@@ -1,0 +1,19 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "files": [],
+  "include": [],
+  "references": [
+    {
+      "path": "../mdx-editor"
+    },
+    {
+      "path": "../content-api-client"
+    },
+    {
+      "path": "../content-api"
+    },
+    {
+      "path": "./tsconfig.lib.json"
+    }
+  ]
+}

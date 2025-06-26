@@ -1,0 +1,447 @@
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises';
+import { tmpdir } from 'os';
+import { join } from 'path';
+import { FileSystemContentAPI } from '../src/filesystem-content-api';
+import {
+  generateRedirects,
+  parseLocaleFromFilename,
+  updatePathnameHistory,
+  validatePathnameUniqueness,
+} from '../src/routes';
+import type { PageContent, PageMeta } from '../src/types';
+
+describe('Route Management', () => {
+  let tempDir: string;
+  let contentApi: FileSystemContentAPI;
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'routes-test-'));
+    const contentRoot = join(tempDir, 'content');
+    await mkdir(contentRoot, { recursive: true });
+    await mkdir(join(contentRoot, 'pages'), { recursive: true });
+
+    contentApi = new FileSystemContentAPI({
+      contentRoot,
+      canvasDir: join(tempDir, 'canvas'),
+    });
+  });
+
+  afterEach(async () => {
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  describe('parseLocaleFromFilename', () => {
+    test('parses locale from filename with locale suffix', () => {
+      expect(parseLocaleFromFilename('home.nl.vxjson')).toBe('nl');
+      expect(parseLocaleFromFilename('about.fr.vxjson')).toBe('fr');
+      expect(parseLocaleFromFilename('contact.de.vxjson')).toBe('de');
+    });
+
+    test('returns default locale for files without locale suffix', () => {
+      expect(parseLocaleFromFilename('home.vxjson')).toBe('en');
+      expect(parseLocaleFromFilename('about.vxjson')).toBe('en');
+    });
+
+    test('handles complex filenames', () => {
+      expect(parseLocaleFromFilename('my-page.nl.vxjson')).toBe('nl');
+      expect(parseLocaleFromFilename('my.page.fr.vxjson')).toBe('fr');
+      expect(parseLocaleFromFilename('my.page.vxjson')).toBe('en');
+    });
+
+    test('handles different extensions', () => {
+      expect(parseLocaleFromFilename('page.nl.mdx')).toBe('nl');
+      expect(parseLocaleFromFilename('page.json')).toBe('en');
+    });
+  });
+
+  describe('updatePathnameHistory', () => {
+    test('adds old pathname to history with current timestamp', () => {
+      const pageMeta: PageMeta = {
+        pathname: '/old-path',
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-01-01T00:00:00Z',
+      };
+
+      const newPathname = '/new-path';
+      const updated = updatePathnameHistory(pageMeta, newPathname);
+
+      expect(updated.pathname).toBe('/new-path');
+      expect(updated.previousPathnames).toBeDefined();
+      expect(updated.previousPathnames!['/old-path']).toBeDefined();
+      // Check that the deprecation date is recent (within last minute)
+      const deprecationDate = new Date(updated.previousPathnames!['/old-path']);
+      const now = new Date();
+      const diffMs = now.getTime() - deprecationDate.getTime();
+      expect(diffMs).toBeLessThan(60000); // Less than 1 minute
+    });
+
+    test('preserves existing pathname history', () => {
+      const pageMeta: PageMeta = {
+        pathname: '/current',
+        previousPathnames: {
+          '/very-old': '2023-01-01T00:00:00Z',
+          '/old': '2023-06-01T00:00:00Z',
+        },
+        createdAt: '2023-01-01T00:00:00Z',
+        updatedAt: '2024-01-01T00:00:00Z',
+      };
+
+      const updated = updatePathnameHistory(pageMeta, '/newest');
+
+      expect(updated.previousPathnames).toBeDefined();
+      expect(Object.keys(updated.previousPathnames!)).toHaveLength(3);
+      expect(updated.previousPathnames!['/very-old']).toBe('2023-01-01T00:00:00Z');
+      expect(updated.previousPathnames!['/old']).toBe('2023-06-01T00:00:00Z');
+      expect(updated.previousPathnames!['/current']).toBeDefined();
+    });
+
+    test('does not add duplicate pathnames', () => {
+      const pageMeta: PageMeta = {
+        pathname: '/current',
+        previousPathnames: {
+          '/old': '2023-01-01T00:00:00Z',
+        },
+        createdAt: '2023-01-01T00:00:00Z',
+        updatedAt: '2024-01-01T00:00:00Z',
+      };
+
+      // Try to set pathname back to an old one
+      const updated = updatePathnameHistory(pageMeta, '/old');
+
+      expect(updated.pathname).toBe('/old');
+      // Should not add /current to history since we're going back to /old
+      expect(updated.previousPathnames).toBeDefined();
+      expect(Object.keys(updated.previousPathnames!)).toHaveLength(1);
+      expect(updated.previousPathnames!['/old']).toBe('2023-01-01T00:00:00Z');
+    });
+
+    test('handles pages without existing history', () => {
+      const pageMeta: PageMeta = {
+        pathname: '/initial',
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-01-01T00:00:00Z',
+      };
+
+      const updated = updatePathnameHistory(pageMeta, '/changed');
+
+      expect(updated.pathname).toBe('/changed');
+      expect(updated.previousPathnames).toBeDefined();
+      expect(Object.keys(updated.previousPathnames!)).toHaveLength(1);
+      expect(updated.previousPathnames!['/initial']).toBeDefined();
+    });
+
+    test('updates the updatedAt timestamp', () => {
+      const oldDate = '2024-01-01T00:00:00Z';
+      const pageMeta: PageMeta = {
+        pathname: '/path',
+        createdAt: oldDate,
+        updatedAt: oldDate,
+      };
+
+      const updated = updatePathnameHistory(pageMeta, '/new-path');
+
+      expect(new Date(updated.updatedAt).getTime()).toBeGreaterThan(new Date(oldDate).getTime());
+    });
+  });
+
+  describe('generateRedirects', () => {
+    test('generates redirects from pathname history', async () => {
+      // Create test pages
+      const page1: PageContent = {
+        pageMeta: {
+          pathname: '/new-home',
+          previousPathnames: {
+            '/home': '2023-01-01T00:00:00Z',
+            '/index': '2023-06-01T00:00:00Z',
+          },
+          createdAt: '2023-01-01T00:00:00Z',
+          updatedAt: '2024-01-01T00:00:00Z',
+        },
+        puckData: {},
+      };
+
+      const page2: PageContent = {
+        pageMeta: {
+          pathname: '/about-us',
+          previousPathnames: {
+            '/about': '2023-03-01T00:00:00Z',
+          },
+          createdAt: '2023-01-01T00:00:00Z',
+          updatedAt: '2024-01-01T00:00:00Z',
+        },
+        puckData: {},
+      };
+
+      await writeFile(join(tempDir, 'content/pages/home.vxjson'), JSON.stringify(page1, null, 2));
+      await writeFile(join(tempDir, 'content/pages/about.vxjson'), JSON.stringify(page2, null, 2));
+
+      const redirects = await generateRedirects(contentApi);
+
+      expect(redirects).toEqual({
+        '/home': '/new-home',
+        '/index': '/new-home',
+        '/about': '/about-us',
+      });
+    });
+
+    test('handles pages without pathname history', async () => {
+      const page: PageContent = {
+        pageMeta: {
+          pathname: '/contact',
+          createdAt: '2024-01-01T00:00:00Z',
+          updatedAt: '2024-01-01T00:00:00Z',
+        },
+        puckData: {},
+      };
+
+      await writeFile(join(tempDir, 'content/pages/contact.vxjson'), JSON.stringify(page, null, 2));
+
+      const redirects = await generateRedirects(contentApi);
+
+      expect(redirects).toEqual({});
+    });
+
+    test('handles conflicting redirects by using most recent', async () => {
+      // Two pages claiming the same old pathname
+      const page1: PageContent = {
+        pageMeta: {
+          pathname: '/page-1',
+          previousPathnames: {
+            '/shared': '2023-01-01T00:00:00Z',
+          },
+          createdAt: '2023-01-01T00:00:00Z',
+          updatedAt: '2023-06-01T00:00:00Z',
+        },
+        puckData: {},
+      };
+
+      const page2: PageContent = {
+        pageMeta: {
+          pathname: '/page-2',
+          previousPathnames: {
+            '/shared': '2023-12-01T00:00:00Z', // More recent
+          },
+          createdAt: '2023-01-01T00:00:00Z',
+          updatedAt: '2024-01-01T00:00:00Z',
+        },
+        puckData: {},
+      };
+
+      await writeFile(join(tempDir, 'content/pages/page1.vxjson'), JSON.stringify(page1, null, 2));
+      await writeFile(join(tempDir, 'content/pages/page2.vxjson'), JSON.stringify(page2, null, 2));
+
+      const redirects = await generateRedirects(contentApi);
+
+      // Should redirect to page-2 since it has the more recent claim
+      expect(redirects['/shared']).toBe('/page-2');
+    });
+  });
+
+  describe('validatePathnameUniqueness', () => {
+    test('allows unique pathnames', async () => {
+      const existingPage = {
+        site: 'test-site',
+        pageMeta: {
+          pathname: '/existing',
+          createdAt: '2024-01-01T00:00:00Z',
+          updatedAt: '2024-01-01T00:00:00Z',
+        },
+        puckData: {},
+      };
+
+      await writeFile(join(tempDir, 'content/pages/existing.vxjson'), JSON.stringify(existingPage, null, 2));
+
+      const result = await validatePathnameUniqueness(contentApi, 'test-site', '/new-path');
+      expect(result.isValid).toBe(true);
+    });
+
+    test('detects conflicts with current pathnames', async () => {
+      const existingPage = {
+        site: 'test-site',
+        pageMeta: {
+          pathname: '/about',
+          createdAt: '2024-01-01T00:00:00Z',
+          updatedAt: '2024-01-01T00:00:00Z',
+        },
+        puckData: {},
+      };
+
+      await writeFile(join(tempDir, 'content/pages/about.vxjson'), JSON.stringify(existingPage, null, 2));
+
+      const result = await validatePathnameUniqueness(contentApi, 'test-site', '/about');
+      expect(result.isValid).toBe(false);
+      expect(result.conflict?.type).toBe('current');
+      expect(result.conflict?.conflictingFile).toContain('about.vxjson');
+    });
+
+    test('detects conflicts with historical pathnames', async () => {
+      const existingPage = {
+        site: 'test-site',
+        pageMeta: {
+          pathname: '/new-about',
+          previousPathnames: {
+            '/about': '2023-01-01T00:00:00Z',
+            '/about-us': '2023-06-01T00:00:00Z',
+          },
+          createdAt: '2023-01-01T00:00:00Z',
+          updatedAt: '2024-01-01T00:00:00Z',
+        },
+        puckData: {},
+      };
+
+      await writeFile(join(tempDir, 'content/pages/about.vxjson'), JSON.stringify(existingPage, null, 2));
+
+      const result = await validatePathnameUniqueness(contentApi, 'test-site', '/about-us');
+      expect(result.isValid).toBe(false);
+      expect(result.conflict?.type).toBe('historical');
+      expect(result.conflict?.conflictingFile).toContain('about.vxjson');
+      expect(result.conflict?.deprecatedAt).toBe('2023-06-01T00:00:00Z');
+    });
+
+    test('allows reusing pathname for the same file', async () => {
+      const existingPage = {
+        site: 'test-site',
+        pageMeta: {
+          pathname: '/current',
+          previousPathnames: {
+            '/old': '2023-01-01T00:00:00Z',
+          },
+          createdAt: '2023-01-01T00:00:00Z',
+          updatedAt: '2024-01-01T00:00:00Z',
+        },
+        puckData: {},
+      };
+
+      await writeFile(join(tempDir, 'content/pages/page.vxjson'), JSON.stringify(existingPage, null, 2));
+
+      // Allow the same file to use its own current pathname
+      const result = await validatePathnameUniqueness(contentApi, 'test-site', '/current', {
+        collection: 'pages',
+        entryId: 'page',
+      });
+      expect(result.isValid).toBe(true);
+
+      // Also allow it to reuse its own historical pathnames
+      const result2 = await validatePathnameUniqueness(contentApi, 'test-site', '/old', {
+        collection: 'pages',
+        entryId: 'page',
+      });
+      expect(result2.isValid).toBe(true);
+    });
+
+    test('handles multiple pages with history', async () => {
+      const pages: Array<[string, any]> = [
+        [
+          'home.vxjson',
+          {
+            site: 'test-site',
+            pageMeta: {
+              pathname: '/home',
+              previousPathnames: {
+                '/index': '2023-01-01T00:00:00Z',
+                '/': '2023-02-01T00:00:00Z',
+              },
+              createdAt: '2023-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+            },
+            puckData: {},
+          },
+        ],
+        [
+          'about.vxjson',
+          {
+            site: 'test-site',
+            pageMeta: {
+              pathname: '/about',
+              previousPathnames: {
+                '/about-us': '2023-03-01T00:00:00Z',
+              },
+              createdAt: '2023-01-01T00:00:00Z',
+              updatedAt: '2024-01-01T00:00:00Z',
+            },
+            puckData: {},
+          },
+        ],
+      ];
+
+      for (const [filename, content] of pages) {
+        await writeFile(join(tempDir, 'content/pages', filename), JSON.stringify(content, null, 2));
+      }
+
+      // Test various pathnames
+      const tests = [
+        { pathname: '/contact', expected: true }, // New pathname
+        { pathname: '/home', expected: false }, // Current pathname
+        { pathname: '/index', expected: false }, // Historical pathname
+        { pathname: '/', expected: false }, // Historical pathname
+        { pathname: '/about-us', expected: false }, // Historical pathname
+      ];
+
+      for (const { pathname, expected } of tests) {
+        const result = await validatePathnameUniqueness(contentApi, 'test-site', pathname);
+        expect(result.isValid).toBe(expected);
+      }
+    });
+  });
+
+  describe('integration with ContentAPI', () => {
+    test('pathname history is updated when pathname changes', async () => {
+      // Create initial page
+      const initialContent: PageContent = {
+        pageMeta: {
+          pathname: '/initial-path',
+          createdAt: '2024-01-01T00:00:00Z',
+          updatedAt: '2024-01-01T00:00:00Z',
+        },
+        puckData: { content: [] },
+      };
+
+      const result = await contentApi.createContent('pages', 'test', initialContent);
+      expect(result.success).toBe(true);
+      const etag = result.etag!;
+
+      expect(etag).toBeDefined();
+
+      // Update pathname
+      const updatedContent: PageContent = {
+        ...initialContent,
+        pageMeta: {
+          ...initialContent.pageMeta,
+          pathname: '/new-path',
+        },
+      };
+
+      await contentApi.updateContent('pages', 'test', updatedContent, etag);
+
+      // Read back and verify
+      const pageResult = await contentApi.readPage('pages', 'test');
+      expect(pageResult).not.toBeNull();
+
+      const { content: pageContent } = pageResult!;
+
+      expect(pageContent.pageMeta.pathname).toBe('/new-path');
+      expect(pageContent.pageMeta.previousPathnames).toBeDefined();
+      expect(pageContent.pageMeta.previousPathnames!['/initial-path']).toBeDefined();
+    });
+
+    test('locale is parsed from filename when creating content', async () => {
+      const content: PageContent = {
+        pageMeta: {
+          pathname: '/dutch-page',
+          createdAt: '2024-01-01T00:00:00Z',
+          updatedAt: '2024-01-01T00:00:00Z',
+        },
+        puckData: {},
+      };
+
+      // Create with Dutch locale
+      await contentApi.createContent('pages', 'test', content, 'nl');
+
+      // Verify file was created with locale suffix
+      const result = await contentApi.readContent('pages', 'test.nl');
+      expect(result).not.toBeNull();
+      expect(result?.content).toBeDefined();
+    });
+  });
+});

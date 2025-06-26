@@ -1,0 +1,68 @@
+{
+  "name": "@conloca/astro-cms",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "development": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./spa-handler": {
+      "development": "./src/spa-handler.ts",
+      "types": "./dist/spa-handler.d.ts",
+      "import": "./dist/spa-handler.js",
+      "default": "./dist/spa-handler.js"
+    },
+    "./api/collections": {
+      "development": "./src/api/collections.ts",
+      "types": "./dist/api/collections.d.ts",
+      "import": "./dist/api/collections.js",
+      "default": "./dist/api/collections.js"
+    },
+    "./api/entry": {
+      "development": "./src/api/entry.ts",
+      "types": "./dist/api/entry.d.ts",
+      "import": "./dist/api/entry.js",
+      "default": "./dist/api/entry.js"
+    },
+    "./api/content-api-handler": {
+      "development": "./src/api/content-api-handler.ts",
+      "types": "./dist/api/content-api-handler.d.ts",
+      "import": "./dist/api/content-api-handler.js",
+      "default": "./dist/api/content-api-handler.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --build tsconfig.lib.json",
+    "test": "tsc-bun-test",
+    "test:watch": "bun test --watch"
+  },
+  "dependencies": {
+    "@conloca/cms-spa": "workspace:*",
+    "@conloca/content-api-client": "workspace:*",
+    "tslib": "^2.3.0"
+  },
+  "peerDependencies": {
+    "react": "19.0.0",
+    "react-dom": "19.0.0"
+  },
+  "devDependencies": {
+    "astro": "^5.10.2"
+  },
+  "nx": {
+    "targets": {
+      "build": {
+        "dependsOn": [
+          "^build"
+        ]
+      }
+    }
+  }
+}

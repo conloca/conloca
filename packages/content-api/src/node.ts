@@ -1,0 +1,23 @@
+/**
+ * Node.js-specific exports for @conloca/content-api
+ *
+ * These exports require Node.js runtime APIs and should not be imported in browser environments.
+ * Use the main package exports for browser-compatible APIs.
+ */
+
+export { Blocks } from './blocks';
+export { ComponentRegistry } from './component-registry';
+export * from './component-registry.types';
+export type { ContentAPI } from './content-api.interface';
+export * from './content-operations';
+export * from './content-utils';
+// Node.js specific implementations (require fs, xxhash, etc.)
+export { FileSystemContentAPI } from './filesystem-content-api';
+export { InMemoryContentAPI } from './in-memory-content-api';
+export { compileMDX, createComponentScope, createMDXCompiler } from './mdx/compile';
+export { createContentAPIRouter, createContentMiddleware } from './middleware';
+export { Site } from './site';
+// Re-export types and utilities that are safe for Node.js environments
+export * from './types';
+export type { ConlocaContentOptions } from './vite-plugin';
+export { conlocaContent } from './vite-plugin';

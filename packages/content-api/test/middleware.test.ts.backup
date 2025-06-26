@@ -1,0 +1,678 @@
+import { beforeEach, describe, expect, test } from 'bun:test';
+import type { ContentAPI } from '../src/content-api.interface';
+import { InMemoryContentAPI } from '../src/in-memory-content-api';
+import { createContentAPIRouter } from '../src/middleware';
+import {
+  assertDefined,
+  getCreatedId,
+  isCollectionsResponse,
+  isContentListResponse,
+  isContentWithLocales,
+  isCreateSuccess,
+  isErrorResponse,
+  isLocalizedContent,
+  isSuccessResponse,
+  parseJsonResponse,
+} from './test-helpers';
+
+describe('Content API Middleware', () => {
+  let api: ContentAPI;
+
+  beforeEach(() => {
+    // Use InMemoryContentAPI instead of mocks
+    api = new InMemoryContentAPI({
+      sites: {
+        shop: {
+          locales: ['en', 'nl'],
+          defaultLocale: 'en',
+          domains: { en: 'shop.com', nl: 'shop.nl' },
+        },
+        corporate: {
+          locales: ['en', 'de'],
+          defaultLocale: 'en',
+        },
+      },
+      globalLocales: ['en', 'nl', 'de', 'fr'],
+    });
+  });
+
+  describe('GET /content', () => {
+    test('lists all content without filters', async () => {
+      // Create test content
+      await api.createContent({
+        site: 'shop',
+        collection: 'pages',
+        type: 'puck',
+        locales: {
+          en: { meta: { title: 'Test Page' }, content: { puckData: {} } },
+        },
+      });
+      
+      await api.createContent({
+        site: 'blocks',
+        collection: 'heroes',
+        type: 'mdx',
+        locales: {
+          en: { meta: { title: 'Hero Block' }, content: { mdx: '# Hero' } },
+        },
+      });
+
+      const app = createContentAPIRouter(api);
+      const res = await app.fetch(new Request('http://localhost/content'));
+
+      expect(res.status).toBe(200);
+      const data = await res.json() as any;
+      expect(data.total).toBe(2);
+      expect(data.items).toHaveLength(2);
+    });
+
+    test('filters by kind=block', async () => {
+      // Create block content
+      await api.createContent({
+        site: 'blocks',
+        collection: 'heroes',
+        type: 'mdx',
+        locales: {
+          en: { meta: { title: 'Hero Block' }, content: { mdx: '# Hero' } },
+        },
+      });
+      
+      await api.createContent({
+        site: 'blocks',
+        collection: 'features',
+        type: 'mdx',
+        locales: {
+          en: { meta: { title: 'Feature Block' }, content: { mdx: '# Feature' } },
+        },
+      });
+
+      // Create page content (should be filtered out)
+      await api.createContent({
+        site: 'shop',
+        collection: 'pages',
+        type: 'puck',
+        locales: {
+          en: { meta: { title: 'Test Page', pathname: '/test' }, content: { puckData: {} } },
+        },
+      });
+
+      const app = createContentAPIRouter(api);
+      const res = await app.fetch(new Request('http://localhost/content?kind=block'));
+
+      expect(res.status).toBe(200);
+      const data = await res.json() as any;
+      expect(data.total).toBe(2);
+      expect(data.items).toHaveLength(2);
+      expect(data.items.every((item: any) => item.site === 'blocks')).toBe(true);
+    });
+
+    test('filters by kind=page', async () => {
+      // Create page content
+      await api.createContent({
+        site: 'shop',
+        collection: 'pages',
+        type: 'puck',
+        locales: {
+          en: { meta: { title: 'Shop Page', pathname: '/shop' }, content: { puckData: {} } },
+        },
+      });
+
+      // Create block content (should be filtered out)
+      await api.createContent({
+        site: 'blocks',
+        collection: 'heroes',
+        type: 'mdx',
+        locales: {
+          en: { meta: { title: 'Hero Block' }, content: { mdx: '# Hero' } },
+        },
+      });
+
+      const app = createContentAPIRouter(api);
+      const res = await app.fetch(new Request('http://localhost/content?kind=page'));
+
+      expect(res.status).toBe(200);
+      const data = await res.json() as any;
+      expect(data.total).toBe(1);
+      expect(data.items).toHaveLength(1);
+      expect(data.items[0].site).toBe('shop');
+    });
+
+    test('filters by site and collection', async () => {
+      await api.createContent({
+        site: 'shop',
+        collection: 'blog',
+        type: 'puck',
+        locales: {
+          en: { meta: { title: 'Blog Post' }, content: { puckData: {} } },
+        },
+      });
+
+      await api.createContent({
+        site: 'shop',
+        collection: 'pages',
+        type: 'puck',
+        locales: {
+          en: { meta: { title: 'Page' }, content: { puckData: {} } },
+        },
+      });
+
+      const app = createContentAPIRouter(api);
+      const res = await app.fetch(new Request('http://localhost/content?site=shop&collection=blog'));
+
+      expect(res.status).toBe(200);
+      const data = await res.json() as any;
+      expect(data.total).toBe(1);
+      expect(data.items[0].collection).toBe('blog');
+    });
+  });
+
+  describe('GET /content/:id', () => {
+    test('returns content with all locales', async () => {
+      const result = await api.createContent({
+        site: 'shop',
+        collection: 'pages',
+        type: 'puck',
+        locales: {
+          en: { meta: { title: 'Test' }, content: { puckData: {} } },
+          nl: { meta: { title: 'Test NL' }, content: { puckData: {} } },
+        },
+      });
+
+      const id = result.id!;
+      const app = createContentAPIRouter(api);
+      const res = await app.fetch(new Request(`http://localhost/content/${id}`));
+
+      expect(res.status).toBe(200);
+      const data = await res.json() as any;
+      expect(data.id).toBe(id);
+      expect(data.locales).toHaveProperty('en');
+      expect(data.locales).toHaveProperty('nl');
+    });
+
+    test('returns 404 for non-existent content', async () => {
+      const app = createContentAPIRouter(api);
+      const res = await app.fetch(new Request('http://localhost/content/vx-nonexistent'));
+
+      expect(res.status).toBe(404);
+      const data = await res.json() as any;
+      expect(data.error).toBe('Content not found');
+    });
+  });
+
+  describe('GET /content/:id/:locale', () => {
+    test('returns specific locale content', async () => {
+      const result = await api.createContent({
+        site: 'shop',
+        collection: 'pages',
+        type: 'puck',
+        locales: {
+          en: { meta: { title: 'Test Page', pathname: '/test' }, content: { puckData: {} } },
+          nl: { meta: { title: 'Test Pagina', pathname: '/test' }, content: { puckData: {} } },
+        },
+      });
+
+      const id = result.id!;
+      const app = createContentAPIRouter(api);
+      const res = await app.fetch(new Request(`http://localhost/content/${id}/en`));
+
+      expect(res.status).toBe(200);
+      expect(res.headers.get('ETag')).toBeTruthy();
+      
+      const data = await res.json() as any;
+      expect(data.id).toBe(id);
+      expect(data.locale).toBe('en');
+      expect(data.meta.title).toBe('Test Page');
+    });
+
+    test('returns 404 for non-existent locale', async () => {
+      const result = await api.createContent({
+        site: 'shop',
+        collection: 'pages',
+        type: 'puck',
+        locales: {
+          en: { meta: { title: 'Test' }, content: { puckData: {} } },
+        },
+      });
+
+      const id = result.id!;
+      const app = createContentAPIRouter(api);
+      const res = await app.fetch(new Request(`http://localhost/content/${id}/fr`));
+
+      expect(res.status).toBe(404);
+    });
+  });
+
+  describe('POST /content', () => {
+    test('creates new content', async () => {
+      const app = createContentAPIRouter(api);
+      const res = await app.fetch(
+        new Request('http://localhost/content', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            site: 'shop',
+            collection: 'pages',
+            type: 'puck',
+            locales: {
+              en: { meta: { title: 'New Page' }, content: { puckData: {} } },
+            },
+          }),
+        })
+      );
+
+      expect(res.status).toBe(201);
+      const data = await res.json() as any;
+      expect(data.success).toBe(true);
+      expect(data.id).toBeTruthy();
+    });
+
+    test('returns 409 for duplicate content', async () => {
+      // Create initial content
+      await api.createContent({
+        site: 'shop',
+        collection: 'pages',
+        type: 'puck',
+        locales: {
+          en: { meta: { title: 'Page', pathname: '/duplicate' }, content: { puckData: {} } },
+        },
+      });
+
+      // Try to create with same pathname
+      const app = createContentAPIRouter(api);
+      const res = await app.fetch(
+        new Request('http://localhost/content', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            site: 'shop',
+            collection: 'pages',
+            type: 'puck',
+            locales: {
+              en: { meta: { title: 'Another Page', pathname: '/duplicate' }, content: { puckData: {} } },
+            },
+          }),
+        })
+      );
+
+      expect(res.status).toBe(409);
+      const data = await res.json() as any;
+      expect(data.success).toBe(false);
+      expect(data.reason).toBe('pathname_taken');
+    });
+  });
+
+  describe('PUT /content/:id', () => {
+    test('updates content with etag validation', async () => {
+      const createResult = await api.createContent({
+        site: 'shop',
+        collection: 'pages',
+        type: 'puck',
+        locales: {
+          en: { meta: { title: 'Original' }, content: { puckData: {} } },
+        },
+      });
+
+      const id = createResult.id!;
+      const content = await api.getLocalized(id, 'en');
+      const etag = content!.etag;
+
+      const app = createContentAPIRouter(api);
+      const res = await app.fetch(
+        new Request(`http://localhost/content/${id}?etag=${encodeURIComponent(etag)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            meta: { title: 'Updated' },
+          }),
+        })
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.headers.get('ETag')).toBeTruthy();
+      
+      const data = await res.json() as any;
+      expect(data.success).toBe(true);
+
+      // Verify update
+      const updated = await api.getLocalized(id, 'en');
+      expect(updated?.meta.title).toBe('Updated');
+    });
+
+    test('returns 412 for stale write', async () => {
+      const createResult = await api.createContent({
+        site: 'shop',
+        collection: 'pages',
+        type: 'puck',
+        locales: {
+          en: { meta: { title: 'Original' }, content: { puckData: {} } },
+        },
+      });
+
+      const id = createResult.id!;
+      const app = createContentAPIRouter(api);
+      
+      const res = await app.fetch(
+        new Request(`http://localhost/content/${id}?etag="old-etag"`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            meta: { title: 'Updated' },
+          }),
+        })
+      );
+
+      expect(res.status).toBe(412);
+      const data = await res.json() as any;
+      expect(data.success).toBe(false);
+      expect(data.reason).toBe('stale_write');
+      expect(data.currentEtag).toBeTruthy();
+    });
+  });
+
+  describe('DELETE /content/:id', () => {
+    test('deletes content with etag validation', async () => {
+      const createResult = await api.createContent({
+        site: 'shop',
+        collection: 'pages',
+        type: 'puck',
+        locales: {
+          en: { meta: { title: 'To Delete' }, content: { puckData: {} } },
+        },
+      });
+
+      const id = createResult.id!;
+      const content = await api.getLocalized(id, 'en');
+      const etag = content!.etag;
+
+      const app = createContentAPIRouter(api);
+      const res = await app.fetch(
+        new Request(`http://localhost/content/${id}?etag=${encodeURIComponent(etag)}`, {
+          method: 'DELETE',
+        })
+      );
+
+      expect(res.status).toBe(200);
+      const data = await res.json() as any;
+      expect(data.success).toBe(true);
+
+      // Verify deletion
+      const deleted = await api.getContent(id);
+      expect(deleted).toBeNull();
+    });
+
+    test('returns 404 for non-existent content', async () => {
+      const app = createContentAPIRouter(api);
+      const res = await app.fetch(
+        new Request('http://localhost/content/vx-nonexistent?etag="any"', {
+          method: 'DELETE',
+        })
+      );
+
+      expect(res.status).toBe(404);
+    });
+  });
+
+  describe('Site-specific endpoints', () => {
+    test('GET /:site/collections returns collections for site', async () => {
+      const site = api.getSite('shop');
+      
+      // Create content to populate collections
+      await api.createContent({
+        site: 'shop',
+        collection: 'pages',
+        type: 'puck',
+        locales: {
+          en: { meta: { title: 'Page' }, content: { puckData: {} } },
+        },
+      });
+
+      await api.createContent({
+        site: 'shop',
+        collection: 'blog',
+        type: 'puck',
+        locales: {
+          en: { meta: { title: 'Post' }, content: { puckData: {} } },
+        },
+      });
+
+      const app = createContentAPIRouter(api);
+      const res = await app.fetch(new Request('http://localhost/shop/collections'));
+
+      expect(res.status).toBe(200);
+      const data = await res.json() as any;
+      expect(data.collections).toBeArray();
+      expect(data.collections).toContain('pages');
+      expect(data.collections).toContain('blog');
+    });
+
+    test('GET /blocks/collections returns block collections', async () => {
+      // Create blocks in different collections
+      await api.createContent({
+        site: 'blocks',
+        collection: 'heroes',
+        type: 'mdx',
+        locales: {
+          en: { meta: { title: 'Hero' }, content: { mdx: '# Hero' } },
+        },
+      });
+
+      await api.createContent({
+        site: 'blocks',
+        collection: 'features',
+        type: 'mdx',
+        locales: {
+          en: { meta: { title: 'Feature' }, content: { mdx: '# Feature' } },
+        },
+      });
+
+      const app = createContentAPIRouter(api);
+      const res = await app.fetch(new Request('http://localhost/blocks/collections'));
+
+      expect(res.status).toBe(200);
+      const data = await res.json() as any;
+      expect(data.collections).toBeArray();
+      expect(data.collections).toContain('heroes');
+      expect(data.collections).toContain('features');
+    });
+
+    test('GET /:site/pages returns pages for site', async () => {
+      await api.createContent({
+        site: 'shop',
+        collection: 'pages',
+        type: 'puck',
+        locales: {
+          en: { meta: { title: 'Page 1', pathname: '/page1' }, content: { puckData: {} } },
+          nl: { meta: { title: 'Pagina 1', pathname: '/page1' }, content: { puckData: {} } },
+        },
+      });
+
+      const app = createContentAPIRouter(api);
+      const res = await app.fetch(new Request('http://localhost/shop/pages?locale=en'));
+
+      expect(res.status).toBe(200);
+      const data = await res.json() as any;
+      expect(data.items).toHaveLength(1);
+      expect(data.items[0].locale).toBe('en');
+    });
+
+    test('GET /blocks/pages returns 400 error', async () => {
+      const app = createContentAPIRouter(api);
+      const res = await app.fetch(new Request('http://localhost/blocks/pages'));
+
+      expect(res.status).toBe(400);
+      const data = await res.json() as any;
+      expect(data.error).toBe('Blocks do not have pages');
+    });
+
+    test('GET /blocks filters blocks by collection', async () => {
+      await api.createContent({
+        site: 'blocks',
+        collection: 'heroes',
+        type: 'mdx',
+        locales: {
+          en: { meta: { title: 'Hero 1' }, content: { mdx: '# Hero' } },
+        },
+      });
+
+      await api.createContent({
+        site: 'blocks',
+        collection: 'features',
+        type: 'mdx',
+        locales: {
+          en: { meta: { title: 'Feature 1' }, content: { mdx: '# Feature' } },
+        },
+      });
+
+      const app = createContentAPIRouter(api);
+      const res = await app.fetch(new Request('http://localhost/blocks?collection=heroes'));
+
+      expect(res.status).toBe(200);
+      const data = await res.json() as any;
+      expect(data.items).toHaveLength(1);
+      expect(data.items[0].collection).toBe('heroes');
+    });
+  });
+
+  describe('PATCH /content/:id', () => {
+    test('partial update with etag', async () => {
+      const createResult = await api.createContent({
+        site: 'shop',
+        collection: 'pages',
+        type: 'puck',
+        locales: {
+          en: { 
+            meta: { title: 'Original', description: 'Original description' }, 
+            content: { puckData: { text: 'original' } } 
+          },
+        },
+      });
+
+      const id = createResult.id!;
+      const content = await api.getLocalized(id, 'en');
+      const etag = content!.etag;
+
+      const app = createContentAPIRouter(api);
+      const res = await app.fetch(
+        new Request(`http://localhost/content/${id}?etag=${encodeURIComponent(etag)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            meta: { title: 'Patched Title' },
+            // description should remain unchanged
+          }),
+        })
+      );
+
+      expect(res.status).toBe(200);
+      const data = await res.json() as any;
+      expect(data.success).toBe(true);
+
+      // Verify partial update
+      const updated = await api.getLocalized(id, 'en');
+      expect(updated?.meta.title).toBe('Patched Title');
+      expect(updated?.meta.description).toBe('Original description');
+    });
+  });
+
+  describe('GET /sites', () => {
+    test('returns sites configuration', async () => {
+      const app = createContentAPIRouter(api);
+      const res = await app.fetch(new Request('http://localhost/sites'));
+
+      expect(res.status).toBe(200);
+      const data = await res.json() as any;
+      expect(data.sites).toHaveProperty('shop');
+      expect(data.sites).toHaveProperty('corporate');
+      expect(data.globalLocales).toBeArray();
+    });
+  });
+
+  describe('POST /batch', () => {
+    test('batch update operations', async () => {
+      // Create content first
+      const result1 = await api.createContent({
+        site: 'shop',
+        collection: 'pages',
+        type: 'puck',
+        locales: {
+          en: { meta: { title: 'Page 1' }, content: { puckData: {} } },
+        },
+      });
+
+      const result2 = await api.createContent({
+        site: 'shop',
+        collection: 'pages',
+        type: 'puck',
+        locales: {
+          en: { meta: { title: 'Page 2' }, content: { puckData: {} } },
+        },
+      });
+
+      const content1 = await api.getLocalized(result1.id!, 'en');
+      const content2 = await api.getLocalized(result2.id!, 'en');
+
+      const app = createContentAPIRouter(api);
+      const res = await app.fetch(
+        new Request('http://localhost/batch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            operations: [
+              {
+                id: result1.id,
+                locale: 'en',
+                data: { meta: { title: 'Updated Page 1' } },
+                etag: content1!.etag,
+              },
+              {
+                id: result2.id,
+                locale: 'en',
+                data: { meta: { title: 'Updated Page 2' } },
+                etag: content2!.etag,
+              },
+            ],
+          }),
+        })
+      );
+
+      expect(res.status).toBe(200);
+      const data = await res.json() as any;
+      expect(data.success).toBe(true);
+      expect(data.updated).toBe(2);
+      expect(data.failed).toBe(0);
+    });
+  });
+
+  describe('GET /untranslated/:locale', () => {
+    test('finds untranslated content', async () => {
+      // Create content with only English
+      await api.createContent({
+        site: 'shop',
+        collection: 'pages',
+        type: 'puck',
+        locales: {
+          en: { meta: { title: 'English Only' }, content: { puckData: {} } },
+        },
+      });
+
+      // Create content with both English and Dutch
+      await api.createContent({
+        site: 'shop',
+        collection: 'pages',
+        type: 'puck',
+        locales: {
+          en: { meta: { title: 'Both Languages' }, content: { puckData: {} } },
+          nl: { meta: { title: 'Beide Talen' }, content: { puckData: {} } },
+        },
+      });
+
+      const app = createContentAPIRouter(api);
+      const res = await app.fetch(new Request('http://localhost/untranslated/nl'));
+
+      expect(res.status).toBe(200);
+      const data = await res.json() as any;
+      expect(data.items).toHaveLength(1);
+      expect(data.items[0].locale).toBe('en'); // The English version of content missing Dutch
+    });
+  });
+});

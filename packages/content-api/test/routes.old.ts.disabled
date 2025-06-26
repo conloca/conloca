@@ -1,0 +1,208 @@
+import type { ContentAPI } from './content-api.interface';
+import type { PageContent, PageMeta } from './types';
+
+/**
+ * Parse locale from filename
+ *
+ * Examples:
+ * - 'home.vxjson' -> 'en' (default)
+ * - 'home.nl.vxjson' -> 'nl'
+ * - 'about.fr.mdx' -> 'fr'
+ *
+ * @param filename - The filename to parse
+ * @returns The locale code
+ */
+export function parseLocaleFromFilename(filename: string): string {
+  // Match pattern: name.locale.extension
+  const match = filename.match(/\.([a-z]{2})\.\w+$/);
+  return match ? match[1] : 'en';
+}
+
+/**
+ * Update pathname history when pathname changes
+ *
+ * @param pageMeta - Current page metadata
+ * @param newPathname - New pathname to set
+ * @returns Updated page metadata
+ */
+export function updatePathnameHistory(pageMeta: PageMeta, newPathname: string): PageMeta {
+  const now = new Date().toISOString();
+
+  // If pathname hasn't changed, just update timestamp
+  if (pageMeta.pathname === newPathname) {
+    return {
+      ...pageMeta,
+      updatedAt: now,
+    };
+  }
+
+  // Initialize previousPathnames if not present
+  const previousPathnames = pageMeta.previousPathnames || {};
+
+  // Don't add to history if we're reverting to a previous pathname
+  const isRevertingToPrevious = newPathname in previousPathnames;
+
+  if (!isRevertingToPrevious) {
+    // Add current pathname to history
+    previousPathnames[pageMeta.pathname] = now;
+  }
+
+  return {
+    ...pageMeta,
+    pathname: newPathname,
+    previousPathnames,
+    updatedAt: now,
+  };
+}
+
+/**
+ * Generate redirect mappings from all pages' pathname history
+ *
+ * @param contentApi - ContentAPI instance
+ * @returns Map of old pathnames to current pathnames
+ */
+export async function generateRedirects(contentApi: ContentAPI): Promise<Record<string, string>> {
+  const redirects: Record<string, string> = {};
+
+  // Track conflicts to resolve by deprecation date
+  const conflicts: Record<string, { pathname: string; deprecatedAt: string }> = {};
+
+  // Get all pages
+  const collections = await contentApi.getCollections();
+
+  for (const collection of collections) {
+    if (!collection.startsWith('pages')) continue;
+
+    const entries = await contentApi.listEntries(collection);
+
+    for (const entry of entries) {
+      const result = await contentApi.readContent(collection, entry.id);
+      if (!result) continue;
+      const pageContent = result.content as PageContent;
+
+      if (!pageContent.pageMeta?.previousPathnames) continue;
+
+      const currentPathname = pageContent.pageMeta.pathname;
+
+      // Process each historical pathname
+      for (const [oldPathname, deprecatedAt] of Object.entries(pageContent.pageMeta.previousPathnames)) {
+        if (!conflicts[oldPathname] || new Date(deprecatedAt) > new Date(conflicts[oldPathname].deprecatedAt)) {
+          // This page has a more recent claim to the pathname
+          conflicts[oldPathname] = { pathname: currentPathname, deprecatedAt };
+        }
+      }
+    }
+  }
+
+  // Build final redirects from conflict resolution
+  for (const [oldPathname, { pathname }] of Object.entries(conflicts)) {
+    redirects[oldPathname] = pathname;
+  }
+
+  return redirects;
+}
+
+/**
+ * Validate that a pathname is unique within a site across all page collections
+ * Note: This does NOT check blocks since they use a separate namespace
+ *
+ * @param contentApi - ContentAPI instance
+ * @param site - The site identifier (e.g., 'shop', 'corporate')
+ * @param pathname - The pathname to validate
+ * @param excludeEntry - Optional entry to exclude (for updates)
+ * @returns Validation result
+ */
+export async function validatePathnameUniqueness(
+  contentApi: ContentAPI,
+  site: string,
+  pathname: string,
+  excludeEntry?: { collection: string; entryId: string },
+): Promise<{
+  isValid: boolean;
+  conflict?: {
+    type: 'current' | 'historical';
+    conflictingFile: string;
+    deprecatedAt?: string;
+  };
+}> {
+  // Get all collections for this site
+  const collections = await contentApi.getCollections();
+
+  for (const collection of collections) {
+    // Skip blocks collection - they have their own namespace
+    if (collection === 'blocks') continue;
+
+    const entries = await contentApi.listEntries(collection);
+
+    for (const entry of entries) {
+      // Skip if this is the file we're updating
+      if (excludeEntry && collection === excludeEntry.collection && entry.id === excludeEntry.entryId) {
+        continue;
+      }
+
+      const result = await contentApi.readContent(collection, entry.id);
+      if (!result) continue;
+
+      // Check if this entry belongs to the specified site
+      const entryData = result.content as any;
+      if (entryData.site !== site) continue;
+
+      // Only check page content (has pageMeta)
+      if (!entryData.pageMeta) continue;
+      const pageContent = result.content as PageContent;
+
+      // Check current pathname
+      if (pageContent.pageMeta?.pathname === pathname) {
+        const filename =
+          entry.locale && entry.locale !== 'en' ? `${entry.id}.${entry.locale}.vxjson` : `${entry.id}.vxjson`;
+        return {
+          isValid: false,
+          conflict: {
+            type: 'current',
+            conflictingFile: filename,
+          },
+        };
+      }
+
+      // Check historical pathnames
+      if (pageContent.pageMeta?.previousPathnames) {
+        for (const [oldPathname, deprecatedAt] of Object.entries(pageContent.pageMeta.previousPathnames)) {
+          if (oldPathname === pathname) {
+            const filename =
+              entry.locale && entry.locale !== 'en' ? `${entry.id}.${entry.locale}.vxjson` : `${entry.id}.vxjson`;
+            return {
+              isValid: false,
+              conflict: {
+                type: 'historical',
+                conflictingFile: filename,
+                deprecatedAt,
+              },
+            };
+          }
+        }
+      }
+    }
+  }
+
+  return { isValid: true };
+}
+
+/**
+ * Extract base name and locale from entry ID
+ *
+ * @param entryId - Entry ID like 'home' or 'home.nl'
+ * @returns Object with baseName and locale
+ */
+export function parseEntryId(entryId: string): { baseName: string; locale: string } {
+  const parts = entryId.split('.');
+  if (parts.length > 1 && parts[parts.length - 1].match(/^[a-z]{2}$/)) {
+    return {
+      baseName: parts.slice(0, -1).join('.'),
+      locale: parts[parts.length - 1],
+    };
+  }
+  return {
+    baseName: entryId,
+    locale: 'en',
+  };
+}

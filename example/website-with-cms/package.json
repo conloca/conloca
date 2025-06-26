@@ -1,0 +1,24 @@
+{
+  "name": "@ligma/website-with-cms",
+  "type": "module",
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "NODE_OPTIONS='--import=extensionless/register' astro dev",
+    "build": "NODE_OPTIONS='--import=extensionless/register' astro build",
+    "preview": "NODE_OPTIONS='--import=extensionless/register' astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@astrojs/react": "^4.3.0",
+    "@ligma/astro-ligma-cms": "workspace:*",
+    "@ligma/content-api": "workspace:*",
+    "@measured/puck": "^0.19.1",
+    "astro": "^5.10.2",
+    "react": "19.0.0",
+    "react-dom": "19.0.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.17",
+    "extensionless": "^1.9.9"
+  }
+}

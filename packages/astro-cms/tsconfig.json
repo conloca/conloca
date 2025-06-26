@@ -1,0 +1,19 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "files": [],
+  "include": [],
+  "references": [
+    {
+      "path": "../content-api"
+    },
+    {
+      "path": "../content-api-client"
+    },
+    {
+      "path": "../cms-spa"
+    },
+    {
+      "path": "./tsconfig.lib.json"
+    }
+  ]
+}
