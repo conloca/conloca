@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Wrapper script to run devenv from anywhere in the monorepo
+# This allows us to keep all devenv files in tooling/direnv
+
+# Save the current working directory
+ORIGINAL_PWD="$(pwd)"
+
+# Find the root of the git repository
+GIT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+
+if [ -z "$GIT_ROOT" ]; then
+    echo "Error: Not in a git repository" >&2
+    exit 1
+fi
+
+# Change to the tooling/direnv directory where devenv files are located
+cd "$GIT_ROOT/tooling/direnv" || exit 1
+
+# Find the actual devenv binary from Nix (not this wrapper)
+# Since our wrapper is first in PATH, the second entry will be the real devenv
+DEVENV_BIN=$(which -a devenv 2>/dev/null | sed -n 2p)
+
+if [ -z "$DEVENV_BIN" ]; then
+    echo "Error: Could not find devenv binary" >&2
+    exit 1
+fi
+
+# Export the original directory so enterShell can use it
+export DEVENV_SHELL_PWD="$ORIGINAL_PWD"
+
+# Run the actual devenv command with all arguments passed through
+exec "$DEVENV_BIN" "$@"

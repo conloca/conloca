@@ -1,5 +1,5 @@
 {
-  "extends": "../../../tsconfig.base.json",
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "baseUrl": ".",
     "rootDir": "src",
@@ -17,5 +17,10 @@
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "composite": true
   },
-  "files": ["src/index.ts", "src/types.ts", "src/mock-puck-config.tsx", "src/ui-config.ts"]
+  "files": [
+    "src/index.ts",
+    "src/types.ts",
+    "src/mock-puck-config.tsx",
+    "src/ui-config.ts"
+  ]
 }

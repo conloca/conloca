@@ -7,7 +7,7 @@
       "path": "../../packages/content-api"
     },
     {
-      "path": "../../packages/astro-ligma-cms"
+      "path": "../../packages/astro-cms"
     }
   ]
 }

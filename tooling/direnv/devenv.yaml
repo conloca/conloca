@@ -1,0 +1,12 @@
+allowUnfree: true
+inputs:
+  nixpkgs:
+    url: github:cachix/devenv-nixpkgs/rolling
+  nixpkgs-overlay:
+    url: path:../../tooling/direnv/nixpkgs-overlay
+    flake: true
+    overlays:
+      - default
+  git-format-staged:
+    url: github:smoothbricks/git-format-staged
+    flake: true

@@ -1,0 +1,21 @@
+# Run: nix shell nixpkgs#nvfetcher -c nvfetcher -o _sources
+
+[bun-x86_64-linux]
+src.github = "oven-sh/bun"
+src.prefix = "bun-v"
+fetch.url = "https://github.com/oven-sh/bun/releases/download/bun-v$ver/bun-linux-x64.zip"
+
+[bun-aarch64-linux]
+src.github = "oven-sh/bun"
+src.prefix = "bun-v"
+fetch.url = "https://github.com/oven-sh/bun/releases/download/bun-v$ver/bun-linux-aarch64.zip"
+
+[bun-x86_64-darwin]
+src.github = "oven-sh/bun"
+src.prefix = "bun-v"
+fetch.url = "https://github.com/oven-sh/bun/releases/download/bun-v$ver/bun-darwin-x64.zip"
+
+[bun-aarch64-darwin]
+src.github = "oven-sh/bun"
+src.prefix = "bun-v"
+fetch.url = "https://github.com/oven-sh/bun/releases/download/bun-v$ver/bun-darwin-aarch64.zip"

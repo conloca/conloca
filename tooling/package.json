@@ -1,0 +1,8 @@
+{
+  "name": "@corpos/tooling",
+  "version": "0.0.1",
+  "private": true,
+  "bin": {
+    "tsc-bun-test": "./tsc-bun-test.sh"
+  }
+}

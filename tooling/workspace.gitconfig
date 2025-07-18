@@ -1,0 +1,22 @@
+# https://gist.github.com/mrnabati/bc59304784e1a3a48dd25f92bf20a420
+[status]
+	submodulesummary = 1
+
+[diff]
+	algorithm = patience
+	submodule = log
+
+[push]
+  # Ensures all submodule commits used by the revisions to be pushed are available on a remote-tracking branch.
+  # Git will verify that all submodule commits that changed in the revisions to be pushed are available on at least
+  # one remote of the submodule. If any commits are missing the push will be aborted and exit with non-zero status.
+  # If on-demand is used all submodules that changed in the revisions to be pushed will be pushed.
+  # If on-demand was not able to push all necessary revisions it will also be aborted and exit with non-zero status.
+	recurse-submodules = on-demand
+	autoSetupRemote = true
+
+[pull]
+	rebase = true
+
+[rebase]
+	autoStash = true

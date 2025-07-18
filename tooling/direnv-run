@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Helper script to run commands with fresh direnv environment
+# This is useful when Claude Code is started from within a direnv session
+# and environment changes need to be picked up without restarting
+
+set -euo pipefail
+
+# Check if direnv is available
+if ! command -v direnv >/dev/null 2>&1; then
+  echo "Error: direnv not found in PATH" >&2
+  exit 1
+fi
+
+# Export fresh direnv environment and run the command
+eval "$(direnv export bash 2>/dev/null)"
+exec "$@"

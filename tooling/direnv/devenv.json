@@ -1,0 +1,9 @@
+{
+  "inputs": {
+    "nixpkgs": { "url": "github:cachix/devenv-nixpkgs/rolling" },
+    "nixpkgs-overlay": {
+      "url": "path:./nixpkgs-overlay",
+      "overlays": ["default"]
+    }
+  }
+}
