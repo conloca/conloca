@@ -1,0 +1,27 @@
+{
+  "versionGroups": [
+    {
+      "packages": ["**"],
+      "dependencies": ["react", "react-dom"],
+      "pinVersion": "19.1.0"
+    },
+    {
+      "packages": ["**"],
+      "dependencies": ["@types/react"],
+      "pinVersion": "19.1.8"
+    },
+    {
+      "packages": ["**"],
+      "dependencies": ["@types/react-dom"],
+      "pinVersion": "19.1.6"
+    }
+  ],
+  "dependencyTypes": ["dev", "peer", "prod"],
+  "semverGroups": [
+    {
+      "packages": ["**"],
+      "dependencies": ["@conloca/*"],
+      "range": "workspace:*"
+    }
+  ]
+}

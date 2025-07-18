@@ -1,0 +1,50 @@
+{
+  "name": "@conloca/public",
+  "version": "0.0.0",
+  "scripts": {
+    "build": "nx run-many -t build --all",
+    "test": "nx run-many -t test --all",
+    "lint": "nx run-many -t lint --all"
+  },
+  "private": true,
+  "packageManager": "bun@1.2.18",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "dependencies": {
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.27.4",
+    "@babel/preset-react": "^7.27.1",
+    "@biomejs/biome": "^2.1.2",
+    "@nx/js": "21.2.1",
+    "@nx/react": "21.2.1",
+    "@nx/web": "21.2.1",
+    "@nx/workspace": "21.2.1",
+    "@swc-node/register": "~1.10.10",
+    "@swc/core": "~1.12.7",
+    "@swc/helpers": "~0.5.17",
+    "@testing-library/dom": "10.4.0",
+    "@testing-library/react": "^16.3.0",
+    "@types/node": "~22.0.0",
+    "@types/react": "19.1.8",
+    "@types/react-dom": "19.1.6",
+    "@vitejs/plugin-react": "^4.6.0",
+    "@vitest/coverage-v8": "^3.2.4",
+    "@vitest/ui": "^3.2.4",
+    "ajv": "^8.17.1",
+    "jiti": "2.4.2",
+    "jsdom": "^26.1.0",
+    "nx": "21.2.1",
+    "prettier": "^3.6.2",
+    "tslib": "^2.8.1",
+    "typescript": "^5.8.3",
+    "vite": "^7.0.0",
+    "vitest": "^3.2.4"
+  },
+  "workspaces": [
+    "packages/*"
+  ]
+}
