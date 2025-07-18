@@ -14,8 +14,8 @@
     "@conloca/content-api": "workspace:*",
     "@measured/puck": "^0.19.1",
     "astro": "^5.10.2",
-    "react": "19.0.0",
-    "react-dom": "19.0.0"
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
   },
   "devDependencies": {
     "@types/bun": "^1.2.17",

@@ -1,6 +1,6 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
-import { ligmaCMS } from '@ligma/astro-ligma-cms';
+import { conlocaCMS } from '@conloca/astro-cms';
 import react from '@astrojs/react';
 
 // https://astro.build/config
@@ -9,7 +9,7 @@ export default defineConfig({
     react({
       //   exclude: [/puck\.config\.tsx$/] // Testing automatic handling
     }),
-    ligmaCMS({
+    conlocaCMS({
       contentRoot: './content',
       canvasDir: './canvas',
       puckConfigPath: './src/puck.config.tsx',
