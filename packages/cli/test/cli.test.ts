@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { $ } from 'bun';
-import { mkdtemp, rm } from 'fs/promises';
+import { mkdtemp, readFile, rm, stat } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
@@ -52,6 +52,57 @@ describe('Conloca CLI', () => {
       expect(result.stdout.toString()).toContain('Content verification successful');
       expect(result.stdout.toString()).toContain('Verified 0 content items');
       expect(result.exitCode).toBe(0);
+    } finally {
+      await rm(tempDir, { recursive: true });
+    }
+  });
+
+  test('init command requires directory argument', async () => {
+    const result = await $`./dist/conloca.js init`
+      .cwd(import.meta.dir + '/..')
+      .quiet()
+      .nothrow();
+    expect(result.stderr.toString()).toContain('init command requires a directory argument');
+    expect(result.exitCode).toBe(1);
+  });
+
+  test('init command requires site name argument', async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), 'conloca-cli-init-nosite-test-'));
+    try {
+      const result = await $`./dist/conloca.js init ${tempDir}`
+        .cwd(import.meta.dir + '/..')
+        .quiet()
+        .nothrow();
+      expect(result.stderr.toString()).toContain('init command requires a site name argument');
+      expect(result.exitCode).toBe(1);
+    } finally {
+      await rm(tempDir, { recursive: true });
+    }
+  });
+
+  test('init command creates content structure with custom site name', async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), 'conloca-cli-init-custom-test-'));
+    try {
+      const result = await $`./dist/conloca.js init ${tempDir} mysite`.cwd(import.meta.dir + '/..').quiet();
+      expect(result.stdout.toString()).toContain("Initialized Conloca content structure for site 'mysite'");
+      expect(result.exitCode).toBe(0);
+
+      // Check that directories were created with custom site name
+      const mysitePagesDir = await stat(join(tempDir, 'content', 'mysite', 'pages'));
+      expect(mysitePagesDir.isDirectory()).toBe(true);
+
+      // Check that sites.json contains the custom site
+      const sitesJson = await readFile(join(tempDir, 'content', 'sites.json'), 'utf-8');
+      const sitesConfig = JSON.parse(sitesJson);
+      expect(sitesConfig).toEqual({
+        sites: {
+          mysite: {
+            locales: ['en'],
+            defaultLocale: 'en',
+          },
+        },
+        globalLocales: ['en'],
+      });
     } finally {
       await rm(tempDir, { recursive: true });
     }

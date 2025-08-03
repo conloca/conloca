@@ -12,6 +12,27 @@ bun add -g @conloca/cli
 
 ## Usage
 
+### Initialize Content Structure
+
+Initialize a new Conloca content structure for a site:
+
+```bash
+conloca init <directory> <site>
+```
+
+This command will:
+
+- Create the content directory structure
+- Create directories for the specified site
+- Create or update the sites.json configuration file
+- Set up the blocks/shared directory for shared components
+
+Example:
+
+```bash
+conloca init ./my-project mysite
+```
+
 ### Verify Content
 
 Verify content files in a directory, automatically repairing any files missing required fields:

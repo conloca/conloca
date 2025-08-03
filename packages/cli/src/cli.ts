@@ -1,4 +1,5 @@
 import { parseArgs } from 'util';
+import { init } from './commands/init';
 import { verify } from './commands/verify';
 
 async function main() {
@@ -18,7 +19,8 @@ async function main() {
       console.log(`Usage: conloca <command> [options]
 
 Commands:
-  verify <directory>    Verify content in the specified directory
+  init <directory> <site>   Initialize a new Conloca content structure
+  verify <directory>        Verify content in the specified directory
 
 Options:
   -h, --help           Show this help message`);
@@ -28,6 +30,18 @@ Options:
     const command = positionals[0];
 
     switch (command) {
+      case 'init':
+        if (positionals.length < 2) {
+          console.error('Error: init command requires a directory argument');
+          process.exit(1);
+        }
+        if (positionals.length < 3) {
+          console.error('Error: init command requires a site name argument');
+          process.exit(1);
+        }
+        await init(positionals[1], positionals[2]);
+        break;
+
       case 'verify':
         if (positionals.length < 2) {
           console.error('Error: verify command requires a directory argument');
@@ -35,6 +49,7 @@ Options:
         }
         await verify(positionals[1]);
         break;
+
       default:
         console.error(`Error: Unknown command '${command}'`);
         process.exit(1);
