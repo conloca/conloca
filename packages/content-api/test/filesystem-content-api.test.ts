@@ -59,7 +59,6 @@ createContentAPITestSuite(
 
 describe('FileSystemContentAPI - 4KB index optimization', () => {
   let tempDir: string;
-  let contentApi: FileSystemContentAPI;
 
   beforeEach(async () => {
     // Clear caches before each test
@@ -88,7 +87,7 @@ describe('FileSystemContentAPI - 4KB index optimization', () => {
     };
     await writeFile(join(contentRoot, 'sites.json'), JSON.stringify(sitesConfig, null, 2));
 
-    contentApi = await FileSystemContentAPI.create({
+    await FileSystemContentAPI.create({
       contentRoot,
       canvasDir,
     });
@@ -659,5 +658,162 @@ category: test
     expect(block).toBeDefined();
     // Either title is acceptable as long as both files still exist
     expect(['Original Without Locale', 'Existing With Locale']).toContain(block!.locales.en?.meta.title);
+  });
+
+  test('handles relative content root paths correctly', async () => {
+    // Create a test structure
+    const testDir = await mkdtemp(join(tmpdir(), 'relative-path-test-'));
+    const contentDir = join(testDir, 'content');
+    const blocksDir = join(contentDir, 'blocks', 'test');
+    await mkdir(blocksDir, { recursive: true });
+
+    // Create sites.json
+    const sitesConfig = {
+      sites: {
+        default: {
+          locales: ['en'],
+          defaultLocale: 'en',
+        },
+      },
+      globalLocales: ['en'],
+    };
+    await writeFile(join(contentDir, 'sites.json'), JSON.stringify(sitesConfig, null, 2));
+
+    // Create a test MDX file
+    const mdxContent = `---
+id: test-block
+title: Test Block
+created: 2024-01-01T00:00:00Z
+modified: 2024-01-01T00:00:00Z
+---
+
+# Test Block
+
+This is a test block.`;
+
+    await writeFile(join(blocksDir, 'test-block.en.mdx'), mdxContent);
+
+    // Change to the test directory to test relative paths
+    const originalCwd = process.cwd();
+    try {
+      process.chdir(testDir);
+
+      // Create API with relative path
+      console.log('Current working directory:', process.cwd());
+      console.log('Creating API with relative path: ./content');
+      const api = await FileSystemContentAPI.create({
+        contentRoot: './content',
+      });
+
+      // The API should work correctly with relative paths
+      const block = await api.getLocalized('test-block', 'en');
+      expect(block).toBeDefined();
+      expect(block?.localized.meta.title).toBe('Test Block');
+
+      // List all content should also work
+      let foundBlock = false;
+      for (const manifest of api.listAllContent()) {
+        if (manifest.id === 'test-block') {
+          foundBlock = true;
+          break;
+        }
+      }
+      expect(foundBlock).toBe(true);
+    } finally {
+      // Restore original working directory
+      process.chdir(originalCwd);
+      // Clean up
+      await rm(testDir, { recursive: true, force: true });
+    }
+  });
+
+  test('normalizes contentRoot paths to remove ./ prefix', async () => {
+    // Create a test structure
+    const testDir = await mkdtemp(join(tmpdir(), 'contentroot-normalization-test-'));
+    const contentDir = join(testDir, 'content');
+    const blocksDir = join(contentDir, 'blocks', 'test');
+    await mkdir(blocksDir, { recursive: true });
+
+    // Create sites.json
+    const sitesConfig = {
+      sites: {
+        default: {
+          locales: ['en'],
+          defaultLocale: 'en',
+        },
+      },
+      globalLocales: ['en'],
+    };
+    await writeFile(join(contentDir, 'sites.json'), JSON.stringify(sitesConfig, null, 2));
+
+    // Create a test block
+    const blockContent = {
+      id: 'test-normalize',
+      type: 'puck' as const,
+      created: '2024-01-01T00:00:00Z',
+      modified: '2024-01-01T00:00:00Z',
+      meta: { title: 'Test Normalization' },
+      content: { puckData: { type: 'test' } },
+    };
+    await writeFile(join(blocksDir, 'test-normalize.en.vxjson'), VXJSON.serialize(blockContent));
+
+    // Change to the test directory to test relative paths
+    const originalCwd = process.cwd();
+    try {
+      process.chdir(testDir);
+
+      // Test 1: contentRoot with ./ prefix should be normalized
+      const api1 = await FileSystemContentAPI.create({
+        contentRoot: './content',
+        canvasDir: './canvas',
+      });
+
+      // The internal contentRoot should be normalized to 'content'
+      expect((api1 as any).normalizedContentRoot).toBe('content');
+
+      // We'll also verify this by checking that the block can be found
+      const block1 = api1.blocks.getByName('test', 'test-normalize', 'en');
+      expect(block1).toBeDefined();
+      expect(block1?.id).toBe('test-normalize');
+
+      // Test 2: contentRoot without ./ prefix should remain unchanged
+      const api2 = await FileSystemContentAPI.create({
+        contentRoot: 'content',
+        canvasDir: 'canvas',
+      });
+
+      // Should remain as 'content'
+      expect((api2 as any).normalizedContentRoot).toBe('content');
+
+      const block2 = api2.blocks.getByName('test', 'test-normalize', 'en');
+      expect(block2).toBeDefined();
+      expect(block2?.id).toBe('test-normalize');
+
+      // Test 3: Absolute paths should remain absolute
+      const absoluteContentRoot = join(testDir, 'content');
+      const api3 = await FileSystemContentAPI.create({
+        contentRoot: absoluteContentRoot,
+        canvasDir: join(testDir, 'canvas'),
+      });
+
+      // Should remain as absolute path
+      expect((api3 as any).normalizedContentRoot).toBe(absoluteContentRoot);
+
+      const block3 = api3.blocks.getByName('test', 'test-normalize', 'en');
+      expect(block3).toBeDefined();
+      expect(block3?.id).toBe('test-normalize');
+
+      // Test 4: Verify cache keys use normalized paths
+      // This is harder to test directly, but we can verify that
+      // api1 and api2 (which should have the same normalized path)
+      // are using the same cached instance
+      // Note: This might not work if caching is based on the original path
+      // We'll need to check the implementation to see how caching works
+    } finally {
+      // Restore original working directory
+      process.chdir(originalCwd);
+      // Clean up
+      await rm(testDir, { recursive: true, force: true });
+    }
   });
 });

@@ -1,6 +1,6 @@
 import { type FileHandle, mkdir, open, readdir, readFile, rename, unlink, writeFile } from 'fs/promises';
 import matter from 'gray-matter';
-import { dirname, join } from 'path';
+import { dirname, join, resolve } from 'path';
 import sortKeys from 'sort-keys';
 import { Blocks } from './blocks';
 import type { ContentAPI } from './content-api.interface';
@@ -157,10 +157,16 @@ function parse4KBMDX(
  */
 export class FileSystemContentAPI implements ContentAPI {
   private contentRoot: string;
+  private absoluteContentRoot: string;
   private contentIndex: ContentIndex;
   readonly sitesConfig: SitesConfig;
   readonly blocks: Blocks;
   private readonly sites: Record<string, Site>;
+
+  // Getter for testing purposes
+  get normalizedContentRoot(): string {
+    return this.contentRoot;
+  }
 
   private constructor(
     contentRoot: string,
@@ -168,7 +174,20 @@ export class FileSystemContentAPI implements ContentAPI {
     sitesConfig: SitesConfig,
     contentIndex: ContentIndex,
   ) {
-    this.contentRoot = contentRoot;
+    // Normalize contentRoot: remove ./ prefix for relative paths, keep absolute paths as-is
+    if (contentRoot.startsWith('./')) {
+      this.contentRoot = contentRoot.slice(2);
+    } else if (contentRoot.startsWith('/')) {
+      // Absolute path, keep as-is
+      this.contentRoot = contentRoot;
+    } else {
+      // Already normalized relative path
+      this.contentRoot = contentRoot;
+    }
+
+    // Store absolute path for file operations
+    this.absoluteContentRoot = resolve(this.contentRoot);
+
     // TODO: Use canvasDir for canvas/unlinked components
     this.sitesConfig = sitesConfig;
     this.contentIndex = contentIndex;
@@ -187,10 +206,15 @@ export class FileSystemContentAPI implements ContentAPI {
   }
 
   static async create(options: ContentAPIOptions): Promise<FileSystemContentAPI> {
-    const { contentRoot, canvasDir } = options;
+    const { canvasDir } = options;
+    // Keep contentRoot as provided (will be normalized in constructor)
+    const contentRoot = options.contentRoot;
+
+    // For file operations, we need the absolute path
+    const absoluteContentRoot = resolve(contentRoot);
 
     // Load sites config
-    const sitesPath = join(contentRoot, 'sites.json');
+    const sitesPath = join(absoluteContentRoot, 'sites.json');
     let sitesConfig: SitesConfig;
     try {
       const content = await readFile(sitesPath, 'utf-8');
@@ -202,7 +226,9 @@ export class FileSystemContentAPI implements ContentAPI {
     }
 
     // Get cached content index or create new one
-    const contentIndex = await ContentIndex.getCachedOrCreate(contentRoot, sitesConfig);
+    // Use the normalized contentRoot for cache key
+    const normalizedContentRoot = contentRoot.startsWith('./') ? contentRoot.slice(2) : contentRoot;
+    const contentIndex = await ContentIndex.getCachedOrCreate(normalizedContentRoot, sitesConfig);
 
     // Create instance (not cached)
     const api = new FileSystemContentAPI(contentRoot, canvasDir, sitesConfig, contentIndex);
@@ -290,8 +316,12 @@ export class FileSystemContentAPI implements ContentAPI {
       // Now parse the buffer content
 
       // Parse file to extract metadata
-      let relativePath = filePath.replace(this.contentRoot + '/', '');
+      let relativePath = filePath.replace(this.absoluteContentRoot + '/', '');
       let parts = relativePath.split('/');
+      console.log(`Processing file: ${filePath}`);
+      console.log(`Content root: ${this.absoluteContentRoot}`);
+      console.log(`Relative path: ${relativePath}`);
+      console.log(`Parts: ${JSON.stringify(parts)}`);
 
       // Determine site/collection structure
       let site: string | undefined;
@@ -320,10 +350,12 @@ export class FileSystemContentAPI implements ContentAPI {
         kind = 'block';
         collection = parts[1];
         const filename = parts[parts.length - 1];
+        console.log(`Processing block file: ${filename}`);
         // Extract name and locale from filename: hero.en.mdx -> name: hero, locale: en
         // Also handle files without locale: hero.mdx -> name: hero, locale: en (default)
         const matchWithLocale = filename.match(/^(.+)\.(\w+)\.(mdx|vxjson)$/);
         const matchWithoutLocale = filename.match(/^(.+)\.(mdx|vxjson)$/);
+        console.log(`matchWithLocale: ${matchWithLocale}, matchWithoutLocale: ${matchWithoutLocale}`);
 
         if (matchWithLocale) {
           name = matchWithLocale[1];
@@ -332,10 +364,12 @@ export class FileSystemContentAPI implements ContentAPI {
           name = matchWithoutLocale[1];
           locale = 'en'; // Default locale
 
+          console.log(`Found file without locale suffix: ${filename}`);
           // Rename file to include locale suffix
           const extension = matchWithoutLocale[2];
           const newFilename = `${name}.${locale}.${extension}`;
           const newFilePath = join(dirname(filePath), newFilename);
+          console.log(`Will rename to: ${newFilename} at ${newFilePath}`);
 
           // Check if target file already exists
           try {
@@ -350,15 +384,16 @@ export class FileSystemContentAPI implements ContentAPI {
             console.warn(`Cannot rename ${filename} to ${newFilename}: target file already exists`);
           } catch (error) {
             // Target file doesn't exist, safe to rename
+            console.log(`Target file doesn't exist, proceeding with rename`);
             try {
               await rename(filePath, newFilePath);
-              console.log(`Renamed ${filename} to ${newFilename}`);
+              console.log(`Successfully renamed ${filename} to ${newFilename}`);
 
               // Update filePath to the new path for further processing
               filePath = newFilePath;
 
               // Update relativePath and parts for the new file path
-              relativePath = filePath.replace(this.contentRoot + '/', '');
+              relativePath = filePath.replace(this.absoluteContentRoot + '/', '');
               parts = relativePath.split('/');
 
               // Re-open the file with the new path
@@ -374,6 +409,7 @@ export class FileSystemContentAPI implements ContentAPI {
         }
 
         // Parse content based on file type
+        console.log(`Parsing file: ${filePath}, ends with .mdx: ${filePath.endsWith('.mdx')}`);
         if (filePath.endsWith('.mdx')) {
           parsedData = parse4KBMDX(buffer, bytesRead);
         } else {
@@ -539,6 +575,7 @@ export class FileSystemContentAPI implements ContentAPI {
           // Write back with updated frontmatter
           const updatedContent = matter.stringify(parsed.content, parsed.data);
           await writeFile(filePath, updatedContent);
+          console.log(`Repaired MDX file: ${filePath} (added missing fields)`);
 
           // Calculate ETags for the repaired MDX file
           const repairedBuffer = Buffer.from(updatedContent, 'utf-8') as Uint8Array;
@@ -590,6 +627,7 @@ export class FileSystemContentAPI implements ContentAPI {
           };
           const repairedJson = VXJSON.serialize(vxjsonData);
           await writeFile(filePath, repairedJson);
+          console.log(`Repaired VXJSON file: ${filePath} (fixed field order or added missing fields)`);
           // Return the repaired data
 
           // Calculate ETags from the repaired JSON
@@ -641,19 +679,19 @@ export class FileSystemContentAPI implements ContentAPI {
       }
     }
 
-    await scan(this.contentRoot);
+    await scan(this.absoluteContentRoot);
     return files;
   }
 
   private getFilePath(manifest: ContentIdentity, { locale, name, pathname }: LocalePathData): string {
     if (manifest.kind === 'block') {
       const ext = manifest.type === 'mdx' ? 'mdx' : 'vxjson';
-      return join(this.contentRoot, 'blocks', manifest.collection, `${name}.${locale}.${ext}`);
+      return join(this.absoluteContentRoot, 'blocks', manifest.collection, `${name}.${locale}.${ext}`);
     }
     if (manifest.kind === 'page' && pathname && manifest.site) {
       // For pages, derive path from pathname
       const basePath = pathname.replace(/^\//, '').replace(/\/$/, '') || 'index';
-      return join(this.contentRoot, manifest.site, manifest.collection, `${basePath}.${locale}.vxjson`);
+      return join(this.absoluteContentRoot, manifest.site, manifest.collection, `${basePath}.${locale}.vxjson`);
     }
     throw new Error(`Invalid manifest: ${JSON.stringify(manifest, null, 2)}`);
   }
@@ -671,7 +709,7 @@ export class FileSystemContentAPI implements ContentAPI {
     locale: string;
   } | null {
     // Remove contentRoot prefix
-    const relativePath = filePath.replace(this.contentRoot + '/', '');
+    const relativePath = filePath.replace(this.absoluteContentRoot + '/', '');
     const parts = relativePath.split('/');
 
     // Match locale.ext pattern at the end
