@@ -7,9 +7,9 @@ describe('ContentAPIClient', () => {
   let fetchMock: ReturnType<typeof mock>;
 
   beforeEach(() => {
-    client = new ContentAPIClient();
     fetchMock = mock(() => Promise.resolve(new Response()));
     global.fetch = fetchMock as any;
+    client = new ContentAPIClient();
   });
 
   describe('getContent', () => {
@@ -149,13 +149,16 @@ describe('ContentAPIClient', () => {
 
       const result = await client.updateLocalized(updateInput);
 
-      expect(fetchMock).toHaveBeenCalledWith('/__conloca/api/content/test-id?locale=en&etag=oldMetaHash.oldContentHash', {
-        method: 'PUT',
-        body: JSON.stringify(updateInput.data),
-        headers: {
-          'Content-Type': 'application/json',
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/__conloca/api/content/test-id?locale=en&etag=oldMetaHash.oldContentHash',
+        {
+          method: 'PUT',
+          body: JSON.stringify(updateInput.data),
+          headers: {
+            'Content-Type': 'application/json',
+          },
         },
-      });
+      );
       expect(result.success).toBe(true);
       expect(result.etag).toBe('updatedMetaHash.updatedContentHash');
     });

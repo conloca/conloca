@@ -54,7 +54,7 @@
     "react-dom": "19.1.0"
   },
   "devDependencies": {
-    "astro": "^5.10.2"
+    "astro": "5.12.8"
   },
   "nx": {
     "targets": {

@@ -12,10 +12,12 @@ await $`bunx @tailwindcss/cli -i ./src/main.css -o ./src/main.compiled.css --min
 
 // Step 3: Bundle with Bun
 console.log('Bundling with Bun...');
+const isDev = process.env.NODE_ENV !== 'production';
 const bundleResult = await build({
   entrypoints: ['./src/main.html'],
   outdir: './dist/spa',
-  minify: true,
+  minify: !isDev,
+  sourcemap: isDev ? 'inline' : 'none',
   naming: {
     entry: '[name].[hash].[ext]',
     chunk: '[name].[hash].[ext]',

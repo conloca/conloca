@@ -21,6 +21,7 @@
   ],
   "scripts": {
     "build": "bun build-spa.ts",
+    "build:dev": "NODE_ENV=development bun build-spa.ts",
     "dev": "bun --bun --hot dev-server.tsx",
     "test": "tsc-bun-test",
     "test:watch": "bun test --watch"
@@ -57,6 +58,17 @@
         "dependsOn": [
           "^build"
         ]
+      },
+      "build:dev": {
+        "dependsOn": [
+          "^build"
+        ]
+      },
+      "dev": {
+        "dependsOn": [
+          "^build"
+        ],
+        "continuous": true
       }
     }
   }

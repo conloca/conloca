@@ -27,7 +27,15 @@ export class ContentAPIClient {
   private fetch: typeof fetch;
 
   constructor(options: ContentAPIClientOptions = {}) {
-    this.fetch = options.fetch || fetch;
+    // Bind fetch to maintain its context
+    if (options.fetch) {
+      this.fetch = options.fetch;
+    } else if (typeof globalThis !== 'undefined' && globalThis.fetch) {
+      // Use globalThis for better compatibility
+      this.fetch = globalThis.fetch.bind(globalThis);
+    } else {
+      this.fetch = fetch;
+    }
     this.baseUrl = options.baseUrl || '/__conloca/api';
   }
 

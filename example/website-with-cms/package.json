@@ -13,7 +13,7 @@
     "@conloca/astro-cms": "workspace:*",
     "@conloca/content-api": "workspace:*",
     "@measured/puck": "^0.19.1",
-    "astro": "^5.10.2",
+    "astro": "5.12.8",
     "react": "19.1.0",
     "react-dom": "19.1.0"
   },
