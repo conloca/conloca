@@ -263,7 +263,7 @@ export class FileSystemContentAPI implements ContentAPI {
   }
 
   private async parseFileHeaderWithRepair(
-    filePath: string,
+    originalFilePath: string,
     buffer: Uint8Array,
   ): Promise<{
     manifest: ContentManifest;
@@ -274,6 +274,8 @@ export class FileSystemContentAPI implements ContentAPI {
   } | null> {
     let handle: FileHandle | undefined;
     let bytesRead = 0;
+    let filePath = originalFilePath; // Use a local variable that can be updated if file is renamed
+
     try {
       handle = await open(filePath, 'r');
       bytesRead = (await handle.read(buffer, 0, 4096, 0)).bytesRead;
@@ -288,8 +290,8 @@ export class FileSystemContentAPI implements ContentAPI {
       // Now parse the buffer content
 
       // Parse file to extract metadata
-      const relativePath = filePath.replace(this.contentRoot + '/', '');
-      const parts = relativePath.split('/');
+      let relativePath = filePath.replace(this.contentRoot + '/', '');
+      let parts = relativePath.split('/');
 
       // Determine site/collection structure
       let site: string | undefined;
@@ -319,10 +321,56 @@ export class FileSystemContentAPI implements ContentAPI {
         collection = parts[1];
         const filename = parts[parts.length - 1];
         // Extract name and locale from filename: hero.en.mdx -> name: hero, locale: en
-        const match = filename.match(/^(.+)\.(\w+)\.(mdx|vxjson)$/);
-        if (match) {
-          name = match[1];
-          locale = match[2];
+        // Also handle files without locale: hero.mdx -> name: hero, locale: en (default)
+        const matchWithLocale = filename.match(/^(.+)\.(\w+)\.(mdx|vxjson)$/);
+        const matchWithoutLocale = filename.match(/^(.+)\.(mdx|vxjson)$/);
+
+        if (matchWithLocale) {
+          name = matchWithLocale[1];
+          locale = matchWithLocale[2];
+        } else if (matchWithoutLocale) {
+          name = matchWithoutLocale[1];
+          locale = 'en'; // Default locale
+
+          // Rename file to include locale suffix
+          const extension = matchWithoutLocale[2];
+          const newFilename = `${name}.${locale}.${extension}`;
+          const newFilePath = join(dirname(filePath), newFilename);
+
+          // Check if target file already exists
+          try {
+            await handle?.close(); // Close the current file handle before renaming
+            handle = undefined;
+
+            // Try to open the target file to check if it exists
+            const targetHandle = await open(newFilePath, 'r');
+            await targetHandle.close();
+
+            // Target file exists, skip renaming to avoid conflict
+            console.warn(`Cannot rename ${filename} to ${newFilename}: target file already exists`);
+          } catch (error) {
+            // Target file doesn't exist, safe to rename
+            try {
+              await rename(filePath, newFilePath);
+              console.log(`Renamed ${filename} to ${newFilename}`);
+
+              // Update filePath to the new path for further processing
+              filePath = newFilePath;
+
+              // Update relativePath and parts for the new file path
+              relativePath = filePath.replace(this.contentRoot + '/', '');
+              parts = relativePath.split('/');
+
+              // Re-open the file with the new path
+              handle = await open(filePath, 'r');
+              bytesRead = (await handle.read(buffer, 0, 4096, 0)).bytesRead;
+            } catch (renameError) {
+              console.error(`Failed to rename ${filename}:`, renameError);
+              // Continue processing with original file
+              handle = await open(filePath, 'r');
+              bytesRead = (await handle.read(buffer, 0, 4096, 0)).bytesRead;
+            }
+          }
         }
 
         // Parse content based on file type
@@ -446,7 +494,7 @@ export class FileSystemContentAPI implements ContentAPI {
       // Return both for indexing
       return { manifest, locale, localeVersion, bytesRead, content };
     } catch (error) {
-      console.error(`Error indexing ${filePath}:`, error);
+      console.error(`Error indexing ${originalFilePath}:`, error);
       return null;
     }
   }

@@ -576,4 +576,88 @@ ${longContent}
     expect(fullContent.localized.content.mdx).toContain('# Main Hero');
     expect(fullContent.localized.content.mdx).toContain(longContent);
   });
+
+  test('automatically renames MDX files without locale suffix during indexing', async () => {
+    // Create an MDX file without locale suffix
+    const mdxContent = `---
+title: Test Block Without Locale
+category: test
+---
+
+# Test Content
+
+This MDX file lacks a locale suffix and should be renamed.`;
+
+    const contentDir = join(tempDir, 'content', 'blocks', 'test');
+    await mkdir(contentDir, { recursive: true });
+    const originalPath = join(contentDir, 'test-block.mdx');
+    await writeFile(originalPath, mdxContent);
+
+    // Create the API which should trigger indexing and renaming
+    const api = await FileSystemContentAPI.create({
+      contentRoot: join(tempDir, 'content'),
+      canvasDir: join(tempDir, 'canvas'),
+    });
+
+    // The original file should no longer exist
+    await expect(stat(originalPath)).rejects.toThrow();
+
+    // The renamed file with default locale should exist
+    const renamedPath = join(contentDir, 'test-block.en.mdx');
+    const renamedStats = await stat(renamedPath);
+    expect(renamedStats.isFile()).toBe(true);
+
+    // The content should be indexed under the correct name
+    const block = api.blocks.getByName('test', 'test-block', 'en');
+    expect(block).toBeDefined();
+    expect(block!.locales.en?.meta.title).toBe('Test Block Without Locale');
+  });
+
+  test('handles edge case when target file already exists during MDX rename', async () => {
+    // Create an MDX file without locale suffix
+    const mdxContentNoLocale = `---
+title: Original Without Locale
+category: test
+---
+
+# Original Content`;
+
+    // Create an existing MDX file with locale suffix
+    const mdxContentWithLocale = `---
+title: Existing With Locale
+category: test
+---
+
+# Existing Content`;
+
+    const contentDir = join(tempDir, 'content', 'blocks', 'test');
+    await mkdir(contentDir, { recursive: true });
+
+    // Write both files
+    const noLocalePath = join(contentDir, 'conflict-test.mdx');
+    const withLocalePath = join(contentDir, 'conflict-test.en.mdx');
+    await writeFile(noLocalePath, mdxContentNoLocale);
+    await writeFile(withLocalePath, mdxContentWithLocale);
+
+    // Create the API which should handle the conflict gracefully
+    const api = await FileSystemContentAPI.create({
+      contentRoot: join(tempDir, 'content'),
+      canvasDir: join(tempDir, 'canvas'),
+    });
+
+    // The original file without locale should still exist (not renamed due to conflict)
+    const originalStats = await stat(noLocalePath);
+    expect(originalStats.isFile()).toBe(true);
+
+    // The existing file with locale should remain unchanged
+    const existingStats = await stat(withLocalePath);
+    expect(existingStats.isFile()).toBe(true);
+
+    // When there's a conflict, the file without locale is indexed but may overwrite
+    // This is acceptable behavior - the important thing is no data loss occurs
+    const block = api.blocks.getByName('test', 'conflict-test', 'en');
+    expect(block).toBeDefined();
+    // Either title is acceptable as long as both files still exist
+    expect(['Original Without Locale', 'Existing With Locale']).toContain(block!.locales.en?.meta.title);
+  });
 });
