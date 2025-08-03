@@ -105,6 +105,42 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
                   return null;
                 },
               },
+              {
+                name: 'conloca-content-watcher',
+                configureServer(server) {
+                  // Watch content folder for changes
+                  const contentPath = options.contentRoot;
+                  const canvasPath = options.canvasDir || './canvas';
+
+                  // Add content folders to Vite's watch list
+                  server.watcher.add([contentPath, canvasPath]);
+
+                  // Handle file changes
+                  const handleContentChange = async (path: string) => {
+                    if (path.includes(contentPath) || path.includes(canvasPath)) {
+                      // Import dynamically to avoid circular dependencies
+                      const { FileSystemContentAPI } = await import('@conloca/content-api/node');
+
+                      console.log(`[Conloca] Content file changed: ${path}`);
+
+                      // Clear the cache to force reindexing
+                      FileSystemContentAPI.clearCaches();
+
+                      // Trigger HMR update for API routes
+                      server.ws.send({
+                        type: 'custom',
+                        event: 'conloca:content-changed',
+                        data: { path },
+                      });
+                    }
+                  };
+
+                  // Watch for file changes
+                  server.watcher.on('change', handleContentChange);
+                  server.watcher.on('add', handleContentChange);
+                  server.watcher.on('unlink', handleContentChange);
+                },
+              },
             ],
           },
         });

@@ -26,6 +26,22 @@ export default defineConfig({
       },
     }),
   ],
+  vite: {
+    // Force Vite to watch and reload on changes to workspace packages
+    optimizeDeps: {
+      exclude: ['@conloca/content-api', '@conloca/astro-cms', '@conloca/cms-spa'],
+    },
+    server: {
+      watch: {
+        // Watch the CMS dist folder for changes (both symlinked and actual path)
+        ignored: ['!**/node_modules/@conloca/cms-spa/dist/**', '!**/packages/cms-spa/dist/**'],
+      },
+      fs: {
+        // Allow serving files from the workspace
+        allow: ['../..'],
+      },
+    },
+  },
   /*
   vite: {
     plugins: [

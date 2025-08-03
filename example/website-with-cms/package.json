@@ -20,5 +20,23 @@
   "devDependencies": {
     "@types/bun": "^1.2.17",
     "extensionless": "^1.9.9"
+  },
+  "nx": {
+    "targets": {
+      "watch-deps": {
+        "executor": "nx:run-commands",
+        "options": {
+          "command": "nx watch --projects=website-with-cms --includeDependentProjects -- nx run-many -t build -p $NX_PROJECT_NAME --exclude=website-with-cms"
+        },
+        "continuous": true
+      },
+      "dev": {
+        "continuous": true,
+        "dependsOn": [
+          "^build",
+          "watch-deps"
+        ]
+      }
+    }
   }
 }
