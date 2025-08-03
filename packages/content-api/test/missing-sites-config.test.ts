@@ -40,7 +40,7 @@ describe('FileSystemContentAPI - Missing sites.json handling', () => {
     const api = await FileSystemContentAPI.create({ contentRoot, canvasDir });
 
     // Should return empty sites config
-    expect(api.sitesConfig).toEqual({ sites: {}, globalLocales: [] });
+    expect(api.sitesConfig).toEqual({ sites: {}, globalLocales: ['en'] });
   });
 
   it('should log a warning when sites.json is missing', async () => {
@@ -72,7 +72,7 @@ describe('FileSystemContentAPI - Missing sites.json handling', () => {
 
     // Should be able to call basic methods without crashing
     // sitesConfig should be empty
-    expect(api.sitesConfig).toEqual({ sites: {}, globalLocales: [] });
+    expect(api.sitesConfig).toEqual({ sites: {}, globalLocales: ['en'] });
 
     // Should return empty results for content queries
     const contents: any[] = [];

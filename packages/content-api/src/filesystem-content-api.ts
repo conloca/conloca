@@ -222,7 +222,7 @@ export class FileSystemContentAPI implements ContentAPI {
     } catch (error) {
       // Handle missing sites.json gracefully
       console.warn(`Warning: sites.json is missing at ${sitesPath}. Using empty configuration.`);
-      sitesConfig = { sites: {}, globalLocales: [] };
+      sitesConfig = { sites: {}, globalLocales: ['en'] };
     }
 
     // Get cached content index or create new one
@@ -348,11 +348,64 @@ export class FileSystemContentAPI implements ContentAPI {
 
       if (parts[0] === 'blocks') {
         kind = 'block';
-        collection = parts[1];
+
+        // Check if block is directly in blocks/ directory (no collection subdirectory)
+        if (parts.length === 2) {
+          // Block is directly in blocks/ directory, needs to be moved to 'general' collection
+          collection = 'general';
+          const filename = parts[1];
+
+          // Create the general directory if it doesn't exist
+          const generalDir = join(this.absoluteContentRoot, 'blocks', 'general');
+          try {
+            await mkdir(generalDir, { recursive: true });
+          } catch (error) {
+            // Directory might already exist, that's fine
+          }
+
+          // Move the file to the general collection
+          const newFilePath = join(generalDir, filename);
+
+          try {
+            await handle?.close(); // Close the current file handle before moving
+            handle = undefined;
+
+            // Check if target file already exists
+            try {
+              const targetHandle = await open(newFilePath, 'r');
+              await targetHandle.close();
+              console.warn(`Cannot move ${filename} to blocks/general/: target file already exists`);
+            } catch (error) {
+              // Target doesn't exist, safe to move
+              await rename(filePath, newFilePath);
+              console.log(`Repaired: Moved ${filename} to blocks/general/ collection`);
+
+              // Update filePath to the new path for further processing
+              filePath = newFilePath;
+
+              // Update relativePath and parts for the new file path
+              relativePath = filePath.replace(this.absoluteContentRoot + '/', '');
+              parts = relativePath.split('/');
+
+              // Re-open the file with the new path
+              handle = await open(filePath, 'r');
+              bytesRead = (await handle.read(buffer, 0, 4096, 0)).bytesRead;
+            }
+          } catch (moveError) {
+            console.error(`Failed to move ${filename} to general collection:`, moveError);
+            // Continue processing with original file
+            handle = await open(filePath, 'r');
+            bytesRead = (await handle.read(buffer, 0, 4096, 0)).bytesRead;
+          }
+        } else {
+          // Block is in a collection subdirectory
+          collection = parts[1];
+        }
+
         const filename = parts[parts.length - 1];
         console.log(`Processing block file: ${filename}`);
         // Extract name and locale from filename: hero.en.mdx -> name: hero, locale: en
-        // Also handle files without locale: hero.mdx -> name: hero, locale: en (default)
+        // Also handle files without locale: hero.mdx -> name: hero, locale: default from sites.json
         const matchWithLocale = filename.match(/^(.+)\.(\w+)\.(mdx|vxjson)$/);
         const matchWithoutLocale = filename.match(/^(.+)\.(mdx|vxjson)$/);
         console.log(`matchWithLocale: ${matchWithLocale}, matchWithoutLocale: ${matchWithoutLocale}`);
@@ -362,7 +415,8 @@ export class FileSystemContentAPI implements ContentAPI {
           locale = matchWithLocale[2];
         } else if (matchWithoutLocale) {
           name = matchWithoutLocale[1];
-          locale = 'en'; // Default locale
+          // Use default locale from sites config instead of hardcoded 'en'
+          locale = this.contentIndex.getDefaultLocale('');
 
           console.log(`Found file without locale suffix: ${filename}`);
           // Rename file to include locale suffix

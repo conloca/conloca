@@ -382,7 +382,7 @@ export function createContentAPITestSuite(
       test('getSite returns Site instance', () => {
         const shop = contentApi.getSite('shop');
         expect(shop).toBeDefined();
-        expect(shop.constructor.name).toBe('Site');
+        expect(shop?.constructor.name).toBe('Site');
       });
 
       test('getSite throws for "blocks"', () => {
