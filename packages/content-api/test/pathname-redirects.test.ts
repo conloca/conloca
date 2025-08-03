@@ -53,11 +53,13 @@ describe('Pathname redirects functionality', () => {
     const result = await contentApi.createContent(createData);
     const id = getCreatedId(result);
     const site = contentApi.getSite('shop');
+    expect(site).toBeDefined();
+    if (!site) throw new Error('Shop site not found');
 
     // Verify content is accessible at original pathname
-    let found = site.getByPathname('/original-path', 'en');
-    assertDefined(found, 'Content should be found at original pathname');
-    expect(found.id).toBe(id);
+    const foundAtOriginal = site.getByPathname('/original-path', 'en');
+    assertDefined(foundAtOriginal, 'Content should be found at original pathname');
+    expect(foundAtOriginal.id).toBe(id);
 
     // Get current etag for update
     const content = await contentApi.getContent(id);
@@ -77,18 +79,18 @@ describe('Pathname redirects functionality', () => {
     expect(updateResult.success).toBe(true);
 
     // CRITICAL: Content should NO LONGER be found at original pathname
-    found = site.getByPathname('/original-path', 'en');
-    expect(found).toBeNull();
+    const notFoundAtOriginal = site.getByPathname('/original-path', 'en');
+    expect(notFoundAtOriginal).toBeNull();
 
     // CRITICAL: Content should now be found at new pathname
-    found = site.getByPathname('/new-path', 'en');
-    assertDefined(found, 'Content should be found at new pathname');
-    expect(found.id).toBe(id);
+    const foundAtNew = site.getByPathname('/new-path', 'en');
+    assertDefined(foundAtNew, 'Content should be found at new pathname');
+    expect(foundAtNew.id).toBe(id);
 
     // CRITICAL: Old pathname should redirect to content via getByPreviousPathname
-    found = site.getByPreviousPathname('/original-path', 'en');
-    assertDefined(found, 'Old pathname should redirect to content');
-    expect(found.id).toBe(id);
+    const foundByPrevious = site.getByPreviousPathname('/original-path', 'en');
+    assertDefined(foundByPrevious, 'Old pathname should redirect to content');
+    expect(foundByPrevious.id).toBe(id);
 
     // Verify the file actually contains the old pathname in previousPathnames
     const updatedContent = await contentApi.getContent(id);
@@ -116,6 +118,8 @@ describe('Pathname redirects functionality', () => {
     const result = await contentApi.createContent(createData);
     const id = getCreatedId(result);
     const site = contentApi.getSite('shop');
+    expect(site).toBeDefined();
+    if (!site) throw new Error('Shop site not found');
 
     const pathnames = ['/path-v1', '/path-v2', '/path-v3', '/path-v4'];
 
@@ -137,22 +141,22 @@ describe('Pathname redirects functionality', () => {
       expect(updateResult.success).toBe(true);
 
       // Content should only be found at current pathname
-      for (let j = 0; j < pathnames.length; j++) {
-        const found = site.getByPathname(pathnames[j], 'en');
+      pathnames.forEach((pathname, j) => {
+        const result = site.getByPathname(pathname, 'en');
         if (j === i) {
-          assertDefined(found, `Content should be found at current pathname ${pathnames[j]}`);
-          expect(found.id).toBe(id);
+          assertDefined(result, `Content should be found at current pathname ${pathname}`);
+          expect(result.id).toBe(id);
         } else {
-          expect(found).toBeNull();
+          expect(result).toBeNull();
         }
-      }
+      });
 
       // All previous pathnames should redirect to content
-      for (let j = 0; j < i; j++) {
-        const found = site.getByPreviousPathname(pathnames[j], 'en');
-        assertDefined(found, `Previous pathname ${pathnames[j]} should redirect to content`);
-        expect(found.id).toBe(id);
-      }
+      pathnames.slice(0, i).forEach((pathname) => {
+        const previousResult = site.getByPreviousPathname(pathname, 'en');
+        assertDefined(previousResult, `Previous pathname ${pathname} should redirect to content`);
+        expect(previousResult.id).toBe(id);
+      });
     }
 
     // Final verification: check file content
@@ -185,6 +189,8 @@ describe('Pathname redirects functionality', () => {
     const result = await contentApi.createContent(createData);
     const id = getCreatedId(result);
     const site = contentApi.getSite('shop');
+    expect(site).toBeDefined();
+    if (!site) throw new Error('Shop site not found');
 
     // Get etags for updates
     const content = await contentApi.getContent(id);
@@ -211,26 +217,26 @@ describe('Pathname redirects functionality', () => {
     expect(nlUpdateResult.success).toBe(true);
 
     // Verify current pathnames work
-    let found = site.getByPathname('/en-new', 'en');
+    const found = site.getByPathname('/en-new', 'en');
     assertDefined(found);
     expect(found.id).toBe(id);
 
-    found = site.getByPathname('/nl-new', 'nl');
-    assertDefined(found);
-    expect(found.id).toBe(id);
+    const foundNl = site.getByPathname('/nl-new', 'nl');
+    assertDefined(foundNl);
+    expect(foundNl.id).toBe(id);
 
     // Verify old pathnames don't work via getByPathname
     expect(site.getByPathname('/en-original', 'en')).toBeNull();
     expect(site.getByPathname('/nl-original', 'nl')).toBeNull();
 
     // Verify redirects work for both locales
-    found = site.getByPreviousPathname('/en-original', 'en');
-    assertDefined(found, 'English original pathname should redirect');
-    expect(found.id).toBe(id);
+    const foundEnRedirect = site.getByPreviousPathname('/en-original', 'en');
+    assertDefined(foundEnRedirect, 'English original pathname should redirect');
+    expect(foundEnRedirect.id).toBe(id);
 
-    found = site.getByPreviousPathname('/nl-original', 'nl');
-    assertDefined(found, 'Dutch original pathname should redirect');
-    expect(found.id).toBe(id);
+    const foundNlRedirect = site.getByPreviousPathname('/nl-original', 'nl');
+    assertDefined(foundNlRedirect, 'Dutch original pathname should redirect');
+    expect(foundNlRedirect.id).toBe(id);
 
     // Cross-locale checks should not work
     expect(site.getByPreviousPathname('/en-original', 'nl')).toBeNull();
@@ -255,6 +261,8 @@ describe('Pathname redirects functionality', () => {
     const result = await contentApi.createContent(createData);
     const id = getCreatedId(result);
     const site = contentApi.getSite('shop');
+    expect(site).toBeDefined();
+    if (!site) throw new Error('Shop site not found');
 
     // Update pathname
     const content = await contentApi.getContent(id);
@@ -302,6 +310,8 @@ describe('Pathname redirects functionality', () => {
     const result = await contentApi.createContent(createData);
     const id = getCreatedId(result);
     const site = contentApi.getSite('shop');
+    expect(site).toBeDefined();
+    if (!site) throw new Error('Shop site not found');
 
     // Get current etag for update
     const content = await contentApi.getContent(id);
@@ -360,6 +370,8 @@ describe('Pathname redirects functionality', () => {
     const result = await contentApi.createContent(createData);
     const id = getCreatedId(result);
     const site = contentApi.getSite('shop');
+    expect(site).toBeDefined();
+    if (!site) throw new Error('Shop site not found');
 
     // Change pathname while still unpublished
     let content = await contentApi.getContent(id);
@@ -449,7 +461,10 @@ describe('Pathname redirects functionality', () => {
     expect(content.locales.en.pathname).toBe('/persistence-updated');
 
     // Since content is now published (no publishAt restriction), the old pathname should be in redirects
-    const redirect = contentApi.getSite('shop').getByPreviousPathname('/persistence-test', 'en');
+    const shopSite = contentApi.getSite('shop');
+    expect(shopSite).toBeDefined();
+    if (!shopSite) throw new Error('Shop site not found');
+    const redirect = shopSite.getByPreviousPathname('/persistence-test', 'en');
     assertDefined(redirect, 'Should create redirect when content becomes published');
     expect(redirect.id).toBe(id);
   });

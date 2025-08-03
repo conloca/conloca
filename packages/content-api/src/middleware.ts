@@ -48,8 +48,10 @@ export function createContentAPIRouter(api: ContentAPI) {
       // Get collections from all sites
       for (const siteName of Object.keys(api.sitesConfig.sites)) {
         const site = api.getSite(siteName);
-        const siteCollections = site.collections;
-        siteCollections.forEach((c) => allCollections.add(c));
+        if (site) {
+          const siteCollections = site.collections;
+          siteCollections.forEach((c) => allCollections.add(c));
+        }
       }
 
       return c.json({
@@ -326,6 +328,9 @@ export function createContentAPIRouter(api: ContentAPI) {
       }
       // Use the efficient collections getter for sites
       const siteObj = api.getSite(site);
+      if (!siteObj) {
+        return c.json(errorResponse(ErrorCodes.SITE_NOT_FOUND, `Site '${site}' not found`, { site }), 404);
+      }
       const collections = Array.from(siteObj.collections).sort();
       return c.json({ collections });
     } catch (error) {
@@ -350,6 +355,9 @@ export function createContentAPIRouter(api: ContentAPI) {
       }
 
       const siteObj = api.getSite(site);
+      if (!siteObj) {
+        return c.json(errorResponse(ErrorCodes.SITE_NOT_FOUND, `Site '${site}' not found`, { site }), 404);
+      }
 
       // Use listContent with locales filter
       const items = Array.from(siteObj.listContent(locale ? { locales: [locale] } : {}));
@@ -392,6 +400,9 @@ export function createContentAPIRouter(api: ContentAPI) {
 
       // Use the optimized pathname index via site.isPathnameAvailable
       const siteObj = api.getSite(site);
+      if (!siteObj) {
+        return c.json(errorResponse(ErrorCodes.SITE_NOT_FOUND, `Site '${site}' not found`, { site }), 404);
+      }
       const available = siteObj.isPathnameAvailable(pathname, locale, excludeId);
 
       if (available) {
@@ -530,6 +541,9 @@ export function createContentAPIRouter(api: ContentAPI) {
       }
 
       const siteObj = api.getSite(site);
+      if (!siteObj) {
+        return c.json(errorResponse(ErrorCodes.SITE_NOT_FOUND, `Site '${site}' not found`, { site }), 404);
+      }
 
       // First check if the pathname is available
       const existing = siteObj.getByPathname(pathname, locale);

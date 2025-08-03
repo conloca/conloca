@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import yaml from 'yaml';
 import type { ContentAPI } from '../src/content-api.interface';
 import type { ContentMeta, CreateContentInput, LocaleUpdateData } from '../src/types';
-import { assertDefined, getCreatedId, isCreateSuccess } from './test-helpers';
+import { assertDefined, getCreatedId } from './test-helpers';
 
 /**
  * Helper to generate MDX frontmatter of a specific size for testing
@@ -391,11 +391,15 @@ export function createContentAPITestSuite(
 
       test('Site.collections returns empty set for new site', () => {
         const shop = contentApi.getSite('shop');
+        expect(shop).toBeDefined();
+        if (!shop) throw new Error('Shop site not found');
         expect(shop.collections).toEqual(new Set());
       });
 
       test('Site.getByPathname checks pathname availability', async () => {
         const shop = contentApi.getSite('shop');
+        expect(shop).toBeDefined();
+        if (!shop) throw new Error('Shop site not found');
 
         // Should return null for available pathname
         const available = shop.getByPathname('/new-page', 'en');
@@ -425,6 +429,8 @@ export function createContentAPITestSuite(
 
       test('Site.move updates pathname and tracks history', async () => {
         const shop = contentApi.getSite('shop');
+        expect(shop).toBeDefined();
+        if (!shop) throw new Error('Shop site not found');
 
         // Create a page
         const createResult = await shop.create({
@@ -460,6 +466,8 @@ export function createContentAPITestSuite(
 
       test('Site.create validates pathname uniqueness', async () => {
         const shop = contentApi.getSite('shop');
+        expect(shop).toBeDefined();
+        if (!shop) throw new Error('Shop site not found');
 
         // Create first page
         const result1 = await shop.create({

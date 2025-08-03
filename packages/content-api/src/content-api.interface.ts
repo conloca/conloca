@@ -67,7 +67,7 @@ export interface ContentAPI {
   deleteLocalized(input: DeleteLocaleInput): Promise<DeleteResult>; // Deletes single locale
 
   // Site and blocks access (getters without arguments)
-  getSite(siteName: string): Site; // Returns Site instance (not for "blocks")
+  getSite(siteName: string): Site | null; // Returns Site instance or null if not found (not for "blocks")
   readonly blocks: Blocks; // Property for shared content
 
   // Global operations

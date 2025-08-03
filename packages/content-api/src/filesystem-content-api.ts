@@ -196,7 +196,9 @@ export class FileSystemContentAPI implements ContentAPI {
       const content = await readFile(sitesPath, 'utf-8');
       sitesConfig = JSON.parse(content);
     } catch (error) {
-      throw new Error(`Failed to load sites.json from ${sitesPath}: ${error}`);
+      // Handle missing sites.json gracefully
+      console.warn(`Warning: sites.json is missing at ${sitesPath}. Using empty configuration.`);
+      sitesConfig = { sites: {}, globalLocales: [] };
     }
 
     // Get cached content index or create new one
@@ -1509,16 +1511,13 @@ export class FileSystemContentAPI implements ContentAPI {
     }
   }
 
-  getSite(siteName: string): Site {
+  getSite(siteName: string): Site | null {
     if (siteName === 'blocks') {
       throw new Error('Use `blocks` property instead of getSite("blocks")');
     }
 
     const site = this.sites[siteName];
-    if (!site) {
-      throw new Error(`Site ${siteName} not found`);
-    }
-    return site;
+    return site || null;
   }
 
   *listAllContent(filters?: GlobalFilters): Generator<ContentManifest> {

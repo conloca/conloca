@@ -60,7 +60,9 @@ describe('Pathname update with in-place manifest modification', () => {
 
     // Verify initial state
     const site = contentApi.getSite('shop');
-    let found = site.getByPathname('/old-path', 'en');
+    expect(site).toBeDefined();
+    if (!site) throw new Error('Shop site not found');
+    const found = site.getByPathname('/old-path', 'en');
     assertDefined(found, `Content not found by pathname /old-path. ID: ${id}`);
     expect(found.id).toBe(id);
 
@@ -82,18 +84,18 @@ describe('Pathname update with in-place manifest modification', () => {
     expect(updateResult.success).toBe(true);
 
     // Verify old pathname is removed from index
-    found = site.getByPathname('/old-path', 'en');
-    expect(found).toBeNull();
+    const foundOld = site.getByPathname('/old-path', 'en');
+    expect(foundOld).toBeNull();
 
     // Verify new pathname works
-    found = site.getByPathname('/new-path', 'en');
-    assertDefined(found);
-    expect(found.id).toBe(id);
+    const foundNew = site.getByPathname('/new-path', 'en');
+    assertDefined(foundNew);
+    expect(foundNew.id).toBe(id);
 
     // Verify previous pathname tracking
-    found = site.getByPreviousPathname('/old-path', 'en');
-    assertDefined(found);
-    expect(found.id).toBe(id);
+    const foundPrevious = site.getByPreviousPathname('/old-path', 'en');
+    assertDefined(foundPrevious);
+    expect(foundPrevious.id).toBe(id);
   });
 
   test('multiple pathname updates should maintain proper index state', async () => {
@@ -114,6 +116,8 @@ describe('Pathname update with in-place manifest modification', () => {
     const result = await contentApi.createContent(createData);
     const id = getCreatedId(result);
     const site = contentApi.getSite('shop');
+    expect(site).toBeDefined();
+    if (!site) throw new Error('Shop site not found');
 
     // Update pathname multiple times
     const pathnames = ['/path-1', '/path-2', '/path-3', '/path-4'];
@@ -135,22 +139,22 @@ describe('Pathname update with in-place manifest modification', () => {
       expect(updateResult.success).toBe(true);
 
       // Verify only current pathname works
-      for (let j = 0; j < pathnames.length; j++) {
-        const found = site.getByPathname(pathnames[j], 'en');
+      pathnames.forEach((pathname, j) => {
+        const result = site.getByPathname(pathname, 'en');
         if (j === i) {
-          assertDefined(found);
-          expect(found.id).toBe(id);
+          assertDefined(result);
+          expect(result.id).toBe(id);
         } else {
-          expect(found).toBeNull();
+          expect(result).toBeNull();
         }
-      }
+      });
 
       // Verify all previous pathnames work via getByPreviousPathname
-      for (let j = 0; j < i; j++) {
-        const found = site.getByPreviousPathname(pathnames[j], 'en');
-        assertDefined(found);
-        expect(found.id).toBe(id);
-      }
+      pathnames.slice(0, i).forEach((pathname) => {
+        const previousResult = site.getByPreviousPathname(pathname, 'en');
+        assertDefined(previousResult);
+        expect(previousResult.id).toBe(id);
+      });
     }
   });
 
@@ -177,6 +181,8 @@ describe('Pathname update with in-place manifest modification', () => {
     const result = await contentApi.createContent(createData);
     const id = getCreatedId(result);
     const site = contentApi.getSite('shop');
+    expect(site).toBeDefined();
+    if (!site) throw new Error('Shop site not found');
 
     // Get etags for both locales
     const content = await contentApi.getContent(id);
@@ -238,7 +244,6 @@ describe('Pathname update with in-place manifest modification', () => {
     const content = await contentApi.getContent(id);
     assertDefined(content);
     const originalEtag = content.locales.en.etag;
-    const originalPathname = content.locales.en.pathname;
 
     // Mock addContent to throw an error during update
     const contentIndex = (contentApi as any).contentIndex;
@@ -287,6 +292,8 @@ describe('Pathname update with in-place manifest modification', () => {
 
     // Verify pathname index is still correct
     const site = contentApi.getSite('shop');
+    expect(site).toBeDefined();
+    if (!site) throw new Error('Shop site not found');
     const found = site.getByPathname('/original', 'en');
     assertDefined(found);
     expect(found.id).toBe(id);

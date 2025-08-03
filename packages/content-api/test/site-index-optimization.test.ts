@@ -82,7 +82,7 @@ describe('SiteIndex optimization', () => {
     siteIndex.addContent(manifest, manifest.locales.en!, undefined);
 
     // Verify initial lookup
-    let found = siteIndex.getByPathname('/old-path', 'en');
+    const found = siteIndex.getByPathname('/old-path', 'en');
     expect(found?.id).toBe('test-page');
 
     // Update pathname using in-place update (how filesystem-content-api does it)
@@ -99,15 +99,15 @@ describe('SiteIndex optimization', () => {
     siteIndex.addContent(manifest, manifest.locales.en, undefined);
 
     // Old path should not find anything
-    found = siteIndex.getByPathname('/old-path', 'en');
-    expect(found).toBeNull();
+    const foundOld = siteIndex.getByPathname('/old-path', 'en');
+    expect(foundOld).toBeNull();
 
     // New path should work
-    found = siteIndex.getByPathname('/new-path', 'en');
-    expect(found?.id).toBe('test-page');
+    const foundNew = siteIndex.getByPathname('/new-path', 'en');
+    expect(foundNew?.id).toBe('test-page');
 
     // Previous pathname lookup should work
-    found = siteIndex.getByPreviousPathname('/old-path', 'en');
-    expect(found?.id).toBe('test-page');
+    const foundPrevious = siteIndex.getByPreviousPathname('/old-path', 'en');
+    expect(foundPrevious?.id).toBe('test-page');
   });
 });

@@ -511,16 +511,13 @@ export class InMemoryContentAPI implements ContentAPI {
   }
 
   // Site and blocks access
-  getSite(siteName: string): Site {
+  getSite(siteName: string): Site | null {
     if (siteName === 'blocks') {
       throw new Error('Use `blocks` property instead of getSite("blocks")');
     }
 
     const site = this.sites[siteName];
-    if (!site) {
-      throw new Error(`Site '${siteName}' not found`);
-    }
-    return site;
+    return site || null;
   }
 
   // Global operations
