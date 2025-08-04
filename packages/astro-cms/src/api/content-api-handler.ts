@@ -27,6 +27,8 @@ export const ALL: APIRoute = async ({ request, params }) => {
     method: request.method,
     headers: request.headers,
     body: request.body,
+    // Required for Node.js when sending a body
+    ...(request.body && { duplex: 'half' as any }),
   });
 
   // Let Hono handle the request
