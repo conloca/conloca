@@ -181,7 +181,7 @@ export function BlockList() {
       setNewBlockName('');
 
       // Navigate to edit the new block
-      navigate(`/blocks/blocks/${entryId}`);
+      navigate(`/blocks/${entryId}`);
     } catch (error) {
       console.error('Failed to create block:', error);
       showError('Failed to create block. Please try again.', error);
@@ -189,7 +189,7 @@ export function BlockList() {
   };
 
   const handleEditBlock = (blockId: string) => {
-    navigate(`/blocks/blocks/${blockId}`);
+    navigate(`/blocks/${blockId}`);
   };
 
   const handleDeleteBlock = (blockId: string) => {
