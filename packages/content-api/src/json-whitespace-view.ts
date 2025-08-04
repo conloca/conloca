@@ -33,10 +33,14 @@ export class JsonWhitespaceSkippingView {
     } else {
       // Outside string: check for string start or skip whitespace
       if (byte === 0x22) {
+        // 0x22 is the double quote character (")
         // quote
         this.inString = true;
         shouldInclude = true;
-      } else if (byte !== 0x20 && byte !== 0x09 && byte !== 0x0a && byte !== 0x0d) {
+      }
+      // Check tab (0x09) first as it's the most common whitespace in our tab-indented VXJSON files
+      // Then space (0x20), newline (0x0a), carriage return (0x0d)
+      else if (byte !== 0x09 && byte !== 0x20 && byte !== 0x0a && byte !== 0x0d) {
         // Not whitespace, include it
         shouldInclude = true;
       }
@@ -114,7 +118,9 @@ export class JsonWhitespaceSkippingView {
           // quote - start of string
           this.inString = true;
           shouldInclude = true;
-        } else if (byte !== 0x20 && byte !== 0x09 && byte !== 0x0a && byte !== 0x0d) {
+          // Check tab (0x09) first as it's the most common whitespace in our tab-indented VXJSON files
+          // Then space (0x20), newline (0x0a), carriage return (0x0d)
+        } else if (byte !== 0x09 && byte !== 0x20 && byte !== 0x0a && byte !== 0x0d) {
           // Not whitespace
           shouldInclude = true;
         }

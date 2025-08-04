@@ -452,17 +452,21 @@ export class VXJSON {
       throw new Error('VXJSON format requires a "content" field');
     }
 
-    // Sort all metadata fields alphabetically and serialize
+    // Sort all metadata fields alphabetically and serialize with tab indentation
     const sortedMetadata = sortKeys(metadataFields, { deep: true });
-    const metadataJson = JSON.stringify(sortedMetadata, null, 2);
+    const metadataJson = JSON.stringify(sortedMetadata, null, '\t');
 
-    // Calculate the size when we add the content field
-    const contentFieldPrefix = ',\n  "content": ';
-    const contentJson = JSON.stringify(sortKeys(content, { deep: true }), null, 2);
+    // Serialize content wrapped in an object to get proper indentation
+    const wrappedContent = JSON.stringify({ c: sortKeys(content, { deep: true }) }, null, '\t');
+    // Extract just the content part, removing the wrapper
+    // This transforms: '{\n "c": {\n  "puckData": ...\n }\n}'
+    // Into: '{\n  "puckData": ...\n }'
+    const contentJson = wrappedContent.slice(wrappedContent.indexOf(': ') + 2, -2);
 
-    // Remove the closing } from metadata and calculate where "content": will appear
-    const metadataWithoutClosing = metadataJson.slice(0, -1); // Remove }
-    const contentKeyPosition = metadataWithoutClosing.length + ',\n  '.length; // Position of "content":
+    // Remove the closing } and newline from metadata
+    const metadataWithoutClosing = metadataJson.slice(0, -2); // Remove \n}
+    const contentFieldPrefix = ',\n\t"content": ';
+    const contentKeyPosition = metadataWithoutClosing.length + 1 + '\n\t'.length; // Position of "content":
 
     // VXJSON constraint: "content": must appear within first 4KB
     const maxContentKeyPosition = 4096 - '"content":'.length; // 4086
