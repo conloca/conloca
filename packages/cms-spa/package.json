@@ -45,6 +45,7 @@
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "^18.0.1",
+    "@tailwindcss/typography": "^0.5.16",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",
     "bun-tailwindcss": "^0.0.8",
