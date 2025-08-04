@@ -1,7 +1,9 @@
 {
   "name": "@conloca/cli",
   "version": "0.0.1",
-  "type": "module",
+  "dependencies": {
+    "@conloca/content-api": "workspace:*"
+  },
   "bin": {
     "conloca": "./dist/conloca.js"
   },
@@ -9,10 +11,5 @@
     "build": "bun run build.ts",
     "test": "bun test"
   },
-  "dependencies": {
-    "@conloca/content-api": "workspace:*"
-  },
-  "devDependencies": {
-    "bun": "latest"
-  }
+  "type": "module"
 }
