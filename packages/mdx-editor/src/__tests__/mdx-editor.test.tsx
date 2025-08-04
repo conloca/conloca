@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 import { MDXEditor, MDXEditorModal } from '../index';
@@ -82,8 +82,8 @@ describe('MDXEditor', () => {
   });
 
   describe('MDXEditorModal component', () => {
-    test('renders when isOpen is true', () => {
-      render(
+    test('renders when isOpen is true', async () => {
+      const { findByTestId, queryByTestId } = render(
         <MDXEditorModal
           isOpen={true}
           onClose={() => {}}
@@ -94,7 +94,27 @@ describe('MDXEditor', () => {
       );
 
       expect(screen.getByText('Edit: test.mdx')).toBeDefined();
-      expect(screen.getByText('Test Content')).toBeDefined();
+
+      // Initially shows modal loading
+      expect(screen.getByTestId('modal-editor-loading')).toBeDefined();
+
+      // Wait for the DeferredMDXEditor to initialize
+      await findByTestId('deferred-editor-ready');
+
+      // Loading indicators should be gone
+      expect(queryByTestId('modal-editor-loading')).toBeNull();
+      expect(queryByTestId('deferred-editor-loading')).toBeNull();
+
+      // The actual MDXEditor component should be rendered now
+      expect(screen.getByTestId('deferred-editor-ready')).toBeDefined();
+      expect(screen.getByText('Cancel')).toBeDefined();
+      expect(screen.getByText('Save')).toBeDefined();
+
+      // Check that the content is actually rendered
+      // MDXEditor renders "# Test Content" as an h1 element
+      const editorContainer = screen.getByTestId('deferred-editor-ready');
+      expect(editorContainer.querySelector('h1')).toBeDefined();
+      expect(editorContainer.textContent).toContain('Test Content');
     });
 
     test('does not render when isOpen is false', () => {

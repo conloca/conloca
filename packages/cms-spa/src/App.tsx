@@ -50,11 +50,13 @@ export default function App() {
       <Route path="/" element={<CMSLayout />}>
         <Route index element={<CMSDashboard />} />
         <Route path="pages" element={<PageList />} />
-        <Route path="blocks" element={<BlockList />} />
+        <Route path="blocks">
+          <Route index element={<BlockList />} />
+          <Route path=":id" element={<BlockEditor />} />
+        </Route>
         <Route path="test-editor" element={<TestEditor puckConfig={puckConfig} />} />
       </Route>
       <Route path="/pages/:id" element={<PageEditorWrapper puckConfig={puckConfig} />} />
-      <Route path="/blocks/:id" element={<BlockEditor />} />
     </Routes>
   );
 }
@@ -140,7 +142,6 @@ function BlockEditor() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const updateContent = useUpdateLocalized();
-  const [showEditor] = useState(true);
   const [currentEtag, setCurrentEtag] = useState<string>('');
 
   // Load the block content with the ID
@@ -183,13 +184,30 @@ function BlockEditor() {
   };
 
   if (isLoading) {
-    return <div className="flex items-center justify-center h-screen">Loading...</div>;
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 shadow-lg">
+          <div className="flex items-center gap-3">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-azure-04" />
+            <span className="text-grey-04">Loading block...</span>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (error || !content || !content.localized) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-red-500">Failed to load block: {error?.message || 'Not found'}</div>
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 shadow-lg max-w-md">
+          <div className="text-red-500 mb-4">Failed to load block: {error?.message || 'Not found'}</div>
+          <button
+            onClick={() => navigate('/blocks')}
+            className="px-4 py-2 bg-azure-04 text-white rounded hover:bg-azure-03 transition-colors"
+          >
+            Back to Blocks
+          </button>
+        </div>
       </div>
     );
   }
@@ -199,7 +217,7 @@ function BlockEditor() {
 
   return (
     <MDXEditorModal
-      isOpen={showEditor}
+      isOpen={true}
       onClose={() => navigate('/blocks')}
       filePath={`blocks/${blockName}`}
       initialContent={contentData?.mdx || '# New Block\n\n'}
