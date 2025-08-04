@@ -218,7 +218,25 @@ export class FileSystemContentAPI implements ContentAPI {
     let sitesConfig: SitesConfig;
     try {
       const content = await readFile(sitesPath, 'utf-8');
-      sitesConfig = JSON.parse(content);
+      const parsed = JSON.parse(content);
+
+      // Validate the structure
+      if (!parsed.sites || typeof parsed.sites !== 'object') {
+        console.warn(
+          `Warning: sites.json has invalid structure at ${sitesPath}. Expected 'sites' property. Using default configuration.`,
+        );
+        sitesConfig = { sites: {}, globalLocales: ['en'] };
+      } else if (!parsed.globalLocales || !Array.isArray(parsed.globalLocales)) {
+        console.warn(
+          `Warning: sites.json is missing 'globalLocales' array at ${sitesPath}. Using default global locales.`,
+        );
+        sitesConfig = {
+          sites: parsed.sites,
+          globalLocales: ['en'],
+        };
+      } else {
+        sitesConfig = parsed;
+      }
     } catch (error) {
       // Handle missing sites.json gracefully
       console.warn(`Warning: sites.json is missing at ${sitesPath}. Using empty configuration.`);
