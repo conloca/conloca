@@ -1,31 +1,12 @@
-diff --git a/src/plugins/js/index.js b/src/plugins/js/index.js
-index 343e728d6f5f3a6973a291b5374ced11ac112f00..c70529ee9e5b96d5270053c22419728564c97268 100644
---- a/src/plugins/js/index.js
-+++ b/src/plugins/js/index.js
-@@ -37,7 +37,7 @@ exports.createNodes = [
-             return {};
-         }
-         const lockFilePath = (0, path_1.join)(workspace_root_1.workspaceRoot, lockFile);
--        const lockFileContents = packageManager !== 'bun'
-+        const lockFileContents = packageManager !== 'bun' || lockFile.endsWith('.lock')
-             ? (0, fs_1.readFileSync)(lockFilePath).toString()
-             : (0, child_process_1.execSync)(`bun ${lockFilePath}`, {
-                 maxBuffer: 1024 * 1024 * 10,
-@@ -66,8 +66,9 @@ const createDependencies = (_, ctx) => {
-     if (pluginConfig.analyzeLockfile &&
-         (0, lock_file_1.lockFileExists)(packageManager) &&
-         parsedLockFile.externalNodes) {
--        const lockFilePath = (0, path_1.join)(workspace_root_1.workspaceRoot, (0, lock_file_1.getLockFileName)(packageManager));
--        const lockFileContents = packageManager !== 'bun'
-+        const lockFileName = (0, lock_file_1.getLockFileName)(packageManager);
-+        const lockFilePath = (0, path_1.join)(workspace_root_1.workspaceRoot, lockFileName);
-+        const lockFileContents = packageManager !== 'bun' || lockFileName.endsWith('.lock')
-             ? (0, fs_1.readFileSync)(lockFilePath).toString()
-             : (0, child_process_1.execSync)(`bun ${lockFilePath}`, {
-                 maxBuffer: 1024 * 1024 * 10,
-diff --git a/bun-parser.js b/bun-parser.js
+diff --git a/node_modules/nx/.bun-tag-7992c79701b9b0fe b/.bun-tag-7992c79701b9b0fe
 new file mode 100644
-index 0000000000000000000000000000000000000000..08941eaf08d316a03954846eafd03298e7ea85e0
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/nx/.bun-tag-dd45b371e4cfe7e4 b/.bun-tag-dd45b371e4cfe7e4
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/nx/bun-parser.js b/bun-parser.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..85311afc0bf1b0bfa1ac1c6a3b9f37fc0244d1d2
 --- /dev/null
 +++ b/bun-parser.js
 @@ -0,0 +1,78 @@
@@ -108,19 +89,44 @@ index 0000000000000000000000000000000000000000..08941eaf08d316a03954846eafd03298
 +    return lockFileContent;
 +}
 \ No newline at end of file
+diff --git a/src/plugins/js/index.js b/src/plugins/js/index.js
+index 343e728d6f5f3a6973a291b5374ced11ac112f00..c70529ee9e5b96d5270053c22419728564c97268 100644
+--- a/src/plugins/js/index.js
++++ b/src/plugins/js/index.js
+@@ -37,7 +37,7 @@ exports.createNodes = [
+             return {};
+         }
+         const lockFilePath = (0, path_1.join)(workspace_root_1.workspaceRoot, lockFile);
+-        const lockFileContents = packageManager !== 'bun'
++        const lockFileContents = packageManager !== 'bun' || lockFile.endsWith('.lock')
+             ? (0, fs_1.readFileSync)(lockFilePath).toString()
+             : (0, child_process_1.execSync)(`bun ${lockFilePath}`, {
+                 maxBuffer: 1024 * 1024 * 10,
+@@ -66,8 +66,9 @@ const createDependencies = (_, ctx) => {
+     if (pluginConfig.analyzeLockfile &&
+         (0, lock_file_1.lockFileExists)(packageManager) &&
+         parsedLockFile.externalNodes) {
+-        const lockFilePath = (0, path_1.join)(workspace_root_1.workspaceRoot, (0, lock_file_1.getLockFileName)(packageManager));
+-        const lockFileContents = packageManager !== 'bun'
++        const lockFileName = (0, lock_file_1.getLockFileName)(packageManager);
++        const lockFilePath = (0, path_1.join)(workspace_root_1.workspaceRoot, lockFileName);
++        const lockFileContents = packageManager !== 'bun' || lockFileName.endsWith('.lock')
+             ? (0, fs_1.readFileSync)(lockFilePath).toString()
+             : (0, child_process_1.execSync)(`bun ${lockFilePath}`, {
+                 maxBuffer: 1024 * 1024 * 10,
 diff --git a/src/plugins/js/lock-file/lock-file.js b/src/plugins/js/lock-file/lock-file.js
-index 3a4dd9f7f20910cd24692d8a6be81ee9abe0fa42..cd78c5162fe2ba77fa4f4f682648f58511ffcfa3 100644
+index 8381f6c85e2cadc6c8c18452cfb8f27c28854cf1..c453af7d1ed6303d7ba54bab808a8704b2a0ccea 100644
 --- a/src/plugins/js/lock-file/lock-file.js
 +++ b/src/plugins/js/lock-file/lock-file.js
-@@ -20,6 +20,7 @@ const output_1 = require("../../../utils/output");
+@@ -20,6 +20,7 @@ const workspace_root_1 = require("../../../utils/workspace-root");
+ const output_1 = require("../../../utils/output");
  const npm_parser_1 = require("./npm-parser");
  const pnpm_parser_1 = require("./pnpm-parser");
- const yarn_parser_1 = require("./yarn-parser");
 +const bun_parser_1 = require("../../../../bun-parser");
+ const yarn_parser_1 = require("./yarn-parser");
  const project_graph_pruning_1 = require("./project-graph-pruning");
  const package_json_1 = require("./utils/package-json");
- const fileutils_1 = require("../../../utils/fileutils");
-@@ -56,9 +57,8 @@ function getLockFileNodes(packageManager, contents, lockFileHash, context) {
+@@ -57,9 +58,8 @@ function getLockFileNodes(packageManager, contents, lockFileHash, context) {
              return (0, npm_parser_1.getNpmLockfileNodes)(contents, lockFileHash);
          }
          if (packageManager === 'bun') {
@@ -132,7 +138,7 @@ index 3a4dd9f7f20910cd24692d8a6be81ee9abe0fa42..cd78c5162fe2ba77fa4f4f682648f585
          }
      }
      catch (e) {
-@@ -87,8 +87,8 @@ function getLockFileDependencies(packageManager, contents, lockFileHash, context
+@@ -88,8 +88,8 @@ function getLockFileDependencies(packageManager, contents, lockFileHash, context
              return (0, npm_parser_1.getNpmLockfileDependencies)(contents, lockFileHash, context);
          }
          if (packageManager === 'bun') {
@@ -144,17 +150,17 @@ index 3a4dd9f7f20910cd24692d8a6be81ee9abe0fa42..cd78c5162fe2ba77fa4f4f682648f585
      }
      catch (e) {
 @@ -133,6 +133,10 @@ function getLockFileName(packageManager) {
+     if (packageManager === 'npm') {
          return NPM_LOCK_FILE;
      }
-     if (packageManager === 'bun') {
 +        // Check which lockfile exists (Bun supports both formats)
 +        if ((0, node_fs_1.existsSync)((0, node_path_1.join)(workspace_root_1.workspaceRoot, BUN_TEXT_LOCK_FILE))) {
 +            return BUN_TEXT_LOCK_FILE;
 +        }
+     if (packageManager === 'bun') {
          return BUN_LOCK_FILE;
      }
-     throw new Error(`Unknown package manager: ${packageManager}`);
-@@ -148,17 +152,11 @@ function getLockFilePath(packageManager) {
+@@ -149,17 +153,11 @@ function getLockFilePath(packageManager) {
          return NPM_LOCK_PATH;
      }
      if (packageManager === 'bun') {

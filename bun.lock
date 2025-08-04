@@ -50,8 +50,8 @@
         "astro": "5.12.8",
       },
       "peerDependencies": {
-        "react": "19.1.0",
-        "react-dom": "19.1.0",
+        "react": "19.1.1",
+        "react-dom": "19.1.1",
       },
     },
     "packages/cli": {
@@ -78,9 +78,9 @@
         "@tanstack/react-query-devtools": "^5.81.5",
         "clsx": "^2.1.1",
         "lucide-react": "^0.525.0",
-        "react": "19.1.0",
-        "react-dom": "19.1.0",
-        "react-router-dom": "^7.6.3",
+        "react": "19.1.1",
+        "react-dom": "19.1.1",
+        "react-router-dom": "^7.7.1",
         "tailwind-merge": "^3.3.1",
         "tslib": "^2.8.1",
       },
@@ -91,7 +91,7 @@
         "bun-tailwindcss": "^0.0.8",
         "react-refresh-typescript": "^2.0.10",
         "tailwindcss": "^4.1.11",
-        "typescript": "^5.8.3",
+        "typescript": "^5.9.2",
       },
     },
     "packages/content-api": {
@@ -125,11 +125,11 @@
         "@happy-dom/global-registrator": "^18.0.1",
         "@testing-library/jest-dom": "^6.6.3",
         "@testing-library/react": "^16.3.0",
-        "@types/react": "19.1.8",
+        "@types/react": "19.1.9",
       },
       "peerDependencies": {
-        "react": "19.1.0",
-        "react-dom": "19.1.0",
+        "react": "19.1.1",
+        "react-dom": "19.1.1",
       },
     },
     "packages/mdx-editor": {
@@ -141,15 +141,15 @@
       },
       "devDependencies": {
         "@testing-library/react": "^16.3.0",
-        "@types/react": "19.1.8",
-        "@types/react-dom": "19.1.6",
+        "@types/react": "19.1.9",
+        "@types/react-dom": "19.1.7",
         "happy-dom": "^18.0.1",
-        "react": "19.1.0",
-        "react-dom": "19.1.0",
+        "react": "19.1.1",
+        "react-dom": "19.1.1",
       },
       "peerDependencies": {
-        "react": "19.1.0",
-        "react-dom": "19.1.0",
+        "react": "19.1.1",
+        "react-dom": "19.1.1",
       },
     },
   },
@@ -2873,6 +2873,20 @@
     "@babel/preset-env/babel-plugin-polyfill-corejs3": ["babel-plugin-polyfill-corejs3@0.14.2", "", { "dependencies": { "@babel/helper-define-polyfill-provider": "^0.6.8", "core-js-compat": "^3.48.0" }, "peerDependencies": { "@babel/core": "^7.4.0 || ^8.0.0-0 <8.0.0" } }, "sha512-coWpDLJ410R781Npmn/SIBZEsAetR4xVi0SxLMXPaMO4lSf1MwnkGYMtkFxew0Dn8B3/CpbpYxN0JCgg8mn67g=="],
 
     "@codesandbox/sandpack-client/buffer": ["buffer@6.0.3", "", { "dependencies": { "base64-js": "^1.3.1", "ieee754": "^1.2.1" } }, "sha512-FTiCpNxtwiZZHEZbcbTIcZjERVICn9yq/pDFkTl95/AxzD1naBctN7YO68riM/gLSDY7sdrMby8hofADYuuqOA=="],
+
+    "@conloca/cms-spa/react": ["react@19.1.1", "", {}, "sha512-w8nqGImo45dmMIfljjMwOGtbmC/mk4CMYhWIicdSflH91J9TyCyczcPFXJzrZ/ZXcgGRFeP6BU0BEJTw6tZdfQ=="],
+
+    "@conloca/cms-spa/react-dom": ["react-dom@19.1.1", "", { "dependencies": { "scheduler": "^0.26.0" }, "peerDependencies": { "react": "^19.1.1" } }, "sha512-Dlq/5LAZgF0Gaz6yiqZCf6VCcZs1ghAJyrsu84Q/GT0gV+mCxbfmKNoGRKBYMJ8IEdGPqu49YWXD02GCknEDkw=="],
+
+    "@conloca/content-api-client/@types/react": ["@types/react@19.1.9", "", { "dependencies": { "csstype": "^3.0.2" } }, "sha512-WmdoynAX8Stew/36uTSVMcLJJ1KRh6L3IZRx1PZ7qJtBqT3dYTgyDTx8H1qoRghErydW7xw9mSJ3wS//tCRpFA=="],
+
+    "@conloca/mdx-editor/@types/react": ["@types/react@19.1.9", "", { "dependencies": { "csstype": "^3.0.2" } }, "sha512-WmdoynAX8Stew/36uTSVMcLJJ1KRh6L3IZRx1PZ7qJtBqT3dYTgyDTx8H1qoRghErydW7xw9mSJ3wS//tCRpFA=="],
+
+    "@conloca/mdx-editor/@types/react-dom": ["@types/react-dom@19.1.7", "", { "peerDependencies": { "@types/react": "^19.0.0" } }, "sha512-i5ZzwYpqjmrKenzkoLM2Ibzt6mAsM7pxB6BCIouEVVmgiqaMj1TjaK7hnA36hbW5aZv20kx7Lw6hWzPWg0Rurw=="],
+
+    "@conloca/mdx-editor/react": ["react@19.1.1", "", {}, "sha512-w8nqGImo45dmMIfljjMwOGtbmC/mk4CMYhWIicdSflH91J9TyCyczcPFXJzrZ/ZXcgGRFeP6BU0BEJTw6tZdfQ=="],
+
+    "@conloca/mdx-editor/react-dom": ["react-dom@19.1.1", "", { "dependencies": { "scheduler": "^0.26.0" }, "peerDependencies": { "react": "^19.1.1" } }, "sha512-Dlq/5LAZgF0Gaz6yiqZCf6VCcZs1ghAJyrsu84Q/GT0gV+mCxbfmKNoGRKBYMJ8IEdGPqu49YWXD02GCknEDkw=="],
 
     "@eslint-community/eslint-utils/eslint-visitor-keys": ["eslint-visitor-keys@3.4.3", "", {}, "sha512-wpc+LXeiyiisxPlEkUzU6svyS1frIO3Mgxj1fdy7Pm8Ygzguax2N3Fa/D/ag1WqbOprdI+uY6wMUl8/a2G+iag=="],
 

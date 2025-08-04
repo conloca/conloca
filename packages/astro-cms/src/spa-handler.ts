@@ -97,7 +97,7 @@ export const GET: APIRoute = async ({ params, request }) => {
 
     // JavaScript files are transformed by the middleware in plugin-spa.ts
 
-    return new Response(content, {
+    return new Response(content as BodyInit, {
       headers: {
         'Content-Type': contentType,
         'Cache-Control': 'public, max-age=31536000',
