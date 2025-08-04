@@ -7,7 +7,7 @@
     "lint": "nx run-many -t lint --all"
   },
   "private": true,
-  "packageManager": "bun@1.2.18",
+  "packageManager": "bun@1.2.29",
   "engines": {
     "node": ">=22.0.0"
   },

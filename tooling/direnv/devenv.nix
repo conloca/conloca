@@ -40,8 +40,12 @@ in {
   # This runs when entering the devenv shell
   # - When using the devenv wrapper from tooling/, restore the original working directory
   #   (The wrapper runs devenv from tooling/direnv but we want the shell to start where the user was)
+
+  # Set up PATH first so setup script can find tools
   enterShell = ''
-    source ${./setup-environment.sh}
+    cd "$DEVENV_ROOT/../.."
+    export PATH="$PWD/tooling:$PWD/node_modules/.bin:$PATH"
+    bun ${./setup-environment.ts}
 
     if [ -n "$DEVENV_SHELL_PWD" ]; then
       cd "$DEVENV_SHELL_PWD"

@@ -8,11 +8,11 @@
     "pinned": false,
     "src": {
       "name": null,
-      "sha256": "sha256-zKnrUnYrvYHriU/IJ1u6CgZU6BqtMY0ZhphUow83aaI=",
+      "sha256": "sha256-Z0pIN4NC76rcPCkVlrVzAQ88I4iVj3xEZ42H9vt1mZE=",
       "type": "url",
-      "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.2.18/bun-darwin-aarch64.zip"
+      "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.2.19/bun-darwin-aarch64.zip"
     },
-    "version": "1.2.18"
+    "version": "1.2.19"
   },
   "bun-aarch64-linux": {
     "cargoLocks": null,
@@ -23,11 +23,11 @@
     "pinned": false,
     "src": {
       "name": null,
-      "sha256": "sha256-G60WcdBboVaWMVynJI7AQ9KbWV/1+xX6hraZwiVdi8U=",
+      "sha256": "sha256-/P1HHNvVp4/Uo5DinMzSu3AEpJ01K6A3rzth1P1dC4M=",
       "type": "url",
-      "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.2.18/bun-linux-aarch64.zip"
+      "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.2.19/bun-linux-aarch64.zip"
     },
-    "version": "1.2.18"
+    "version": "1.2.19"
   },
   "bun-x86_64-darwin": {
     "cargoLocks": null,
@@ -38,11 +38,11 @@
     "pinned": false,
     "src": {
       "name": null,
-      "sha256": "sha256-yD6k7yEmzJQgVv8ZWFGBgaKltnI9aqV8lrXQ+zTUt9w=",
+      "sha256": "sha256-39fkxHMRtdvTgjCzz9NX9dC+ro75eZYsW0EAj8QcJaA=",
       "type": "url",
-      "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.2.18/bun-darwin-x64.zip"
+      "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.2.19/bun-darwin-x64.zip"
     },
-    "version": "1.2.18"
+    "version": "1.2.19"
   },
   "bun-x86_64-linux": {
     "cargoLocks": null,
@@ -53,10 +53,10 @@
     "pinned": false,
     "src": {
       "name": null,
-      "sha256": "sha256-kOAyqYKuKZxi1kXaxsqqjrALaQkryFAb8TpZDejQmcg=",
+      "sha256": "sha256-w9PBTppeyD/2fQrP525DFa0G2p809Z/HsTgTeCyvH2Y=",
       "type": "url",
-      "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.2.18/bun-linux-x64.zip"
+      "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.2.19/bun-linux-x64.zip"
     },
-    "version": "1.2.18"
+    "version": "1.2.19"
   }
 }
