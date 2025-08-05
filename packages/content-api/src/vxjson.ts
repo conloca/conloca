@@ -453,8 +453,19 @@ export class VXJSON {
     }
 
     // Sort all metadata fields alphabetically and serialize with tab indentation
+    // Use a replacer function to filter out empty strings
     const sortedMetadata = sortKeys(metadataFields, { deep: true });
-    const metadataJson = JSON.stringify(sortedMetadata, null, '\t');
+    const metadataJson = JSON.stringify(
+      sortedMetadata,
+      (_key, value) => {
+        // Filter out empty strings at any level
+        if (value === '') {
+          return undefined;
+        }
+        return value;
+      },
+      '\t',
+    );
 
     // Serialize content wrapped in an object to get proper indentation
     const wrappedContent = JSON.stringify({ c: sortKeys(content, { deep: true }) }, null, '\t');

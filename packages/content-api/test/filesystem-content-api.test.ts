@@ -158,7 +158,7 @@ describe('FileSystemContentAPI - 4KB index optimization', () => {
         pathname: '/exactly-4kb',
         description: 'File is exactly 4KB but complete',
         // Will adjust padding to reach exactly 4KB
-        padding: '',
+        padding: 'x',
       },
       content: {
         puckData: {
@@ -177,7 +177,7 @@ describe('FileSystemContentAPI - 4KB index optimization', () => {
     const targetSize = 4096;
 
     // Calculate exactly how many characters we need
-    const bytesNeeded = targetSize - currentSize;
+    const bytesNeeded = targetSize - currentSize + 1;
 
     // Add the exact padding needed
     if (bytesNeeded > 0) {
@@ -454,7 +454,7 @@ This MDX file is exactly 4KB.`;
         title: 'Boundary test',
         pathname: '/boundary',
         description: 'Testing exact 4KB boundary',
-        padding: '', // Will calculate exact padding needed
+        padding: 'x', // Will calculate exact padding needed
       },
       content: {
         puckData: {
@@ -480,7 +480,7 @@ This MDX file is exactly 4KB.`;
       ...baseVxjsonData,
       meta: {
         ...baseVxjsonData.meta,
-        padding: 'X'.repeat(paddingNeeded),
+        padding: 'X'.repeat(paddingNeeded + 1), // +1 because baseVxjsonData.meta.padding already has 'x'
       },
     };
 

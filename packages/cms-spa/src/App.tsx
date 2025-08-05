@@ -7,6 +7,8 @@ import { CMSDashboard } from './components/CMSDashboard';
 import { CMSLayout } from './components/CMSLayout';
 import { PageEditor } from './components/PageEditor';
 import { PageList } from './components/PageList';
+import { PageMetadataDialog } from './components/PageMetadataDialog';
+import type { PageMetadata } from './types';
 import './main.css';
 
 export default function App() {
@@ -73,6 +75,9 @@ function PageEditorWrapper({ puckConfig }: { puckConfig: any }) {
   // Store the current ETag for saving
   const [currentEtag, setCurrentEtag] = useState<string>('');
 
+  // Metadata dialog state
+  const [metadataDialogOpen, setMetadataDialogOpen] = useState(false);
+
   useEffect(() => {
     if (content?.localized?.etag) {
       setCurrentEtag(content.localized.etag);
@@ -92,48 +97,91 @@ function PageEditorWrapper({ puckConfig }: { puckConfig: any }) {
   }
 
   return (
-    <PageEditor
-      pageId={content.id}
-      entry={content}
-      config={puckConfig}
-      availableLocales={['en']}
-      onSave={async (newData, forceEtag) => {
-        try {
-          const result = await updateContent.mutateAsync({
-            id: content.id,
-            locale: 'en',
-            data: {
-              content: { puckData: newData },
-            },
-            etag: forceEtag || currentEtag,
-          });
+    <>
+      <PageEditor
+        pageId={content.id}
+        entry={content}
+        config={puckConfig}
+        availableLocales={['en']}
+        onSave={async (newData, forceEtag) => {
+          try {
+            const result = await updateContent.mutateAsync({
+              id: content.id,
+              locale: 'en',
+              data: {
+                content: { puckData: newData },
+              },
+              etag: forceEtag || currentEtag,
+            });
 
-          if (result.success && result.etag) {
-            console.log('Page saved successfully');
-            setCurrentEtag(result.etag); // Update ETag for next save
+            if (result.success && result.etag) {
+              console.log('Page saved successfully');
+              setCurrentEtag(result.etag); // Update ETag for next save
+            }
+
+            return result;
+          } catch (error) {
+            console.error('Failed to save page:', error);
+            // Return a failed result for error handling
+            return {
+              success: false,
+              reason: 'write_error' as const,
+              error: error as Error,
+            };
           }
+        }}
+        onBack={() => navigate('/pages')}
+        onOpenMetadata={() => {
+          setMetadataDialogOpen(true);
+        }}
+        onReload={() => {
+          // Reload the page to get fresh data
+          window.location.reload();
+        }}
+      />
 
-          return result;
-        } catch (error) {
-          console.error('Failed to save page:', error);
-          // Return a failed result for error handling
-          return {
-            success: false,
-            reason: 'write_error' as const,
-            error: error as Error,
-          };
-        }
-      }}
-      onBack={() => navigate('/pages')}
-      onOpenMetadata={() => {
-        // TODO: Implement metadata dialog
-        console.log('Open metadata dialog');
-      }}
-      onReload={() => {
-        // Reload the page to get fresh data
-        window.location.reload();
-      }}
-    />
+      {/* Metadata Dialog */}
+      <PageMetadataDialog
+        open={metadataDialogOpen}
+        onOpenChange={setMetadataDialogOpen}
+        page={{
+          title: content.localized.meta.title || '',
+          description: content.localized.meta.description || '',
+          pathname: content.localized.pathname || '/',
+          publishDate: content.localized.publishAt ? new Date(content.localized.publishAt) : null,
+          unpublishDate: content.localized.unpublishAt ? new Date(content.localized.unpublishAt) : null,
+          robots: content.localized.meta.robots,
+          canonical: content.localized.meta.canonical,
+        }}
+        onSave={async (metadata: PageMetadata) => {
+          try {
+            const result = await updateContent.mutateAsync({
+              id: content.id,
+              locale: 'en',
+              data: {
+                meta: {
+                  title: metadata.title,
+                  description: metadata.description,
+                  robots: metadata.robots,
+                  canonical: metadata.canonical,
+                },
+                pathname: metadata.pathname,
+                publishAt: metadata.publishDate?.toISOString() || null,
+                unpublishAt: metadata.unpublishDate?.toISOString() || null,
+              },
+              etag: currentEtag,
+            });
+
+            if (result.success && result.etag) {
+              console.log('Metadata saved successfully');
+              setCurrentEtag(result.etag); // Update ETag for next save
+            }
+          } catch (error) {
+            console.error('Failed to save metadata:', error);
+          }
+        }}
+      />
+    </>
   );
 }
 
