@@ -11,6 +11,8 @@ export * from './component-registry.types';
 export type { ContentAPI } from './content-api.interface';
 export * from './content-operations';
 export * from './content-utils';
+export type { ContentWatcherOptions, WebSocketSender } from './content-watcher';
+export { createContentAPI, createContentWatchHandlers } from './content-watcher';
 // Node.js specific implementations (require fs, xxhash, etc.)
 export { FileSystemContentAPI } from './filesystem-content-api';
 export { InMemoryContentAPI } from './in-memory-content-api';

@@ -1,4 +1,5 @@
 import type { UIConfig } from '@conloca/cms-spa';
+import { createContentAPI, createContentWatchHandlers } from '@conloca/content-api/node';
 // @ts-ignore - accessing internal export
 import viteReact from '@vitejs/plugin-react';
 import type { AstroIntegration } from 'astro';
@@ -16,8 +17,8 @@ const contentChangeListener = () => {
   return `
 // Content change listener that uses Vite HMR
 if (import.meta.hot) {
-  import.meta.hot.on('conloca:content-changed', (data) => {
-    console.log('[Conloca CMS] Content changed, invalidating cache:', data.path);
+  import.meta.hot.on('conloca:content-update', (data) => {
+    console.log('[Conloca CMS] Content updated, invalidating cache:', data);
     
     // Get the query client from the global scope and invalidate
     if (window.__QUERY_CLIENT__) {
@@ -132,48 +133,60 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
               },
               {
                 name: 'conloca-content-watcher',
-                configureServer(server) {
-                  // Watch content folder for changes
-                  const contentPath = options.contentRoot;
-                  const canvasPath = options.canvasDir || './canvas';
+                async configureServer(server) {
+                  // Initialize content API using the extracted function
+                  const contentApi = await createContentAPI({
+                    contentRoot: options.contentRoot,
+                    canvasDir: options.canvasDir || './canvas',
+                  });
 
-                  // Add content folders to Vite's watch list
-                  server.watcher.add([contentPath, canvasPath]);
+                  // Only add explicit watchers if content is outside the Astro project
+                  const { resolve } = await import('path');
+                  const astroRoot = process.cwd();
+                  const contentAbsolute = resolve(options.contentRoot);
+                  const canvasAbsolute = resolve(options.canvasDir || './canvas');
 
-                  // Handle file changes
-                  const handleContentChange = async (path: string) => {
+                  const foldersToWatch = [];
+
+                  if (!contentAbsolute.startsWith(astroRoot)) {
                     console.log(
-                      `[Conloca] File changed: ${path}, contentPath: ${contentPath}, canvasPath: ${canvasPath}`,
+                      `[Astro Integration] Content outside project, adding to watcher: ${options.contentRoot}`,
                     );
+                    foldersToWatch.push(options.contentRoot);
+                  } else {
+                    console.log(
+                      `[Astro Integration] Content inside project, Vite will watch automatically: ${options.contentRoot}`,
+                    );
+                  }
 
-                    // Normalize paths for comparison - remove leading ./ and handle both absolute and relative paths
-                    const normalizedContentPath = contentPath.replace(/^\.\//, '');
-                    const normalizedCanvasPath = canvasPath.replace(/^\.\//, '');
+                  if (!canvasAbsolute.startsWith(astroRoot)) {
+                    console.log(
+                      `[Astro Integration] Canvas outside project, adding to watcher: ${options.canvasDir || './canvas'}`,
+                    );
+                    foldersToWatch.push(options.canvasDir || './canvas');
+                  } else {
+                    console.log(
+                      `[Astro Integration] Canvas inside project, Vite will watch automatically: ${options.canvasDir || './canvas'}`,
+                    );
+                  }
 
-                    const isContentFile = path.includes(normalizedContentPath) || path.includes(normalizedCanvasPath);
+                  if (foldersToWatch.length > 0) {
+                    server.watcher.add(foldersToWatch);
+                  }
 
-                    if (isContentFile) {
-                      // Import dynamically to avoid circular dependencies
-                      const { FileSystemContentAPI } = await import('@conloca/content-api/node');
+                  // Set up HMR for content changes using extracted handlers
+                  const handlers = createContentWatchHandlers(
+                    contentApi,
+                    {
+                      contentRoot: options.contentRoot,
+                      canvasDir: options.canvasDir || './canvas',
+                    },
+                    server.ws,
+                  );
 
-                      console.log(`[Conloca] Content file changed: ${path}`);
-
-                      // Clear the cache to force reindexing
-                      FileSystemContentAPI.clearCaches();
-
-                      // Trigger HMR update for API routes
-                      server.ws.send({
-                        type: 'custom',
-                        event: 'conloca:content-changed',
-                        data: { path },
-                      });
-                    }
-                  };
-
-                  // Watch for file changes
-                  server.watcher.on('change', handleContentChange);
-                  server.watcher.on('add', handleContentChange);
-                  server.watcher.on('unlink', handleContentChange);
+                  server.watcher.on('change', handlers.onChange);
+                  server.watcher.on('add', handlers.onAdd);
+                  server.watcher.on('unlink', handlers.onUnlink);
                 },
               },
             ],

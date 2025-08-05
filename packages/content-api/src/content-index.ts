@@ -7,9 +7,17 @@ import type { ContentData, ContentIdentity, ContentManifest, LocaleVersion, Site
  * ContentIndex coordinates between per-site indexes and the block index
  * This provides efficient filtering by routing to the appropriate specialized index
  */
+// Use global registry to survive module reloads in development
+const globalCache = (globalThis as any).__CONLOCA_CONTENT_INDEX_CACHE__ || {};
+if (!(globalThis as any).__CONLOCA_CONTENT_INDEX_CACHE__) {
+  (globalThis as any).__CONLOCA_CONTENT_INDEX_CACHE__ = globalCache;
+}
+
 export class ContentIndex {
-  // Static cache of indexes by path
-  private static cache: { [path: string]: ContentIndex } = {};
+  // Use global cache instead of static cache
+  private static get cache() {
+    return globalCache;
+  }
 
   // Per-site indexes using V8-optimized object
   private siteIndexes: Record<string, SiteIndex | undefined>;
@@ -42,7 +50,7 @@ export class ContentIndex {
    * Clear all cached indexes
    */
   static clearCache(): void {
-    ContentIndex.cache = {};
+    Object.keys(globalCache).forEach((key) => delete globalCache[key]);
   }
 
   /**

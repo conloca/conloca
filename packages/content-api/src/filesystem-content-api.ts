@@ -336,10 +336,6 @@ export class FileSystemContentAPI implements ContentAPI {
       // Parse file to extract metadata
       let relativePath = filePath.replace(this.absoluteContentRoot + '/', '');
       let parts = relativePath.split('/');
-      console.log(`Processing file: ${filePath}`);
-      console.log(`Content root: ${this.absoluteContentRoot}`);
-      console.log(`Relative path: ${relativePath}`);
-      console.log(`Parts: ${JSON.stringify(parts)}`);
 
       // Determine site/collection structure
       let site: string | undefined;
@@ -421,12 +417,10 @@ export class FileSystemContentAPI implements ContentAPI {
         }
 
         const filename = parts[parts.length - 1];
-        console.log(`Processing block file: ${filename}`);
         // Extract name and locale from filename: hero.en.mdx -> name: hero, locale: en
         // Also handle files without locale: hero.mdx -> name: hero, locale: default from sites.json
         const matchWithLocale = filename.match(/^(.+)\.(\w+)\.(mdx|vxjson)$/);
         const matchWithoutLocale = filename.match(/^(.+)\.(mdx|vxjson)$/);
-        console.log(`matchWithLocale: ${matchWithLocale}, matchWithoutLocale: ${matchWithoutLocale}`);
 
         if (matchWithLocale) {
           name = matchWithLocale[1];
@@ -481,7 +475,6 @@ export class FileSystemContentAPI implements ContentAPI {
         }
 
         // Parse content based on file type
-        console.log(`Parsing file: ${filePath}, ends with .mdx: ${filePath.endsWith('.mdx')}`);
         if (filePath.endsWith('.mdx')) {
           parsedData = parse4KBMDX(buffer, bytesRead);
         } else {
@@ -1681,7 +1674,6 @@ export class FileSystemContentAPI implements ContentAPI {
   *listAllContent(filters?: GlobalFilters): Generator<ContentManifest> {
     yield* filterContentWithIndexes(this.contentIndex, filters, this.sitesConfig);
   }
-
   *findUntranslatedContent(targetLocale: string, options?: FindOptions): Generator<ContentManifest> {
     yield* this.contentIndex.findUntranslatedContent(targetLocale, options);
   }
@@ -1807,7 +1799,11 @@ export class FileSystemContentAPI implements ContentAPI {
             }
 
             // Only reindex if etag changed
-            if (currentManifest.locales[parsed.locale]?.etag === currentEtag) {
+            const existingEtag = currentManifest.locales[parsed.locale]?.etag;
+
+            if (existingEtag === currentEtag) {
+              const relativePath = filePath.replace(this.absoluteContentRoot + '/', '');
+              console.log(`[Content] skip ${relativePath} (unchanged)`);
               filesSkipped++;
             } else {
               filesToIndex.push(filePath);
