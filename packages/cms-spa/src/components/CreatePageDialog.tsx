@@ -21,12 +21,14 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
   // Direct fetch implementation for testing
   const [isPathnameAvailable, setIsPathnameAvailable] = useState(true);
   const [pathnameLoading, setPathnameLoading] = useState(false);
+  const [showLoadingText, setShowLoadingText] = useState(false);
 
   // Use direct fetch instead of React Query to debug the delay
   useEffect(() => {
     if (!path) {
       setIsPathnameAvailable(true);
       setPathnameLoading(false);
+      setShowLoadingText(false);
       return;
     }
 
@@ -35,6 +37,12 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
       console.log('[CreatePageDialog] Starting pathname check for:', path);
       const startTime = performance.now();
       setPathnameLoading(true);
+
+      // Show loading text after 500ms delay
+      const loadingTextTimeout = setTimeout(() => {
+        setShowLoadingText(true);
+      }, 500);
+
       try {
         const config = getUIConfig();
         const baseUrl = config.apiBaseUrl || '/__cms/api';
@@ -61,7 +69,9 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
         console.error('Failed to check pathname availability:', error);
         setIsPathnameAvailable(true); // Assume available on error
       } finally {
+        clearTimeout(loadingTextTimeout);
         setPathnameLoading(false);
+        setShowLoadingText(false);
         console.log('[CreatePageDialog] Total check time:', performance.now() - startTime, 'ms');
       }
     }, 100); // 100ms debounce
@@ -148,10 +158,14 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
                   </div>
                 )}
               </div>
-              {!isPathnameAvailable && path && (
-                <p className="mt-1 text-sm text-red-500">This pathname is already in use</p>
-              )}
-              {pathnameLoading && path && <p className="mt-1 text-sm text-grey-04">Checking availability...</p>}
+              <div className="h-5 mt-1">
+                {!isPathnameAvailable && path && (
+                  <p className="text-sm text-red-500">This pathname is already in use</p>
+                )}
+                {pathnameLoading && showLoadingText && path && (
+                  <p className="text-sm text-grey-04">Checking availability...</p>
+                )}
+              </div>
             </div>
 
             <div>
