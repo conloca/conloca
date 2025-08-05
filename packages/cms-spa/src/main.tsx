@@ -18,6 +18,8 @@ setContentAPIClient(contentAPIClient);
 // Create QueryClient with configurable options
 const queryClient = new QueryClient(config.queryClientOptions);
 
+// Expose query client globally for content change listener
+(window as any).__QUERY_CLIENT__ = queryClient;
 const root = createRoot(document.getElementById('root')!);
 root.render(
   <QueryClientProvider client={queryClient}>

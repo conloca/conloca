@@ -58,6 +58,7 @@ export const GET: APIRoute = async ({ params, request }) => {
           window.__UI_CONFIG__ = ${JSON.stringify(uiConfig)};
         </script>
         <script type="module" src="${uiConfig.basename}/puck-entry.js"></script>
+        <script type="module" src="${uiConfig.basename}/content-listener.js"></script>
       `;
 
       // Inject the script at the top to ensure config is available first

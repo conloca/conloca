@@ -11,6 +11,25 @@ export interface ConlocaCMSOptions extends Omit<UIConfig, 'basename'> {
   puckConfigPath: string; // Path to the puck config module (should be .tsx file with React components)
 }
 
+// Template for content change listener virtual module
+const contentChangeListener = () => {
+  return `
+// Content change listener that uses Vite HMR
+if (import.meta.hot) {
+  import.meta.hot.on('conloca:content-changed', (data) => {
+    console.log('[Conloca CMS] Content changed, invalidating cache:', data.path);
+    
+    // Get the query client from the global scope and invalidate
+    if (window.__QUERY_CLIENT__) {
+      window.__QUERY_CLIENT__.invalidateQueries();
+    }
+  });
+}
+
+export default {};
+`;
+};
+
 // Template for the puck config loader virtual module
 const puckConfigLoader = (absolutePuckPath: string) => {
   // Get the exact preamble code from the React plugin
@@ -92,6 +111,9 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
                   if (id === `${cmsRoute}/puck-entry.js`) {
                     return id;
                   }
+                  if (id === `${cmsRoute}/content-listener.js`) {
+                    return id;
+                  }
                   return null;
                 },
                 load(id) {
@@ -101,6 +123,9 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
                       : options.puckConfigPath;
 
                     return puckConfigLoader(absolutePuckPath);
+                  }
+                  if (id === `${cmsRoute}/content-listener.js`) {
+                    return contentChangeListener();
                   }
                   return null;
                 },
@@ -117,7 +142,17 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
 
                   // Handle file changes
                   const handleContentChange = async (path: string) => {
-                    if (path.includes(contentPath) || path.includes(canvasPath)) {
+                    console.log(
+                      `[Conloca] File changed: ${path}, contentPath: ${contentPath}, canvasPath: ${canvasPath}`,
+                    );
+
+                    // Normalize paths for comparison - remove leading ./ and handle both absolute and relative paths
+                    const normalizedContentPath = contentPath.replace(/^\.\//, '');
+                    const normalizedCanvasPath = canvasPath.replace(/^\.\//, '');
+
+                    const isContentFile = path.includes(normalizedContentPath) || path.includes(normalizedCanvasPath);
+
+                    if (isContentFile) {
                       // Import dynamically to avoid circular dependencies
                       const { FileSystemContentAPI } = await import('@conloca/content-api/node');
 
