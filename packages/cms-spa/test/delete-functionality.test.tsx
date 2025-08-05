@@ -297,9 +297,9 @@ describe('Delete Functionality', () => {
       expect(deleteButtons.length).toBeGreaterThan(0);
     });
 
-    it('should not allow deletion of the last locale', async () => {
+    it('should allow deletion of entire page when only one locale exists', async () => {
       // Create a page with only one locale
-      await testApi.createContent({
+      const createResult = await testApi.createContent({
         type: 'puck',
         kind: 'page',
         site: 'default',
@@ -314,6 +314,8 @@ describe('Delete Functionality', () => {
         },
       });
 
+      const pageId = createResult.id!;
+
       render(
         <MemoryRouter>
           <QueryClientProvider client={queryClient}>
@@ -324,9 +326,31 @@ describe('Delete Functionality', () => {
 
       await screen.findByText('Single Locale Page');
 
-      // The delete button should be disabled for the only locale
-      const deleteButton = screen.getByRole('button', { name: /delete/i });
-      expect(deleteButton).toBeDisabled();
+      // The delete button should be enabled and show appropriate title - using test ID
+      // In "all" view, the test ID includes the locale
+      const deleteButton = screen.getByTestId(`delete-${pageId}.en`);
+      expect(deleteButton).toBeDefined();
+      expect(deleteButton.hasAttribute('disabled')).toBe(false);
+      expect(deleteButton.getAttribute('title')).toBe('Delete entire page');
+
+      // Click delete button
+      fireEvent.click(deleteButton);
+
+      // Should show confirmation dialog for deleting the entire page
+      await waitFor(() => {
+        expect(screen.getByText(/are you sure you want to delete this page/i)).toBeDefined();
+      });
+
+      // Confirm deletion
+      const confirmButton = await screen.findByRole('button', { name: /confirm delete/i });
+      fireEvent.click(confirmButton);
+
+      // Page should be completely removed
+      await waitForElementToBeRemoved(() => screen.queryByText('Single Locale Page'));
+
+      // Verify the page was actually deleted from the API
+      const allContent = Array.from(testApi.listAllContent());
+      expect(allContent).toHaveLength(0);
     });
 
     it('should allow deletion of specific locale when multiple exist', async () => {

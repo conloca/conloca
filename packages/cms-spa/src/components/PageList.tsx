@@ -378,14 +378,15 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
                       )}
                       {selectedLocale !== 'all' ? (
                         page.locales.length === 1 ? (
-                          <Tooltip content="Cannot delete the last locale">
+                          <Tooltip content="This will delete the entire page">
                             <button
-                              disabled
-                              className="p-1 rounded transition-colors opacity-50 cursor-not-allowed"
-                              title="Delete page"
+                              onClick={() => handleDeletePage(page.id, selectedLocale)}
+                              className="p-1 hover:bg-grey-11 rounded transition-colors"
+                              title="Delete entire page"
                               aria-label="Delete"
+                              data-testid={`delete-${page.id}`}
                             >
-                              <Trash2 className="h-4 w-4 text-grey-04" />
+                              <Trash2 className="h-4 w-4 text-red-04" />
                             </button>
                           </Tooltip>
                         ) : (
@@ -394,6 +395,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
                             className="p-1 hover:bg-grey-11 rounded transition-colors"
                             title="Delete page"
                             aria-label="Delete"
+                            data-testid={`delete-${page.id}.${selectedLocale}`}
                           >
                             <Trash2 className="h-4 w-4 text-red-04" />
                           </button>
@@ -402,26 +404,29 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
                         // For 'all' view, show delete buttons for each locale
                         page.locales.map((locale) =>
                           page.locales.length === 1 ? (
-                            <Tooltip key={`delete-${locale}`} content="Cannot delete the last locale">
+                            <Tooltip key={`delete-${locale}`} content="This will delete the entire page">
                               <button
-                                disabled
-                                className="p-1 rounded transition-colors opacity-50 cursor-not-allowed"
-                                title={`Delete ${locale} version`}
+                                onClick={() => handleDeletePage(page.id, locale)}
+                                className="p-1 hover:bg-grey-11 rounded transition-colors"
+                                title="Delete entire page"
                                 aria-label="Delete"
+                                data-testid={`delete-${page.id}.${locale}`}
                               >
-                                <Trash2 className="h-4 w-4 text-grey-04" />
+                                <Trash2 className="h-4 w-4 text-red-04" />
                               </button>
                             </Tooltip>
                           ) : (
-                            <button
-                              key={`delete-${locale}`}
-                              onClick={() => handleDeletePage(page.id, locale)}
-                              className="p-1 hover:bg-grey-11 rounded transition-colors"
-                              title={`Delete ${locale} version`}
-                              aria-label="Delete"
-                            >
-                              <Trash2 className="h-4 w-4 text-red-04" />
-                            </button>
+                            <Tooltip key={`delete-${locale}`} content={`Delete only the ${locale} version`}>
+                              <button
+                                onClick={() => handleDeletePage(page.id, locale)}
+                                className="p-1 hover:bg-grey-11 rounded transition-colors"
+                                title={`Delete ${locale} version`}
+                                aria-label="Delete"
+                                data-testid={`delete-${page.id}.${locale}`}
+                              >
+                                <Trash2 className="h-4 w-4 text-red-04" />
+                              </button>
+                            </Tooltip>
                           ),
                         )
                       )}
