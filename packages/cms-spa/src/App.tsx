@@ -18,6 +18,13 @@ export default function App() {
 
   useEffect(() => {
     console.log('[App] Setting up puck config listeners');
+    console.log('[App] Initial __PUCK_CONFIG__:', (window as any).__PUCK_CONFIG__);
+
+    // Check if config is already loaded (race condition)
+    if ((window as any).__PUCK_CONFIG__ && Object.keys((window as any).__PUCK_CONFIG__.components || {}).length > 0) {
+      console.log('[App] Config already loaded, setting state');
+      setPuckConfig((window as any).__PUCK_CONFIG__);
+    }
 
     // Listen for Puck config updates
     const handleConfigUpdate = (event: CustomEvent) => {
