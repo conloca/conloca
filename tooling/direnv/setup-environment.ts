@@ -1,9 +1,13 @@
 #!/usr/bin/env bun
 import { $, file } from 'bun';
 import { existsSync } from 'fs';
+import path from 'path';
+
+const devenvRoot = process.env.DEVENV_ROOT;
+const projectRoot = path.resolve(`${devenvRoot}/../..`);
 
 // Go to project root
-process.chdir(`${process.env.DEVENV_ROOT}/../..`);
+process.chdir(projectRoot);
 
 try {
   // Install dependencies first so node_modules/.bin tools are available
@@ -22,7 +26,7 @@ try {
   }
 
   // Make sure Biome is executable
-  await $`chmod +x node_modules/@biomejs/*/bin/biome`;
+  await $`chmod +x ${projectRoot}/node_modules/@biomejs/biome/bin/biome`;
 
   if (!process.env.CI) {
     // Update package.json with current versions from devenv
@@ -51,7 +55,7 @@ try {
   }
 
   // Apply workspace git configuration
-  const gitConfigScript = `${process.env.DEVENV_ROOT}/apply-workspace-git-config.sh`;
+  const gitConfigScript = `${devenvRoot}/apply-workspace-git-config.sh`;
   if (existsSync(gitConfigScript)) {
     await $`${gitConfigScript}`;
   }
