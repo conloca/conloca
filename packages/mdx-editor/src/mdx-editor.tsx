@@ -238,7 +238,7 @@ export interface MDXEditorModalProps {
   onClose: () => void;
   filePath?: string;
   initialContent: string;
-  onSave: (content: string) => void;
+  onSave: (content: string) => void | Promise<void>;
 }
 
 export const MDXEditorModal: React.FC<MDXEditorModalProps> = ({
@@ -250,6 +250,7 @@ export const MDXEditorModal: React.FC<MDXEditorModalProps> = ({
 }) => {
   const [content, setContent] = useState(initialContent);
   const [isEditorReady, setIsEditorReady] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     setContent(initialContent);
@@ -268,9 +269,18 @@ export const MDXEditorModal: React.FC<MDXEditorModalProps> = ({
     return undefined;
   }, [isOpen]);
 
-  const handleSave = () => {
-    onSave(content);
-    onClose();
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      await onSave(content);
+      // Only close if onSave completes without error
+      onClose();
+    } catch (error) {
+      // If onSave throws, don't close the modal
+      console.error('Save failed:', error);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // Only render the editor when the modal is actually open
@@ -303,11 +313,19 @@ export const MDXEditorModal: React.FC<MDXEditorModalProps> = ({
           )}
         </div>
         <div className="flex justify-end gap-2 mt-4">
-          <button onClick={onClose} className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50">
+          <button 
+            onClick={onClose} 
+            className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50"
+            disabled={isSaving}
+          >
             Cancel
           </button>
-          <button onClick={handleSave} className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
-            Save
+          <button 
+            onClick={handleSave} 
+            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={isSaving}
+          >
+            {isSaving ? 'Saving...' : 'Save'}
           </button>
         </div>
       </DialogContent>

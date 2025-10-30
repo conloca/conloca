@@ -114,17 +114,8 @@ export function useCreateContent() {
             },
           );
         } else if (variables.kind === 'block') {
-          queryClient.setQueriesData(
-            { queryKey: queryKeys.blocks(variables.collection) },
-            (old: ContentListResult | undefined) => {
-              if (!old) return old;
-              return {
-                ...old,
-                items: [...old.items, newManifest],
-                total: old.total + 1,
-              };
-            },
-          );
+          // Invalidate all block queries to ensure the new block appears everywhere
+          queryClient.invalidateQueries({ queryKey: ['blocks'] });
         }
       }
     },

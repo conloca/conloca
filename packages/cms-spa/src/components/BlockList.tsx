@@ -136,55 +136,33 @@ export function BlockList() {
   };
 
   const handleSaveBlock = async (content: string) => {
-    try {
-      // Generate block ID from name
-      const blockId = newBlockName
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '');
-
-      // Create the entry ID with default locale
-      const entryId = `${blockId}.en`;
-
-      // Create block structure with MDX content
-      const blockContent = {
-        mdx: content,
+    const result = await createContent.mutateAsync({
+      kind: 'block',
+      collection: 'blocks',
+      type: 'mdx',
+      name: newBlockName,
+      meta: {
         title: newBlockName,
-        category: 'content', // Default category
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      // Create the block
-      await createContent.mutate({
-        kind: 'block',
-        collection: 'blocks',
-        type: 'mdx',
-        name: newBlockName,
-        meta: {
-          title: blockContent.title || newBlockName,
-        },
-        locales: {
-          en: {
-            meta: {
-              title: blockContent.title || newBlockName,
-            },
-            content: {
-              mdx: content,
-            },
+      },
+      locales: {
+        en: {
+          meta: {
+            title: newBlockName,
+          },
+          content: {
+            mdx: content,
           },
         },
-      });
+      },
+    });
 
-      // Close the editor and refresh
-      setShowMDXEditor(false);
+    if (result.success) {
       setNewBlockName('');
-
-      // Navigate to edit the new block
-      navigate(`/blocks/${entryId}`);
-    } catch (error) {
-      console.error('Failed to create block:', error);
-      showError('Failed to create block. Please try again.', error);
+      navigate('/blocks');
+    } else {
+      const errorMessage = result.error?.message || 'Failed to create block';
+      showError(errorMessage, result.error);
+      throw new Error(errorMessage);
     }
   };
 
