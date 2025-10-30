@@ -12,6 +12,7 @@
     "@astrojs/react": "^4.3.0",
     "@conloca/astro-cms": "workspace:*",
     "@conloca/content-api": "workspace:*",
+    "@astrojs/node": "^8.0.0",
     "@measured/puck": "^0.19.1",
     "astro": "5.12.8",
     "react": "19.1.1",

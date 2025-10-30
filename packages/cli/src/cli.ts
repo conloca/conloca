@@ -1,4 +1,5 @@
 import { parseArgs } from 'util';
+import { generateRoutes } from './commands/generate-routes';
 import { init } from './commands/init';
 import { verify } from './commands/verify';
 
@@ -11,6 +12,10 @@ async function main() {
           type: 'boolean',
           short: 'h',
         },
+        site: {
+          type: 'string',
+          short: 's',
+        },
       },
       allowPositionals: true,
     });
@@ -19,11 +24,16 @@ async function main() {
       console.log(`Usage: conloca <command> [options]
 
 Commands:
-  init <directory> <site>   Initialize a new Conloca content structure
-  verify <directory>        Verify content in the specified directory
+  init <directory> <site>      Initialize a new Conloca content structure
+  verify <directory>           Verify content in the specified directory
+  astro <subcommand> [options] Astro framework integration commands
+
+Astro Subcommands:
+  astro generate-routes [path] Generate Astro route files for CMS pages (default: .)
 
 Options:
-  -h, --help           Show this help message`);
+  -h, --help                   Show this help message
+  -s, --site <name>            Site name to target (default: default)`);
       process.exit(0);
     }
 
@@ -48,6 +58,28 @@ Options:
           process.exit(1);
         }
         await verify(positionals[1]);
+        break;
+
+      case 'astro':
+        const subcommand = positionals[1];
+        if (!subcommand) {
+          console.error(`Error: astro command requires a subcommand
+Available subcommands:
+  generate-routes [path]    Generate Astro route files for CMS pages (default: .)`);
+          process.exit(1);
+        }
+
+        switch (subcommand) {
+          case 'generate-routes':
+            const projectPath = positionals[2] || '.';
+            const siteName = typeof values.site === 'string' && values.site.length > 0 ? values.site : 'default';
+            await generateRoutes(projectPath, siteName);
+            break;
+
+          default:
+            console.error(`Error: Unknown astro subcommand '${subcommand}'`);
+            process.exit(1);
+        }
         break;
 
       default:
