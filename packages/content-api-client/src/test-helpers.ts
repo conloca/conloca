@@ -45,7 +45,7 @@ export function createMockFetch(mockFn: (impl?: any) => any) {
 /**
  * Creates a Response object with JSON body
  */
-export function jsonResponse(body: any, options: { status?: number; headers?: Record<string, string> } = {}) {
+export function jsonResponse(body: any, options: { status?: number; headers?: Record<string, string> } = {}): Response {
   return new Response(JSON.stringify(body), {
     status: options.status || 200,
     headers: {

@@ -45,12 +45,13 @@
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "^18.0.1",
-    "@tailwindcss/typography": "^0.5.16",
+    "@tailwindcss/cli": "4.1.16",
+    "@tailwindcss/typography": "^0.5.19",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",
     "bun-tailwindcss": "^0.0.8",
     "react-refresh-typescript": "^2.0.10",
-    "tailwindcss": "^4.1.11",
+    "tailwindcss": "^4.1.16",
     "typescript": "^5.9.2"
   },
   "nx": {

@@ -8,7 +8,7 @@ await $`mkdir -p ./dist/spa`;
 
 // Step 2: Process CSS with Tailwind
 console.log('Processing CSS with Tailwind...');
-await $`bunx @tailwindcss/cli -i ./src/main.css -o ./src/main.compiled.css --minify`;
+await $`bun tailwindcss -i ./src/main.css -o ./src/main.compiled.css --minify`;
 
 // Step 3: Bundle with Bun
 console.log('Bundling with Bun...');
@@ -24,6 +24,8 @@ const bundleResult = await build({
     asset: '[name].[hash].[ext]',
   },
   publicPath: '/__cms/',
+  // Prevent Bun from importing tailwindcss's raw CSS files
+  external: ['tailwindcss'],
 });
 
 // Step 4: Clean up temporary files
