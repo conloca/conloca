@@ -1,5 +1,6 @@
 import { $ } from 'bun';
 import index from './src/dev.html';
+import { processTailwindCSS, TAILWIND_CONFIG } from './tailwind-config';
 
 // ANSI color codes
 const colors = {
@@ -24,7 +25,9 @@ if (!globalThis.__watchersStarted) {
 
   // Process Tailwind CSS
   console.log(`${colors.cyan}🎨 Processing CSS with Tailwind...${colors.reset}`);
-  await $`bunx @tailwindcss/cli -i ./src/main.css -o ./src/main.processed.css`;
+  await processTailwindCSS({
+    output: TAILWIND_CONFIG.outputProcessed,
+  });
 
   // Shared output buffer system
   const processBuffers = new Map<string, { output: string; hasError: boolean }>();
@@ -88,7 +91,7 @@ if (!globalThis.__watchersStarted) {
   console.log(`${colors.cyan}👁  Starting Tailwind watch process...${colors.reset}`);
   spawnWatcher(
     'tailwind',
-    ['bunx', '@tailwindcss/cli', '-i', './src/main.css', '-o', './src/main.processed.css', '--watch=always'],
+    ['bun', TAILWIND_CONFIG.cli, '-i', TAILWIND_CONFIG.input, '-o', TAILWIND_CONFIG.outputProcessed, '--watch=always'],
     { env: { ...process.env, FORCE_COLOR: '1' } },
   );
 

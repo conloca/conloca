@@ -1,4 +1,5 @@
 import { $, build } from 'bun';
+import { BUN_BUILD_CONFIG, processTailwindCSS, TAILWIND_CONFIG } from './tailwind-config';
 
 console.log('Building CMS SPA...');
 
@@ -8,7 +9,10 @@ await $`mkdir -p ./dist/spa`;
 
 // Step 2: Process CSS with Tailwind
 console.log('Processing CSS with Tailwind...');
-await $`bun tailwindcss -i ./src/main.css -o ./src/main.compiled.css --minify`;
+await processTailwindCSS({
+  output: TAILWIND_CONFIG.outputCompiled,
+  minify: true,
+});
 
 // Step 3: Bundle with Bun
 console.log('Bundling with Bun...');
@@ -24,12 +28,11 @@ const bundleResult = await build({
     asset: '[name].[hash].[ext]',
   },
   publicPath: '/__cms/',
-  // Prevent Bun from importing tailwindcss's raw CSS files
-  external: ['tailwindcss'],
+  ...BUN_BUILD_CONFIG,
 });
 
 // Step 4: Clean up temporary files
-await $`rm -f ./src/main.compiled.css`;
+await $`rm -f ${TAILWIND_CONFIG.outputCompiled}`;
 
 if (!bundleResult.success) {
   console.error('Build failed:', bundleResult.logs);
