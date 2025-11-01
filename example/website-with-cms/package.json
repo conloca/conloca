@@ -34,7 +34,8 @@
       "dev": {
         "continuous": true,
         "dependsOn": [
-          "^build"
+          "^build",
+          "watch-deps"
         ]
       }
     }
