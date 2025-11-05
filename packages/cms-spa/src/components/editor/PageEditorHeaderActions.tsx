@@ -36,6 +36,7 @@ export function PageEditorHeaderActions({
       <div className="flex items-center gap-2">
         {onPublish && (
           <button
+            type="button"
             onClick={onPublish}
             className="px-4 py-2 bg-grey-10 text-grey-01 rounded-md text-sm hover:bg-grey-09 transition-all duration-150 flex items-center gap-1 whitespace-nowrap font-medium cursor-pointer"
             aria-label="Publish"
@@ -44,6 +45,7 @@ export function PageEditorHeaderActions({
           </button>
         )}
         <button
+          type="button"
           onClick={onPreview}
           className="px-4 py-2 rounded-md text-sm text-grey-01 hover:bg-grey-10 transition-all duration-150 flex items-center gap-1 cursor-pointer"
           data-testid="preview-button"
@@ -64,6 +66,7 @@ export function PageEditorHeaderActions({
           onChange={onLocaleChange || (() => {})}
         />
         <button
+          type="button"
           onClick={onSave}
           disabled={!isDirty && saveState !== 'error' && saveState !== 'conflict'}
           className={cn(
