@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor, waitForElementToBeRemoved } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { BlockList } from '../src/components/BlockList';
-import { PageList } from '../src/components/PageList';
+import { BlockList } from '../src/components/pages/BlockList';
+import { PageList } from '../src/components/pages/PageList';
 import { API_ROUTES, mockAPIError, setupTestAPI, testApi } from './test-utils';
 
 // Clean up after each test

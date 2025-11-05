@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { ErrorModalProps } from '../components/ErrorModal';
+import type { ErrorModalProps } from '../components/dialogs/ErrorModal';
 
 export interface UseErrorModalReturn {
   errorModal: {

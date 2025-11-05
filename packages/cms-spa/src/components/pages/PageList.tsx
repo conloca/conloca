@@ -2,12 +2,12 @@ import { localesOf, useCreateContent, useDeleteContent, useSitePages } from '@co
 import { AlertCircle, Clock, Edit, FileText, Loader2, Plus, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useErrorModal } from '../hooks';
-import type { CreatePageData, Page } from '../types';
-import { CreatePageDialog } from './CreatePageDialog';
-import { DeleteConfirmDialog } from './DeleteConfirmDialog';
-import { ErrorModal } from './ErrorModal';
-import { Tooltip } from './Tooltip';
+import { useErrorModal } from '../../hooks';
+import type { CreatePageData, Page } from '../../types';
+import { CreatePageDialog } from '../dialogs/CreatePageDialog';
+import { DeleteConfirmDialog } from '../dialogs/DeleteConfirmDialog';
+import { ErrorModal } from '../dialogs/ErrorModal';
+import { Tooltip } from '../ui/Tooltip';
 
 interface PageListProps {
   selectedSite?: string;

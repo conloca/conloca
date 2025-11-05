@@ -9,10 +9,10 @@ import { MDXEditorModal } from '@conloca/mdx-editor';
 import { AlertCircle, Edit2, Loader2, Package, Plus, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useErrorModal } from '../hooks';
-import type { Block } from '../types';
-import { DeleteConfirmDialog } from './DeleteConfirmDialog';
-import { ErrorModal } from './ErrorModal';
+import { useErrorModal } from '../../hooks';
+import type { Block } from '../../types';
+import { DeleteConfirmDialog } from '../dialogs/DeleteConfirmDialog';
+import { ErrorModal } from '../dialogs/ErrorModal';
 
 export function BlockList() {
   const [selectedCategory, setSelectedCategory] = useState<string | 'all'>('all');

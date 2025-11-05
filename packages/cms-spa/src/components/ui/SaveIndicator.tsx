@@ -1,6 +1,6 @@
 import { AlertTriangle, Check, Loader2, X } from 'lucide-react';
-import { cn } from '../lib/utils';
-import type { SaveState } from '../types';
+import type { SaveState } from '../../types';
+import { cn } from '../../utils/cn';
 
 interface SaveIndicatorProps {
   state: SaveState;

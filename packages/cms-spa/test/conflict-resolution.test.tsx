@@ -8,8 +8,8 @@ import {
 } from '@conloca/content-api-client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor, waitForElementToBeRemoved } from '@testing-library/react';
-import { ConflictDialog } from '../src/components/ConflictDialog';
-import { PageEditor } from '../src/components/PageEditor';
+import { ConflictDialog } from '../src/components/dialogs/ConflictDialog';
+import { PageEditor } from '../src/components/editor/PageEditor';
 import { renderWithProviders, setupTestAPI, testApi } from './test-utils';
 
 afterEach(() => {

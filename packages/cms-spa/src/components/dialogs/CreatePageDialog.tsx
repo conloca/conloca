@@ -2,8 +2,8 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { AlertCircle, X } from 'lucide-react';
 import type React from 'react';
 import { useEffect, useState } from 'react';
-import type { CreatePageData } from '../types';
-import { getUIConfig } from '../ui-config';
+import type { CreatePageData } from '../../types';
+import { getUIConfig } from '../../ui-config';
 
 interface CreatePageDialogProps {
   open: boolean;

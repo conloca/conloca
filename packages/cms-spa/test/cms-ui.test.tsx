@@ -1,13 +1,13 @@
 /// <reference lib="dom" />
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
-import { BlockList } from '../src/components/BlockList';
 import { CMSDashboard } from '../src/components/CMSDashboard';
-import { CreatePageDialog } from '../src/components/CreatePageDialog';
-import { LocaleSelector } from '../src/components/LocaleSelector';
-import { PageList } from '../src/components/PageList';
-import { PageMetadataDialog } from '../src/components/PageMetadataDialog';
-import { SaveIndicator } from '../src/components/SaveIndicator';
+import { CreatePageDialog } from '../src/components/dialogs/CreatePageDialog';
+import { PageMetadataDialog } from '../src/components/dialogs/PageMetadataDialog';
+import { LocaleSelector } from '../src/components/editor/LocaleSelector';
+import { BlockList } from '../src/components/pages/BlockList';
+import { PageList } from '../src/components/pages/PageList';
+import { SaveIndicator } from '../src/components/ui/SaveIndicator';
 import type { Block, ContentStats, Page, PageMetadata, RecentChange } from '../src/types';
 import { renderWithProviders, setupTestAPI, testApi } from './test-utils';
 

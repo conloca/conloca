@@ -1,6 +1,6 @@
 import type { UpdateResult } from '@conloca/content-api-client';
 import { useState } from 'react';
-import { ContentDiff } from './ContentDiff';
+import { ContentDiff } from '../editor/ContentDiff';
 
 interface ConflictDialogProps {
   conflict: UpdateResult;

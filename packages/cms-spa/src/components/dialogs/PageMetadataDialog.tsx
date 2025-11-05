@@ -2,7 +2,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import type React from 'react';
 import { useState } from 'react';
-import type { PageMetadata } from '../types';
+import type { PageMetadata } from '../../types';
 
 interface PageMetadataDialogProps {
   open: boolean;

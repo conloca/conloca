@@ -2,12 +2,12 @@ import { type LocalizedEntry, useLocalizedContent, useUpdateLocalized } from '@c
 import { MDXEditorModal } from '@conloca/mdx-editor';
 import { useEffect, useState } from 'react';
 import { Route, Routes, useNavigate, useParams } from 'react-router-dom';
-import { BlockList } from './components/BlockList';
 import { CMSDashboard } from './components/CMSDashboard';
 import { CMSLayout } from './components/CMSLayout';
-import { PageEditor } from './components/PageEditor';
-import { PageList } from './components/PageList';
-import { PageMetadataDialog } from './components/PageMetadataDialog';
+import { PageMetadataDialog } from './components/dialogs/PageMetadataDialog';
+import { PageEditor } from './components/editor/PageEditor';
+import { BlockList } from './components/pages/BlockList';
+import { PageList } from './components/pages/PageList';
 import type { PageMetadata } from './types';
 import './main.css';
 

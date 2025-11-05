@@ -1,9 +1,12 @@
-export { BlockList } from './BlockList';
+// UI Components
+
+// Layout & Dashboard
 export { CMSDashboard } from './CMSDashboard';
-export { CreatePageDialog } from './CreatePageDialog';
-export { ErrorModal } from './ErrorModal';
-export { LocaleSelector } from './LocaleSelector';
-export { PageEditor } from './PageEditor';
-export { PageList } from './PageList';
-export { PageMetadataDialog } from './PageMetadataDialog';
-export { SaveIndicator } from './SaveIndicator';
+export { CMSLayout } from './CMSLayout';
+// Dialogs
+export * from './dialogs';
+// Editor Components
+export * from './editor';
+// Page Management
+export * from './pages';
+export * from './ui';
