@@ -9,18 +9,18 @@
     "astro": "astro"
   },
   "dependencies": {
-    "@astrojs/react": "^4.3.0",
+    "@astrojs/react": "^4.4.1",
     "@conloca/astro-cms": "workspace:*",
     "@conloca/content-api": "workspace:*",
-    "@astrojs/node": "^8.0.0",
-    "@measured/puck": "^0.19.1",
-    "astro": "5.12.8",
-    "react": "19.1.1",
-    "react-dom": "19.1.1"
+    "@astrojs/node": "^9.5.0",
+    "@measured/puck": "^0.20.2",
+    "astro": "5.15.3",
+    "react": "19.2.0",
+    "react-dom": "19.2.0"
   },
   "devDependencies": {
     "@types/bun": "^1.2.17",
-    "extensionless": "^1.9.9"
+    "extensionless": "^2.0.2"
   },
   "nx": {
     "targets": {

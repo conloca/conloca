@@ -11,5 +11,8 @@
     "build": "bun run build.ts",
     "test": "bun test"
   },
-  "type": "module"
+  "type": "module",
+  "devDependencies": {
+    "@types/bun": "^1.3.1"
+  }
 }

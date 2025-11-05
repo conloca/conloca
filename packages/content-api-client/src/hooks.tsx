@@ -24,6 +24,18 @@ export function setContentAPIClient(client: ContentAPIClient): void {
   globalClient = client;
 }
 
+// ===== Type Guards =====
+function isContentListResult(value: unknown): value is ContentListResult {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'items' in value &&
+    'total' in value &&
+    Array.isArray((value as { items: unknown }).items) &&
+    typeof (value as { total: unknown }).total === 'number'
+  );
+}
+
 // ===== Query Keys =====
 const queryKeys = {
   content: (id: string) => ['content', id] as const,
@@ -105,7 +117,7 @@ export function useCreateContent() {
           queryClient.setQueriesData(
             { queryKey: queryKeys.sitePages(variables.site) },
             (old: ContentListResult | undefined) => {
-              if (!old) return old;
+              if (!isContentListResult(old)) return old;
               return {
                 ...old,
                 items: [...old.items, newManifest],
@@ -155,7 +167,7 @@ export function useUpdateLocalized() {
 
         // Update list queries to reflect the server data
         const updateListQueries = (old: ContentListResult | undefined) => {
-          if (!old) return old;
+          if (!isContentListResult(old)) return old;
           return {
             ...old,
             items: old.items.map((item) =>
@@ -226,7 +238,7 @@ export function useDeleteContent() {
 
           // Update list queries to remove the locale from the item
           const updateListQueries = (old: ContentListResult | undefined) => {
-            if (!old) return old;
+            if (!isContentListResult(old)) return old;
             const locale = variables.locale!;
             return {
               ...old,
@@ -255,7 +267,7 @@ export function useDeleteContent() {
 
           // Update list queries by removing the deleted item
           queryClient.setQueriesData({ queryKey: ['sites'], exact: false }, (old: ContentListResult | undefined) => {
-            if (!old) return old;
+            if (!isContentListResult(old)) return old;
             const newItems = old.items.filter((item) => item.id !== variables.id);
             return {
               ...old,
@@ -266,7 +278,7 @@ export function useDeleteContent() {
 
           // Update block lists
           queryClient.setQueriesData({ queryKey: ['blocks'], exact: false }, (old: ContentListResult | undefined) => {
-            if (!old) return old;
+            if (!isContentListResult(old)) return old;
             const newItems = old.items.filter((item) => item.id !== variables.id);
             return {
               ...old,
@@ -279,7 +291,7 @@ export function useDeleteContent() {
           queryClient.setQueriesData(
             { queryKey: ['content', 'all'], exact: false },
             (old: ContentListResult | undefined) => {
-              if (!old) return old;
+              if (!isContentListResult(old)) return old;
               const newItems = old.items.filter((item) => item.id !== variables.id);
               return {
                 ...old,
@@ -497,7 +509,7 @@ export function useBatchUpdate() {
         );
 
         const updateListQueries = (old: ContentListResult | undefined) => {
-          if (!old) return old;
+          if (!isContentListResult(old)) return old;
           return {
             ...old,
             items: old.items.map((item) => {

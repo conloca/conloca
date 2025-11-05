@@ -44,6 +44,12 @@ export default defineConfig({
         allow: ['../..'],
       },
     },
+    ssr: {
+      // Externalize native Node modules for SSR builds
+      // These cannot be bundled and must be available at runtime
+      external: ['@node-rs/xxhash'],
+      noExternal: [],
+    },
   },
   /*
   vite: {

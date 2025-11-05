@@ -50,11 +50,11 @@
     "tslib": "^2.8.1"
   },
   "peerDependencies": {
-    "react": "19.1.1",
-    "react-dom": "19.1.1"
+    "react": "19.2.0",
+    "react-dom": "19.2.0"
   },
   "devDependencies": {
-    "astro": "5.12.8"
+    "astro": "5.15.3"
   },
   "nx": {
     "targets": {

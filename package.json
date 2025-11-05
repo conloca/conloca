@@ -2,9 +2,18 @@
   "name": "@conloca/public",
   "version": "0.0.0",
   "scripts": {
-    "build": "nx run-many -t build --all",
-    "test": "nx run-many -t test --all",
-    "lint": "nx run-many -t lint --all"
+    "build:all": "nx run-many -t build",
+    "clean:node_modules": "find e* t* p* -type d -name node_modules -print0 |xargs -0 rm -rvf",
+    "dev:conloca": "nx run website-with-cms:dev",
+    "list:nx-build-targets": "nx show projects | xargs -n1 nx show project --json | jq -r  '.name as $name | .targets | to_entries[] | \"\\($name):\\(.key)\"'",
+    "reload:direnv": "rm -rf tooling/direnv/.{direnv,devenv}; direnv reload",
+    "reload:node_modules": "tooling/rm_node_modules; bun install",
+    "serve:conloca": "nx run website-with-cms:dev --outputStyle=stream",
+    "show:tree": "tree --gitignore -d",
+    "syncpack:fix": "bunx syncpack fix-mismatches",
+    "update:devenv": "cd tooling/direnv; devenv update",
+    "update:npm:interactive": "bun update --interactive --recursive",
+    "update:nixpkgs-overlay": "cd tooling/direnv/nixpkgs-overlay && nix shell nixpkgs#nvfetcher -c nvfetcher"
   },
   "private": true,
   "packageManager": "bun@1.3.12",
@@ -12,39 +21,59 @@
     "node": ">=22.0.0"
   },
   "dependencies": {
-    "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "@conloca/content-api": "workspace:*",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "react-router-dom": "^7.9.5"
   },
   "devDependencies": {
-    "@babel/core": "^7.27.4",
-    "@babel/preset-react": "^7.27.1",
-    "@biomejs/biome": "^2.1.2",
-    "@nx/js": "21.2.1",
-    "@nx/react": "21.2.1",
-    "@nx/web": "21.2.1",
-    "@nx/workspace": "21.2.1",
-    "@swc-node/register": "~1.10.10",
-    "@swc/core": "~1.12.7",
+    "@babel/core": "^7.28.5",
+    "@babel/preset-react": "^7.28.5",
+    "@biomejs/biome": "^2.3.2",
+    "@corpos/tooling": "workspace:*",
+    "@nx/js": "22.0.2",
+    "@nx/react": "22.0.2",
+    "@nx/web": "22.0.2",
+    "@nx/workspace": "22.0.2",
+    "@swc-node/register": "~1.11.1",
+    "@swc/core": "~1.14.0",
     "@swc/helpers": "~0.5.17",
-    "@testing-library/dom": "10.4.0",
+    "@testing-library/dom": "10.4.1",
     "@testing-library/react": "^16.3.0",
     "@types/node": "~22.0.0",
-    "@types/react": "19.1.8",
-    "@types/react-dom": "19.1.6",
-    "@vitejs/plugin-react": "^4.6.0",
-    "@vitest/coverage-v8": "^3.2.4",
-    "@vitest/ui": "^3.2.4",
+    "@types/react": "19.2.2",
+    "@types/react-dom": "19.2.2",
+    "@vitejs/plugin-react": "^5.1.0",
+    "@vitest/coverage-v8": "^4.0.5",
+    "@vitest/ui": "^4.0.5",
     "ajv": "^8.17.1",
-    "jiti": "2.4.2",
-    "jsdom": "^26.1.0",
-    "nx": "21.2.1",
+    "jiti": "2.6.1",
+    "jsdom": "^27.0.1",
+    "nx": "22.0.2",
     "prettier": "^3.6.2",
     "tslib": "^2.8.1",
-    "typescript": "^5.8.3",
-    "vite": "^7.0.0",
-    "vitest": "^3.2.4"
+    "typescript": "^5.9.3",
+    "verdaccio": "^6.2.1",
+    "vite": "^7.1.12",
+    "vitest": "^4.0.5"
   },
   "workspaces": [
-    "packages/*"
-  ]
+    "packages/*",
+    "example/*",
+    "targets/*",
+    "tooling"
+  ],
+  "nx": {
+    "includedScripts": [],
+    "targets": {
+      "local-registry": {
+        "executor": "@nx/js:verdaccio",
+        "options": {
+          "port": 4873,
+          "config": ".verdaccio/config.yml",
+          "storage": "tmp/local-registry/storage"
+        }
+      }
+    }
+  }
 }
