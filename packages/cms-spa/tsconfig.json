@@ -4,13 +4,13 @@
   "include": [],
   "references": [
     {
-      "path": "../mdx-editor"
+      "path": "../content-api"
+    },
+    {
+      "path": "../mdx-client"
     },
     {
       "path": "../content-api-client"
-    },
-    {
-      "path": "../content-api"
     },
     {
       "path": "./tsconfig.lib.json"

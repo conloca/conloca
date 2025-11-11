@@ -28,7 +28,7 @@
   },
   "dependencies": {
     "@conloca/content-api-client": "workspace:*",
-    "@conloca/mdx-editor": "workspace:*",
+    "@conloca/mdx-client": "workspace:*",
     "@measured/puck": "^0.20.2",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-dropdown-menu": "^2.1.16",

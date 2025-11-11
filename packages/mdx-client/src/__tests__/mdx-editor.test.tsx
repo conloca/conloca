@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { MDXEditor, MDXEditorModal } from '../index';
 
@@ -153,7 +153,7 @@ describe('MDXEditor', () => {
       expect(closed).toBe(true);
     });
 
-    test('calls onSave with content and closes modal', () => {
+    test('calls onSave with content and closes modal', async () => {
       let savedContent = '';
       let closed = false;
 
@@ -178,8 +178,11 @@ describe('MDXEditor', () => {
       const saveButton = screen.getByText('Save');
       fireEvent.click(saveButton);
 
-      expect(savedContent).toBe('# Initial');
-      expect(closed).toBe(true);
+      // Wait for async handleSave to complete
+      await waitFor(() => {
+        expect(savedContent).toBe('# Initial');
+        expect(closed).toBe(true);
+      });
     });
 
     test('shows file path in modal title', () => {

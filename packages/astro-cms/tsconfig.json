@@ -7,6 +7,9 @@
       "path": "../content-api"
     },
     {
+      "path": "../mdx-client"
+    },
+    {
       "path": "../content-api-client"
     },
     {

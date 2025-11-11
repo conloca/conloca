@@ -17,13 +17,13 @@
   "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"],
   "references": [
     {
-      "path": "../mdx-editor/tsconfig.lib.json"
+      "path": "../content-api/tsconfig.lib.json"
+    },
+    {
+      "path": "../mdx-client/tsconfig.lib.json"
     },
     {
       "path": "../content-api-client/tsconfig.lib.json"
-    },
-    {
-      "path": "../content-api/tsconfig.lib.json"
     }
   ]
 }

@@ -21,6 +21,8 @@
     "src/index.ts",
     "src/types.ts",
     "src/mock-puck-config.tsx",
-    "src/ui-config.ts"
+    "src/ui-config.ts",
+    "src/components/puck/index.ts",
+    "src/components/puck/MDXContent.tsx"
   ]
 }
