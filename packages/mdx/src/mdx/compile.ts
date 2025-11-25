@@ -4,7 +4,7 @@ import matter from 'gray-matter';
 import remarkFrontmatter from 'remark-frontmatter';
 import remarkGfm from 'remark-gfm';
 import remarkMdxFrontmatter from 'remark-mdx-frontmatter';
-import type { MDXCompileResult, MDXCompiler } from '../types';
+import type { MDXCompileResult, MDXCompiler } from '../types.js';
 
 /**
  * Compile MDX content to executable JavaScript

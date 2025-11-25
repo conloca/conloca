@@ -4,6 +4,9 @@
   "exclude": ["dist"],
   "references": [
     {
+      "path": "../../packages/mdx"
+    },
+    {
       "path": "../../packages/content-api"
     },
     {

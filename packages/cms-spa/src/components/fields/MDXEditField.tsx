@@ -1,6 +1,6 @@
 import type { LocalizedEntry } from '@conloca/content-api-client';
 import { useUpdateLocalized } from '@conloca/content-api-client';
-import { MDXEditorModal } from '@conloca/mdx-client';
+import { MDXEditorModal } from '@conloca/mdx';
 import { Edit2 } from 'lucide-react';
 import { useState } from 'react';
 

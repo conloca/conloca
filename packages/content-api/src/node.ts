@@ -16,7 +16,6 @@ export { createContentAPI, createContentWatchHandlers } from './content-watcher'
 // Node.js specific implementations (require fs, xxhash, etc.)
 export { FileSystemContentAPI } from './filesystem-content-api';
 export { InMemoryContentAPI } from './in-memory-content-api';
-export { compileMDX, createComponentScope, createMDXCompiler } from './mdx/compile';
 export { createContentAPIRouter, createContentMiddleware } from './middleware';
 export { Site } from './site';
 // Re-export types and utilities that are safe for Node.js environments

@@ -1,5 +1,5 @@
 import { useLocalizedContent, useUpdateLocalized } from '@conloca/content-api-client';
-import { MDXEditorModal } from '@conloca/mdx-client';
+import { MDXEditorModal } from '@conloca/mdx';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 

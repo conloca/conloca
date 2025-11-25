@@ -53,7 +53,7 @@
   "dependencies": {
     "@conloca/cms-spa": "workspace:*",
     "@conloca/content-api-client": "workspace:*",
-    "@conloca/mdx-client": "workspace:*",
+    "@conloca/mdx": "workspace:*",
     "@measured/puck": "^0.20.2",
     "tslib": "^2.8.1"
   },

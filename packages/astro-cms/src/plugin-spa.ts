@@ -193,9 +193,6 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
               // Externalize native Node modules for SSR builds
               // These cannot be bundled and must be available at runtime
               external: ['@node-rs/xxhash'],
-              // Bundle these packages during SSR to handle CSS imports from @mdxeditor/editor
-              // This is required because mdx-client includes @mdxeditor/editor which imports CSS files
-              noExternal: ['@conloca/mdx-client', '@mdxeditor/editor'],
             },
           },
         });

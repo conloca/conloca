@@ -12,6 +12,7 @@
     "@astrojs/react": "^4.4.1",
     "@conloca/astro-cms": "workspace:*",
     "@conloca/content-api": "workspace:*",
+    "@conloca/mdx": "workspace:*",
     "@astrojs/node": "^9.5.0",
     "astro": "5.15.3",
     "react": "19.2.0",
@@ -19,6 +20,8 @@
   },
   "devDependencies": {
     "@types/bun": "^1.2.17",
+    "@typescript-eslint/parser": "^8.46.4",
+    "eslint-plugin-astro": "^1.5.0",
     "extensionless": "^2.0.2"
   },
   "nx": {

@@ -5,7 +5,7 @@ import {
   useCreateContent,
   useDeleteContent,
 } from '@conloca/content-api-client';
-import { MDXEditorModal } from '@conloca/mdx-client';
+import { MDXEditorModal } from '@conloca/mdx';
 import { AlertCircle, Edit2, Loader2, Package, Plus, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';

@@ -1,6 +1,8 @@
 ---
-import { PageRenderer } from '../components/PageRenderer';
+import { createPageRendererWithBlocks } from '@conloca/astro-cms/components';
 import { createContentAPI } from '@conloca/content-api/node';
+import { evaluateMDXBlocks } from '@conloca/mdx/node';
+import config from '../puck.config';
 
 // Enable static site generation
 export const prerender = true;
@@ -41,7 +43,7 @@ const slug = Array.isArray(slugParam) ? slugParam.join('/') : slugParam || 'inde
 
 let puckData;
 let manifest;
-let blocksData: Array<{ id: string; title: string; mdxContent?: string; etag: string }> = [];
+let PageRenderer;
 
 try {
   const api = await createContentAPI({ contentRoot: './content' });
@@ -52,42 +54,30 @@ try {
   const siteApi = api.getSite(site);
   const found = siteApi?.getByPathname(pathname, locale) || siteApi?.getByPathname(pathname);
   if (!found) {
+    console.warn(`[${pathname}] Page not found in site "${site}" for locale "${locale}"`);
     return Astro.redirect('/404');
   }
 
   const localized = await api.getLocalized(found.id, locale);
   if (!localized) {
+    console.warn(`[${pathname}] Failed to get localized content for page "${found.id}" in locale "${locale}"`);
     return Astro.redirect('/404');
   }
 
   puckData = localized.localized.content?.puckData;
   manifest = localized.localized.meta || {};
 
-  // Fetch all blocks and prepare data for client
-  const blocksGenerator = api.listAllContent({ kind: 'block' });
-  const blocks = Array.from(blocksGenerator);
+  // Evaluate all MDX blocks to React components at build time
+  const mdxComponents = await evaluateMDXBlocks(api, locale);
 
-  // Prepare blocks data for the client component (fetch in parallel)
-  const blocksDataPromises = blocks.map(async (block) => {
-    const locales = Object.keys(block.locales);
-    const firstLocale = locales.length > 0 ? block.locales[locales[0]] : null;
-    const blockTitle = firstLocale?.meta?.title || firstLocale?.name || block.id;
-
-    // Fetch the localized block to get MDX content and ETag
-    const blockLocalized = await api.getLocalized(block.id, locale);
-    const mdxContent = blockLocalized?.localized?.content?.mdx;
-    const etag = blockLocalized?.localized?.etag || '';
-
-    return {
-      id: block.id,
-      title: blockTitle,
-      mdxContent: mdxContent,
-      etag: etag,
-    };
-  });
-
-  blocksData = await Promise.all(blocksDataPromises);
+  // Create page renderer with MDX components baked in via closure
+  PageRenderer = createPageRendererWithBlocks(config, puckData, mdxComponents);
 } catch (error) {
+  console.error(`[${slug}] Failed to render page:`, error);
+  if (error instanceof Error) {
+    console.error(`  Error message: ${error.message}`);
+    console.error(`  Stack trace:`, error.stack);
+  }
   return Astro.redirect('/404');
 }
 ---
@@ -100,6 +90,6 @@ try {
     <title>{manifest.title || 'Page'}</title>
   </head>
   <body>
-    <PageRenderer data={puckData} blocksData={blocksData} client:load />
+    <PageRenderer />
   </body>
 </html>

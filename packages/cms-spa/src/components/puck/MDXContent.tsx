@@ -1,5 +1,5 @@
 import type { LocalizedEntry } from '@conloca/content-api-client';
-import { useMDXEvaluation } from '@conloca/mdx-client';
+import { useMDXEvaluation } from '@conloca/mdx';
 import React, { useMemo } from 'react';
 
 interface MDXContentProps {

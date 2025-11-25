@@ -4,6 +4,9 @@
   "include": [],
   "references": [
     {
+      "path": "../content-api"
+    },
+    {
       "path": "./tsconfig.lib.json"
     }
   ]
