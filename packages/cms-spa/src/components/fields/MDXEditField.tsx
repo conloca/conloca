@@ -1,8 +1,8 @@
 import type { LocalizedEntry } from '@conloca/content-api-client';
-import { useUpdateLocalized } from '@conloca/content-api-client';
+import { useLocalizedContent, useUpdateLocalized } from '@conloca/content-api-client';
 import { MDXEditorModal } from '@conloca/mdx';
 import { Edit2 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 interface MDXEditFieldProps {
   entry: LocalizedEntry;
@@ -14,13 +14,23 @@ interface MDXEditFieldProps {
  */
 export function MDXEditField({ entry }: MDXEditFieldProps) {
   const [editorOpen, setEditorOpen] = useState(false);
+  const locale = 'en';
+  const { data: localizedContent } = useLocalizedContent(entry.id, locale);
   const updateLocalized = useUpdateLocalized();
   const [currentEtag, setCurrentEtag] = useState<string>(entry.localized.etag);
 
+  useEffect(() => {
+    if (localizedContent?.localized?.etag) {
+      setCurrentEtag(localizedContent.localized.etag);
+    }
+  }, [localizedContent]);
+
   const handleSaveEdit = async (newContent: string) => {
+    if (!entry.id || !localizedContent) return;
+
     const result = await updateLocalized.mutateAsync({
       id: entry.id,
-      locale: entry.localized.locale,
+      locale,
       data: {
         content: {
           mdx: newContent,

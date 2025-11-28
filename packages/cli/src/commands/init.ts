@@ -19,7 +19,7 @@ export async function init(directory: string, siteName: string): Promise<void> {
     const sitesJsonPath = join(contentPath, 'sites.json');
     let sitesConfig: SitesConfig = {
       sites: {},
-      globalLocales: ['en'],
+      globalLocales: ['en', 'nl', 'de', 'fr'],
     };
 
     try {
@@ -40,7 +40,7 @@ export async function init(directory: string, siteName: string): Promise<void> {
     // Add or update the site configuration
     if (!sitesConfig.sites[siteName]) {
       sitesConfig.sites[siteName] = {
-        locales: ['en'],
+        locales: ['en', 'nl', 'de', 'fr'],
         defaultLocale: 'en',
       };
       await writeFile(sitesJsonPath, JSON.stringify(sitesConfig, null, 2) + '\n', 'utf-8');

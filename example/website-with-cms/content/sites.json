@@ -1,9 +1,9 @@
 {
   "sites": {
     "default": {
-      "locales": ["en"],
+      "locales": ["en", "nl", "de", "fr"],
       "defaultLocale": "en"
     }
   },
-  "globalLocales": ["en"]
+  "globalLocales": ["en", "nl", "de", "fr"]
 }

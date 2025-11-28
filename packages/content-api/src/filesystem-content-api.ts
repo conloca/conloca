@@ -1,4 +1,4 @@
-import { type FileHandle, mkdir, open, readdir, readFile, rename, unlink, writeFile } from 'fs/promises';
+import { type FileHandle, mkdir, open, readdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import matter from 'gray-matter';
 import { dirname, join, resolve } from 'path';
 import sortKeys from 'sort-keys';
@@ -1299,6 +1299,27 @@ export class FileSystemContentAPI implements ContentAPI {
       }
     }
 
+    // Validate name change if updating name for blocks
+    if (data.name && manifest.kind === 'block') {
+      // Check if new name is already taken by another block in the same collection
+      const blockIndex = this.contentIndex.getBlockIndex();
+      const existingBlock = blockIndex.getByName(manifest.collection, data.name);
+
+      if (existingBlock && existingBlock.id !== id) {
+        // Get title from the existing block for a better error message
+        const existingLocale = Object.values(existingBlock.locales).find((lv) => lv !== undefined);
+        const existingTitle = existingLocale?.meta?.title;
+
+        return {
+          success: false,
+          reason: 'write_error',
+          error: new Error(
+            `Block name "${data.name}" is already in use${existingTitle ? ` by "${existingTitle}"` : ''}`,
+          ),
+        };
+      }
+    }
+
     // Handle pathname changes - track history only for published content
     const pathnameHistory = buildPathnameHistory(
       localeVersion.pathname,
@@ -1311,13 +1332,23 @@ export class FileSystemContentAPI implements ContentAPI {
     );
 
     try {
-      // Determine the target file path (may be different if pathname changed)
+      // Determine the target file path (may be different if pathname or name changed)
       let targetFilePath = filePath;
       if (data.pathname && localeVersion.pathname && data.pathname !== localeVersion.pathname && manifest.site) {
         // For pages, calculate new file path based on new pathname
         const newLocaleVersion: LocaleVersion = {
           ...localeVersion,
           pathname: data.pathname,
+        };
+        targetFilePath = this.getFilePath(manifest, newLocaleVersion);
+
+        // Ensure target directory exists
+        await mkdir(dirname(targetFilePath), { recursive: true });
+      } else if (data.name && localeVersion.name && data.name !== localeVersion.name && manifest.kind === 'block') {
+        // For blocks, calculate new file path based on new name
+        const newLocaleVersion: LocaleVersion = {
+          ...localeVersion,
+          name: data.name,
         };
         targetFilePath = this.getFilePath(manifest, newLocaleVersion);
 
@@ -1473,6 +1504,7 @@ export class FileSystemContentAPI implements ContentAPI {
         modified,
         meta: newMeta,
         ...(data.pathname && { pathname: data.pathname }),
+        ...(data.name && { name: data.name }),
       };
 
       // Handle publish dates using shared function

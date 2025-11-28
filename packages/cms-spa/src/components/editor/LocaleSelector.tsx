@@ -25,7 +25,7 @@ export function LocaleSelector({
       </Select.Trigger>
 
       <Select.Portal>
-        <Select.Content className="bg-white border border-grey-09 rounded shadow-md">
+        <Select.Content className="bg-white border border-grey-09 rounded shadow-md" style={{ zIndex: 100 }}>
           <Select.Viewport className="p-1">
             {availableLocales.map((locale) => {
               const isCurrent = locale === currentLocale;

@@ -4,8 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { PageMetadata } from '../../types';
 import { PageMetadataDialog } from '../dialogs/PageMetadataDialog';
-import { BlockComponentRenderer } from './BlockComponentRenderer';
-import { BlockFieldRenderer } from './BlockFieldRenderer';
+import { BlockContentWrapper, BlockFieldWrapper } from './BlockWrappers';
 import { PageEditor } from './PageEditor';
 
 interface PageEditorWrapperProps {
@@ -60,15 +59,11 @@ export function PageEditorWrapper({ puckConfig }: PageEditorWrapperProps) {
           contentId: {
             type: 'custom',
             label: 'Content Block',
-            render: ({ value }: { value: string }) => {
-              return <BlockFieldRenderer contentId={value} />;
-            },
+            render: ({ value }: { value: string }) => <BlockFieldWrapper contentId={value} />,
           },
         },
         defaultProps: { contentId: block.id },
-        render: ({ contentId }: { contentId: string }) => {
-          return <BlockComponentRenderer contentId={contentId} />;
-        },
+        render: ({ contentId }: { contentId: string }) => <BlockContentWrapper contentId={contentId} />,
       };
       blockCategoryList.push(componentKey);
     });

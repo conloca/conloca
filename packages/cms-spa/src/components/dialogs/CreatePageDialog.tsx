@@ -4,6 +4,7 @@ import type React from 'react';
 import { useEffect, useState } from 'react';
 import type { CreatePageData } from '../../types';
 import { getUIConfig } from '../../ui-config';
+import { slugify } from '../../utils/slugify';
 
 interface CreatePageDialogProps {
   open: boolean;
@@ -85,11 +86,8 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
 
   // Auto-generate path from title
   useEffect(() => {
-    const slugified = title
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '');
-    setPath(slugified ? `/${slugified}` : '');
+    const slug = slugify(title);
+    setPath(slug ? `/${slug}` : '');
   }, [title]);
 
   const handleSubmit = (e: React.FormEvent) => {

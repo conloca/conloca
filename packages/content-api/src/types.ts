@@ -224,6 +224,7 @@ export interface UpdateLocaleInput {
 
 export interface LocaleUpdateData {
   pathname?: string; // for pages - update pathname
+  name?: string; // for blocks - update name (filename)
   publishAt?: string | null | false;
   unpublishAt?: string | null | false;
   modified?: string; // Optional, will use current time if not provided

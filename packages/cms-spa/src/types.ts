@@ -28,6 +28,13 @@ export interface Block {
   category: string;
   locales: string[];
   etag: string;
+  name?: string; // The filename for this block
+  meta?: {
+    title: string;
+    description?: string;
+    category?: string;
+    tags?: string[];
+  };
 }
 
 export interface PageMetadata {

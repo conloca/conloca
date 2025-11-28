@@ -151,3 +151,13 @@ body {
   cursor: not-allowed !important;
   pointer-events: none !important;
 }
+
+/* MDXEditor popup z-index fix - ensure link/image dialogs appear above modal */
+.mdxeditor-popup-container {
+  z-index: 100 !important;
+}
+
+.mdxeditor-select-content {
+  z-index: 100 !important;
+  max-height: var(--radix-select-content-available-height, 300px) !important;
+}

@@ -9,10 +9,8 @@ import {
   frontmatterPlugin,
   headingsPlugin,
   InsertCodeBlock,
-  InsertImage,
   InsertTable,
   InsertThematicBreak,
-  imagePlugin,
   jsxPlugin,
   ListsToggle,
   linkDialogPlugin,
@@ -30,6 +28,47 @@ import {
 } from '@mdxeditor/editor';
 import React, { useEffect, useState } from 'react';
 import '@mdxeditor/editor/style.css';
+
+/**
+ * Error Boundary for catching React errors in MDXEditor.
+ * Prevents editor crashes from breaking the entire CMS.
+ */
+class MDXEditorErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error?: Error }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  override componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('[MDXEditor] Error boundary caught:', error, errorInfo);
+  }
+
+  override render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-4 bg-red-50 border border-red-200 rounded text-red-600">
+          <p className="font-semibold mb-2">MDXEditor Error</p>
+          <p className="text-sm mb-2">{this.state.error?.message || 'Unknown error occurred'}</p>
+          <details className="text-xs">
+            <summary className="cursor-pointer font-medium">Stack Trace</summary>
+            <pre className="mt-2 p-2 bg-red-100 rounded overflow-auto whitespace-pre-wrap">
+              {this.state.error?.stack}
+            </pre>
+          </details>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 export interface MDXEditorProps {
   value: string;
@@ -68,13 +107,13 @@ export const MDXEditor = React.forwardRef<MDXEditorMethods, MDXEditorProps>(
           quotePlugin(),
           linkPlugin(),
           linkDialogPlugin(),
-          imagePlugin(),
           tablePlugin(),
           thematicBreakPlugin(),
           frontmatterPlugin(),
-          codeBlockPlugin({ defaultCodeBlockLanguage: 'typescript' }),
+          codeBlockPlugin({ defaultCodeBlockLanguage: 'ts' }),
           codeMirrorPlugin({
             codeBlockLanguages: {
+              text: 'Plain Text',
               js: 'JavaScript',
               jsx: 'JavaScript (React)',
               ts: 'TypeScript',
@@ -104,7 +143,6 @@ export const MDXEditor = React.forwardRef<MDXEditorMethods, MDXEditorProps>(
                   <BlockTypeSelect />
                   <Separator />
                   <CreateLink />
-                  <InsertImage />
                   <InsertTable />
                   <InsertThematicBreak />
                   <Separator />
@@ -239,6 +277,8 @@ export interface MDXEditorModalProps {
   filePath?: string;
   initialContent: string;
   onSave: (content: string) => void | Promise<void>;
+  headerExtra?: React.ReactNode;
+  onBeforeClose?: () => boolean; // Return false to prevent closing
 }
 
 export const MDXEditorModal: React.FC<MDXEditorModalProps> = ({
@@ -247,6 +287,8 @@ export const MDXEditorModal: React.FC<MDXEditorModalProps> = ({
   filePath,
   initialContent,
   onSave,
+  headerExtra,
+  onBeforeClose,
 }) => {
   const [content, setContent] = useState(initialContent);
   const [isEditorReady, setIsEditorReady] = useState(false);
@@ -255,6 +297,14 @@ export const MDXEditorModal: React.FC<MDXEditorModalProps> = ({
   useEffect(() => {
     setContent(initialContent);
   }, [initialContent]);
+
+  const handleClose = () => {
+    // Check if parent wants to prevent closing
+    if (onBeforeClose && !onBeforeClose()) {
+      return;
+    }
+    onClose();
+  };
 
   // Defer editor initialization to avoid render-phase state updates
   useEffect(() => {
@@ -274,7 +324,7 @@ export const MDXEditorModal: React.FC<MDXEditorModalProps> = ({
     try {
       await onSave(content);
       // Only close if onSave completes without error
-      onClose();
+      handleClose();
     } catch (error) {
       // If onSave throws, don't close the modal
       console.error('Save failed:', error);
@@ -289,21 +339,24 @@ export const MDXEditorModal: React.FC<MDXEditorModalProps> = ({
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="w-[90vw] h-[90vh] flex flex-col" data-testid="mdx-editor-modal">
         <DialogHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-4">
             <DialogTitle>{filePath ? `Edit: ${filePath}` : 'New MDX File'}</DialogTitle>
-            <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded" aria-label="Close">
+            {headerExtra && <div className="flex items-center gap-2">{headerExtra}</div>}
+            <button onClick={handleClose} className="p-2 hover:bg-gray-100 rounded" aria-label="Close">
               ✕
             </button>
           </div>
         </DialogHeader>
         <div className="flex-1 overflow-hidden">
           {isEditorReady ? (
-            // Using DeferredMDXEditor to avoid React 19 render-phase state update errors
-            // See DeferredMDXEditor documentation for detailed explanation
-            <DeferredMDXEditor value={content} onChange={setContent} onSave={handleSave} />
+            <MDXEditorErrorBoundary>
+              {/* Using DeferredMDXEditor to avoid React 19 render-phase state update errors */}
+              {/* See DeferredMDXEditor documentation for detailed explanation */}
+              <DeferredMDXEditor value={content} onChange={setContent} onSave={handleSave} />
+            </MDXEditorErrorBoundary>
           ) : (
             <div className="flex items-center justify-center h-full">
               <div className="text-gray-500" data-testid="modal-editor-loading">
@@ -314,7 +367,7 @@ export const MDXEditorModal: React.FC<MDXEditorModalProps> = ({
         </div>
         <div className="flex justify-end gap-2 mt-4">
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50"
             disabled={isSaving}
           >
