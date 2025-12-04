@@ -83,7 +83,7 @@ export function buildLocaleVersion(params: {
   created: string;
   modified: string;
   meta: ContentMeta;
-  kind: 'block' | 'page';
+  kind: 'block' | 'page' | 'data';
   publishAt?: string;
   unpublishAt?: string;
   pathname?: string;
@@ -108,7 +108,7 @@ export function buildLocaleVersion(params: {
   if (params.pathname && params.kind === 'page') {
     manifest.pathname = params.pathname;
   }
-  if (params.name && params.kind === 'block') {
+  if (params.name && (params.kind === 'block' || params.kind === 'data')) {
     manifest.name = params.name;
   }
   if (params.previousPathnames && Object.keys(params.previousPathnames).length > 0) {
@@ -150,6 +150,10 @@ export function validateCreateContent(
   data: CreateContentInput,
   sites: Record<string, Site>,
   blocks: Blocks,
+  dataApi?: {
+    isDataNameValid: (name: string) => boolean;
+    getNameConflict: (collection: string, name: string) => string | null;
+  },
 ): CreateValidationResult {
   // Validate metadata for all locales
   for (const localeData of Object.values(data.locales)) {
@@ -239,6 +243,37 @@ export function validateCreateContent(
       return {
         valid: false,
         error: `Block name ${data.name} already exists in collection ${data.collection}`,
+        reason: 'name_taken',
+        existingId,
+      };
+    }
+  }
+
+  // Validate data entry name uniqueness
+  if (data.kind === 'data' && dataApi) {
+    if (!data.name) {
+      return {
+        valid: false,
+        error: 'Data name is required',
+        reason: 'invalid_name',
+      };
+    }
+
+    // Validate data name format
+    if (!dataApi.isDataNameValid(data.name)) {
+      return {
+        valid: false,
+        error: `Invalid data name: ${data.name}. Data names must contain only alphanumeric characters, hyphens, and underscores.`,
+        reason: 'invalid_name',
+      };
+    }
+
+    // Check if name is already taken in any locale
+    const existingId = dataApi.getNameConflict(data.collection, data.name);
+    if (existingId) {
+      return {
+        valid: false,
+        error: `Data name ${data.name} already exists in collection ${data.collection}`,
         reason: 'name_taken',
         existingId,
       };

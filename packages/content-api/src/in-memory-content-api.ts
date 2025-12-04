@@ -13,6 +13,7 @@ import {
   validateCreateContent,
 } from './content-operations';
 import { getCurrentISODate, localesOf, mapLocales, mapSiteNames, serializeMdxWithFrontmatter } from './content-utils';
+import { Data } from './data';
 import { calculateEtagsFromMdxBuffer, findMdxContentStartPosition } from './etag-utils';
 import { Site } from './site';
 import type {
@@ -44,6 +45,7 @@ export class InMemoryContentAPI implements ContentAPI {
   private contentIndex: ContentIndex;
   readonly sitesConfig: SitesConfig;
   readonly blocks: Blocks;
+  readonly data: Data;
   private readonly sites: Record<string, Site>;
 
   constructor(sitesConfig?: SitesConfig) {
@@ -57,6 +59,9 @@ export class InMemoryContentAPI implements ContentAPI {
 
     // Initialize blocks
     this.blocks = new Blocks(this, this.contentIndex.getBlockIndex());
+
+    // Initialize data
+    this.data = new Data(this, this.contentIndex.getDataIndex());
 
     // Initialize all sites
     this.sites = mapSiteNames(this.sitesConfig, (siteName) => {

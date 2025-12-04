@@ -42,12 +42,13 @@ export const ErrorCodes = {
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
 
 // Content type - the format of the content
-export type ContentType = 'puck' | 'mdx';
+export type ContentType = 'puck' | 'mdx' | 'json';
 
-// Content data - the actual content (puck or mdx)
+// Content data - the actual content (puck, mdx, or json data)
 export interface ContentData {
   puckData?: any;
   mdx?: string;
+  data?: Record<string, unknown>;
 }
 
 // Content property that extends manifests with actual content
@@ -59,7 +60,7 @@ export interface ContentProp {
 export interface ContentIdentity {
   id: string;
   type: ContentType;
-  kind: 'block' | 'page';
+  kind: 'block' | 'page' | 'data';
   site?: string; // Only for pages
   collection: string;
 }
@@ -139,9 +140,9 @@ export interface GlobalFilters {
   site?: string;
   collection?: string;
   locales?: string[];
-  type?: 'puck' | 'mdx';
+  type?: 'puck' | 'mdx' | 'json';
   published?: boolean;
-  kind?: 'block' | 'page';
+  kind?: 'block' | 'page' | 'data';
   localization?: 'complete' | 'partial' | 'one';
   missingLocales?: string[];
 }
@@ -166,12 +167,12 @@ export interface FindOptions {
 // Input types
 
 export interface CreateContentInput {
-  kind: 'block' | 'page';
-  site?: string; // Required for pages, must be undefined for blocks
+  kind: 'block' | 'page' | 'data';
+  site?: string; // Required for pages, must be undefined for blocks and data
   collection: string;
   type: ContentType;
   created?: string; // Optional, will use current time if not provided
-  name?: string; // Internal identifier for blocks (same across all locales)
+  name?: string; // Internal identifier for blocks and data (same across all locales)
   meta?: Partial<ContentMeta>; // Shared metadata defaults (for backward compatibility)
   locales: {
     [locale: string]: {
@@ -391,5 +392,6 @@ export interface LocaleFileData {
   content: {
     puckData?: any;
     mdx?: string;
+    data?: Record<string, unknown>;
   };
 }

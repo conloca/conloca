@@ -1,5 +1,6 @@
 import { BlockIndex } from './block-index';
 import { localesOf, mapSiteNames } from './content-utils';
+import { DataIndex } from './data-index';
 import { SiteIndex } from './site-index';
 import type { ContentData, ContentIdentity, ContentManifest, LocaleVersion, SitesConfig } from './types';
 
@@ -25,9 +26,15 @@ export class ContentIndex {
   // Single block index
   private blockIndex: BlockIndex;
 
+  // Single data index
+  private dataIndex: DataIndex;
+
   private constructor(private sitesConfig: SitesConfig) {
     // Initialize block index
     this.blockIndex = new BlockIndex(sitesConfig.globalLocales);
+
+    // Initialize data index
+    this.dataIndex = new DataIndex(sitesConfig.globalLocales);
 
     // Initialize V8-optimized site indexes
     this.siteIndexes = mapSiteNames(sitesConfig, (siteName) => {
@@ -65,9 +72,9 @@ export class ContentIndex {
    * Updates a single locale's manifest and content cache if provided
    */
   addContent(identity: ContentIdentity, localeVersion: LocaleVersion, content?: ContentData | null): void {
-    // Validate that blocks don't have a site
-    if (identity.kind === 'block' && identity.site) {
-      throw new Error('Blocks cannot have a site property');
+    // Validate that blocks and data don't have a site
+    if ((identity.kind === 'block' || identity.kind === 'data') && identity.site) {
+      throw new Error(`${identity.kind} cannot have a site property`);
     }
     // Validate that pages must have a site
     if (identity.kind === 'page' && !identity.site) {
@@ -76,6 +83,8 @@ export class ContentIndex {
 
     if (identity.kind === 'block') {
       this.blockIndex.addContent(identity, localeVersion, content);
+    } else if (identity.kind === 'data') {
+      this.dataIndex.addContent(identity, localeVersion, content);
     } else {
       const siteIndex = this.siteIndexes[identity.site!];
       if (siteIndex) {
@@ -94,6 +103,8 @@ export class ContentIndex {
     // Remove from the appropriate index
     if (manifest.kind === 'block') {
       this.blockIndex.removeLocale(id, locale);
+    } else if (manifest.kind === 'data') {
+      this.dataIndex.removeLocale(id, locale);
     } else {
       const siteIndex = this.siteIndexes[manifest.site!];
       if (siteIndex) {
@@ -112,6 +123,9 @@ export class ContentIndex {
     if (manifest.kind === 'block') {
       return this.blockIndex.getCachedContent(id, locale);
     }
+    if (manifest.kind === 'data') {
+      return this.dataIndex.getCachedContent(id, locale);
+    }
     const siteIndex = this.siteIndexes[manifest.site!];
     return siteIndex ? siteIndex.getCachedContent(id, locale) : null;
   }
@@ -122,6 +136,9 @@ export class ContentIndex {
   removeEntry(id: string): void {
     // Try blocks first
     this.blockIndex.removeEntry(id);
+
+    // Try data
+    this.dataIndex.removeEntry(id);
 
     // Then try each site
     for (const site in this.siteIndexes) {
@@ -138,6 +155,10 @@ export class ContentIndex {
   getManifest(id: string): ContentManifest | null {
     // Check blocks first
     let manifest = this.blockIndex.getManifest(id);
+    if (manifest) return manifest;
+
+    // Check data
+    manifest = this.dataIndex.getManifest(id);
     if (manifest) return manifest;
 
     // Then check each site
@@ -199,11 +220,35 @@ export class ContentIndex {
   }
 
   /**
+   * Get data index
+   */
+  getDataIndex(): DataIndex {
+    return this.dataIndex;
+  }
+
+  /**
+   * Find data entry by name
+   */
+  getDataByName(collection: string, name: string, locale?: string): ContentManifest | null {
+    return this.dataIndex.getByName(collection, name, locale);
+  }
+
+  /**
+   * Get all collections for data
+   */
+  getDataCollections(): Set<string> {
+    return this.dataIndex.collections;
+  }
+
+  /**
    * List all content (for iteration)
    */
   *listAllContent(): Generator<ContentManifest> {
     // Yield all blocks
     yield* this.blockIndex.getAllManifests();
+
+    // Yield all data entries
+    yield* this.dataIndex.getAllManifests();
 
     // Yield all site entries
     for (const site in this.siteIndexes) {
@@ -309,9 +354,11 @@ export class ContentIndex {
    * Generators for efficient filtering
    */
 
-  *getManifestsForKind(kind: 'block' | 'page'): Generator<ContentManifest> {
+  *getManifestsForKind(kind: 'block' | 'page' | 'data'): Generator<ContentManifest> {
     if (kind === 'block') {
       yield* this.blockIndex.getAllManifests();
+    } else if (kind === 'data') {
+      yield* this.dataIndex.getAllManifests();
     } else {
       for (const site in this.siteIndexes) {
         const siteIndex = this.siteIndexes[site];
@@ -352,6 +399,9 @@ export class ContentIndex {
     // Yield from blocks
     yield* this.blockIndex.getManifestsByLocale(locale);
 
+    // Yield from data
+    yield* this.dataIndex.getManifestsByLocale(locale);
+
     // Yield from all sites
     for (const site in this.siteIndexes) {
       const siteIndex = this.siteIndexes[site];
@@ -364,6 +414,9 @@ export class ContentIndex {
   *getManifestsForCollection(collection: string): Generator<ContentManifest> {
     // Check blocks first
     yield* this.blockIndex.getManifestsByCollection(collection);
+
+    // Check data
+    yield* this.dataIndex.getManifestsByCollection(collection);
 
     // Then check all sites
     for (const site in this.siteIndexes) {
@@ -383,6 +436,7 @@ export class ContentIndex {
    */
   get entryCount(): number {
     let count = this.blockIndex.entryCount;
+    count += this.dataIndex.entryCount;
     for (const site in this.siteIndexes) {
       const siteIndex = this.siteIndexes[site];
       if (siteIndex) {
@@ -397,6 +451,7 @@ export class ContentIndex {
    */
   clear(): void {
     this.blockIndex.clear();
+    this.dataIndex.clear();
     for (const site in this.siteIndexes) {
       const siteIndex = this.siteIndexes[site];
       if (siteIndex) {

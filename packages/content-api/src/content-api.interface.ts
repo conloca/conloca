@@ -1,4 +1,5 @@
 import type { Blocks } from './blocks';
+import type { Data } from './data';
 import type { Site } from './site';
 import type {
   BatchResult,
@@ -66,9 +67,10 @@ export interface ContentAPI {
   deleteContent(id: string, etag: string): Promise<DeleteResult>; // Deletes all locales
   deleteLocalized(input: DeleteLocaleInput): Promise<DeleteResult>; // Deletes single locale
 
-  // Site and blocks access (getters without arguments)
+  // Site, blocks, and data access (getters without arguments)
   getSite(siteName: string): Site | null; // Returns Site instance or null if not found (not for "blocks")
-  readonly blocks: Blocks; // Property for shared content
+  readonly blocks: Blocks; // Property for shared content blocks
+  readonly data: Data; // Property for structured data collections
 
   // Global operations
   listAllContent(filters?: GlobalFilters): Generator<ContentManifest>;

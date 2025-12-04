@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { ContentAPI } from './content-api.interface';
 import { localesOf } from './content-utils';
-import type { APIError, ContentManifest, ErrorCode, FindOptions } from './types';
+import type { APIError, ContentManifest, ErrorCode, FindOptions, GlobalFilters } from './types';
 import { ErrorCodes } from './types';
 
 /**
@@ -313,6 +313,118 @@ export function createContentAPIRouter(api: ContentAPI) {
         },
         500,
       );
+    }
+  });
+
+  // ===== Data Routes =====
+  // NOTE: These routes MUST come before /:site/* routes to avoid being captured by them
+
+  // GET /data/collections - List all data collections (must be before /data/:name)
+  app.get('/data/collections', async (c) => {
+    try {
+      const collections = api.data.collections;
+      return c.json({
+        collections: Array.from(collections).sort(),
+      });
+    } catch (error) {
+      return c.json(
+        logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to list data collections'),
+        500,
+      );
+    }
+  });
+
+  // GET /data/name-available - Check if data name is available
+  app.get('/data/name-available', async (c) => {
+    const name = c.req.query('name');
+    const collection = c.req.query('collection');
+    const excludeId = c.req.query('excludeId');
+
+    if (!name) {
+      return c.json(
+        errorResponse(ErrorCodes.MISSING_REQUIRED_FIELD, 'name query parameter is required', { field: 'name' }),
+        400,
+      );
+    }
+
+    if (!collection) {
+      return c.json(
+        errorResponse(ErrorCodes.MISSING_REQUIRED_FIELD, 'collection query parameter is required', {
+          field: 'collection',
+        }),
+        400,
+      );
+    }
+
+    try {
+      const available = api.data.isNameAvailable(collection, name, excludeId);
+      if (available) {
+        return c.json({ available: true });
+      }
+
+      const existing = api.data.getByName(collection, name);
+      return c.json({
+        available: false,
+        existingId: existing?.id,
+      });
+    } catch (error) {
+      return c.json(
+        logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to check data name availability'),
+        500,
+      );
+    }
+  });
+
+  // GET /data - List data entries
+  app.get('/data', async (c) => {
+    const collection = c.req.query('collection');
+    const locale = c.req.query('locale');
+
+    try {
+      const filters: GlobalFilters = { kind: 'data' };
+      if (collection) filters.collection = collection;
+      if (locale) filters.locales = [locale];
+
+      const items = Array.from(api.listAllContent(filters));
+      return c.json({ items, total: items.length });
+    } catch (error) {
+      return c.json(logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to list data entries'), 500);
+    }
+  });
+
+  // GET /data/:name - Get data entry by name
+  app.get('/data/:name', async (c) => {
+    const name = c.req.param('name');
+    const collection = c.req.query('collection');
+    const locale = c.req.query('locale');
+
+    if (!collection) {
+      return c.json(
+        errorResponse(ErrorCodes.MISSING_REQUIRED_FIELD, 'collection query parameter is required', {
+          field: 'collection',
+        }),
+        400,
+      );
+    }
+
+    try {
+      const dataEntry = api.data.getByName(collection, name, locale);
+
+      if (!dataEntry) {
+        return c.json(errorResponse(ErrorCodes.CONTENT_NOT_FOUND, 'Data entry not found', { name, collection }), 404);
+      }
+
+      // If locale specified and provided, filter the response
+      if (locale && dataEntry.locales[locale]) {
+        return c.json({
+          ...dataEntry,
+          locales: { [locale]: dataEntry.locales[locale] },
+        });
+      }
+
+      return c.json(dataEntry);
+    } catch (error) {
+      return c.json(logAndCreateErrorResponse(error, ErrorCodes.FETCH_ERROR, 'Failed to fetch data entry'), 500);
     }
   });
 

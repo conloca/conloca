@@ -440,6 +440,14 @@ export class VXJSON {
   static calculateETags = calculateEtagsFromVXJSONBuffer;
 
   /**
+   * Calculate a simple single etag from the entire buffer
+   * Used for data files that don't follow the content-last convention
+   */
+  static calculateSimpleEtag(buffer: Uint8Array): string {
+    return calculateMetaEtagFromBuffer(buffer);
+  }
+
+  /**
    * Serialize a VXJSONFile to VXJSON format string
    * Ensures content field is last and enforces 4KB constraint efficiently
    */

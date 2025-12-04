@@ -1,6 +1,6 @@
 import { defineCollection } from 'astro:content';
 import { createContentAPI } from '@conloca/content-api/node';
-import { blockMetaSchema, pageMetaSchema } from '@conloca/content-api/schemas';
+import { blockMetaSchema, dataMetaSchema, pageMetaSchema } from '@conloca/content-api/schemas';
 import { conlocaLoader } from './loader';
 
 /**
@@ -46,6 +46,14 @@ export async function createConlocaCollections(
     collections[name] = defineCollection({
       loader: conlocaLoader({ collection: name, contentRoot, site, kind: 'block' }),
       schema: blockMetaSchema,
+    });
+  }
+
+  // Add data collections
+  for (const name of api.data.collections) {
+    collections[name] = defineCollection({
+      loader: conlocaLoader({ collection: name, contentRoot, site, kind: 'data' }),
+      schema: dataMetaSchema,
     });
   }
 

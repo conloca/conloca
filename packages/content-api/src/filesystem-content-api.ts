@@ -19,6 +19,7 @@ import {
   validateCreateContent,
 } from './content-operations';
 import { localesOf, mapSiteNames, resolvePublishDate, serializeMdxWithFrontmatter } from './content-utils';
+import { Data } from './data';
 import { calculateEtagsFromMdxBuffer, findMdxContentStartPosition, parseDualEtag } from './etag-utils';
 import { Site } from './site';
 import type {
@@ -161,6 +162,7 @@ export class FileSystemContentAPI implements ContentAPI {
   private contentIndex: ContentIndex;
   readonly sitesConfig: SitesConfig;
   readonly blocks: Blocks;
+  readonly data: Data;
   private readonly sites: Record<string, Site>;
 
   // Getter for testing purposes
@@ -194,6 +196,9 @@ export class FileSystemContentAPI implements ContentAPI {
 
     // Initialize blocks
     this.blocks = new Blocks(this, this.contentIndex.getBlockIndex());
+
+    // Initialize data
+    this.data = new Data(this, this.contentIndex.getDataIndex());
 
     // Initialize all sites
     this.sites = mapSiteNames(sitesConfig, (siteName) => {
@@ -354,11 +359,12 @@ export class FileSystemContentAPI implements ContentAPI {
         name?: string;
         previousPathnames?: Record<string, string>;
         meta?: ContentMeta;
-        type?: 'puck' | 'mdx';
+        type?: 'puck' | 'mdx' | 'json';
         contentStartPos?: number;
+        data?: Record<string, unknown>; // For data collection entries
       }
       let parsedData: ParsedMetadata = {};
-      let kind: 'block' | 'page';
+      let kind: 'block' | 'page' | 'data';
 
       if (parts[0] === 'blocks') {
         kind = 'block';
@@ -480,6 +486,38 @@ export class FileSystemContentAPI implements ContentAPI {
         } else {
           parsedData = VXJSON.parse4KB(buffer, bytesRead);
         }
+      } else if (parts[0] === 'data') {
+        // Data collection entry: data/{collection}/{name}.{locale}.json
+        kind = 'data';
+        collection = parts[1];
+
+        const filename = parts[parts.length - 1];
+        // Extract name and locale from filename: testimonial.en.json -> name: testimonial, locale: en
+        const match = filename.match(/^(.+)\.(\w+)\.json$/);
+        if (match) {
+          name = match[1];
+          locale = match[2];
+        }
+
+        // Parse JSON to get ID, metadata, and data
+        const content = textDecoder.decode(buffer.subarray(0, bytesRead));
+        try {
+          const jsonData = JSON.parse(content);
+          parsedData = {
+            id: jsonData.id,
+            type: 'json',
+            created: jsonData.created,
+            modified: jsonData.modified,
+            publishAt: jsonData.publishAt,
+            unpublishAt: jsonData.unpublishAt,
+            meta: jsonData.meta || { title: name || 'Untitled' },
+            data: jsonData.data,
+            name,
+          };
+        } catch (error) {
+          console.error(`Failed to parse JSON data file ${filePath}:`, error);
+          return null;
+        }
       } else {
         kind = 'page';
         site = parts[0];
@@ -523,7 +561,7 @@ export class FileSystemContentAPI implements ContentAPI {
       // Build ContentManifest (without content)
       const manifest: ContentManifest = {
         id,
-        type: parsedData.type || (filePath.endsWith('.mdx') ? 'mdx' : 'puck'),
+        type: parsedData.type || (filePath.endsWith('.mdx') ? 'mdx' : filePath.endsWith('.json') ? 'json' : 'puck'),
         kind,
         site,
         collection,
@@ -550,12 +588,21 @@ export class FileSystemContentAPI implements ContentAPI {
         return null;
       }
 
-      if (bytesRead < 4096 || (filePath.endsWith('.vxjson') && buffer[bytesRead - 1] === 0x7d)) {
+      if (
+        bytesRead < 4096 ||
+        (filePath.endsWith('.vxjson') && buffer[bytesRead - 1] === 0x7d) ||
+        (filePath.endsWith('.json') && buffer[bytesRead - 1] === 0x7d)
+      ) {
         // We have the full content
         if (filePath.endsWith('.mdx')) {
           const fullContent = textDecoder.decode(buffer.subarray(0, bytesRead));
           const { content: mdx } = matter(fullContent);
           content = { mdx };
+        } else if (filePath.endsWith('.json')) {
+          // Data collection JSON file
+          const fullContent = textDecoder.decode(buffer.subarray(0, bytesRead));
+          const jsonData = JSON.parse(fullContent);
+          content = { data: jsonData.data };
         } else {
           const fullContent = textDecoder.decode(buffer.subarray(0, bytesRead));
           const data = JSON.parse(fullContent);
@@ -568,6 +615,10 @@ export class FileSystemContentAPI implements ContentAPI {
         if (filePath.endsWith('.mdx')) {
           const etags = calculateEtagsFromMdxBuffer(validBuffer, parsedData.contentStartPos || -1);
           localeVersion.etag = `${etags.metaEtag}.${etags.contentEtag}`;
+        } else if (filePath.endsWith('.json')) {
+          // For data files, use simple etag (hash entire buffer)
+          // Data files are typically small and don't need separate meta/content etags
+          localeVersion.etag = VXJSON.calculateSimpleEtag(validBuffer);
         } else {
           const etagResult = VXJSON.calculateETags(validBuffer);
 
@@ -727,16 +778,25 @@ export class FileSystemContentAPI implements ContentAPI {
 
   private async scanContentFiles(): Promise<string[]> {
     const files: string[] = [];
+    const contentRoot = this.absoluteContentRoot;
 
-    async function scan(dir: string) {
+    async function scan(dir: string, inDataDir = false) {
       try {
         const entries = await readdir(dir, { withFileTypes: true });
         for (const entry of entries) {
           const fullPath = join(dir, entry.name);
           if (entry.isDirectory()) {
-            await scan(fullPath);
-          } else if (entry.isFile() && (entry.name.endsWith('.vxjson') || entry.name.endsWith('.mdx'))) {
-            files.push(fullPath);
+            // Check if we're entering the data/ directory
+            const isDataDir = dir === contentRoot && entry.name === 'data';
+            await scan(fullPath, inDataDir || isDataDir);
+          } else if (entry.isFile()) {
+            // Include .vxjson and .mdx files everywhere
+            // Include .json files only in the data/ directory
+            if (entry.name.endsWith('.vxjson') || entry.name.endsWith('.mdx')) {
+              files.push(fullPath);
+            } else if (inDataDir && entry.name.endsWith('.json')) {
+              files.push(fullPath);
+            }
           }
         }
       } catch (error) {
@@ -752,6 +812,9 @@ export class FileSystemContentAPI implements ContentAPI {
     if (manifest.kind === 'block') {
       const ext = manifest.type === 'mdx' ? 'mdx' : 'vxjson';
       return join(this.absoluteContentRoot, 'blocks', manifest.collection, `${name}.${locale}.${ext}`);
+    }
+    if (manifest.kind === 'data') {
+      return join(this.absoluteContentRoot, 'data', manifest.collection, `${name}.${locale}.json`);
     }
     if (manifest.kind === 'page' && pathname && manifest.site) {
       // For pages, derive path from pathname
@@ -931,12 +994,38 @@ export class FileSystemContentAPI implements ContentAPI {
         return result;
       }
 
-      // For JSON, calculate ETags directly from buffer
+      // Parse JSON data first to determine type
+      const data = JSON.parse(content);
+
+      // Handle JSON data files (type: 'json') separately - they use simple etag
+      if (data.type === 'json') {
+        const etag = VXJSON.calculateSimpleEtag(buffer);
+
+        const result: LocaleFileData = {
+          locale,
+          etag,
+          created: data.created,
+          modified: data.modified,
+          meta: data.meta || {},
+          content: { data: data.data || {} },
+        };
+
+        // Only add optional fields if they exist
+        if (data.publishAt !== undefined) {
+          result.publishAt = data.publishAt;
+        }
+        if (data.unpublishAt !== undefined) {
+          result.unpublishAt = data.unpublishAt;
+        }
+
+        return result;
+      }
+
+      // For VXJSON (puck pages), calculate ETags with meta/content split
       const etagResult = VXJSON.calculateETags(buffer);
 
       if (!etagResult.success) {
         // File needs repair - parse it and rewrite in correct format
-        const data = JSON.parse(content);
         const repairedData: VXJSONFile = {
           id: data.id,
           type: data.type,
@@ -992,7 +1081,6 @@ export class FileSystemContentAPI implements ContentAPI {
 
       const etag = etagResult.contentEtag ? `${etagResult.metaEtag}.${etagResult.contentEtag}` : etagResult.metaEtag;
 
-      const data = JSON.parse(content);
       const result: LocaleFileData = {
         locale,
         etag,
@@ -1021,7 +1109,7 @@ export class FileSystemContentAPI implements ContentAPI {
 
   async createContent(data: CreateContentInput): Promise<CreateResult> {
     // Use shared validation
-    const validation = validateCreateContent(data, this.sites, this.blocks);
+    const validation = validateCreateContent(data, this.sites, this.blocks, this.data);
     if (!validation.valid) {
       return {
         success: false,
@@ -1088,8 +1176,7 @@ export class FileSystemContentAPI implements ContentAPI {
         await mkdir(dirname(filePath), { recursive: true });
 
         // Write file and calculate etag from the serialized content
-        let metaEtag: string;
-        let contentEtag: string;
+        let etag: string;
 
         if (data.type === 'mdx') {
           // Write MDX with frontmatter - flatten metadata fields
@@ -1124,10 +1211,30 @@ export class FileSystemContentAPI implements ContentAPI {
             }
           }
           const etags = calculateEtagsFromMdxBuffer(mdxBuffer, contentPos);
-          metaEtag = etags.metaEtag;
-          contentEtag = etags.contentEtag;
+          etag = `${etags.metaEtag}.${etags.contentEtag}`;
+        } else if (data.type === 'json') {
+          // Data files use "data" field instead of "content"
+          const dataFileContent = {
+            id,
+            type: 'json',
+            created: now,
+            modified: now,
+            ...(localeData.publishAt &&
+              typeof localeData.publishAt === 'string' && { publishAt: localeData.publishAt }),
+            ...(localeData.unpublishAt &&
+              typeof localeData.unpublishAt === 'string' && { unpublishAt: localeData.unpublishAt }),
+            meta,
+            data: content.data || {},
+          };
+
+          const jsonContent = JSON.stringify(sortKeys(dataFileContent, { deep: true }), null, '\t');
+          await writeFile(filePath, jsonContent);
+
+          // For data files, use simple etag (hash entire buffer)
+          const jsonBuffer = new TextEncoder().encode(jsonContent);
+          etag = VXJSON.calculateSimpleEtag(jsonBuffer);
         } else {
-          // Serialize JSON using shared function for consistent ordering
+          // VXJSON for pages (puck)
           const jsonContent = VXJSON.serialize(fileData);
           const jsonBuffer = new TextEncoder().encode(jsonContent);
 
@@ -1138,15 +1245,11 @@ export class FileSystemContentAPI implements ContentAPI {
             throw new Error(`Invalid VXJSON format when creating content: ${etagResult.error}`);
           }
 
-          metaEtag = etagResult.metaEtag;
-          contentEtag = etagResult.contentEtag || '';
+          etag = etagResult.contentEtag ? `${etagResult.metaEtag}.${etagResult.contentEtag}` : etagResult.metaEtag;
 
           // Write the file
           await writeFile(filePath, jsonContent);
         }
-
-        // Etag will be calculated during file write
-        const etag = `${metaEtag}.${contentEtag}`; // These are set in the write block above
 
         // Build locale manifest using shared function
         const localeVersion = buildLocaleVersion({
@@ -1157,7 +1260,7 @@ export class FileSystemContentAPI implements ContentAPI {
           meta,
           kind: data.kind,
           pathname: data.kind === 'page' ? localeData.pathname : undefined,
-          name: data.kind === 'block' ? data.name : undefined,
+          name: data.kind === 'block' || data.kind === 'data' ? data.name : undefined,
           publishAt:
             localeData.publishAt && typeof localeData.publishAt === 'string' ? localeData.publishAt : undefined,
           unpublishAt:
@@ -1299,22 +1402,23 @@ export class FileSystemContentAPI implements ContentAPI {
       }
     }
 
-    // Validate name change if updating name for blocks
-    if (data.name && manifest.kind === 'block') {
-      // Check if new name is already taken by another block in the same collection
-      const blockIndex = this.contentIndex.getBlockIndex();
-      const existingBlock = blockIndex.getByName(manifest.collection, data.name);
+    // Validate name change if updating name for blocks or data
+    if (data.name && (manifest.kind === 'block' || manifest.kind === 'data')) {
+      // Check if new name is already taken by another entry in the same collection
+      const index = manifest.kind === 'block' ? this.contentIndex.getBlockIndex() : this.contentIndex.getDataIndex();
+      const existing = index.getByName(manifest.collection, data.name);
 
-      if (existingBlock && existingBlock.id !== id) {
-        // Get title from the existing block for a better error message
-        const existingLocale = Object.values(existingBlock.locales).find((lv) => lv !== undefined);
+      if (existing && existing.id !== id) {
+        // Get title from the existing entry for a better error message
+        const existingLocale = Object.values(existing.locales).find((lv) => lv !== undefined);
         const existingTitle = existingLocale?.meta?.title;
+        const kindLabel = manifest.kind === 'block' ? 'Block' : 'Data';
 
         return {
           success: false,
           reason: 'write_error',
           error: new Error(
-            `Block name "${data.name}" is already in use${existingTitle ? ` by "${existingTitle}"` : ''}`,
+            `${kindLabel} name "${data.name}" is already in use${existingTitle ? ` by "${existingTitle}"` : ''}`,
           ),
         };
       }
@@ -1396,8 +1500,59 @@ export class FileSystemContentAPI implements ContentAPI {
           }
           throw error;
         }
+      } else if (targetFilePath.endsWith('.json')) {
+        // Data files use "data" field instead of "content"
+        const fileContent = JSON.parse(await readFile(filePath, 'utf-8'));
+
+        // Build updated data file structure
+        const updatedFile = {
+          id: fileContent.id,
+          type: 'json' as const,
+          created: fileContent.created,
+          modified,
+          ...(fileContent.publishAt && { publishAt: fileContent.publishAt }),
+          ...(fileContent.unpublishAt && { unpublishAt: fileContent.unpublishAt }),
+          meta: newMeta,
+          data: sortKeys(newContent.data || {}, { deep: true }),
+        };
+
+        // Handle publish date updates
+        if ('publishAt' in data) {
+          if (data.publishAt) {
+            (updatedFile as Record<string, unknown>).publishAt = data.publishAt;
+          } else {
+            delete (updatedFile as Record<string, unknown>).publishAt;
+          }
+        }
+
+        if ('unpublishAt' in data) {
+          if (data.unpublishAt) {
+            (updatedFile as Record<string, unknown>).unpublishAt = data.unpublishAt;
+          } else {
+            delete (updatedFile as Record<string, unknown>).unpublishAt;
+          }
+        }
+
+        // Serialize data file
+        const serializedContent = JSON.stringify(sortKeys(updatedFile, { deep: true }), null, '\t');
+
+        // Use atomic write
+        const hrtime = process.hrtime.bigint();
+        const tempFile = `${targetFilePath}.tmp.${process.pid}.${hrtime}`;
+
+        try {
+          await writeFile(tempFile, serializedContent);
+          await rename(tempFile, targetFilePath);
+        } catch (error) {
+          try {
+            await unlink(tempFile);
+          } catch {
+            // Ignore cleanup errors
+          }
+          throw error;
+        }
       } else {
-        // Read full file to preserve structure
+        // VXJSON for pages (puck)
         const fileContent = JSON.parse(await readFile(filePath, 'utf-8'));
 
         // Build updated VXJSONFile structure
@@ -1486,6 +1641,9 @@ export class FileSystemContentAPI implements ContentAPI {
         }
         const etags = calculateEtagsFromMdxBuffer(writtenBuffer, contentPos);
         newEtag = `${etags.metaEtag}.${etags.contentEtag}`;
+      } else if (targetFilePath.endsWith('.json')) {
+        // For data files, use simple etag (hash entire buffer)
+        newEtag = VXJSON.calculateSimpleEtag(writtenBuffer);
       } else {
         // For VXJSON, calculateEtagsFromVXJSONBuffer finds the content position internally
         const etagResult = VXJSON.calculateETags(writtenBuffer);

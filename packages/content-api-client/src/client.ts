@@ -231,6 +231,58 @@ export class ContentAPIClient {
     }
   }
 
+  // Data operations
+  async getData(collection?: string, locale?: string): Promise<ContentListResult> {
+    const params = new URLSearchParams();
+    if (collection) params.set('collection', collection);
+    if (locale) params.set('locale', locale);
+
+    const url = `${this.baseUrl}/data${params.toString() ? `?${params}` : ''}`;
+    return this.fetchAPI<ContentListResult>(url);
+  }
+
+  async getDataByName(name: string, collection: string, locale?: string): Promise<ContentManifest | null> {
+    try {
+      const params = new URLSearchParams();
+      params.set('collection', collection);
+      if (locale) params.set('locale', locale);
+
+      const url = `${this.baseUrl}/data/${name}?${params}`;
+      const response = await this.fetch(url);
+      if (response.status === 404) {
+        return null;
+      }
+      if (!response.ok) {
+        throw new Error(`Failed to fetch data entry: ${response.statusText}`);
+      }
+      return (await response.json()) as ContentManifest;
+    } catch (error) {
+      console.error('Error fetching data entry by name:', error);
+      throw error;
+    }
+  }
+
+  async isDataNameAvailable(name: string, collection: string, excludeId?: string): Promise<boolean> {
+    const params = new URLSearchParams({
+      name,
+      collection,
+      ...(excludeId && { excludeId }),
+    });
+
+    const response = await this.fetch(`${this.baseUrl}/data/name-available?${params}`);
+    if (!response.ok) {
+      throw new Error(`Failed to check data name availability: ${response.statusText}`);
+    }
+
+    const data = (await response.json()) as { available: boolean };
+    return data.available;
+  }
+
+  async getDataCollections(): Promise<string[]> {
+    const response = await this.fetchAPI<{ collections: string[] }>(`${this.baseUrl}/data/collections`);
+    return response.collections;
+  }
+
   // Global operations
   async listAllContent(filters?: GlobalFilters): Promise<ContentListResult> {
     const params = new URLSearchParams();

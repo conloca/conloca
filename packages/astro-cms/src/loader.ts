@@ -6,7 +6,7 @@ export interface ConlocaLoaderOptions {
   contentRoot: string;
   site?: string;
   /** Collection kind. If not provided, defaults to 'block' for 'blocks' collection, 'page' otherwise. */
-  kind?: 'page' | 'block';
+  kind?: 'page' | 'block' | 'data';
 }
 
 /**
@@ -26,7 +26,7 @@ export function conlocaLoader(options: ConlocaLoaderOptions): Loader {
       const kind = options.kind ?? (options.collection === 'blocks' ? 'block' : 'page');
 
       // List all content for this collection
-      // Note: blocks don't have a site, so only pass site for pages
+      // Note: blocks and data don't have a site, so only pass site for pages
       const content = Array.from(
         api.listAllContent({
           collection: options.collection,
@@ -43,14 +43,25 @@ export function conlocaLoader(options: ConlocaLoaderOptions): Loader {
 
           const entryId = `${manifest.id}/${locale}`;
 
+          // For data collections, we need to fetch the actual content to get the data field
+          let dataContent: Record<string, unknown> | undefined;
+          if (kind === 'data') {
+            const fullContent = await api.getLocalized(manifest.id, locale);
+            if (fullContent?.localized.content?.data) {
+              dataContent = fullContent.localized.content.data;
+            }
+          }
+
           const data = {
             id: manifest.id,
             locale,
-            pathname: localeVersion.pathname,
-            name: localeVersion.name,
+            ...(localeVersion.pathname && { pathname: localeVersion.pathname }),
+            ...(localeVersion.name && { name: localeVersion.name }),
             ...localeVersion.meta,
             publishAt: localeVersion.publishAt,
             unpublishAt: localeVersion.unpublishAt,
+            // Include the data content for data collections
+            ...(dataContent && { data: dataContent }),
           };
 
           const parsedData = await parseData({ id: entryId, data });

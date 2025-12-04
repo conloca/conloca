@@ -47,6 +47,11 @@ const queryKeys = {
     ['sites', site, 'pathname-availability', pathname, excludeId] as const,
   blocks: (collection?: string, locale?: string) => ['blocks', collection, locale] as const,
   blockByName: (name: string, collection?: string, locale?: string) => ['blocks', name, collection, locale] as const,
+  data: (collection?: string, locale?: string) => ['data', collection, locale] as const,
+  dataByName: (name: string, collection: string, locale?: string) => ['data', name, collection, locale] as const,
+  dataNameAvailability: (name: string, collection: string, excludeId?: string) =>
+    ['data', 'name-availability', name, collection, excludeId] as const,
+  dataCollections: () => ['data', 'collections'] as const,
   allContent: (filters?: GlobalFilters) => ['content', 'all', filters] as const,
   untranslatedContent: (targetLocale: string, excludeSites?: string[], includeUnpublished?: boolean) =>
     ['content', 'untranslated', targetLocale, excludeSites, includeUnpublished] as const,
@@ -128,6 +133,9 @@ export function useCreateContent() {
         } else if (variables.kind === 'block') {
           // Invalidate all block queries to ensure the new block appears everywhere
           queryClient.invalidateQueries({ queryKey: ['blocks'] });
+        } else if (variables.kind === 'data') {
+          // Invalidate all data queries to ensure the new data entry appears everywhere
+          queryClient.invalidateQueries({ queryKey: ['data'] });
         }
       }
     },
@@ -198,6 +206,8 @@ export function useUpdateLocalized() {
         queryClient.setQueriesData({ queryKey: ['sites'], exact: false }, updateListQueries);
 
         queryClient.setQueriesData({ queryKey: ['blocks'], exact: false }, updateListQueries);
+
+        queryClient.setQueriesData({ queryKey: ['data'], exact: false }, updateListQueries);
       }
     },
   });
@@ -259,6 +269,7 @@ export function useDeleteContent() {
 
           queryClient.setQueriesData({ queryKey: ['sites'], exact: false }, updateListQueries);
           queryClient.setQueriesData({ queryKey: ['blocks'], exact: false }, updateListQueries);
+          queryClient.setQueriesData({ queryKey: ['data'], exact: false }, updateListQueries);
           queryClient.setQueriesData({ queryKey: ['content', 'all'], exact: false }, updateListQueries);
         } else {
           // For full deletion, remove from cache
@@ -278,6 +289,17 @@ export function useDeleteContent() {
 
           // Update block lists
           queryClient.setQueriesData({ queryKey: ['blocks'], exact: false }, (old: ContentListResult | undefined) => {
+            if (!isContentListResult(old)) return old;
+            const newItems = old.items.filter((item) => item.id !== variables.id);
+            return {
+              ...old,
+              items: newItems,
+              total: newItems.length < old.items.length ? old.total - 1 : old.total,
+            };
+          });
+
+          // Update data lists
+          queryClient.setQueriesData({ queryKey: ['data'], exact: false }, (old: ContentListResult | undefined) => {
             if (!isContentListResult(old)) return old;
             const newItems = old.items.filter((item) => item.id !== variables.id);
             return {
@@ -414,6 +436,51 @@ export function useBlockByName(name: string, collection?: string, locale?: strin
   });
 }
 
+// ===== Data Hooks =====
+
+export function useData(collection?: string, locale?: string) {
+  const client = getContentAPIClient();
+
+  return useQuery({
+    queryKey: queryKeys.data(collection, locale),
+    queryFn: () => client.getData(collection, locale),
+  });
+}
+
+export function useDataByName(name: string, collection: string, locale?: string) {
+  const client = getContentAPIClient();
+
+  return useQuery({
+    queryKey: queryKeys.dataByName(name, collection, locale),
+    queryFn: () => client.getDataByName(name, collection, locale),
+    enabled: !!name && !!collection,
+  });
+}
+
+export function useDataNameAvailability(name: string, collection: string, excludeId?: string) {
+  const client = getContentAPIClient();
+
+  return useQuery({
+    queryKey: queryKeys.dataNameAvailability(name, collection, excludeId),
+    queryFn: async () => {
+      const available = await client.isDataNameAvailable(name, collection, excludeId);
+      return { available };
+    },
+    enabled: !!name && !!collection,
+    staleTime: 0,
+    gcTime: 0,
+  });
+}
+
+export function useDataCollections() {
+  const client = getContentAPIClient();
+
+  return useQuery({
+    queryKey: queryKeys.dataCollections(),
+    queryFn: () => client.getDataCollections(),
+  });
+}
+
 // ===== Global Hooks =====
 
 export function useAllContent(filters?: GlobalFilters) {
@@ -535,6 +602,8 @@ export function useBatchUpdate() {
         queryClient.setQueriesData({ queryKey: ['sites'], exact: false }, updateListQueries);
 
         queryClient.setQueriesData({ queryKey: ['blocks'], exact: false }, updateListQueries);
+
+        queryClient.setQueriesData({ queryKey: ['data'], exact: false }, updateListQueries);
       }
     },
   });

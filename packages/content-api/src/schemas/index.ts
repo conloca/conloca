@@ -57,3 +57,23 @@ export const blockMetaSchema = blockEditableSchema.extend({
 });
 
 export type BlockMeta = z.infer<typeof blockMetaSchema>;
+
+/**
+ * Zod schema for data entry metadata.
+ * Covers common organizational fields for structured data collections.
+ */
+export const dataMetaSchema = z.object({
+  // System fields (added by loader)
+  id: z.string(),
+  locale: z.string(),
+  name: z.string(),
+
+  // Content metadata
+  title: z.string(),
+  description: z.string().optional(),
+
+  // Actual data content (arbitrary JSON structure)
+  data: z.record(z.unknown()).optional(),
+});
+
+export type DataMeta = z.infer<typeof dataMetaSchema>;
