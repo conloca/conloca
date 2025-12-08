@@ -1,3 +1,5 @@
+import type { ContentEditable } from '@conloca/content-api';
+
 export interface ContentStats {
   totalPages?: number;
   totalBlocks?: number;
@@ -29,12 +31,18 @@ export interface Block {
   locales: string[];
   etag: string;
   name?: string; // The filename for this block
-  meta?: {
-    title: string;
-    description?: string;
-    category?: string;
-    tags?: string[];
-  };
+  meta?: ContentEditable;
+}
+
+export interface DataEntry {
+  id: string;
+  title: string;
+  description?: string;
+  collection: string;
+  locales: string[];
+  etag: string;
+  name?: string;
+  meta?: ContentEditable;
 }
 
 export interface PageMetadata {

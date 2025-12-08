@@ -9,6 +9,7 @@ export interface ConlocaCMSOptions extends Omit<UIConfig, 'basename'> {
   canvasDir?: string;
   route?: string; // Default: /__cms
   puckConfigPath: string; // Path to the puck config module (should be .tsx file with React components)
+  dataSchemasPath?: string; // Path to the data schemas module (exports { dataSchemas })
 }
 
 // Template for content change listener virtual module
@@ -74,6 +75,29 @@ export default puckConfigPromise.then(m => m.default);
 `;
 };
 
+// Template for the data schemas loader virtual module
+const dataSchemasLoader = (absoluteSchemasPath: string) => {
+  return `
+import { setDataSchemas } from '@conloca/cms-spa';
+import { dataSchemas } from '${absoluteSchemasPath}';
+
+// Register the schemas with the CMS
+setDataSchemas(dataSchemas);
+
+// Accept HMR for this module
+if (import.meta.hot) {
+  import.meta.hot.accept('${absoluteSchemasPath}', async (newModule) => {
+    if (newModule?.dataSchemas) {
+      setDataSchemas(newModule.dataSchemas);
+      console.log('[Conloca CMS] Data schemas updated');
+    }
+  });
+}
+
+export default dataSchemas;
+`;
+};
+
 export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
   const cmsRoute = options.route || '/__cms';
 
@@ -106,12 +130,15 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
             },
             plugins: [
               {
-                name: 'puck-config-virtual-module',
+                name: 'conloca-virtual-modules',
                 resolveId(id) {
                   if (id === `${cmsRoute}/puck-entry.js`) {
                     return id;
                   }
                   if (id === `${cmsRoute}/content-listener.js`) {
+                    return id;
+                  }
+                  if (id === `${cmsRoute}/data-schemas-entry.js`) {
                     return id;
                   }
                   return null;
@@ -126,6 +153,13 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
                   }
                   if (id === `${cmsRoute}/content-listener.js`) {
                     return contentChangeListener();
+                  }
+                  if (id === `${cmsRoute}/data-schemas-entry.js` && options.dataSchemasPath) {
+                    const absoluteSchemasPath = options.dataSchemasPath.startsWith('.')
+                      ? `/${options.dataSchemasPath.slice(2)}`
+                      : options.dataSchemasPath;
+
+                    return dataSchemasLoader(absoluteSchemasPath);
                   }
                   return null;
                 },

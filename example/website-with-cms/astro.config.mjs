@@ -16,6 +16,7 @@ export default defineConfig({
       contentRoot: './content',
       canvasDir: './canvas',
       puckConfigPath: './src/puck.config.tsx',
+      dataSchemasPath: './src/schemas/data.ts',
       enableDevtools: true,
       queryClientOptions: {
         defaultOptions: {

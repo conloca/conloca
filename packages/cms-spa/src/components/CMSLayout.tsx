@@ -1,4 +1,4 @@
-import { FileText, LayoutDashboard, Package, TestTube } from 'lucide-react';
+import { Database, FileText, LayoutDashboard, Package, TestTube } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { cn } from '../lib/utils';
 
@@ -51,6 +51,19 @@ export function CMSLayout() {
           >
             <Package className="h-4 w-4" />
             Blocks
+          </NavLink>
+
+          <NavLink
+            to="/data"
+            className={({ isActive }) =>
+              cn(
+                'flex items-center gap-2 px-4 py-3 border-b-2 -mb-px transition-colors',
+                isActive ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-600 hover:text-gray-900',
+              )
+            }
+          >
+            <Database className="h-4 w-4" />
+            Data
           </NavLink>
 
           <NavLink

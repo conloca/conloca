@@ -1,3 +1,4 @@
+import type { ContentEditable } from '@conloca/content-api';
 import {
   type ContentManifest,
   localesOf,
@@ -8,9 +9,9 @@ import {
 } from '@conloca/content-api-client';
 import { MDXEditorModal } from '@conloca/mdx';
 import { AlertCircle, Edit2, FileEdit, Loader2, MoreVertical, Package, Plus, Settings, Trash2 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useErrorModal } from '../../hooks';
+import { useClickOutside, useDialogState, useErrorModal } from '../../hooks';
 import type { Block } from '../../types';
 import { slugify } from '../../utils/slugify';
 import { BlockPropertiesDialog } from '../dialogs/BlockPropertiesDialog';
@@ -21,47 +22,33 @@ export function BlockList() {
   const [selectedCategory, setSelectedCategory] = useState<string | 'all'>('all');
   const [showMDXEditor, setShowMDXEditor] = useState(false);
   const [newBlockName, setNewBlockName] = useState('');
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [createDialog, openCreateDialog, closeCreateDialog] = useDialogState({});
   const [titleInput, setTitleInput] = useState('');
-  const [deleteDialog, setDeleteDialog] = useState<{
-    isOpen: boolean;
-    blockId: string;
-    blockTitle: string;
-    etag: string;
-  }>({ isOpen: false, blockId: '', blockTitle: '', etag: '' });
-
-  const [renameDialog, setRenameDialog] = useState<{
-    isOpen: boolean;
-    blockId: string;
-    currentName: string;
-    etag: string;
-  }>({ isOpen: false, blockId: '', currentName: '', etag: '' });
-  const [newName, setNewName] = useState('');
-
-  const [propertiesDialog, setPropertiesDialog] = useState<{
-    isOpen: boolean;
-    blockId: string;
-    blockTitle: string;
-    etag: string;
-    currentMeta: {
-      title: string;
-      description?: string;
-      category?: string;
-      tags?: string[];
-    };
-  }>({
-    isOpen: false,
+  const [deleteDialog, openDeleteDialog, closeDeleteDialog] = useDialogState({
     blockId: '',
     blockTitle: '',
     etag: '',
-    currentMeta: { title: '' },
+  });
+
+  const [renameDialog, openRenameDialog, closeRenameDialog] = useDialogState({
+    blockId: '',
+    currentName: '',
+    etag: '',
+  });
+  const [newName, setNewName] = useState('');
+
+  const [propertiesDialog, openPropertiesDialog, closePropertiesDialog] = useDialogState({
+    blockId: '',
+    blockTitle: '',
+    etag: '',
+    currentMeta: { title: '' } as ContentEditable,
   });
 
   // Dropdown menu state
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  const { showError, errorModalProps } = useErrorModal();
+  const { showError, showStaleWriteError, errorModalProps } = useErrorModal();
 
   const navigate = useNavigate();
   const createContent = useCreateContent();
@@ -138,20 +125,8 @@ export function BlockList() {
   }, [blocks, selectedCategory]);
 
   // Click outside handler to close menu
-  useEffect(() => {
-    if (!openMenuId) return;
-
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setOpenMenuId(null);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [openMenuId]);
+  const closeMenu = useCallback(() => setOpenMenuId(null), []);
+  useClickOutside(menuRef, closeMenu, !!openMenuId);
 
   // Loading state
   if (isLoading) {
@@ -186,14 +161,14 @@ export function BlockList() {
 
   const handleNewBlock = () => {
     setTitleInput('');
-    setShowCreateDialog(true);
+    openCreateDialog({});
   };
 
   const handleCreateBlock = () => {
     if (!titleInput.trim()) return;
 
     setNewBlockName(titleInput.trim());
-    setShowCreateDialog(false);
+    closeCreateDialog();
     setShowMDXEditor(true);
   };
 
@@ -236,8 +211,7 @@ export function BlockList() {
     const block = blocks.find((b) => b.id === blockId);
     if (!block) return;
 
-    setDeleteDialog({
-      isOpen: true,
+    openDeleteDialog({
       blockId,
       blockTitle: block.title,
       etag: block.etag,
@@ -253,41 +227,18 @@ export function BlockList() {
         etag: deleteDialog.etag,
       });
 
-      if (result.success) {
-        // Close dialog and show success
-        setDeleteDialog({ isOpen: false, blockId: '', blockTitle: '', etag: '' });
-        // The list will refresh automatically due to query invalidation
-      } else {
-        // Handle delete failure
-        const errorMessage = result.error?.message || 'Failed to delete block';
-        console.error('Delete failed:', errorMessage);
-        setDeleteDialog({ isOpen: false, blockId: '', blockTitle: '', etag: '' });
+      closeDeleteDialog();
 
-        // Check if it's a stale write error
+      if (!result.success) {
+        const errorMessage = result.error?.message || 'Failed to delete block';
         if (errorMessage.includes('modified')) {
-          showError(
-            'This block has been modified by someone else. Would you like to reload and try again?',
-            result.error,
-            [
-              {
-                label: 'Reload',
-                onClick: () => window.location.reload(),
-                variant: 'primary',
-              },
-              {
-                label: 'Cancel',
-                onClick: () => {},
-                variant: 'secondary',
-              },
-            ],
-          );
+          showStaleWriteError(result.error);
         } else {
           showError(errorMessage, result.error);
         }
       }
     } catch (error) {
-      console.error('Failed to delete block:', error);
-      setDeleteDialog({ isOpen: false, blockId: '', blockTitle: '', etag: '' });
+      closeDeleteDialog();
       showError('Failed to delete block. Please try again.', error);
     }
   };
@@ -299,8 +250,7 @@ export function BlockList() {
     // Use the actual filename from the block data
     const currentName = block.name || block.id.split('/').pop() || block.id;
 
-    setRenameDialog({
-      isOpen: true,
+    openRenameDialog({
       blockId,
       currentName,
       etag: block.etag,
@@ -324,35 +274,13 @@ export function BlockList() {
         etag: renameDialog.etag,
       });
 
-      if (result.success) {
-        // Close dialog and show success
-        setRenameDialog({ isOpen: false, blockId: '', currentName: '', etag: '' });
-        setNewName('');
-        // The list will refresh automatically due to query invalidation
-      } else {
-        // Handle rename failure
-        const errorMessage = result.error?.message || 'Failed to rename block';
-        console.error('Rename failed:', errorMessage);
-        setRenameDialog({ isOpen: false, blockId: '', currentName: '', etag: '' });
+      closeRenameDialog();
+      setNewName('');
 
-        // Check if it's a stale write error
+      if (!result.success) {
+        const errorMessage = result.error?.message || 'Failed to rename block';
         if (errorMessage.includes('modified') || result.reason === 'stale_write') {
-          showError(
-            'This block has been modified by someone else. Would you like to reload and try again?',
-            result.error,
-            [
-              {
-                label: 'Reload',
-                onClick: () => window.location.reload(),
-                variant: 'primary',
-              },
-              {
-                label: 'Cancel',
-                onClick: () => {},
-                variant: 'secondary',
-              },
-            ],
-          );
+          showStaleWriteError(result.error);
         } else if (errorMessage.includes('already taken')) {
           showError('A block with this name already exists. Please choose a different name.', result.error);
         } else {
@@ -360,8 +288,7 @@ export function BlockList() {
         }
       }
     } catch (error) {
-      console.error('Failed to rename block:', error);
-      setRenameDialog({ isOpen: false, blockId: '', currentName: '', etag: '' });
+      closeRenameDialog();
       showError('Failed to rename block. Please try again.', error);
     }
   };
@@ -373,8 +300,7 @@ export function BlockList() {
     // Initialize default meta if missing
     const meta = block.meta || { title: block.title };
 
-    setPropertiesDialog({
-      isOpen: true,
+    openPropertiesDialog({
       blockId,
       blockTitle: block.title,
       etag: block.etag,
@@ -408,70 +334,20 @@ export function BlockList() {
         etag: propertiesDialog.etag,
       });
 
-      if (result.success) {
-        // Close dialog - list will refresh automatically due to query invalidation
-        setPropertiesDialog({
-          isOpen: false,
-          blockId: '',
-          blockTitle: '',
-          etag: '',
-          currentMeta: { title: '' },
-        });
-      } else {
-        // Handle save failure
-        const errorMessage = result.error?.message || 'Failed to save properties';
-        console.error('Save failed:', errorMessage);
-        setPropertiesDialog({
-          isOpen: false,
-          blockId: '',
-          blockTitle: '',
-          etag: '',
-          currentMeta: { title: '' },
-        });
+      closePropertiesDialog();
 
-        // Check if it's a stale write error
+      if (!result.success) {
+        const errorMessage = result.error?.message || 'Failed to save properties';
         if (errorMessage.includes('modified') || result.reason === 'stale_write') {
-          showError(
-            'This block has been modified by someone else. Would you like to reload and try again?',
-            result.error,
-            [
-              {
-                label: 'Reload',
-                onClick: () => window.location.reload(),
-                variant: 'primary',
-              },
-              {
-                label: 'Cancel',
-                onClick: () => {},
-                variant: 'secondary',
-              },
-            ],
-          );
+          showStaleWriteError(result.error);
         } else {
           showError(errorMessage, result.error);
         }
       }
     } catch (error) {
-      console.error('Failed to save properties:', error);
-      setPropertiesDialog({
-        isOpen: false,
-        blockId: '',
-        blockTitle: '',
-        etag: '',
-        currentMeta: { title: '' },
-      });
+      closePropertiesDialog();
       showError('Failed to save properties. Please try again.', error);
     }
-  };
-
-  const handleCancelProperties = () => {
-    setPropertiesDialog({
-      isOpen: false,
-      blockId: '',
-      blockTitle: '',
-      etag: '',
-      currentMeta: { title: '' },
-    });
   };
 
   return (
@@ -620,7 +496,7 @@ export function BlockList() {
       )}
 
       {/* Create Block Dialog */}
-      {showCreateDialog && (
+      {createDialog.isOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" role="dialog">
           <div className="bg-white rounded-lg p-6 w-full max-w-md" data-testid="create-block-dialog">
             <h2 className="text-xl font-semibold mb-4">Create New Block</h2>
@@ -648,7 +524,7 @@ export function BlockList() {
             </div>
             <div className="flex justify-end gap-3">
               <button
-                onClick={() => setShowCreateDialog(false)}
+                onClick={closeCreateDialog}
                 className="px-4 py-2 border border-grey-09 rounded hover:bg-grey-11 transition-colors"
               >
                 Cancel
@@ -682,7 +558,7 @@ export function BlockList() {
           role="dialog"
           onKeyDown={(e) => {
             if (e.key === 'Escape') {
-              setRenameDialog({ isOpen: false, blockId: '', currentName: '', etag: '' });
+              closeRenameDialog();
               setNewName('');
             }
           }}
@@ -714,7 +590,7 @@ export function BlockList() {
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => {
-                  setRenameDialog({ isOpen: false, blockId: '', currentName: '', etag: '' });
+                  closeRenameDialog();
                   setNewName('');
                 }}
                 className="px-4 py-2 border border-grey-09 rounded hover:bg-grey-11 transition-colors"
@@ -741,7 +617,7 @@ export function BlockList() {
         blockTitle={propertiesDialog.blockTitle}
         currentMeta={propertiesDialog.currentMeta}
         onSave={handleSaveProperties}
-        onCancel={handleCancelProperties}
+        onCancel={closePropertiesDialog}
         isSaving={updateLocalized.isPending}
       />
 
@@ -749,7 +625,7 @@ export function BlockList() {
       <DeleteConfirmDialog
         isOpen={deleteDialog.isOpen}
         onConfirm={handleConfirmDelete}
-        onCancel={() => setDeleteDialog({ isOpen: false, blockId: '', blockTitle: '', etag: '' })}
+        onCancel={closeDeleteDialog}
         title="Delete Block"
         message="Are you sure you want to delete this block?"
         itemName={deleteDialog.blockTitle}

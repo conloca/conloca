@@ -6,6 +6,7 @@ import { BlockEditor } from './components/editor/BlockEditor';
 import { PageEditorWrapper } from './components/editor/PageEditorWrapper';
 import { TestEditor } from './components/editor/TestEditor';
 import { BlockList } from './components/pages/BlockList';
+import { DataList } from './components/pages/DataList';
 import { PageList } from './components/pages/PageList';
 import './main.css';
 
@@ -61,6 +62,7 @@ export default function App() {
           <Route index element={<BlockList />} />
           <Route path=":id" element={<BlockEditor />} />
         </Route>
+        <Route path="data" element={<DataList />} />
         <Route path="test-editor" element={<TestEditor puckConfig={puckConfig} />} />
       </Route>
       <Route path="/pages/:id" element={<PageEditorWrapper puckConfig={puckConfig} />} />

@@ -9,13 +9,18 @@ import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const cmsSpaPath = dirname(require.resolve('@conloca/cms-spa/package.json'));
 
+// Extended config for internal use
+interface SpaHandlerConfig extends UIConfig {
+  dataSchemasPath?: string;
+}
+
 // Configuration set by the plugin
-let uiConfig: UIConfig = {
+let uiConfig: SpaHandlerConfig = {
   basename: '/__cms',
   apiBaseUrl: '/__cms/api',
 };
 
-export function configureSpaHandler(config: UIConfig) {
+export function configureSpaHandler(config: SpaHandlerConfig) {
   uiConfig = { ...uiConfig, ...config };
   // Ensure apiBaseUrl is set based on basename if not explicitly provided
   if (!uiConfig.apiBaseUrl && uiConfig.basename) {
@@ -51,12 +56,13 @@ export const GET: APIRoute = async ({ params, request }) => {
     try {
       let html = await loadIndexHtml();
 
-      // Inject CMS configuration and load puck entry
+      // Inject CMS configuration and load virtual modules
       const configScript = `
         <script>
           // Configure UI with plugin options
           window.__UI_CONFIG__ = ${JSON.stringify(uiConfig)};
         </script>
+        ${uiConfig.dataSchemasPath ? `<script type="module" src="${uiConfig.basename}/data-schemas-entry.js"></script>` : ''}
         <script type="module" src="${uiConfig.basename}/puck-entry.js"></script>
         <script type="module" src="${uiConfig.basename}/content-listener.js"></script>
       `;

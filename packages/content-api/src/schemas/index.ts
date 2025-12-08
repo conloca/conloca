@@ -30,21 +30,28 @@ export const pageMetaSchema = pageEditableSchema.extend({
 
 export type PageMeta = z.infer<typeof pageMetaSchema>;
 
-// ===== Block Schemas =====
+// ===== Shared Content Schemas =====
 
 /**
- * Base schema for block metadata - editable fields only.
+ * Base schema for content metadata - editable fields only.
  * Used by CMS forms for dynamic form generation.
- * Add .describe() for form field labels/hints.
+ * Shared by blocks and data entries.
  */
-export const blockEditableSchema = z.object({
-  title: z.string().describe('Display name for the block'),
-  description: z.string().optional().describe('Brief description of this block'),
-  category: z.string().optional().describe('Category for organizing blocks (e.g., headers, cta, content)'),
-  tags: z.array(z.string()).optional().describe('Tags for filtering and organization'),
+export const contentEditableSchema = z.object({
+  title: z.string().describe('Display name'),
+  description: z.string().optional().describe('Brief description'),
+  category: z.string().optional().describe('Category for organization'),
+  tags: z.array(z.string()).optional().describe('Tags for filtering'),
 });
 
-export type BlockEditable = z.infer<typeof blockEditableSchema>;
+export type ContentEditable = z.infer<typeof contentEditableSchema>;
+
+// ===== Block Schemas =====
+
+/** @deprecated Use contentEditableSchema instead */
+export const blockEditableSchema = contentEditableSchema;
+
+export type BlockEditable = ContentEditable;
 
 /**
  * Full block schema with system fields.
@@ -58,22 +65,33 @@ export const blockMetaSchema = blockEditableSchema.extend({
 
 export type BlockMeta = z.infer<typeof blockMetaSchema>;
 
+// ===== Data Schemas =====
+
+/** @deprecated Use contentEditableSchema instead */
+export const dataEditableSchema = contentEditableSchema;
+
+export type DataEditable = ContentEditable;
+
 /**
  * Zod schema for data entry metadata.
  * Covers common organizational fields for structured data collections.
  */
-export const dataMetaSchema = z.object({
+export const dataMetaSchema = dataEditableSchema.extend({
   // System fields (added by loader)
   id: z.string(),
   locale: z.string(),
   name: z.string(),
-
-  // Content metadata
-  title: z.string(),
-  description: z.string().optional(),
 
   // Actual data content (arbitrary JSON structure)
   data: z.record(z.unknown()).optional(),
 });
 
 export type DataMeta = z.infer<typeof dataMetaSchema>;
+
+// ===== Data Collection Schemas (DEPRECATED) =====
+// The CMS no longer uses schemas from this package at runtime.
+// Define your own schemas in your project and configure dataSchemasPath.
+// See: packages/content-api/src/schemas/data/index.ts for examples.
+
+// Note: Re-export removed to prevent accidental usage.
+// Users should use useDataSchema() from @conloca/cms-spa instead.

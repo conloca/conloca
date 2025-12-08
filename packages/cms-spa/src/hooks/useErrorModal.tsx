@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import type { ErrorModalProps } from '../components/dialogs/ErrorModal';
 
 export interface UseErrorModalReturn {
@@ -9,6 +9,7 @@ export interface UseErrorModalReturn {
     actions?: ErrorModalProps['actions'];
   };
   showError: (message: string, error?: unknown, actions?: ErrorModalProps['actions']) => void;
+  showStaleWriteError: (error?: unknown) => void;
   hideError: () => void;
   errorModalProps: Omit<ErrorModalProps, 'title'>;
 }
@@ -30,9 +31,19 @@ export function useErrorModal(): UseErrorModalReturn {
     });
   };
 
-  const hideError = () => {
+  const hideError = useCallback(() => {
     setErrorModal({ isOpen: false, message: '', error: undefined, actions: undefined });
-  };
+  }, []);
+
+  const showStaleWriteError = useCallback(
+    (error?: unknown) => {
+      showError('This entry has been modified by someone else. Would you like to reload and try again?', error, [
+        { label: 'Reload', onClick: () => window.location.reload(), variant: 'primary' },
+        { label: 'Cancel', onClick: hideError, variant: 'secondary' },
+      ]);
+    },
+    [hideError],
+  );
 
   const errorModalProps: Omit<ErrorModalProps, 'title'> = {
     isOpen: errorModal.isOpen,
@@ -45,6 +56,7 @@ export function useErrorModal(): UseErrorModalReturn {
   return {
     errorModal,
     showError,
+    showStaleWriteError,
     hideError,
     errorModalProps,
   };

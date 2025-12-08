@@ -20,6 +20,7 @@
   "files": [
     "src/index.ts",
     "src/types.ts",
+    "src/data-schemas.ts",
     "src/mock-puck-config.tsx",
     "src/ui-config.ts",
     "src/components/puck/index.ts",
