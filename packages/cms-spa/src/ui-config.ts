@@ -8,6 +8,8 @@ export interface UIConfig {
   queryClientOptions?: QueryClientConfig;
   /** Absolute path to project root (for "Open in Editor" links) */
   projectRoot?: string;
+  /** Relative path to data schemas file (e.g., './src/schemas/data.ts') */
+  dataSchemasPath?: string;
 }
 
 const defaultConfig: UIConfig = {

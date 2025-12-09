@@ -8,11 +8,12 @@ import {
   useDeleteContent,
   useUpdateLocalized,
 } from '@conloca/content-api-client';
-import { AlertCircle, Database, Loader2, Plus } from 'lucide-react';
+import { AlertCircle, Code, Database, Loader2, Plus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { DataSchemas } from '../../data-schemas';
 import { useDialogState, useErrorModal } from '../../hooks';
 import type { DataEntry } from '../../types';
+import { getUIConfig } from '../../ui-config';
 import { slugify } from '../../utils/slugify';
 import { DataEntryCard } from '../cards/DataEntryCard';
 import { CreateDataDialog } from '../dialogs/CreateDataDialog';
@@ -21,6 +22,15 @@ import { DeleteConfirmDialog } from '../dialogs/DeleteConfirmDialog';
 import { ErrorModal } from '../dialogs/ErrorModal';
 import { DataEditor } from '../editors/DataEditor';
 
+/**
+ * Generates a VSCode URI to open the data schemas file.
+ */
+function getSchemasEditorLink(projectRoot: string, dataSchemasPath: string): string {
+  // Convert relative path (./src/...) to absolute
+  const relativePath = dataSchemasPath.startsWith('./') ? dataSchemasPath.slice(2) : dataSchemasPath;
+  return `vscode://file${projectRoot}/${relativePath}`;
+}
+
 interface DataListProps {
   dataSchemas: DataSchemas;
 }
@@ -28,6 +38,13 @@ interface DataListProps {
 export function DataList({ dataSchemas }: DataListProps) {
   const [selectedCollection, setSelectedCollection] = useState<string | 'all'>('all');
   const [createDialog, openCreateDialog, closeCreateDialog] = useDialogState({});
+
+  // Get config for editor links
+  const config = getUIConfig();
+  const schemasEditorLink =
+    config.projectRoot && config.dataSchemasPath
+      ? getSchemasEditorLink(config.projectRoot, config.dataSchemasPath)
+      : null;
   const [deleteDialog, openDeleteDialog, closeDeleteDialog] = useDialogState({
     entryId: '',
     entryTitle: '',
@@ -263,6 +280,16 @@ export function DataList({ dataSchemas }: DataListProps) {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-semibold text-grey-01">Data Entries</h1>
         <div className="flex items-center gap-4">
+          {schemasEditorLink && (
+            <a
+              href={schemasEditorLink}
+              className="px-3 py-2 border border-grey-09 rounded hover:bg-grey-11 transition-colors flex items-center gap-2 text-grey-04 hover:text-grey-01"
+              title="Open data schemas file in editor"
+            >
+              <Code className="h-4 w-4" />
+              Edit Schemas
+            </a>
+          )}
           {collections.length > 0 && (
             <select
               value={selectedCollection}
