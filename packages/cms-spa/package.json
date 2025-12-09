@@ -13,6 +13,11 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
+    "./data-schemas": {
+      "types": "./dist/data-schemas.d.ts",
+      "import": "./dist/data-schemas.js",
+      "default": "./dist/data-schemas.js"
+    },
     "./dist/spa/*": "./dist/spa/*"
   },
   "files": [

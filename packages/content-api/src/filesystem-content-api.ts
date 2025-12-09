@@ -1309,38 +1309,51 @@ export class FileSystemContentAPI implements ContentAPI {
       };
     }
 
-    // Check etag - support partial updates
-    const etagParts = parseDualEtag(etag);
-    const currentParts = parseDualEtag(localeVersion.etag);
+    // Check etag - data files use simple etags, others use dual etags
+    if (manifest.kind === 'data') {
+      // Data files use simple etag (single hash, no dot separator)
+      // Just compare the full etag directly
+      if (etag !== localeVersion.etag) {
+        return {
+          success: false,
+          reason: 'stale_write',
+          currentEtag: localeVersion.etag,
+        };
+      }
+    } else {
+      // Non-data files use dual etags (meta.content format)
+      const etagParts = parseDualEtag(etag);
+      const currentParts = parseDualEtag(localeVersion.etag);
 
-    if (!etagParts || !currentParts) {
-      return {
-        success: false,
-        reason: 'stale_write',
-        currentEtag: localeVersion.etag,
-      };
-    }
+      if (!etagParts || !currentParts) {
+        return {
+          success: false,
+          reason: 'stale_write',
+          currentEtag: localeVersion.etag,
+        };
+      }
 
-    // Check which parts are being updated
-    const updateScope = analyzeUpdateScope(data);
-    const updatingMeta = (updateScope & UPDATE_SCOPE.META) !== 0;
-    const updatingContent = (updateScope & UPDATE_SCOPE.CONTENT) !== 0;
+      // Check which parts are being updated
+      const updateScope = analyzeUpdateScope(data);
+      const updatingMeta = (updateScope & UPDATE_SCOPE.META) !== 0;
+      const updatingContent = (updateScope & UPDATE_SCOPE.CONTENT) !== 0;
 
-    // Validate etags for parts being updated
-    if (updatingMeta && etagParts.meta !== currentParts.meta) {
-      return {
-        success: false,
-        reason: 'stale_write',
-        currentEtag: localeVersion.etag,
-      };
-    }
+      // Validate etags for parts being updated
+      if (updatingMeta && etagParts.meta !== currentParts.meta) {
+        return {
+          success: false,
+          reason: 'stale_write',
+          currentEtag: localeVersion.etag,
+        };
+      }
 
-    if (updatingContent && etagParts.content !== currentParts.content) {
-      return {
-        success: false,
-        reason: 'stale_write',
-        currentEtag: localeVersion.etag,
-      };
+      if (updatingContent && etagParts.content !== currentParts.content) {
+        return {
+          success: false,
+          reason: 'stale_write',
+          currentEtag: localeVersion.etag,
+        };
+      }
     }
 
     // Get file path

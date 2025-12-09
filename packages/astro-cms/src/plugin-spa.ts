@@ -2,7 +2,6 @@ import type { UIConfig } from '@conloca/cms-spa';
 import { createContentAPI, createContentWatchHandlers } from '@conloca/content-api/node';
 import viteReact from '@vitejs/plugin-react';
 import type { AstroIntegration } from 'astro';
-import { configureSpaHandler } from './spa-handler';
 
 export interface ConlocaCMSOptions extends Omit<UIConfig, 'basename'> {
   contentRoot: string;
@@ -78,18 +77,20 @@ export default puckConfigPromise.then(m => m.default);
 // Template for the data schemas loader virtual module
 const dataSchemasLoader = (absoluteSchemasPath: string) => {
   return `
-import { setDataSchemas } from '@conloca/cms-spa';
+// Import directly from data-schemas to avoid loading MDXContent which triggers React Refresh errors
+import { setDataSchemas } from '@conloca/cms-spa/data-schemas';
 import { dataSchemas } from '${absoluteSchemasPath}';
 
-// Register the schemas with the CMS
+// Register the schemas with the CMS and notify React components
 setDataSchemas(dataSchemas);
+window.dispatchEvent(new CustomEvent('data-schemas-loaded', { detail: dataSchemas }));
 
 // Accept HMR for this module
 if (import.meta.hot) {
   import.meta.hot.accept('${absoluteSchemasPath}', async (newModule) => {
     if (newModule?.dataSchemas) {
       setDataSchemas(newModule.dataSchemas);
-      console.log('[Conloca CMS] Data schemas updated');
+      window.dispatchEvent(new CustomEvent('data-schemas-updated', { detail: newModule.dataSchemas }));
     }
   });
 }
@@ -101,13 +102,15 @@ export default dataSchemas;
 export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
   const cmsRoute = options.route || '/__cms';
 
-  // Configure the SPA handler with CMS options
-  configureSpaHandler({
+  // Build SPA config once - will be injected via Vite define
+  const spaConfig = {
     basename: cmsRoute,
+    apiBaseUrl: `${cmsRoute}/api`,
     siteBaseUrl: options.siteBaseUrl,
     enableDevtools: options.enableDevtools,
     queryClientOptions: options.queryClientOptions,
-  });
+    dataSchemasPath: options.dataSchemasPath,
+  };
 
   return {
     name: '@conloca/astro-cms',
@@ -116,13 +119,14 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
         // Only inject routes in dev mode
         if (command !== 'dev') return;
 
-        // Pass options via environment variables for API routes
+        // Pass options via Vite define - available in route handlers via import.meta.env
         updateConfig({
           vite: {
             define: {
               'import.meta.env.CONLOCA_CONTENT_ROOT': JSON.stringify(options.contentRoot),
               'import.meta.env.CONLOCA_CANVAS_DIR': JSON.stringify(options.canvasDir || './canvas'),
               'import.meta.env.CONLOCA_PUCK_CONFIG_PATH': JSON.stringify(options.puckConfigPath),
+              'import.meta.env.CONLOCA_SPA_CONFIG': JSON.stringify(spaConfig),
             },
             optimizeDeps: {
               // Exclude the puck config from optimization to avoid the outdated dep error
@@ -162,6 +166,41 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
                     return dataSchemasLoader(absoluteSchemasPath);
                   }
                   return null;
+                },
+              },
+              {
+                name: 'conloca-virtual-module-server',
+                configureServer(server) {
+                  // Serve virtual modules through Vite's middleware
+                  // This must run BEFORE Astro's route handlers catch the request
+                  server.middlewares.use(async (req, res, next) => {
+                    const url = req.url;
+                    if (!url) return next();
+
+                    // Check if this is a virtual module request
+                    const virtualModules = [
+                      `${cmsRoute}/puck-entry.js`,
+                      `${cmsRoute}/content-listener.js`,
+                      `${cmsRoute}/data-schemas-entry.js`,
+                    ];
+
+                    const matchedModule = virtualModules.find((m) => url === m || url.startsWith(m + '?'));
+                    if (!matchedModule) return next();
+
+                    try {
+                      // Transform and serve the virtual module through Vite
+                      const result = await server.transformRequest(matchedModule);
+                      if (result) {
+                        res.setHeader('Content-Type', 'application/javascript');
+                        res.setHeader('Cache-Control', 'no-cache');
+                        res.end(result.code);
+                        return;
+                      }
+                    } catch (err) {
+                      console.error(`[Conloca] Error transforming virtual module ${matchedModule}:`, err);
+                    }
+                    next();
+                  });
                 },
               },
               {
@@ -255,15 +294,6 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
 
       'astro:server:setup': ({ logger }) => {
         logger.info(`Conloca CMS available at ${cmsRoute}`);
-
-        // Configure spa-handler with updated options
-        configureSpaHandler({
-          basename: cmsRoute,
-          apiBaseUrl: `${cmsRoute}/api`,
-          siteBaseUrl: options.siteBaseUrl,
-          enableDevtools: options.enableDevtools,
-          queryClientOptions: options.queryClientOptions,
-        });
       },
     },
   };

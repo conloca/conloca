@@ -8,13 +8,17 @@ import { TestEditor } from './components/editor/TestEditor';
 import { BlockList } from './components/pages/BlockList';
 import { DataList } from './components/pages/DataList';
 import { PageList } from './components/pages/PageList';
+import type { DataSchemas } from './data-schemas';
 import './main.css';
 
 export default function App() {
-  // In development, use the mock config from the global variable
-  // In production (via Astro), this will be loaded dynamically
+  // Puck config state - loaded from virtual module
   const [puckConfig, setPuckConfig] = useState((window as any).__PUCK_CONFIG__ || { components: {} });
 
+  // Data schemas state - loaded from virtual module
+  const [dataSchemas, setDataSchemas] = useState<DataSchemas>(() => (window as any).__DATA_SCHEMAS__ || {});
+
+  // Puck config listener
   useEffect(() => {
     console.log('[App] Setting up puck config listeners');
     console.log('[App] Initial __PUCK_CONFIG__:', (window as any).__PUCK_CONFIG__);
@@ -53,6 +57,28 @@ export default function App() {
     };
   }, []);
 
+  // Data schemas listener
+  useEffect(() => {
+    // Check if schemas were already loaded (race condition)
+    const current = (window as any).__DATA_SCHEMAS__;
+    if (current && Object.keys(current).length > 0 && Object.keys(dataSchemas).length === 0) {
+      setDataSchemas(current);
+    }
+
+    // Listen for schema updates
+    const handleSchemasUpdate = (event: CustomEvent<DataSchemas>) => {
+      setDataSchemas(event.detail);
+    };
+
+    window.addEventListener('data-schemas-loaded', handleSchemasUpdate as EventListener);
+    window.addEventListener('data-schemas-updated', handleSchemasUpdate as EventListener);
+
+    return () => {
+      window.removeEventListener('data-schemas-loaded', handleSchemasUpdate as EventListener);
+      window.removeEventListener('data-schemas-updated', handleSchemasUpdate as EventListener);
+    };
+  }, []);
+
   return (
     <Routes>
       <Route path="/" element={<CMSLayout />}>
@@ -62,7 +88,7 @@ export default function App() {
           <Route index element={<BlockList />} />
           <Route path=":id" element={<BlockEditor />} />
         </Route>
-        <Route path="data" element={<DataList />} />
+        <Route path="data" element={<DataList dataSchemas={dataSchemas} />} />
         <Route path="test-editor" element={<TestEditor puckConfig={puckConfig} />} />
       </Route>
       <Route path="/pages/:id" element={<PageEditorWrapper puckConfig={puckConfig} />} />

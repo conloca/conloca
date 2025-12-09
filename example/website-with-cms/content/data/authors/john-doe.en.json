@@ -1,17 +1,16 @@
 {
   "created": "2025-12-08T09:41:45.355Z",
+  "data": {
+    "bio": "Full-stack developer with 10 years of experience",
+    "email": "john@example.com",
+    "name": "John Doe",
+    "twitter": "@johndoe"
+  },
   "id": "vx-EikPoefP",
   "meta": {
     "description": "Lead developer and tech writer",
     "title": "John Doe"
   },
-  "modified": "2025-12-08T09:41:45.355Z",
-  "content": {
-    "data": {
-      "bio": "Full-stack developer with 10 years of experience",
-      "email": "john@example.com",
-      "name": "John Doe",
-      "twitter": "@johndoe"
-    }
-  }
+  "modified": "2025-12-09T11:07:11.969Z",
+  "type": "json"
 }

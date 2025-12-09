@@ -1,18 +1,17 @@
 {
   "created": "2025-12-08T09:41:45.356Z",
+  "data": {
+    "contactEmail": "hello@example.com",
+    "siteName": "My Website",
+    "socialLinks": {
+      "twitter": "https://twitter.com/example"
+    }
+  },
   "id": "vx-fyhy2zSG",
   "meta": {
     "description": "Global site settings",
     "title": "Site Configuration"
   },
   "modified": "2025-12-08T09:41:45.356Z",
-  "content": {
-    "data": {
-      "contactEmail": "hello@example.com",
-      "siteName": "My Website",
-      "socialLinks": {
-        "twitter": "https://twitter.com/example"
-      }
-    }
-  }
+  "type": "json"
 }

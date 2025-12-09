@@ -14,18 +14,16 @@ interface SpaHandlerConfig extends UIConfig {
   dataSchemasPath?: string;
 }
 
-// Configuration set by the plugin
-let uiConfig: SpaHandlerConfig = {
+const defaultConfig: SpaHandlerConfig = {
   basename: '/__cms',
   apiBaseUrl: '/__cms/api',
 };
 
-export function configureSpaHandler(config: SpaHandlerConfig) {
-  uiConfig = { ...uiConfig, ...config };
-  // Ensure apiBaseUrl is set based on basename if not explicitly provided
-  if (!uiConfig.apiBaseUrl && uiConfig.basename) {
-    uiConfig.apiBaseUrl = `${uiConfig.basename}/api`;
-  }
+// Config is injected via Vite define in plugin-spa.ts
+function getConfig(): SpaHandlerConfig {
+  // Vite replaces import.meta.env.CONLOCA_SPA_CONFIG at build/dev time
+  const injectedConfig = import.meta.env.CONLOCA_SPA_CONFIG as SpaHandlerConfig | undefined;
+  return injectedConfig ?? defaultConfig;
 }
 
 // Load the HTML at runtime
@@ -45,16 +43,16 @@ async function loadIndexHtml(): Promise<string> {
   return html;
 }
 
-export const GET: APIRoute = async ({ params, request }) => {
+export const GET: APIRoute = async ({ params }) => {
   // The path parameter is an array for [...path] routes
   const pathArray = params.path;
   const path = Array.isArray(pathArray) ? pathArray.join('/') : pathArray || '';
-  console.log('[spa-handler] Request for path:', path, 'params:', params, 'URL:', request.url);
 
   // For the root path or any path without an extension, serve the HTML
   if (!path || !path.includes('.')) {
     try {
       let html = await loadIndexHtml();
+      const uiConfig = getConfig();
 
       // Inject CMS configuration and load virtual modules
       const configScript = `
@@ -69,10 +67,6 @@ export const GET: APIRoute = async ({ params, request }) => {
 
       // Inject the script at the top to ensure config is available first
       html = html.replace('<head>', `<head>${configScript}`);
-
-      // Log what JS files are referenced in the HTML
-      const scriptMatches = html.match(/<script[^>]+src="([^"]+)"/g);
-      console.log('[spa-handler] Script tags in HTML:', scriptMatches);
 
       return new Response(html, {
         headers: {

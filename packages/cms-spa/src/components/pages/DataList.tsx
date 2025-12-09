@@ -10,6 +10,7 @@ import {
 } from '@conloca/content-api-client';
 import { AlertCircle, Database, Loader2, Plus } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import type { DataSchemas } from '../../data-schemas';
 import { useDialogState, useErrorModal } from '../../hooks';
 import type { DataEntry } from '../../types';
 import { slugify } from '../../utils/slugify';
@@ -20,7 +21,11 @@ import { DeleteConfirmDialog } from '../dialogs/DeleteConfirmDialog';
 import { ErrorModal } from '../dialogs/ErrorModal';
 import { DataEditor } from '../editors/DataEditor';
 
-export function DataList() {
+interface DataListProps {
+  dataSchemas: DataSchemas;
+}
+
+export function DataList({ dataSchemas }: DataListProps) {
   const [selectedCollection, setSelectedCollection] = useState<string | 'all'>('all');
   const [createDialog, openCreateDialog, closeCreateDialog] = useDialogState({});
   const [deleteDialog, openDeleteDialog, closeDeleteDialog] = useDialogState({
@@ -405,6 +410,7 @@ export function DataList() {
               collection={editDataDialog.collection}
               locale={editDataDialog.locale}
               name={editDataDialog.name}
+              schema={dataSchemas[editDataDialog.collection] ?? null}
               onSave={closeEditDataDialog}
               onCancel={closeEditDataDialog}
             />

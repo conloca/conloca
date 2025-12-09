@@ -1,7 +1,7 @@
 import { useLocalizedContent, useUpdateLocalized } from '@conloca/content-api-client';
 import { AlertCircle, Code2, Loader2, Save } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { useDataSchema } from '../../hooks/useDataSchema';
+import type { z } from 'zod';
 import { SchemaForm } from '../forms/SchemaForm';
 
 interface DataEditorProps {
@@ -9,6 +9,7 @@ interface DataEditorProps {
   collection: string;
   locale: string;
   name: string;
+  schema: z.ZodObject<z.ZodRawShape> | null;
   onSave?: () => void;
   onCancel?: () => void;
 }
@@ -17,8 +18,7 @@ interface DataEditorProps {
  * Editor for data entry content.
  * Uses collection-specific schema for form generation if available.
  */
-export function DataEditor({ id, collection, locale, name, onSave, onCancel }: DataEditorProps) {
-  const schema = useDataSchema(collection);
+export function DataEditor({ id, collection, locale, name, schema, onSave, onCancel }: DataEditorProps) {
   const { data: entry, isLoading, error } = useLocalizedContent(id, locale);
   const updateLocalized = useUpdateLocalized();
 
