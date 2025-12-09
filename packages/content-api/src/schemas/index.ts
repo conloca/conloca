@@ -30,28 +30,21 @@ export const pageMetaSchema = pageEditableSchema.extend({
 
 export type PageMeta = z.infer<typeof pageMetaSchema>;
 
-// ===== Shared Content Schemas =====
+// ===== Block Schemas =====
 
 /**
- * Base schema for content metadata - editable fields only.
- * Used by CMS forms for dynamic form generation.
- * Shared by blocks and data entries.
+ * Schema for block metadata - editable fields only.
+ * Blocks need category/tags because they all live in a single `blocks/` folder
+ * and need metadata for organization and filtering.
  */
-export const contentEditableSchema = z.object({
+export const blockEditableSchema = z.object({
   title: z.string().describe('Display name'),
   description: z.string().optional().describe('Brief description'),
   category: z.string().optional().describe('Category for organization'),
   tags: z.array(z.string()).optional().describe('Tags for filtering'),
 });
 
-export type ContentEditable = z.infer<typeof contentEditableSchema>;
-
-// ===== Block Schemas =====
-
-/** @deprecated Use contentEditableSchema instead */
-export const blockEditableSchema = contentEditableSchema;
-
-export type BlockEditable = ContentEditable;
+export type BlockEditable = z.infer<typeof blockEditableSchema>;
 
 /**
  * Full block schema with system fields.
@@ -67,10 +60,17 @@ export type BlockMeta = z.infer<typeof blockMetaSchema>;
 
 // ===== Data Schemas =====
 
-/** @deprecated Use contentEditableSchema instead */
-export const dataEditableSchema = contentEditableSchema;
+/**
+ * Schema for data entry metadata - simpler than blocks.
+ * Data entries are organized by collections (folders), so they don't need category/tags.
+ * If you need additional fields, add them to your data schema instead.
+ */
+export const dataEditableSchema = z.object({
+  title: z.string().describe('Display name'),
+  description: z.string().optional().describe('Brief description'),
+});
 
-export type DataEditable = ContentEditable;
+export type DataEditable = z.infer<typeof dataEditableSchema>;
 
 /**
  * Zod schema for data entry metadata.

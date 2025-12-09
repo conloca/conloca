@@ -1,12 +1,12 @@
-import { type ContentEditable, contentEditableSchema } from '@conloca/content-api';
+import { type BlockEditable, blockEditableSchema } from '@conloca/content-api';
 import { useEffect, useMemo, useState } from 'react';
 import { SchemaForm } from '../forms/SchemaForm';
 
 interface BlockPropertiesDialogProps {
   isOpen: boolean;
   blockTitle: string;
-  currentMeta: ContentEditable;
-  onSave: (meta: ContentEditable) => void;
+  currentMeta: BlockEditable;
+  onSave: (meta: BlockEditable) => void;
   onCancel: () => void;
   isSaving?: boolean;
 }
@@ -44,7 +44,7 @@ export function BlockPropertiesDialog({
     const tags = (formValues.tags as string[]) || [];
     const filteredTags = tags.filter((tag) => tag.trim().length > 0);
 
-    const meta: ContentEditable = {
+    const meta: BlockEditable = {
       title: ((formValues.title as string) || '').trim(),
       description: ((formValues.description as string) || '').trim() || undefined,
       category: ((formValues.category as string) || '').trim() || undefined,
@@ -74,7 +74,7 @@ export function BlockPropertiesDialog({
         <h2 className="text-xl font-semibold mb-4">Edit Block Properties</h2>
 
         <div className="mb-4">
-          <SchemaForm schema={contentEditableSchema} values={formValues} onChange={setFormValues} />
+          <SchemaForm schema={blockEditableSchema} values={formValues} onChange={setFormValues} />
         </div>
 
         <div className="flex justify-end gap-3">

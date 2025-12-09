@@ -1,23 +1,21 @@
-import { type ContentEditable, contentEditableSchema } from '@conloca/content-api';
+import { type DataEditable, dataEditableSchema } from '@conloca/content-api';
 import { useState } from 'react';
 import { SchemaForm } from '../forms/SchemaForm';
 
 interface DataPropertiesDialogProps {
-  initialMeta: ContentEditable;
+  initialMeta: DataEditable;
   isPending: boolean;
   onClose: () => void;
-  onSave: (meta: ContentEditable) => void;
+  onSave: (meta: DataEditable) => void;
 }
 
 export function DataPropertiesDialog({ initialMeta, isPending, onClose, onSave }: DataPropertiesDialogProps) {
-  const [meta, setMeta] = useState<ContentEditable>(initialMeta);
+  const [meta, setMeta] = useState<DataEditable>(initialMeta);
 
   const handleChange = (values: Record<string, unknown>) => {
     setMeta({
       title: (values.title as string) || '',
       description: (values.description as string) || undefined,
-      category: (values.category as string) || undefined,
-      tags: (values.tags as string[]) || undefined,
     });
   };
 
@@ -36,12 +34,10 @@ export function DataPropertiesDialog({ initialMeta, isPending, onClose, onSave }
 
         <div className="mb-4">
           <SchemaForm
-            schema={contentEditableSchema}
+            schema={dataEditableSchema}
             values={{
               title: meta.title,
               description: meta.description || '',
-              category: meta.category || '',
-              tags: meta.tags || [],
             }}
             onChange={handleChange}
           />

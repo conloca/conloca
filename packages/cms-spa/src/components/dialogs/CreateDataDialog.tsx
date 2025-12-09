@@ -1,4 +1,4 @@
-import { contentEditableSchema } from '@conloca/content-api';
+import { dataEditableSchema } from '@conloca/content-api';
 import { useState } from 'react';
 import { SchemaForm } from '../forms/SchemaForm';
 
@@ -49,7 +49,7 @@ export function CreateDataDialog({ collections, isPending, onClose, onCreate }: 
           </select>
         </div>
         <div className="mb-4">
-          <SchemaForm schema={contentEditableSchema} values={formValues} onChange={setFormValues} />
+          <SchemaForm schema={dataEditableSchema} values={formValues} onChange={setFormValues} />
         </div>
         <div className="flex justify-end gap-3">
           <button

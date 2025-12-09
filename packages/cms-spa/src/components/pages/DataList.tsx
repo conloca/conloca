@@ -1,4 +1,4 @@
-import type { ContentEditable } from '@conloca/content-api';
+import type { DataEditable } from '@conloca/content-api';
 import {
   type ContentManifest,
   localesOf,
@@ -38,7 +38,7 @@ export function DataList({ dataSchemas }: DataListProps) {
     entryId: '',
     locale: '',
     etag: '',
-    currentMeta: { title: '' } as ContentEditable,
+    currentMeta: { title: '' } as DataEditable,
   });
 
   const [editDataDialog, openEditDataDialog, closeEditDataDialog] = useDialogState({
@@ -92,8 +92,6 @@ export function DataList({ dataSchemas }: DataListProps) {
           ? {
               title: firstLocale.meta.title || title,
               description: firstLocale.meta.description,
-              category: firstLocale.meta.category,
-              tags: firstLocale.meta.tags,
             }
           : undefined,
       };
@@ -149,16 +147,12 @@ export function DataList({ dataSchemas }: DataListProps) {
       meta: {
         title,
         description: ((values.description as string) || '').trim() || undefined,
-        category: ((values.category as string) || '').trim() || undefined,
-        tags: values.tags as string[] | undefined,
       },
       locales: {
         en: {
           meta: {
             title,
             description: ((values.description as string) || '').trim() || undefined,
-            category: ((values.category as string) || '').trim() || undefined,
-            tags: values.tags as string[] | undefined,
           },
           content: {
             data: {},
@@ -223,12 +217,7 @@ export function DataList({ dataSchemas }: DataListProps) {
     });
   };
 
-  const handleSaveProperties = async (meta: {
-    title: string;
-    description?: string;
-    category?: string;
-    tags?: string[];
-  }) => {
+  const handleSaveProperties = async (meta: DataEditable) => {
     if (!propertiesDialog.entryId || !meta.title.trim()) return;
 
     try {

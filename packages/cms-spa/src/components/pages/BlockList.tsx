@@ -1,4 +1,4 @@
-import type { ContentEditable } from '@conloca/content-api';
+import type { BlockEditable } from '@conloca/content-api';
 import {
   type ContentManifest,
   localesOf,
@@ -41,7 +41,7 @@ export function BlockList() {
     blockId: '',
     blockTitle: '',
     etag: '',
-    currentMeta: { title: '' } as ContentEditable,
+    currentMeta: { title: '' } as BlockEditable,
   });
 
   // Dropdown menu state
