@@ -125,6 +125,29 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
 
   // Handle by type
   switch (fieldInfo.type) {
+    case 'enum':
+      return (
+        <div>
+          <label className="block text-sm font-medium mb-1">
+            {label}
+            {required && <span className="text-red-500 ml-1">*</span>}
+          </label>
+          <select
+            value={(value as string) || ''}
+            onChange={(e) => onChange(e.target.value || undefined)}
+            className="w-full px-3 py-2 border border-grey-09 rounded focus:outline-none focus:ring-2 focus:ring-azure-04 bg-white"
+          >
+            {!required && <option value="">Select...</option>}
+            {fieldInfo.enumValues?.map((enumValue) => (
+              <option key={enumValue} value={enumValue}>
+                {formatEnumLabel(enumValue)}
+              </option>
+            ))}
+          </select>
+          {description && <p className="mt-1 text-sm text-grey-04">{description}</p>}
+        </div>
+      );
+
     case 'number':
       return (
         <div>
@@ -234,6 +257,17 @@ function formatFieldLabel(name: string): string {
   return name
     .replace(/([A-Z])/g, ' $1')
     .replace(/_/g, ' ')
+    .replace(/^\w/, (c) => c.toUpperCase())
+    .trim();
+}
+
+function formatEnumLabel(value: string): string {
+  // Convert enum values like "PENDING", "in_progress", "camelCase" to readable labels
+  return value
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/_/g, ' ')
+    .replace(/-/g, ' ')
+    .toLowerCase()
     .replace(/^\w/, (c) => c.toUpperCase())
     .trim();
 }
