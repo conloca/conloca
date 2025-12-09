@@ -6,6 +6,8 @@ export interface UIConfig {
   siteBaseUrl?: string; // Base URL for the site (e.g., '/docs' or 'https://example.com/docs')
   enableDevtools?: boolean;
   queryClientOptions?: QueryClientConfig;
+  /** Absolute path to project root (for "Open in Editor" links) */
+  projectRoot?: string;
 }
 
 const defaultConfig: UIConfig = {

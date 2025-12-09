@@ -110,6 +110,7 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
     enableDevtools: options.enableDevtools,
     queryClientOptions: options.queryClientOptions,
     dataSchemasPath: options.dataSchemasPath,
+    projectRoot: process.cwd(),
   };
 
   return {

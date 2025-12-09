@@ -1,6 +1,7 @@
-import { Database, Edit2, FileJson, MoreVertical, Settings, Trash2 } from 'lucide-react';
+import { Database, Edit2, ExternalLink, FileJson, MoreVertical, Settings, Trash2 } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
 import { useClickOutside } from '../../hooks';
+import { getUIConfig } from '../../ui-config';
 
 interface DataEntryCardProps {
   id: string;
@@ -8,9 +9,19 @@ interface DataEntryCardProps {
   description?: string;
   collection: string;
   locales: string[];
+  name?: string;
   onEditData: () => void;
   onEditProperties: () => void;
   onDelete: () => void;
+}
+
+/**
+ * Generates a VSCode URI to open a file.
+ * Uses vscode:// protocol which works when VSCode is installed.
+ */
+function getEditorLink(projectRoot: string, collection: string, name: string, locale: string): string {
+  const filePath = `${projectRoot}/content/data/${collection}/${name}.${locale}.json`;
+  return `vscode://file${filePath}`;
 }
 
 export function DataEntryCard({
@@ -19,6 +30,7 @@ export function DataEntryCard({
   description,
   collection,
   locales,
+  name,
   onEditData,
   onEditProperties,
   onDelete,
@@ -28,6 +40,11 @@ export function DataEntryCard({
 
   const closeMenu = useCallback(() => setIsMenuOpen(false), []);
   useClickOutside(menuRef, closeMenu, isMenuOpen);
+
+  const config = getUIConfig();
+  const firstLocale = locales[0];
+  const editorLink =
+    config.projectRoot && name && firstLocale ? getEditorLink(config.projectRoot, collection, name, firstLocale) : null;
 
   return (
     <div className="bg-white border border-grey-09 rounded p-4 hover:border-azure-04 transition-colors">
@@ -95,6 +112,16 @@ export function DataEntryCard({
                 <Settings className="h-4 w-4 text-grey-04" />
                 <span>Properties</span>
               </button>
+              {editorLink && (
+                <a
+                  href={editorLink}
+                  onClick={() => setIsMenuOpen(false)}
+                  className="w-full px-4 py-2 text-left flex items-center gap-2 hover:bg-grey-11 transition-colors"
+                >
+                  <ExternalLink className="h-4 w-4 text-grey-04" />
+                  <span>Open in Editor</span>
+                </a>
+              )}
               <div className="border-t border-grey-09 my-1" />
               <button
                 onClick={() => {

@@ -326,6 +326,7 @@ export function DataList({ dataSchemas }: DataListProps) {
               description={entry.description}
               collection={entry.collection}
               locales={entry.locales}
+              name={entry.name}
               onEditData={() => handleEditData(entry.id)}
               onEditProperties={() => handleEditProperties(entry.id)}
               onDelete={() => handleDeleteEntry(entry.id)}
