@@ -92,8 +92,9 @@ export class DataIndex {
       delete contentCache[locale];
     }
 
-    // If no locales left, remove the entire entry
-    if (Object.keys(manifest.locales).length === 0) {
+    // If no defined locales left, remove the entire entry
+    const remainingLocales = Object.values(manifest.locales).filter((v) => v !== undefined);
+    if (remainingLocales.length === 0) {
       this.removeEntry(id);
     }
   }

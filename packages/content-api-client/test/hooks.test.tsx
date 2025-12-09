@@ -10,6 +10,10 @@ import {
   setContentAPIClient,
   useContent,
   useCreateContent,
+  useData,
+  useDataByName,
+  useDataCollections,
+  useDataNameAvailability,
   useLocalizedContent,
   usePathnameAvailability,
   useSitePages,
@@ -55,6 +59,10 @@ describe('Content API Hooks', () => {
       movePage: mock(() => Promise.resolve({ moved: true })),
       getBlocks: mock(() => Promise.resolve({ entries: [], total: 0 })),
       getBlockByName: mock(() => Promise.resolve(null)),
+      getData: mock(() => Promise.resolve({ items: [], total: 0 })),
+      getDataByName: mock(() => Promise.resolve(null)),
+      isDataNameAvailable: mock(() => Promise.resolve(true)),
+      getDataCollections: mock(() => Promise.resolve([])),
       listAllContent: mock(() => Promise.resolve({ entries: [], total: 0 })),
       findUntranslatedContent: mock(() => Promise.resolve({ entries: [], total: 0 })),
       getSitesConfig: mock(() => Promise.resolve({ sites: {} })),
@@ -312,6 +320,161 @@ describe('Content API Hooks', () => {
       expect(result.current.isLoading).toBe(false);
       expect(mockClient.isPathnameAvailable).not.toHaveBeenCalled();
       expect(result.current.data).toBeUndefined();
+    });
+  });
+
+  describe('useData', () => {
+    it('should fetch data entries', async () => {
+      const mockData = {
+        items: [
+          {
+            id: 'vx-data1',
+            kind: 'data' as const,
+            type: 'json' as const,
+            collection: 'authors',
+            locales: {
+              en: {
+                locale: 'en',
+                etag: 'meta.content',
+                created: '2024-01-01T00:00:00Z',
+                modified: '2024-01-01T00:00:00Z',
+                name: 'john-doe',
+                meta: { title: 'John Doe' },
+              },
+            },
+          },
+        ],
+        total: 1,
+      };
+
+      mockClient.getData = mock(() => Promise.resolve(mockData));
+
+      const { result } = renderHook(() => useData('authors', 'en'), { wrapper });
+
+      await waitFor(() => {
+        expect(result.current.isSuccess).toBe(true);
+      });
+
+      expect(mockClient.getData).toHaveBeenCalledWith('authors', 'en');
+      expect(result.current.data).toEqual(mockData);
+    });
+
+    it('should fetch all data when no filters', async () => {
+      const mockData = { items: [], total: 0 };
+
+      mockClient.getData = mock(() => Promise.resolve(mockData));
+
+      const { result } = renderHook(() => useData(), { wrapper });
+
+      await waitFor(() => {
+        expect(result.current.isSuccess).toBe(true);
+      });
+
+      expect(mockClient.getData).toHaveBeenCalledWith(undefined, undefined);
+    });
+  });
+
+  describe('useDataByName', () => {
+    it('should fetch data entry by name', async () => {
+      const mockEntry = {
+        id: 'vx-data1',
+        kind: 'data' as const,
+        type: 'json' as const,
+        collection: 'authors',
+        locales: {
+          en: {
+            locale: 'en',
+            etag: 'meta.content',
+            created: '2024-01-01T00:00:00Z',
+            modified: '2024-01-01T00:00:00Z',
+            name: 'john-doe',
+            meta: { title: 'John Doe' },
+          },
+        },
+      };
+
+      mockClient.getDataByName = mock(() => Promise.resolve(mockEntry));
+
+      const { result } = renderHook(() => useDataByName('john-doe', 'authors', 'en'), { wrapper });
+
+      await waitFor(() => {
+        expect(result.current.isSuccess).toBe(true);
+      });
+
+      expect(mockClient.getDataByName).toHaveBeenCalledWith('john-doe', 'authors', 'en');
+      expect(result.current.data).toEqual(mockEntry);
+    });
+
+    it('should not query if name is empty', () => {
+      const { result } = renderHook(() => useDataByName('', 'authors'), { wrapper });
+
+      expect(result.current.isLoading).toBe(false);
+      expect(mockClient.getDataByName).not.toHaveBeenCalled();
+    });
+
+    it('should not query if collection is empty', () => {
+      const { result } = renderHook(() => useDataByName('john-doe', ''), { wrapper });
+
+      expect(result.current.isLoading).toBe(false);
+      expect(mockClient.getDataByName).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('useDataNameAvailability', () => {
+    it('should check data name availability', async () => {
+      mockClient.isDataNameAvailable = mock(() => Promise.resolve(true));
+
+      const { result } = renderHook(() => useDataNameAvailability('new-name', 'authors', 'exclude-id'), { wrapper });
+
+      await waitFor(() => {
+        expect(result.current.isSuccess).toBe(true);
+      });
+
+      expect(mockClient.isDataNameAvailable).toHaveBeenCalledWith('new-name', 'authors', 'exclude-id');
+      expect(result.current.data).toEqual({ available: true });
+    });
+
+    it('should return available: false for taken name', async () => {
+      mockClient.isDataNameAvailable = mock(() => Promise.resolve(false));
+
+      const { result } = renderHook(() => useDataNameAvailability('taken-name', 'authors'), { wrapper });
+
+      await waitFor(() => {
+        expect(result.current.isSuccess).toBe(true);
+      });
+
+      expect(result.current.data).toEqual({ available: false });
+    });
+
+    it('should not query if name is empty', () => {
+      const { result } = renderHook(() => useDataNameAvailability('', 'authors'), { wrapper });
+
+      expect(result.current.isLoading).toBe(false);
+      expect(mockClient.isDataNameAvailable).not.toHaveBeenCalled();
+    });
+
+    it('should not query if collection is empty', () => {
+      const { result } = renderHook(() => useDataNameAvailability('some-name', ''), { wrapper });
+
+      expect(result.current.isLoading).toBe(false);
+      expect(mockClient.isDataNameAvailable).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('useDataCollections', () => {
+    it('should fetch data collections', async () => {
+      const mockCollections = ['authors', 'testimonials', 'settings'];
+
+      mockClient.getDataCollections = mock(() => Promise.resolve(mockCollections));
+
+      const { result } = renderHook(() => useDataCollections(), { wrapper });
+
+      await waitFor(() => {
+        expect(result.current.isSuccess).toBe(true);
+      });
+
+      expect(mockClient.getDataCollections).toHaveBeenCalled();
+      expect(result.current.data).toEqual(mockCollections);
     });
   });
 });

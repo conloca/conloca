@@ -257,6 +257,99 @@ describe('ContentAPIClient', () => {
     });
   });
 
+  describe('data operations', () => {
+    it('should get data with filters', async () => {
+      const mockResult = { items: [], total: 0 };
+
+      fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(mockResult), { status: 200 }));
+
+      const result = await client.getData('authors', 'en');
+
+      expect(fetchMock).toHaveBeenCalledWith('/__conloca/api/data?collection=authors&locale=en', {
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(result).toEqual(mockResult);
+    });
+
+    it('should get data without filters', async () => {
+      const mockResult = { items: [], total: 0 };
+
+      fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(mockResult), { status: 200 }));
+
+      const result = await client.getData();
+
+      expect(fetchMock).toHaveBeenCalledWith('/__conloca/api/data', {
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(result).toEqual(mockResult);
+    });
+
+    it('should get data entry by name', async () => {
+      const mockEntry = {
+        id: 'vx-data123',
+        kind: 'data',
+        type: 'json',
+        collection: 'authors',
+        locales: {
+          en: {
+            locale: 'en',
+            etag: 'meta.content',
+            name: 'john-doe',
+            meta: { title: 'John Doe' },
+          },
+        },
+      };
+
+      fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(mockEntry), { status: 200 }));
+
+      const result = await client.getDataByName('john-doe', 'authors', 'en');
+
+      expect(fetchMock).toHaveBeenCalledWith('/__conloca/api/data/john-doe?collection=authors&locale=en');
+      expect(result?.id).toBe('vx-data123');
+    });
+
+    it('should return null for non-existent data entry', async () => {
+      fetchMock.mockResolvedValueOnce(new Response('Not found', { status: 404 }));
+
+      const result = await client.getDataByName('non-existent', 'authors');
+
+      expect(result).toBeNull();
+    });
+
+    it('should check data name availability', async () => {
+      fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ available: true }), { status: 200 }));
+
+      const result = await client.isDataNameAvailable('new-name', 'authors', 'exclude-id');
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/__conloca/api/data/name-available?name=new-name&collection=authors&excludeId=exclude-id',
+      );
+      expect(result).toBe(true);
+    });
+
+    it('should check data name availability without excludeId', async () => {
+      fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ available: false }), { status: 200 }));
+
+      const result = await client.isDataNameAvailable('taken-name', 'authors');
+
+      expect(fetchMock).toHaveBeenCalledWith('/__conloca/api/data/name-available?name=taken-name&collection=authors');
+      expect(result).toBe(false);
+    });
+
+    it('should get data collections', async () => {
+      const mockCollections = { collections: ['authors', 'testimonials', 'settings'] };
+
+      fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(mockCollections), { status: 200 }));
+
+      const result = await client.getDataCollections();
+
+      expect(fetchMock).toHaveBeenCalledWith('/__conloca/api/data/collections', {
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(result).toEqual(['authors', 'testimonials', 'settings']);
+    });
+  });
+
   describe('global operations', () => {
     it('should list all content with filters', async () => {
       const mockResult = { items: [], total: 0 };

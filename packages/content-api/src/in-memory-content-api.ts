@@ -254,7 +254,7 @@ export class InMemoryContentAPI implements ContentAPI {
           meta,
           kind: data.kind,
           pathname: data.kind === 'page' ? localeData.pathname : undefined,
-          name: data.kind === 'block' ? data.name : undefined,
+          name: data.kind === 'block' || data.kind === 'data' ? data.name : undefined,
           publishAt:
             localeData.publishAt && typeof localeData.publishAt === 'string' ? localeData.publishAt : undefined,
           unpublishAt:
