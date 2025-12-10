@@ -173,7 +173,7 @@ export interface CreateContentInput {
   type: ContentType;
   created?: string; // Optional, will use current time if not provided
   name?: string; // Internal identifier for blocks and data (same across all locales)
-  meta?: Partial<ContentMeta>; // Shared metadata defaults (for backward compatibility)
+  meta?: Partial<ContentMeta>; // Shared metadata defaults (applied to all locales)
   locales: {
     [locale: string]: {
       pathname?: string; // for pages (locale-specific route)

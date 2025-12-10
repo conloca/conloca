@@ -150,12 +150,6 @@ export class Site {
     return this.getByPreviousPathname(pathname, locale) !== null;
   }
 
-  // Update pathname index when pathname changes
-  updatePathnameIndex(oldPathname: string, newPathname: string, locale: string, manifest: ContentManifest): void {
-    // ContentIndex will handle this during updateEntry
-    // This method is kept for compatibility but the actual update happens in ContentIndex
-  }
-
   // Create page with validation
   async create(data: CreatePageInput): Promise<CreateResult> {
     // Validate pathname availability for all locales
