@@ -140,7 +140,7 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
               {
                 name: 'conloca-virtual-modules',
                 resolveId(id) {
-                  // Virtual config module for SSR route handler
+                  // Config module for spa-handler.ts
                   if (id === VIRTUAL_CONFIG_MODULE) {
                     return RESOLVED_VIRTUAL_CONFIG;
                   }
@@ -156,7 +156,7 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
                   return null;
                 },
                 load(id) {
-                  // Virtual config module for SSR route handler
+                  // Config module for spa-handler.ts
                   if (id === RESOLVED_VIRTUAL_CONFIG) {
                     return `export default ${JSON.stringify(spaConfig)};`;
                   }
