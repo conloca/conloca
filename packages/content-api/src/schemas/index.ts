@@ -89,8 +89,3 @@ export const dataMetaSchema = dataEditableSchema.extend({
 });
 
 export type DataMeta = z.infer<typeof dataMetaSchema>;
-
-// ===== Data Collection Schemas =====
-// Per-collection schemas for structured data editing
-
-export * from './data';
