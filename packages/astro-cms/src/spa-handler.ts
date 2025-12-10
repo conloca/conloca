@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-// Import config from virtual module (works for SSR)
+// Import config from virtual module (injected by plugin-spa.ts)
 import spaConfig from 'virtual:conloca-config';
 import type { APIRoute } from 'astro';
 

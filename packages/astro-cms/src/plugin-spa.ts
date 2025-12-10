@@ -3,7 +3,7 @@ import { createContentAPI, createContentWatchHandlers } from '@conloca/content-a
 import viteReact from '@vitejs/plugin-react';
 import type { AstroIntegration } from 'astro';
 
-// Virtual module for passing SPA config to route handler (works for SSR)
+// Virtual module for passing config from plugin to route handler
 const VIRTUAL_CONFIG_MODULE = 'virtual:conloca-config';
 const RESOLVED_VIRTUAL_CONFIG = '\0' + VIRTUAL_CONFIG_MODULE;
 
