@@ -9,3 +9,14 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+// Virtual module for passing SPA config from plugin to route handler
+declare module 'virtual:conloca-config' {
+  import type { UIConfig } from '@conloca/cms-spa';
+  interface SpaConfig extends UIConfig {
+    dataSchemasPath?: string;
+    projectRoot?: string;
+  }
+  const config: SpaConfig;
+  export default config;
+}

@@ -3,6 +3,10 @@ import { createContentAPI, createContentWatchHandlers } from '@conloca/content-a
 import viteReact from '@vitejs/plugin-react';
 import type { AstroIntegration } from 'astro';
 
+// Virtual module for passing SPA config to route handler (works for SSR)
+const VIRTUAL_CONFIG_MODULE = 'virtual:conloca-config';
+const RESOLVED_VIRTUAL_CONFIG = '\0' + VIRTUAL_CONFIG_MODULE;
+
 export interface ConlocaCMSOptions extends Omit<UIConfig, 'basename'> {
   contentRoot: string;
   canvasDir?: string;
@@ -102,7 +106,7 @@ export default dataSchemas;
 export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
   const cmsRoute = options.route || '/__cms';
 
-  // Build SPA config - stored on globalThis for route handler access
+  // SPA config passed to route handler via virtual module
   const spaConfig = {
     basename: cmsRoute,
     apiBaseUrl: `${cmsRoute}/api`,
@@ -112,9 +116,6 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
     dataSchemasPath: options.dataSchemasPath,
     projectRoot: process.cwd(),
   };
-
-  // Store config in process.env for spa-handler access (survives module reloads)
-  process.env.__CONLOCA_SPA_CONFIG__ = JSON.stringify(spaConfig);
 
   return {
     name: '@conloca/astro-cms',
@@ -139,6 +140,10 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
               {
                 name: 'conloca-virtual-modules',
                 resolveId(id) {
+                  // Virtual config module for SSR route handler
+                  if (id === VIRTUAL_CONFIG_MODULE) {
+                    return RESOLVED_VIRTUAL_CONFIG;
+                  }
                   if (id === `${cmsRoute}/puck-entry.js`) {
                     return id;
                   }
@@ -151,6 +156,10 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
                   return null;
                 },
                 load(id) {
+                  // Virtual config module for SSR route handler
+                  if (id === RESOLVED_VIRTUAL_CONFIG) {
+                    return `export default ${JSON.stringify(spaConfig)};`;
+                  }
                   if (id === `${cmsRoute}/puck-entry.js`) {
                     const absolutePuckPath = options.puckConfigPath.startsWith('.')
                       ? `/${options.puckConfigPath.slice(2)}`

@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import type { UIConfig } from '@conloca/cms-spa';
+// Import config from virtual module (works for SSR)
+import spaConfig from 'virtual:conloca-config';
 import type { APIRoute } from 'astro';
 
 // Get the path to the cms-spa package by resolving its package.json
@@ -8,30 +9,6 @@ import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
 const cmsSpaPath = dirname(require.resolve('@conloca/cms-spa/package.json'));
-
-// Extended config for internal use
-interface SpaHandlerConfig extends UIConfig {
-  dataSchemasPath?: string;
-  projectRoot?: string;
-}
-
-const defaultConfig: SpaHandlerConfig = {
-  basename: '/__cms',
-  apiBaseUrl: '/__cms/api',
-};
-
-// Config is stored in process.env by plugin-spa.ts
-function getConfig(): SpaHandlerConfig {
-  const envConfig = process.env.__CONLOCA_SPA_CONFIG__;
-  if (envConfig) {
-    try {
-      return JSON.parse(envConfig) as SpaHandlerConfig;
-    } catch {
-      // Fall through to default
-    }
-  }
-  return defaultConfig;
-}
 
 // Load the HTML at runtime
 async function loadIndexHtml(): Promise<string> {
@@ -59,17 +36,16 @@ export const GET: APIRoute = async ({ params }) => {
   if (!path || !path.includes('.')) {
     try {
       let html = await loadIndexHtml();
-      const uiConfig = getConfig();
 
       // Inject CMS configuration and load virtual modules
       const configScript = `
         <script>
           // Configure UI with plugin options
-          window.__UI_CONFIG__ = ${JSON.stringify(uiConfig)};
+          window.__UI_CONFIG__ = ${JSON.stringify(spaConfig)};
         </script>
-        <script type="module" src="${uiConfig.basename}/data-schemas-entry.js"></script>
-        <script type="module" src="${uiConfig.basename}/puck-entry.js"></script>
-        <script type="module" src="${uiConfig.basename}/content-listener.js"></script>
+        <script type="module" src="${spaConfig.basename}/data-schemas-entry.js"></script>
+        <script type="module" src="${spaConfig.basename}/puck-entry.js"></script>
+        <script type="module" src="${spaConfig.basename}/content-listener.js"></script>
       `;
 
       // Inject the script at the top to ensure config is available first
@@ -102,8 +78,6 @@ export const GET: APIRoute = async ({ params }) => {
     else if (path.endsWith('.css')) contentType = 'text/css';
     else if (path.endsWith('.html')) contentType = 'text/html';
     else if (path.endsWith('.json')) contentType = 'application/json';
-
-    // JavaScript files are transformed by the middleware in plugin-spa.ts
 
     return new Response(content as BodyInit, {
       headers: {
