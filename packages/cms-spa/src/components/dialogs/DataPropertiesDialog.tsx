@@ -1,5 +1,5 @@
 import { type DataEditable, dataEditableSchema } from '@conloca/content-api';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { SchemaForm } from '../forms/SchemaForm';
 
 interface DataPropertiesDialogProps {
@@ -10,37 +10,58 @@ interface DataPropertiesDialogProps {
 }
 
 export function DataPropertiesDialog({ initialMeta, isPending, onClose, onSave }: DataPropertiesDialogProps) {
-  const [meta, setMeta] = useState<DataEditable>(initialMeta);
+  // Convert DataMeta to form values
+  const initialValues = useMemo(
+    () => ({
+      title: initialMeta.title || '',
+      description: initialMeta.description || '',
+      category: initialMeta.category || '',
+      tags: initialMeta.tags || [],
+    }),
+    [initialMeta],
+  );
 
-  const handleChange = (values: Record<string, unknown>) => {
-    setMeta({
-      title: (values.title as string) || '',
-      description: (values.description as string) || undefined,
-    });
+  const [formValues, setFormValues] = useState<Record<string, unknown>>(initialValues);
+
+  // Reset form when initialMeta changes (e.g., different entry selected)
+  useEffect(() => {
+    setFormValues(initialValues);
+  }, [initialValues]);
+
+  const handleSave = () => {
+    // SchemaForm returns tags as array directly
+    const tags = (formValues.tags as string[]) || [];
+    const filteredTags = tags.filter((tag) => tag.trim().length > 0);
+
+    const meta: DataEditable = {
+      title: ((formValues.title as string) || '').trim(),
+      description: ((formValues.description as string) || '').trim() || undefined,
+      category: ((formValues.category as string) || '').trim() || undefined,
+      tags: filteredTags.length > 0 ? filteredTags : undefined,
+    };
+
+    onSave(meta);
   };
 
-  const isValid = meta.title.trim();
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      onClose();
+    }
+  };
+
+  const canSave = ((formValues.title as string) || '').trim().length > 0;
 
   return (
     <div
       className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
       role="dialog"
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') onClose();
-      }}
+      onKeyDown={handleKeyDown}
     >
       <div className="bg-white rounded-lg p-6 w-full max-w-md" data-testid="properties-dialog">
         <h2 className="text-xl font-semibold mb-4">Edit Data Properties</h2>
 
         <div className="mb-4">
-          <SchemaForm
-            schema={dataEditableSchema}
-            values={{
-              title: meta.title,
-              description: meta.description || '',
-            }}
-            onChange={handleChange}
-          />
+          <SchemaForm schema={dataEditableSchema} values={formValues} onChange={setFormValues} />
         </div>
 
         <div className="flex justify-end gap-3">
@@ -52,8 +73,8 @@ export function DataPropertiesDialog({ initialMeta, isPending, onClose, onSave }
             Cancel
           </button>
           <button
-            onClick={() => onSave(meta)}
-            disabled={!isValid || isPending}
+            onClick={handleSave}
+            disabled={!canSave || isPending}
             className="px-4 py-2 bg-azure-04 text-white rounded hover:bg-azure-03 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             data-testid="save-properties-submit"
           >
