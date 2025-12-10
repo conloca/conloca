@@ -27,10 +27,11 @@ async function loadIndexHtml(): Promise<string> {
   return html;
 }
 
-export const GET: APIRoute = async ({ params }) => {
+export const GET: APIRoute = async ({ params, request }) => {
   // The path parameter is an array for [...path] routes
   const pathArray = params.path;
   const path = Array.isArray(pathArray) ? pathArray.join('/') : pathArray || '';
+  console.log('[spa-handler] Request for path:', path, 'params:', params, 'URL:', request.url);
 
   // For the root path or any path without an extension, serve the HTML
   if (!path || !path.includes('.')) {
@@ -50,6 +51,10 @@ export const GET: APIRoute = async ({ params }) => {
 
       // Inject the script at the top to ensure config is available first
       html = html.replace('<head>', `<head>${configScript}`);
+
+      // Log what JS files are referenced in the HTML
+      const scriptMatches = html.match(/<script[^>]+src="([^"]+)"/g);
+      console.log('[spa-handler] Script tags in HTML:', scriptMatches);
 
       return new Response(html, {
         headers: {
