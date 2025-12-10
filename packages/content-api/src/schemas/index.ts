@@ -33,15 +33,15 @@ export type PageMeta = z.infer<typeof pageMetaSchema>;
 // ===== Block Schemas =====
 
 /**
- * Schema for block metadata - editable fields only.
- * Blocks need category/tags because they all live in a single `blocks/` folder
- * and need metadata for organization and filtering.
+ * Base schema for block metadata - editable fields only.
+ * Used by CMS forms for dynamic form generation.
+ * Add .describe() for form field labels/hints.
  */
 export const blockEditableSchema = z.object({
-  title: z.string().describe('Display name'),
-  description: z.string().optional().describe('Brief description'),
-  category: z.string().optional().describe('Category for organization'),
-  tags: z.array(z.string()).optional().describe('Tags for filtering'),
+  title: z.string().describe('Display name for the block'),
+  description: z.string().optional().describe('Brief description of this block'),
+  category: z.string().optional().describe('Category for organizing blocks (e.g., headers, cta, content)'),
+  tags: z.array(z.string()).optional().describe('Tags for filtering and organization'),
 });
 
 export type BlockEditable = z.infer<typeof blockEditableSchema>;
@@ -61,13 +61,15 @@ export type BlockMeta = z.infer<typeof blockMetaSchema>;
 // ===== Data Schemas =====
 
 /**
- * Schema for data entry metadata - simpler than blocks.
- * Data entries are organized by collections (folders), so they don't need category/tags.
- * If you need additional fields, add them to your data schema instead.
+ * Base schema for data entry metadata - editable fields only.
+ * Used by CMS forms for dynamic form generation.
+ * Add .describe() for form field labels/hints.
  */
 export const dataEditableSchema = z.object({
-  title: z.string().describe('Display name'),
-  description: z.string().optional().describe('Brief description'),
+  title: z.string().describe('Display name for the entry'),
+  description: z.string().optional().describe('Brief description of this entry'),
+  category: z.string().optional().describe('Category for organizing entries'),
+  tags: z.array(z.string()).optional().describe('Tags for filtering and organization'),
 });
 
 export type DataEditable = z.infer<typeof dataEditableSchema>;
@@ -88,10 +90,7 @@ export const dataMetaSchema = dataEditableSchema.extend({
 
 export type DataMeta = z.infer<typeof dataMetaSchema>;
 
-// ===== Data Collection Schemas (DEPRECATED) =====
-// The CMS no longer uses schemas from this package at runtime.
-// Define your own schemas in your project and configure dataSchemasPath.
-// See: packages/content-api/src/schemas/data/index.ts for examples.
+// ===== Data Collection Schemas =====
+// Per-collection schemas for structured data editing
 
-// Note: Re-export removed to prevent accidental usage.
-// Users should use useDataSchema() from @conloca/cms-spa instead.
+export * from './data';

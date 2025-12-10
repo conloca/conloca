@@ -102,7 +102,7 @@ export default dataSchemas;
 export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
   const cmsRoute = options.route || '/__cms';
 
-  // Build SPA config once - will be injected via Vite define
+  // Build SPA config - stored on globalThis for route handler access
   const spaConfig = {
     basename: cmsRoute,
     apiBaseUrl: `${cmsRoute}/api`,
@@ -113,6 +113,9 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
     projectRoot: process.cwd(),
   };
 
+  // Store config in process.env for spa-handler access (survives module reloads)
+  process.env.__CONLOCA_SPA_CONFIG__ = JSON.stringify(spaConfig);
+
   return {
     name: '@conloca/astro-cms',
     hooks: {
@@ -120,14 +123,13 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
         // Only inject routes in dev mode
         if (command !== 'dev') return;
 
-        // Pass options via Vite define - available in route handlers via import.meta.env
+        // Pass options via Vite define for API routes
         updateConfig({
           vite: {
             define: {
               'import.meta.env.CONLOCA_CONTENT_ROOT': JSON.stringify(options.contentRoot),
               'import.meta.env.CONLOCA_CANVAS_DIR': JSON.stringify(options.canvasDir || './canvas'),
               'import.meta.env.CONLOCA_PUCK_CONFIG_PATH': JSON.stringify(options.puckConfigPath),
-              'import.meta.env.CONLOCA_SPA_CONFIG': JSON.stringify(spaConfig),
             },
             optimizeDeps: {
               // Exclude the puck config from optimization to avoid the outdated dep error
@@ -159,49 +161,18 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
                   if (id === `${cmsRoute}/content-listener.js`) {
                     return contentChangeListener();
                   }
-                  if (id === `${cmsRoute}/data-schemas-entry.js` && options.dataSchemasPath) {
-                    const absoluteSchemasPath = options.dataSchemasPath.startsWith('.')
-                      ? `/${options.dataSchemasPath.slice(2)}`
-                      : options.dataSchemasPath;
+                  if (id === `${cmsRoute}/data-schemas-entry.js`) {
+                    if (options.dataSchemasPath) {
+                      const absoluteSchemasPath = options.dataSchemasPath.startsWith('.')
+                        ? `/${options.dataSchemasPath.slice(2)}`
+                        : options.dataSchemasPath;
 
-                    return dataSchemasLoader(absoluteSchemasPath);
+                      return dataSchemasLoader(absoluteSchemasPath);
+                    }
+                    // Return empty module if no schemas path configured
+                    return 'export default {};';
                   }
                   return null;
-                },
-              },
-              {
-                name: 'conloca-virtual-module-server',
-                configureServer(server) {
-                  // Serve virtual modules through Vite's middleware
-                  // This must run BEFORE Astro's route handlers catch the request
-                  server.middlewares.use(async (req, res, next) => {
-                    const url = req.url;
-                    if (!url) return next();
-
-                    // Check if this is a virtual module request
-                    const virtualModules = [
-                      `${cmsRoute}/puck-entry.js`,
-                      `${cmsRoute}/content-listener.js`,
-                      `${cmsRoute}/data-schemas-entry.js`,
-                    ];
-
-                    const matchedModule = virtualModules.find((m) => url === m || url.startsWith(m + '?'));
-                    if (!matchedModule) return next();
-
-                    try {
-                      // Transform and serve the virtual module through Vite
-                      const result = await server.transformRequest(matchedModule);
-                      if (result) {
-                        res.setHeader('Content-Type', 'application/javascript');
-                        res.setHeader('Cache-Control', 'no-cache');
-                        res.end(result.code);
-                        return;
-                      }
-                    } catch (err) {
-                      console.error(`[Conloca] Error transforming virtual module ${matchedModule}:`, err);
-                    }
-                    next();
-                  });
                 },
               },
               {

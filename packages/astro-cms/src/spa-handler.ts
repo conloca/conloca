@@ -12,6 +12,7 @@ const cmsSpaPath = dirname(require.resolve('@conloca/cms-spa/package.json'));
 // Extended config for internal use
 interface SpaHandlerConfig extends UIConfig {
   dataSchemasPath?: string;
+  projectRoot?: string;
 }
 
 const defaultConfig: SpaHandlerConfig = {
@@ -19,11 +20,17 @@ const defaultConfig: SpaHandlerConfig = {
   apiBaseUrl: '/__cms/api',
 };
 
-// Config is injected via Vite define in plugin-spa.ts
+// Config is stored in process.env by plugin-spa.ts
 function getConfig(): SpaHandlerConfig {
-  // Vite replaces import.meta.env.CONLOCA_SPA_CONFIG at build/dev time
-  const injectedConfig = import.meta.env.CONLOCA_SPA_CONFIG as SpaHandlerConfig | undefined;
-  return injectedConfig ?? defaultConfig;
+  const envConfig = process.env.__CONLOCA_SPA_CONFIG__;
+  if (envConfig) {
+    try {
+      return JSON.parse(envConfig) as SpaHandlerConfig;
+    } catch {
+      // Fall through to default
+    }
+  }
+  return defaultConfig;
 }
 
 // Load the HTML at runtime
@@ -60,7 +67,7 @@ export const GET: APIRoute = async ({ params }) => {
           // Configure UI with plugin options
           window.__UI_CONFIG__ = ${JSON.stringify(uiConfig)};
         </script>
-        ${uiConfig.dataSchemasPath ? `<script type="module" src="${uiConfig.basename}/data-schemas-entry.js"></script>` : ''}
+        <script type="module" src="${uiConfig.basename}/data-schemas-entry.js"></script>
         <script type="module" src="${uiConfig.basename}/puck-entry.js"></script>
         <script type="module" src="${uiConfig.basename}/content-listener.js"></script>
       `;
