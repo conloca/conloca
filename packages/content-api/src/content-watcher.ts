@@ -29,8 +29,10 @@ export function createContentWatchHandlers(
   ws: WebSocketSender,
 ) {
   const handleFileChange = async (file: string, action: 'update' | 'create' | 'delete') => {
-    // Only process content files (.mdx, .vxjson)
-    if (!file.endsWith('.mdx') && !file.endsWith('.vxjson')) {
+    // Only process content files (.mdx, .vxjson, and .json in data/ directory)
+    const isContentFile = file.endsWith('.mdx') || file.endsWith('.vxjson');
+    const isDataFile = file.endsWith('.json') && file.includes('/data/');
+    if (!isContentFile && !isDataFile) {
       return;
     }
 
