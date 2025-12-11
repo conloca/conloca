@@ -16,11 +16,12 @@ interface DataEntryCardProps {
 }
 
 /**
- * Generates a VSCode URI to open a file.
+ * Generates a VSCode URI to open a data file.
  * Uses vscode:// protocol which works when VSCode is installed.
+ * Note: Data files don't have locale suffix (unlike pages/blocks).
  */
-function getEditorLink(projectRoot: string, collection: string, name: string, locale: string): string {
-  const filePath = `${projectRoot}/content/data/${collection}/${name}.${locale}.json`;
+function getEditorLink(projectRoot: string, collection: string, name: string): string {
+  const filePath = `${projectRoot}/content/data/${collection}/${name}.json`;
   return `vscode://file${filePath}`;
 }
 
@@ -42,9 +43,7 @@ export function DataEntryCard({
   useClickOutside(menuRef, closeMenu, isMenuOpen);
 
   const config = getUIConfig();
-  const firstLocale = locales[0];
-  const editorLink =
-    config.projectRoot && name && firstLocale ? getEditorLink(config.projectRoot, collection, name, firstLocale) : null;
+  const editorLink = config.projectRoot && name ? getEditorLink(config.projectRoot, collection, name) : null;
 
   return (
     <div className="bg-white border border-grey-09 rounded p-4 hover:border-azure-04 transition-colors">
