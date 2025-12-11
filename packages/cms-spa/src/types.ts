@@ -1,19 +1,5 @@
 import type { BlockEditable, DataEditable } from '@conloca/content-api';
 
-export interface ContentStats {
-  totalPages?: number;
-  totalBlocks?: number;
-  pagesByLocale?: Record<string, number>;
-  blocksByLocale?: Record<string, number>;
-}
-
-export interface RecentChange {
-  id: string;
-  message: string;
-  author: string;
-  date: Date;
-}
-
 export interface Page {
   id: string;
   title: string;
