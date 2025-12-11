@@ -488,16 +488,17 @@ export class FileSystemContentAPI implements ContentAPI {
           parsedData = VXJSON.parse4KB(buffer, bytesRead);
         }
       } else if (parts[0] === 'data') {
-        // Data collection entry: data/{collection}/{name}.{locale}.json
+        // Data collection entry: data/{collection}/{name}.json (no locale)
         kind = 'data';
         collection = parts[1];
 
         const filename = parts[parts.length - 1];
-        // Extract name and locale from filename: testimonial.en.json -> name: testimonial, locale: en
-        const match = filename.match(/^(.+)\.(\w+)\.json$/);
+        // Extract name from filename: testimonial.json -> name: testimonial
+        // Data files don't have locales - use 'default' internally
+        const match = filename.match(/^(.+)\.json$/);
         if (match) {
           name = match[1];
-          locale = match[2];
+          locale = 'default';
         }
 
         // Parse JSON to get ID, metadata, and data
@@ -815,7 +816,8 @@ export class FileSystemContentAPI implements ContentAPI {
       return join(this.absoluteContentRoot, 'blocks', manifest.collection, `${name}.${locale}.${ext}`);
     }
     if (manifest.kind === 'data') {
-      return join(this.absoluteContentRoot, 'data', manifest.collection, `${name}.${locale}.json`);
+      // Data files don't have locale in filename
+      return join(this.absoluteContentRoot, 'data', manifest.collection, `${name}.json`);
     }
     if (manifest.kind === 'page' && pathname && manifest.site) {
       // For pages, derive path from pathname
@@ -844,16 +846,16 @@ export class FileSystemContentAPI implements ContentAPI {
     // Match locale.ext pattern at the end
     const filename = parts[parts.length - 1];
 
-    // Handle data files: data/{collection}/{name}.{locale}.json
+    // Handle data files: data/{collection}/{name}.json (no locale)
     if (parts[0] === 'data' && parts.length === 3) {
-      const dataMatch = filename.match(/^(.+)\.([a-z]{2}(?:-[A-Z]{2})?)\.json$/);
+      const dataMatch = filename.match(/^(.+)\.json$/);
       if (!dataMatch) return null;
-      const [, name, locale] = dataMatch;
+      const [, name] = dataMatch;
       return {
         kind: 'data',
         collection: parts[1],
         name,
-        locale,
+        locale: 'default', // Data files don't have locale
       };
     }
 
