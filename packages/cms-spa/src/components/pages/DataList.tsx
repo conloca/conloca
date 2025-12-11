@@ -156,20 +156,24 @@ export function DataList({ dataSchemas }: DataListProps) {
     const title = ((values.title as string) || '').trim();
     if (!title || !collection) return;
 
+    const name = slugify(title) || 'untitled';
+    const description = ((values.description as string) || '').trim() || undefined;
+
     const result = await createContent.mutateAsync({
       kind: 'data',
       collection,
       type: 'json',
-      name: slugify(title) || 'untitled',
+      name,
       meta: {
         title,
-        description: ((values.description as string) || '').trim() || undefined,
+        description,
       },
+      // Data entries use 'default' locale (not localized like pages/blocks)
       locales: {
-        en: {
+        default: {
           meta: {
             title,
-            description: ((values.description as string) || '').trim() || undefined,
+            description,
           },
           content: {
             data: {},
@@ -178,9 +182,17 @@ export function DataList({ dataSchemas }: DataListProps) {
       },
     });
 
-    if (result.success) {
+    if (result.success && result.id) {
       closeCreateDialog();
-    } else {
+      // Auto-open the editor so user can fill in schema fields
+      openEditDataDialog({
+        entryId: result.id,
+        entryTitle: title,
+        collection,
+        locale: 'default',
+        name,
+      });
+    } else if (!result.success) {
       const errorMessage = result.error?.message || 'Failed to create data entry';
       showError(errorMessage, result.error);
     }
