@@ -13,7 +13,7 @@ describe('Data Collections - DataIndex', () => {
   let dataIndex: DataIndex;
 
   beforeEach(() => {
-    dataIndex = new DataIndex(['en', 'nl', 'de']);
+    dataIndex = new DataIndex();
   });
 
   describe('addContent', () => {

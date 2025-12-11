@@ -34,7 +34,7 @@ export class ContentIndex {
     this.blockIndex = new BlockIndex(sitesConfig.globalLocales);
 
     // Initialize data index
-    this.dataIndex = new DataIndex(sitesConfig.globalLocales);
+    this.dataIndex = new DataIndex();
 
     // Initialize V8-optimized site indexes
     this.siteIndexes = mapSiteNames(sitesConfig, (siteName) => {

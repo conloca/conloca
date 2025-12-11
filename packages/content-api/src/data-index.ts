@@ -18,11 +18,6 @@ export class DataIndex {
   // Collections used by data
   readonly collections: Set<string> = new Set();
 
-  constructor(locales: string[]) {
-    // Nothing to initialize here - structures created on demand
-    // locales parameter kept for future use
-  }
-
   /**
    * Add or update content in the index
    * Merges manifest locales and updates content cache if provided
