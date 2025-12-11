@@ -3,7 +3,6 @@ import { CMSDashboard } from './components/CMSDashboard';
 import { CMSLayout } from './components/CMSLayout';
 import { BlockEditor } from './components/editor/BlockEditor';
 import { PageEditorWrapper } from './components/editor/PageEditorWrapper';
-import { TestEditor } from './components/editor/TestEditor';
 import { BlockList } from './components/pages/BlockList';
 import { DataList } from './components/pages/DataList';
 import { PageList } from './components/pages/PageList';
@@ -25,7 +24,6 @@ export default function App() {
           <Route path=":id" element={<BlockEditor />} />
         </Route>
         <Route path="data" element={<DataList dataSchemas={dataSchemas} />} />
-        <Route path="test-editor" element={<TestEditor puckConfig={puckConfig} />} />
       </Route>
       <Route path="/pages/:id" element={<PageEditorWrapper puckConfig={puckConfig} />} />
     </Routes>
