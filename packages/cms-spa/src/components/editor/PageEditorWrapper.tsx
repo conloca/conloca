@@ -82,7 +82,7 @@ export function PageEditorWrapper({ puckConfig }: PageEditorWrapperProps) {
       categories: {
         ...existingCategories,
         blocks: {
-          title: 'Content Blocks',
+          title: 'Blocks',
           components: blockCategoryList,
         },
       },
