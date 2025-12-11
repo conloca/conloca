@@ -21,6 +21,7 @@
     "src/index.ts",
     "src/types.ts",
     "src/data-schemas.ts",
+    "src/puck-config.ts",
     "src/mock-puck-config.tsx",
     "src/ui-config.ts",
     "src/components/puck/index.ts",

@@ -1,4 +1,5 @@
 import { type FileHandle, mkdir, open, readdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { xxh3 } from '@node-rs/xxhash';
 import matter from 'gray-matter';
 import { dirname, join, resolve } from 'path';
 import sortKeys from 'sort-keys';
@@ -56,7 +57,7 @@ interface ReindexResult {
   errors?: number;
   // Return manifests of updated locales (without content)
   updated: LocalizedManifest[];
-  deleted?: Array<{ id: string; locale: string; kind: 'page' | 'block' }>;
+  deleted?: Array<{ id: string; locale: string; kind: 'page' | 'block' | 'data' }>;
 }
 
 import { VXJSON } from './vxjson';
@@ -829,7 +830,7 @@ export class FileSystemContentAPI implements ContentAPI {
    * Returns null if the path doesn't match expected patterns
    */
   parseFilePath(filePath: string): {
-    kind: 'page' | 'block';
+    kind: 'page' | 'block' | 'data';
     site?: string;
     collection: string;
     pathname?: string;
@@ -842,6 +843,21 @@ export class FileSystemContentAPI implements ContentAPI {
 
     // Match locale.ext pattern at the end
     const filename = parts[parts.length - 1];
+
+    // Handle data files: data/{collection}/{name}.{locale}.json
+    if (parts[0] === 'data' && parts.length === 3) {
+      const dataMatch = filename.match(/^(.+)\.([a-z]{2}(?:-[A-Z]{2})?)\.json$/);
+      if (!dataMatch) return null;
+      const [, name, locale] = dataMatch;
+      return {
+        kind: 'data',
+        collection: parts[1],
+        name,
+        locale,
+      };
+    }
+
+    // Match locale.ext pattern for non-data files (vxjson, mdx)
     const match = filename.match(/^(.+)\.([a-z]{2}(?:-[A-Z]{2})?)\.(?:vxjson|mdx)$/);
     if (!match) return null;
 
@@ -1902,7 +1918,7 @@ export class FileSystemContentAPI implements ContentAPI {
     let errors = 0;
     const filesToIndex: string[] = [];
     const updated: LocalizedManifest[] = [];
-    const deleted: Array<{ id: string; locale: string; kind: 'page' | 'block' }> = [];
+    const deleted: Array<{ id: string; locale: string; kind: 'page' | 'block' | 'data' }> = [];
 
     // Check each file
     for (const filePath of filesToProcess) {
@@ -1918,6 +1934,8 @@ export class FileSystemContentAPI implements ContentAPI {
             let manifest: ContentManifest | null = null;
             if (parsed.kind === 'block' && parsed.name) {
               manifest = this.contentIndex.getBlockByName(parsed.collection, parsed.name, parsed.locale);
+            } else if (parsed.kind === 'data' && parsed.name) {
+              manifest = this.contentIndex.getDataByName(parsed.collection, parsed.name, parsed.locale);
             } else if (parsed.kind === 'page' && parsed.site && parsed.pathname) {
               manifest = this.contentIndex.getByPathname(parsed.site, parsed.pathname, parsed.locale);
             }
@@ -1962,6 +1980,10 @@ export class FileSystemContentAPI implements ContentAPI {
         // Check site index by pathname
         const manifest = this.contentIndex.getByPathname(parsed.site, parsed.pathname, parsed.locale);
         isIndexed = !!manifest;
+      } else if (parsed.kind === 'data' && parsed.name) {
+        // Check data index by name
+        const manifest = this.contentIndex.getDataByName(parsed.collection, parsed.name, parsed.locale);
+        isIndexed = !!manifest;
       }
 
       if (isIndexed) {
@@ -1971,10 +1993,14 @@ export class FileSystemContentAPI implements ContentAPI {
         } else {
           // For specific paths, check if the file has changed
           const fileStats = await readFile(filePath);
-          const currentManifest =
-            parsed.kind === 'block' && parsed.name
-              ? this.contentIndex.getBlockByName(parsed.collection, parsed.name, parsed.locale)
-              : this.contentIndex.getByPathname(parsed.site!, parsed.pathname!, parsed.locale);
+          let currentManifest: ContentManifest | null = null;
+          if (parsed.kind === 'block' && parsed.name) {
+            currentManifest = this.contentIndex.getBlockByName(parsed.collection, parsed.name, parsed.locale);
+          } else if (parsed.kind === 'data' && parsed.name) {
+            currentManifest = this.contentIndex.getDataByName(parsed.collection, parsed.name, parsed.locale);
+          } else if (parsed.kind === 'page' && parsed.site && parsed.pathname) {
+            currentManifest = this.contentIndex.getByPathname(parsed.site, parsed.pathname, parsed.locale);
+          }
 
           if (currentManifest) {
             // Calculate current file etag
@@ -1995,6 +2021,9 @@ export class FileSystemContentAPI implements ContentAPI {
               currentEtag = etagResult.contentEtag
                 ? `${etagResult.metaEtag}.${etagResult.contentEtag}`
                 : etagResult.metaEtag;
+            } else if (filePath.endsWith('.json')) {
+              // For JSON data files, use content hash as etag
+              currentEtag = xxh3.xxh64(buffer).toString(16);
             } else {
               // Unknown file type, skip
               filesSkipped++;

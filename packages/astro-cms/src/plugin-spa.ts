@@ -46,24 +46,23 @@ const puckConfigLoader = (absolutePuckPath: string) => {
 // Import and execute React refresh preamble first (from @vitejs/plugin-react)
 ${preambleCode}
 
+// Import the setPuckConfig function from cms-spa
+import { setPuckConfig } from '@conloca/cms-spa/puck-config';
+
 // Now dynamically import the config after preamble is ready
 const puckConfigPromise = import('${absolutePuckPath}');
 
 // Handle the initial load
 puckConfigPromise.then(module => {
   const puckConfig = module.default;
-  window.__PUCK_CONFIG__ = puckConfig;
-  
-  // Notify app of initial config
-  window.dispatchEvent(new CustomEvent('puck-config-loaded', { detail: puckConfig }));
-  
+  setPuckConfig(puckConfig);
+
   // Hook into React Fast Refresh to detect component updates
   if (window.__registerBeforePerformReactRefresh) {
     window.__registerBeforePerformReactRefresh(async () => {
       // Re-import the config module to get updated components
       const newModule = await import('${absolutePuckPath}');
-      window.__PUCK_CONFIG__ = newModule.default;
-      window.dispatchEvent(new CustomEvent('puck-config-updated', { detail: newModule.default }));
+      setPuckConfig(newModule.default);
     });
   }
 });
@@ -81,20 +80,18 @@ export default puckConfigPromise.then(m => m.default);
 // Template for the data schemas loader virtual module
 const dataSchemasLoader = (absoluteSchemasPath: string) => {
   return `
-// Import directly from data-schemas to avoid loading MDXContent which triggers React Refresh errors
+// Import setDataSchemas which handles subscription notifications
 import { setDataSchemas } from '@conloca/cms-spa/data-schemas';
 import { dataSchemas } from '${absoluteSchemasPath}';
 
-// Register the schemas with the CMS and notify React components
+// Register the schemas - subscribers are notified automatically
 setDataSchemas(dataSchemas);
-window.dispatchEvent(new CustomEvent('data-schemas-loaded', { detail: dataSchemas }));
 
 // Accept HMR for this module
 if (import.meta.hot) {
   import.meta.hot.accept('${absoluteSchemasPath}', async (newModule) => {
     if (newModule?.dataSchemas) {
       setDataSchemas(newModule.dataSchemas);
-      window.dispatchEvent(new CustomEvent('data-schemas-updated', { detail: newModule.dataSchemas }));
     }
   });
 }

@@ -18,6 +18,11 @@
       "import": "./dist/data-schemas.js",
       "default": "./dist/data-schemas.js"
     },
+    "./puck-config": {
+      "types": "./dist/puck-config.d.ts",
+      "import": "./dist/puck-config.js",
+      "default": "./dist/puck-config.js"
+    },
     "./dist/spa/*": "./dist/spa/*"
   },
   "files": [
