@@ -75,9 +75,14 @@ export function DataList({ dataSchemas }: DataListProps) {
   // Fetch data entries
   const { data, isLoading, error } = useData(selectedCollection === 'all' ? undefined : selectedCollection);
 
-  // Fetch available collections
+  // Fetch available collections from filesystem and merge with schema-defined collections
   const { data: collectionsData } = useDataCollections();
-  const collections = collectionsData ?? [];
+  const collections = useMemo(() => {
+    const filesystemCollections = collectionsData ?? [];
+    const schemaCollections = Object.keys(dataSchemas);
+    // Merge and dedupe - schema collections should appear even without data files
+    return [...new Set([...filesystemCollections, ...schemaCollections])].sort();
+  }, [collectionsData, dataSchemas]);
 
   // Transform entries into DataEntry objects
   const entries = useMemo<DataEntry[]>(() => {
@@ -364,7 +369,6 @@ export function DataList({ dataSchemas }: DataListProps) {
               title={entry.title}
               description={entry.description}
               collection={entry.collection}
-              locales={entry.locales}
               name={entry.name}
               onEditData={() => handleEditData(entry.id)}
               onEditProperties={() => handleEditProperties(entry.id)}
