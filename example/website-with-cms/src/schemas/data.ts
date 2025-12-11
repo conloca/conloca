@@ -39,8 +39,9 @@ export const dataSchemas = {
    */
   settings: z.object({
     siteName: z.string().optional().describe('Site name'),
-    tagline: z.string().optional().describe('Site tagline'),
-    analyticsId: z.string().optional().describe('Google Analytics ID'),
-    enableComments: z.boolean().optional().describe('Enable comments on posts'),
+    contactEmail: z.string().email().optional().describe('Contact email address'),
+    twitterUrl: z.string().url().optional().describe('Twitter profile URL'),
+    githubUrl: z.string().url().optional().describe('GitHub profile URL'),
+    linkedinUrl: z.string().url().optional().describe('LinkedIn profile URL'),
   }),
 };
