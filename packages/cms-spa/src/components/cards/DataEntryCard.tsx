@@ -8,7 +8,6 @@ interface DataEntryCardProps {
   title: string;
   description?: string;
   collection: string;
-  locales: string[];
   name?: string;
   onEditData: () => void;
   onEditProperties: () => void;
@@ -30,7 +29,6 @@ export function DataEntryCard({
   title,
   description,
   collection,
-  locales,
   name,
   onEditData,
   onEditProperties,
@@ -63,15 +61,7 @@ export function DataEntryCard({
         </p>
       )}
 
-      <div className="flex items-center justify-between">
-        <div className="flex gap-1">
-          {locales.map((locale) => (
-            <span key={locale} data-testid="locale-indicator" className="px-2 py-1 text-xs bg-grey-11 rounded">
-              {locale}
-            </span>
-          ))}
-        </div>
-
+      <div className="flex items-center justify-end">
         <div className="flex gap-2 relative">
           <button onClick={onEditData} className="p-1 hover:bg-grey-11 rounded transition-colors" title="Edit data">
             <Edit2 className="h-4 w-4 text-azure-04" />
