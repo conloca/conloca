@@ -43,6 +43,12 @@
       "types": "./dist/api/content-api-handler.d.ts",
       "import": "./dist/api/content-api-handler.js",
       "default": "./dist/api/content-api-handler.js"
+    },
+    "./collections": {
+      "development": "./src/collections.ts",
+      "types": "./dist/collections.d.ts",
+      "import": "./dist/collections.js",
+      "default": "./dist/collections.js"
     }
   },
   "scripts": {
@@ -52,6 +58,7 @@
   },
   "dependencies": {
     "@conloca/cms-spa": "workspace:*",
+    "@conloca/content-api": "workspace:*",
     "@conloca/content-api-client": "workspace:*",
     "@conloca/mdx": "workspace:*",
     "@measured/puck": "^0.20.2",
@@ -59,7 +66,8 @@
   },
   "peerDependencies": {
     "react": "19.2.0",
-    "react-dom": "19.2.0"
+    "react-dom": "19.2.0",
+    "zod": "^3.0.0"
   },
   "devDependencies": {
     "astro": "5.15.3"

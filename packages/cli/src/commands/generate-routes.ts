@@ -4,19 +4,20 @@ import { join, resolve } from 'node:path';
 function getSlugRouteTemplate(siteName = 'default') {
   return `---
 import { Render } from '@measured/puck';
-import config from '../puck.config';
 import { createContentAPI } from '@conloca/content-api/node';
+import config from '../puck.config';
 
+// SSR mode for dynamic content loading
 export const prerender = false;
 
 export function getStaticPaths() {
   return [];
 }
 
-  const slugParam = (Astro.params as any).slug;
-  const slug = Array.isArray(slugParam) ? slugParam.join('/') : (slugParam || 'index');
+const slugParam = (Astro.params as any).slug;
+const slug = Array.isArray(slugParam) ? slugParam.join('/') : (slugParam || 'index');
 const locale = 'en';
-  const pathname = slug === 'index' ? '/' : (slug.startsWith('/') ? slug : '/' + slug);
+const pathname = slug === 'index' ? '/' : (slug.startsWith('/') ? slug : '/' + slug);
 
 const api = await createContentAPI({ contentRoot: './content' });
 
@@ -24,8 +25,8 @@ let puckData;
 let manifest;
 
 try {
-    const site = (import.meta.env.SITE_NAME ?? import.meta.env.PUBLIC_SITE_NAME ?? '${siteName}') as string;
-    const siteApi = api.getSite(site);
+  const site = (import.meta.env.SITE_NAME ?? import.meta.env.PUBLIC_SITE_NAME ?? '${siteName}') as string;
+  const siteApi = api.getSite(site);
   const found = siteApi?.getByPathname(pathname, locale) || siteApi?.getByPathname(pathname);
   if (!found) {
     return Astro.redirect('/404');
@@ -55,6 +56,17 @@ try {
     <Render config={config} data={puckData} />
   </body>
 </html>
+`;
+}
+
+function getContentConfigTemplate(siteName = 'default') {
+  return `import { createConlocaCollections } from '@conloca/astro-cms/collections';
+
+// Uses default pages + blocks collections with Zod schemas
+export const { collections } = await createConlocaCollections({
+  contentRoot: './content',
+  site: '${siteName}',
+});
 `;
 }
 
@@ -101,7 +113,7 @@ const puckConfig: Config<Components> = {
 export default puckConfig;
 `;
 
-export async function generateRoutes(projectPath: string = '.', siteName: string = 'default') {
+export async function generateRoutes(projectPath = '.', siteName = 'default') {
   try {
     const absolutePath = resolve(projectPath);
 
@@ -109,26 +121,37 @@ export async function generateRoutes(projectPath: string = '.', siteName: string
     const pagesDir = join(absolutePath, 'src', 'pages');
     await mkdir(pagesDir, { recursive: true });
 
-  // Write the [...slug].astro file
-  const slugFilePath = join(pagesDir, '[...slug].astro');
-  await writeFile(slugFilePath, getSlugRouteTemplate(siteName), 'utf-8');
-  console.log(`✅ Created dynamic route: ${slugFilePath} (site: ${siteName})`);
+    // Write the [...slug].astro file
+    const slugFilePath = join(pagesDir, '[...slug].astro');
+    await writeFile(slugFilePath, getSlugRouteTemplate(siteName), 'utf-8');
+    console.log(`✅ Created dynamic route: ${slugFilePath}`);
 
     // Check if puck.config.tsx exists, if not create it
     const puckConfigPath = join(absolutePath, 'src', 'puck.config.tsx');
     try {
       await readFile(puckConfigPath);
-      console.log(`ℹ️  Puck config already exists: ${puckConfigPath}`);
+      console.log(`i  Puck config already exists: ${puckConfigPath}`);
     } catch {
       await writeFile(puckConfigPath, PUCK_CONFIG_TEMPLATE, 'utf-8');
       console.log(`✅ Created Puck config: ${puckConfigPath}`);
+    }
+
+    // Check if content.config.ts exists, if not create it
+    const contentConfigPath = join(absolutePath, 'src', 'content.config.ts');
+    try {
+      await readFile(contentConfigPath);
+      console.log(`i  Content config already exists: ${contentConfigPath}`);
+    } catch {
+      await writeFile(contentConfigPath, getContentConfigTemplate(siteName), 'utf-8');
+      console.log(`✅ Created content config: ${contentConfigPath}`);
     }
 
     console.log('\\n✨ Route generation complete!');
     console.log('\\nNext steps:');
     console.log('1. Customize the [...slug].astro file to add your layout');
     console.log('2. Add more component types to your puck.config.tsx');
-    console.log('3. Start your dev server and visit /__cms to edit pages');
+    console.log('3. Add custom meta fields to your content.config.ts');
+    console.log('4. Start your dev server and visit /__cms to edit pages');
   } catch (error) {
     console.error('❌ Error generating routes:', error);
     throw error;

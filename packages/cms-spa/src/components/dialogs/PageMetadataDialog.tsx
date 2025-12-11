@@ -1,8 +1,10 @@
+import { pageEditableSchema } from '@conloca/content-api';
 import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import type React from 'react';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { PageMetadata } from '../../types';
+import { SchemaForm } from '../forms/SchemaForm';
 
 interface PageMetadataDialogProps {
   open: boolean;
@@ -12,16 +14,43 @@ interface PageMetadataDialogProps {
 }
 
 export function PageMetadataDialog({ open, onOpenChange, page, onSave }: PageMetadataDialogProps) {
-  const [metadata, setMetadata] = useState<PageMetadata>(page);
+  // Convert PageMetadata to form values (flatten dates to strings)
+  const initialValues = useMemo(
+    () => ({
+      title: page.title,
+      description: page.description,
+      pathname: page.pathname,
+      publishAt: page.publishDate?.toISOString().slice(0, 16) || '',
+      unpublishAt: page.unpublishDate?.toISOString().slice(0, 16) || '',
+      robots: page.robots || '',
+      canonical: page.canonical || '',
+    }),
+    [page],
+  );
+
+  const [formValues, setFormValues] = useState<Record<string, unknown>>(initialValues);
+
+  // Reset form when page changes
+  useEffect(() => {
+    setFormValues(initialValues);
+  }, [initialValues]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Convert form values back to PageMetadata
+    const metadata: PageMetadata = {
+      title: (formValues.title as string) || '',
+      description: (formValues.description as string) || '',
+      pathname: (formValues.pathname as string) || '',
+      publishDate: formValues.publishAt ? new Date(formValues.publishAt as string) : null,
+      unpublishDate: formValues.unpublishAt ? new Date(formValues.unpublishAt as string) : null,
+      robots: (formValues.robots as string) || undefined,
+      canonical: (formValues.canonical as string) || undefined,
+    };
+
     onSave?.(metadata);
     onOpenChange?.(false);
-  };
-
-  const updateField = <K extends keyof PageMetadata>(field: K, value: PageMetadata[K]) => {
-    setMetadata((prev) => ({ ...prev, [field]: value }));
   };
 
   return (
@@ -36,127 +65,10 @@ export function PageMetadataDialog({ open, onOpenChange, page, onSave }: PageMet
             </Dialog.Close>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* SEO Section */}
-            <div>
-              <h3 className="text-sm font-medium mb-3">SEO</h3>
-              <div className="space-y-4">
-                <div>
-                  <label htmlFor="title" className="block text-sm font-medium mb-1">
-                    Title
-                  </label>
-                  <input
-                    id="title"
-                    type="text"
-                    value={metadata.title}
-                    onChange={(e) => updateField('title', e.target.value)}
-                    className="w-full px-3 py-2 border border-grey-09 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
-                  />
-                </div>
+          <form onSubmit={handleSubmit}>
+            <SchemaForm schema={pageEditableSchema} values={formValues} onChange={setFormValues} />
 
-                <div>
-                  <label htmlFor="description" className="block text-sm font-medium mb-1">
-                    Description
-                  </label>
-                  <textarea
-                    id="description"
-                    value={metadata.description}
-                    onChange={(e) => updateField('description', e.target.value)}
-                    rows={3}
-                    className="w-full px-3 py-2 border border-grey-09 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* URL Management */}
-            <div>
-              <h3 className="text-sm font-medium mb-3">URL Management</h3>
-              <div className="space-y-4">
-                <div>
-                  <label htmlFor="pathname" className="block text-sm font-medium mb-1">
-                    URL Path
-                  </label>
-                  <input
-                    id="pathname"
-                    type="text"
-                    value={metadata.pathname}
-                    onChange={(e) => updateField('pathname', e.target.value)}
-                    className="w-full px-3 py-2 border border-grey-09 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
-                  />
-                  <p className="text-xs text-grey-04 mt-1">
-                    Previous paths will automatically redirect to the new path
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Publishing Control */}
-            <div>
-              <h3 className="text-sm font-medium mb-3">Publishing Control</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="publishDate" className="block text-sm font-medium mb-1">
-                    Publish Date
-                  </label>
-                  <input
-                    id="publishDate"
-                    type="datetime-local"
-                    value={metadata.publishDate?.toISOString().slice(0, 16) || ''}
-                    onChange={(e) => updateField('publishDate', e.target.value ? new Date(e.target.value) : null)}
-                    className="w-full px-3 py-2 border border-grey-09 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="unpublishDate" className="block text-sm font-medium mb-1">
-                    Unpublish Date
-                  </label>
-                  <input
-                    id="unpublishDate"
-                    type="datetime-local"
-                    value={metadata.unpublishDate?.toISOString().slice(0, 16) || ''}
-                    onChange={(e) => updateField('unpublishDate', e.target.value ? new Date(e.target.value) : null)}
-                    className="w-full px-3 py-2 border border-grey-09 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Advanced */}
-            <div>
-              <h3 className="text-sm font-medium mb-3">Advanced</h3>
-              <div className="space-y-4">
-                <div>
-                  <label htmlFor="robots" className="block text-sm font-medium mb-1">
-                    Robots Meta
-                  </label>
-                  <input
-                    id="robots"
-                    type="text"
-                    value={metadata.robots || ''}
-                    onChange={(e) => updateField('robots', e.target.value)}
-                    placeholder="index, follow"
-                    className="w-full px-3 py-2 border border-grey-09 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="canonical" className="block text-sm font-medium mb-1">
-                    Canonical URL
-                  </label>
-                  <input
-                    id="canonical"
-                    type="url"
-                    value={metadata.canonical || ''}
-                    onChange={(e) => updateField('canonical', e.target.value)}
-                    className="w-full px-3 py-2 border border-grey-09 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="flex gap-2 pt-4">
+            <div className="flex gap-2 pt-6">
               <button
                 type="submit"
                 className="flex-1 px-4 py-2 bg-azure-04 text-white rounded hover:bg-azure-03 transition-colors"

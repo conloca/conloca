@@ -13,6 +13,7 @@ import { useNavigate } from 'react-router-dom';
 import { useErrorModal } from '../../hooks';
 import type { Block } from '../../types';
 import { slugify } from '../../utils/slugify';
+import { BlockPropertiesDialog } from '../dialogs/BlockPropertiesDialog';
 import { DeleteConfirmDialog } from '../dialogs/DeleteConfirmDialog';
 import { ErrorModal } from '../dialogs/ErrorModal';
 
@@ -45,6 +46,7 @@ export function BlockList() {
     currentMeta: {
       title: string;
       description?: string;
+      category?: string;
       tags?: string[];
     };
   }>({
@@ -54,10 +56,6 @@ export function BlockList() {
     etag: '',
     currentMeta: { title: '' },
   });
-  const [editedTitle, setEditedTitle] = useState('');
-  const [editedDescription, setEditedDescription] = useState('');
-  const [editedCategory, setEditedCategory] = useState('');
-  const [editedTags, setEditedTags] = useState('');
 
   // Dropdown menu state
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -382,23 +380,18 @@ export function BlockList() {
       etag: block.etag,
       currentMeta: meta,
     });
-    setEditedTitle(meta.title);
-    setEditedDescription(meta.description || '');
-    setEditedCategory(meta.category || '');
-    setEditedTags(meta.tags?.join(', ') || '');
   };
 
-  const handleSaveProperties = async () => {
-    if (!propertiesDialog.blockId || !editedTitle.trim()) return;
+  const handleSaveProperties = async (meta: {
+    title: string;
+    description?: string;
+    category?: string;
+    tags?: string[];
+  }) => {
+    if (!propertiesDialog.blockId || !meta.title.trim()) return;
 
     const block = blocks.find((b) => b.id === propertiesDialog.blockId);
     const locale = block?.locales[0] || 'en';
-
-    // Parse tags from comma-separated string
-    const tags = editedTags
-      .split(',')
-      .map((tag) => tag.trim())
-      .filter((tag) => tag.length > 0);
 
     try {
       const result = await updateLocalized.mutateAsync({
@@ -406,17 +399,17 @@ export function BlockList() {
         locale,
         data: {
           meta: {
-            title: editedTitle.trim(),
-            description: editedDescription.trim() || undefined,
-            category: editedCategory.trim() || undefined,
-            tags: tags.length > 0 ? tags : undefined,
+            title: meta.title,
+            description: meta.description,
+            category: meta.category,
+            tags: meta.tags,
           },
         },
         etag: propertiesDialog.etag,
       });
 
       if (result.success) {
-        // Close dialog and show success
+        // Close dialog - list will refresh automatically due to query invalidation
         setPropertiesDialog({
           isOpen: false,
           blockId: '',
@@ -424,11 +417,6 @@ export function BlockList() {
           etag: '',
           currentMeta: { title: '' },
         });
-        setEditedTitle('');
-        setEditedDescription('');
-        setEditedCategory('');
-        setEditedTags('');
-        // The list will refresh automatically due to query invalidation
       } else {
         // Handle save failure
         const errorMessage = result.error?.message || 'Failed to save properties';
@@ -472,12 +460,18 @@ export function BlockList() {
         etag: '',
         currentMeta: { title: '' },
       });
-      setEditedTitle('');
-      setEditedDescription('');
-      setEditedCategory('');
-      setEditedTags('');
       showError('Failed to save properties. Please try again.', error);
     }
+  };
+
+  const handleCancelProperties = () => {
+    setPropertiesDialog({
+      isOpen: false,
+      blockId: '',
+      blockTitle: '',
+      etag: '',
+      currentMeta: { title: '' },
+    });
   };
 
   return (
@@ -742,132 +736,14 @@ export function BlockList() {
       )}
 
       {/* Edit Properties Dialog */}
-      {propertiesDialog.isOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-          role="dialog"
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') {
-              setPropertiesDialog({
-                isOpen: false,
-                blockId: '',
-                blockTitle: '',
-                etag: '',
-                currentMeta: { title: '' },
-              });
-              setEditedTitle('');
-              setEditedDescription('');
-              setEditedCategory('');
-              setEditedTags('');
-            }
-          }}
-        >
-          <div className="bg-white rounded-lg p-6 w-full max-w-md" data-testid="properties-dialog">
-            <h2 className="text-xl font-semibold mb-4">Edit Block Properties</h2>
-            <div className="space-y-4 mb-4">
-              <div>
-                <label htmlFor="block-title" className="block text-sm font-medium mb-2">
-                  Title <span className="text-red-500">*</span>
-                </label>
-                <input
-                  id="block-title"
-                  type="text"
-                  value={editedTitle}
-                  onChange={(e) => setEditedTitle(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && e.ctrlKey) {
-                      e.preventDefault();
-                      handleSaveProperties();
-                    }
-                  }}
-                  placeholder="Enter block title..."
-                  className="w-full px-3 py-2 border border-grey-09 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
-                  autoFocus
-                  data-testid="block-title-input"
-                />
-                <p className="mt-1 text-sm text-grey-04">The display name shown in the UI</p>
-              </div>
-
-              <div>
-                <label htmlFor="block-description" className="block text-sm font-medium mb-2">
-                  Description
-                </label>
-                <textarea
-                  id="block-description"
-                  value={editedDescription}
-                  onChange={(e) => setEditedDescription(e.target.value)}
-                  placeholder="Enter block description..."
-                  rows={3}
-                  className="w-full px-3 py-2 border border-grey-09 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
-                  data-testid="block-description-input"
-                />
-                <p className="mt-1 text-sm text-grey-04">Brief description of this block</p>
-              </div>
-
-              <div>
-                <label htmlFor="block-category" className="block text-sm font-medium mb-2">
-                  Category
-                </label>
-                <input
-                  id="block-category"
-                  type="text"
-                  value={editedCategory}
-                  onChange={(e) => setEditedCategory(e.target.value)}
-                  placeholder="content, headers, cta, footers..."
-                  className="w-full px-3 py-2 border border-grey-09 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
-                  data-testid="block-category-input"
-                />
-                <p className="mt-1 text-sm text-grey-04">Category for organizing blocks</p>
-              </div>
-
-              <div>
-                <label htmlFor="block-tags" className="block text-sm font-medium mb-2">
-                  Tags
-                </label>
-                <input
-                  id="block-tags"
-                  type="text"
-                  value={editedTags}
-                  onChange={(e) => setEditedTags(e.target.value)}
-                  placeholder="hero, cta, featured..."
-                  className="w-full px-3 py-2 border border-grey-09 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
-                  data-testid="block-tags-input"
-                />
-                <p className="mt-1 text-sm text-grey-04">Comma-separated tags for categorization</p>
-              </div>
-            </div>
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => {
-                  setPropertiesDialog({
-                    isOpen: false,
-                    blockId: '',
-                    blockTitle: '',
-                    etag: '',
-                    currentMeta: { title: '' },
-                  });
-                  setEditedTitle('');
-                  setEditedDescription('');
-                  setEditedCategory('');
-                  setEditedTags('');
-                }}
-                className="px-4 py-2 border border-grey-09 rounded hover:bg-grey-11 transition-colors"
-                disabled={updateLocalized.isPending}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveProperties}
-                disabled={!editedTitle.trim() || updateLocalized.isPending}
-                className="px-4 py-2 bg-azure-04 text-white rounded hover:bg-azure-03 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                data-testid="save-properties-submit"
-              >
-                {updateLocalized.isPending ? 'Saving...' : 'Save'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <BlockPropertiesDialog
+        isOpen={propertiesDialog.isOpen}
+        blockTitle={propertiesDialog.blockTitle}
+        currentMeta={propertiesDialog.currentMeta}
+        onSave={handleSaveProperties}
+        onCancel={handleCancelProperties}
+        isSaving={updateLocalized.isPending}
+      />
 
       {/* Delete Confirmation Dialog */}
       <DeleteConfirmDialog

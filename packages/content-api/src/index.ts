@@ -11,6 +11,7 @@ export * from './component-registry.types';
 export type { ContentAPI } from './content-api.interface';
 export * from './content-operations';
 export * from './content-utils';
+export * from './schemas';
 export { Site } from './site';
 export * from './types';
 export { ContentUtils } from './utils';
