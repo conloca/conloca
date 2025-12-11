@@ -714,9 +714,9 @@ describe('Data Collections - FileSystem Integration', () => {
       }),
     );
 
-    // Create test data files
+    // Create test data files (no locale suffix - data entries use 'default' locale internally)
     await writeFile(
-      join(contentRoot, 'data', 'authors', 'john-doe.en.json'),
+      join(contentRoot, 'data', 'authors', 'john-doe.json'),
       JSON.stringify({
         id: 'vx-author123',
         type: 'json',
@@ -728,19 +728,7 @@ describe('Data Collections - FileSystem Integration', () => {
     );
 
     await writeFile(
-      join(contentRoot, 'data', 'authors', 'john-doe.nl.json'),
-      JSON.stringify({
-        id: 'vx-author123',
-        type: 'json',
-        created: '2024-01-01T00:00:00Z',
-        modified: '2024-01-01T00:00:00Z',
-        meta: { title: 'John Doe NL', description: 'Ontwikkelaar' },
-        data: { name: 'John Doe', email: 'john@example.com' },
-      }),
-    );
-
-    await writeFile(
-      join(contentRoot, 'data', 'settings', 'site-config.en.json'),
+      join(contentRoot, 'data', 'settings', 'site-config.json'),
       JSON.stringify({
         id: 'vx-settings123',
         type: 'json',
@@ -775,19 +763,20 @@ describe('Data Collections - FileSystem Integration', () => {
     expect(api.data.collections.has('settings')).toBe(true);
   });
 
-  test('indexes multiple locales for same entry', () => {
+  test('data entries use default locale (locale-independent)', () => {
     const author = api.data.getByName('authors', 'john-doe');
-    expect(author?.locales.en).toBeDefined();
-    expect(author?.locales.nl).toBeDefined();
-    expect(author?.locales.en?.meta.title).toBe('John Doe');
-    expect(author?.locales.nl?.meta.title).toBe('John Doe NL');
+    // Data entries always use 'default' as their locale (they're locale-independent)
+    expect(author?.locales.default).toBeDefined();
+    expect(author?.locales.default?.meta.title).toBe('John Doe');
+    expect(author?.locales.default?.name).toBe('john-doe');
   });
 
-  test('retrieves localized data content', async () => {
+  test('retrieves data content via default locale', async () => {
     const author = api.data.getByName('authors', 'john-doe');
     assertDefined(author, 'Author should exist');
 
-    const localized = await api.getLocalized(author.id, 'en');
+    // Data entries use 'default' locale internally
+    const localized = await api.getLocalized(author.id, 'default');
     assertDefined(localized, 'Localized content should exist');
 
     expect(localized.localized.content?.data).toBeDefined();
