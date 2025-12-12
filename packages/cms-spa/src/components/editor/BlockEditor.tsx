@@ -44,11 +44,11 @@ export function BlockEditor() {
   }, [content]);
 
   const handleSave = async (newContent: string) => {
-    if (!content) return;
+    if (!id) return;
 
     try {
       const result = await updateContent.mutateAsync({
-        id: content.id,
+        id,
         locale: currentLocale,
         data: {
           content: { mdx: newContent },

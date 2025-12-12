@@ -9,6 +9,7 @@ interface DataEntryCardProps {
   description?: string;
   collection: string;
   name?: string;
+  locales: string[];
   onEditData: () => void;
   onEditProperties: () => void;
   onDelete: () => void;
@@ -17,10 +18,9 @@ interface DataEntryCardProps {
 /**
  * Generates a VSCode URI to open a data file.
  * Uses vscode:// protocol which works when VSCode is installed.
- * Note: Data files don't have locale suffix (unlike pages/blocks).
  */
-function getEditorLink(projectRoot: string, collection: string, name: string): string {
-  const filePath = `${projectRoot}/content/data/${collection}/${name}.json`;
+function getEditorLink(projectRoot: string, collection: string, name: string, locale: string): string {
+  const filePath = `${projectRoot}/content/data/${collection}/${name}.${locale}.json`;
   return `vscode://file${filePath}`;
 }
 
@@ -30,6 +30,7 @@ export function DataEntryCard({
   description,
   collection,
   name,
+  locales,
   onEditData,
   onEditProperties,
   onDelete,
@@ -41,7 +42,9 @@ export function DataEntryCard({
   useClickOutside(menuRef, closeMenu, isMenuOpen);
 
   const config = getUIConfig();
-  const editorLink = config.projectRoot && name ? getEditorLink(config.projectRoot, collection, name) : null;
+  const firstLocale = locales[0] || 'en';
+  const editorLink =
+    config.projectRoot && name ? getEditorLink(config.projectRoot, collection, name, firstLocale) : null;
 
   return (
     <div className="bg-white border border-grey-09 rounded p-4 hover:border-azure-04 transition-colors">
@@ -61,7 +64,14 @@ export function DataEntryCard({
         </p>
       )}
 
-      <div className="flex items-center justify-end">
+      <div className="flex items-center justify-between">
+        <div className="flex gap-1">
+          {locales.map((locale) => (
+            <span key={locale} data-testid="locale-indicator" className="px-2 py-1 text-xs bg-grey-11 rounded">
+              {locale}
+            </span>
+          ))}
+        </div>
         <div className="flex gap-2 relative">
           <button onClick={onEditData} className="p-1 hover:bg-grey-11 rounded transition-colors" title="Edit data">
             <Edit2 className="h-4 w-4 text-azure-04" />

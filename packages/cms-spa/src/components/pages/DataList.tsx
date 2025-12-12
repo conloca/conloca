@@ -63,6 +63,7 @@ export function DataList({ dataSchemas }: DataListProps) {
     entryTitle: '',
     collection: '',
     locale: '',
+    existingLocales: [] as string[],
     name: '',
   });
 
@@ -173,9 +174,9 @@ export function DataList({ dataSchemas }: DataListProps) {
         title,
         description,
       },
-      // Data entries use 'default' locale (not localized like pages/blocks)
+      // Use 'en' as the default locale for new data entries
       locales: {
-        default: {
+        en: {
           meta: {
             title,
             description,
@@ -194,7 +195,8 @@ export function DataList({ dataSchemas }: DataListProps) {
         entryId: result.id,
         entryTitle: title,
         collection,
-        locale: 'default',
+        locale: 'en',
+        existingLocales: ['en'],
         name,
       });
     } else if (!result.success) {
@@ -287,6 +289,7 @@ export function DataList({ dataSchemas }: DataListProps) {
       entryTitle: entry.title,
       collection: entry.collection,
       locale: entry.locales[0] || 'en',
+      existingLocales: entry.locales,
       name: entry.name || '',
     });
   };
@@ -370,6 +373,7 @@ export function DataList({ dataSchemas }: DataListProps) {
               description={entry.description}
               collection={entry.collection}
               name={entry.name}
+              locales={entry.locales}
               onEditData={() => handleEditData(entry.id)}
               onEditProperties={() => handleEditProperties(entry.id)}
               onDelete={() => handleDeleteEntry(entry.id)}
@@ -441,7 +445,8 @@ export function DataList({ dataSchemas }: DataListProps) {
             <DataEditor
               id={editDataDialog.entryId}
               collection={editDataDialog.collection}
-              locale={editDataDialog.locale}
+              initialLocale={editDataDialog.locale}
+              existingLocales={editDataDialog.existingLocales}
               name={editDataDialog.name}
               schema={dataSchemas[editDataDialog.collection] ?? null}
               onSave={closeEditDataDialog}
