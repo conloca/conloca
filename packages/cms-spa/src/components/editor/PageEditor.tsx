@@ -5,6 +5,7 @@ import React, { useCallback, useState } from 'react';
 import { useSiteBaseUrl } from '../../hooks';
 import type { SaveState } from '../../types';
 import { ConflictDialog } from '../dialogs/ConflictDialog';
+import { DrawerItemOverride } from './DrawerItemOverride';
 import { PageEditorHeaderActions } from './PageEditorHeaderActions';
 
 interface PageEditorProps {
@@ -110,8 +111,9 @@ export function PageEditor({
                 onBack={onBack}
               />
             ),
+            drawerItem: ({ children, name }) => <DrawerItemOverride name={name}>{children}</DrawerItemOverride>,
           }}
-        ></Puck>
+        />
       </div>
 
       {/* Conflict Dialog */}
