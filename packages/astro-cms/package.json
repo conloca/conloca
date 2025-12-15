@@ -1,7 +1,6 @@
 {
   "name": "@conloca/astro-cms",
   "version": "0.0.1",
-  "private": true,
   "type": "module",
   "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",

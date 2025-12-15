@@ -36,7 +36,6 @@
       "default": "./dist/schemas/index.mjs"
     }
   },
-  "private": true,
   "scripts": {
     "build": "tsdown",
     "test": "tsc-bun-test",
