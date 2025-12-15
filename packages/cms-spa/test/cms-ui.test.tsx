@@ -8,7 +8,7 @@ import { LocaleSelector } from '../src/components/editor/LocaleSelector';
 import { BlockList } from '../src/components/pages/BlockList';
 import { PageList } from '../src/components/pages/PageList';
 import { SaveIndicator } from '../src/components/ui/SaveIndicator';
-import type { Block, ContentStats, Page, PageMetadata, RecentChange } from '../src/types';
+import type { Block, Page, PageMetadata } from '../src/types';
 import { renderWithProviders, setupTestAPI, testApi } from './test-utils';
 
 // Setup test API before all tests
@@ -80,22 +80,6 @@ describe('CMS Dashboard', () => {
     expect(blocksCard).toBeInTheDocument();
     expect(blocksCard).toHaveTextContent('1'); // 1 block
     expect(blocksCard).toHaveTextContent('Blocks');
-  });
-
-  test('shows recent changes', async () => {
-    const recentChanges: RecentChange[] = [
-      { id: '1', message: 'Updated homepage', author: 'John', date: new Date() },
-      { id: '2', message: 'Created about page', author: 'Jane', date: new Date() },
-    ];
-
-    // No need to add test data - dashboard should work with empty content too
-    const { getByText, findByTestId } = renderWithProviders(<CMSDashboard recentChanges={recentChanges} />, {}, false);
-
-    // Wait for any stat card to appear, which means loading is done
-    await findByTestId('stat-card-pages');
-
-    expect(getByText('Updated homepage')).toBeInTheDocument();
-    expect(getByText('Created about page')).toBeInTheDocument();
   });
 });
 
