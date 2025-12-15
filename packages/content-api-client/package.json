@@ -22,7 +22,8 @@
   },
   "files": [
     "dist",
-    "!**/*.tsbuildinfo"
+    "!**/*.tsbuildinfo",
+    "!dist/test"
   ],
   "scripts": {
     "build": "tsdown",
