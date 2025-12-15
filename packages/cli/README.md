@@ -30,7 +30,45 @@ This command will:
 Example:
 
 ```bash
-conloca init ./my-project mysite
+conloca init . default
+```
+
+### Astro Integration
+
+Set up Astro integration with all necessary files:
+
+```bash
+conloca astro setup [path]
+```
+
+This command will generate:
+
+- `src/pages/[...slug].astro` - Dynamic route file for CMS pages
+- `src/content.config.ts` - Astro content collections config
+- `src/puck.config.tsx` - Puck component configuration
+- `src/components/Layout.tsx` - Layout HOC with grid/flex support
+- `src/components/Section.tsx` - Section wrapper component
+- `src/components/puck/Heading.tsx` - Heading component
+- `src/components/puck/Text.tsx` - Text component
+- `src/components/puck/Flex.tsx` - Flex layout component
+- `src/components/puck/Grid.tsx` - Grid layout component
+- `src/schemas/data.ts` - Example Zod schemas for data collections
+
+Options:
+
+- `-s, --site <name>`: Target a specific site (default: `default`)
+
+Examples:
+
+```bash
+# Set up in current directory
+conloca astro setup
+
+# Set up in a specific project
+conloca astro setup ./my-astro-project
+
+# Set up for a specific site
+conloca astro setup ./my-astro-project --site blog
 ```
 
 ### Verify Content
@@ -48,54 +86,27 @@ This command will:
 - Report any errors found
 - Display a summary of verified content items
 
-### Astro Integration
-
-Generate Astro route files for rendering CMS pages:
+## Quick Start
 
 ```bash
-conloca astro generate-routes [path]
+# 1. Create a new Astro project (if you don't have one)
+npm create astro@latest my-site
+cd my-site
+
+# 2. Install Conloca packages
+npm install @conloca/astro-cms @conloca/content-api @conloca/mdx @measured/puck
+
+# 3. Initialize content structure
+conloca init . default
+
+# 4. Set up Astro integration
+conloca astro setup
+
+# 5. Start your dev server
+npm run dev
+
+# 6. Visit /__cms to edit pages
 ```
-
-This command will:
-
-- Create `src/pages/[...slug].astro` dynamic route file
-- Create `src/puck.config.tsx` with basic component definitions (if it doesn't exist)
-- Set up the basic structure for rendering Puck pages
-
-Options:
-
-- `-s, --site <name>`: Target a specific site (default: `default`). If not provided, the generated route can still be overridden at runtime via the `SITE_NAME` or `PUBLIC_SITE_NAME` env var.
-
-Examples:
-
-```bash
-# Generate in current directory
-conloca astro generate-routes
-
-# Generate in a specific project
-conloca astro generate-routes ./my-astro-project
-
-# Generate for a specific site (e.g., "blog")
-conloca astro generate-routes ./my-astro-project --site blog
-```
-
-Programmatic usage (pass a site name):
-
-```ts
-import { generateRoutes } from '@conloca/cli/commands/generate-routes';
-
-// Generate routes for the "blog" site in the current directory
-await generateRoutes('.', 'blog');
-```
-
-After generation, you can:
-1. Customize the `[...slug].astro` file to add your own layout
-2. Add more component types to `puck.config.tsx`
-3. Start your dev server and visit `/__cms` to edit pages
-
-Note on multi-site:
-
-- The generated `[...slug].astro` reads content from the Content API for a given site. By default it uses `default`. You can change the site at runtime by setting an environment variable (e.g. `SITE_NAME=blog`) and restarting the dev server.
 
 ## Development
 

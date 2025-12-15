@@ -151,6 +151,11 @@ export const Hero: ComponentConfig<HeroProps> = {
       min: 1,
       max: 4,
       getItemSummary: (item) => item.label || 'Button',
+      defaultItemProps: {
+        label: 'Button',
+        href: '#',
+        variant: 'primary',
+      },
       arrayFields: {
         label: { type: 'text', contentEditable: true },
         href: { type: 'text' },

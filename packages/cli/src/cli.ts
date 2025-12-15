@@ -1,6 +1,6 @@
 import { parseArgs } from 'util';
-import { generateRoutes } from './commands/generate-routes';
 import { init } from './commands/init';
+import { setup } from './commands/setup';
 import { verify } from './commands/verify';
 
 async function main() {
@@ -29,7 +29,7 @@ Commands:
   astro <subcommand> [options] Astro framework integration commands
 
 Astro Subcommands:
-  astro generate-routes [path] Generate Astro route files for CMS pages (default: .)
+  astro setup [path]           Set up Astro integration (routes, components, config)
 
 Options:
   -h, --help                   Show this help message
@@ -60,27 +60,29 @@ Options:
         await verify(positionals[1]);
         break;
 
-      case 'astro':
+      case 'astro': {
         const subcommand = positionals[1];
         if (!subcommand) {
           console.error(`Error: astro command requires a subcommand
 Available subcommands:
-  generate-routes [path]    Generate Astro route files for CMS pages (default: .)`);
+  setup [path]    Set up Astro integration (routes, components, config)`);
           process.exit(1);
         }
 
         switch (subcommand) {
-          case 'generate-routes':
+          case 'setup': {
             const projectPath = positionals[2] || '.';
             const siteName = typeof values.site === 'string' && values.site.length > 0 ? values.site : 'default';
-            await generateRoutes(projectPath, siteName);
+            await setup(projectPath, siteName);
             break;
+          }
 
           default:
             console.error(`Error: Unknown astro subcommand '${subcommand}'`);
             process.exit(1);
         }
         break;
+      }
 
       default:
         console.error(`Error: Unknown command '${command}'`);
