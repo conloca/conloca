@@ -2,22 +2,22 @@
   "name": "@conloca/content-api-client",
   "version": "0.0.1",
   "type": "module",
-  "main": "./dist/index.js",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
   "exports": {
     "./package.json": "./package.json",
     ".": {
       "development": "./src/index.ts",
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "default": "./dist/index.js"
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.mjs"
     },
     "./testing": {
       "development": "./src/testing.ts",
-      "types": "./dist/testing.d.ts",
-      "import": "./dist/testing.js",
-      "default": "./dist/testing.js"
+      "types": "./dist/testing.d.mts",
+      "import": "./dist/testing.mjs",
+      "default": "./dist/testing.mjs"
     }
   },
   "files": [
@@ -25,7 +25,7 @@
     "!**/*.tsbuildinfo"
   ],
   "scripts": {
-    "build": "tsc --build",
+    "build": "tsdown",
     "test": "tsc-bun-test"
   },
   "dependencies": {

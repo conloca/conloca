@@ -3,56 +3,44 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "main": "./dist/index.js",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
   "exports": {
     "./package.json": "./package.json",
     ".": {
       "development": "./src/index.ts",
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "default": "./dist/index.js"
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.mjs"
     },
     "./components": {
       "development": "./src/components.ts",
-      "types": "./dist/components.d.ts",
-      "import": "./dist/components.js",
-      "default": "./dist/components.js"
+      "types": "./dist/components.d.mts",
+      "import": "./dist/components.mjs",
+      "default": "./dist/components.mjs"
     },
     "./spa-handler": {
       "development": "./src/spa-handler.ts",
-      "types": "./dist/spa-handler.d.ts",
-      "import": "./dist/spa-handler.js",
-      "default": "./dist/spa-handler.js"
-    },
-    "./api/collections": {
-      "development": "./src/api/collections.ts",
-      "types": "./dist/api/collections.d.ts",
-      "import": "./dist/api/collections.js",
-      "default": "./dist/api/collections.js"
-    },
-    "./api/entry": {
-      "development": "./src/api/entry.ts",
-      "types": "./dist/api/entry.d.ts",
-      "import": "./dist/api/entry.js",
-      "default": "./dist/api/entry.js"
+      "types": "./dist/spa-handler.d.mts",
+      "import": "./dist/spa-handler.mjs",
+      "default": "./dist/spa-handler.mjs"
     },
     "./api/content-api-handler": {
       "development": "./src/api/content-api-handler.ts",
-      "types": "./dist/api/content-api-handler.d.ts",
-      "import": "./dist/api/content-api-handler.js",
-      "default": "./dist/api/content-api-handler.js"
+      "types": "./dist/api/content-api-handler.d.mts",
+      "import": "./dist/api/content-api-handler.mjs",
+      "default": "./dist/api/content-api-handler.mjs"
     },
     "./collections": {
       "development": "./src/collections.ts",
-      "types": "./dist/collections.d.ts",
-      "import": "./dist/collections.js",
-      "default": "./dist/collections.js"
+      "types": "./dist/collections.d.mts",
+      "import": "./dist/collections.mjs",
+      "default": "./dist/collections.mjs"
     }
   },
   "scripts": {
-    "build": "tsc --build tsconfig.lib.json",
+    "build": "tsdown",
     "test": "tsc-bun-test",
     "test:watch": "bun test --watch"
   },
