@@ -1,11 +1,55 @@
 import { useBlocks, useLocalizedContent, useUpdateLocalized } from '@conloca/content-api-client';
-import type { ComponentConfig, Config } from '@measured/puck';
+import type { ComponentConfig, Config, Data } from '@measured/puck';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { PageMetadata } from '../../types';
 import { PageMetadataDialog } from '../dialogs/PageMetadataDialog';
 import { BlockContentWrapper, BlockFieldWrapper } from './BlockWrappers';
 import { PageEditor } from './PageEditor';
+
+/**
+ * Merge component defaultProps with stored sparse props.
+ *
+ * Puck saves sparse data - only props the user explicitly changed.
+ * When loading, we need to merge defaultProps so field UI shows correct values.
+ * Without this, select/radio fields show wrong defaults (first option instead of actual default).
+ */
+function mergeDefaultProps(data: Data, config: Config): Data {
+  if (!data?.content || !config?.components) return data;
+
+  // Helper to merge props for a single component
+  const mergeComponentProps = (item: Data['content'][0]): Data['content'][0] => {
+    const componentConfig = config.components[item.type];
+    if (!componentConfig?.defaultProps) return item;
+
+    // Merge defaultProps with stored props (stored props take precedence)
+    return {
+      ...item,
+      props: {
+        ...componentConfig.defaultProps,
+        ...item.props,
+      },
+    };
+  };
+
+  // Merge top-level content
+  const mergedContent = data.content.map(mergeComponentProps);
+
+  // Also merge zones if they exist (nested components)
+  let mergedZones = data.zones;
+  if (data.zones) {
+    mergedZones = {};
+    for (const [zoneKey, zoneContent] of Object.entries(data.zones)) {
+      mergedZones[zoneKey] = zoneContent.map(mergeComponentProps);
+    }
+  }
+
+  return {
+    ...data,
+    content: mergedContent,
+    ...(mergedZones && { zones: mergedZones }),
+  };
+}
 
 interface PageEditorWrapperProps {
   puckConfig: Config;
@@ -93,6 +137,25 @@ export function PageEditorWrapper({ puckConfig }: PageEditorWrapperProps) {
     } as Config;
   }, [puckConfig, blocksData]);
 
+  // Create entry with merged defaultProps for proper field UI display
+  // This ensures select/radio fields show correct defaults, not first option
+  const entryWithMergedDefaults = useMemo(() => {
+    if (!content?.localized?.content?.puckData || !enhancedConfig) return content;
+
+    const mergedPuckData = mergeDefaultProps(content.localized.content.puckData, enhancedConfig);
+
+    return {
+      ...content,
+      localized: {
+        ...content.localized,
+        content: {
+          ...content.localized.content,
+          puckData: mergedPuckData,
+        },
+      },
+    };
+  }, [content, enhancedConfig]);
+
   if (isLoading) {
     return <div className="flex items-center justify-center h-screen">Loading...</div>;
   }
@@ -109,7 +172,7 @@ export function PageEditorWrapper({ puckConfig }: PageEditorWrapperProps) {
     <>
       <PageEditor
         pageId={content.id}
-        entry={content}
+        entry={entryWithMergedDefaults!}
         config={enhancedConfig}
         availableLocales={['en']}
         onSave={async (newData, forceEtag) => {

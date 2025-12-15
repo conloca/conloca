@@ -58,6 +58,7 @@ const HeadingInternal: ComponentConfig<HeadingProps> = {
     align: 'left',
     text: 'Heading',
     size: 'm',
+    level: '2',
     layout: {
       padding: '8px',
     },
