@@ -44,6 +44,10 @@
     "test": "tsc-bun-test",
     "test:watch": "bun test --watch"
   },
+  "files": [
+    "dist",
+    "!**/*.tsbuildinfo"
+  ],
   "dependencies": {
     "@conloca/cms-spa": "workspace:*",
     "@conloca/content-api": "workspace:*",

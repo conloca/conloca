@@ -44,5 +44,9 @@
   },
   "type": "module",
   "types": "./dist/index.d.mts",
+  "files": [
+    "dist",
+    "!**/*.tsbuildinfo"
+  ],
   "devDependencies": {}
 }
