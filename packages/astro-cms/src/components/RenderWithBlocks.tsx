@@ -36,52 +36,25 @@ interface RenderWithBlocksProps {
  */
 function RenderWithBlocks({ config, data, mdxComponents }: RenderWithBlocksProps) {
   // Build enhanced config with MDX blocks
-  const blockComponents: Record<string, ComponentConfig<{ contentId: string }>> = {};
+  const blockComponents: Record<string, ComponentConfig> = {};
   const blockCategoryList: string[] = [];
-
-  // Create lookup map for components by contentId
-  const componentMap = new Map<string, ComponentType>();
-  mdxComponents.forEach((block) => {
-    componentMap.set(block.id, block.Component);
-  });
 
   // Create component configs for each block
   mdxComponents.forEach((block) => {
     const componentKey = `Block_${block.id}`;
 
+    // Capture component in closure - Puck doesn't persist defaultProps reliably
+    const BlockComponent = block.Component;
+
     blockComponents[componentKey] = {
       label: block.title,
-      fields: {
-        contentId: {
-          type: 'text' as const,
-          label: 'Content ID',
-        },
-      },
-      defaultProps: {
-        contentId: block.id,
-      },
-      render: ({ contentId }) => {
-        if (!contentId) {
-          return (
-            <div className="p-4 bg-yellow-50 border border-yellow-200 rounded">
-              <p className="text-sm text-yellow-600">Invalid block configuration: missing content ID</p>
-            </div>
-          );
-        }
-
-        const Component = componentMap.get(contentId);
-        if (!Component) {
-          return (
-            <div className="p-4 bg-gray-100 border border-gray-300 rounded">
-              <p className="text-sm text-gray-600">Block content not found: {contentId}</p>
-            </div>
-          );
-        }
-
-        // Render React component directly - no dangerouslySetInnerHTML!
+      fields: {},
+      defaultProps: {},
+      render: () => {
+        // Use blockId and BlockComponent from closure - no prop dependency
         return (
           <div className="mdx-content prose prose-sm max-w-none">
-            <Component />
+            <BlockComponent />
           </div>
         );
       },
@@ -93,13 +66,7 @@ function RenderWithBlocks({ config, data, mdxComponents }: RenderWithBlocksProps
   const existingCategories = config.categories || {};
   const existingComponents = config.components || {};
 
-  // Merge components: existing components may have various prop types,
-  // while block components all have { contentId: string } props.
-  // TypeScript can't infer the union of all possible prop types at compile time,
-  // so we use a type assertion. This is safe because:
-  // 1. All components conform to ComponentConfig structure
-  // 2. Props are validated at runtime by Puck
-  // 3. We're only adding components with known structure ({ contentId: string })
+  // Merge block components with existing config components
   const mergedComponents = {
     ...existingComponents,
     ...blockComponents,
