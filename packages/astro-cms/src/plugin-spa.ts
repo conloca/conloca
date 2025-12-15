@@ -129,6 +129,11 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
               'import.meta.env.CONLOCA_CANVAS_DIR': JSON.stringify(options.canvasDir || './canvas'),
               'import.meta.env.CONLOCA_PUCK_CONFIG_PATH': JSON.stringify(options.puckConfigPath),
             },
+            resolve: {
+              // Dedupe React to avoid multiple instances when using symlinked packages
+              // This prevents "Cannot read properties of null (reading 'useMemo')" errors
+              dedupe: ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime', '@measured/puck'],
+            },
             optimizeDeps: {
               // Exclude the puck config from optimization to avoid the outdated dep error
               exclude: [options.puckConfigPath],
@@ -241,6 +246,10 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
               },
             ],
             ssr: {
+              // Force these packages through Vite's resolver during SSR
+              // This ensures symlinked packages use the consumer's React, not their own
+              // Without this, symlinked packages resolve React from their node_modules
+              noExternal: ['@conloca/astro-cms', '@conloca/cms-spa'],
               // Externalize native Node modules for SSR builds
               // These cannot be bundled and must be available at runtime
               external: ['@node-rs/xxhash'],
