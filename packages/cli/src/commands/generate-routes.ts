@@ -3,44 +3,85 @@ import { join, resolve } from 'node:path';
 
 function getSlugRouteTemplate(siteName = 'default') {
   return `---
-import { Render } from '@measured/puck';
+import { createPageRendererWithBlocks } from '@conloca/astro-cms/components';
 import { createContentAPI } from '@conloca/content-api/node';
+import { evaluateMDXBlocks } from '@conloca/mdx/node';
 import config from '../puck.config';
 
-// SSR mode for dynamic content loading
-export const prerender = false;
+// Enable static site generation
+export const prerender = true;
 
-export function getStaticPaths() {
-  return [];
+// Generate static paths for all pages at build time
+export async function getStaticPaths() {
+  const api = await createContentAPI({ contentRoot: './content' });
+  const site = (import.meta.env.SITE_NAME ?? import.meta.env.PUBLIC_SITE_NAME ?? '${siteName}') as string;
+  const siteApi = api.getSite(site);
+
+  if (!siteApi) {
+    return [];
+  }
+
+  // Get all pages for this site
+  const pages = Array.from(api.listAllContent({ kind: 'page', site }));
+
+  // Generate paths for all pages
+  return pages.map((page) => {
+    const locales = Object.keys(page.locales);
+    const firstLocale = locales[0] || 'en';
+    const localizedData = page.locales[firstLocale];
+    const pathname = localizedData?.pathname || '/';
+
+    // Convert pathname to slug parameter
+    // Root path (/) becomes undefined, other paths remove leading slash
+    const slug = pathname === '/' ? undefined : pathname.replace(/^\\//, '');
+
+    return {
+      params: { slug },
+    };
+  });
 }
 
+// Get the slug from the URL (supports string or array)
 const slugParam = (Astro.params as any).slug;
-const slug = Array.isArray(slugParam) ? slugParam.join('/') : (slugParam || 'index');
-const locale = 'en';
-const pathname = slug === 'index' ? '/' : (slug.startsWith('/') ? slug : '/' + slug);
-
-const api = await createContentAPI({ contentRoot: './content' });
+const slug = Array.isArray(slugParam) ? slugParam.join('/') : slugParam || 'index';
 
 let puckData;
 let manifest;
+let PageRenderer;
 
 try {
+  const api = await createContentAPI({ contentRoot: './content' });
   const site = (import.meta.env.SITE_NAME ?? import.meta.env.PUBLIC_SITE_NAME ?? '${siteName}') as string;
+  const locale = 'en';
+  const pathname = slug === 'index' ? '/' : slug.startsWith('/') ? slug : \`/\${slug}\`;
+
   const siteApi = api.getSite(site);
   const found = siteApi?.getByPathname(pathname, locale) || siteApi?.getByPathname(pathname);
   if (!found) {
+    console.warn(\`[\${pathname}] Page not found in site "\${site}" for locale "\${locale}"\`);
     return Astro.redirect('/404');
   }
 
   const localized = await api.getLocalized(found.id, locale);
   if (!localized) {
+    console.warn(\`[\${pathname}] Failed to get localized content for page "\${found.id}" in locale "\${locale}"\`);
     return Astro.redirect('/404');
   }
 
   puckData = localized.localized.content?.puckData;
   manifest = localized.localized.meta || {};
+
+  // Evaluate all MDX blocks to React components at build time
+  const mdxComponents = await evaluateMDXBlocks(api, locale);
+
+  // Create page renderer with MDX components baked in via closure
+  PageRenderer = createPageRendererWithBlocks(config, puckData, mdxComponents);
 } catch (error) {
-  console.error('[Page] Failed to load content:', error);
+  console.error(\`[\${slug}] Failed to render page:\`, error);
+  if (error instanceof Error) {
+    console.error(\`  Error message: \${error.message}\`);
+    console.error(\`  Stack trace:\`, error.stack);
+  }
   return Astro.redirect('/404');
 }
 ---
@@ -53,7 +94,7 @@ try {
     <title>{manifest.title || 'Page'}</title>
   </head>
   <body>
-    <Render config={config} data={puckData} />
+    <PageRenderer />
   </body>
 </html>
 `;
