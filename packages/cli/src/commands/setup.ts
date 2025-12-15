@@ -105,11 +105,19 @@ try {
 }
 
 function getContentConfigTemplate(siteName = 'default') {
+  // Use short form for defaults, explicit form for custom site
+  if (siteName === 'default') {
+    return `import { createConlocaCollections } from '@conloca/astro-cms/collections';
+
+// Uses default pages + blocks collections
+export const { collections } = await createConlocaCollections();
+`;
+  }
+
   return `import { createConlocaCollections } from '@conloca/astro-cms/collections';
 
-// Uses default pages + blocks collections with Zod schemas
+// Uses pages + blocks collections for site '${siteName}'
 export const { collections } = await createConlocaCollections({
-  contentRoot: './content',
   site: '${siteName}',
 });
 `;
