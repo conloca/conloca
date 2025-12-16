@@ -118,7 +118,23 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
     name: '@conloca/astro-cms',
     hooks: {
       'astro:config:setup': ({ updateConfig, injectRoute, command }) => {
-        // Only inject routes in dev mode
+        // Always apply SSR externalization for native modules (needed for both dev and build)
+        // This must be outside the dev-only block to fix build errors
+        updateConfig({
+          vite: {
+            ssr: {
+              // Force these packages through Vite's resolver during SSR
+              // This ensures symlinked packages use the consumer's React, not their own
+              // Without this, symlinked packages resolve React from their node_modules
+              noExternal: ['@conloca/astro-cms', '@conloca/cms-spa'],
+              // Externalize native Node modules for SSR builds
+              // These cannot be bundled and must be available at runtime
+              external: ['@node-rs/xxhash'],
+            },
+          },
+        });
+
+        // Only inject routes and dev-specific config in dev mode
         if (command !== 'dev') return;
 
         // Pass options via Vite define for API routes
@@ -245,15 +261,6 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
                 },
               },
             ],
-            ssr: {
-              // Force these packages through Vite's resolver during SSR
-              // This ensures symlinked packages use the consumer's React, not their own
-              // Without this, symlinked packages resolve React from their node_modules
-              noExternal: ['@conloca/astro-cms', '@conloca/cms-spa'],
-              // Externalize native Node modules for SSR builds
-              // These cannot be bundled and must be available at runtime
-              external: ['@node-rs/xxhash'],
-            },
           },
         });
 
