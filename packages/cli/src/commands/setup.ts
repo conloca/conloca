@@ -15,7 +15,21 @@ import config from '../puck.config';
 // Enable static site generation
 export const prerender = true;
 
-// Generate static paths for all pages at build time
+// Types for getStaticPaths props
+type PageProps = {
+  type: 'page';
+  pageId: string;
+  locale: string;
+};
+
+type RedirectProps = {
+  type: 'redirect';
+  redirectTo: string;
+};
+
+type Props = PageProps | RedirectProps;
+
+// Generate static paths for all pages AND redirects at build time
 export async function getStaticPaths() {
   const api = await createContentAPI({ contentRoot: './content' });
   const site = (import.meta.env.SITE_NAME ?? import.meta.env.PUBLIC_SITE_NAME ?? '${siteName}') as string;
@@ -27,27 +41,51 @@ export async function getStaticPaths() {
 
   // Get all pages for this site
   const pages = Array.from(api.listAllContent({ kind: 'page', site }));
+  const paths: Array<{ params: { slug: string | undefined }; props: Props }> = [];
 
-  // Generate paths for all pages
-  return pages.map((page) => {
+  for (const page of pages) {
     const locales = Object.keys(page.locales);
     const firstLocale = locales[0] || 'en';
     const localizedData = page.locales[firstLocale];
-    const pathname = localizedData?.pathname || '/';
+
+    if (!localizedData) continue;
+
+    const pathname = localizedData.pathname || '/';
 
     // Convert pathname to slug parameter
     // Root path (/) becomes undefined, other paths remove leading slash
     const slug = pathname === '/' ? undefined : pathname.replace(/^\\//, '');
 
-    return {
+    // Current pathname → renders page
+    paths.push({
       params: { slug },
-    };
-  });
+      props: { type: 'page', pageId: page.id, locale: firstLocale },
+    });
+
+    // Previous pathnames → redirects (for SEO-friendly URL changes)
+    const previousPathnames = localizedData.previousPathnames || {};
+    for (const oldPathname of Object.keys(previousPathnames)) {
+      const oldSlug = oldPathname === '/' ? undefined : oldPathname.replace(/^\\//, '');
+      paths.push({
+        params: { slug: oldSlug },
+        props: { type: 'redirect', redirectTo: pathname },
+      });
+    }
+  }
+
+  return paths;
 }
 
-// Get the slug from the URL (supports string or array)
-const slugParam = (Astro.params as any).slug;
-const slug = Array.isArray(slugParam) ? slugParam.join('/') : slugParam || 'index';
+// Get props from getStaticPaths
+const props = Astro.props as Props;
+
+// Handle redirects (from previousPathnames)
+if (props.type === 'redirect') {
+  return Astro.redirect(props.redirectTo, 301);
+}
+
+// Render page
+const { pageId, locale } = props;
 
 let puckData;
 let manifest;
@@ -55,20 +93,10 @@ let PageRenderer;
 
 try {
   const api = await createContentAPI({ contentRoot: './content' });
-  const site = (import.meta.env.SITE_NAME ?? import.meta.env.PUBLIC_SITE_NAME ?? '${siteName}') as string;
-  const locale = 'en';
-  const pathname = slug === 'index' ? '/' : slug.startsWith('/') ? slug : \`/\${slug}\`;
 
-  const siteApi = api.getSite(site);
-  const found = siteApi?.getByPathname(pathname, locale) || siteApi?.getByPathname(pathname);
-  if (!found) {
-    console.warn(\`[\${pathname}] Page not found in site "\${site}" for locale "\${locale}"\`);
-    return Astro.redirect('/404');
-  }
-
-  const localized = await api.getLocalized(found.id, locale);
+  const localized = await api.getLocalized(pageId, locale);
   if (!localized) {
-    console.warn(\`[\${pathname}] Failed to get localized content for page "\${found.id}" in locale "\${locale}"\`);
+    console.warn(\`[\${pageId}] Failed to get localized content for locale "\${locale}"\`);
     return Astro.redirect('/404');
   }
 
@@ -81,7 +109,7 @@ try {
   // Create page renderer with MDX components baked in via closure
   PageRenderer = createPageRendererWithBlocks(config, puckData, mdxComponents);
 } catch (error) {
-  console.error(\`[\${slug}] Failed to render page:\`, error);
+  console.error(\`[\${pageId}] Failed to render page:\`, error);
   if (error instanceof Error) {
     console.error(\`  Error message: \${error.message}\`);
     console.error(\`  Stack trace:\`, error.stack);
@@ -91,7 +119,7 @@ try {
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang={locale}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
