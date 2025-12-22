@@ -73,6 +73,14 @@
     }
   },
   "release": {
+    "projects": [
+      "@conloca/astro-cms",
+      "@conloca/cms-spa",
+      "@conloca/content-api",
+      "@conloca/content-api-client",
+      "@conloca/cli",
+      "@conloca/mdx"
+    ],
     "version": {
       "preVersionCommand": "bunx nx run-many -t build"
     }
