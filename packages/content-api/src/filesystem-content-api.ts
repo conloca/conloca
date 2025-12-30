@@ -533,7 +533,11 @@ export class FileSystemContentAPI implements ContentAPI {
           locale = match[2];
           // Replace filename with basename
           pathParts[pathParts.length - 1] = match[1];
-          pathname = '/' + pathParts.join('/');
+          // index files map to parent: /index -> /, /foo/index -> /foo
+          pathname =
+            pathParts[pathParts.length - 1] === 'index'
+              ? '/' + pathParts.slice(0, -1).join('/') || '/'
+              : '/' + pathParts.join('/');
         }
 
         // Parse JSON to get ID and metadata
