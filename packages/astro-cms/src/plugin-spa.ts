@@ -3,9 +3,30 @@ import { createContentAPI, createContentWatchHandlers } from '@conloca/content-a
 import viteReact from '@vitejs/plugin-react';
 import type { AstroIntegration } from 'astro';
 
+import { normalizeRoutingConfig, resolveRouteConfig } from './lib/routing-config.js';
+import {
+  generateLayoutModule,
+  generatePageApiModule,
+  generatePuckConfigModule,
+  generateRoutingConfigModule,
+} from './lib/virtual-module-generators.js';
+import type { ResolvedRoutingConfig, RoutingConfigInput } from './types.js';
+
 // Virtual module for passing config from plugin to route handler
 const VIRTUAL_CONFIG_MODULE = 'virtual:conloca-config';
 const RESOLVED_VIRTUAL_CONFIG = '\0' + VIRTUAL_CONFIG_MODULE;
+
+// Virtual module IDs for routing system
+const VIRTUAL_ROUTING_CONFIG = 'virtual:conloca-routing-config';
+const VIRTUAL_LAYOUT = 'virtual:conloca-layout';
+const VIRTUAL_PAGE_API = 'virtual:conloca-page-api';
+const VIRTUAL_PUCK_CONFIG = 'virtual:conloca-puck-config';
+
+// Resolved IDs (with \0 prefix to prevent file resolution)
+const RESOLVED_ROUTING_CONFIG = '\0' + VIRTUAL_ROUTING_CONFIG;
+const RESOLVED_LAYOUT = '\0' + VIRTUAL_LAYOUT;
+const RESOLVED_PAGE_API = '\0' + VIRTUAL_PAGE_API;
+const RESOLVED_PUCK_CONFIG = '\0' + VIRTUAL_PUCK_CONFIG;
 
 export interface ConlocaCMSOptions extends Omit<UIConfig, 'basename'> {
   contentRoot: string;
@@ -13,6 +34,7 @@ export interface ConlocaCMSOptions extends Omit<UIConfig, 'basename'> {
   route?: string; // Default: /__cms
   puckConfigPath: string; // Path to the puck config module (should be .tsx file with React components)
   dataSchemasPath?: string; // Path to the data schemas module (exports { dataSchemas })
+  routing?: RoutingConfigInput; // Content page routing configuration
 }
 
 // Template for content change listener virtual module
@@ -103,6 +125,24 @@ export default dataSchemas;
 export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
   const cmsRoute = options.route || '/__cms';
 
+  // Normalize routing config and resolve defaults
+  const routingConfig = normalizeRoutingConfig(options.routing);
+
+  // Build resolved routing config with all defaults applied
+  let resolvedRoutingConfig: ResolvedRoutingConfig | undefined;
+  if (routingConfig?.enabled !== false && routingConfig) {
+    const resolvedRoutes: Record<string, Required<import('./types.js').RouteConfig>> = {};
+    for (const [name, config] of Object.entries(routingConfig.routes || {})) {
+      resolvedRoutes[name] = resolveRouteConfig(config);
+    }
+    resolvedRoutingConfig = {
+      enabled: routingConfig.enabled ?? true,
+      routes: resolvedRoutes,
+      fallback: routingConfig.fallback ?? '404',
+      onConflict: routingConfig.onConflict ?? 'warn',
+    };
+  }
+
   // SPA config passed to route handler via virtual module
   const spaConfig = {
     basename: cmsRoute,
@@ -171,6 +211,21 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
                   if (id === `${cmsRoute}/data-schemas-entry.js`) {
                     return id;
                   }
+
+                  // Routing virtual modules
+                  if (id === VIRTUAL_ROUTING_CONFIG) {
+                    return RESOLVED_ROUTING_CONFIG;
+                  }
+                  if (id === VIRTUAL_LAYOUT) {
+                    return RESOLVED_LAYOUT;
+                  }
+                  if (id === VIRTUAL_PAGE_API) {
+                    return RESOLVED_PAGE_API;
+                  }
+                  if (id === VIRTUAL_PUCK_CONFIG) {
+                    return RESOLVED_PUCK_CONFIG;
+                  }
+
                   return null;
                 },
                 load(id) {
@@ -199,6 +254,28 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
                     // Return empty module if no schemas path configured
                     return 'export default {};';
                   }
+
+                  // Routing virtual modules
+                  if (id === RESOLVED_ROUTING_CONFIG) {
+                    if (resolvedRoutingConfig) {
+                      return generateRoutingConfigModule(resolvedRoutingConfig);
+                    }
+                    // Return disabled config if routing not configured
+                    return 'export default { enabled: false, routes: {}, fallback: "404", onConflict: "warn" };';
+                  }
+                  if (id === RESOLVED_LAYOUT) {
+                    return generateLayoutModule(routingConfig);
+                  }
+                  if (id === RESOLVED_PAGE_API) {
+                    return generatePageApiModule({
+                      contentRoot: options.contentRoot,
+                      canvasDir: options.canvasDir || './canvas',
+                    });
+                  }
+                  if (id === RESOLVED_PUCK_CONFIG) {
+                    return generatePuckConfigModule(options.puckConfigPath);
+                  }
+
                   return null;
                 },
               },
