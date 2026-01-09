@@ -29,7 +29,7 @@ Commands:
   astro <subcommand> [options] Astro framework integration commands
 
 Astro Subcommands:
-  astro setup [path]           Set up Astro integration (routes, components, config)
+  astro setup [path]           Set up Astro integration (components, Puck config)
 
 Options:
   -h, --help                   Show this help message
@@ -65,7 +65,7 @@ Options:
         if (!subcommand) {
           console.error(`Error: astro command requires a subcommand
 Available subcommands:
-  setup [path]    Set up Astro integration (routes, components, config)`);
+  setup [path]    Set up Astro integration (components, Puck config)`);
           process.exit(1);
         }
 

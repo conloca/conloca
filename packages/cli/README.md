@@ -35,7 +35,7 @@ conloca init . default
 
 ### Astro Integration
 
-Set up Astro integration with all necessary files:
+Set up Astro integration with Puck components and configuration:
 
 ```bash
 conloca astro setup [path]
@@ -43,8 +43,6 @@ conloca astro setup [path]
 
 This command will generate:
 
-- `src/pages/[...slug].astro` - Dynamic route file for CMS pages
-- `src/content.config.ts` - Astro content collections config
 - `src/puck.config.tsx` - Puck component configuration
 - `src/components/Layout.tsx` - Layout HOC with grid/flex support
 - `src/components/Section.tsx` - Section wrapper component
@@ -54,9 +52,7 @@ This command will generate:
 - `src/components/puck/Grid.tsx` - Grid layout component
 - `src/schemas/data.ts` - Example Zod schemas for data collections
 
-Options:
-
-- `-s, --site <name>`: Target a specific site (default: `default`)
+> **Note:** Routes are now handled automatically by the Astro plugin. Configure routing in your `astro.config.mjs` with `conlocaCMS({ routing: true })`.
 
 Examples:
 
@@ -66,9 +62,6 @@ conloca astro setup
 
 # Set up in a specific project
 conloca astro setup ./my-astro-project
-
-# Set up for a specific site
-conloca astro setup ./my-astro-project --site blog
 ```
 
 ### Verify Content
@@ -99,13 +92,19 @@ npm install @conloca/astro-cms @conloca/content-api @conloca/mdx @measured/puck
 # 3. Initialize content structure
 conloca init . default
 
-# 4. Set up Astro integration
+# 4. Set up Astro integration (components + Puck config)
 conloca astro setup
 
-# 5. Start your dev server
+# 5. Configure routing in astro.config.mjs:
+#    import { conlocaCMS } from '@conloca/astro-cms';
+#    export default defineConfig({
+#      integrations: [conlocaCMS({ routing: true })]
+#    });
+
+# 6. Start your dev server
 npm run dev
 
-# 6. Visit /__cms to edit pages
+# 7. Visit /__cms to edit pages
 ```
 
 ## Development
