@@ -193,7 +193,7 @@ if (hasPuckData && page && resolvedPuckData) {
 ---
 
 {Layout && page ? (
-  <Layout page={page}>
+  <Layout title={page.title ?? 'Page'} description={page.description}>
     {hasPuckData && PageRenderer ? (
       <PageRenderer />
     ) : hasPuckData && resolvedPuckData ? (

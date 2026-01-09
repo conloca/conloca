@@ -441,45 +441,44 @@ export interface PageReference {
 /**
  * Props passed to layout components wrapping page content.
  *
- * Layouts receive page metadata for customization and
- * children (the rendered Puck content) as a slot.
+ * Layouts receive common props (title, description) that work with
+ * most existing layouts. No special Conloca-specific layout needed.
  *
  * @example Astro layout usage
  * ```astro
  * ---
- * import type { LayoutProps } from '@conloca/astro-cms';
+ * interface Props {
+ *   title: string;
+ *   description?: string;
+ * }
  *
- * type Props = LayoutProps;
- *
- * const { page, children } = Astro.props;
+ * const { title, description } = Astro.props;
  * ---
  *
  * <html>
  *   <head>
- *     <title>{page.title}</title>
- *     <meta name="description" content={page.description} />
+ *     <title>{title}</title>
+ *     {description && <meta name="description" content={description} />}
  *   </head>
  *   <body>
- *     <header>
- *       <nav>...</nav>
- *     </header>
- *     <main>
- *       <slot />
- *     </main>
- *     <footer>...</footer>
+ *     <slot />
  *   </body>
  * </html>
  * ```
  *
  * @example React layout usage
  * ```tsx
- * import type { LayoutProps } from '@conloca/astro-cms';
+ * interface LayoutProps {
+ *   title: string;
+ *   description?: string;
+ *   children: React.ReactNode;
+ * }
  *
- * export default function Layout({ page, children }: LayoutProps) {
+ * export default function Layout({ title, children }: LayoutProps) {
  *   return (
  *     <div className="layout">
  *       <header>
- *         <h1>{page.title}</h1>
+ *         <h1>{title}</h1>
  *       </header>
  *       <main>{children}</main>
  *     </div>
@@ -489,24 +488,22 @@ export interface PageReference {
  */
 export interface LayoutProps {
   /**
-   * Page data for the current route.
-   *
-   * Contains all metadata needed for layout customization:
-   * - title, description for SEO
-   * - pathname for navigation highlighting
-   * - route.meta for conditional rendering
+   * Page title for the document head.
    */
-  page: PageData;
+  title: string;
+
+  /**
+   * Page description for SEO meta tag.
+   */
+  description?: string;
 
   /**
    * The rendered Puck content.
    *
    * In Astro layouts, use <slot /> instead of {children}.
    * In React layouts, render {children} in the content area.
-   *
-   * This is the result of <Render config={} data={puckData} />
    */
-  children: unknown; // astro.JSX.Element | React.ReactNode
+  children?: unknown; // astro.JSX.Element | React.ReactNode
 }
 
 /**
