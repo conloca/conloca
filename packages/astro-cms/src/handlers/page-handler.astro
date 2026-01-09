@@ -9,7 +9,7 @@
  * MDX blocks are evaluated at build time and rendered as React components.
  */
 
-import { Render } from '@measured/puck';
+import { Render, resolveAllData } from '@measured/puck';
 import type { ComponentType } from 'react';
 
 // MDX evaluation imports
@@ -153,11 +153,25 @@ if (routeConfig?.dataBindings?.collections?.length) {
 // Handle missing puckData gracefully
 const hasPuckData = page?.puckData && Object.keys(page.puckData).length > 0;
 
+// Resolve component data if we have bindings
+let resolvedPuckData = page?.puckData;
+
+if (hasPuckData && page && dataContext) {
+  try {
+    resolvedPuckData = await resolveAllData(page.puckData, puckConfig, {
+      metadata: dataContext,
+    });
+  } catch (error) {
+    console.error('[Conloca] resolveAllData failed:', error);
+    // Fall back to original puckData if resolution fails
+  }
+}
+
 // Create PageRenderer with MDX blocks support
 // This evaluates all MDX blocks at build time and creates a renderer with them baked in
 let PageRenderer: ComponentType | undefined;
 
-if (hasPuckData && page) {
+if (hasPuckData && page && resolvedPuckData) {
   try {
     // Create ContentAPI for MDX evaluation using options from virtual module
     const contentApi = await createContentAPI({
@@ -169,7 +183,7 @@ if (hasPuckData && page) {
     const mdxComponents = await evaluateMDXBlocks(contentApi, contentOptions.locale);
 
     // Create renderer with MDX components baked in via closure
-    PageRenderer = createPageRendererWithBlocks(puckConfig, page.puckData, mdxComponents);
+    PageRenderer = createPageRendererWithBlocks(puckConfig, resolvedPuckData, mdxComponents);
   } catch (error) {
     // If MDX evaluation fails, log and fall back to plain Render
     console.error('[Conloca] MDX evaluation failed, falling back to plain render:', error);
@@ -182,8 +196,8 @@ if (hasPuckData && page) {
   <Layout page={page}>
     {hasPuckData && PageRenderer ? (
       <PageRenderer />
-    ) : hasPuckData ? (
-      <Render config={puckConfig} data={page.puckData} />
+    ) : hasPuckData && resolvedPuckData ? (
+      <Render config={puckConfig} data={resolvedPuckData} />
     ) : (
       <div class="conloca-empty-page">
         <p>This page has no content yet.</p>
@@ -201,8 +215,8 @@ if (hasPuckData && page) {
     <body>
       {hasPuckData && PageRenderer ? (
         <PageRenderer />
-      ) : hasPuckData ? (
-        <Render config={puckConfig} data={page.puckData} />
+      ) : hasPuckData && resolvedPuckData ? (
+        <Render config={puckConfig} data={resolvedPuckData} />
       ) : (
         <div class="conloca-empty-page">
           <p>This page has no content yet.</p>
