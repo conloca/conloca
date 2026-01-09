@@ -1,0 +1,471 @@
+import type { Data } from '@measured/puck';
+
+/**
+ * Configuration for Conloca's content page routing system.
+ *
+ * The routing system allows sites to declare which URL patterns
+ * map to which content collections, eliminating the need for
+ * manual [...slug].astro files.
+ *
+ * @example Minimal configuration (uses all defaults)
+ * ```typescript
+ * conlocaCMS({
+ *   contentRoot: '../content',
+ *   puckConfigPath: './src/puck.config.tsx',
+ *   routing: true, // Enable with all defaults
+ * });
+ * ```
+ *
+ * @example Full configuration
+ * ```typescript
+ * conlocaCMS({
+ *   contentRoot: '../content',
+ *   puckConfigPath: './src/puck.config.tsx',
+ *   routing: {
+ *     enabled: true,
+ *     routes: {
+ *       pages: {
+ *         pattern: '/[...slug]',
+ *         collection: 'pages',
+ *         layout: './src/layouts/Layout.astro',
+ *         prerender: true,
+ *       },
+ *       blog: {
+ *         pattern: '/blog/[slug]',
+ *         collection: 'posts',
+ *         layout: './src/layouts/BlogLayout.astro',
+ *       },
+ *     },
+ *     fallback: '404',
+ *   },
+ * });
+ * ```
+ */
+export interface RoutingConfig {
+  /**
+   * Whether routing is enabled.
+   *
+   * When false, no content routes are injected and sites must
+   * handle routing manually (backward-compatible mode).
+   *
+   * @default true (when routing config object is provided)
+   */
+  enabled?: boolean;
+
+  /**
+   * Route definitions mapping URL patterns to content collections.
+   *
+   * Each key is a route identifier (for debugging/logging).
+   * The value defines how that route behaves.
+   *
+   * If not provided, a default 'pages' route is created:
+   * - pattern: '/[...slug]'
+   * - collection: 'pages' (auto-discovered from content)
+   * - layout: undefined (uses default Astro layout behavior)
+   * - prerender: true
+   *
+   * @default { pages: { pattern: '/[...slug]', collection: 'pages', prerender: true } }
+   */
+  routes?: Record<string, RouteConfig>;
+
+  /**
+   * Behavior when a route pattern matches but no content exists.
+   *
+   * - '404': Return a 404 response (standard behavior)
+   * - 'passthrough': Let Astro continue to the next route handler
+   *
+   * 'passthrough' is useful when you have both CMS-managed pages
+   * and file-based pages coexisting during migration.
+   *
+   * @default '404'
+   */
+  fallback?: '404' | 'passthrough';
+
+  /**
+   * What to do when an injected route conflicts with an existing file-based route.
+   *
+   * - 'warn': Log a warning but proceed (injected route takes precedence)
+   * - 'error': Fail the build with an error
+   * - 'silent': No message (injected route takes precedence)
+   *
+   * Conflicts are detected during the 'astro:routes:resolved' hook.
+   *
+   * @default 'warn'
+   */
+  onConflict?: 'warn' | 'error' | 'silent';
+}
+
+/**
+ * Shorthand for enabling routing with all defaults.
+ *
+ * When `routing: true` is passed, it's equivalent to:
+ * ```typescript
+ * routing: {
+ *   enabled: true,
+ *   routes: { pages: { pattern: '/[...slug]', collection: 'pages', prerender: true } },
+ *   fallback: '404',
+ *   onConflict: 'warn',
+ * }
+ * ```
+ */
+export type RoutingConfigInput = boolean | RoutingConfig;
+
+/**
+ * Configuration for a single route mapping.
+ *
+ * Defines how a URL pattern maps to content from a collection,
+ * which layout to use, and rendering behavior.
+ *
+ * @example Catch-all pages route
+ * ```typescript
+ * {
+ *   pattern: '/[...slug]',
+ *   collection: 'pages',
+ *   layout: './src/layouts/Layout.astro',
+ *   prerender: true,
+ * }
+ * ```
+ *
+ * @example Blog route with specific prefix
+ * ```typescript
+ * {
+ *   pattern: '/blog/[slug]',
+ *   collection: 'posts',
+ *   layout: './src/layouts/BlogLayout.astro',
+ *   prerender: true,
+ * }
+ * ```
+ *
+ * @example SSR route (no static generation)
+ * ```typescript
+ * {
+ *   pattern: '/preview/[...slug]',
+ *   collection: 'pages',
+ *   prerender: false,
+ * }
+ * ```
+ */
+export interface RouteConfig {
+  /**
+   * Astro route pattern for URL matching.
+   *
+   * Must be a valid Astro route pattern:
+   * - '/about' - Exact match
+   * - '/blog/[slug]' - Single dynamic segment
+   * - '/[...slug]' - Catch-all (rest parameter)
+   * - '/docs/[...path]' - Catch-all with prefix
+   *
+   * The pattern is passed directly to Astro's injectRoute() API.
+   *
+   * IMPORTANT: Pattern must start with '/'
+   * IMPORTANT: Catch-all patterns ([...param]) capture everything after the prefix
+   */
+  pattern: string;
+
+  /**
+   * Content collection to use for this route.
+   *
+   * Must match a collection in the content directory.
+   * Typically 'pages' for general content or a specific
+   * collection like 'posts' for blog content.
+   *
+   * If not specified, defaults to 'pages'.
+   *
+   * The collection is used to:
+   * 1. Discover available paths for getStaticPaths()
+   * 2. Load page data for the matched route
+   *
+   * @default 'pages'
+   */
+  collection?: string;
+
+  /**
+   * Path to the Astro layout component.
+   *
+   * The layout wraps the Puck-rendered content. It receives
+   * LayoutProps with page metadata and children.
+   *
+   * Path resolution:
+   * - Relative paths (./src/...) resolve from project root
+   * - Can be an Astro component (.astro) or React component (.tsx)
+   *
+   * If not specified, the page handler renders content without
+   * a layout wrapper (Puck content only).
+   *
+   * @example './src/layouts/Layout.astro'
+   * @example './src/layouts/BlogLayout.tsx'
+   */
+  layout?: string;
+
+  /**
+   * Whether to statically generate pages at build time.
+   *
+   * - true: Generate static HTML at build time (SSG)
+   * - false: Render on each request (SSR)
+   *
+   * SSG (true) is recommended for most content sites:
+   * - Faster page loads
+   * - Lower hosting costs
+   * - Works with static hosting
+   *
+   * SSR (false) is useful for:
+   * - Preview routes
+   * - Personalized content
+   * - Frequently updated content
+   *
+   * @default true
+   */
+  prerender?: boolean;
+
+  /**
+   * Additional route metadata passed to the page handler.
+   *
+   * This allows route-specific customization that the
+   * layout or page handler can access.
+   *
+   * @example { showSidebar: true, theme: 'dark' }
+   */
+  meta?: Record<string, unknown>;
+}
+
+/**
+ * Complete page data for rendering.
+ *
+ * This is what the page-handler.astro receives after
+ * loading content from the matched route.
+ *
+ * Contains:
+ * - Puck editor data for rendering
+ * - Page metadata for SEO/layouts
+ * - Route information for context
+ */
+export interface PageData {
+  /**
+   * Unique page identifier from the content collection.
+   *
+   * Typically matches the URL path (e.g., 'about', 'blog/post-1').
+   */
+  id: string;
+
+  /**
+   * Page title from content metadata.
+   *
+   * Used for:
+   * - <title> tag
+   * - Layout heading
+   * - Navigation/breadcrumbs
+   *
+   * May be undefined if page has no title set.
+   */
+  title?: string;
+
+  /**
+   * Page description for SEO.
+   *
+   * Used for:
+   * - <meta name="description">
+   * - Social sharing previews
+   */
+  description?: string;
+
+  /**
+   * URL pathname for this page.
+   *
+   * Always starts with '/' and matches the route pattern.
+   *
+   * @example '/about'
+   * @example '/blog/my-first-post'
+   */
+  pathname: string;
+
+  /**
+   * Puck editor data for rendering.
+   *
+   * This is the Data object from @measured/puck containing:
+   * - root: Root component props
+   * - content: Array of component instances
+   * - zones: Named drop zones with nested content
+   *
+   * Passed directly to <Render config={} data={puckData} />
+   */
+  puckData: Data;
+
+  /**
+   * Content collection this page belongs to.
+   *
+   * @example 'pages', 'posts', 'docs'
+   */
+  collection: string;
+
+  /**
+   * Route configuration that matched this page.
+   *
+   * Includes the pattern, layout path, and any meta.
+   * Useful for conditional rendering based on route.
+   */
+  route: {
+    /**
+     * Route identifier from the config.
+     * @example 'pages', 'blog'
+     */
+    name: string;
+
+    /**
+     * Original pattern from RouteConfig.
+     */
+    pattern: string;
+
+    /**
+     * Route-specific metadata if configured.
+     */
+    meta?: Record<string, unknown>;
+  };
+
+  /**
+   * Additional page metadata from content.
+   *
+   * Custom fields stored in the page's frontmatter/metadata.
+   * Schema depends on the site's content configuration.
+   */
+  meta?: Record<string, unknown>;
+
+  /**
+   * Timestamps for the page content.
+   */
+  timestamps?: {
+    /**
+     * When the page was first created.
+     */
+    created?: Date;
+
+    /**
+     * When the page was last modified.
+     */
+    modified?: Date;
+
+    /**
+     * When the page was published (if different from created).
+     */
+    published?: Date;
+  };
+}
+
+/**
+ * Minimal page reference for listing/navigation.
+ *
+ * Used in getStaticPaths() to enumerate available pages
+ * without loading full content.
+ */
+export interface PageReference {
+  /**
+   * Page identifier.
+   */
+  id: string;
+
+  /**
+   * URL pathname.
+   */
+  pathname: string;
+
+  /**
+   * Page title (if available without full load).
+   */
+  title?: string;
+
+  /**
+   * Content collection.
+   */
+  collection: string;
+}
+
+/**
+ * Props passed to layout components wrapping page content.
+ *
+ * Layouts receive page metadata for customization and
+ * children (the rendered Puck content) as a slot.
+ *
+ * @example Astro layout usage
+ * ```astro
+ * ---
+ * import type { LayoutProps } from '@conloca/astro-cms';
+ *
+ * type Props = LayoutProps;
+ *
+ * const { page, children } = Astro.props;
+ * ---
+ *
+ * <html>
+ *   <head>
+ *     <title>{page.title}</title>
+ *     <meta name="description" content={page.description} />
+ *   </head>
+ *   <body>
+ *     <header>
+ *       <nav>...</nav>
+ *     </header>
+ *     <main>
+ *       <slot />
+ *     </main>
+ *     <footer>...</footer>
+ *   </body>
+ * </html>
+ * ```
+ *
+ * @example React layout usage
+ * ```tsx
+ * import type { LayoutProps } from '@conloca/astro-cms';
+ *
+ * export default function Layout({ page, children }: LayoutProps) {
+ *   return (
+ *     <div className="layout">
+ *       <header>
+ *         <h1>{page.title}</h1>
+ *       </header>
+ *       <main>{children}</main>
+ *     </div>
+ *   );
+ * }
+ * ```
+ */
+export interface LayoutProps {
+  /**
+   * Page data for the current route.
+   *
+   * Contains all metadata needed for layout customization:
+   * - title, description for SEO
+   * - pathname for navigation highlighting
+   * - route.meta for conditional rendering
+   */
+  page: PageData;
+
+  /**
+   * The rendered Puck content.
+   *
+   * In Astro layouts, use <slot /> instead of {children}.
+   * In React layouts, render {children} in the content area.
+   *
+   * This is the result of <Render config={} data={puckData} />
+   */
+  children: unknown; // astro.JSX.Element | React.ReactNode
+}
+
+/**
+ * Layout component type for Astro.
+ *
+ * Layouts must accept LayoutProps and render a page shell
+ * with the provided content.
+ */
+export type LayoutComponent = (props: LayoutProps) => unknown;
+
+/**
+ * Resolved routing configuration with all fields required.
+ *
+ * This is what the page handler receives via the virtual module,
+ * with all defaults applied.
+ */
+export interface ResolvedRoutingConfig {
+  enabled: boolean;
+  routes: Record<string, Required<RouteConfig>>;
+  fallback: '404' | 'passthrough';
+  onConflict: 'warn' | 'error' | 'silent';
+}
