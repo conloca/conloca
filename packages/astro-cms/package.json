@@ -42,6 +42,11 @@
     },
     "./virtual-modules": {
       "types": "./src/virtual-modules.d.ts"
+    },
+    "./page-handler": {
+      "development": "./src/handlers/page-handler.astro",
+      "import": "./dist/handlers/page-handler.astro",
+      "default": "./dist/handlers/page-handler.astro"
     }
   },
   "scripts": {
@@ -51,6 +56,8 @@
   },
   "files": [
     "dist",
+    "src/handlers",
+    "src/virtual-modules.d.ts",
     "!**/*.tsbuildinfo"
   ],
   "dependencies": {

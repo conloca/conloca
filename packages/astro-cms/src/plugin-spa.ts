@@ -157,7 +157,7 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
   return {
     name: '@conloca/astro-cms',
     hooks: {
-      'astro:config:setup': ({ updateConfig, injectRoute, command }) => {
+      'astro:config:setup': ({ updateConfig, injectRoute, command, logger }) => {
         // Always apply SSR externalization for native modules (needed for both dev and build)
         // This must be outside the dev-only block to fix build errors
         updateConfig({
@@ -171,10 +171,67 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
               // These cannot be bundled and must be available at runtime
               external: ['@node-rs/xxhash'],
             },
+            // Virtual modules for routing - needed in both dev and build
+            plugins: [
+              {
+                name: 'conloca-routing-virtual-modules',
+                resolveId(id) {
+                  // Routing virtual modules (work in both dev and build)
+                  if (id === VIRTUAL_ROUTING_CONFIG) {
+                    return RESOLVED_ROUTING_CONFIG;
+                  }
+                  if (id === VIRTUAL_LAYOUT) {
+                    return RESOLVED_LAYOUT;
+                  }
+                  if (id === VIRTUAL_PAGE_API) {
+                    return RESOLVED_PAGE_API;
+                  }
+                  if (id === VIRTUAL_PUCK_CONFIG) {
+                    return RESOLVED_PUCK_CONFIG;
+                  }
+                  return null;
+                },
+                load(id) {
+                  // Routing virtual modules
+                  if (id === RESOLVED_ROUTING_CONFIG) {
+                    if (resolvedRoutingConfig) {
+                      return generateRoutingConfigModule(resolvedRoutingConfig);
+                    }
+                    // Return disabled config if routing not configured
+                    return 'export default { enabled: false, routes: {}, fallback: "404", onConflict: "warn" };';
+                  }
+                  if (id === RESOLVED_LAYOUT) {
+                    return generateLayoutModule(routingConfig);
+                  }
+                  if (id === RESOLVED_PAGE_API) {
+                    return generatePageApiModule({
+                      contentRoot: options.contentRoot,
+                      canvasDir: options.canvasDir || './canvas',
+                    });
+                  }
+                  if (id === RESOLVED_PUCK_CONFIG) {
+                    return generatePuckConfigModule(options.puckConfigPath);
+                  }
+                  return null;
+                },
+              },
+            ],
           },
         });
 
-        // Only inject routes and dev-specific config in dev mode
+        // Content page routes - works in both dev and build
+        if (resolvedRoutingConfig?.enabled) {
+          for (const [routeName, routeConfig] of Object.entries(resolvedRoutingConfig.routes)) {
+            logger.info(`Injecting content route: ${routeConfig.pattern} (${routeName})`);
+            injectRoute({
+              pattern: routeConfig.pattern,
+              entrypoint: '@conloca/astro-cms/page-handler',
+              prerender: routeConfig.prerender,
+            });
+          }
+        }
+
+        // Only inject CMS admin routes and dev-specific config in dev mode
         if (command !== 'dev') return;
 
         // Pass options via Vite define for API routes
@@ -196,9 +253,9 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
             },
             plugins: [
               {
-                name: 'conloca-virtual-modules',
+                name: 'conloca-dev-virtual-modules',
                 resolveId(id) {
-                  // Config module for spa-handler.ts
+                  // Dev-only config module for spa-handler.ts
                   if (id === VIRTUAL_CONFIG_MODULE) {
                     return RESOLVED_VIRTUAL_CONFIG;
                   }
@@ -211,25 +268,10 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
                   if (id === `${cmsRoute}/data-schemas-entry.js`) {
                     return id;
                   }
-
-                  // Routing virtual modules
-                  if (id === VIRTUAL_ROUTING_CONFIG) {
-                    return RESOLVED_ROUTING_CONFIG;
-                  }
-                  if (id === VIRTUAL_LAYOUT) {
-                    return RESOLVED_LAYOUT;
-                  }
-                  if (id === VIRTUAL_PAGE_API) {
-                    return RESOLVED_PAGE_API;
-                  }
-                  if (id === VIRTUAL_PUCK_CONFIG) {
-                    return RESOLVED_PUCK_CONFIG;
-                  }
-
                   return null;
                 },
                 load(id) {
-                  // Config module for spa-handler.ts
+                  // Dev-only config module for spa-handler.ts
                   if (id === RESOLVED_VIRTUAL_CONFIG) {
                     return `export default ${JSON.stringify(spaConfig)};`;
                   }
@@ -254,28 +296,6 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
                     // Return empty module if no schemas path configured
                     return 'export default {};';
                   }
-
-                  // Routing virtual modules
-                  if (id === RESOLVED_ROUTING_CONFIG) {
-                    if (resolvedRoutingConfig) {
-                      return generateRoutingConfigModule(resolvedRoutingConfig);
-                    }
-                    // Return disabled config if routing not configured
-                    return 'export default { enabled: false, routes: {}, fallback: "404", onConflict: "warn" };';
-                  }
-                  if (id === RESOLVED_LAYOUT) {
-                    return generateLayoutModule(routingConfig);
-                  }
-                  if (id === RESOLVED_PAGE_API) {
-                    return generatePageApiModule({
-                      contentRoot: options.contentRoot,
-                      canvasDir: options.canvasDir || './canvas',
-                    });
-                  }
-                  if (id === RESOLVED_PUCK_CONFIG) {
-                    return generatePuckConfigModule(options.puckConfigPath);
-                  }
-
                   return null;
                 },
               },
@@ -365,6 +385,48 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
 
       'astro:server:setup': ({ logger }) => {
         logger.info(`Conloca CMS available at ${cmsRoute}`);
+      },
+
+      'astro:routes:resolved': ({ routes, logger }) => {
+        // Check for route conflicts when routing is enabled
+        if (!resolvedRoutingConfig?.enabled) return;
+
+        const injectedPatterns = new Set(
+          Object.values(resolvedRoutingConfig.routes).map((r) => r.pattern),
+        );
+
+        // Find file-based routes that may conflict with injected routes
+        const conflicts: { injected: string; fileBased: string }[] = [];
+
+        for (const route of routes) {
+          // Skip routes from integrations (including our own)
+          if (route.origin === 'internal') continue;
+
+          // Check if this file-based route pattern matches any injected pattern
+          const pattern = route.pattern;
+          if (injectedPatterns.has(pattern)) {
+            conflicts.push({
+              injected: pattern,
+              fileBased: route.route,
+            });
+          }
+        }
+
+        if (conflicts.length === 0) return;
+
+        // Handle conflicts based on onConflict setting
+        const onConflict = resolvedRoutingConfig.onConflict;
+
+        for (const conflict of conflicts) {
+          const message = `Route conflict: '${conflict.injected}' is defined both in ${conflict.fileBased} and injected by Conloca routing. Conloca route will take precedence.`;
+
+          if (onConflict === 'error') {
+            throw new Error(`[Conloca] ${message}`);
+          } else if (onConflict === 'warn') {
+            logger.warn(message);
+          }
+          // 'silent' - do nothing
+        }
       },
     },
   };
