@@ -414,7 +414,8 @@ export interface PageData {
  * Minimal page reference for listing/navigation.
  *
  * Used in getStaticPaths() to enumerate available pages
- * without loading full content.
+ * without loading full content, and in dataBindings.pages
+ * for blog listing components.
  */
 export interface PageReference {
   /**
@@ -436,6 +437,32 @@ export interface PageReference {
    * Content collection.
    */
   collection: string;
+
+  /**
+   * Page metadata from content.
+   *
+   * Contains author, excerpt, tags, featured image, and other
+   * custom fields from the page's frontmatter/metadata.
+   * Useful for blog cards, listings, and SEO.
+   */
+  meta?: Record<string, unknown>;
+
+  /**
+   * Page timestamps for sorting and display.
+   *
+   * Used by getPagesByPrefix for date-based sorting.
+   */
+  timestamps?: {
+    /**
+     * When the page was first created.
+     */
+    created?: Date;
+
+    /**
+     * When the page was last modified.
+     */
+    modified?: Date;
+  };
 }
 
 /**
@@ -576,6 +603,56 @@ export interface DataBindingConfig {
    * Use this to fetch data in a specific locale regardless of route config.
    */
   locale?: string;
+
+  /**
+   * Page discovery configuration for listing pages by path prefix.
+   *
+   * Enables components to access lists of pages matching a URL pattern,
+   * useful for blog listings, category pages, and site navigation.
+   *
+   * @example Blog listing page
+   * ```typescript
+   * {
+   *   pattern: '/blog',
+   *   dataBindings: {
+   *     pages: {
+   *       prefix: '/blog/',
+   *       sort: 'date-desc',
+   *       limit: 10,
+   *     },
+   *   },
+   * }
+   * ```
+   */
+  pages?: {
+    /**
+     * Path prefix to filter pages.
+     *
+     * Only pages whose pathname starts with this prefix are included.
+     * The listing page itself is excluded.
+     *
+     * @example '/blog/' matches '/blog/post-1', '/blog/post-2'
+     */
+    prefix: string;
+
+    /**
+     * Maximum number of pages to return.
+     *
+     * Useful for showing "latest N posts" on a homepage or sidebar.
+     */
+    limit?: number;
+
+    /**
+     * Sort order for returned pages.
+     *
+     * - 'date-desc': Newest first (by modified/created date)
+     * - 'date-asc': Oldest first
+     * - 'title': Alphabetical by title
+     *
+     * @default 'date-desc'
+     */
+    sort?: 'date-desc' | 'date-asc' | 'title';
+  };
 }
 
 /**
@@ -611,6 +688,14 @@ export interface DataContext {
    * Value is an array of entries from that collection.
    */
   collections: Record<string, DataCollectionEntry[]>;
+
+  /**
+   * Pages matching the dataBindings.pages filter.
+   *
+   * Only present if dataBindings.pages is configured for the route.
+   * Contains PageReference objects with meta and timestamps for blog display.
+   */
+  pages?: PageReference[];
 
   /**
    * Current locale used for data fetching.
