@@ -91,19 +91,26 @@ const locale = contentOptions.locale; // Configured via routing.locale
  * @param collection - Optional collection filter
  */
 export async function getAllPages(collection) {
-  const pages = await site.listPages(locale);
+  const pages = [];
 
-  // Filter by collection if specified
-  const filtered = collection
-    ? pages.filter(p => p.collection === collection)
-    : pages;
+  // listPages is a generator that yields ContentManifest objects
+  for (const manifest of site.listPages(locale)) {
+    // Filter by collection if specified
+    if (collection && manifest.collection !== collection) continue;
 
-  return filtered.map(page => ({
-    id: page.id,
-    pathname: page.pathname || '/' + page.id,
-    title: page.title,
-    collection: page.collection || 'pages',
-  }));
+    // Get the localized data for pathname/title
+    const localeData = manifest.locales[locale];
+    if (!localeData) continue;
+
+    pages.push({
+      id: manifest.id,
+      pathname: localeData.pathname || '/' + manifest.id.replace(/^index$/, ''),
+      title: localeData.meta?.title || manifest.id,
+      collection: manifest.collection || 'pages',
+    });
+  }
+
+  return pages;
 }
 
 /**
@@ -112,29 +119,51 @@ export async function getAllPages(collection) {
  * @param collection - Optional collection to search in
  */
 export async function getPage(pathname, collection) {
-  // Use site.getByPathname which handles pathname-to-page resolution
-  const pageData = await site.getByPathname(pathname, locale);
+  // Use site.getByPathname which returns ContentManifest (metadata only)
+  const manifest = site.getByPathname(pathname, locale);
 
-  if (!pageData) {
+  if (!manifest) {
     const error = new Error(\`Page not found: \${pathname}\`);
     error.code = 'PAGE_NOT_FOUND';
     throw error;
   }
 
+  // Optionally filter by collection
+  if (collection && manifest.collection !== collection) {
+    const error = new Error(\`Page not found: \${pathname}\`);
+    error.code = 'PAGE_NOT_FOUND';
+    throw error;
+  }
+
+  // Get the full content with locale data
+  const content = await contentApi.getLocalized(manifest.id, locale);
+
+  if (!content) {
+    const error = new Error(\`Page not found: \${pathname}\`);
+    error.code = 'PAGE_NOT_FOUND';
+    throw error;
+  }
+
+  const localeData = content.localized;
+  const meta = localeData.meta || {};
+
   return {
-    id: pageData.id,
-    title: pageData.title,
-    description: pageData.description,
+    id: manifest.id,
+    title: meta.title || manifest.id,
+    description: meta.description,
     pathname: pathname,
-    puckData: pageData.puck,
-    collection: pageData.collection || collection || 'pages',
+    puckData: localeData.content?.puckData,
+    collection: manifest.collection || collection || 'pages',
     route: {
       name: 'pages', // Will be set by caller
       pattern: '/[...slug]',
       meta: {},
     },
-    meta: pageData.meta || {},
-    timestamps: pageData.timestamps,
+    meta: meta,
+    timestamps: {
+      created: localeData.created,
+      modified: localeData.modified,
+    },
   };
 }
 
@@ -143,13 +172,20 @@ export async function getPage(pathname, collection) {
  * @param pathname - URL pathname
  * @param collection - Optional collection filter
  */
-export async function pageExists(pathname, collection) {
-  try {
-    const pageData = await site.getByPathname(pathname, locale);
-    return pageData !== null;
-  } catch {
+export function pageExists(pathname, collection) {
+  // getByPathname is synchronous - returns ContentManifest | null
+  const manifest = site.getByPathname(pathname, locale);
+
+  if (!manifest) {
     return false;
   }
+
+  // If collection filter specified, verify it matches
+  if (collection && manifest.collection !== collection) {
+    return false;
+  }
+
+  return true;
 }
 
 /**
