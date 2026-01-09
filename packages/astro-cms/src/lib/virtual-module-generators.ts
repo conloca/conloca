@@ -59,6 +59,7 @@ export interface PageApiModuleOptions {
  * - getAllPages(collection?) - For getStaticPaths()
  * - getPage(pathname, collection?) - For page data loading
  * - pageExists(pathname, collection?) - For 404 checks
+ * - contentOptions - Configuration for ContentAPI (for MDX evaluation)
  *
  * @param options - Configuration for ContentAPI initialization
  * @returns JavaScript module code as a string
@@ -67,15 +68,23 @@ export function generatePageApiModule(options: PageApiModuleOptions): string {
   return `
 import { createContentAPI } from '@conloca/content-api/node';
 
-// Initialize ContentAPI with configured paths
-const contentApi = await createContentAPI({
+// Export content options for MDX evaluation and other ContentAPI uses
+export const contentOptions = {
   contentRoot: '${options.contentRoot}',
   canvasDir: '${options.canvasDir}',
+  siteName: '${options.siteName}',
+  locale: '${options.locale}',
+};
+
+// Initialize ContentAPI with configured paths
+const contentApi = await createContentAPI({
+  contentRoot: contentOptions.contentRoot,
+  canvasDir: contentOptions.canvasDir,
 });
 
 // Get site instance for page operations (configured via routing.siteName)
-const site = contentApi.getSite('${options.siteName}');
-const locale = '${options.locale}'; // Configured via routing.locale
+const site = contentApi.getSite(contentOptions.siteName);
+const locale = contentOptions.locale; // Configured via routing.locale
 
 /**
  * Get all pages for static path generation.

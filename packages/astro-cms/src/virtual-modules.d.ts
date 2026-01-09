@@ -51,8 +51,24 @@ declare module 'virtual:conloca-layout' {
  * - getStaticPaths(): getAllPages()
  * - Page rendering: getPage()
  * - 404 checks: pageExists()
+ * - MDX evaluation: contentOptions
  */
 declare module 'virtual:conloca-page-api' {
+  /**
+   * Content configuration options for ContentAPI initialization.
+   * Useful for creating additional ContentAPI instances (e.g., for MDX evaluation).
+   */
+  export const contentOptions: {
+    /** Path to content directory */
+    contentRoot: string;
+    /** Path to canvas/puck directory */
+    canvasDir: string;
+    /** Site name for content resolution */
+    siteName: string;
+    /** Default locale for content resolution */
+    locale: string;
+  };
+
   /**
    * Get all pages for static path generation.
    * @param collection - Optional collection filter (defaults to all collections)
