@@ -93,6 +93,48 @@ export interface RoutingConfig {
    * @default 'warn'
    */
   onConflict?: 'warn' | 'error' | 'silent';
+
+  /**
+   * Site name for content resolution.
+   *
+   * Used by PageAPI to call contentApi.getSite(siteName).
+   * Allows multi-site content directories with a single configuration.
+   *
+   * @example Multi-site setup with different content directories
+   * ```typescript
+   * conlocaCMS({
+   *   contentRoot: '../content',
+   *   routing: {
+   *     enabled: true,
+   *     siteName: 'marketing', // Load content from 'marketing' site
+   *   },
+   * });
+   * ```
+   *
+   * @default 'default'
+   */
+  siteName?: string;
+
+  /**
+   * Default locale for content resolution.
+   *
+   * Used by PageAPI for listPages(locale) and getByPathname(pathname, locale).
+   * Can be extended later for multi-locale routing.
+   *
+   * @example Non-English content site
+   * ```typescript
+   * conlocaCMS({
+   *   contentRoot: '../content',
+   *   routing: {
+   *     enabled: true,
+   *     locale: 'de', // German content
+   *   },
+   * });
+   * ```
+   *
+   * @default 'en'
+   */
+  locale?: string;
 }
 
 /**
@@ -468,4 +510,8 @@ export interface ResolvedRoutingConfig {
   routes: Record<string, Required<RouteConfig>>;
   fallback: '404' | 'passthrough';
   onConflict: 'warn' | 'error' | 'silent';
+  /** Site name for content resolution. */
+  siteName: string;
+  /** Default locale for content resolution. */
+  locale: string;
 }
