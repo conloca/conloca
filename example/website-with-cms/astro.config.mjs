@@ -16,6 +16,7 @@ export default defineConfig({
       puckConfigPath: './src/puck.config.tsx',
       dataSchemasPath: './src/schemas/data.ts',
       enableDevtools: true,
+      routing: true, // That's it - Conloca handles all routing
       queryClientOptions: {
         defaultOptions: {
           queries: {
