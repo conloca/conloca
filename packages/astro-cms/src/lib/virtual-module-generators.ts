@@ -69,12 +69,16 @@ const contentApi = await createContentAPI({
   canvasDir: '${options.canvasDir}',
 });
 
+// Get default site instance for page operations
+const site = contentApi.getSite('default');
+const locale = 'en'; // Default locale, could be made configurable
+
 /**
  * Get all pages for static path generation.
  * @param collection - Optional collection filter
  */
 export async function getAllPages(collection) {
-  const pages = await contentApi.listPages();
+  const pages = await site.listPages(locale);
 
   // Filter by collection if specified
   const filtered = collection
@@ -95,10 +99,8 @@ export async function getAllPages(collection) {
  * @param collection - Optional collection to search in
  */
 export async function getPage(pathname, collection) {
-  // Convert pathname to page ID
-  const id = pathname === '/' ? 'index' : pathname.slice(1);
-
-  const pageData = await contentApi.getPage(id);
+  // Use site.getByPathname which handles pathname-to-page resolution
+  const pageData = await site.getByPathname(pathname, locale);
 
   if (!pageData) {
     const error = new Error(\`Page not found: \${pathname}\`);
@@ -130,9 +132,8 @@ export async function getPage(pathname, collection) {
  */
 export async function pageExists(pathname, collection) {
   try {
-    const id = pathname === '/' ? 'index' : pathname.slice(1);
-    const exists = await contentApi.pageExists(id);
-    return exists;
+    const pageData = await site.getByPathname(pathname, locale);
+    return pageData !== null;
   } catch {
     return false;
   }

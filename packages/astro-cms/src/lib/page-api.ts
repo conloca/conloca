@@ -1,5 +1,5 @@
 import { createContentAPI } from '@conloca/content-api/node';
-import type { PageData, PageReference, RouteConfig } from '../types.js';
+import type { PageData, PageReference } from '../types.js';
 
 /**
  * Options for creating a PageAPI instance.
@@ -7,6 +7,10 @@ import type { PageData, PageReference, RouteConfig } from '../types.js';
 export interface PageApiOptions {
   contentRoot: string;
   canvasDir: string;
+  /** Site name to use for pages (defaults to 'default') */
+  siteName?: string;
+  /** Default locale for content (defaults to 'en') */
+  locale?: string;
 }
 
 /**
@@ -86,87 +90,96 @@ export async function createPageAPI(options: PageApiOptions): Promise<PageAPI> {
     canvasDir: options.canvasDir,
   });
 
+  const siteName = options.siteName || 'default';
+  const locale = options.locale || 'en';
+
+  // Get the site for page operations
+  const site = contentApi.getSite(siteName);
+  if (!site) {
+    throw new Error(`Site '${siteName}' not found in content configuration`);
+  }
+
   return {
     async getAllPages(collection?: string): Promise<PageReference[]> {
-      const pages = await contentApi.listPages();
+      const pages: PageReference[] = [];
 
-      // Filter by collection if specified
-      const filtered = collection
-        ? pages.filter((p) => p.collection === collection)
-        : pages;
+      // Use site.listPages() generator to get all pages
+      for (const manifest of site.listPages(locale)) {
+        // Filter by collection if specified
+        if (collection && manifest.collection !== collection) {
+          continue;
+        }
 
-      return filtered.map((page) => ({
-        id: page.id,
-        pathname: page.pathname || '/' + page.id.replace(/^index$/, ''),
-        title: page.title,
-        collection: page.collection || 'pages',
-      }));
+        // Get the localized data for pathname
+        const localeData = manifest.locales[locale];
+        if (!localeData) continue;
+
+        pages.push({
+          id: manifest.id,
+          pathname: localeData.pathname || '/' + manifest.id.replace(/^index$/, ''),
+          title: localeData.meta?.title || manifest.id,
+          collection: manifest.collection || 'pages',
+        });
+      }
+
+      return pages;
     },
 
     async getPage(pathname: string, collection?: string): Promise<PageData> {
-      // Convert pathname to page ID
-      // / -> 'index'
-      // /about -> 'about'
-      // /blog/post-1 -> 'blog/post-1'
-      const id = pathname === '/' ? 'index' : pathname.slice(1);
+      // Use site.getByPathname to find the content by pathname
+      const manifest = site.getByPathname(pathname, locale);
 
-      const pageData = await contentApi.getPage(id);
-
-      if (!pageData) {
+      if (!manifest) {
         throw new PageNotFoundError(pathname);
       }
 
       // Optionally filter by collection
-      if (collection && pageData.collection && pageData.collection !== collection) {
+      if (collection && manifest.collection !== collection) {
         throw new PageNotFoundError(pathname);
       }
 
+      // Get the full content with locale data
+      const content = await contentApi.getLocalized(manifest.id, locale);
+
+      if (!content) {
+        throw new PageNotFoundError(pathname);
+      }
+
+      const localeData = content.localized;
+      const meta = localeData.meta || {};
+
       return {
-        id: pageData.id,
-        title: pageData.title,
-        description: pageData.description,
+        id: manifest.id,
+        title: meta.title || manifest.id,
+        description: meta.description,
         pathname,
-        puckData: pageData.puck,
-        collection: pageData.collection || collection || 'pages',
+        puckData: localeData.data,
+        collection: manifest.collection || collection || 'pages',
         route: {
           // These will be overwritten by the caller with actual route info
           name: 'pages',
           pattern: '/[...slug]',
           meta: {},
         },
-        meta: pageData.meta || {},
-        timestamps: pageData.timestamps,
+        meta,
+        timestamps: {
+          created: localeData.created,
+          modified: localeData.modified,
+        },
       };
     },
 
     async pageExists(pathname: string, collection?: string): Promise<boolean> {
       try {
-        const id = pathname === '/' ? 'index' : pathname.slice(1);
+        // Use site.getByPathname to check existence
+        const manifest = site.getByPathname(pathname, locale);
 
-        // Try to check if page exists
-        // ContentAPI may have a pageExists method, or we fall back to getPage
-        if ('pageExists' in contentApi && typeof contentApi.pageExists === 'function') {
-          const exists = await contentApi.pageExists(id);
-          if (!exists) return false;
-
-          // If collection filter specified, need to verify
-          if (collection) {
-            try {
-              const page = await contentApi.getPage(id);
-              return page?.collection === collection;
-            } catch {
-              return false;
-            }
-          }
-
-          return exists;
+        if (!manifest) {
+          return false;
         }
 
-        // Fallback: try to get the page
-        const page = await contentApi.getPage(id);
-        if (!page) return false;
-
-        if (collection && page.collection !== collection) {
+        // If collection filter specified, verify it matches
+        if (collection && manifest.collection !== collection) {
           return false;
         }
 

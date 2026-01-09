@@ -21,9 +21,6 @@ import { extractSlugFromPathname } from '../lib/route-utils.js';
 import type { GetStaticPaths } from 'astro';
 import type { PageData, ResolvedRoutingConfig } from '../types.js';
 
-// Cast to typed config
-const config = routingConfig as ResolvedRoutingConfig;
-
 // Default to prerender: true for static site generation
 export const prerender = true;
 
@@ -34,6 +31,10 @@ export const prerender = true;
  * to discover pages and generate the params/props for each.
  */
 export const getStaticPaths: GetStaticPaths = async () => {
+  // Import config inside getStaticPaths to ensure it's available at build time
+  // (Astro hoists getStaticPaths and runs it before module initialization)
+  const config = routingConfig as ResolvedRoutingConfig;
+
   const paths: {
     params: { slug: string | undefined };
     props: { routeName: string; collection: string; pathname: string };
@@ -80,6 +81,9 @@ interface Props {
 }
 
 const { routeName, collection, pathname } = Astro.props as Props;
+
+// Cast routing config for component body
+const config = routingConfig as ResolvedRoutingConfig;
 
 // Load page data
 let page: PageData | undefined;

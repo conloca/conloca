@@ -14,7 +14,7 @@
     "lib": ["ES2020", "DOM", "DOM.Iterable"]
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"],
-  "exclude": [],
+  "exclude": ["src/**/*.test.ts", "src/__tests__/**/*"],
   "references": [
     {
       "path": "../content-api/tsconfig.lib.json"

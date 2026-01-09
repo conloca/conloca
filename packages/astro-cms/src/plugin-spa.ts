@@ -1,9 +1,20 @@
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { UIConfig } from '@conloca/cms-spa';
 import { createContentAPI, createContentWatchHandlers } from '@conloca/content-api/node';
 import viteReact from '@vitejs/plugin-react';
 import type { AstroIntegration } from 'astro';
 
 import { normalizeRoutingConfig, resolveRouteConfig } from './lib/routing-config.js';
+
+// Get the directory of this module to resolve page-handler.astro
+// In development, __dirname points to src/. In production, it points to dist/.
+// The handlers directory is always in src/, so we need to handle both cases.
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const isInDist = __dirname.endsWith('/dist') || __dirname.includes('/dist/');
+const PAGE_HANDLER_PATH = isInDist
+  ? join(dirname(__dirname), 'src', 'handlers', 'page-handler.astro')
+  : join(__dirname, 'handlers', 'page-handler.astro');
 import {
   generateLayoutModule,
   generatePageApiModule,
@@ -225,7 +236,7 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
             logger.info(`Injecting content route: ${routeConfig.pattern} (${routeName})`);
             injectRoute({
               pattern: routeConfig.pattern,
-              entrypoint: '@conloca/astro-cms/page-handler',
+              entrypoint: PAGE_HANDLER_PATH,
               prerender: routeConfig.prerender,
             });
           }
@@ -407,7 +418,7 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
           if (injectedPatterns.has(pattern)) {
             conflicts.push({
               injected: pattern,
-              fileBased: route.route,
+              fileBased: route.entrypoint || pattern,
             });
           }
         }
