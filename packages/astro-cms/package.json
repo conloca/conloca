@@ -39,6 +39,9 @@
       "types": "./dist/collections.d.mts",
       "import": "./dist/collections.mjs",
       "default": "./dist/collections.mjs"
+    },
+    "./virtual-modules": {
+      "types": "./src/virtual-modules.d.ts"
     }
   },
   "scripts": {
