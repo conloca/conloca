@@ -107,6 +107,32 @@ declare module 'virtual:conloca-page-api' {
     collection: string,
     locale?: string,
   ): Promise<import('./types').DataCollectionEntry[]>;
+
+  /**
+   * Get pages matching a path prefix.
+   *
+   * Filters all pages by pathname prefix and returns them sorted.
+   * Excludes the listing page itself (exact prefix match).
+   *
+   * @param prefix - Path prefix to match (e.g., '/blog/')
+   * @param options - Optional sort and limit settings
+   * @returns Array of PageReference objects with meta and timestamps
+   *
+   * @example Get latest 10 blog posts
+   * ```typescript
+   * const posts = await getPagesByPrefix('/blog/', {
+   *   sort: 'date-desc',
+   *   limit: 10,
+   * });
+   * ```
+   */
+  export function getPagesByPrefix(
+    prefix: string,
+    options?: {
+      sort?: 'date-desc' | 'date-asc' | 'title';
+      limit?: number;
+    },
+  ): Promise<PageReference[]>;
 }
 
 /**

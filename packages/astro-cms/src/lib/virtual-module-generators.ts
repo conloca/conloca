@@ -107,10 +107,54 @@ export async function getAllPages(collection) {
       pathname: localeData.pathname || '/' + manifest.id.replace(/^index$/, ''),
       title: localeData.meta?.title || manifest.id,
       collection: manifest.collection || 'pages',
+      meta: localeData.meta || {},
+      timestamps: {
+        created: localeData.created,
+        modified: localeData.modified,
+      },
     });
   }
 
   return pages;
+}
+
+/**
+ * Get pages matching a path prefix.
+ * @param prefix - Path prefix to match (e.g., '/blog/')
+ * @param options - Optional sort and limit settings
+ * @returns Array of PageReference objects
+ */
+export async function getPagesByPrefix(prefix, options = {}) {
+  const allPages = await getAllPages();
+
+  let filtered = allPages.filter(page =>
+    page.pathname.startsWith(prefix) &&
+    page.pathname !== prefix && // Exclude the listing page itself
+    page.pathname !== prefix.slice(0, -1) // Exclude without trailing slash
+  );
+
+  // Sort by date (newest first by default)
+  if (options.sort === 'date-desc' || !options.sort) {
+    filtered.sort((a, b) => {
+      const dateA = a.timestamps?.modified || a.timestamps?.created || new Date(0);
+      const dateB = b.timestamps?.modified || b.timestamps?.created || new Date(0);
+      return new Date(dateB).getTime() - new Date(dateA).getTime();
+    });
+  } else if (options.sort === 'date-asc') {
+    filtered.sort((a, b) => {
+      const dateA = a.timestamps?.modified || a.timestamps?.created || new Date(0);
+      const dateB = b.timestamps?.modified || b.timestamps?.created || new Date(0);
+      return new Date(dateA).getTime() - new Date(dateB).getTime();
+    });
+  } else if (options.sort === 'title') {
+    filtered.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+  }
+
+  if (options.limit && options.limit > 0) {
+    filtered = filtered.slice(0, options.limit);
+  }
+
+  return filtered;
 }
 
 /**
