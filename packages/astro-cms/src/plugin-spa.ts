@@ -151,6 +151,8 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
       routes: resolvedRoutes,
       fallback: routingConfig.fallback ?? '404',
       onConflict: routingConfig.onConflict ?? 'warn',
+      siteName: routingConfig.siteName ?? 'default',
+      locale: routingConfig.locale ?? 'en',
     };
   }
 
@@ -218,6 +220,8 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
                     return generatePageApiModule({
                       contentRoot: options.contentRoot,
                       canvasDir: options.canvasDir || './canvas',
+                      siteName: resolvedRoutingConfig?.siteName ?? 'default',
+                      locale: resolvedRoutingConfig?.locale ?? 'en',
                     });
                   }
                   if (id === RESOLVED_PUCK_CONFIG) {

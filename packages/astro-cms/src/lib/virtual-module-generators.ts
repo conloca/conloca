@@ -46,6 +46,10 @@ export function generateLayoutModule(routing: RoutingConfig | undefined): string
 export interface PageApiModuleOptions {
   contentRoot: string;
   canvasDir: string;
+  /** Site name for content resolution. @default 'default' */
+  siteName: string;
+  /** Default locale for content resolution. @default 'en' */
+  locale: string;
 }
 
 /**
@@ -69,9 +73,9 @@ const contentApi = await createContentAPI({
   canvasDir: '${options.canvasDir}',
 });
 
-// Get default site instance for page operations
-const site = contentApi.getSite('default');
-const locale = 'en'; // Default locale, could be made configurable
+// Get site instance for page operations (configured via routing.siteName)
+const site = contentApi.getSite('${options.siteName}');
+const locale = '${options.locale}'; // Configured via routing.locale
 
 /**
  * Get all pages for static path generation.
