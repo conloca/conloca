@@ -20,14 +20,14 @@ import { createPageRendererWithBlocks } from '../components/RenderWithBlocks.js'
 // Virtual modules configured by the Vite plugin
 import routingConfig from 'virtual:conloca-routing-config';
 import Layout from 'virtual:conloca-layout';
-import { getAllPages, getPage, getDataCollection, contentOptions } from 'virtual:conloca-page-api';
+import { getAllPages, getPage, getDataCollection, getPagesByPrefix, contentOptions } from 'virtual:conloca-page-api';
 import puckConfig from 'virtual:conloca-puck-config';
 
 // Route utilities for slug extraction
 import { extractSlugFromPathname } from '../lib/route-utils.js';
 
 import type { GetStaticPaths } from 'astro';
-import type { DataCollectionEntry, DataContext, PageData, ResolvedRoutingConfig } from '../types.js';
+import type { DataCollectionEntry, DataContext, PageData, PageReference, ResolvedRoutingConfig } from '../types.js';
 
 // Default to prerender: true for static site generation
 export const prerender = true;
@@ -130,21 +130,43 @@ try {
 let dataContext: DataContext | undefined;
 
 const routeConfig = config.routes[routeName];
-if (routeConfig?.dataBindings?.collections?.length) {
-  const collections: Record<string, DataCollectionEntry[]> = {};
+const hasCollections = routeConfig?.dataBindings?.collections?.length;
+const hasPages = routeConfig?.dataBindings?.pages?.prefix;
 
-  for (const collectionName of routeConfig.dataBindings.collections) {
+if (hasCollections || hasPages) {
+  const collections: Record<string, DataCollectionEntry[]> = {};
+  let pages: PageReference[] | undefined;
+
+  // Fetch collections
+  if (hasCollections) {
+    for (const collectionName of routeConfig.dataBindings.collections) {
+      try {
+        const locale = routeConfig.dataBindings.locale ?? contentOptions.locale;
+        collections[collectionName] = await getDataCollection(collectionName, locale);
+      } catch (error) {
+        console.error(`[Conloca] Failed to fetch collection '${collectionName}':`, error);
+        collections[collectionName] = [];
+      }
+    }
+  }
+
+  // Fetch pages by prefix
+  if (hasPages) {
     try {
-      const locale = routeConfig.dataBindings.locale ?? contentOptions.locale;
-      collections[collectionName] = await getDataCollection(collectionName, locale);
+      const pagesConfig = routeConfig.dataBindings.pages;
+      pages = await getPagesByPrefix(pagesConfig.prefix, {
+        sort: pagesConfig.sort,
+        limit: pagesConfig.limit,
+      });
     } catch (error) {
-      console.error(`[Conloca] Failed to fetch collection '${collectionName}':`, error);
-      collections[collectionName] = [];
+      console.error(`[Conloca] Failed to fetch pages with prefix '${routeConfig.dataBindings.pages.prefix}':`, error);
+      pages = [];
     }
   }
 
   dataContext = {
     collections,
+    pages,
     locale: routeConfig.dataBindings.locale ?? contentOptions.locale,
     siteName: contentOptions.siteName,
   };
