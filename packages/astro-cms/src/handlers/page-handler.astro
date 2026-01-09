@@ -1,0 +1,179 @@
+---
+/**
+ * Page Handler Component
+ *
+ * This Astro component is injected via injectRoute() to handle content pages.
+ * It implements getStaticPaths() for static page generation and renders
+ * content using the Puck Render component with an optional Layout wrapper.
+ */
+
+import { Render } from '@measured/puck';
+
+// Virtual modules configured by the Vite plugin
+import routingConfig from 'virtual:conloca-routing-config';
+import Layout from 'virtual:conloca-layout';
+import { getAllPages, getPage } from 'virtual:conloca-page-api';
+import puckConfig from 'virtual:conloca-puck-config';
+
+// Route utilities for slug extraction
+import { extractSlugFromPathname } from '../lib/route-utils.js';
+
+import type { GetStaticPaths } from 'astro';
+import type { PageData, ResolvedRoutingConfig } from '../types.js';
+
+// Cast to typed config
+const config = routingConfig as ResolvedRoutingConfig;
+
+// Default to prerender: true for static site generation
+export const prerender = true;
+
+/**
+ * Generate static paths for all content pages.
+ *
+ * Iterates through all configured routes and their collections
+ * to discover pages and generate the params/props for each.
+ */
+export const getStaticPaths: GetStaticPaths = async () => {
+  const paths: {
+    params: { slug: string | undefined };
+    props: { routeName: string; collection: string; pathname: string };
+  }[] = [];
+
+  // Skip if routing is disabled
+  if (!config.enabled) {
+    return paths;
+  }
+
+  // For each configured route
+  for (const [routeName, routeConfig] of Object.entries(config.routes)) {
+    try {
+      // Get all pages from this route's collection
+      const pages = await getAllPages(routeConfig.collection);
+
+      for (const page of pages) {
+        // Convert pathname to slug params
+        // Pattern: /blog/[...slug] + pathname: /blog/post-1 = slug: 'post-1'
+        const slug = extractSlugFromPathname(page.pathname, routeConfig.pattern);
+
+        paths.push({
+          params: { slug },
+          props: {
+            routeName,
+            collection: routeConfig.collection,
+            pathname: page.pathname,
+          },
+        });
+      }
+    } catch (error) {
+      console.error(`[Conloca] Error loading pages for route '${routeName}':`, error);
+    }
+  }
+
+  return paths;
+};
+
+// Props passed from getStaticPaths
+interface Props {
+  routeName: string;
+  collection: string;
+  pathname: string;
+}
+
+const { routeName, collection, pathname } = Astro.props as Props;
+
+// Load page data
+let page: PageData | undefined;
+let loadError: Error | undefined;
+
+try {
+  page = await getPage(pathname, collection);
+
+  // Enrich with route information
+  if (page && config.routes[routeName]) {
+    const routeConfig = config.routes[routeName];
+    page.route = {
+      name: routeName,
+      pattern: routeConfig.pattern,
+      meta: routeConfig.meta,
+    };
+  }
+} catch (error) {
+  loadError = error as Error;
+
+  // Handle 404 based on fallback configuration
+  if ((error as { code?: string }).code === 'PAGE_NOT_FOUND') {
+    if (config.fallback === 'passthrough') {
+      // Let Astro continue to next route
+      return Astro.redirect('/404', 307);
+    }
+    // Return 404 response
+    return new Response('Page not found', { status: 404 });
+  }
+
+  // Re-throw other errors
+  throw error;
+}
+
+// Handle missing puckData gracefully
+const hasPuckData = page?.puckData && Object.keys(page.puckData).length > 0;
+---
+
+{Layout && page ? (
+  <Layout page={page}>
+    {hasPuckData ? (
+      <Render config={puckConfig} data={page.puckData} />
+    ) : (
+      <div class="conloca-empty-page">
+        <p>This page has no content yet.</p>
+      </div>
+    )}
+  </Layout>
+) : page ? (
+  <html lang="en">
+    <head>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <title>{page.title || 'Untitled'}</title>
+      {page.description && <meta name="description" content={page.description} />}
+    </head>
+    <body>
+      {hasPuckData ? (
+        <Render config={puckConfig} data={page.puckData} />
+      ) : (
+        <div class="conloca-empty-page">
+          <p>This page has no content yet.</p>
+        </div>
+      )}
+    </body>
+  </html>
+) : (
+  <html lang="en">
+    <head>
+      <meta charset="UTF-8" />
+      <title>Error</title>
+    </head>
+    <body>
+      <div class="conloca-error">
+        <h1>Error Loading Page</h1>
+        <p>{loadError?.message || 'An unknown error occurred.'}</p>
+      </div>
+    </body>
+  </html>
+)}
+
+<style>
+  .conloca-empty-page {
+    padding: 2rem;
+    text-align: center;
+    color: #666;
+  }
+
+  .conloca-error {
+    padding: 2rem;
+    text-align: center;
+  }
+
+  .conloca-error h1 {
+    color: #c00;
+  }
+</style>
