@@ -2,156 +2,6 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
 // ============================================================================
-// Route Templates
-// ============================================================================
-
-function getSlugRouteTemplate(siteName = 'default') {
-  return `---
-import { createPageRendererWithBlocks } from '@conloca/astro-cms/components';
-import { createContentAPI } from '@conloca/content-api/node';
-import { evaluateMDXBlocks } from '@conloca/mdx/node';
-import config from '../puck.config';
-
-// Enable static site generation
-export const prerender = true;
-
-// Types for getStaticPaths props
-type PageProps = {
-  type: 'page';
-  pageId: string;
-  locale: string;
-};
-
-type RedirectProps = {
-  type: 'redirect';
-  redirectTo: string;
-};
-
-type Props = PageProps | RedirectProps;
-
-// Generate static paths for all pages AND redirects at build time
-export async function getStaticPaths() {
-  const api = await createContentAPI({ contentRoot: './content' });
-  const site = (import.meta.env.SITE_NAME ?? import.meta.env.PUBLIC_SITE_NAME ?? '${siteName}') as string;
-  const siteApi = api.getSite(site);
-
-  if (!siteApi) {
-    return [];
-  }
-
-  // Get all pages for this site
-  const pages = Array.from(api.listAllContent({ kind: 'page', site }));
-  const paths: Array<{ params: { slug: string | undefined }; props: Props }> = [];
-
-  for (const page of pages) {
-    const locales = Object.keys(page.locales);
-    const firstLocale = locales[0] || 'en';
-    const localizedData = page.locales[firstLocale];
-
-    if (!localizedData) continue;
-
-    const pathname = localizedData.pathname || '/';
-
-    // Convert pathname to slug parameter
-    // Root path (/) becomes undefined, other paths remove leading slash
-    const slug = pathname === '/' ? undefined : pathname.replace(/^\\//, '');
-
-    // Current pathname → renders page
-    paths.push({
-      params: { slug },
-      props: { type: 'page', pageId: page.id, locale: firstLocale },
-    });
-
-    // Previous pathnames → redirects (for SEO-friendly URL changes)
-    const previousPathnames = localizedData.previousPathnames || {};
-    for (const oldPathname of Object.keys(previousPathnames)) {
-      const oldSlug = oldPathname === '/' ? undefined : oldPathname.replace(/^\\//, '');
-      paths.push({
-        params: { slug: oldSlug },
-        props: { type: 'redirect', redirectTo: pathname },
-      });
-    }
-  }
-
-  return paths;
-}
-
-// Get props from getStaticPaths
-const props = Astro.props as Props;
-
-// Handle redirects (from previousPathnames)
-if (props.type === 'redirect') {
-  return Astro.redirect(props.redirectTo, 301);
-}
-
-// Render page
-const { pageId, locale } = props;
-
-let puckData;
-let manifest;
-let PageRenderer;
-
-try {
-  const api = await createContentAPI({ contentRoot: './content' });
-
-  const localized = await api.getLocalized(pageId, locale);
-  if (!localized) {
-    console.warn(\`[\${pageId}] Failed to get localized content for locale "\${locale}"\`);
-    return Astro.redirect('/404');
-  }
-
-  puckData = localized.localized.content?.puckData;
-  manifest = localized.localized.meta || {};
-
-  // Evaluate all MDX blocks to React components at build time
-  const mdxComponents = await evaluateMDXBlocks(api, locale);
-
-  // Create page renderer with MDX components baked in via closure
-  PageRenderer = createPageRendererWithBlocks(config, puckData, mdxComponents);
-} catch (error) {
-  console.error(\`[\${pageId}] Failed to render page:\`, error);
-  if (error instanceof Error) {
-    console.error(\`  Error message: \${error.message}\`);
-    console.error(\`  Stack trace:\`, error.stack);
-  }
-  return Astro.redirect('/404');
-}
----
-
-<!doctype html>
-<html lang={locale}>
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{manifest.title || 'Page'}</title>
-  </head>
-  <body>
-    <PageRenderer />
-  </body>
-</html>
-`;
-}
-
-function getContentConfigTemplate(siteName = 'default') {
-  // Use short form for defaults, explicit form for custom site
-  if (siteName === 'default') {
-    return `import { createConlocaCollections } from '@conloca/astro-cms/collections';
-
-// Uses default pages + blocks collections
-export const { collections } = await createConlocaCollections();
-`;
-  }
-
-  return `import { createConlocaCollections } from '@conloca/astro-cms/collections';
-
-// Uses pages + blocks collections for site '${siteName}'
-export const { collections } = await createConlocaCollections({
-  site: '${siteName}',
-});
-`;
-}
-
-// ============================================================================
 // Component Templates
 // ============================================================================
 
@@ -783,20 +633,15 @@ export const dataSchemas = {
 // Setup Command
 // ============================================================================
 
-export async function setup(projectPath = '.', siteName = 'default') {
+export async function setup(projectPath = '.') {
   try {
     const absolutePath = resolve(projectPath);
     const srcDir = join(absolutePath, 'src');
 
     console.log('Setting up Conloca for Astro...\n');
 
-    // Create directories
-    const dirs = [
-      join(srcDir, 'pages'),
-      join(srcDir, 'components'),
-      join(srcDir, 'components', 'puck'),
-      join(srcDir, 'schemas'),
-    ];
+    // Create directories (routes now handled by conlocaCMS({ routing: true }))
+    const dirs = [join(srcDir, 'components'), join(srcDir, 'components', 'puck'), join(srcDir, 'schemas')];
 
     for (const dir of dirs) {
       await mkdir(dir, { recursive: true });
@@ -817,17 +662,7 @@ export async function setup(projectPath = '.', siteName = 'default') {
       }
     }
 
-    // 1. Route files
-    await writeFile(join(srcDir, 'pages', '[...slug].astro'), getSlugRouteTemplate(siteName), 'utf-8');
-    created.push('src/pages/[...slug].astro');
-
-    await writeIfNotExists(
-      join(srcDir, 'content.config.ts'),
-      getContentConfigTemplate(siteName),
-      'src/content.config.ts',
-    );
-
-    // 2. Core components
+    // 1. Core components
     await writeIfNotExists(join(srcDir, 'components', 'Layout.tsx'), LAYOUT_TEMPLATE, 'src/components/Layout.tsx');
 
     await writeIfNotExists(join(srcDir, 'components', 'Section.tsx'), SECTION_TEMPLATE, 'src/components/Section.tsx');
@@ -891,8 +726,9 @@ export async function setup(projectPath = '.', siteName = 'default') {
     console.log('\n✨ Astro setup complete!');
     console.log('\nNext steps:');
     console.log('1. Run `conloca init . <site-name>` to create content directory');
-    console.log('2. Start your dev server and visit /__cms to edit pages');
-    console.log('3. Add more Puck components in src/components/puck/');
+    console.log('2. Configure routing in astro.config: conlocaCMS({ routing: true })');
+    console.log('3. Start your dev server and visit /__cms to edit pages');
+    console.log('4. Add more Puck components in src/components/puck/');
   } catch (error) {
     console.error('❌ Error during setup:', error);
     throw error;

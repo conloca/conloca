@@ -72,8 +72,7 @@ Available subcommands:
         switch (subcommand) {
           case 'setup': {
             const projectPath = positionals[2] || '.';
-            const siteName = typeof values.site === 'string' && values.site.length > 0 ? values.site : 'default';
-            await setup(projectPath, siteName);
+            await setup(projectPath);
             break;
           }
 
