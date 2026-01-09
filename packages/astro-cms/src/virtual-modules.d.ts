@@ -92,6 +92,21 @@ declare module 'virtual:conloca-page-api' {
    * @returns true if page exists, false otherwise
    */
   export function pageExists(pathname: string, collection?: string): Promise<boolean>;
+
+  /**
+   * Get all entries from a data collection.
+   *
+   * Fetches all entries from a data collection and returns them as
+   * simplified DataCollectionEntry objects for use in Puck component resolvers.
+   *
+   * @param collection - Data collection name
+   * @param locale - Optional locale override (defaults to configured locale)
+   * @returns Array of DataCollectionEntry objects with id, name, data, and meta
+   */
+  export function getDataCollection(
+    collection: string,
+    locale?: string,
+  ): Promise<import('./types').DataCollectionEntry[]>;
 }
 
 /**

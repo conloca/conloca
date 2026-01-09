@@ -151,6 +151,33 @@ export async function pageExists(pathname, collection) {
     return false;
   }
 }
+
+/**
+ * Get all entries from a data collection.
+ * @param collection - Data collection name
+ * @param localeOverride - Optional locale override (defaults to configured locale)
+ * @returns Array of DataCollectionEntry objects
+ */
+export async function getDataCollection(collection, localeOverride) {
+  const targetLocale = localeOverride || locale;
+  const entries = [];
+
+  // List all manifests in the collection
+  for (const manifest of contentApi.data.listContent({ collection })) {
+    // Get localized data for each entry
+    const localized = await contentApi.getLocalized(manifest.id, targetLocale);
+    if (localized) {
+      entries.push({
+        id: manifest.id,
+        name: manifest.name,
+        data: localized.content?.data || {},
+        meta: manifest.meta || {},
+      });
+    }
+  }
+
+  return entries;
+}
 `;
 }
 
