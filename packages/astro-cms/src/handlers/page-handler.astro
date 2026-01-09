@@ -20,14 +20,14 @@ import { createPageRendererWithBlocks } from '../components/RenderWithBlocks.js'
 // Virtual modules configured by the Vite plugin
 import routingConfig from 'virtual:conloca-routing-config';
 import Layout from 'virtual:conloca-layout';
-import { getAllPages, getPage, contentOptions } from 'virtual:conloca-page-api';
+import { getAllPages, getPage, getDataCollection, contentOptions } from 'virtual:conloca-page-api';
 import puckConfig from 'virtual:conloca-puck-config';
 
 // Route utilities for slug extraction
 import { extractSlugFromPathname } from '../lib/route-utils.js';
 
 import type { GetStaticPaths } from 'astro';
-import type { PageData, ResolvedRoutingConfig } from '../types.js';
+import type { DataCollectionEntry, DataContext, PageData, ResolvedRoutingConfig } from '../types.js';
 
 // Default to prerender: true for static site generation
 export const prerender = true;
@@ -124,6 +124,30 @@ try {
 
   // Re-throw other errors
   throw error;
+}
+
+// Build metadata with collection data for resolvers
+let dataContext: DataContext | undefined;
+
+const routeConfig = config.routes[routeName];
+if (routeConfig?.dataBindings?.collections?.length) {
+  const collections: Record<string, DataCollectionEntry[]> = {};
+
+  for (const collectionName of routeConfig.dataBindings.collections) {
+    try {
+      const locale = routeConfig.dataBindings.locale ?? contentOptions.locale;
+      collections[collectionName] = await getDataCollection(collectionName, locale);
+    } catch (error) {
+      console.error(`[Conloca] Failed to fetch collection '${collectionName}':`, error);
+      collections[collectionName] = [];
+    }
+  }
+
+  dataContext = {
+    collections,
+    locale: routeConfig.dataBindings.locale ?? contentOptions.locale,
+    siteName: contentOptions.siteName,
+  };
 }
 
 // Handle missing puckData gracefully
