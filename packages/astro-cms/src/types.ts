@@ -268,6 +268,24 @@ export interface RouteConfig {
    * @example { showSidebar: true, theme: 'dark' }
    */
   meta?: Record<string, unknown>;
+
+  /**
+   * Data binding configuration for this route.
+   *
+   * Specifies which data collections should be fetched and
+   * injected into Puck component resolvers via metadata.
+   *
+   * @example Inject team and testimonials data
+   * ```typescript
+   * {
+   *   pattern: '/[...slug]',
+   *   dataBindings: {
+   *     collections: ['team', 'testimonials'],
+   *   },
+   * }
+   * ```
+   */
+  dataBindings?: DataBindingConfig;
 }
 
 /**
@@ -514,4 +532,129 @@ export interface ResolvedRoutingConfig {
   siteName: string;
   /** Default locale for content resolution. */
   locale: string;
+}
+
+// ============================================================================
+// Data Binding Types
+// ============================================================================
+
+/**
+ * Configuration for automatic data collection injection into Puck components.
+ *
+ * Allows components to declare data dependencies on Conloca data collections,
+ * which are automatically fetched and injected via Puck's metadata system.
+ *
+ * @example Route with data bindings
+ * ```typescript
+ * conlocaCMS({
+ *   routing: {
+ *     routes: {
+ *       pages: {
+ *         pattern: '/[...slug]',
+ *         dataBindings: {
+ *           collections: ['team', 'testimonials'],
+ *         },
+ *       },
+ *     },
+ *   },
+ * });
+ * ```
+ */
+export interface DataBindingConfig {
+  /**
+   * Collections to fetch and inject into component resolvers.
+   *
+   * Each collection name must match a data collection in the content directory.
+   * The fetched data will be available in `metadata.collections[collectionName]`
+   * within Puck component resolvers.
+   *
+   * @example ['team', 'testimonials', 'products']
+   */
+  collections?: string[];
+
+  /**
+   * Locale override for data fetching.
+   *
+   * Defaults to the route's locale setting (from routing.locale).
+   * Use this to fetch data in a specific locale regardless of route config.
+   */
+  locale?: string;
+}
+
+/**
+ * Context object passed to Puck component resolvers via metadata.
+ *
+ * Contains fetched collection data and contextual information
+ * for data-driven component rendering.
+ *
+ * @example Accessing data in a Puck component resolver
+ * ```typescript
+ * const TeamListConfig: ComponentConfig<TeamListProps> = {
+ *   resolveData: async (data, { metadata }) => {
+ *     const context = metadata as DataContext;
+ *     const team = context.collections.team || [];
+ *     return {
+ *       props: {
+ *         members: team.map(entry => ({
+ *           id: entry.id,
+ *           name: entry.data.name,
+ *           role: entry.data.role,
+ *         })),
+ *       },
+ *     };
+ *   },
+ * };
+ * ```
+ */
+export interface DataContext {
+  /**
+   * Collection data keyed by collection name.
+   *
+   * Each key matches a collection name from DataBindingConfig.collections.
+   * Value is an array of entries from that collection.
+   */
+  collections: Record<string, DataCollectionEntry[]>;
+
+  /**
+   * Current locale used for data fetching.
+   */
+  locale: string;
+
+  /**
+   * Site name from routing configuration.
+   */
+  siteName: string;
+}
+
+/**
+ * A single entry from a data collection.
+ *
+ * Simplified representation of collection data for use in component resolvers.
+ * Contains the entry's identifier, name, and localized content.
+ */
+export interface DataCollectionEntry {
+  /**
+   * Unique identifier for the entry.
+   */
+  id: string;
+
+  /**
+   * Human-readable name of the entry.
+   */
+  name: string;
+
+  /**
+   * The entry's data content.
+   *
+   * Schema depends on the collection's structure.
+   * Access typed fields via `entry.data.fieldName`.
+   */
+  data: Record<string, unknown>;
+
+  /**
+   * Optional metadata for the entry.
+   *
+   * May include title, description, or custom fields.
+   */
+  meta?: Record<string, unknown>;
 }

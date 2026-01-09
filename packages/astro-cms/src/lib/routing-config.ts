@@ -52,6 +52,7 @@ export function resolveRouteConfig(config: RouteConfig): Required<RouteConfig> {
     layout: config.layout ?? '',
     prerender: config.prerender ?? true,
     meta: config.meta ?? {},
+    dataBindings: config.dataBindings ?? { collections: [] },
   };
 }
 
