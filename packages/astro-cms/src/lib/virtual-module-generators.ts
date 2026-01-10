@@ -89,6 +89,31 @@ const site = contentApi.getSite(contentOptions.siteName);
 const locale = contentOptions.locale; // Configured via routing.locale
 
 /**
+ * Infer collection from pathname using configured mappings.
+ * @param pathname - Page pathname
+ * @returns Inferred collection or null
+ */
+function inferCollection(pathname) {
+  const mappings = ${JSON.stringify(options.collectionInference || {})};
+  if (!mappings || Object.keys(mappings).length === 0) return null;
+
+  // Sort by prefix length (longest first) for proper nested path handling
+  const sortedPrefixes = Object.keys(mappings).sort((a, b) => b.length - a.length);
+
+  for (const prefix of sortedPrefixes) {
+    // Normalize: ensure both have consistent trailing slash handling
+    const normalizedPrefix = prefix.endsWith('/') ? prefix : prefix + '/';
+    const normalizedPath = pathname.endsWith('/') ? pathname : pathname + '/';
+
+    if (normalizedPath.startsWith(normalizedPrefix)) {
+      return mappings[prefix];
+    }
+  }
+
+  return null;
+}
+
+/**
  * Get all pages for static path generation.
  * @param collection - Optional collection filter
  */
@@ -97,18 +122,29 @@ export async function getAllPages(collection) {
 
   // listPages is a generator that yields ContentManifest objects
   for (const manifest of site.listPages(locale)) {
-    // Filter by collection if specified
-    if (collection && manifest.collection !== collection) continue;
-
     // Get the localized data for pathname/title
     const localeData = manifest.locales[locale];
     if (!localeData) continue;
 
+    const pathname = localeData.pathname || '/' + manifest.id.replace(/^index$/, '');
+
+    // Collection resolution order:
+    // 1. Explicit collection in manifest (from storage)
+    // 2. Path-based inference from config
+    // 3. Default 'pages'
+    const resolvedCollection =
+      manifest.collection ||
+      inferCollection(pathname) ||
+      'pages';
+
+    // Filter by requested collection
+    if (collection && resolvedCollection !== collection) continue;
+
     pages.push({
       id: manifest.id,
-      pathname: localeData.pathname || '/' + manifest.id.replace(/^index$/, ''),
+      pathname: pathname,
       title: localeData.meta?.title || manifest.id,
-      collection: manifest.collection || 'pages',
+      collection: resolvedCollection,
       meta: localeData.meta || {},
       timestamps: {
         created: localeData.created,
