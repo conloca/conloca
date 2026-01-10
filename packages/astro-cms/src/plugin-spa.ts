@@ -222,6 +222,7 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
                       canvasDir: options.canvasDir || './canvas',
                       siteName: resolvedRoutingConfig?.siteName ?? 'default',
                       locale: resolvedRoutingConfig?.locale ?? 'en',
+                      collectionInference: resolvedRoutingConfig?.routes?.pages?.collectionInference,
                     });
                   }
                   if (id === RESOLVED_PUCK_CONFIG) {

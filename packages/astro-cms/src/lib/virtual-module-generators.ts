@@ -50,6 +50,8 @@ export interface PageApiModuleOptions {
   siteName: string;
   /** Default locale for content resolution. @default 'en' */
   locale: string;
+  /** Path prefix to collection mappings for automatic collection inference. */
+  collectionInference?: Record<string, string>;
 }
 
 /**
