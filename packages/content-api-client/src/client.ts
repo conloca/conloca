@@ -17,6 +17,28 @@ import type {
 } from '@conloca/content-api';
 import { ErrorCodes } from '@conloca/content-api';
 
+// Git operation types
+export interface GitStatus {
+  hasChanges: boolean;
+  changedFiles: number;
+  ahead: number;
+  behind: number;
+  branch: string;
+  isRepo: boolean;
+}
+
+export interface GitCommitResult {
+  success: boolean;
+  commit?: string;
+  summary?: string;
+  error?: string;
+}
+
+export interface GitPushResult {
+  success: boolean;
+  error?: string;
+}
+
 export interface ContentAPIClientOptions {
   baseUrl?: string;
   fetch?: typeof fetch;
@@ -321,6 +343,25 @@ export class ContentAPIClient {
     return this.fetchAPI<BatchResult>(`${this.baseUrl}/content/batch`, {
       method: 'POST',
       body: JSON.stringify({ operations }),
+    });
+  }
+
+  // Git operations
+  async getGitStatus(): Promise<GitStatus> {
+    return this.fetchAPI<GitStatus>(`${this.baseUrl}/git/status`);
+  }
+
+  async commitChanges(message?: string): Promise<GitCommitResult> {
+    return this.fetchAPI<GitCommitResult>(`${this.baseUrl}/git/commit`, {
+      method: 'POST',
+      body: JSON.stringify(message ? { message } : {}),
+    });
+  }
+
+  async pushChanges(): Promise<GitPushResult> {
+    return this.fetchAPI<GitPushResult>(`${this.baseUrl}/git/push`, {
+      method: 'POST',
+      body: JSON.stringify({}),
     });
   }
 }
