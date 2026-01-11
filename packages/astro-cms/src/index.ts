@@ -11,6 +11,7 @@ export {
 // Astro Content Collections loader
 export { type ConlocaLoaderOptions, conlocaLoader } from './loader.js';
 export { type ConlocaCMSOptions, conlocaCMS } from './plugin-spa.js';
+export type { TemplateConfig } from './types.js';
 
 // NOTE: Collections helpers are in a separate entry point '@conloca/astro-cms/collections'
 // to avoid loading 'astro:content' during astro.config.mjs import.

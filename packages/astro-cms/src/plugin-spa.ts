@@ -21,7 +21,7 @@ import {
   generatePuckConfigModule,
   generateRoutingConfigModule,
 } from './lib/virtual-module-generators.js';
-import type { ResolvedRoutingConfig, RoutingConfigInput } from './types.js';
+import type { ResolvedRoutingConfig, RoutingConfigInput, TemplateConfig } from './types.js';
 
 // Virtual module for passing config from plugin to route handler
 const VIRTUAL_CONFIG_MODULE = 'virtual:conloca-config';
@@ -46,6 +46,7 @@ export interface ConlocaCMSOptions extends Omit<UIConfig, 'basename'> {
   puckConfigPath: string; // Path to the puck config module (should be .tsx file with React components)
   dataSchemasPath?: string; // Path to the data schemas module (exports { dataSchemas })
   routing?: RoutingConfigInput; // Content page routing configuration
+  templates?: Record<string, TemplateConfig>; // Page creation templates
 }
 
 // Template for content change listener virtual module
@@ -165,6 +166,7 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
     queryClientOptions: options.queryClientOptions,
     dataSchemasPath: options.dataSchemasPath,
     projectRoot: process.cwd(),
+    templates: options.templates,
   };
 
   return {
