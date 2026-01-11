@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useErrorModal } from '../../hooks';
 import type { CreatePageData, Page } from '../../types';
+import { getUIConfig } from '../../ui-config';
 import { CreatePageDialog } from '../dialogs/CreatePageDialog';
 import { DeleteConfirmDialog } from '../dialogs/DeleteConfirmDialog';
 import { ErrorModal } from '../dialogs/ErrorModal';
@@ -163,8 +164,33 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
     setShowCreateDialog(true);
   };
 
+  const createTemplateContent = (componentName: string) => [
+    {
+      type: componentName,
+      props: {
+        id: `${componentName}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      },
+    },
+  ];
+
   const handleCreatePage = async (data: CreatePageData) => {
     try {
+      const config = getUIConfig();
+      const templateConfig = config.templates?.[data.template];
+
+      // Apply path prefix if template has one
+      let finalPath = data.path;
+      if (templateConfig?.pathPrefix && !data.path.startsWith(templateConfig.pathPrefix)) {
+        // Ensure proper path joining (avoid double slashes)
+        const prefix = templateConfig.pathPrefix.endsWith('/')
+          ? templateConfig.pathPrefix.slice(0, -1)
+          : templateConfig.pathPrefix;
+        finalPath = `${prefix}${data.path.startsWith('/') ? data.path : '/' + data.path}`;
+      }
+
+      // Generate template content if template has a component
+      const templateContent = templateConfig?.component ? createTemplateContent(templateConfig.component) : [];
+
       // Create page using the new API
       const result = await createContent.mutateAsync({
         kind: 'page',
@@ -179,11 +205,11 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
             meta: {
               title: data.title,
             },
-            pathname: data.path,
+            pathname: finalPath,
             content: {
               puckData: {
                 root: {},
-                content: [],
+                content: templateContent,
                 zones: {},
               },
             },
