@@ -9,8 +9,7 @@ export default defineConfig({
     collections: 'src/collections.ts',
   },
   format: ['esm'],
-  // Disable dts generation - use tsc for declarations due to rolldown-plugin-dts issues
-  dts: false,
+  dts: true,
   tsconfig: 'tsconfig.lib.json',
   clean: true,
   external: [
