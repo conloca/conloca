@@ -9,11 +9,11 @@
   "dependencies": {
     "@hono/node-server": "^1.19.5",
     "@node-rs/xxhash": "^1.7.6",
+    "@octokit/graphql": "^9.0.3",
     "fast-glob": "^3.3.2",
     "gray-matter": "^4.0.3",
     "hono": "^4.10.4",
     "nanoid": "^5.1.6",
-    "simple-git": "^3.30.0",
     "sort-keys": "^6.0.0",
     "tslib": "^2.8.1",
     "yaml": "^2.8.1",

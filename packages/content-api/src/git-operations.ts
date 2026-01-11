@@ -1,4 +1,6 @@
-import { simpleGit, type SimpleGit } from 'simple-git'
+import { graphql } from '@octokit/graphql'
+import { readdir, readFile } from 'node:fs/promises'
+import { join, relative } from 'node:path'
 
 export interface GitStatus {
   isRepo: boolean
@@ -27,86 +29,188 @@ export interface GitOperations {
   pushOrigin(): Promise<PushResult>
 }
 
-export function createGitOperations(repoPath: string): GitOperations {
-  // Initialize with provided path, but we'll switch to repo root for operations
-  const initialGit: SimpleGit = simpleGit(repoPath)
-  let repoRootGit: SimpleGit | null = null
+export interface GitHubConfig {
+  token: string
+  repo: string // owner/repo format
+  branch?: string // defaults to 'main'
+  contentPath: string // path to content directory
+}
 
-  // Get git instance at repo root (lazy initialized)
-  async function getRepoRootGit(): Promise<SimpleGit | null> {
-    if (repoRootGit) return repoRootGit
+interface GraphQLError {
+  message: string
+  type?: string
+  path?: string[]
+}
 
-    const isRepo = await initialGit.checkIsRepo()
-    if (!isRepo) return null
+/**
+ * Create git operations using GitHub GraphQL API.
+ * Works in serverless environments (Cloudflare Workers) where git binary is unavailable.
+ */
+export function createGitOperations(config: GitHubConfig): GitOperations {
+  const { token, repo, contentPath } = config
+  const branch = config.branch || 'main'
+  const [owner, repoName] = repo.split('/')
 
-    // Get the actual repo root and use that for all operations
-    const repoRoot = await initialGit.revparse(['--show-toplevel'])
-    repoRootGit = simpleGit(repoRoot.trim())
-    return repoRootGit
-  }
+  const graphqlWithAuth = graphql.defaults({
+    headers: { authorization: `token ${token}` },
+  })
 
   return {
     async getStatus(): Promise<GitStatus> {
-      const git = await getRepoRootGit()
-      if (!git) {
+      try {
+        // Query GitHub to verify repo access and branch existence
+        await graphqlWithAuth(
+          `
+          query($owner: String!, $name: String!, $branch: String!) {
+            repository(owner: $owner, name: $name) {
+              ref(qualifiedName: $branch) {
+                target {
+                  ... on Commit {
+                    oid
+                  }
+                }
+              }
+            }
+          }
+        `,
+          { owner, name: repoName, branch: `refs/heads/${branch}` },
+        )
+
         return {
-          isRepo: false,
-          hasChanges: false,
-          changedFiles: 0,
+          isRepo: true,
+          hasChanges: true, // Always allow commit - we can't track local changes
+          changedFiles: 0, // Unknown without git status
           ahead: 0,
           behind: 0,
-          branch: 'unknown',
+          branch,
         }
-      }
-
-      const status = await git.status()
-      return {
-        isRepo: true,
-        hasChanges: status.files.length > 0,
-        changedFiles: status.files.length,
-        ahead: status.ahead,
-        behind: status.behind,
-        branch: status.current ?? 'unknown',
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error'
+        if (message.includes('Could not resolve')) {
+          return {
+            isRepo: false,
+            hasChanges: false,
+            changedFiles: 0,
+            ahead: 0,
+            behind: 0,
+            branch: 'unknown',
+          }
+        }
+        throw error
       }
     },
 
     async commitAll(message: string): Promise<CommitResult> {
       try {
-        const git = await getRepoRootGit()
-        if (!git) {
-          return { success: false, error: 'Not a git repository' }
+        // Get current HEAD SHA
+        const { repository } = (await graphqlWithAuth(
+          `
+          query($owner: String!, $name: String!, $branch: String!) {
+            repository(owner: $owner, name: $name) {
+              ref(qualifiedName: $branch) {
+                target { oid }
+              }
+            }
+          }
+        `,
+          { owner, name: repoName, branch: `refs/heads/${branch}` },
+        )) as {
+          repository: { ref: { target: { oid: string } } | null }
         }
 
-        await git.add('.')
-        const result = await git.commit(message)
+        if (!repository.ref) {
+          return { success: false, error: `Branch '${branch}' not found` }
+        }
+
+        const headOid = repository.ref.target.oid
+
+        // Read all content files recursively
+        const files = await collectContentFiles(contentPath)
+
+        if (files.length === 0) {
+          return { success: false, error: 'No content files found' }
+        }
+
+        // Create commit with all files
+        const result = (await graphqlWithAuth(
+          `
+          mutation($input: CreateCommitOnBranchInput!) {
+            createCommitOnBranch(input: $input) {
+              commit { oid url }
+            }
+          }
+        `,
+          {
+            input: {
+              branch: { repositoryNameWithOwner: repo, branchName: branch },
+              message: { headline: message },
+              expectedHeadOid: headOid,
+              fileChanges: {
+                additions: files.map((f) => ({
+                  path: f.path,
+                  contents: Buffer.from(f.content).toString('base64'),
+                })),
+              },
+            },
+          },
+        )) as {
+          createCommitOnBranch: { commit: { oid: string; url: string } }
+        }
+
         return {
           success: true,
-          commit: result.commit,
-          summary: result.summary?.changes ? `${result.summary.changes} files changed` : 'No changes',
+          commit: result.createCommitOnBranch.commit.oid,
+          summary: `${files.length} files committed`,
         }
-      } catch (err) {
+      } catch (error) {
+        // Handle GraphQL errors
+        if (error && typeof error === 'object' && 'errors' in error) {
+          const gqlErrors = (error as { errors: GraphQLError[] }).errors
+          const messages = gqlErrors.map((e) => e.message).join(', ')
+          return { success: false, error: messages }
+        }
         return {
           success: false,
-          error: err instanceof Error ? err.message : 'Commit failed',
+          error: error instanceof Error ? error.message : 'Commit failed',
         }
       }
     },
 
     async pushOrigin(): Promise<PushResult> {
-      try {
-        const git = await getRepoRootGit()
-        if (!git) {
-          return { success: false, error: 'Not a git repository' }
-        }
-
-        await git.push('origin')
-        return { success: true }
-      } catch (err) {
-        return {
-          success: false,
-          error: err instanceof Error ? err.message : 'Push failed',
-        }
-      }
+      // GraphQL commits directly to the branch - no push needed
+      return { success: true }
     },
   }
+}
+
+/**
+ * Recursively collect all content files (.vxjson, .mdx) from a directory
+ */
+async function collectContentFiles(
+  dirPath: string,
+  basePath?: string,
+): Promise<{ path: string; content: string }[]> {
+  const base = basePath ?? dirPath
+  const files: { path: string; content: string }[] = []
+
+  try {
+    const entries = await readdir(dirPath, { withFileTypes: true })
+
+    for (const entry of entries) {
+      const fullPath = join(dirPath, entry.name)
+
+      if (entry.isDirectory()) {
+        const subFiles = await collectContentFiles(fullPath, base)
+        files.push(...subFiles)
+      } else if (entry.isFile() && (entry.name.endsWith('.vxjson') || entry.name.endsWith('.mdx'))) {
+        const content = await readFile(fullPath, 'utf-8')
+        const relativePath = relative(join(base, '..'), fullPath)
+        files.push({ path: relativePath, content })
+      }
+    }
+  } catch {
+    // Directory doesn't exist or can't be read
+  }
+
+  return files
 }
