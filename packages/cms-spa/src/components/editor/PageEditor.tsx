@@ -1,6 +1,7 @@
 import type { LocalizedEntry, UpdateResult } from '@conloca/content-api-client';
 import type { Config } from '@measured/puck';
 import { Puck } from '@measured/puck';
+import { Monitor, Smartphone, Tablet } from 'lucide-react';
 import React, { useCallback, useState } from 'react';
 import { useSiteBaseUrl } from '../../hooks';
 import type { SaveState } from '../../types';
@@ -20,6 +21,12 @@ interface PageEditorProps {
   onReload?: () => void;
   onPublish?: () => void;
 }
+
+const viewports = [
+  { width: 375, height: 'auto' as const, label: 'Mobile', icon: <Smartphone size={16} /> },
+  { width: 768, height: 'auto' as const, label: 'Tablet', icon: <Tablet size={16} /> },
+  { width: 1280, height: 'auto' as const, label: 'Desktop', icon: <Monitor size={16} /> },
+]
 
 export function PageEditor({
   pageId,
@@ -96,6 +103,7 @@ export function PageEditor({
           data={data}
           onChange={handleDataChange}
           headerTitle={entry.localized.meta.title || 'Untitled Page'}
+          viewports={viewports}
           overrides={{
             headerActions: () => (
               <PageEditorHeaderActions
