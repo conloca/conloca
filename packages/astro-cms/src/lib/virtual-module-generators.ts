@@ -50,8 +50,6 @@ export interface PageApiModuleOptions {
   siteName: string;
   /** Default locale for content resolution. @default 'en' */
   locale: string;
-  /** Path prefix to collection mappings for automatic collection inference. */
-  collectionInference?: Record<string, string>;
 }
 
 /**
@@ -89,31 +87,6 @@ const site = contentApi.getSite(contentOptions.siteName);
 const locale = contentOptions.locale; // Configured via routing.locale
 
 /**
- * Infer collection from pathname using configured mappings.
- * @param pathname - Page pathname
- * @returns Inferred collection or null
- */
-function inferCollection(pathname) {
-  const mappings = ${JSON.stringify(options.collectionInference || {})};
-  if (!mappings || Object.keys(mappings).length === 0) return null;
-
-  // Sort by prefix length (longest first) for proper nested path handling
-  const sortedPrefixes = Object.keys(mappings).sort((a, b) => b.length - a.length);
-
-  for (const prefix of sortedPrefixes) {
-    // Normalize: ensure both have consistent trailing slash handling
-    const normalizedPrefix = prefix.endsWith('/') ? prefix : prefix + '/';
-    const normalizedPath = pathname.endsWith('/') ? pathname : pathname + '/';
-
-    if (normalizedPath.startsWith(normalizedPrefix)) {
-      return mappings[prefix];
-    }
-  }
-
-  return null;
-}
-
-/**
  * Get all pages for static path generation.
  * @param collection - Optional collection filter
  */
@@ -128,14 +101,8 @@ export async function getAllPages(collection) {
 
     const pathname = localeData.pathname || '/' + manifest.id.replace(/^index$/, '');
 
-    // Collection resolution order:
-    // 1. Explicit collection in manifest (from storage)
-    // 2. Path-based inference from config
-    // 3. Default 'pages'
-    const resolvedCollection =
-      manifest.collection ||
-      inferCollection(pathname) ||
-      'pages';
+    // Collection resolution: explicit collection in manifest, or default 'pages'
+    const resolvedCollection = manifest.collection || 'pages';
 
     // Filter by requested collection
     if (collection && resolvedCollection !== collection) continue;
