@@ -6,7 +6,8 @@ export default defineConfig({
     testing: 'src/testing.ts',
   },
   format: ['esm'],
-  dts: { build: true },
+  // Disable dts generation - use tsc for declarations due to rolldown-plugin-dts issues
+  dts: false,
   tsconfig: 'tsconfig.lib.json',
   clean: true,
   external: ['@conloca/content-api', '@tanstack/react-query', 'react', 'react-dom'],
