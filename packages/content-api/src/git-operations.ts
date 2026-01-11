@@ -28,12 +28,27 @@ export interface GitOperations {
 }
 
 export function createGitOperations(repoPath: string): GitOperations {
-  const git: SimpleGit = simpleGit(repoPath)
+  // Initialize with provided path, but we'll switch to repo root for operations
+  const initialGit: SimpleGit = simpleGit(repoPath)
+  let repoRootGit: SimpleGit | null = null
+
+  // Get git instance at repo root (lazy initialized)
+  async function getRepoRootGit(): Promise<SimpleGit | null> {
+    if (repoRootGit) return repoRootGit
+
+    const isRepo = await initialGit.checkIsRepo()
+    if (!isRepo) return null
+
+    // Get the actual repo root and use that for all operations
+    const repoRoot = await initialGit.revparse(['--show-toplevel'])
+    repoRootGit = simpleGit(repoRoot.trim())
+    return repoRootGit
+  }
 
   return {
     async getStatus(): Promise<GitStatus> {
-      const isRepo = await git.checkIsRepo()
-      if (!isRepo) {
+      const git = await getRepoRootGit()
+      if (!git) {
         return {
           isRepo: false,
           hasChanges: false,
@@ -57,6 +72,11 @@ export function createGitOperations(repoPath: string): GitOperations {
 
     async commitAll(message: string): Promise<CommitResult> {
       try {
+        const git = await getRepoRootGit()
+        if (!git) {
+          return { success: false, error: 'Not a git repository' }
+        }
+
         await git.add('.')
         const result = await git.commit(message)
         return {
@@ -74,6 +94,11 @@ export function createGitOperations(repoPath: string): GitOperations {
 
     async pushOrigin(): Promise<PushResult> {
       try {
+        const git = await getRepoRootGit()
+        if (!git) {
+          return { success: false, error: 'Not a git repository' }
+        }
+
         await git.push('origin')
         return { success: true }
       } catch (err) {
