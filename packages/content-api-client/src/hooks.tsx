@@ -8,7 +8,14 @@ import type {
   UpdateLocaleInput,
 } from '@conloca/content-api';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { APIClientError, ContentAPIClient, StaleWriteError } from './client';
+import {
+  APIClientError,
+  ContentAPIClient,
+  StaleWriteError,
+  type GitCommitResult,
+  type GitPushResult,
+  type GitStatus,
+} from './client';
 
 // Global client instance
 let globalClient: ContentAPIClient | null = null;
@@ -38,6 +45,7 @@ function isContentListResult(value: unknown): value is ContentListResult {
 
 // ===== Query Keys =====
 const queryKeys = {
+  gitStatus: () => ['git', 'status'] as const,
   content: (id: string) => ['content', id] as const,
   localized: (id: string, locale: string) => ['content', id, locale] as const,
   sitePages: (site: string, locale?: string) => ['sites', site, 'pages', locale] as const,
@@ -609,5 +617,43 @@ export function useBatchUpdate() {
   });
 }
 
+// ===== Git Hooks =====
+
+export function useGitStatus() {
+  const client = getContentAPIClient();
+
+  return useQuery({
+    queryKey: queryKeys.gitStatus(),
+    queryFn: () => client.getGitStatus(),
+    refetchInterval: 10000,
+    staleTime: 5000,
+  });
+}
+
+export function useCommitChanges() {
+  const queryClient = useQueryClient();
+  const client = getContentAPIClient();
+
+  return useMutation({
+    mutationFn: (message?: string) => client.commitChanges(message),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.gitStatus() });
+    },
+  });
+}
+
+export function usePushChanges() {
+  const queryClient = useQueryClient();
+  const client = getContentAPIClient();
+
+  return useMutation({
+    mutationFn: () => client.pushChanges(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.gitStatus() });
+    },
+  });
+}
+
 // Re-export for convenience
 export { ContentAPIClient, StaleWriteError, APIClientError };
+export type { GitStatus, GitCommitResult, GitPushResult };
