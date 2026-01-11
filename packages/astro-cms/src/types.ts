@@ -270,25 +270,6 @@ export interface RouteConfig {
   meta?: Record<string, unknown>;
 
   /**
-   * Path prefix to collection mappings for automatic collection inference.
-   *
-   * Pages matching a prefix are assigned the corresponding collection
-   * when queried via getAllPages(collection).
-   *
-   * @example Infer 'blog' collection for /blog/* pages
-   * ```typescript
-   * {
-   *   pattern: '/[...slug]',
-   *   collectionInference: {
-   *     '/blog/': 'blog',
-   *     '/products/': 'products',
-   *   },
-   * }
-   * ```
-   */
-  collectionInference?: Record<string, string>;
-
-  /**
    * Data binding configuration for this route.
    *
    * Specifies which data collections should be fetched and
