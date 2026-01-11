@@ -37,6 +37,12 @@ export const ErrorCodes = {
   // System errors
   INTERNAL_ERROR: 'INTERNAL_ERROR',
   FETCH_ERROR: 'FETCH_ERROR',
+
+  // Git errors
+  GIT_NOT_REPO: 'GIT_NOT_REPO',
+  GIT_COMMIT_FAILED: 'GIT_COMMIT_FAILED',
+  GIT_PUSH_FAILED: 'GIT_PUSH_FAILED',
+  GIT_STATUS_FAILED: 'GIT_STATUS_FAILED',
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];

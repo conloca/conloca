@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { ContentAPI } from './content-api.interface';
 import { localesOf } from './content-utils';
+import { createGitOperations } from './git-operations';
 import type { APIError, ContentManifest, ErrorCode, FindOptions, GlobalFilters } from './types';
 import { ErrorCodes } from './types';
 
@@ -782,6 +783,64 @@ export function createContentAPIRouter(api: ContentAPI) {
         },
         500,
       );
+    }
+  });
+
+  // ===== Git Routes =====
+
+  // GET /git/status - Get git repository status
+  app.get('/git/status', async (c) => {
+    try {
+      const gitOps = createGitOperations(process.cwd());
+      const status = await gitOps.getStatus();
+
+      if (!status.isRepo) {
+        return c.json(errorResponse(ErrorCodes.GIT_NOT_REPO, 'Not a git repository'), 400);
+      }
+
+      return c.json(status);
+    } catch (error) {
+      return c.json(logAndCreateErrorResponse(error, ErrorCodes.GIT_STATUS_FAILED, 'Failed to get git status'), 500);
+    }
+  });
+
+  // POST /git/commit - Commit all changes
+  app.post('/git/commit', async (c) => {
+    try {
+      const body = await c.req.json<{ message?: string }>().catch(() => ({}));
+
+      // Auto-generate message if not provided
+      const date = new Date();
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const defaultMessage = `CMS changes - ${monthNames[date.getMonth()]} ${date.getDate()}`;
+      const message = body.message || defaultMessage;
+
+      const gitOps = createGitOperations(process.cwd());
+      const result = await gitOps.commitAll(message);
+
+      if (!result.success) {
+        return c.json(errorResponse(ErrorCodes.GIT_COMMIT_FAILED, result.error || 'Commit failed'), 500);
+      }
+
+      return c.json(result);
+    } catch (error) {
+      return c.json(logAndCreateErrorResponse(error, ErrorCodes.GIT_COMMIT_FAILED, 'Failed to commit changes'), 500);
+    }
+  });
+
+  // POST /git/push - Push to origin
+  app.post('/git/push', async (c) => {
+    try {
+      const gitOps = createGitOperations(process.cwd());
+      const result = await gitOps.pushOrigin();
+
+      if (!result.success) {
+        return c.json(errorResponse(ErrorCodes.GIT_PUSH_FAILED, result.error || 'Push failed'), 500);
+      }
+
+      return c.json(result);
+    } catch (error) {
+      return c.json(logAndCreateErrorResponse(error, ErrorCodes.GIT_PUSH_FAILED, 'Failed to push to origin'), 500);
     }
   });
 
