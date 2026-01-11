@@ -1,5 +1,12 @@
 import type { QueryClientConfig } from '@tanstack/react-query';
 
+export interface TemplateConfig {
+  label: string;
+  component: string;
+  pathPrefix?: string;
+  description?: string;
+}
+
 export interface UIConfig {
   basename?: string;
   apiBaseUrl?: string;
@@ -10,6 +17,8 @@ export interface UIConfig {
   projectRoot?: string;
   /** Relative path to data schemas file (e.g., './src/schemas/data.ts') */
   dataSchemasPath?: string;
+  /** Page creation templates */
+  templates?: Record<string, TemplateConfig>;
 }
 
 const defaultConfig: UIConfig = {
