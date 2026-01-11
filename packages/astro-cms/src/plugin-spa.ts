@@ -420,12 +420,16 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
           // Skip routes from integrations (including our own)
           if (route.origin === 'internal') continue;
 
+          // Skip our own injected page handler route
+          const entrypoint = route.entrypoint || '';
+          if (entrypoint.includes('page-handler.astro')) continue;
+
           // Check if this file-based route pattern matches any injected pattern
           const pattern = route.pattern;
           if (injectedPatterns.has(pattern)) {
             conflicts.push({
               injected: pattern,
-              fileBased: route.entrypoint || pattern,
+              fileBased: entrypoint || pattern,
             });
           }
         }
