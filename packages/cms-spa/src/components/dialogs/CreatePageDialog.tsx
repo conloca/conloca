@@ -95,6 +95,25 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
     setPath(slug ? `/${slug}` : '');
   }, [title]);
 
+  // Update path when template with pathPrefix is selected
+  const handleTemplateChange = (newTemplate: string) => {
+    setTemplate(newTemplate);
+
+    const templateConfig = templates[newTemplate];
+    if (templateConfig?.pathPrefix && path) {
+      // Check if path already has this prefix
+      if (!path.startsWith(templateConfig.pathPrefix)) {
+        // Get the slug part (remove leading slash if present)
+        const slug = path.startsWith('/') ? path.slice(1) : path;
+        // Apply prefix
+        const prefix = templateConfig.pathPrefix.endsWith('/')
+          ? templateConfig.pathPrefix
+          : `${templateConfig.pathPrefix}/`;
+        setPath(`${prefix}${slug}`);
+      }
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onCreatePage?.({
@@ -178,7 +197,7 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
               <select
                 id="template"
                 value={template}
-                onChange={(e) => setTemplate(e.target.value)}
+                onChange={(e) => handleTemplateChange(e.target.value)}
                 className="w-full px-3 py-2 border border-grey-09 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
               >
                 <option value="blank">Blank</option>
