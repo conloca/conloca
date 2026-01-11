@@ -16,8 +16,13 @@ interface CreatePageDialogProps {
 export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'default' }: CreatePageDialogProps) {
   const [title, setTitle] = useState('');
   const [path, setPath] = useState('');
-  const [template, setTemplate] = useState<CreatePageData['template']>('blank');
+  const [template, setTemplate] = useState<string>('blank');
   const [locale, setLocale] = useState('en');
+
+  // Get templates from config
+  const config = getUIConfig();
+  const templates = config.templates || {};
+  const templateEntries = Object.entries(templates);
 
   // Direct fetch implementation for testing
   const [isPathnameAvailable, setIsPathnameAvailable] = useState(true);
@@ -173,12 +178,16 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
               <select
                 id="template"
                 value={template}
-                onChange={(e) => setTemplate(e.target.value as CreatePageData['template'])}
+                onChange={(e) => setTemplate(e.target.value)}
                 className="w-full px-3 py-2 border border-grey-09 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
               >
                 <option value="blank">Blank</option>
-                <option value="landing">Landing</option>
-                <option value="article">Article</option>
+                {templateEntries.map(([key, templateConfig]) => (
+                  <option key={key} value={key}>
+                    {templateConfig.label}
+                    {templateConfig.description ? ` - ${templateConfig.description}` : ''}
+                  </option>
+                ))}
               </select>
             </div>
 

@@ -46,6 +46,6 @@ export type SaveState = 'idle' | 'saving' | 'saved' | 'error' | 'conflict';
 export interface CreatePageData {
   title: string;
   path: string;
-  template: 'blank' | 'landing' | 'article';
+  template: string;
   locale: string;
 }
