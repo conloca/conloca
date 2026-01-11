@@ -89,29 +89,29 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
   // const { data: pathnameData, isLoading: pathnameLoading } = usePathnameAvailability(site, path);
   // const isPathnameAvailable = pathnameData?.available ?? true;
 
-  // Auto-generate path from title
+  // Auto-generate path from title, including template prefix if applicable
   useEffect(() => {
     const slug = slugify(title);
-    setPath(slug ? `/${slug}` : '');
-  }, [title]);
+    if (!slug) {
+      setPath('');
+      return;
+    }
 
-  // Update path when template with pathPrefix is selected
+    // Check if current template has a pathPrefix
+    const templateConfig = templates[template];
+    if (templateConfig?.pathPrefix) {
+      const prefix = templateConfig.pathPrefix.endsWith('/')
+        ? templateConfig.pathPrefix
+        : `${templateConfig.pathPrefix}/`;
+      setPath(`${prefix}${slug}`);
+    } else {
+      setPath(`/${slug}`);
+    }
+  }, [title, template, templates]);
+
+  // Template change handler - path update handled by useEffect above
   const handleTemplateChange = (newTemplate: string) => {
     setTemplate(newTemplate);
-
-    const templateConfig = templates[newTemplate];
-    if (templateConfig?.pathPrefix && path) {
-      // Check if path already has this prefix
-      if (!path.startsWith(templateConfig.pathPrefix)) {
-        // Get the slug part (remove leading slash if present)
-        const slug = path.startsWith('/') ? path.slice(1) : path;
-        // Apply prefix
-        const prefix = templateConfig.pathPrefix.endsWith('/')
-          ? templateConfig.pathPrefix
-          : `${templateConfig.pathPrefix}/`;
-        setPath(`${prefix}${slug}`);
-      }
-    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
