@@ -759,3 +759,49 @@ export interface DataCollectionEntry {
    */
   meta?: Record<string, unknown>;
 }
+
+/**
+ * Configuration for a page creation template.
+ *
+ * Templates allow sites to define pre-built page structures
+ * that users can select when creating new pages in the CMS.
+ *
+ * @example Blog template configuration
+ * ```typescript
+ * conlocaCMS({
+ *   templates: {
+ *     blog: {
+ *       label: 'Blog Post',
+ *       component: 'BlogPostTemplate',
+ *       pathPrefix: '/blog/',
+ *     },
+ *   },
+ * });
+ * ```
+ */
+export interface TemplateConfig {
+  /**
+   * Display label shown in the template dropdown.
+   * @example 'Blog Post', 'Landing Page', 'Documentation'
+   */
+  label: string;
+
+  /**
+   * Puck component name to pre-drop into the page.
+   * Must match a component registered in the site's puck.config.
+   * @example 'BlogPostTemplate', 'LandingPageTemplate'
+   */
+  component: string;
+
+  /**
+   * Optional path prefix to auto-apply when this template is selected.
+   * If the user's path doesn't start with this prefix, it's added.
+   * @example '/blog/' will turn '/my-post' into '/blog/my-post'
+   */
+  pathPrefix?: string;
+
+  /**
+   * Optional description shown in the dropdown.
+   */
+  description?: string;
+}
