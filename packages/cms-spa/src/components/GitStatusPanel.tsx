@@ -10,7 +10,7 @@ export function GitStatusPanel() {
   // Handle commit click
   const handleCommit = () => {
     if (status?.hasChanges) {
-      commitMutation.mutate()
+      commitMutation.mutate(undefined)
     }
   }
 

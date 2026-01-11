@@ -807,7 +807,7 @@ export function createContentAPIRouter(api: ContentAPI) {
   // POST /git/commit - Commit all changes
   app.post('/git/commit', async (c) => {
     try {
-      const body = await c.req.json<{ message?: string }>().catch(() => ({}));
+      const body = await c.req.json<{ message?: string }>().catch(() => ({}) as { message?: string });
 
       // Auto-generate message if not provided
       const date = new Date();

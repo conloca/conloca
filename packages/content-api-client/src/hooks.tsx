@@ -635,7 +635,7 @@ export function useCommitChanges() {
   const client = getContentAPIClient();
 
   return useMutation({
-    mutationFn: (message?: string) => client.commitChanges(message),
+    mutationFn: (message: string | undefined) => client.commitChanges(message),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.gitStatus() });
     },
