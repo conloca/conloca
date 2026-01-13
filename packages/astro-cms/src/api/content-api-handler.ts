@@ -2,7 +2,7 @@ import { createContentAPIRouter, FileSystemContentAPI } from '@conloca/content-a
 import type { APIRoute } from 'astro';
 
 // Create a single handler for all content API routes
-export const ALL: APIRoute = async ({ request, params }) => {
+export const ALL: APIRoute = async ({ request }) => {
   const contentRoot = import.meta.env.CONLOCA_CONTENT_ROOT || './content';
   const canvasDir = import.meta.env.CONLOCA_CANVAS_DIR || './canvas';
 
@@ -23,13 +23,14 @@ export const ALL: APIRoute = async ({ request, params }) => {
   const path = url.pathname.substring(basePath.length) || '/';
 
   // Create a new request with the correct path for Hono
+  // Note: duplex option is required for Node.js fetch when sending a body
+  // but not in the TypeScript RequestInit type
   const honoRequest = new Request(new URL(path + url.search, 'http://localhost').href, {
     method: request.method,
     headers: request.headers,
     body: request.body,
-    // Required for Node.js when sending a body
-    ...(request.body && { duplex: 'half' as any }),
-  });
+    ...(request.body && { duplex: 'half' }),
+  } as RequestInit);
 
   // Let Hono handle the request
   const response = await app.fetch(honoRequest);

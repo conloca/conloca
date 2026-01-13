@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  normalizeRoutingConfig,
-  resolveRouteConfig,
-  validateRoutePattern,
-} from '../lib/routing-config.js';
+import { normalizeRoutingConfig, resolveRouteConfig, validateRoutePattern } from '../lib/routing-config.js';
 
 describe('normalizeRoutingConfig', () => {
   it('returns undefined for undefined input', () => {

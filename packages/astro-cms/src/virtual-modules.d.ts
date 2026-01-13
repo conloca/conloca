@@ -8,13 +8,7 @@
 
 import type { Config } from '@measured/puck';
 
-import type {
-  LayoutProps,
-  PageData,
-  PageReference,
-  ResolvedRoutingConfig,
-  RouteConfig,
-} from './types.js';
+import type { LayoutProps, PageData, PageReference, ResolvedRoutingConfig } from './types.js';
 
 /**
  * Virtual module: virtual:conloca-routing-config

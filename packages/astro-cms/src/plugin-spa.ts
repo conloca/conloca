@@ -15,6 +15,7 @@ const isInDist = __dirname.endsWith('/dist') || __dirname.includes('/dist/');
 const PAGE_HANDLER_PATH = isInDist
   ? join(dirname(__dirname), 'src', 'handlers', 'page-handler.astro')
   : join(__dirname, 'handlers', 'page-handler.astro');
+
 import {
   generateLayoutModule,
   generatePageApiModule,
@@ -25,7 +26,7 @@ import type { ResolvedRoutingConfig, RoutingConfigInput, TemplateConfig } from '
 
 // Virtual module for passing config from plugin to route handler
 const VIRTUAL_CONFIG_MODULE = 'virtual:conloca-config';
-const RESOLVED_VIRTUAL_CONFIG = '\0' + VIRTUAL_CONFIG_MODULE;
+const RESOLVED_VIRTUAL_CONFIG = `\0${VIRTUAL_CONFIG_MODULE}`;
 
 // Virtual module IDs for routing system
 const VIRTUAL_ROUTING_CONFIG = 'virtual:conloca-routing-config';
@@ -34,10 +35,10 @@ const VIRTUAL_PAGE_API = 'virtual:conloca-page-api';
 const VIRTUAL_PUCK_CONFIG = 'virtual:conloca-puck-config';
 
 // Resolved IDs (with \0 prefix to prevent file resolution)
-const RESOLVED_ROUTING_CONFIG = '\0' + VIRTUAL_ROUTING_CONFIG;
-const RESOLVED_LAYOUT = '\0' + VIRTUAL_LAYOUT;
-const RESOLVED_PAGE_API = '\0' + VIRTUAL_PAGE_API;
-const RESOLVED_PUCK_CONFIG = '\0' + VIRTUAL_PUCK_CONFIG;
+const RESOLVED_ROUTING_CONFIG = `\0${VIRTUAL_ROUTING_CONFIG}`;
+const RESOLVED_LAYOUT = `\0${VIRTUAL_LAYOUT}`;
+const RESOLVED_PAGE_API = `\0${VIRTUAL_PAGE_API}`;
+const RESOLVED_PUCK_CONFIG = `\0${VIRTUAL_PUCK_CONFIG}`;
 
 export interface ConlocaCMSOptions extends Omit<UIConfig, 'basename'> {
   contentRoot: string;
@@ -326,7 +327,7 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
                   });
 
                   // Only add explicit watchers if content is outside the Astro project
-                  const { resolve } = await import('path');
+                  const { resolve } = await import('node:path');
                   const astroRoot = process.cwd();
                   const contentAbsolute = resolve(options.contentRoot);
                   const canvasAbsolute = resolve(options.canvasDir || './canvas');
@@ -408,9 +409,7 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
         // Check for route conflicts when routing is enabled
         if (!resolvedRoutingConfig?.enabled) return;
 
-        const injectedPatterns = new Set(
-          Object.values(resolvedRoutingConfig.routes).map((r) => r.pattern),
-        );
+        const injectedPatterns = new Set(Object.values(resolvedRoutingConfig.routes).map((r) => r.pattern));
 
         // Find file-based routes that may conflict with injected routes
         const conflicts: { injected: string; fileBased: string }[] = [];
@@ -443,7 +442,8 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
 
           if (onConflict === 'error') {
             throw new Error(`[Conloca] ${message}`);
-          } else if (onConflict === 'warn') {
+          }
+          if (onConflict === 'warn') {
             logger.warn(message);
           }
           // 'silent' - do nothing

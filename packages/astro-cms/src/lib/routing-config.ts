@@ -8,9 +8,7 @@ import type { RouteConfig, RoutingConfig, RoutingConfigInput } from '../types.js
  * @param input - The routing config input (boolean, object, or undefined)
  * @returns Normalized RoutingConfig or undefined if not enabled
  */
-export function normalizeRoutingConfig(
-  input: RoutingConfigInput | undefined,
-): RoutingConfig | undefined {
+export function normalizeRoutingConfig(input: RoutingConfigInput | undefined): RoutingConfig | undefined {
   if (input === undefined) {
     return undefined;
   }
@@ -75,9 +73,7 @@ export function validateRoutePattern(pattern: string, routeName: string): void {
   // Allow: a-zA-Z0-9, hyphen, underscore, slash, brackets, dots
   const invalidChars = pattern.match(/[^a-zA-Z0-9\-_/[\].]/g);
   if (invalidChars) {
-    throw new Error(
-      `Route '${routeName}': pattern contains invalid characters: ${invalidChars.join(', ')}`,
-    );
+    throw new Error(`Route '${routeName}': pattern contains invalid characters: ${invalidChars.join(', ')}`);
   }
 
   // Check for balanced brackets

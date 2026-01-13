@@ -1,11 +1,10 @@
 import { readFile } from 'node:fs/promises';
+// Get the path to the cms-spa package by resolving its package.json
+import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 // Import config from virtual module (injected by plugin-spa.ts)
 import spaConfig from 'virtual:conloca-config';
 import type { APIRoute } from 'astro';
-
-// Get the path to the cms-spa package by resolving its package.json
-import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
 const cmsSpaPath = dirname(require.resolve('@conloca/cms-spa/package.json'));

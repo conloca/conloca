@@ -14,10 +14,7 @@
  * extractSlugFromPathname('/', '/[...slug]') // undefined
  * extractSlugFromPathname('/blog', '/blog/[...slug]') // undefined
  */
-export function extractSlugFromPathname(
-  pathname: string,
-  pattern: string,
-): string | undefined {
+export function extractSlugFromPathname(pathname: string, pattern: string): string | undefined {
   // Pattern: /[...slug] -> prefix: ''
   // Pattern: /blog/[...slug] -> prefix: '/blog'
   // Pattern: /docs/[...path] -> prefix: '/docs'
@@ -51,10 +48,7 @@ export function extractSlugFromPathname(
  * pathnameFromSlug(undefined, '/[...slug]') // '/'
  * pathnameFromSlug(undefined, '/blog/[...slug]') // '/blog'
  */
-export function pathnameFromSlug(
-  slug: string | undefined,
-  pattern: string,
-): string {
+export function pathnameFromSlug(slug: string | undefined, pattern: string): string {
   // Extract the static prefix before the dynamic segment
   const prefixMatch = pattern.match(/^(.*?)\[/);
   const prefix = prefixMatch ? prefixMatch[1].replace(/\/$/, '') : '';
@@ -65,5 +59,5 @@ export function pathnameFromSlug(
   }
 
   // Combine prefix and slug
-  return prefix + '/' + slug;
+  return `${prefix}/${slug}`;
 }

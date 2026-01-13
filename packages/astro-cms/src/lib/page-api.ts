@@ -116,7 +116,7 @@ export async function createPageAPI(options: PageApiOptions): Promise<PageAPI> {
 
         pages.push({
           id: manifest.id,
-          pathname: localeData.pathname || '/' + manifest.id.replace(/^index$/, ''),
+          pathname: localeData.pathname || `/${manifest.id.replace(/^index$/, '')}`,
           title: localeData.meta?.title || manifest.id,
           collection: manifest.collection || 'pages',
         });
@@ -153,7 +153,7 @@ export async function createPageAPI(options: PageApiOptions): Promise<PageAPI> {
         title: meta.title || manifest.id,
         description: meta.description,
         pathname,
-        puckData: localeData.data,
+        puckData: localeData.content.puckData,
         collection: manifest.collection || collection || 'pages',
         route: {
           // These will be overwritten by the caller with actual route info
@@ -163,8 +163,8 @@ export async function createPageAPI(options: PageApiOptions): Promise<PageAPI> {
         },
         meta,
         timestamps: {
-          created: localeData.created,
-          modified: localeData.modified,
+          created: localeData.created ? new Date(localeData.created) : undefined,
+          modified: localeData.modified ? new Date(localeData.modified) : undefined,
         },
       };
     },
