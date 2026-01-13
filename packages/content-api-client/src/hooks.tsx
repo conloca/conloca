@@ -11,10 +11,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   APIClientError,
   ContentAPIClient,
-  StaleWriteError,
   type GitCommitResult,
   type GitPushResult,
   type GitStatus,
+  StaleWriteError,
 } from './client';
 
 // Global client instance
