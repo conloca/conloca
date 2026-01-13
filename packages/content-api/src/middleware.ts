@@ -1,10 +1,10 @@
-import { Hono } from 'hono'
-import { cors } from 'hono/cors'
-import type { ContentAPI } from './content-api.interface'
-import { localesOf } from './content-utils'
-import { createGitOperations, type GitHubConfig } from './git-operations'
-import type { APIError, ContentManifest, ErrorCode, FindOptions, GlobalFilters } from './types'
-import { ErrorCodes } from './types'
+import { Hono } from 'hono';
+import { cors } from 'hono/cors';
+import type { ContentAPI } from './content-api.interface';
+import { localesOf } from './content-utils';
+import { createGitOperations, type GitHubConfig } from './git-operations';
+import type { APIError, ContentManifest, ErrorCode, FindOptions, GlobalFilters } from './types';
+import { ErrorCodes } from './types';
 
 /**
  * Helper to create standardized error responses
@@ -794,11 +794,11 @@ export function createContentAPIRouter(api: ContentAPI) {
    * Optional: GITHUB_BRANCH (defaults to 'main'), CONTENT_PATH (defaults to 'content/')
    */
   function getGitConfig(): GitHubConfig {
-    const token = process.env.GITHUB_TOKEN
-    const repo = process.env.GITHUB_REPO
+    const token = process.env.GITHUB_TOKEN;
+    const repo = process.env.GITHUB_REPO;
 
     if (!token || !repo) {
-      throw new Error('GITHUB_TOKEN and GITHUB_REPO environment variables required')
+      throw new Error('GITHUB_TOKEN and GITHUB_REPO environment variables required');
     }
 
     return {
@@ -806,76 +806,76 @@ export function createContentAPIRouter(api: ContentAPI) {
       repo,
       branch: process.env.GITHUB_BRANCH || 'main',
       contentPath: process.env.CONTENT_PATH || 'content/',
-    }
+    };
   }
 
   // GET /git/status - Get git repository status
   app.get('/git/status', async (c) => {
     try {
-      const config = getGitConfig()
-      const gitOps = createGitOperations(config)
-      const status = await gitOps.getStatus()
+      const config = getGitConfig();
+      const gitOps = createGitOperations(config);
+      const status = await gitOps.getStatus();
 
       if (!status.isRepo) {
-        return c.json(errorResponse(ErrorCodes.GIT_NOT_REPO, 'Repository not accessible'), 400)
+        return c.json(errorResponse(ErrorCodes.GIT_NOT_REPO, 'Repository not accessible'), 400);
       }
 
-      return c.json(status)
+      return c.json(status);
     } catch (error) {
       if (error instanceof Error && error.message.includes('environment variables required')) {
-        return c.json(errorResponse(ErrorCodes.GIT_NOT_REPO, error.message), 400)
+        return c.json(errorResponse(ErrorCodes.GIT_NOT_REPO, error.message), 400);
       }
-      return c.json(logAndCreateErrorResponse(error, ErrorCodes.GIT_STATUS_FAILED, 'Failed to get git status'), 500)
+      return c.json(logAndCreateErrorResponse(error, ErrorCodes.GIT_STATUS_FAILED, 'Failed to get git status'), 500);
     }
-  })
+  });
 
   // POST /git/commit - Commit all changes
   app.post('/git/commit', async (c) => {
     try {
-      const body = await c.req.json<{ message?: string }>().catch(() => ({}) as { message?: string })
+      const body = await c.req.json<{ message?: string }>().catch(() => ({}) as { message?: string });
 
       // Auto-generate message if not provided
-      const date = new Date()
-      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-      const defaultMessage = `CMS changes - ${monthNames[date.getMonth()]} ${date.getDate()}`
-      const message = body.message || defaultMessage
+      const date = new Date();
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const defaultMessage = `CMS changes - ${monthNames[date.getMonth()]} ${date.getDate()}`;
+      const message = body.message || defaultMessage;
 
-      const config = getGitConfig()
-      const gitOps = createGitOperations(config)
-      const result = await gitOps.commitAll(message)
+      const config = getGitConfig();
+      const gitOps = createGitOperations(config);
+      const result = await gitOps.commitAll(message);
 
       if (!result.success) {
-        return c.json(errorResponse(ErrorCodes.GIT_COMMIT_FAILED, result.error || 'Commit failed'), 500)
+        return c.json(errorResponse(ErrorCodes.GIT_COMMIT_FAILED, result.error || 'Commit failed'), 500);
       }
 
-      return c.json(result)
+      return c.json(result);
     } catch (error) {
       if (error instanceof Error && error.message.includes('environment variables required')) {
-        return c.json(errorResponse(ErrorCodes.GIT_NOT_REPO, error.message), 400)
+        return c.json(errorResponse(ErrorCodes.GIT_NOT_REPO, error.message), 400);
       }
-      return c.json(logAndCreateErrorResponse(error, ErrorCodes.GIT_COMMIT_FAILED, 'Failed to commit changes'), 500)
+      return c.json(logAndCreateErrorResponse(error, ErrorCodes.GIT_COMMIT_FAILED, 'Failed to commit changes'), 500);
     }
-  })
+  });
 
   // POST /git/push - Push to origin
   app.post('/git/push', async (c) => {
     try {
-      const config = getGitConfig()
-      const gitOps = createGitOperations(config)
-      const result = await gitOps.pushOrigin()
+      const config = getGitConfig();
+      const gitOps = createGitOperations(config);
+      const result = await gitOps.pushOrigin();
 
       if (!result.success) {
-        return c.json(errorResponse(ErrorCodes.GIT_PUSH_FAILED, result.error || 'Push failed'), 500)
+        return c.json(errorResponse(ErrorCodes.GIT_PUSH_FAILED, result.error || 'Push failed'), 500);
       }
 
-      return c.json(result)
+      return c.json(result);
     } catch (error) {
       if (error instanceof Error && error.message.includes('environment variables required')) {
-        return c.json(errorResponse(ErrorCodes.GIT_NOT_REPO, error.message), 400)
+        return c.json(errorResponse(ErrorCodes.GIT_NOT_REPO, error.message), 400);
       }
-      return c.json(logAndCreateErrorResponse(error, ErrorCodes.GIT_PUSH_FAILED, 'Failed to push to origin'), 500)
+      return c.json(logAndCreateErrorResponse(error, ErrorCodes.GIT_PUSH_FAILED, 'Failed to push to origin'), 500);
     }
-  })
+  });
 
   return app;
 }
