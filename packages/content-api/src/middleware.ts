@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { ContentAPI } from './content-api.interface';
 import { localesOf } from './content-utils';
-import { createGitOperations, type GitHubConfig } from './git-operations';
+import { createGitOperations, type GitAuthor, type GitHubConfig } from './git-operations'
 import type { APIError, ContentManifest, ErrorCode, FindOptions, GlobalFilters } from './types';
 import { ErrorCodes } from './types';
 
@@ -847,17 +847,23 @@ export function createContentAPIRouter(api: ContentAPI) {
   // POST /git/commit - Commit all changes
   app.post('/git/commit', async (c) => {
     try {
-      const body = await c.req.json<{ message?: string }>().catch(() => ({}) as { message?: string });
+      const body = await c.req.json<{ message?: string }>().catch(() => ({}) as { message?: string })
 
       // Auto-generate message if not provided
-      const date = new Date();
-      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      const defaultMessage = `CMS changes - ${monthNames[date.getMonth()]} ${date.getDate()}`;
-      const message = body.message || defaultMessage;
+      const date = new Date()
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+      const defaultMessage = `CMS changes - ${monthNames[date.getMonth()]} ${date.getDate()}`
+      const message = body.message || defaultMessage
 
-      const config = getGitConfig();
-      const gitOps = createGitOperations(config);
-      const result = await gitOps.commitAll(message);
+      // Extract user email from CF Access header for commit attribution
+      const userEmail = c.req.header('X-CF-User-Email')
+      const author: GitAuthor | undefined = userEmail
+        ? { name: userEmail.split('@')[0], email: userEmail }
+        : undefined
+
+      const config = getGitConfig()
+      const gitOps = createGitOperations(config)
+      const result = await gitOps.commitAll(message, author)
 
       if (!result.success) {
         return c.json(errorResponse(ErrorCodes.GIT_COMMIT_FAILED, result.error || 'Commit failed'), 500);
