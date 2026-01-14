@@ -5,6 +5,13 @@
  * Use the main package exports for browser-compatible APIs.
  */
 
+// CF Access authentication
+export {
+  extractCFAccessToken,
+  validateCFAccessRequest,
+  type CFAccessResult,
+  type CFAccessUser,
+} from './cf-access.js'
 export { Blocks } from './blocks';
 export { ComponentRegistry } from './component-registry';
 export * from './component-registry.types';
