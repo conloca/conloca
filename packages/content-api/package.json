@@ -9,7 +9,6 @@
   "dependencies": {
     "@hono/node-server": "^1.19.5",
     "@node-rs/xxhash": "^1.7.6",
-    "@octokit/graphql": "^9.0.3",
     "@octokit/rest": "^22.0.1",
     "fast-glob": "^3.3.2",
     "gray-matter": "^4.0.3",
