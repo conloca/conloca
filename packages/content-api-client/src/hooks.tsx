@@ -45,6 +45,7 @@ function isContentListResult(value: unknown): value is ContentListResult {
 
 // ===== Query Keys =====
 const queryKeys = {
+  currentUser: () => ['auth', 'user'] as const,
   gitStatus: () => ['git', 'status'] as const,
   content: (id: string) => ['content', id] as const,
   localized: (id: string, locale: string) => ['content', id, locale] as const,
@@ -515,6 +516,18 @@ export function useSitesConfig() {
   return useQuery({
     queryKey: queryKeys.sitesConfig(),
     queryFn: () => client.getSitesConfig(),
+  });
+}
+
+// ===== Auth Hooks =====
+
+export function useCurrentUser() {
+  const client = getContentAPIClient();
+
+  return useQuery({
+    queryKey: queryKeys.currentUser(),
+    queryFn: () => client.getCurrentUser(),
+    staleTime: 60000, // Cache for 1 minute (user doesn't change often)
   });
 }
 

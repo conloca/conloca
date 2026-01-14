@@ -364,6 +364,15 @@ export class ContentAPIClient {
       body: JSON.stringify({}),
     });
   }
+
+  // Auth operations
+  async getCurrentUser(): Promise<{ authenticated: boolean; user?: { email: string; sub: string } }> {
+    const response = await this.fetch(`${this.baseUrl}/auth/user`);
+    if (!response.ok) {
+      return { authenticated: false };
+    }
+    return response.json() as Promise<{ authenticated: boolean; user?: { email: string; sub: string } }>;
+  }
 }
 
 // Custom error for API responses
