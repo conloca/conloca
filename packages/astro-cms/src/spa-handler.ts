@@ -1,10 +1,11 @@
-import { readFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises'
 // Get the path to the cms-spa package by resolving its package.json
-import { createRequire } from 'node:module';
-import { dirname, join } from 'node:path';
+import { createRequire } from 'node:module'
+import { dirname, join } from 'node:path'
+import { validateCFAccessRequest } from '@conloca/content-api/node'
 // Import config from virtual module (injected by plugin-spa.ts)
-import spaConfig from 'virtual:conloca-config';
-import type { APIRoute } from 'astro';
+import spaConfig from 'virtual:conloca-config'
+import type { APIRoute } from 'astro'
 
 const require = createRequire(import.meta.url);
 const cmsSpaPath = dirname(require.resolve('@conloca/cms-spa/package.json'));
@@ -27,10 +28,20 @@ async function loadIndexHtml(): Promise<string> {
 }
 
 export const GET: APIRoute = async ({ params, request }) => {
+  // Validate CF Access (reads env vars internally)
+  const cfResult = await validateCFAccessRequest(request)
+
+  if (!cfResult.valid && cfResult.required) {
+    return new Response('Unauthorized - CF Access required', {
+      status: 401,
+      headers: { 'Content-Type': 'text/plain' },
+    })
+  }
+
   // The path parameter is an array for [...path] routes
-  const pathArray = params.path;
-  const path = Array.isArray(pathArray) ? pathArray.join('/') : pathArray || '';
-  console.log('[spa-handler] Request for path:', path, 'params:', params, 'URL:', request.url);
+  const pathArray = params.path
+  const path = Array.isArray(pathArray) ? pathArray.join('/') : pathArray || ''
+  console.log('[spa-handler] Request for path:', path, 'params:', params, 'URL:', request.url)
 
   // For the root path or any path without an extension, serve the HTML
   if (!path || !path.includes('.')) {
