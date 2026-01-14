@@ -1,6 +1,5 @@
 import { readdir, readFile } from 'node:fs/promises'
 import { join, relative } from 'node:path'
-import { graphql } from '@octokit/graphql'
 import { Octokit } from '@octokit/rest'
 
 export interface GitStatus {
@@ -42,15 +41,8 @@ export interface GitHubConfig {
   contentPath: string // path to content directory
 }
 
-interface GraphQLError {
-  message: string
-  type?: string
-  path?: string[]
-}
-
 /**
- * Create git operations using GitHub API.
- * Uses GraphQL for read-only queries (getStatus) and REST API for commits (author attribution).
+ * Create git operations using GitHub REST API.
  * Works in serverless environments (Cloudflare Workers) where git binary is unavailable.
  */
 export function createGitOperations(config: GitHubConfig): GitOperations {
@@ -58,34 +50,13 @@ export function createGitOperations(config: GitHubConfig): GitOperations {
   const branch = config.branch || 'main'
   const [owner, repoName] = repo.split('/')
 
-  // GraphQL client for read-only queries
-  const graphqlWithAuth = graphql.defaults({
-    headers: { authorization: `token ${token}` },
-  })
-
-  // REST client for commits with author support
   const octokit = new Octokit({ auth: token })
 
   return {
     async getStatus(): Promise<GitStatus> {
       try {
-        // Query GitHub to verify repo access and branch existence
-        await graphqlWithAuth(
-          `
-          query($owner: String!, $name: String!, $branch: String!) {
-            repository(owner: $owner, name: $name) {
-              ref(qualifiedName: $branch) {
-                target {
-                  ... on Commit {
-                    oid
-                  }
-                }
-              }
-            }
-          }
-        `,
-          { owner, name: repoName, branch: `refs/heads/${branch}` },
-        )
+        // Verify repo access and branch existence using REST API
+        await octokit.repos.getBranch({ owner, repo: repoName, branch })
 
         return {
           isRepo: true,
@@ -96,8 +67,8 @@ export function createGitOperations(config: GitHubConfig): GitOperations {
           branch,
         }
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error'
-        if (message.includes('Could not resolve')) {
+        // REST API throws 404 for non-existent branch/repo
+        if (error && typeof error === 'object' && 'status' in error && (error as { status: number }).status === 404) {
           return {
             isRepo: false,
             hasChanges: false,
@@ -204,13 +175,6 @@ export function createGitOperations(config: GitHubConfig): GitOperations {
               error: 'Authentication failed. Check your GitHub token permissions.',
             }
           }
-        }
-
-        // Handle GraphQL errors (legacy, kept for safety)
-        if (error && typeof error === 'object' && 'errors' in error) {
-          const gqlErrors = (error as { errors: GraphQLError[] }).errors
-          const messages = gqlErrors.map((e) => e.message).join(', ')
-          return { success: false, error: messages }
         }
 
         return {
