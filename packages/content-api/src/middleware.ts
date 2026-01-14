@@ -35,7 +35,22 @@ export function createContentAPIRouter(api: ContentAPI) {
   const app = new Hono();
 
   // Enable CORS for CMS access
-  app.use('/*', cors());
+  app.use('/*', cors())
+
+  // GET /auth/user - Get current authenticated user
+  app.get('/auth/user', async (c) => {
+    const email = c.req.header('X-CF-User-Email')
+    const sub = c.req.header('X-CF-User-Sub')
+
+    if (!email) {
+      return c.json({ authenticated: false })
+    }
+
+    return c.json({
+      authenticated: true,
+      user: { email, sub },
+    })
+  })
 
   // GET /content/collections - List all collections across all sites
   app.get('/content/collections', async (c) => {
