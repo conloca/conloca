@@ -1,7 +1,8 @@
-import { Database, FileText, LayoutDashboard, Package } from 'lucide-react';
-import { NavLink, Outlet } from 'react-router-dom';
-import { cn } from '../lib/utils';
-import { GitStatusPanel } from './GitStatusPanel';
+import { Database, FileText, LayoutDashboard, Package } from 'lucide-react'
+import { NavLink, Outlet } from 'react-router-dom'
+import { cn } from '../lib/utils'
+import { GitStatusPanel } from './GitStatusPanel'
+import { UserAvatar } from './UserAvatar'
 
 export function CMSLayout() {
   return (
@@ -10,7 +11,10 @@ export function CMSLayout() {
       <header className="bg-white border-b border-gray-200">
         <div className="px-6 py-4 flex items-center justify-between">
           <h1 className="text-xl font-semibold">Conloca CMS</h1>
-          <GitStatusPanel />
+          <div className="flex items-center gap-4">
+            <GitStatusPanel />
+            <UserAvatar />
+          </div>
         </div>
 
         {/* Navigation Tabs */}
