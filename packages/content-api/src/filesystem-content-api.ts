@@ -920,6 +920,7 @@ export class FileSystemContentAPI implements ContentAPI {
       if (content) {
         locales[localeVersion.locale] = {
           ...localeVersion,
+          etag: content.etag, // Use fresh etag from file, not stale manifest etag
           content: content.content,
         };
       }
@@ -973,6 +974,7 @@ export class FileSystemContentAPI implements ContentAPI {
       kind: manifest.kind,
       localized: {
         ...localeVersion,
+        etag: localeData.etag, // Use fresh etag from file, not stale manifest etag
         content: localeData.content,
       },
     };
@@ -1330,27 +1332,40 @@ export class FileSystemContentAPI implements ContentAPI {
       };
     }
 
+    // Get file path and read current content FIRST to get fresh etag
+    const filePath = this.getFilePath(manifest, localeVersion);
+    const current = await this.readLocaleFile(filePath, locale);
+    if (!current) {
+      return {
+        success: false,
+        reason: 'not_found',
+      };
+    }
+
+    // Use fresh etag from file, not stale manifest etag
+    const currentEtag = current.etag;
+
     // Check etag - data files use simple etags, others use dual etags
     if (manifest.kind === 'data') {
       // Data files use simple etag (single hash, no dot separator)
       // Just compare the full etag directly
-      if (etag !== localeVersion.etag) {
+      if (etag !== currentEtag) {
         return {
           success: false,
           reason: 'stale_write',
-          currentEtag: localeVersion.etag,
+          currentEtag,
         };
       }
     } else {
       // Non-data files use dual etags (meta.content format)
       const etagParts = parseDualEtag(etag);
-      const currentParts = parseDualEtag(localeVersion.etag);
+      const currentParts = parseDualEtag(currentEtag);
 
       if (!etagParts || !currentParts) {
         return {
           success: false,
           reason: 'stale_write',
-          currentEtag: localeVersion.etag,
+          currentEtag,
         };
       }
 
@@ -1364,7 +1379,7 @@ export class FileSystemContentAPI implements ContentAPI {
         return {
           success: false,
           reason: 'stale_write',
-          currentEtag: localeVersion.etag,
+          currentEtag,
         };
       }
 
@@ -1372,21 +1387,9 @@ export class FileSystemContentAPI implements ContentAPI {
         return {
           success: false,
           reason: 'stale_write',
-          currentEtag: localeVersion.etag,
+          currentEtag,
         };
       }
-    }
-
-    // Get file path
-    const filePath = this.getFilePath(manifest, localeVersion);
-
-    // Get current content
-    const current = await this.readLocaleFile(filePath, locale);
-    if (!current) {
-      return {
-        success: false,
-        reason: 'not_found',
-      };
     }
 
     // Update modified timestamp for any change (metadata or content)
