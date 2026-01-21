@@ -46,6 +46,10 @@ const VIRTUAL_HYDRATION_ENTRY = 'virtual:conloca-hydration-entry';
 const RESOLVED_HYDRATION_REGISTRY = `\0${VIRTUAL_HYDRATION_REGISTRY}`;
 const RESOLVED_HYDRATION_ENTRY = `\0${VIRTUAL_HYDRATION_ENTRY}`;
 
+// Virtual module for CMS SPA source loading (dev only)
+const VIRTUAL_CMS_SPA_ENTRY = 'virtual:conloca-cms-spa-entry';
+const RESOLVED_CMS_SPA_ENTRY = `\0${VIRTUAL_CMS_SPA_ENTRY}`;
+
 export interface ConlocaCMSOptions extends Omit<UIConfig, 'basename'> {
   contentRoot: string;
   canvasDir?: string;
@@ -343,6 +347,12 @@ initHydration(componentRegistry)
                   if (id === `${cmsRoute}/data-schemas-entry.js`) {
                     return id;
                   }
+                  if (id === VIRTUAL_CMS_SPA_ENTRY) {
+                    return RESOLVED_CMS_SPA_ENTRY;
+                  }
+                  if (id === `${cmsRoute}/cms-spa-entry.js`) {
+                    return RESOLVED_CMS_SPA_ENTRY;
+                  }
                   return null;
                 },
                 load(id) {
@@ -370,6 +380,24 @@ initHydration(componentRegistry)
                     }
                     // Return empty module if no schemas path configured
                     return 'export default {};';
+                  }
+                  if (id === RESOLVED_CMS_SPA_ENTRY) {
+                    // Get React refresh preamble (same pattern as puckConfigLoader)
+                    const preambleCode = viteReact.preambleCode.replace('__BASE__', '/');
+
+                    return `
+// Import and execute React refresh preamble first (from @vitejs/plugin-react)
+${preambleCode}
+
+// Import cms-spa main.tsx directly through Vite
+// Vite will resolve React from its pre-bundled deps (same instance as puck.config.tsx)
+import '@conloca/cms-spa/src/main.tsx';
+
+// Accept HMR
+if (import.meta.hot) {
+  import.meta.hot.accept();
+}
+`;
                   }
                   return null;
                 },
