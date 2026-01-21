@@ -17,6 +17,10 @@ import { createContentAPI } from '@conloca/content-api/node';
 import { evaluateMDXBlocks } from '@conloca/mdx/node';
 import { createPageRendererWithBlocks } from '../components/RenderWithBlocks.js';
 
+// Hydration support
+import { hasHydratableComponents } from '../lib/hydration-utils.js';
+import { RenderWithHydration } from '../components/RenderWithHydration.js';
+
 // Virtual modules configured by the Vite plugin
 import routingConfig from 'virtual:conloca-routing-config';
 import Layout from 'virtual:conloca-layout';
@@ -189,6 +193,9 @@ if (hasPuckData && page && dataContext) {
   }
 }
 
+// Check if page has hydratable components (for conditional script injection)
+const needsHydration = hasPuckData && resolvedPuckData && hasHydratableComponents(resolvedPuckData, puckConfig);
+
 // Create PageRenderer with MDX blocks support
 // This evaluates all MDX blocks at build time and creates a renderer with them baked in
 let PageRenderer: ComponentType | undefined;
@@ -219,7 +226,11 @@ if (hasPuckData && page && resolvedPuckData) {
     {hasPuckData && PageRenderer ? (
       <PageRenderer />
     ) : hasPuckData && resolvedPuckData ? (
-      <Render config={puckConfig} data={resolvedPuckData} />
+      needsHydration ? (
+        <RenderWithHydration config={puckConfig} data={resolvedPuckData} />
+      ) : (
+        <Render config={puckConfig} data={resolvedPuckData} />
+      )
     ) : (
       <div class="conloca-empty-page">
         <p>This page has no content yet.</p>
@@ -233,12 +244,17 @@ if (hasPuckData && page && resolvedPuckData) {
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       <title>{page.title || 'Untitled'}</title>
       {page.description && <meta name="description" content={page.description} />}
+      {needsHydration && <script type="module" src="virtual:conloca-hydration-entry" />}
     </head>
     <body>
       {hasPuckData && PageRenderer ? (
         <PageRenderer />
       ) : hasPuckData && resolvedPuckData ? (
-        <Render config={puckConfig} data={resolvedPuckData} />
+        needsHydration ? (
+          <RenderWithHydration config={puckConfig} data={resolvedPuckData} />
+        ) : (
+          <Render config={puckConfig} data={resolvedPuckData} />
+        )
       ) : (
         <div class="conloca-empty-page">
           <p>This page has no content yet.</p>
@@ -260,6 +276,9 @@ if (hasPuckData && page && resolvedPuckData) {
     </body>
   </html>
 )}
+
+{/* Hydration script - conditionally loaded only on pages with hydratable components */}
+{Layout && needsHydration && <script type="module" src="virtual:conloca-hydration-entry" />}
 
 <style>
   .conloca-empty-page {
