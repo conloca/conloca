@@ -1,6 +1,29 @@
 import type { Data } from '@measured/puck';
 
 /**
+ * Hydration strategy for Puck components in production.
+ *
+ * Determines when a component's React code loads and hydrates on the client.
+ * Only components with explicit hydration strategy will ship JavaScript.
+ *
+ * @example In puck.config.tsx
+ * ```typescript
+ * const FilteredGrid: ComponentConfig<Props> & { hydration?: HydrationStrategy } = {
+ *   hydration: 'visible',  // Hydrate when scrolled into view
+ *   fields: { ... },
+ *   render: (props) => <FilteredGridComponent {...props} />,
+ * }
+ * ```
+ *
+ * Strategies:
+ * - 'none': No hydration, pure static HTML (default, current behavior)
+ * - 'load': Hydrate immediately on page load (client:load)
+ * - 'visible': Hydrate when component enters viewport (client:visible)
+ * - 'idle': Hydrate when browser is idle (client:idle)
+ */
+export type HydrationStrategy = 'none' | 'load' | 'visible' | 'idle';
+
+/**
  * Configuration for Conloca's content page routing system.
  *
  * The routing system allows sites to declare which URL patterns
