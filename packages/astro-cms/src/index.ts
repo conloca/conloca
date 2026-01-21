@@ -22,7 +22,8 @@ export {
   type HydratableComponent,
   type HydratableComponentConfig,
 } from './lib/hydration-utils.js';
-export { HydrationWrapper } from './components/HydrationWrapper.js';
+export { HydrationWrapper } from './components/HydrationWrapper.js'
+export { RenderWithHydration } from './components/RenderWithHydration.js';
 export { serializeProps } from './lib/serialize-props.js';
 export { initHydration, type ComponentRegistry } from './lib/hydration-script.js';
 
