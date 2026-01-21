@@ -25,7 +25,15 @@
       "import": "./dist/puck-config.js",
       "default": "./dist/puck-config.js"
     },
-    "./dist/spa/*": "./dist/spa/*"
+    "./dist/spa/*": "./dist/spa/*",
+    "./src/main.tsx": {
+      "import": "./src/main.tsx",
+      "default": "./src/main.tsx"
+    },
+    "./src/main.css": {
+      "import": "./src/main.css",
+      "default": "./src/main.css"
+    }
   },
   "files": [
     "dist",
