@@ -13,5 +13,15 @@ export { type ConlocaLoaderOptions, conlocaLoader } from './loader.js';
 export { type ConlocaCMSOptions, conlocaCMS } from './plugin-spa.js';
 export type { TemplateConfig } from './types.js';
 
+// Hydration support for interactive components
+export type { HydrationStrategy } from './types.js';
+export {
+  findHydratableComponents,
+  hasHydratableComponents,
+  isHydratable,
+  type HydratableComponent,
+  type HydratableComponentConfig,
+} from './lib/hydration-utils.js';
+
 // NOTE: Collections helpers are in a separate entry point '@conloca/astro-cms/collections'
 // to avoid loading 'astro:content' during astro.config.mjs import.
