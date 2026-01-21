@@ -14,6 +14,10 @@ export { type ConlocaCMSOptions, conlocaCMS } from './plugin-spa.js';
 export type { TemplateConfig } from './types.js';
 
 // Hydration support for interactive components
+// NOTE: Only types and pure utilities are exported here.
+// React components (HydrationWrapper, RenderWithHydration) are NOT exported
+// from the main entry point to avoid React duplication in cms-spa.
+// They are imported directly by page-handler.astro which runs in Astro SSR context.
 export type { HydrationStrategy } from './types.js';
 export {
   findHydratableComponents,
@@ -22,10 +26,9 @@ export {
   type HydratableComponent,
   type HydratableComponentConfig,
 } from './lib/hydration-utils.js';
-export { HydrationWrapper } from './components/HydrationWrapper.js'
-export { RenderWithHydration } from './components/RenderWithHydration.js';
 export { serializeProps } from './lib/serialize-props.js';
-export { initHydration, type ComponentRegistry } from './lib/hydration-script.js';
+// Type-only export for sites that want to customize hydration
+export type { ComponentRegistry } from './lib/hydration-script.js';
 
 // NOTE: Collections helpers are in a separate entry point '@conloca/astro-cms/collections'
 // to avoid loading 'astro:content' during astro.config.mjs import.
