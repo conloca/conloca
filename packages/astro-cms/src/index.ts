@@ -24,6 +24,7 @@ export {
 } from './lib/hydration-utils.js';
 export { HydrationWrapper } from './components/HydrationWrapper.js';
 export { serializeProps } from './lib/serialize-props.js';
+export { initHydration, type ComponentRegistry } from './lib/hydration-script.js';
 
 // NOTE: Collections helpers are in a separate entry point '@conloca/astro-cms/collections'
 // to avoid loading 'astro:content' during astro.config.mjs import.
