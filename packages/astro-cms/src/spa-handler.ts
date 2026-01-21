@@ -10,7 +10,33 @@ import type { APIRoute } from 'astro'
 const require = createRequire(import.meta.url);
 const cmsSpaPath = dirname(require.resolve('@conloca/cms-spa/package.json'));
 
-// Load the HTML at runtime
+/**
+ * Generate HTML for dev mode that loads cms-spa source through Vite.
+ * This ensures React is resolved from Vite's pre-bundled deps, not from the cms-spa bundle.
+ */
+function generateDevHtml(config: typeof spaConfig): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Conloca CMS</title>
+  <script>
+    // Configure UI with plugin options
+    window.__UI_CONFIG__ = ${JSON.stringify(config)};
+  </script>
+  <script type="module" src="${config.basename}/data-schemas-entry.js"></script>
+  <script type="module" src="${config.basename}/puck-entry.js"></script>
+  <script type="module" src="${config.basename}/content-listener.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="module" src="${config.basename}/cms-spa-entry.js"></script>
+</body>
+</html>`;
+}
+
+// Load the HTML at runtime (production only)
 async function loadIndexHtml(): Promise<string> {
   const spaDir = join(cmsSpaPath, 'dist/spa');
   const { readdir } = await import('node:fs/promises');
@@ -46,10 +72,17 @@ export const GET: APIRoute = async ({ params, request }) => {
   // For the root path or any path without an extension, serve the HTML
   if (!path || !path.includes('.')) {
     try {
-      let html = await loadIndexHtml();
+      let html: string;
 
-      // Inject CMS configuration and load virtual modules
-      const configScript = `
+      // In dev mode, generate HTML that loads source through Vite
+      // In production, load the pre-built HTML from cms-spa dist
+      if (import.meta.env.DEV) {
+        html = generateDevHtml(spaConfig);
+        console.log('[spa-handler] Dev mode: serving generated HTML with virtual module entry');
+      } else {
+        html = await loadIndexHtml();
+        // Inject CMS configuration and load virtual modules
+        const configScript = `
         <script>
           // Configure UI with plugin options
           window.__UI_CONFIG__ = ${JSON.stringify(spaConfig)};
@@ -58,9 +91,9 @@ export const GET: APIRoute = async ({ params, request }) => {
         <script type="module" src="${spaConfig.basename}/puck-entry.js"></script>
         <script type="module" src="${spaConfig.basename}/content-listener.js"></script>
       `;
-
-      // Inject the script at the top to ensure config is available first
-      html = html.replace('<head>', `<head>${configScript}`);
+        // Inject the script at the top to ensure config is available first
+        html = html.replace('<head>', `<head>${configScript}`);
+      }
 
       // Log what JS files are referenced in the HTML
       const scriptMatches = html.match(/<script[^>]+src="([^"]+)"/g);
