@@ -7,6 +7,7 @@ export default defineConfig({
     'spa-handler': 'src/spa-handler.ts',
     'api/content-api-handler': 'src/api/content-api-handler.ts',
     collections: 'src/collections.ts',
+    'lib/hydration-script': 'src/lib/hydration-script.ts',
   },
   format: ['esm'],
   dts: true,

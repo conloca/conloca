@@ -244,7 +244,7 @@ if (hasPuckData && page && resolvedPuckData) {
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       <title>{page.title || 'Untitled'}</title>
       {page.description && <meta name="description" content={page.description} />}
-      {needsHydration && <script type="module" src="virtual:conloca-hydration-entry" />}
+      {needsHydration && <script>import 'virtual:conloca-hydration-entry'</script>}
     </head>
     <body>
       {hasPuckData && PageRenderer ? (
@@ -278,7 +278,7 @@ if (hasPuckData && page && resolvedPuckData) {
 )}
 
 {/* Hydration script - conditionally loaded only on pages with hydratable components */}
-{Layout && needsHydration && <script type="module" src="virtual:conloca-hydration-entry" />}
+{Layout && needsHydration && <script>import 'virtual:conloca-hydration-entry'</script>}
 
 <style>
   .conloca-empty-page {

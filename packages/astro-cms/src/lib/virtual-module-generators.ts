@@ -278,7 +278,7 @@ export async function getDataCollection(collection, localeOverride) {
 export function generatePuckConfigModule(puckConfigPath: string): string {
   // Convert relative path to absolute for Vite resolution
   // ./src/... -> /src/...
-  const absolutePath = puckConfigPath.startsWith('.') ? `/${puckConfigPath.slice(2)}` : puckConfigPath;
+  const absolutePath = puckConfigPath.startsWith('.') ? `/${puckConfigPath.slice(2)}` : puckConfigPath
 
-  return `export { default } from '${absolutePath}';`;
+  return `export { default } from '${absolutePath}';`
 }

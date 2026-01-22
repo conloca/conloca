@@ -1,6 +1,8 @@
 import type { ComponentConfig, Config, Data } from '@measured/puck';
 import { Render } from '@measured/puck';
 import type { ComponentType } from 'react';
+import { RenderWithHydration } from './RenderWithHydration.js';
+import { hasHydratableComponents } from '../lib/hydration-utils.js';
 
 interface MDXComponent {
   id: string;
@@ -84,8 +86,15 @@ function RenderWithBlocks({ config, data, mdxComponents }: RenderWithBlocksProps
     components: mergedComponents,
   };
 
-  // Render with Puck for static HTML generation
-  return <Render config={enhancedConfig} data={data} />;
+  // Check if page has hydratable components
+  const needsHydration = hasHydratableComponents(data, enhancedConfig);
+
+  // Render with hydration support if needed, otherwise static
+  return needsHydration ? (
+    <RenderWithHydration config={enhancedConfig} data={data} />
+  ) : (
+    <Render config={enhancedConfig} data={data} />
+  );
 }
 
 /**
