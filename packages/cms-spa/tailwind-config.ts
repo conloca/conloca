@@ -34,12 +34,3 @@ export async function processTailwindCSS(options: {
   // Use bun to run the CLI
   return $`bun ${args}`;
 }
-
-/**
- * Common Bun build configuration to prevent importing raw Tailwind CSS
- */
-export const BUN_BUILD_CONFIG = {
-  // Prevent Bun from importing tailwindcss's raw CSS files
-  // Externalize React - consumer must provide it
-  external: ['tailwindcss', 'react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime'] as string[],
-};

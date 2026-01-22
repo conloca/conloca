@@ -1,5 +1,5 @@
 import { $, build } from 'bun';
-import { BUN_BUILD_CONFIG, processTailwindCSS, TAILWIND_CONFIG } from './tailwind-config';
+import { processTailwindCSS, TAILWIND_CONFIG } from './tailwind-config';
 
 const isDev = process.env.NODE_ENV !== 'production';
 console.log(`Building CMS SPA (${isDev ? 'dev' : 'production'})...`);
@@ -37,7 +37,16 @@ const bundleResult = await build({
     asset: '[name].[hash].[ext]',
   },
   publicPath: '/__cms/',
-  ...BUN_BUILD_CONFIG,
+  // Externalize dependencies that the consumer must provide
+  // Note: Bun requires explicit strings, not regex patterns
+  external: [
+    'tailwindcss',
+    'react',
+    'react/jsx-runtime',
+    'react/jsx-dev-runtime',
+    'react-dom',
+    'react-dom/client',
+  ],
 });
 
 // Step 4: Clean up temporary files
