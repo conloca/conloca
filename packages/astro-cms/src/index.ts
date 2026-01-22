@@ -29,6 +29,9 @@ export {
 export { serializeProps } from './lib/serialize-props.js';
 // Type-only export for sites that want to customize hydration
 export type { ComponentRegistry } from './lib/hydration-script.js';
+// New hydration API: withHydration wrapper and build-time scanner
+export { withHydration, type HydrationMeta, type WithHydrationStrategy } from './lib/withHydration.js';
+export { scanForHydratableComponents, type HydrationDiscovery } from './lib/hydration-scanner.js';
 
 // NOTE: Collections helpers are in a separate entry point '@conloca/astro-cms/collections'
 // to avoid loading 'astro:content' during astro.config.mjs import.
