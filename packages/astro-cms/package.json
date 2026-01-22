@@ -47,6 +47,12 @@
       "development": "./src/handlers/page-handler.astro",
       "import": "./dist/handlers/page-handler.astro",
       "default": "./dist/handlers/page-handler.astro"
+    },
+    "./lib/hydration-script": {
+      "development": "./src/lib/hydration-script.ts",
+      "types": "./dist/lib/hydration-script.d.mts",
+      "import": "./dist/lib/hydration-script.mjs",
+      "default": "./dist/lib/hydration-script.mjs"
     }
   },
   "scripts": {
@@ -66,6 +72,7 @@
     "@conloca/content-api-client": "workspace:*",
     "@conloca/mdx": "workspace:*",
     "@measured/puck": "^0.20.2",
+    "fast-glob": "^3.3.2",
     "tslib": "^2.8.1"
   },
   "peerDependencies": {
