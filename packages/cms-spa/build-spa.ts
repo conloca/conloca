@@ -1,8 +1,8 @@
 import { $, build } from 'bun';
 import { BUN_BUILD_CONFIG, processTailwindCSS, TAILWIND_CONFIG } from './tailwind-config';
 
-console.log('Building CMS SPA...');
 const isDev = process.env.NODE_ENV !== 'production';
+console.log(`Building CMS SPA (${isDev ? 'dev' : 'production'})...`);
 
 // Step 1: Clean dist directory
 await $`rm -rf ./dist`;
