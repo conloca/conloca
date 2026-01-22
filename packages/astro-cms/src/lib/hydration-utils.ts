@@ -1,12 +1,15 @@
 import type { Config, Data } from '@measured/puck'
 import type { HydrationStrategy } from '../types.js'
+import type { HydrationMeta } from './withHydration.js'
 
 /**
  * Extended ComponentConfig with hydration support.
- * Sites add `hydration` property to their ComponentConfig definitions.
+ * @deprecated Use withHydration() wrapper instead of hydration property.
  */
 export interface HydratableComponentConfig {
+  /** @deprecated Use withHydration() wrapper on render function instead */
   hydration?: HydrationStrategy
+  render?: (props: unknown) => unknown
 }
 
 /**
@@ -25,13 +28,29 @@ export interface HydratableComponent {
 }
 
 /**
- * Check if a component type has hydration enabled in the config.
+ * Check if a component type has hydration enabled.
+ *
+ * First checks for __hydration metadata on the render function (new withHydration API),
+ * then falls back to hydration property on ComponentConfig (deprecated).
+ *
+ * @param componentType - The component type name from Puck data
+ * @param config - The Puck config with component definitions
+ * @returns The hydration strategy ('none', 'load', 'visible', 'idle')
  */
 export function isHydratable(
   componentType: string,
   config: Config
 ): HydrationStrategy {
   const componentConfig = config.components[componentType] as HydratableComponentConfig | undefined
+  if (!componentConfig?.render) return 'none'
+
+  // New API: Check for __hydration metadata attached by withHydration()
+  const render = componentConfig.render as { __hydration?: HydrationMeta }
+  if (render.__hydration?.__isHydratable) {
+    return render.__hydration.strategy
+  }
+
+  // Deprecated: Check hydration property on ComponentConfig
   return componentConfig?.hydration ?? 'none'
 }
 
