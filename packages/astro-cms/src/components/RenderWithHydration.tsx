@@ -36,7 +36,7 @@ export function RenderWithHydration({ config, data }: RenderWithHydrationProps) 
           name,
           {
             ...componentConfig,
-            render: (props: Record<string, unknown>) => (
+            render: (props) => (
               <HydrationWrapper
                 componentName={name}
                 strategy={strategy}

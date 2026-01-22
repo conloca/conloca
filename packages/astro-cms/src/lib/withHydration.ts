@@ -1,3 +1,5 @@
+import type React from 'react'
+
 /**
  * Metadata attached to components marked for hydration.
  * Used by the build-time scanner and runtime hydration system.
@@ -44,7 +46,7 @@ export type WithHydrationStrategy = 'load' | 'visible' | 'idle'
  * }
  * ```
  */
-export function withHydration<T extends (props: any) => JSX.Element>(
+export function withHydration<T extends (props: any) => React.ReactNode>(
   Component: T,
   strategy: WithHydrationStrategy
 ): T {
