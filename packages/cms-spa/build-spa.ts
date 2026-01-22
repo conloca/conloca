@@ -2,6 +2,7 @@ import { $, build } from 'bun';
 import { BUN_BUILD_CONFIG, processTailwindCSS, TAILWIND_CONFIG } from './tailwind-config';
 
 console.log('Building CMS SPA...');
+const isDev = process.env.NODE_ENV !== 'production';
 
 // Step 1: Clean dist directory
 await $`rm -rf ./dist`;
@@ -11,17 +12,25 @@ await $`mkdir -p ./dist/spa`;
 console.log('Processing CSS with Tailwind...');
 await processTailwindCSS({
   output: TAILWIND_CONFIG.outputCompiled,
-  minify: true,
+  minify: !isDev,
 });
 
-// Step 3: Bundle with Bun
+// Dev mode: CSS only - Vite loads source directly via virtual module
+if (isDev) {
+  // Copy CSS to dist/spa for serving
+  await $`cp ${TAILWIND_CONFIG.outputCompiled} ./dist/spa/main.css`;
+  await $`rm -f ${TAILWIND_CONFIG.outputCompiled}`;
+  console.log('Dev build complete (CSS only - Vite handles JS source)');
+  process.exit(0);
+}
+
+// Production: Bundle with Bun
 console.log('Bundling with Bun...');
-const isDev = process.env.NODE_ENV !== 'production';
 const bundleResult = await build({
   entrypoints: ['./src/main.html'],
   outdir: './dist/spa',
-  minify: !isDev,
-  sourcemap: isDev ? 'inline' : 'none',
+  minify: true,
+  sourcemap: 'none',
   naming: {
     entry: '[name].[hash].[ext]',
     chunk: '[name].[hash].[ext]',
