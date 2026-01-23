@@ -3,12 +3,33 @@ import type { RouteConfig, RoutingConfig, RoutingConfigInput } from '../types.js
 /**
  * Normalize routing config input to full RoutingConfig.
  *
- * Handles the `routing: true` shorthand and boolean values.
+ * Handles the `routing: true` shorthand, boolean values, and top-level layout option.
  *
  * @param input - The routing config input (boolean, object, or undefined)
+ * @param topLevelLayout - Optional top-level layout path (enables routing when provided)
  * @returns Normalized RoutingConfig or undefined if not enabled
  */
-export function normalizeRoutingConfig(input: RoutingConfigInput | undefined): RoutingConfig | undefined {
+export function normalizeRoutingConfig(
+  input: RoutingConfigInput | undefined,
+  topLevelLayout?: string
+): RoutingConfig | undefined {
+  // If no routing config but layout provided, enable with defaults
+  if (input === undefined && topLevelLayout) {
+    return {
+      enabled: true,
+      routes: {
+        pages: {
+          pattern: '/[...slug]',
+          collection: 'pages',
+          layout: topLevelLayout,
+          prerender: true,
+        },
+      },
+      fallback: '404',
+      onConflict: 'warn',
+    };
+  }
+
   if (input === undefined) {
     return undefined;
   }
