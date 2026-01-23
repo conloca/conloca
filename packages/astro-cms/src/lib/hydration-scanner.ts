@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises'
-import { basename, extname, resolve } from 'node:path'
+import { basename, dirname, extname, join, resolve } from 'node:path'
 import fg from 'fast-glob'
 
 /**
@@ -24,6 +24,31 @@ const HYDRATION_PATTERN = /withHydration\s*\(\s*\w+\s*,\s*['"](\w+)['"]\s*\)/g
 
 // Valid hydration strategies
 const VALID_STRATEGIES = new Set(['load', 'visible', 'idle'])
+
+/**
+ * Derives component scan paths from puckConfigPath.
+ *
+ * Convention: puckConfigPath directory + '/components/puck'
+ * Example: './src/puck.config.tsx' -> './src/components/puck'
+ *
+ * If explicitPaths provided, they extend (not replace) the auto-discovered path.
+ *
+ * @param puckConfigPath - Path to the puck config (e.g., './src/puck.config.tsx')
+ * @param explicitPaths - Optional additional paths to scan
+ * @returns Array of paths to scan for hydratable components
+ */
+export function deriveComponentPaths(
+  puckConfigPath: string,
+  explicitPaths?: string[]
+): string[] {
+  const puckDir = dirname(puckConfigPath)
+  const defaultScanPath = join(puckDir, 'components', 'puck')
+
+  if (explicitPaths && explicitPaths.length > 0) {
+    return [defaultScanPath, ...explicitPaths]
+  }
+  return [defaultScanPath]
+}
 
 /**
  * Derives a PascalCase component name from a file path.
