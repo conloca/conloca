@@ -14,9 +14,9 @@ export interface HydrationDiscovery {
   strategy: 'load' | 'visible' | 'idle'
 }
 
-// Regex to check if file imports withHydration from @conloca/astro-cms
+// Regex to check if file imports withHydration from @conloca/astro-cms or @conloca/astro-cms/hydration
 // This is faster than es-module-lexer for JSX files and avoids parse errors
-const HYDRATION_IMPORT_PATTERN = /import\s+\{[^}]*withHydration[^}]*\}\s+from\s+['"]@conloca\/astro-cms['"]/
+const HYDRATION_IMPORT_PATTERN = /import\s+\{[^}]*withHydration[^}]*\}\s+from\s+['"]@conloca\/astro-cms(?:\/hydration)?['"]/
 
 // Regex to find withHydration calls and extract strategy
 // Matches: withHydration(ComponentName, 'strategy') or withHydration(ComponentName, "strategy")

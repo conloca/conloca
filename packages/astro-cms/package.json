@@ -53,6 +53,12 @@
       "types": "./dist/lib/hydration-script.d.mts",
       "import": "./dist/lib/hydration-script.mjs",
       "default": "./dist/lib/hydration-script.mjs"
+    },
+    "./hydration": {
+      "development": "./src/hydration.ts",
+      "types": "./dist/hydration.d.mts",
+      "import": "./dist/hydration.mjs",
+      "default": "./dist/hydration.mjs"
     }
   },
   "scripts": {

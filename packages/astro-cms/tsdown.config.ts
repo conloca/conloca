@@ -3,6 +3,7 @@ import { defineConfig } from 'tsdown';
 export default defineConfig({
   entry: {
     index: 'src/index.ts',
+    hydration: 'src/hydration.ts',
     components: 'src/components.ts',
     'spa-handler': 'src/spa-handler.ts',
     'api/content-api-handler': 'src/api/content-api-handler.ts',
