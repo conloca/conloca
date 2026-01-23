@@ -11,16 +11,19 @@
   "exports": {
     "./package.json": "./package.json",
     ".": {
+      "development": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
     "./data-schemas": {
+      "development": "./src/data-schemas.ts",
       "types": "./dist/data-schemas.d.ts",
       "import": "./dist/data-schemas.js",
       "default": "./dist/data-schemas.js"
     },
     "./puck-config": {
+      "development": "./src/puck-config.ts",
       "types": "./dist/puck-config.d.ts",
       "import": "./dist/puck-config.js",
       "default": "./dist/puck-config.js"
