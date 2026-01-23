@@ -17,6 +17,7 @@ export default defineConfig({
   external: [
     'astro',
     'astro:content',
+    'vite',
     '@conloca/content-api',
     '@conloca/content-api-client',
     '@conloca/cms-spa',
