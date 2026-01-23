@@ -1,11 +1,12 @@
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { UIConfig } from '@conloca/cms-spa';
 import { createContentAPI, createContentWatchHandlers } from '@conloca/content-api/node';
 import viteReact from '@vitejs/plugin-react';
 import type { AstroIntegration } from 'astro';
+import { searchForWorkspaceRoot } from 'vite';
 
-import { scanForHydratableComponents, type HydrationDiscovery } from './lib/hydration-scanner.js';
+import { deriveComponentPaths, scanForHydratableComponents, type HydrationDiscovery } from './lib/hydration-scanner.js';
 import { normalizeRoutingConfig, resolveRouteConfig } from './lib/routing-config.js';
 
 // Get the directory of this module to resolve page-handler.astro
@@ -57,6 +58,16 @@ export interface ConlocaCMSOptions extends Omit<UIConfig, 'basename'> {
   route?: string; // Default: /__cms
   puckConfigPath: string; // Path to the puck config module (should be .tsx file with React components)
   dataSchemasPath?: string; // Path to the data schemas module (exports { dataSchemas })
+
+  /**
+   * Default layout for content pages.
+   * When provided without routing config, enables routing with catch-all pattern.
+   * For multi-route setups, use routing.routes.{name}.layout instead.
+   *
+   * @example './src/layouts/Layout.astro'
+   */
+  layout?: string;
+
   routing?: RoutingConfigInput; // Content page routing configuration
   templates?: Record<string, TemplateConfig>; // Page creation templates
 
@@ -160,20 +171,20 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
   // Normalize routing config and resolve defaults
   const routingConfig = normalizeRoutingConfig(options.routing);
 
-  // Scan for hydratable components if componentPaths configured
-  // This promise is awaited in the virtual module loader
-  let hydrationDiscoveriesPromise: Promise<HydrationDiscovery[]> | null = null;
-  if (options.componentPaths && options.componentPaths.length > 0) {
-    hydrationDiscoveriesPromise = scanForHydratableComponents(
-      options.componentPaths,
-      process.cwd()
-    ).then((discoveries) => {
-      if (discoveries.length > 0) {
-        console.log(`[Conloca] Found ${discoveries.length} hydratable component(s)`);
-      }
-      return discoveries;
-    });
-  }
+  // Always derive component paths - auto-discover from puckConfigPath + extend with explicit paths
+  // Scanner handles missing directories gracefully (fast-glob returns empty array)
+  const componentPaths = deriveComponentPaths(options.puckConfigPath, options.componentPaths);
+
+  // Scan for hydratable components - this promise is awaited in the virtual module loader
+  const hydrationDiscoveriesPromise: Promise<HydrationDiscovery[]> = scanForHydratableComponents(
+    componentPaths,
+    process.cwd()
+  ).then((discoveries) => {
+    if (discoveries.length > 0) {
+      console.log(`[Conloca] Found ${discoveries.length} hydratable component(s)`);
+    }
+    return discoveries;
+  });
 
   // Build resolved routing config with all defaults applied
   let resolvedRoutingConfig: ResolvedRoutingConfig | undefined;
@@ -208,6 +219,27 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
     name: '@conloca/astro-cms',
     hooks: {
       'astro:config:setup': ({ updateConfig, injectRoute, command, logger }) => {
+        // Auto-inject fs.allow for external contentRoot (dev mode only)
+        const astroRoot = process.cwd();
+        const contentAbsolute = resolve(options.contentRoot);
+
+        if (command === 'dev' && !contentAbsolute.startsWith(astroRoot)) {
+          logger.info(`Auto-allowing contentRoot in Vite fs.allow: ${options.contentRoot}`);
+
+          updateConfig({
+            vite: {
+              server: {
+                fs: {
+                  allow: [
+                    searchForWorkspaceRoot(process.cwd()), // Preserve Vite default
+                    contentAbsolute,
+                  ],
+                },
+              },
+            },
+          });
+        }
+
         // Always apply SSR externalization for native modules (needed for both dev and build)
         // This must be outside the dev-only block to fix build errors
         updateConfig({
