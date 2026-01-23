@@ -21,6 +21,7 @@ in {
     # Bun.sh for javascript dependencies
     bun
     # Git hooks and formatters
+    git
     git-format-staged
     jq # Used in pre-commit hook and generally useful
     alejandra # Nix formatter
