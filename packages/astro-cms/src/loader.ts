@@ -43,16 +43,25 @@ export function conlocaLoader(options: ConlocaLoaderOptions): Loader {
 
           const entryId = `${manifest.id}/${locale}`;
 
-          // For data collections, we need to fetch the actual content to get the data field
+          // For data and page collections, fetch full content to get the actual content fields
           let dataContent: Record<string, unknown> | undefined;
+          let puckData: unknown | undefined;
+
           if (kind === 'data') {
             const fullContent = await api.getLocalized(manifest.id, locale);
             if (fullContent?.localized.content?.data) {
               dataContent = fullContent.localized.content.data;
             }
+          } else if (kind === 'page') {
+            // For page collections, fetch full content to get puckData
+            // This enables getCollection('pages') to return entries with puckData included
+            const fullContent = await api.getLocalized(manifest.id, locale);
+            if (fullContent?.localized.content?.puckData) {
+              puckData = fullContent.localized.content.puckData;
+            }
           }
 
-          const data = {
+          const data: Record<string, unknown> = {
             id: manifest.id,
             locale,
             ...(localeVersion.pathname && { pathname: localeVersion.pathname }),
@@ -63,6 +72,11 @@ export function conlocaLoader(options: ConlocaLoaderOptions): Loader {
             // Include the data content for data collections
             ...(dataContent && { data: dataContent }),
           };
+
+          // Include puckData for page collections (added separately to avoid spread type issues)
+          if (puckData !== undefined) {
+            data.puckData = puckData;
+          }
 
           const parsedData = await parseData({ id: entryId, data });
 
