@@ -6,7 +6,7 @@ import viteReact from '@vitejs/plugin-react';
 import type { AstroIntegration } from 'astro';
 import { searchForWorkspaceRoot } from 'vite';
 
-import { deriveComponentPaths, scanForHydratableComponents, type HydrationDiscovery } from './lib/hydration-scanner.js';
+import { deriveComponentPaths, type HydrationDiscovery, scanForHydratableComponents } from './lib/hydration-scanner.js';
 import { normalizeRoutingConfig, resolveRouteConfig } from './lib/routing-config.js';
 
 // Get the directory of this module to resolve page-handler.astro
@@ -179,7 +179,7 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
   // Scan for hydratable components - this promise is awaited in the virtual module loader
   const hydrationDiscoveriesPromise: Promise<HydrationDiscovery[]> = scanForHydratableComponents(
     componentPaths,
-    process.cwd()
+    process.cwd(),
   ).then((discoveries) => {
     if (discoveries.length > 0) {
       console.log(`[Conloca] Found ${discoveries.length} hydratable component(s)`);
@@ -373,6 +373,37 @@ initHydration(componentRegistry)
             optimizeDeps: {
               // Exclude the puck config from optimization to avoid the outdated dep error
               exclude: [options.puckConfigPath],
+              // Pre-bundle ALL CMS dependencies upfront to prevent mid-session re-optimization
+              // which causes React dual-instance issues when Vite discovers new deps dynamically
+              include: [
+                // React core - must be pre-bundled together
+                'react',
+                'react-dom',
+                'react-dom/client',
+                'react/jsx-runtime',
+                'react/jsx-dev-runtime',
+                // CMS dependencies
+                '@mdxeditor/editor',
+                '@measured/puck',
+                '@tanstack/react-query',
+                '@tanstack/react-query-devtools',
+                'react-router-dom',
+                '@radix-ui/react-dialog',
+                '@radix-ui/react-select',
+                'lucide-react',
+                'clsx',
+                'tailwind-merge',
+                // Content processing
+                'zod',
+                'yaml',
+                'nanoid',
+                'sort-keys',
+                // MDX processing
+                '@mdx-js/mdx',
+                'remark-frontmatter',
+                'remark-gfm',
+                'remark-mdx-frontmatter',
+              ],
             },
             plugins: [
               {
