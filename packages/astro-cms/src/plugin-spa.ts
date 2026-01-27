@@ -205,11 +205,12 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
   }
 
   // SPA config passed to route handler via virtual module
+  // This is only served in dev mode (CMS admin is dev-only), so enableDevtools defaults to true
   const spaConfig = {
     basename: cmsRoute,
     apiBaseUrl: `${cmsRoute}/api`,
     siteBaseUrl: options.siteBaseUrl,
-    enableDevtools: options.enableDevtools,
+    enableDevtools: options.enableDevtools ?? true,
     queryClientOptions: options.queryClientOptions,
     dataSchemasPath: options.dataSchemasPath,
     projectRoot: process.cwd(),
