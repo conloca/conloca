@@ -17,6 +17,19 @@ import type {
 } from '@conloca/content-api';
 import { ErrorCodes } from '@conloca/content-api';
 
+// Asset types (mirrored from content-api/node for client-side use)
+export interface AssetEntry {
+  filename: string;
+  originalName: string;
+  mimeType: string;
+  size: number;
+  width?: number;
+  height?: number;
+  alt?: string;
+  uploadedAt: string;
+  uploadedBy?: string;
+}
+
 // Git operation types
 export interface GitStatus {
   hasChanges: boolean;
@@ -362,6 +375,60 @@ export class ContentAPIClient {
     return this.fetchAPI<GitPushResult>(`${this.baseUrl}/git/push`, {
       method: 'POST',
       body: JSON.stringify({}),
+    });
+  }
+
+  // Asset operations
+  async listAssets(): Promise<{ assets: AssetEntry[] }> {
+    return this.fetchAPI<{ assets: AssetEntry[] }>(`${this.baseUrl}/assets`);
+  }
+
+  async getAsset(filename: string): Promise<AssetEntry | null> {
+    try {
+      const response = await this.fetch(`${this.baseUrl}/assets/${encodeURIComponent(filename)}`);
+      if (response.status === 404) {
+        return null;
+      }
+      if (!response.ok) {
+        throw new Error(`Failed to fetch asset: ${response.statusText}`);
+      }
+      return (await response.json()) as AssetEntry;
+    } catch (error) {
+      console.error('Error fetching asset:', error);
+      throw error;
+    }
+  }
+
+  async uploadAsset(formData: FormData): Promise<{ success: true; asset: AssetEntry }> {
+    const response = await this.fetch(`${this.baseUrl}/assets/upload`, {
+      method: 'POST',
+      body: formData,
+      // No Content-Type header — browser sets multipart boundary automatically
+    });
+
+    if (!response.ok) {
+      let errorData: { error?: { message?: string } } | undefined;
+      try {
+        errorData = await response.json();
+      } catch {
+        // ignore
+      }
+      throw new Error(errorData?.error?.message || `Upload failed: ${response.status} ${response.statusText}`);
+    }
+
+    return (await response.json()) as { success: true; asset: AssetEntry };
+  }
+
+  async importAssetUrl(url: string, alt?: string): Promise<{ success: true; asset: AssetEntry }> {
+    return this.fetchAPI<{ success: true; asset: AssetEntry }>(`${this.baseUrl}/assets/import-url`, {
+      method: 'POST',
+      body: JSON.stringify({ url, alt }),
+    });
+  }
+
+  async deleteAsset(filename: string): Promise<{ success: boolean }> {
+    return this.fetchAPI<{ success: boolean }>(`${this.baseUrl}/assets/${encodeURIComponent(filename)}`, {
+      method: 'DELETE',
     });
   }
 

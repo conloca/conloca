@@ -10,6 +10,7 @@ import type {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   APIClientError,
+  type AssetEntry,
   ContentAPIClient,
   type GitCommitResult,
   type GitPushResult,
@@ -65,6 +66,8 @@ const queryKeys = {
   untranslatedContent: (targetLocale: string, excludeSites?: string[], includeUnpublished?: boolean) =>
     ['content', 'untranslated', targetLocale, excludeSites, includeUnpublished] as const,
   sitesConfig: () => ['sites', 'config'] as const,
+  assets: () => ['assets'] as const,
+  asset: (filename: string) => ['assets', filename] as const,
 };
 
 // ===== Core Content Hooks =====
@@ -667,6 +670,63 @@ export function usePushChanges() {
   });
 }
 
+// ===== Asset Hooks =====
+
+export function useAssets() {
+  const client = getContentAPIClient();
+
+  return useQuery({
+    queryKey: queryKeys.assets(),
+    queryFn: () => client.listAssets(),
+  });
+}
+
+export function useAsset(filename: string) {
+  const client = getContentAPIClient();
+
+  return useQuery({
+    queryKey: queryKeys.asset(filename),
+    queryFn: () => client.getAsset(filename),
+    enabled: !!filename,
+  });
+}
+
+export function useUploadAsset() {
+  const client = getContentAPIClient();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (formData: FormData) => client.uploadAsset(formData),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.assets() });
+    },
+  });
+}
+
+export function useImportAssetUrl() {
+  const client = getContentAPIClient();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ url, alt }: { url: string; alt?: string }) => client.importAssetUrl(url, alt),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.assets() });
+    },
+  });
+}
+
+export function useDeleteAsset() {
+  const client = getContentAPIClient();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (filename: string) => client.deleteAsset(filename),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.assets() });
+    },
+  });
+}
+
 // Re-export for convenience
 export { ContentAPIClient, StaleWriteError, APIClientError };
-export type { GitStatus, GitCommitResult, GitPushResult };
+export type { AssetEntry, GitStatus, GitCommitResult, GitPushResult };
