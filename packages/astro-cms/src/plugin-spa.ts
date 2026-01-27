@@ -553,6 +553,13 @@ if (import.meta.hot) {
           prerender: false,
         });
 
+        // Data context endpoint for editor preview (must be before catch-all)
+        injectRoute({
+          pattern: `${cmsRoute}/api/data-context`,
+          entrypoint: '@conloca/astro-cms/api/data-context-handler',
+          prerender: false,
+        });
+
         // Inject single catch-all API route
         injectRoute({
           pattern: `${cmsRoute}/api/[...path]`,

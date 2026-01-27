@@ -34,6 +34,12 @@
       "import": "./dist/api/content-api-handler.mjs",
       "default": "./dist/api/content-api-handler.mjs"
     },
+    "./api/data-context-handler": {
+      "development": "./src/api/data-context-handler.ts",
+      "types": "./dist/api/data-context-handler.d.mts",
+      "import": "./dist/api/data-context-handler.mjs",
+      "default": "./dist/api/data-context-handler.mjs"
+    },
     "./collections": {
       "development": "./src/collections.ts",
       "types": "./dist/collections.d.mts",
