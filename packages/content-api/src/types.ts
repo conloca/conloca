@@ -43,6 +43,12 @@ export const ErrorCodes = {
   GIT_COMMIT_FAILED: 'GIT_COMMIT_FAILED',
   GIT_PUSH_FAILED: 'GIT_PUSH_FAILED',
   GIT_STATUS_FAILED: 'GIT_STATUS_FAILED',
+
+  // Asset errors
+  ASSET_NOT_FOUND: 'ASSET_NOT_FOUND',
+  ASSET_INVALID_FORMAT: 'ASSET_INVALID_FORMAT',
+  ASSET_TOO_LARGE: 'ASSET_TOO_LARGE',
+  ASSET_UPLOAD_FAILED: 'ASSET_UPLOAD_FAILED',
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];

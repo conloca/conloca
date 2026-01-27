@@ -5,14 +5,16 @@
  * Use the main package exports for browser-compatible APIs.
  */
 
+export { type AssetEntry, AssetManifest, type AssetManifestData } from './asset-manifest';
+export { type AssetConfig, AssetOperations } from './asset-operations';
+export { Blocks } from './blocks';
 // CF Access authentication
 export {
-  extractCFAccessToken,
-  validateCFAccessRequest,
   type CFAccessResult,
   type CFAccessUser,
-} from './cf-access.js'
-export { Blocks } from './blocks';
+  extractCFAccessToken,
+  validateCFAccessRequest,
+} from './cf-access.js';
 export { ComponentRegistry } from './component-registry';
 export * from './component-registry.types';
 export type { ContentAPI } from './content-api.interface';
