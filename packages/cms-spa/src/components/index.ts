@@ -7,6 +7,8 @@ export { CMSLayout } from './CMSLayout';
 export * from './dialogs';
 // Editor Components
 export * from './editor';
+// Media Library
+export * from './media';
 // Page Management
 export * from './pages';
 export * from './ui';
