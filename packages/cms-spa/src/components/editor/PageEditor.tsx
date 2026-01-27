@@ -13,6 +13,7 @@ interface PageEditorProps {
   pageId: string;
   entry: LocalizedEntry; // The full localized entry
   config: Config; // Puck config
+  metadata?: Record<string, unknown>; // DataContext for data-bound components (passed to Puck resolveData)
   availableLocales: string[];
   onSave: (data: any, forceEtag?: string) => Promise<UpdateResult>;
   onBack: () => void;
@@ -26,12 +27,13 @@ const viewports = [
   { width: 375, height: 'auto' as const, label: 'Mobile', icon: <Smartphone size={16} /> },
   { width: 768, height: 'auto' as const, label: 'Tablet', icon: <Tablet size={16} /> },
   { width: 1280, height: 'auto' as const, label: 'Desktop', icon: <Monitor size={16} /> },
-]
+];
 
 export function PageEditor({
   pageId,
   entry,
   config,
+  metadata,
   availableLocales,
   onSave,
   onBack,
@@ -101,6 +103,7 @@ export function PageEditor({
         <Puck
           config={config}
           data={data}
+          metadata={metadata}
           onChange={handleDataChange}
           headerTitle={entry.localized.meta.title || 'Untitled Page'}
           viewports={viewports}

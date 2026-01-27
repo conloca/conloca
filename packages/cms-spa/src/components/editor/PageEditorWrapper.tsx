@@ -1,5 +1,6 @@
 import { useBlocks, useLocalizedContent, useUpdateLocalized } from '@conloca/content-api-client';
 import type { ComponentConfig, Config, Data } from '@measured/puck';
+import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { PageMetadata } from '../../types';
@@ -68,6 +69,19 @@ export function PageEditorWrapper({ puckConfig }: PageEditorWrapperProps) {
 
   // Fetch blocks to add to Puck config
   const { data: blocksData } = useBlocks();
+
+  // Fetch DataContext for data-bound components (e.g. BlogPostGrid)
+  // Silent fallback: if fetch fails, components show empty state as before
+  const { data: dataContextResponse } = useQuery({
+    queryKey: ['data-context', id],
+    queryFn: () =>
+      fetch(`/__cms/api/data-context?pageId=${id}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null),
+    enabled: !!id,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
 
   // Store the current ETag for saving
   const [currentEtag, setCurrentEtag] = useState<string>('');
@@ -174,6 +188,7 @@ export function PageEditorWrapper({ puckConfig }: PageEditorWrapperProps) {
         pageId={content.id}
         entry={entryWithMergedDefaults!}
         config={enhancedConfig}
+        metadata={dataContextResponse?.dataContext ?? undefined}
         availableLocales={['en']}
         onSave={async (newData, forceEtag) => {
           try {
