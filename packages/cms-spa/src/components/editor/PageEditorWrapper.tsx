@@ -190,7 +190,7 @@ export function PageEditorWrapper({ puckConfig }: PageEditorWrapperProps) {
         pageId={content.id}
         entry={entryWithMergedDefaults!}
         config={enhancedConfig}
-        metadata={dataContextResponse?.dataContext ?? undefined}
+        metadata={dataContextResponse?.dataContext ? { metadata: dataContextResponse.dataContext } : undefined}
         availableLocales={['en']}
         onSave={async (newData, forceEtag) => {
           try {
