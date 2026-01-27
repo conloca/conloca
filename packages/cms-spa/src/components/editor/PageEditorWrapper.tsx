@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { PageMetadata } from '../../types';
+import { getUIConfig } from '../../ui-config';
 import { PageMetadataDialog } from '../dialogs/PageMetadataDialog';
 import { BlockContentWrapper, BlockFieldWrapper } from './BlockWrappers';
 import { PageEditor } from './PageEditor';
@@ -72,10 +73,11 @@ export function PageEditorWrapper({ puckConfig }: PageEditorWrapperProps) {
 
   // Fetch DataContext for data-bound components (e.g. BlogPostGrid)
   // Silent fallback: if fetch fails, components show empty state as before
+  const apiBaseUrl = getUIConfig().apiBaseUrl || '/__cms/api';
   const { data: dataContextResponse } = useQuery({
     queryKey: ['data-context', id],
     queryFn: () =>
-      fetch(`/__cms/api/data-context?pageId=${id}`)
+      fetch(`${apiBaseUrl}/data-context?pageId=${id}`)
         .then((r) => (r.ok ? r.json() : null))
         .catch(() => null),
     enabled: !!id,

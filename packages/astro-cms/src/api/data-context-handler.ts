@@ -1,5 +1,6 @@
 import { contentOptions, getDataCollection, getPagesByPrefix } from 'virtual:conloca-page-api';
 import routingConfig from 'virtual:conloca-routing-config';
+import { createContentAPI } from '@conloca/content-api/node';
 import type { APIRoute } from 'astro';
 import type { DataCollectionEntry, DataContext, PageReference, ResolvedRoutingConfig } from '../types.js';
 
@@ -30,7 +31,6 @@ export const GET: APIRoute = async ({ request }) => {
 
     // Find which route this page belongs to by loading the page manifest
     // and matching its collection against route configs
-    const { createContentAPI } = await import('@conloca/content-api/node');
     const contentApi = await createContentAPI({
       contentRoot: contentOptions.contentRoot,
       canvasDir: contentOptions.canvasDir,
