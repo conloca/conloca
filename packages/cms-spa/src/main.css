@@ -1,6 +1,7 @@
 @import "@measured/puck/puck.css";
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
+@source ".";
 @source "../../mdx-editor/src";
 
 @theme {
