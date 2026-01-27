@@ -78,6 +78,14 @@ export interface ConlocaCMSOptions extends Omit<UIConfig, 'basename'> {
    * @example ['src/components/puck']
    */
   componentPaths?: string[];
+
+  /**
+   * Path to the assets directory for image uploads.
+   * When provided, enables the Media Library and asset upload API routes.
+   *
+   * @example 'src/assets/uploads'
+   */
+  assetsPath?: string;
 }
 
 // Template for content change listener virtual module
@@ -365,6 +373,7 @@ initHydration(componentRegistry)
               'import.meta.env.CONLOCA_CONTENT_ROOT': JSON.stringify(options.contentRoot),
               'import.meta.env.CONLOCA_CANVAS_DIR': JSON.stringify(options.canvasDir || './canvas'),
               'import.meta.env.CONLOCA_PUCK_CONFIG_PATH': JSON.stringify(options.puckConfigPath),
+              'import.meta.env.CONLOCA_ASSETS_PATH': JSON.stringify(options.assetsPath || ''),
             },
             resolve: {
               // Dedupe React to avoid multiple instances when using symlinked packages

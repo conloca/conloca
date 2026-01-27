@@ -6,6 +6,7 @@ import React, { useCallback, useState } from 'react';
 import { useSiteBaseUrl } from '../../hooks';
 import type { SaveState } from '../../types';
 import { ConflictDialog } from '../dialogs/ConflictDialog';
+import { ImageFieldRender } from '../fields/ImageField';
 import { DrawerItemOverride } from './DrawerItemOverride';
 import { PageEditorHeaderActions } from './PageEditorHeaderActions';
 
@@ -108,6 +109,9 @@ export function PageEditor({
           headerTitle={entry.localized.meta.title || 'Untitled Page'}
           viewports={viewports}
           overrides={{
+            fieldTypes: {
+              image: ({ onChange, value }) => <ImageFieldRender value={value || ''} onChange={onChange} />,
+            },
             headerActions: () => (
               <PageEditorHeaderActions
                 onPublish={onPublish}
