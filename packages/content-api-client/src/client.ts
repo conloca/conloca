@@ -26,8 +26,22 @@ export interface AssetEntry {
   width?: number;
   height?: number;
   alt?: string;
+  tags?: string[];
+  folder?: string;
   uploadedAt: string;
   uploadedBy?: string;
+}
+
+// Folder listing response
+export interface FolderListing {
+  assets: AssetEntry[];
+  folders: { name: string; path: string }[];
+}
+
+// Asset usage reference
+export interface AssetUsage {
+  page: string;
+  field: string;
 }
 
 // Git operation types
@@ -419,10 +433,10 @@ export class ContentAPIClient {
     return (await response.json()) as { success: true; asset: AssetEntry };
   }
 
-  async importAssetUrl(url: string, alt?: string): Promise<{ success: true; asset: AssetEntry }> {
+  async importAssetUrl(url: string, alt?: string, folder?: string): Promise<{ success: true; asset: AssetEntry }> {
     return this.fetchAPI<{ success: true; asset: AssetEntry }>(`${this.baseUrl}/assets/import-url`, {
       method: 'POST',
-      body: JSON.stringify({ url, alt }),
+      body: JSON.stringify({ url, alt, folder }),
     });
   }
 
@@ -430,6 +444,33 @@ export class ContentAPIClient {
     return this.fetchAPI<{ success: boolean }>(`${this.baseUrl}/assets/${encodeURIComponent(filename)}`, {
       method: 'DELETE',
     });
+  }
+
+  // Folder operations
+  async listFolder(path = '/'): Promise<FolderListing> {
+    const params = new URLSearchParams({ path });
+    return this.fetchAPI<FolderListing>(`${this.baseUrl}/assets/folders?${params}`);
+  }
+
+  async createFolder(path: string): Promise<void> {
+    await this.fetch(`${this.baseUrl}/assets/folders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path }),
+    });
+  }
+
+  // Asset metadata operations
+  async updateAssetMetadata(filename: string, updates: { alt?: string; tags?: string[] }): Promise<AssetEntry> {
+    return this.fetchAPI<AssetEntry>(`${this.baseUrl}/assets/${encodeURIComponent(filename)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    });
+  }
+
+  // Asset usage tracking
+  async getAssetUsage(filename: string): Promise<AssetUsage[]> {
+    return this.fetchAPI<AssetUsage[]>(`${this.baseUrl}/assets/${encodeURIComponent(filename)}/usage`);
   }
 
   // Auth operations
