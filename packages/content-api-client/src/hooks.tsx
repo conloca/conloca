@@ -11,7 +11,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   APIClientError,
   type AssetEntry,
+  type AssetUsage,
   ContentAPIClient,
+  type FolderListing,
   type GitCommitResult,
   type GitPushResult,
   type GitStatus,
@@ -68,6 +70,8 @@ const queryKeys = {
   sitesConfig: () => ['sites', 'config'] as const,
   assets: () => ['assets'] as const,
   asset: (filename: string) => ['assets', filename] as const,
+  assetFolders: (path?: string) => ['asset-folders', path] as const,
+  assetUsage: (filename: string | null) => ['asset-usage', filename] as const,
 };
 
 // ===== Core Content Hooks =====
@@ -699,6 +703,7 @@ export function useUploadAsset() {
     mutationFn: (formData: FormData) => client.uploadAsset(formData),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.assets() });
+      queryClient.invalidateQueries({ queryKey: ['asset-folders'] });
     },
   });
 }
@@ -708,9 +713,11 @@ export function useImportAssetUrl() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ url, alt }: { url: string; alt?: string }) => client.importAssetUrl(url, alt),
+    mutationFn: ({ url, alt, folder }: { url: string; alt?: string; folder?: string }) =>
+      client.importAssetUrl(url, alt, folder),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.assets() });
+      queryClient.invalidateQueries({ queryKey: ['asset-folders'] });
     },
   });
 }
@@ -723,10 +730,59 @@ export function useDeleteAsset() {
     mutationFn: (filename: string) => client.deleteAsset(filename),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.assets() });
+      queryClient.invalidateQueries({ queryKey: ['asset-folders'] });
     },
+  });
+}
+
+// ===== Media Library Hooks =====
+
+export function useAssetFolders(path?: string) {
+  const client = getContentAPIClient();
+
+  return useQuery({
+    queryKey: queryKeys.assetFolders(path),
+    queryFn: () => client.listFolder(path),
+  });
+}
+
+export function useCreateFolder() {
+  const client = getContentAPIClient();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (path: string) => client.createFolder(path),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['asset-folders'] });
+    },
+  });
+}
+
+export function useUpdateAssetMetadata() {
+  const client = getContentAPIClient();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ filename, updates }: { filename: string; updates: { alt?: string; tags?: string[] } }) =>
+      client.updateAssetMetadata(filename, updates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.assets() });
+      queryClient.invalidateQueries({ queryKey: ['asset-folders'] });
+    },
+  });
+}
+
+export function useAssetUsage(filename: string | null) {
+  const client = getContentAPIClient();
+
+  return useQuery({
+    queryKey: queryKeys.assetUsage(filename),
+    queryFn: () => client.getAssetUsage(filename!),
+    enabled: !!filename,
+    staleTime: 60_000, // Cache usage for 1 minute to avoid repeated VXJSON scans
   });
 }
 
 // Re-export for convenience
 export { ContentAPIClient, StaleWriteError, APIClientError };
-export type { AssetEntry, GitStatus, GitCommitResult, GitPushResult };
+export type { AssetEntry, AssetUsage, FolderListing, GitStatus, GitCommitResult, GitPushResult };
