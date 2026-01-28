@@ -1,82 +1,231 @@
+import cn from 'clsx';
+import { Folder } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { type AssetEntry, useAssets, useDeleteAsset } from '../../hooks';
+import { type AssetEntry, useAssetFolders, useCreateFolder, useDeleteAsset } from '../../hooks';
 import { AssetCard } from './AssetCard';
+import { FolderNav } from './FolderNav';
+import type { FileTypeFilter, SortOption } from './MediaToolbar';
+import { MediaToolbar } from './MediaToolbar';
 import { UploadZone } from './UploadZone';
 
 interface MediaLibraryProps {
-  /** Called when user selects an asset (picker mode) */
+  /** Initial folder path */
+  folder?: string;
+  /** Called when folder changes */
+  onFolderChange?: (path: string) => void;
+  /** Called when user selects an asset */
   onSelect?: (asset: AssetEntry) => void;
+  /** Currently selected asset (for controlled selection) */
+  selectedAsset?: AssetEntry | null;
+  /** Show toolbar with search, filter, sort, create folder */
+  showToolbar?: boolean;
+  /** Mode: 'page' for standalone page, 'picker' for modal selection */
+  mode?: 'page' | 'picker';
   /** Base path for asset URLs */
   assetsBasePath?: string;
 }
 
-export function MediaLibrary({ onSelect, assetsBasePath }: MediaLibraryProps) {
-  const { data, isLoading } = useAssets();
-  const deleteAsset = useDeleteAsset();
+export function MediaLibrary({
+  folder: initialFolder = '/',
+  onFolderChange,
+  onSelect,
+  selectedAsset: controlledSelectedAsset,
+  showToolbar = true,
+  mode = 'page',
+  assetsBasePath,
+}: MediaLibraryProps) {
+  // Folder navigation state
+  const [currentFolder, setCurrentFolder] = useState(initialFolder);
+
+  // Toolbar state
   const [search, setSearch] = useState('');
-  const [selectedAsset, setSelectedAsset] = useState<AssetEntry | null>(null);
+  const [fileType, setFileType] = useState<FileTypeFilter>('all');
+  const [sort, setSort] = useState<SortOption>('date-newest');
+
+  // Internal selection state (for uncontrolled mode)
+  const [internalSelectedAsset, setInternalSelectedAsset] = useState<AssetEntry | null>(null);
+
+  // Use controlled selection if provided, otherwise use internal state
+  const selectedAsset = controlledSelectedAsset !== undefined ? controlledSelectedAsset : internalSelectedAsset;
+
+  // Queries and mutations
+  const { data, isLoading } = useAssetFolders(currentFolder);
+  const deleteAsset = useDeleteAsset();
+  const createFolder = useCreateFolder();
 
   const assets = data?.assets ?? [];
+  const folders = data?.folders ?? [];
 
-  const filtered = useMemo(() => {
-    if (!search.trim()) return assets;
-    const q = search.toLowerCase();
-    return assets.filter(
-      (a) =>
-        a.originalName.toLowerCase().includes(q) ||
-        a.filename.toLowerCase().includes(q) ||
-        a.alt?.toLowerCase().includes(q),
-    );
-  }, [assets, search]);
+  // Navigate to folder
+  const handleNavigate = (path: string) => {
+    setCurrentFolder(path);
+    onFolderChange?.(path);
+  };
 
+  // Filter assets by search and file type
+  const filteredAssets = useMemo(() => {
+    let result = assets;
+
+    // Search filter
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      result = result.filter(
+        (a) =>
+          a.originalName.toLowerCase().includes(q) ||
+          a.filename.toLowerCase().includes(q) ||
+          a.alt?.toLowerCase().includes(q),
+      );
+    }
+
+    // File type filter
+    if (fileType !== 'all') {
+      result = result.filter((a) => {
+        if (fileType === 'images') {
+          return a.mimeType.startsWith('image/') && a.mimeType !== 'image/svg+xml';
+        }
+        if (fileType === 'svg') {
+          return a.mimeType === 'image/svg+xml';
+        }
+        return true;
+      });
+    }
+
+    return result;
+  }, [assets, search, fileType]);
+
+  // Sort assets
+  const sortedAssets = useMemo(() => {
+    const sorted = [...filteredAssets];
+
+    switch (sort) {
+      case 'date-newest':
+        sorted.sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
+        break;
+      case 'date-oldest':
+        sorted.sort((a, b) => new Date(a.uploadedAt).getTime() - new Date(b.uploadedAt).getTime());
+        break;
+      case 'name-asc':
+        sorted.sort((a, b) => a.originalName.localeCompare(b.originalName));
+        break;
+      case 'name-desc':
+        sorted.sort((a, b) => b.originalName.localeCompare(a.originalName));
+        break;
+      case 'size-largest':
+        sorted.sort((a, b) => b.size - a.size);
+        break;
+      case 'size-smallest':
+        sorted.sort((a, b) => a.size - b.size);
+        break;
+    }
+
+    return sorted;
+  }, [filteredAssets, sort]);
+
+  // Handle asset selection
   const handleSelect = (asset: AssetEntry) => {
-    setSelectedAsset(asset);
+    if (controlledSelectedAsset === undefined) {
+      setInternalSelectedAsset(asset);
+    }
     onSelect?.(asset);
   };
 
+  // Handle asset deletion
   const handleDelete = (asset: AssetEntry) => {
     deleteAsset.mutate(asset.filename, {
       onSuccess: () => {
         if (selectedAsset?.filename === asset.filename) {
-          setSelectedAsset(null);
+          setInternalSelectedAsset(null);
         }
       },
     });
   };
 
+  // Handle create folder
+  const handleCreateFolder = () => {
+    const name = window.prompt('Enter folder name:');
+    if (!name || !name.trim()) return;
+
+    const folderPath = currentFolder === '/' ? `/${name.trim()}` : `${currentFolder}/${name.trim()}`;
+    createFolder.mutate(folderPath);
+  };
+
+  // Handle folder click
+  const handleFolderClick = (folderPath: string) => {
+    handleNavigate(folderPath);
+  };
+
   return (
     <div className="flex flex-col gap-4">
-      <UploadZone />
+      {/* Folder navigation breadcrumbs */}
+      {(currentFolder !== '/' || showToolbar) && (
+        <FolderNav currentFolder={currentFolder} onNavigate={handleNavigate} />
+      )}
 
-      {/* Search */}
-      <input
-        type="text"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="Filter by filename..."
-        className="w-full px-3 py-2 border rounded text-sm"
-      />
+      {/* Toolbar */}
+      {showToolbar && (
+        <MediaToolbar
+          search={search}
+          onSearchChange={setSearch}
+          fileType={fileType}
+          onFileTypeChange={setFileType}
+          sort={sort}
+          onSortChange={setSort}
+          onCreateFolder={handleCreateFolder}
+        />
+      )}
 
-      {/* Asset grid */}
+      {/* Upload zone */}
+      <UploadZone folder={currentFolder} />
+
+      {/* Loading state */}
       {isLoading ? (
         <div className="text-center py-12 text-gray-500">Loading assets...</div>
-      ) : filtered.length === 0 ? (
-        <div className="text-center py-12 text-gray-500">
-          {assets.length === 0 ? 'No assets yet. Upload your first image above.' : 'No assets match your filter.'}
-        </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-          {filtered.map((asset) => (
-            <AssetCard
-              key={asset.filename}
-              asset={asset}
-              selected={selectedAsset?.filename === asset.filename}
-              onSelect={handleSelect}
-              onDelete={handleDelete}
-              assetsBasePath={assetsBasePath}
-            />
-          ))}
-        </div>
+        <>
+          {/* Folder cards */}
+          {folders.length > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+              {folders.map((folder) => (
+                <button
+                  key={folder.path}
+                  type="button"
+                  onClick={() => handleFolderClick(folder.path)}
+                  className={cn(
+                    'group flex flex-col items-center justify-center p-4 rounded-lg border-2 border-gray-200',
+                    'bg-white hover:border-blue-400 hover:bg-blue-50 transition-colors cursor-pointer',
+                  )}
+                >
+                  <Folder className="w-12 h-12 text-gray-400 group-hover:text-blue-500 transition-colors" />
+                  <span className="mt-2 text-sm text-gray-700 group-hover:text-blue-600 truncate max-w-full">
+                    {folder.name}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Asset grid */}
+          {sortedAssets.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
+              {assets.length === 0 && folders.length === 0
+                ? 'No assets yet. Upload your first image above.'
+                : 'No assets match your filter.'}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+              {sortedAssets.map((asset) => (
+                <AssetCard
+                  key={asset.filename}
+                  asset={asset}
+                  selected={selectedAsset?.filename === asset.filename}
+                  onClick={() => handleSelect(asset)}
+                  onDelete={mode === 'page' ? () => handleDelete(asset) : undefined}
+                  assetsBasePath={assetsBasePath}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

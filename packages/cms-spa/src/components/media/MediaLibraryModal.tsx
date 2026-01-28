@@ -11,26 +11,25 @@ interface MediaLibraryModalProps {
 }
 
 export function MediaLibraryModal({ isOpen, onClose, onConfirmSelect, assetsBasePath }: MediaLibraryModalProps) {
-  const [selected, setSelected] = useState<AssetEntry | null>(null);
+  const [selectedAsset, setSelectedAsset] = useState<AssetEntry | null>(null);
   const isPicker = !!onConfirmSelect;
 
   if (!isOpen) return null;
 
   const handleSelect = (asset: AssetEntry) => {
-    setSelected(asset);
-    // In non-picker (browse) mode, selection is visual only
+    setSelectedAsset(asset);
   };
 
   const handleConfirm = () => {
-    if (selected && onConfirmSelect) {
-      onConfirmSelect(selected);
-      setSelected(null);
+    if (selectedAsset && onConfirmSelect) {
+      onConfirmSelect(selectedAsset);
+      setSelectedAsset(null);
       onClose();
     }
   };
 
   const handleClose = () => {
-    setSelected(null);
+    setSelectedAsset(null);
     onClose();
   };
 
@@ -60,13 +59,21 @@ export function MediaLibraryModal({ isOpen, onClose, onConfirmSelect, assetsBase
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
-          <MediaLibrary onSelect={handleSelect} assetsBasePath={assetsBasePath} />
+          <MediaLibrary
+            mode="picker"
+            onSelect={handleSelect}
+            selectedAsset={selectedAsset}
+            showToolbar={true}
+            assetsBasePath={assetsBasePath}
+          />
         </div>
 
         {/* Footer (picker mode only) */}
         {isPicker && (
           <div className="flex items-center justify-between px-6 py-3 border-t bg-gray-50 rounded-b-lg">
-            <span className="text-sm text-gray-500">{selected ? selected.originalName : 'No image selected'}</span>
+            <span className="text-sm text-gray-500">
+              {selectedAsset ? selectedAsset.originalName : 'No image selected'}
+            </span>
             <div className="flex gap-2">
               <button
                 type="button"
@@ -78,7 +85,7 @@ export function MediaLibraryModal({ isOpen, onClose, onConfirmSelect, assetsBase
               <button
                 type="button"
                 onClick={handleConfirm}
-                disabled={!selected}
+                disabled={!selectedAsset}
                 className="px-4 py-2 bg-blue-500 text-white text-sm rounded hover:bg-blue-600 disabled:opacity-50"
               >
                 Select

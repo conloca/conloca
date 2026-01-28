@@ -1,33 +1,88 @@
 import cn from 'clsx';
 import { useCallback, useRef, useState } from 'react';
-import { buildUploadFormData, useImportUrl, useUpload } from '../../hooks';
+import { buildUploadFormData, useImportAssetUrl, useUploadAsset } from '../../hooks';
 
 const ACCEPTED_TYPES = 'image/jpeg,image/png,image/gif,image/webp,image/svg+xml,image/avif';
 
 interface UploadZoneProps {
+  /** Folder to upload files to */
+  folder?: string;
   onUploadComplete?: () => void;
 }
 
-export function UploadZone({ onUploadComplete }: UploadZoneProps) {
+interface UploadProgress {
+  total: number;
+  completed: number;
+  failed: number;
+  inProgress: boolean;
+}
+
+export function UploadZone({ folder = '/', onUploadComplete }: UploadZoneProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [altText, setAltText] = useState('');
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [activeTab, setActiveTab] = useState<'file' | 'url'>('file');
   const [importUrl, setImportUrl] = useState('');
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const uploadMutation = useUpload();
-  const importMutation = useImportUrl();
+  const uploadMutation = useUploadAsset();
+  const importMutation = useImportAssetUrl();
 
-  const isUploading = uploadMutation.isPending || importMutation.isPending;
+  const isUploading = uploadMutation.isPending || importMutation.isPending || (uploadProgress?.inProgress ?? false);
   const error = uploadMutation.error || importMutation.error;
 
-  const handleFiles = useCallback((files: FileList | null) => {
-    if (!files || files.length === 0) return;
-    const file = files[0];
+  // Handle single file selection (shows alt text input)
+  const handleSingleFile = useCallback((file: File) => {
     setPendingFile(file);
     setAltText('');
   }, []);
+
+  // Handle multiple files (uploads directly without alt text prompt)
+  const handleMultipleFiles = useCallback(
+    async (files: File[]) => {
+      if (files.length === 0) return;
+
+      // If only one file, use the single file flow with alt text prompt
+      if (files.length === 1) {
+        handleSingleFile(files[0]);
+        return;
+      }
+
+      // Multi-file upload: upload all in parallel without alt text prompts
+      setUploadProgress({ total: files.length, completed: 0, failed: 0, inProgress: true });
+
+      const uploadPromises = files.map(async (file) => {
+        const formData = await buildUploadFormData(file, undefined, folder);
+        return uploadMutation.mutateAsync(formData);
+      });
+
+      const results = await Promise.allSettled(uploadPromises);
+
+      const completed = results.filter((r) => r.status === 'fulfilled').length;
+      const failed = results.filter((r) => r.status === 'rejected').length;
+
+      setUploadProgress({ total: files.length, completed, failed, inProgress: false });
+
+      // Clear progress after a delay
+      setTimeout(() => {
+        setUploadProgress(null);
+        if (completed > 0) {
+          onUploadComplete?.();
+        }
+      }, 2000);
+    },
+    [folder, uploadMutation, handleSingleFile, onUploadComplete],
+  );
+
+  const handleFiles = useCallback(
+    (fileList: FileList | null) => {
+      if (!fileList || fileList.length === 0) return;
+      const files = Array.from(fileList);
+      handleMultipleFiles(files);
+    },
+    [handleMultipleFiles],
+  );
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -51,7 +106,7 @@ export function UploadZone({ onUploadComplete }: UploadZoneProps) {
   const handleUpload = async () => {
     if (!pendingFile) return;
 
-    const formData = await buildUploadFormData(pendingFile, altText || undefined);
+    const formData = await buildUploadFormData(pendingFile, altText || undefined, folder);
     uploadMutation.mutate(formData, {
       onSuccess: () => {
         setPendingFile(null);
@@ -66,7 +121,7 @@ export function UploadZone({ onUploadComplete }: UploadZoneProps) {
     if (!importUrl.trim()) return;
 
     importMutation.mutate(
-      { url: importUrl.trim(), alt: altText || undefined },
+      { url: importUrl.trim(), alt: altText || undefined, folder },
       {
         onSuccess: () => {
           setImportUrl('');
@@ -111,6 +166,28 @@ export function UploadZone({ onUploadComplete }: UploadZoneProps) {
 
       {activeTab === 'file' && (
         <>
+          {/* Multi-file upload progress */}
+          {uploadProgress && (
+            <div className="mb-4 p-3 bg-white rounded border">
+              <p className="text-sm font-medium">
+                {uploadProgress.inProgress
+                  ? `Uploading ${uploadProgress.total} files...`
+                  : `Upload complete: ${uploadProgress.completed}/${uploadProgress.total} succeeded`}
+              </p>
+              {uploadProgress.failed > 0 && (
+                <p className="text-sm text-red-600 mt-1">{uploadProgress.failed} file(s) failed to upload</p>
+              )}
+              <div className="mt-2 h-2 bg-gray-200 rounded overflow-hidden">
+                <div
+                  className={cn('h-full transition-all', uploadProgress.failed > 0 ? 'bg-yellow-500' : 'bg-blue-500')}
+                  style={{
+                    width: `${((uploadProgress.completed + uploadProgress.failed) / uploadProgress.total) * 100}%`,
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
           {pendingFile ? (
             <div className="space-y-3">
               <div className="flex items-center gap-3">
@@ -138,7 +215,7 @@ export function UploadZone({ onUploadComplete }: UploadZoneProps) {
                   disabled={isUploading}
                   className="px-4 py-2 bg-blue-500 text-white text-sm rounded hover:bg-blue-600 disabled:opacity-50"
                 >
-                  {isUploading ? 'Uploading...' : 'Upload'}
+                  {uploadMutation.isPending ? 'Uploading...' : 'Upload'}
                 </button>
                 <button
                   type="button"
@@ -183,12 +260,13 @@ export function UploadZone({ onUploadComplete }: UploadZoneProps) {
                   d="M12 16V4m0 0l-4 4m4-4l4 4M4 20h16"
                 />
               </svg>
-              <p className="mt-2 text-sm text-gray-600">Drag and drop an image here, or click to browse</p>
-              <p className="mt-1 text-xs text-gray-400">JPEG, PNG, GIF, WebP, SVG, AVIF</p>
+              <p className="mt-2 text-sm text-gray-600">Drag and drop images here, or click to browse</p>
+              <p className="mt-1 text-xs text-gray-400">JPEG, PNG, GIF, WebP, SVG, AVIF - Multiple files supported</p>
               <input
                 ref={fileInputRef}
                 type="file"
                 accept={ACCEPTED_TYPES}
+                multiple
                 onChange={(e) => handleFiles(e.target.files)}
                 className="hidden"
               />
@@ -219,7 +297,7 @@ export function UploadZone({ onUploadComplete }: UploadZoneProps) {
             disabled={isUploading || !importUrl.trim()}
             className="px-4 py-2 bg-blue-500 text-white text-sm rounded hover:bg-blue-600 disabled:opacity-50"
           >
-            {isUploading ? 'Importing...' : 'Import'}
+            {importMutation.isPending ? 'Importing...' : 'Import'}
           </button>
         </div>
       )}

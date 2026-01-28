@@ -1,4 +1,12 @@
-export type { AssetEntry } from './useAssets';
+export type { AssetEntry, AssetUsage, FolderListing } from '@conloca/content-api-client';
+export {
+  useAssetFolders,
+  useAssetUsage,
+  useCreateFolder,
+  useImportAssetUrl,
+  useUpdateAssetMetadata,
+  useUploadAsset,
+} from '@conloca/content-api-client';
 export { useAsset, useAssets, useDeleteAsset } from './useAssets';
 export { useClickOutside } from './useClickOutside';
 export { useDialogState } from './useDialogState';

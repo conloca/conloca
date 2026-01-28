@@ -10,29 +10,32 @@ function formatFileSize(bytes: number): string {
 
 interface AssetCardProps {
   asset: AssetEntry;
+  /** Whether this card is selected */
   selected?: boolean;
-  onSelect?: (asset: AssetEntry) => void;
-  onDelete?: (asset: AssetEntry) => void;
+  /** Called when card is clicked (for selection) */
+  onClick?: () => void;
+  /** Called when delete is confirmed */
+  onDelete?: () => void;
   assetsBasePath?: string;
 }
 
 export function AssetCard({
   asset,
   selected,
-  onSelect,
+  onClick,
   onDelete,
   assetsBasePath = '/__conloca/assets',
 }: AssetCardProps) {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const handleClick = () => {
-    onSelect?.(asset);
+    onClick?.();
   };
 
-  const handleDelete = (e: React.MouseEvent) => {
+  const handleDeleteClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (confirmDelete) {
-      onDelete?.(asset);
+      onDelete?.();
       setConfirmDelete(false);
     } else {
       setConfirmDelete(true);
@@ -80,7 +83,7 @@ export function AssetCard({
         </p>
         <p className="text-gray-500 mt-0.5">
           {formatFileSize(asset.size)}
-          {dimensions && ` · ${dimensions}`}
+          {dimensions && ` \u00B7 ${dimensions}`}
         </p>
         {asset.alt && (
           <p className="text-gray-400 truncate mt-0.5" title={asset.alt}>
@@ -102,7 +105,7 @@ export function AssetCard({
             <>
               <button
                 type="button"
-                onClick={handleDelete}
+                onClick={handleDeleteClick}
                 className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
               >
                 Delete
@@ -118,7 +121,7 @@ export function AssetCard({
           ) : (
             <button
               type="button"
-              onClick={handleDelete}
+              onClick={handleDeleteClick}
               className="p-1 bg-black/50 text-white rounded hover:bg-black/70"
               title="Delete asset"
             >

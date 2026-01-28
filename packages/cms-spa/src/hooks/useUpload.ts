@@ -26,12 +26,16 @@ export function getImageDimensions(file: File): Promise<{ width: number; height:
 }
 
 /** Build FormData for asset upload, reading dimensions client-side */
-export async function buildUploadFormData(file: File, alt?: string): Promise<FormData> {
+export async function buildUploadFormData(file: File, alt?: string, folder?: string): Promise<FormData> {
   const formData = new FormData();
   formData.append('file', file);
 
   if (alt) {
     formData.append('alt', alt);
+  }
+
+  if (folder && folder !== '/') {
+    formData.append('folder', folder);
   }
 
   try {
