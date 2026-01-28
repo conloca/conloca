@@ -35,6 +35,8 @@ function logAndCreateErrorResponse(error: unknown, code: ErrorCode, message: str
 export interface ContentAPIRouterOptions {
   assetsPath?: string;
   assetConfig?: Omit<AssetConfig, 'assetsPath'>;
+  /** Content root directory for asset usage tracking */
+  contentRoot?: string;
 }
 
 export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRouterOptions) {
@@ -908,6 +910,7 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
   if (options?.assetsPath) {
     const assetOps = new AssetOperations({
       assetsPath: options.assetsPath,
+      contentRoot: options.contentRoot,
       ...options.assetConfig,
     });
 
@@ -924,8 +927,9 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
         const uploadedBy = typeof body.uploadedBy === 'string' ? body.uploadedBy : undefined;
         const width = typeof body.width === 'string' ? Number.parseInt(body.width, 10) : undefined;
         const height = typeof body.height === 'string' ? Number.parseInt(body.height, 10) : undefined;
+        const folder = typeof body.folder === 'string' ? body.folder : undefined;
 
-        const result = await assetOps.upload(file, { alt, uploadedBy, width, height });
+        const result = await assetOps.upload(file, { alt, uploadedBy, width, height, folder });
 
         if (!result.success) {
           return c.json(errorResponse(ErrorCodes.ASSET_UPLOAD_FAILED, result.error), 400);
@@ -940,13 +944,18 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
     // POST /assets/import-url — import image from URL
     app.post('/assets/import-url', async (c) => {
       try {
-        const { url, alt, uploadedBy } = await c.req.json<{ url: string; alt?: string; uploadedBy?: string }>();
+        const { url, alt, uploadedBy, folder } = await c.req.json<{
+          url: string;
+          alt?: string;
+          uploadedBy?: string;
+          folder?: string;
+        }>();
 
         if (!url) {
           return c.json(errorResponse(ErrorCodes.INVALID_REQUEST, 'url is required'), 400);
         }
 
-        const result = await assetOps.importFromUrl(url, { alt, uploadedBy });
+        const result = await assetOps.importFromUrl(url, { alt, uploadedBy, folder });
 
         if (!result.success) {
           return c.json(errorResponse(ErrorCodes.ASSET_UPLOAD_FAILED, result.error), 400);
@@ -968,6 +977,52 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
       }
     });
 
+    // GET /assets/folders — list assets and subfolders within a folder
+    app.get('/assets/folders', async (c) => {
+      try {
+        const path = c.req.query('path') || '/';
+        const result = await assetOps.listFolder(path);
+        return c.json(result);
+      } catch (error) {
+        if (error instanceof Error && error.message === 'Path traversal detected') {
+          return c.json(errorResponse(ErrorCodes.INVALID_REQUEST, 'Invalid folder path'), 400);
+        }
+        return c.json(logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to list folder'), 500);
+      }
+    });
+
+    // POST /assets/folders — create a folder
+    app.post('/assets/folders', async (c) => {
+      try {
+        const { path } = await c.req.json<{ path: string }>();
+
+        if (!path) {
+          return c.json(errorResponse(ErrorCodes.INVALID_REQUEST, 'path is required'), 400);
+        }
+
+        const result = await assetOps.createFolder(path);
+
+        if (!result.success) {
+          return c.json(errorResponse(ErrorCodes.INVALID_REQUEST, result.error), 400);
+        }
+
+        return c.json({ success: true }, 201);
+      } catch (error) {
+        return c.json(logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to create folder'), 500);
+      }
+    });
+
+    // GET /assets/:filename/usage — get asset usage information
+    app.get('/assets/:filename/usage', async (c) => {
+      try {
+        const filename = c.req.param('filename');
+        const usage = await assetOps.getUsage(filename);
+        return c.json({ usage });
+      } catch (error) {
+        return c.json(logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to get asset usage'), 500);
+      }
+    });
+
     // GET /assets/:filename — get single asset metadata
     app.get('/assets/:filename', async (c) => {
       try {
@@ -981,6 +1036,24 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
         return c.json(asset);
       } catch (error) {
         return c.json(logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to get asset'), 500);
+      }
+    });
+
+    // PATCH /assets/:filename — update asset metadata
+    app.patch('/assets/:filename', async (c) => {
+      try {
+        const filename = c.req.param('filename');
+        const { alt, tags } = await c.req.json<{ alt?: string; tags?: string[] }>();
+
+        const result = await assetOps.updateMetadata(filename, { alt, tags });
+
+        if (!result.success) {
+          return c.json(errorResponse(ErrorCodes.ASSET_NOT_FOUND, result.error), 404);
+        }
+
+        return c.json(result.asset);
+      } catch (error) {
+        return c.json(logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to update asset'), 500);
       }
     });
 
