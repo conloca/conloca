@@ -5,6 +5,7 @@ import { BlockEditor } from './components/editor/BlockEditor';
 import { PageEditorWrapper } from './components/editor/PageEditorWrapper';
 import { BlockList } from './components/pages/BlockList';
 import { DataList } from './components/pages/DataList';
+import { MediaPage } from './components/pages/MediaPage';
 import { PageList } from './components/pages/PageList';
 import { useDataSchemas } from './data-schemas';
 import './main.css';
@@ -24,6 +25,7 @@ export default function App() {
           <Route path=":id" element={<BlockEditor />} />
         </Route>
         <Route path="data" element={<DataList dataSchemas={dataSchemas} />} />
+        <Route path="media" element={<MediaPage />} />
       </Route>
       <Route path="/pages/:id" element={<PageEditorWrapper puckConfig={puckConfig} />} />
     </Routes>

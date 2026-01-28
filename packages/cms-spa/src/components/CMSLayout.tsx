@@ -1,8 +1,8 @@
-import { Database, FileText, LayoutDashboard, Package } from 'lucide-react'
-import { NavLink, Outlet } from 'react-router-dom'
-import { cn } from '../lib/utils'
-import { GitStatusPanel } from './GitStatusPanel'
-import { UserAvatar } from './UserAvatar'
+import { Database, FileText, ImageIcon, LayoutDashboard, Package } from 'lucide-react';
+import { NavLink, Outlet } from 'react-router-dom';
+import { cn } from '../lib/utils';
+import { GitStatusPanel } from './GitStatusPanel';
+import { UserAvatar } from './UserAvatar';
 
 export function CMSLayout() {
   return (
@@ -44,6 +44,19 @@ export function CMSLayout() {
           >
             <FileText className="h-4 w-4" />
             Pages
+          </NavLink>
+
+          <NavLink
+            to="/media"
+            className={({ isActive }) =>
+              cn(
+                'flex items-center gap-2 px-4 py-3 border-b-2 -mb-px transition-colors',
+                isActive ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-600 hover:text-gray-900',
+              )
+            }
+          >
+            <ImageIcon className="h-4 w-4" />
+            Media
           </NavLink>
 
           <NavLink
