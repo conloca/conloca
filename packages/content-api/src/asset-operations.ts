@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
-import { mkdir, unlink, writeFile } from 'node:fs/promises';
-import { extname, join, parse } from 'node:path';
+import { mkdir, readdir, readFile, unlink, writeFile } from 'node:fs/promises';
+import { extname, join, parse, resolve } from 'node:path';
 import { type AssetEntry, AssetManifest } from './asset-manifest';
 import { setupGitLfsAttributes } from './git-operations';
 
@@ -8,6 +8,8 @@ export interface AssetConfig {
   assetsPath: string;
   maxFileSize?: number;
   acceptedFormats?: string[];
+  /** Content root directory for usage tracking (scanning VXJSON files) */
+  contentRoot?: string;
 }
 
 const DEFAULT_MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -24,8 +26,20 @@ const MIME_MAP: Record<string, string> = {
   ico: 'image/x-icon',
 };
 
+/** Folder listing result */
+export interface FolderListing {
+  assets: AssetEntry[];
+  folders: { name: string; path: string }[];
+}
+
+/** Asset usage reference */
+export interface AssetUsage {
+  page: string;
+  field: string;
+}
+
 export class AssetOperations {
-  private config: Required<AssetConfig>;
+  private config: Required<Omit<AssetConfig, 'contentRoot'>> & Pick<AssetConfig, 'contentRoot'>;
   private manifest: AssetManifest;
   private dirEnsured = false;
   private lfsSetup = false;
@@ -35,20 +49,41 @@ export class AssetOperations {
       assetsPath: config.assetsPath,
       maxFileSize: config.maxFileSize ?? DEFAULT_MAX_FILE_SIZE,
       acceptedFormats: config.acceptedFormats ?? DEFAULT_ACCEPTED_FORMATS,
+      contentRoot: config.contentRoot,
     };
     this.manifest = new AssetManifest(config.assetsPath);
   }
 
-  private async ensureDir(): Promise<void> {
-    if (this.dirEnsured) return;
-    await mkdir(this.config.assetsPath, { recursive: true });
-    this.dirEnsured = true;
+  private async ensureDir(subpath?: string): Promise<void> {
+    const targetPath = subpath ? join(this.config.assetsPath, subpath) : this.config.assetsPath;
+    if (!subpath && this.dirEnsured) return;
+    await mkdir(targetPath, { recursive: true });
+    if (!subpath) this.dirEnsured = true;
+  }
+
+  /**
+   * Validate that a subpath is safe (no path traversal attacks)
+   * Returns the resolved full path if valid, throws if invalid
+   */
+  private validateSubpath(subpath: string): string {
+    // Normalize the path: remove leading/trailing slashes, resolve .. and .
+    const normalizedSubpath = subpath.replace(/^\/+|\/+$/g, '') || '.';
+    const fullPath = resolve(this.config.assetsPath, normalizedSubpath);
+
+    // Security check: ensure resolved path is within assetsPath
+    if (!fullPath.startsWith(this.config.assetsPath)) {
+      throw new Error('Path traversal detected');
+    }
+
+    return fullPath;
   }
 
   /**
    * Resolve a unique filename by appending -1, -2, etc. if collision exists
+   * @param originalName Original filename
+   * @param folder Optional folder path (relative to assets root)
    */
-  private resolveFilename(originalName: string): string {
+  private resolveFilename(originalName: string, folder?: string): string {
     const { name, ext } = parse(originalName);
     // Sanitize: lowercase, replace spaces with dashes, remove non-alphanumeric except dash/dot
     const sanitized = name
@@ -57,10 +92,16 @@ export class AssetOperations {
       .replace(/[^a-z0-9-]/g, '');
     const safeExt = ext.toLowerCase();
 
+    // Determine base directory (assetsPath or assetsPath/folder)
+    const baseDir =
+      folder && folder !== '/'
+        ? join(this.config.assetsPath, folder.replace(/^\/+|\/+$/g, ''))
+        : this.config.assetsPath;
+
     let candidate = `${sanitized}${safeExt}`;
     let counter = 0;
 
-    while (existsSync(join(this.config.assetsPath, candidate))) {
+    while (existsSync(join(baseDir, candidate))) {
       counter++;
       candidate = `${sanitized}-${counter}${safeExt}`;
     }
@@ -79,7 +120,7 @@ export class AssetOperations {
 
   async upload(
     file: File,
-    metadata?: { alt?: string; uploadedBy?: string; width?: number; height?: number },
+    metadata?: { alt?: string; uploadedBy?: string; width?: number; height?: number; folder?: string },
   ): Promise<{ success: true; asset: AssetEntry } | { success: false; error: string }> {
     if (!this.validateFormat(file.name)) {
       const allowed = this.config.acceptedFormats.join(', ');
@@ -91,15 +132,38 @@ export class AssetOperations {
       return { success: false, error: `File too large. Maximum: ${maxMB}MB` };
     }
 
+    // Normalize folder path
+    const folder = metadata?.folder && metadata.folder !== '/' ? '/' + metadata.folder.replace(/^\/+|\/+$/g, '') : '/';
+
+    // Validate folder path (prevent path traversal)
+    if (folder !== '/') {
+      try {
+        this.validateSubpath(folder);
+      } catch {
+        return { success: false, error: 'Invalid folder path' };
+      }
+    }
+
     await this.ensureDir();
+
+    // Ensure target folder exists
+    if (folder !== '/') {
+      await this.ensureDir(folder.replace(/^\//, ''));
+    }
 
     if (!this.lfsSetup) {
       await setupGitLfsAttributes(this.config.assetsPath);
       this.lfsSetup = true;
     }
 
-    const filename = this.resolveFilename(file.name);
-    const filePath = join(this.config.assetsPath, filename);
+    const filename = this.resolveFilename(file.name, folder);
+
+    // Determine file path (in folder if specified)
+    const filePath =
+      folder !== '/'
+        ? join(this.config.assetsPath, folder.replace(/^\//, ''), filename)
+        : join(this.config.assetsPath, filename);
+
     const buffer = Buffer.from(await file.arrayBuffer());
     await writeFile(filePath, buffer);
 
@@ -114,6 +178,7 @@ export class AssetOperations {
       alt: metadata?.alt,
       uploadedAt: new Date().toISOString(),
       uploadedBy: metadata?.uploadedBy,
+      folder,
     };
 
     await this.manifest.add(entry);
@@ -151,7 +216,7 @@ export class AssetOperations {
    */
   async importFromUrl(
     url: string,
-    metadata?: { alt?: string; uploadedBy?: string },
+    metadata?: { alt?: string; uploadedBy?: string; folder?: string },
   ): Promise<{ success: true; asset: AssetEntry } | { success: false; error: string }> {
     let response: Response;
     try {
@@ -173,5 +238,208 @@ export class AssetOperations {
     const file = new File([arrayBuffer], urlFilename, { type: contentType });
 
     return this.upload(file, metadata);
+  }
+
+  /**
+   * List assets and subfolders within a folder
+   * @param subpath Folder path relative to assets root (default '/')
+   */
+  async listFolder(subpath = '/'): Promise<FolderListing> {
+    // Normalize subpath
+    const normalizedSubpath = subpath === '/' ? '/' : '/' + subpath.replace(/^\/+|\/+$/g, '');
+
+    // Validate path (prevent path traversal)
+    let fullPath: string;
+    if (normalizedSubpath === '/') {
+      fullPath = this.config.assetsPath;
+    } else {
+      fullPath = this.validateSubpath(normalizedSubpath);
+    }
+
+    // Read directory entries
+    let entries: Awaited<ReturnType<typeof readdir<{ withFileTypes: true }>>> = [];
+    try {
+      entries = await readdir(fullPath, { withFileTypes: true });
+    } catch {
+      // Directory doesn't exist yet - return empty
+      return { assets: [], folders: [] };
+    }
+
+    // Get subfolders (exclude dotfiles/dotfolders)
+    const folders = entries
+      .filter((e) => e.isDirectory() && !e.name.startsWith('.'))
+      .map((e) => ({
+        name: e.name,
+        path: normalizedSubpath === '/' ? `/${e.name}` : `${normalizedSubpath}/${e.name}`,
+      }));
+
+    // Get assets from manifest filtered by folder
+    const manifestData = await this.manifest.read();
+    const assets = manifestData.assets.filter((a) => {
+      // Assets without folder field are treated as root '/'
+      const assetFolder = a.folder || '/';
+      return assetFolder === normalizedSubpath;
+    });
+
+    return { assets, folders };
+  }
+
+  /**
+   * Create a folder on disk
+   * @param subpath Folder path relative to assets root
+   */
+  async createFolder(subpath: string): Promise<{ success: true } | { success: false; error: string }> {
+    if (!subpath || subpath === '/') {
+      return { success: false, error: 'Cannot create root folder' };
+    }
+
+    // Validate path (prevent path traversal)
+    let fullPath: string;
+    try {
+      fullPath = this.validateSubpath(subpath);
+    } catch {
+      return { success: false, error: 'Invalid folder path' };
+    }
+
+    try {
+      await mkdir(fullPath, { recursive: true });
+      return { success: true };
+    } catch (err) {
+      return {
+        success: false,
+        error: `Failed to create folder: ${err instanceof Error ? err.message : 'Unknown error'}`,
+      };
+    }
+  }
+
+  /**
+   * Update asset metadata (alt text, tags)
+   * @param filename Asset filename
+   * @param updates Metadata updates (alt, tags)
+   */
+  async updateMetadata(
+    filename: string,
+    updates: { alt?: string; tags?: string[] },
+  ): Promise<{ success: true; asset: AssetEntry } | { success: false; error: string }> {
+    const data = await this.manifest.read();
+    const index = data.assets.findIndex((a) => a.filename === filename);
+
+    if (index === -1) {
+      return { success: false, error: 'Asset not found' };
+    }
+
+    // Merge updates
+    const entry = data.assets[index];
+    if (updates.alt !== undefined) {
+      entry.alt = updates.alt;
+    }
+    if (updates.tags !== undefined) {
+      entry.tags = updates.tags;
+    }
+
+    // Write manifest
+    await this.manifest.write(data);
+
+    return { success: true, asset: entry };
+  }
+
+  /**
+   * Get usage information for an asset (which pages reference it)
+   * @param filename Asset filename
+   */
+  async getUsage(filename: string): Promise<AssetUsage[]> {
+    if (!this.config.contentRoot) {
+      return [];
+    }
+
+    const usages: AssetUsage[] = [];
+
+    // Search patterns for the asset
+    const searchPatterns = [filename, `/assets/uploads/${filename}`, `assets/uploads/${filename}`];
+
+    // Recursively walk the content directory to find all .vxjson files
+    const walkDir = async (dir: string): Promise<string[]> => {
+      const files: string[] = [];
+      let entries: Awaited<ReturnType<typeof readdir<{ withFileTypes: true }>>> = [];
+      try {
+        entries = await readdir(dir, { withFileTypes: true });
+      } catch {
+        return files;
+      }
+
+      for (const entry of entries) {
+        const fullPath = join(dir, entry.name);
+        if (entry.isDirectory() && !entry.name.startsWith('.')) {
+          files.push(...(await walkDir(fullPath)));
+        } else if (entry.isFile() && entry.name.endsWith('.vxjson')) {
+          files.push(fullPath);
+        }
+      }
+
+      return files;
+    };
+
+    const vxjsonFiles = await walkDir(this.config.contentRoot);
+
+    for (const filePath of vxjsonFiles) {
+      try {
+        const content = await readFile(filePath, 'utf-8');
+
+        // Check if any search pattern is found in the file content
+        const found = searchPatterns.some((pattern) => content.includes(pattern));
+
+        if (found) {
+          // Extract page name from file path (remove .vxjson extension)
+          const relativePath = filePath.replace(this.config.contentRoot, '').replace(/^[/\\]/, '');
+          const pageName = relativePath.replace(/\.vxjson$/, '');
+
+          // Try to identify which field contains the reference
+          // Simple approach: look for the pattern in JSON structure
+          let field = 'unknown';
+          try {
+            const json = JSON.parse(content);
+            field = this.findFieldWithAsset(json, searchPatterns) || 'content';
+          } catch {
+            // If JSON parsing fails, just mark as content
+            field = 'content';
+          }
+
+          usages.push({ page: pageName, field });
+        }
+      } catch {
+        // Skip files that can't be read
+      }
+    }
+
+    return usages;
+  }
+
+  /**
+   * Helper to find which field contains an asset reference
+   */
+  private findFieldWithAsset(obj: unknown, patterns: string[], path = ''): string | null {
+    if (typeof obj === 'string') {
+      if (patterns.some((p) => obj.includes(p))) {
+        return path || 'root';
+      }
+      return null;
+    }
+
+    if (Array.isArray(obj)) {
+      for (let i = 0; i < obj.length; i++) {
+        const result = this.findFieldWithAsset(obj[i], patterns, path ? `${path}[${i}]` : `[${i}]`);
+        if (result) return result;
+      }
+      return null;
+    }
+
+    if (obj && typeof obj === 'object') {
+      for (const [key, value] of Object.entries(obj)) {
+        const result = this.findFieldWithAsset(value, patterns, path ? `${path}.${key}` : key);
+        if (result) return result;
+      }
+    }
+
+    return null;
   }
 }

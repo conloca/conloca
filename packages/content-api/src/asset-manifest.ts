@@ -11,6 +11,10 @@ export interface AssetEntry {
   alt?: string;
   uploadedAt: string;
   uploadedBy?: string;
+  /** Folder path relative to assets root, default '/' */
+  folder?: string;
+  /** Tags for categorization/filtering */
+  tags?: string[];
 }
 
 export interface AssetManifestData {
