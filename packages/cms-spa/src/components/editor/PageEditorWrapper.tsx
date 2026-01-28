@@ -1,5 +1,6 @@
 import { useBlocks, useLocalizedContent, useUpdateLocalized } from '@conloca/content-api-client';
 import type { ComponentConfig, Config, Data } from '@measured/puck';
+import { resolveAllData } from '@measured/puck';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -19,12 +20,10 @@ import { PageEditor } from './PageEditor';
 function mergeDefaultProps(data: Data, config: Config): Data {
   if (!data?.content || !config?.components) return data;
 
-  // Helper to merge props for a single component
   const mergeComponentProps = (item: Data['content'][0]): Data['content'][0] => {
     const componentConfig = config.components[item.type];
     if (!componentConfig?.defaultProps) return item;
 
-    // Merge defaultProps with stored props (stored props take precedence)
     return {
       ...item,
       props: {
@@ -34,10 +33,8 @@ function mergeDefaultProps(data: Data, config: Config): Data {
     };
   };
 
-  // Merge top-level content
   const mergedContent = data.content.map(mergeComponentProps);
 
-  // Also merge zones if they exist (nested components)
   let mergedZones = data.zones;
   if (data.zones) {
     mergedZones = {};
@@ -58,38 +55,46 @@ interface PageEditorWrapperProps {
 }
 
 /**
- * Wrapper component for PageEditor that loads data
+ * Wrapper component for PageEditor that loads and pre-resolves data.
+ *
+ * Key insight: Puck's internal resolveData only runs on mount and doesn't
+ * react to metadata prop changes. To ensure data-bound components (like
+ * BlogPostGrid) receive their data, we must pre-resolve using resolveAllData()
+ * BEFORE passing data to Puck. This matches the production renderer behavior
+ * in page-handler.astro.
  */
 export function PageEditorWrapper({ puckConfig }: PageEditorWrapperProps) {
   const { id } = useParams();
   const navigate = useNavigate();
   const updateContent = useUpdateLocalized();
 
-  // Load content with the ID
-  const { data: content, isLoading, error } = useLocalizedContent(id || '', 'en');
+  // Load page content
+  const { data: content, isLoading: isLoadingContent, error } = useLocalizedContent(id || '', 'en');
 
-  // Fetch blocks to add to Puck config
+  // Load user-created blocks for config enhancement
   const { data: blocksData } = useBlocks();
 
-  // Fetch DataContext for data-bound components (e.g. BlogPostGrid)
-  // Silent fallback: if fetch fails, components show empty state as before
+  // Load DataContext for data-bound components (e.g. BlogPostGrid)
   const apiBaseUrl = getUIConfig().apiBaseUrl || '/__cms/api';
-  const { data: dataContextResponse } = useQuery({
+  const { data: dataContextResponse, isLoading: isLoadingDataContext } = useQuery({
     queryKey: ['data-context', id],
     queryFn: () =>
       fetch(`${apiBaseUrl}/data-context?pageId=${id}`)
         .then((r) => (r.ok ? r.json() : null))
         .catch(() => null),
     enabled: !!id,
-    staleTime: 5 * 60 * 1000,
     retry: false,
   });
 
-  // Store the current ETag for saving
+  // Store current ETag for optimistic locking
   const [currentEtag, setCurrentEtag] = useState<string>('');
 
   // Metadata dialog state
   const [metadataDialogOpen, setMetadataDialogOpen] = useState(false);
+
+  // Pre-resolved Puck data (resolved BEFORE passing to Puck)
+  const [resolvedPuckData, setResolvedPuckData] = useState<Data | null>(null);
+  const [isResolving, setIsResolving] = useState(false);
 
   useEffect(() => {
     if (content?.localized?.etag) {
@@ -104,11 +109,8 @@ export function PageEditorWrapper({ puckConfig }: PageEditorWrapperProps) {
     const blockComponents: Record<string, ComponentConfig<{ contentId: string }>> = {};
     const blockCategoryList: string[] = [];
 
-    // Create a component config for each block
     blocksData.items.forEach((block) => {
       const componentKey = `Block_${block.id}`;
-
-      // Get block title from first available locale
       const locales = Object.keys(block.locales);
       const firstLocale = locales.length > 0 ? block.locales[locales[0]] : null;
       const blockTitle = firstLocale?.meta?.title || firstLocale?.name || block.id;
@@ -128,15 +130,9 @@ export function PageEditorWrapper({ puckConfig }: PageEditorWrapperProps) {
       blockCategoryList.push(componentKey);
     });
 
-    // Merge with existing config
     const existingCategories = puckConfig.categories || {};
     const existingComponents = puckConfig.components || {};
 
-    // Create enhanced config with proper typing
-    // Note: 'as Record<string, ComponentConfig<any>>' is necessary because Puck's Config
-    // type expects a statically defined component map, but we're dynamically adding
-    // user-created blocks at runtime. The 'any' for component props is acceptable here
-    // since each block component has its own proper type definition above.
     return {
       ...puckConfig,
       categories: {
@@ -153,26 +149,54 @@ export function PageEditorWrapper({ puckConfig }: PageEditorWrapperProps) {
     } as Config;
   }, [puckConfig, blocksData]);
 
-  // Create entry with merged defaultProps for proper field UI display
-  // This ensures select/radio fields show correct defaults, not first option
-  const entryWithMergedDefaults = useMemo(() => {
-    if (!content?.localized?.content?.puckData || !enhancedConfig) return content;
+  // Pre-resolve component data using resolveAllData.
+  // This runs each component's resolveData with the dataContext metadata,
+  // ensuring data-bound components have their data BEFORE Puck mounts.
+  useEffect(() => {
+    let cancelled = false;
+    const puckData = content?.localized?.content?.puckData;
 
-    const mergedPuckData = mergeDefaultProps(content.localized.content.puckData, enhancedConfig);
+    if (!puckData || !enhancedConfig) {
+      setResolvedPuckData(null);
+      return;
+    }
 
-    return {
-      ...content,
-      localized: {
-        ...content.localized,
-        content: {
-          ...content.localized.content,
-          puckData: mergedPuckData,
-        },
-      },
+    const dataContext = dataContextResponse?.dataContext;
+    const mergedData = mergeDefaultProps(puckData, enhancedConfig);
+
+    // If no dataContext, use merged data as-is
+    if (!dataContext) {
+      setResolvedPuckData(mergedData);
+      return;
+    }
+
+    // Resolve with dataContext
+    setIsResolving(true);
+    resolveAllData(mergedData, enhancedConfig, { metadata: dataContext })
+      .then((resolved) => {
+        if (!cancelled) {
+          setResolvedPuckData(resolved);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          console.error('[PageEditorWrapper] resolveAllData failed:', err);
+          setResolvedPuckData(mergedData);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsResolving(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
     };
-  }, [content, enhancedConfig]);
+  }, [content?.localized?.etag, enhancedConfig, dataContextResponse]);
 
-  if (isLoading) {
+  // Show loading while fetching or resolving
+  if (isLoadingContent || isLoadingDataContext || isResolving || !resolvedPuckData) {
     return <div className="flex items-center justify-center h-screen">Loading...</div>;
   }
 
@@ -184,12 +208,25 @@ export function PageEditorWrapper({ puckConfig }: PageEditorWrapperProps) {
     );
   }
 
+  // Build entry with resolved puckData
+  const entryWithResolvedData = {
+    ...content,
+    localized: {
+      ...content.localized,
+      content: {
+        ...content.localized.content,
+        puckData: resolvedPuckData,
+      },
+    },
+  };
+
   return (
     <>
       <PageEditor
         pageId={content.id}
-        entry={entryWithMergedDefaults!}
+        entry={entryWithResolvedData}
         config={enhancedConfig}
+        // Pass dataContext for Puck's internal resolveData (field changes, etc.)
         metadata={dataContextResponse?.dataContext ? { metadata: dataContextResponse.dataContext } : undefined}
         availableLocales={['en']}
         onSave={async (newData, forceEtag) => {
@@ -205,13 +242,12 @@ export function PageEditorWrapper({ puckConfig }: PageEditorWrapperProps) {
 
             if (result.success && result.etag) {
               console.log('Page saved successfully');
-              setCurrentEtag(result.etag); // Update ETag for next save
+              setCurrentEtag(result.etag);
             }
 
             return result;
           } catch (error) {
             console.error('Failed to save page:', error);
-            // Return a failed result for error handling
             return {
               success: false,
               reason: 'write_error' as const,
@@ -224,12 +260,10 @@ export function PageEditorWrapper({ puckConfig }: PageEditorWrapperProps) {
           setMetadataDialogOpen(true);
         }}
         onReload={() => {
-          // Reload the page to get fresh data
           window.location.reload();
         }}
       />
 
-      {/* Metadata Dialog */}
       <PageMetadataDialog
         open={metadataDialogOpen}
         onOpenChange={setMetadataDialogOpen}
@@ -263,7 +297,7 @@ export function PageEditorWrapper({ puckConfig }: PageEditorWrapperProps) {
 
             if (result.success && result.etag) {
               console.log('Metadata saved successfully');
-              setCurrentEtag(result.etag); // Update ETag for next save
+              setCurrentEtag(result.etag);
             }
           } catch (error) {
             console.error('Failed to save metadata:', error);
