@@ -1,15 +1,22 @@
-import { useBlocks, useData, useSitePages } from '@conloca/content-api-client';
-import { Database, FileText, Package } from 'lucide-react';
+import { useBlocks, useData, useFolderTree, useSitePages } from '@conloca/content-api-client';
+import { Database, FileText, Image, Package } from 'lucide-react';
 import { SectionCard } from './cards/SectionCard';
 
 export function CMSDashboard() {
   const { data: sitePages, isLoading: pagesLoading } = useSitePages('default');
   const { data: blocks, isLoading: blocksLoading } = useBlocks();
   const { data: dataEntries, isLoading: dataLoading } = useData();
+  const { data: folderTree, isLoading: mediaLoading } = useFolderTree();
 
   const pagesCount = sitePages?.items?.length ?? 0;
   const blocksCount = blocks?.items?.length ?? 0;
   const dataCount = dataEntries?.items?.length ?? 0;
+
+  const rawTree = folderTree?.tree ?? [];
+  const mediaCount =
+    rawTree.length === 1 && rawTree[0].path === '/'
+      ? rawTree[0].assetCount
+      : rawTree.reduce((sum, node) => sum + node.assetCount, 0);
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -29,6 +36,16 @@ export function CMSDashboard() {
           count={pagesCount}
           countLabel={pagesCount === 1 ? 'page' : 'pages'}
           isLoading={pagesLoading}
+        />
+
+        <SectionCard
+          to="/media"
+          icon={<Image className="h-6 w-6 text-gray-600 group-hover:text-blue-500 transition-colors" />}
+          title="Media"
+          description="Upload and manage images and assets for your website."
+          count={mediaCount}
+          countLabel={mediaCount === 1 ? 'asset' : 'assets'}
+          isLoading={mediaLoading}
         />
 
         <SectionCard
