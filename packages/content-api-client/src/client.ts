@@ -44,6 +44,14 @@ export interface AssetUsage {
   field: string;
 }
 
+// Folder tree node for hierarchical folder navigation
+export interface FolderTreeNode {
+  name: string;
+  path: string;
+  assetCount: number;
+  children: FolderTreeNode[];
+}
+
 // Git operation types
 export interface GitStatus {
   hasChanges: boolean;
@@ -471,6 +479,23 @@ export class ContentAPIClient {
   // Asset usage tracking
   async getAssetUsage(filename: string): Promise<AssetUsage[]> {
     return this.fetchAPI<AssetUsage[]>(`${this.baseUrl}/assets/${encodeURIComponent(filename)}/usage`);
+  }
+
+  // Move assets between folders
+  async moveAssets(
+    filenames: string[],
+    sourceFolder: string,
+    targetFolder: string,
+  ): Promise<{ success: boolean; moved?: number; error?: string }> {
+    return this.fetchAPI<{ success: boolean; moved?: number; error?: string }>(`${this.baseUrl}/assets/move`, {
+      method: 'POST',
+      body: JSON.stringify({ filenames, sourceFolder, targetFolder }),
+    });
+  }
+
+  // Get folder tree structure
+  async getFolderTree(): Promise<{ tree: FolderTreeNode[] }> {
+    return this.fetchAPI<{ tree: FolderTreeNode[] }>(`${this.baseUrl}/assets/folder-tree`);
   }
 
   // Auth operations
