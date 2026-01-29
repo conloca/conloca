@@ -1,9 +1,11 @@
-export type { AssetEntry, AssetUsage, FolderListing } from '@conloca/content-api-client';
+export type { AssetEntry, AssetUsage, FolderListing, FolderTreeNode } from '@conloca/content-api-client';
 export {
   useAssetFolders,
   useAssetUsage,
   useCreateFolder,
+  useFolderTree,
   useImportAssetUrl,
+  useMoveAssets,
   useUpdateAssetMetadata,
   useUploadAsset,
 } from '@conloca/content-api-client';
