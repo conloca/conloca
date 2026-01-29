@@ -71,7 +71,7 @@ export function MediaPage() {
   const handleBulkMove = (targetFolder: string) => {
     const filenames = Array.from(selectedAssets);
     moveAssets.mutate(
-      { filenames, targetFolder },
+      { filenames, sourceFolder: currentFolder, targetFolder },
       {
         onSuccess: () => {
           setSelectedAssets(new Set());
