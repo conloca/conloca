@@ -30,11 +30,14 @@ function FolderOption({ node, depth, selectedFolder, currentFolder, onSelect }: 
         type="button"
         onClick={() => !isDisabled && onSelect(node.path)}
         disabled={isDisabled}
-        className={cn('w-full flex items-center gap-2 py-2 px-3 rounded text-sm transition-colors text-left', {
-          'bg-azure-11 text-azure-01 ring-1 ring-azure-04': isSelected,
-          'hover:bg-grey-11': !isSelected && !isDisabled,
-          'opacity-50 cursor-not-allowed': isDisabled,
-        })}
+        className={cn(
+          'w-full flex items-center gap-2 py-2 px-3 rounded text-sm transition-colors text-left text-grey-01',
+          {
+            'bg-azure-11 text-azure-01 ring-1 ring-azure-04': isSelected,
+            'hover:bg-grey-11': !isSelected && !isDisabled,
+            'opacity-50 cursor-not-allowed': isDisabled,
+          },
+        )}
         style={{ paddingLeft: `${depth * 16 + 12}px` }}
       >
         <Folder className="w-4 h-4 flex-shrink-0" />
@@ -118,11 +121,14 @@ export function MoveFolderDialog({
                 type="button"
                 onClick={() => currentFolder !== '/' && setSelectedFolder('/')}
                 disabled={currentFolder === '/'}
-                className={cn('w-full flex items-center gap-2 py-2 px-3 rounded text-sm transition-colors text-left', {
-                  'bg-azure-11 text-azure-01 ring-1 ring-azure-04': selectedFolder === '/',
-                  'hover:bg-grey-11': selectedFolder !== '/' && currentFolder !== '/',
-                  'opacity-50 cursor-not-allowed': currentFolder === '/',
-                })}
+                className={cn(
+                  'w-full flex items-center gap-2 py-2 px-3 rounded text-sm transition-colors text-left text-grey-01',
+                  {
+                    'bg-azure-11 text-azure-01 ring-1 ring-azure-04': selectedFolder === '/',
+                    'hover:bg-grey-11': selectedFolder !== '/' && currentFolder !== '/',
+                    'opacity-50 cursor-not-allowed': currentFolder === '/',
+                  },
+                )}
               >
                 <Folder className="w-4 h-4 flex-shrink-0" />
                 <span className="truncate flex-1">All Assets</span>
@@ -156,7 +162,7 @@ export function MoveFolderDialog({
             type="button"
             onClick={onCancel}
             disabled={isMoving}
-            className="px-4 py-2 border border-grey-09 rounded hover:bg-grey-11 transition-colors disabled:opacity-50"
+            className="px-4 py-2 border border-grey-09 rounded text-grey-01 hover:bg-grey-11 transition-colors disabled:opacity-50"
           >
             Cancel
           </button>

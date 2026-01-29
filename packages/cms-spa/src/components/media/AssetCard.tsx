@@ -40,9 +40,9 @@ export function AssetCard({
       role="button"
       tabIndex={0}
       className={cn(
-        'group relative rounded border overflow-hidden cursor-pointer transition-colors',
+        'group relative rounded overflow-hidden cursor-pointer transition-colors',
         'bg-white hover:border-azure-04',
-        isSelected ? 'border-azure-04 ring-2 ring-azure-04' : 'border-grey-09',
+        isSelected ? 'border-2 border-azure-04' : 'border border-grey-09',
       )}
     >
       {/* Thumbnail */}
