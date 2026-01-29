@@ -15,18 +15,8 @@ export default defineConfig({
       canvasDir: './canvas',
       puckConfigPath: './src/puck.config.tsx',
       dataSchemasPath: './src/schemas/data.ts',
-      enableDevtools: true,
+      assetsPath: './public/assets',
       routing: true, // That's it - Conloca handles all routing
-      queryClientOptions: {
-        defaultOptions: {
-          queries: {
-            staleTime: 0, // Always fetch fresh data in dev
-            refetchOnWindowFocus: true,
-            refetchOnMount: true,
-            retry: 0, // No retries for faster feedback
-          },
-        },
-      },
     }),
   ],
   // Vite config for monorepo development (not needed for published packages)
