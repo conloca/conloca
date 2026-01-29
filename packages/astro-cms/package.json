@@ -22,29 +22,11 @@
       "import": "./dist/components.mjs",
       "default": "./dist/components.mjs"
     },
-    "./spa-handler": {
-      "development": "./src/spa-handler.ts",
-      "types": "./dist/spa-handler.d.mts",
-      "import": "./dist/spa-handler.mjs",
-      "default": "./dist/spa-handler.mjs"
-    },
     "./cms-handler": {
       "development": "./src/cms-handler.ts",
       "types": "./dist/cms-handler.d.mts",
       "import": "./dist/cms-handler.mjs",
       "default": "./dist/cms-handler.mjs"
-    },
-    "./api/content-api-handler": {
-      "development": "./src/api/content-api-handler.ts",
-      "types": "./dist/api/content-api-handler.d.mts",
-      "import": "./dist/api/content-api-handler.mjs",
-      "default": "./dist/api/content-api-handler.mjs"
-    },
-    "./api/data-context-handler": {
-      "development": "./src/api/data-context-handler.ts",
-      "types": "./dist/api/data-context-handler.d.mts",
-      "import": "./dist/api/data-context-handler.mjs",
-      "default": "./dist/api/data-context-handler.mjs"
     },
     "./collections": {
       "development": "./src/collections.ts",
