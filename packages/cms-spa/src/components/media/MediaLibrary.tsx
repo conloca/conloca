@@ -4,7 +4,6 @@ import { CreateFolderDialog } from '../dialogs/CreateFolderDialog';
 import { AssetCard } from './AssetCard';
 import type { FileTypeFilter, SortOption } from './MediaToolbar';
 import { MediaToolbar } from './MediaToolbar';
-import { UploadZone } from './UploadZone';
 
 interface MediaLibraryProps {
   /** Initial folder path */
@@ -19,14 +18,22 @@ interface MediaLibraryProps {
   assetsBasePath?: string;
   /** Set of selected asset filenames (multi-select) */
   selectedAssets?: Set<string>;
-  /** Called when asset selection is toggled */
+  /** Called when asset selection is toggled (in select mode) */
   onToggleSelect?: (filename: string) => void;
+  /** Called when asset is single-clicked (receives full asset for view mode detail) */
+  onAssetClick?: (asset: AssetEntry) => void;
   /** Called when asset is double-clicked (for detail view) */
   onAssetDoubleClick?: (asset: AssetEntry) => void;
   /** For picker mode: called when user selects an asset */
   onSelect?: (asset: AssetEntry) => void;
   /** For picker mode: currently selected asset */
   selectedAsset?: AssetEntry | null;
+  /** External search value (when toolbar is external) */
+  search?: string;
+  /** External file type filter (when toolbar is external) */
+  fileType?: FileTypeFilter;
+  /** External sort option (when toolbar is external) */
+  sort?: SortOption;
 }
 
 export function MediaLibrary({
@@ -37,17 +44,23 @@ export function MediaLibrary({
   assetsBasePath,
   selectedAssets,
   onToggleSelect,
+  onAssetClick,
   onAssetDoubleClick,
   onSelect,
   selectedAsset,
+  search: externalSearch,
+  fileType: externalFileType,
+  sort: externalSort,
 }: MediaLibraryProps) {
-  // Folder navigation state (used for legacy picker mode)
-  const [currentFolder, setCurrentFolder] = useState(initialFolder);
+  // Internal toolbar state (used when showToolbar=true and no external values)
+  const [internalSearch, setInternalSearch] = useState('');
+  const [internalFileType, setInternalFileType] = useState<FileTypeFilter>('all');
+  const [internalSort, setInternalSort] = useState<SortOption>('date-newest');
 
-  // Toolbar state
-  const [search, setSearch] = useState('');
-  const [fileType, setFileType] = useState<FileTypeFilter>('all');
-  const [sort, setSort] = useState<SortOption>('date-newest');
+  // Use external values when provided, otherwise use internal state
+  const search = externalSearch ?? internalSearch;
+  const fileType = externalFileType ?? internalFileType;
+  const sort = externalSort ?? internalSort;
 
   // Create folder dialog state (for picker mode only)
   const [showCreateFolderDialog, setShowCreateFolderDialog] = useState(false);
@@ -123,8 +136,9 @@ export function MediaLibrary({
       // Picker mode: single select
       onSelect?.(asset);
     } else {
-      // Page mode: toggle selection
-      onToggleSelect?.(asset.filename);
+      // Page mode: call the asset click handler with full asset
+      // Parent decides whether to toggle selection or open detail
+      onAssetClick?.(asset);
     }
   };
 
@@ -135,36 +149,28 @@ export function MediaLibrary({
 
   // Handle folder creation from dialog (picker mode only)
   const handleCreateFolder = (name: string) => {
-    const folderPath = currentFolder === '/' ? `/${name}` : `${currentFolder}/${name}`;
+    const folderPath = initialFolder === '/' ? `/${name}` : `${initialFolder}/${name}`;
     createFolder.mutate(folderPath, {
       onSuccess: () => {
         setShowCreateFolderDialog(false);
+        onFolderChange?.(folderPath);
       },
     });
   };
 
-  // Navigate to folder (for picker mode)
-  const handleNavigate = (path: string) => {
-    setCurrentFolder(path);
-    onFolderChange?.(path);
-  };
-
   return (
     <div className="flex flex-col gap-4">
-      {/* Toolbar */}
-      {showToolbar && (
+      {/* Toolbar (only when using internal state) */}
+      {showToolbar && externalSearch === undefined && (
         <MediaToolbar
-          search={search}
-          onSearchChange={setSearch}
-          fileType={fileType}
-          onFileTypeChange={setFileType}
-          sort={sort}
-          onSortChange={setSort}
+          search={internalSearch}
+          onSearchChange={setInternalSearch}
+          fileType={internalFileType}
+          onFileTypeChange={setInternalFileType}
+          sort={internalSort}
+          onSortChange={setInternalSort}
         />
       )}
-
-      {/* Upload zone */}
-      <UploadZone folder={initialFolder} />
 
       {/* Loading state */}
       {isLoading ? (
@@ -174,7 +180,9 @@ export function MediaLibrary({
           {/* Asset grid - medium thumbnails (120-150px) */}
           {sortedAssets.length === 0 ? (
             <div className="text-center py-12 text-grey-04">
-              {assets.length === 0 ? 'No assets yet. Upload your first image above.' : 'No assets match your filter.'}
+              {assets.length === 0
+                ? 'No assets yet. Click Upload to add your first image.'
+                : 'No assets match your filter.'}
             </div>
           ) : (
             <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 150px))' }}>

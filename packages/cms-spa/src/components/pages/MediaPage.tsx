@@ -3,7 +3,15 @@ import { useState } from 'react';
 import type { AssetEntry } from '../../hooks';
 import { useDeleteAsset, useMoveAssets } from '../../hooks';
 import { DeleteConfirmDialog, MoveFolderDialog } from '../dialogs';
-import { AssetDetailSidebar, BulkActionBar, FolderTreeSidebar, MediaLibrary } from '../media';
+import {
+  AssetDetailSidebar,
+  BulkActionBar,
+  FolderTreeSidebar,
+  MediaLibrary,
+  MediaToolbar,
+  UploadModal,
+} from '../media';
+import type { FileTypeFilter, SortOption } from '../media/MediaToolbar';
 
 /**
  * Full-page media management layout with three-panel view:
@@ -15,13 +23,22 @@ export function MediaPage() {
   // Navigation state
   const [currentFolder, setCurrentFolder] = useState('/');
 
+  // Selection mode state
+  const [isSelectMode, setIsSelectMode] = useState(false);
+
   // Selection state
   const [selectedAssets, setSelectedAssets] = useState<Set<string>>(new Set());
   const [selectedAsset, setSelectedAsset] = useState<AssetEntry | null>(null);
 
+  // Toolbar state (lifted from MediaLibrary for direct control)
+  const [search, setSearch] = useState('');
+  const [fileType, setFileType] = useState<FileTypeFilter>('all');
+  const [sort, setSort] = useState<SortOption>('date-newest');
+
   // Dialog state
   const [showMoveDialog, setShowMoveDialog] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
 
   // Mutations
   const moveAssets = useMoveAssets();
@@ -40,11 +57,25 @@ export function MediaPage() {
     });
   };
 
-  // Open detail sidebar on double-click (only when 0-1 assets already selected)
-  const handleAssetDoubleClick = (asset: AssetEntry) => {
-    if (selectedAssets.size <= 1) {
-      setSelectedAsset(asset);
+  // Click handler with mode awareness
+  const handleAssetClick = (asset: AssetEntry) => {
+    if (isSelectMode) {
+      handleToggleSelect(asset.filename);
+    } else {
+      setSelectedAsset(asset); // Open detail sidebar
     }
+  };
+
+  // Enter select mode
+  const handleEnterSelectMode = () => {
+    setIsSelectMode(true);
+    setSelectedAsset(null); // Close detail sidebar when entering select mode
+  };
+
+  // Exit select mode and clear selection
+  const handleExitSelectMode = () => {
+    setSelectedAssets(new Set());
+    setIsSelectMode(false);
   };
 
   // Bulk delete selected assets
@@ -81,9 +112,10 @@ export function MediaPage() {
     );
   };
 
-  // Clear selection
+  // Clear selection and exit select mode
   const handleClearSelection = () => {
     setSelectedAssets(new Set());
+    setIsSelectMode(false);
   };
 
   // Close detail sidebar
@@ -104,6 +136,20 @@ export function MediaPage() {
             <Image className="h-6 w-6 text-grey-04" />
             <h1 className="text-2xl font-semibold text-grey-01">Media</h1>
           </div>
+
+          {/* Toolbar with Select/Done toggle and Upload button */}
+          <MediaToolbar
+            search={search}
+            onSearchChange={setSearch}
+            fileType={fileType}
+            onFileTypeChange={setFileType}
+            sort={sort}
+            onSortChange={setSort}
+            isSelectMode={isSelectMode}
+            onEnterSelectMode={handleEnterSelectMode}
+            onExitSelectMode={handleExitSelectMode}
+            onUploadClick={() => setShowUploadModal(true)}
+          />
         </div>
 
         {/* Media Library (grid) - flex-1 to fill space */}
@@ -112,15 +158,17 @@ export function MediaPage() {
             mode="page"
             folder={currentFolder}
             onFolderChange={setCurrentFolder}
-            selectedAssets={selectedAssets}
-            onToggleSelect={handleToggleSelect}
-            onAssetDoubleClick={handleAssetDoubleClick}
-            showToolbar
+            selectedAssets={isSelectMode ? selectedAssets : new Set()}
+            onAssetClick={handleAssetClick}
+            showToolbar={false}
+            search={search}
+            fileType={fileType}
+            sort={sort}
           />
         </div>
 
-        {/* Bulk action bar (conditional) */}
-        {selectedAssets.size > 1 && (
+        {/* Bulk action bar (select mode with selection) */}
+        {isSelectMode && selectedAssets.size > 0 && (
           <BulkActionBar
             count={selectedAssets.size}
             onDelete={() => setShowDeleteConfirm(true)}
@@ -130,8 +178,8 @@ export function MediaPage() {
         )}
       </div>
 
-      {/* Right: Asset detail sidebar (conditional) */}
-      {selectedAsset && selectedAssets.size <= 1 && (
+      {/* Right: Asset detail sidebar (only in view mode with selection) */}
+      {!isSelectMode && selectedAsset && (
         <AssetDetailSidebar asset={selectedAsset} onClose={handleCloseDetail} onAssetDeleted={handleCloseDetail} />
       )}
 
@@ -154,6 +202,9 @@ export function MediaPage() {
         onCancel={() => setShowDeleteConfirm(false)}
         isDeleting={deleteAsset.isPending}
       />
+
+      {/* Upload modal */}
+      <UploadModal isOpen={showUploadModal} onClose={() => setShowUploadModal(false)} folder={currentFolder} />
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { Search } from 'lucide-react';
+import { Search, Upload } from 'lucide-react';
 
 export type FileTypeFilter = 'all' | 'images' | 'svg';
 export type SortOption = 'date-newest' | 'date-oldest' | 'name-asc' | 'name-desc' | 'size-largest' | 'size-smallest';
@@ -10,6 +10,14 @@ interface MediaToolbarProps {
   onFileTypeChange: (value: FileTypeFilter) => void;
   sort: SortOption;
   onSortChange: (value: SortOption) => void;
+  /** Whether in multi-select mode */
+  isSelectMode?: boolean;
+  /** Called to enter select mode */
+  onEnterSelectMode?: () => void;
+  /** Called to exit select mode */
+  onExitSelectMode?: () => void;
+  /** Called when Upload button is clicked */
+  onUploadClick?: () => void;
 }
 
 export function MediaToolbar({
@@ -19,6 +27,10 @@ export function MediaToolbar({
   onFileTypeChange,
   sort,
   onSortChange,
+  isSelectMode,
+  onEnterSelectMode,
+  onExitSelectMode,
+  onUploadClick,
 }: MediaToolbarProps) {
   return (
     <div className="flex items-center gap-3 flex-wrap">
@@ -58,6 +70,39 @@ export function MediaToolbar({
         <option value="size-largest">Size (largest)</option>
         <option value="size-smallest">Size (smallest)</option>
       </select>
+
+      {/* Select mode toggle */}
+      {isSelectMode ? (
+        <button
+          type="button"
+          onClick={onExitSelectMode}
+          className="px-3 py-2 bg-azure-04 text-white rounded text-sm hover:bg-azure-03 transition-colors"
+        >
+          Done
+        </button>
+      ) : (
+        onEnterSelectMode && (
+          <button
+            type="button"
+            onClick={onEnterSelectMode}
+            className="px-3 py-2 border border-grey-09 rounded text-sm bg-white hover:bg-grey-11 transition-colors"
+          >
+            Select
+          </button>
+        )
+      )}
+
+      {/* Upload button */}
+      {onUploadClick && (
+        <button
+          type="button"
+          onClick={onUploadClick}
+          className="flex items-center gap-2 px-3 py-2 bg-azure-04 text-white rounded text-sm hover:bg-azure-03 transition-colors"
+        >
+          <Upload className="w-4 h-4" />
+          Upload
+        </button>
+      )}
     </div>
   );
 }
