@@ -1012,6 +1012,50 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
       }
     });
 
+    // POST /assets/move — move assets between folders
+    app.post('/assets/move', async (c) => {
+      try {
+        const { filenames, sourceFolder, targetFolder } = await c.req.json<{
+          filenames: string[];
+          sourceFolder: string;
+          targetFolder: string;
+        }>();
+
+        if (!Array.isArray(filenames)) {
+          return c.json(errorResponse(ErrorCodes.INVALID_REQUEST, 'filenames must be an array'), 400);
+        }
+        if (typeof sourceFolder !== 'string') {
+          return c.json(errorResponse(ErrorCodes.INVALID_REQUEST, 'sourceFolder is required'), 400);
+        }
+        if (typeof targetFolder !== 'string') {
+          return c.json(errorResponse(ErrorCodes.INVALID_REQUEST, 'targetFolder is required'), 400);
+        }
+
+        const result = await assetOps.moveAssets(filenames, sourceFolder, targetFolder);
+
+        if (!result.success) {
+          return c.json(errorResponse(ErrorCodes.INVALID_REQUEST, result.error), 400);
+        }
+
+        return c.json(result);
+      } catch (error) {
+        if (error instanceof Error && error.message === 'Path traversal detected') {
+          return c.json(errorResponse(ErrorCodes.INVALID_REQUEST, 'Invalid folder path'), 400);
+        }
+        return c.json(logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to move assets'), 500);
+      }
+    });
+
+    // GET /assets/folder-tree — get complete folder hierarchy with asset counts
+    app.get('/assets/folder-tree', async (c) => {
+      try {
+        const tree = await assetOps.getFolderTree();
+        return c.json({ tree });
+      } catch (error) {
+        return c.json(logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to get folder tree'), 500);
+      }
+    });
+
     // GET /assets/:filename/usage — get asset usage information
     app.get('/assets/:filename/usage', async (c) => {
       try {
