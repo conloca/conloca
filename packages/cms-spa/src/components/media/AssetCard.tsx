@@ -1,5 +1,4 @@
 import cn from 'clsx';
-import { Check } from 'lucide-react';
 import type { AssetEntry } from '../../hooks';
 
 interface AssetCardProps {
@@ -46,13 +45,6 @@ export function AssetCard({
         isSelected ? 'border-azure-04 ring-2 ring-azure-04' : 'border-grey-09',
       )}
     >
-      {/* Selection checkmark indicator */}
-      {isSelected && (
-        <div className="absolute top-2 left-2 z-10 w-5 h-5 bg-azure-04 rounded-full flex items-center justify-center">
-          <Check className="w-3 h-3 text-white" />
-        </div>
-      )}
-
       {/* Thumbnail */}
       <div className="aspect-square bg-grey-11 flex items-center justify-center overflow-hidden">
         <img
