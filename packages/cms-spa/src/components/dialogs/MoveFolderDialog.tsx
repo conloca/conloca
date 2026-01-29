@@ -125,7 +125,7 @@ export function MoveFolderDialog({
                 })}
               >
                 <Folder className="w-4 h-4 flex-shrink-0" />
-                <span className="truncate flex-1">Root</span>
+                <span className="truncate flex-1">All Assets</span>
                 {currentFolder === '/' && <span className="text-xs text-grey-05">(current)</span>}
               </button>
 

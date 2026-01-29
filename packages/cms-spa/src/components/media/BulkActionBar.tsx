@@ -31,7 +31,7 @@ export function BulkActionBar({ count, onDelete, onMove, onClear }: BulkActionBa
         onClick={onMove}
         className={cn(
           'flex items-center gap-2 px-3 py-1.5 rounded text-sm transition-colors',
-          'bg-grey-03 hover:bg-grey-04',
+          'bg-grey-03 hover:bg-grey-04 text-white',
         )}
       >
         <FolderInput className="w-4 h-4" />
@@ -44,7 +44,7 @@ export function BulkActionBar({ count, onDelete, onMove, onClear }: BulkActionBa
         onClick={onDelete}
         className={cn(
           'flex items-center gap-2 px-3 py-1.5 rounded text-sm transition-colors',
-          'bg-red-600 hover:bg-red-700',
+          'bg-red-600 hover:bg-red-700 text-white',
         )}
       >
         <Trash2 className="w-4 h-4" />
