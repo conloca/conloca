@@ -431,7 +431,7 @@ export class ContentAPIClient {
     if (!response.ok) {
       let errorData: { error?: { message?: string } } | undefined;
       try {
-        errorData = await response.json();
+        errorData = (await response.json()) as { error?: { message?: string } };
       } catch {
         // ignore
       }
