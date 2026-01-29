@@ -1,5 +1,5 @@
 import { type Dirent, existsSync, type Stats } from 'node:fs';
-import { mkdir, readdir, readFile, stat, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { extname, join, parse, resolve } from 'node:path';
 import { imageSize } from 'image-size';
 import { type AssetEntry, AssetManifest, type AssetManifestData, type ManifestEntryData } from './asset-manifest';
@@ -48,6 +48,14 @@ function isSystemFile(filename: string): boolean {
 export interface FolderListing {
   assets: AssetEntry[];
   folders: { name: string; path: string }[];
+}
+
+/** Folder tree node for hierarchical folder view */
+export interface FolderTreeNode {
+  name: string;
+  path: string;
+  assetCount: number;
+  children: FolderTreeNode[];
 }
 
 /** Asset usage reference */
@@ -678,5 +686,160 @@ export class AssetOperations {
     }
 
     return null;
+  }
+
+  /**
+   * Move assets from one folder to another
+   * @param filenames List of filenames to move
+   * @param sourceFolder Source folder path (relative to assets root)
+   * @param targetFolder Target folder path (relative to assets root)
+   */
+  async moveAssets(
+    filenames: string[],
+    sourceFolder: string,
+    targetFolder: string,
+  ): Promise<{ success: true; moved: number } | { success: false; error: string }> {
+    // Normalize folder paths
+    const normalizedSource = sourceFolder === '/' ? '/' : '/' + sourceFolder.replace(/^\/+|\/+$/g, '');
+    const normalizedTarget = targetFolder === '/' ? '/' : '/' + targetFolder.replace(/^\/+|\/+$/g, '');
+
+    // Validate both folders exist (for non-root folders)
+    let sourcePath: string;
+    let targetPath: string;
+
+    try {
+      sourcePath = normalizedSource === '/' ? this.config.assetsPath : this.validateSubpath(normalizedSource);
+      targetPath = normalizedTarget === '/' ? this.config.assetsPath : this.validateSubpath(normalizedTarget);
+    } catch {
+      return { success: false, error: 'Invalid folder path' };
+    }
+
+    // Verify source folder exists
+    try {
+      const sourceStat = await stat(sourcePath);
+      if (!sourceStat.isDirectory()) {
+        return { success: false, error: 'Source folder does not exist' };
+      }
+    } catch {
+      return { success: false, error: 'Source folder does not exist' };
+    }
+
+    // Verify target folder exists
+    try {
+      const targetStat = await stat(targetPath);
+      if (!targetStat.isDirectory()) {
+        return { success: false, error: 'Target folder does not exist' };
+      }
+    } catch {
+      return { success: false, error: 'Target folder does not exist' };
+    }
+
+    // Move each file
+    let movedCount = 0;
+    for (const filename of filenames) {
+      const sourceFile = join(sourcePath, filename);
+      const targetFile = join(targetPath, filename);
+
+      // Compute manifest paths
+      const oldRelativePath = normalizedSource === '/' ? filename : `${normalizedSource.slice(1)}/${filename}`;
+      const newRelativePath = normalizedTarget === '/' ? filename : `${normalizedTarget.slice(1)}/${filename}`;
+
+      try {
+        // Move the file on disk
+        await rename(sourceFile, targetFile);
+
+        // Update manifest: remove old entry and add new one
+        const manifestData = await this.manifest.read();
+        const oldEntry = manifestData[oldRelativePath];
+
+        if (oldEntry) {
+          await this.manifest.remove(oldRelativePath);
+          await this.manifest.add(newRelativePath, oldEntry);
+        }
+
+        movedCount++;
+      } catch (err) {
+        // Continue with other files even if one fails
+        console.error(`[AssetOperations] Failed to move ${filename}:`, err);
+      }
+    }
+
+    return { success: true, moved: movedCount };
+  }
+
+  /**
+   * Get the complete folder tree with asset counts
+   * @returns Array of folder tree nodes representing the folder hierarchy
+   */
+  async getFolderTree(): Promise<FolderTreeNode[]> {
+    const buildTree = async (folderPath: string, folder: string): Promise<FolderTreeNode[]> => {
+      let entries: Dirent[];
+      try {
+        entries = await readdir(folderPath, { withFileTypes: true });
+      } catch {
+        return [];
+      }
+
+      const result: FolderTreeNode[] = [];
+
+      for (const entry of entries) {
+        // Skip hidden files/folders and symlinks
+        if (isSystemFile(entry.name) || entry.isSymbolicLink()) {
+          continue;
+        }
+
+        if (entry.isDirectory()) {
+          const entryPath = join(folderPath, entry.name);
+          const subFolder = folder === '/' ? `/${entry.name}` : `${folder}/${entry.name}`;
+
+          // Count image files in this folder (non-recursive count for this folder only)
+          let assetCount = 0;
+          try {
+            const subEntries = await readdir(entryPath, { withFileTypes: true });
+            assetCount = subEntries.filter(
+              (e) => e.isFile() && !isSystemFile(e.name) && isRecognizedImageExtension(e.name),
+            ).length;
+          } catch {
+            // If we can't read the folder, count is 0
+          }
+
+          // Recursively get children
+          const children = await buildTree(entryPath, subFolder);
+
+          result.push({
+            name: entry.name,
+            path: subFolder,
+            assetCount,
+            children,
+          });
+        }
+      }
+
+      return result;
+    };
+
+    // Count assets in root folder
+    let rootAssetCount = 0;
+    try {
+      const rootEntries = await readdir(this.config.assetsPath, { withFileTypes: true });
+      rootAssetCount = rootEntries.filter(
+        (e) => e.isFile() && !isSystemFile(e.name) && isRecognizedImageExtension(e.name),
+      ).length;
+    } catch {
+      // If we can't read root, count is 0
+    }
+
+    // Build tree starting from assets root
+    const children = await buildTree(this.config.assetsPath, '/');
+
+    // Return root as first element with its children
+    return [
+      {
+        name: 'Root',
+        path: '/',
+        assetCount: rootAssetCount,
+        children,
+      },
+    ];
   }
 }
