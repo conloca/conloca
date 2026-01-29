@@ -68,10 +68,12 @@ export class AssetOperations {
   private validateSubpath(subpath: string): string {
     // Normalize the path: remove leading/trailing slashes, resolve .. and .
     const normalizedSubpath = subpath.replace(/^\/+|\/+$/g, '') || '.';
-    const fullPath = resolve(this.config.assetsPath, normalizedSubpath);
+    // Resolve both paths to absolute to ensure consistent comparison
+    const assetsAbsolute = resolve(this.config.assetsPath);
+    const fullPath = resolve(assetsAbsolute, normalizedSubpath);
 
     // Security check: ensure resolved path is within assetsPath
-    if (!fullPath.startsWith(this.config.assetsPath)) {
+    if (!fullPath.startsWith(assetsAbsolute)) {
       throw new Error('Path traversal detected');
     }
 
@@ -412,6 +414,38 @@ export class AssetOperations {
     }
 
     return usages;
+  }
+
+  /**
+   * Get the file path for an asset
+   * @param filename Asset filename
+   * @param folder Optional folder path (defaults to asset's stored folder)
+   */
+  getAssetPath(filename: string, folder?: string): string {
+    const subpath = folder && folder !== '/' ? folder.replace(/^\/+|\/+$/g, '') : '';
+    return subpath ? join(this.config.assetsPath, subpath, filename) : join(this.config.assetsPath, filename);
+  }
+
+  /**
+   * Read asset file contents for serving
+   * @param filename Asset filename
+   */
+  async readAssetFile(
+    filename: string,
+  ): Promise<{ success: true; buffer: Buffer; mimeType: string } | { success: false; error: string }> {
+    const entry = await this.manifest.get(filename);
+    if (!entry) {
+      return { success: false, error: 'Asset not found' };
+    }
+
+    const filePath = this.getAssetPath(filename, entry.folder);
+
+    try {
+      const buffer = await readFile(filePath);
+      return { success: true, buffer, mimeType: entry.mimeType };
+    } catch {
+      return { success: false, error: 'Failed to read file' };
+    }
   }
 
   /**

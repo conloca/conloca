@@ -24,7 +24,7 @@ export function AssetCard({
   selected,
   onClick,
   onDelete,
-  assetsBasePath = '/__conloca/assets',
+  assetsBasePath = '/__cms/api/assets/serve',
 }: AssetCardProps) {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -61,13 +61,13 @@ export function AssetCard({
       role="button"
       tabIndex={0}
       className={cn(
-        'group relative rounded-lg border-2 overflow-hidden cursor-pointer transition-colors',
-        'bg-white hover:border-blue-400',
-        selected ? 'border-blue-500 ring-2 ring-blue-200' : 'border-gray-200',
+        'group relative rounded border overflow-hidden cursor-pointer transition-colors',
+        'bg-white hover:border-azure-04',
+        selected ? 'border-azure-04 ring-2 ring-azure-11' : 'border-grey-09',
       )}
     >
       {/* Thumbnail */}
-      <div className="aspect-square bg-gray-100 flex items-center justify-center overflow-hidden">
+      <div className="aspect-square bg-grey-11 flex items-center justify-center overflow-hidden">
         <img
           src={`${assetsBasePath}/${asset.filename}`}
           alt={asset.alt || asset.originalName}
@@ -77,16 +77,16 @@ export function AssetCard({
       </div>
 
       {/* Info */}
-      <div className="p-2 text-xs">
-        <p className="font-medium text-gray-900 truncate" title={asset.originalName}>
+      <div className="p-2 text-xs border-t border-grey-09">
+        <p className="font-medium text-grey-01 truncate" title={asset.originalName}>
           {asset.originalName}
         </p>
-        <p className="text-gray-500 mt-0.5">
+        <p className="text-grey-04 mt-0.5">
           {formatFileSize(asset.size)}
           {dimensions && ` \u00B7 ${dimensions}`}
         </p>
         {asset.alt && (
-          <p className="text-gray-400 truncate mt-0.5" title={asset.alt}>
+          <p className="text-grey-07 truncate mt-0.5" title={asset.alt}>
             {asset.alt}
           </p>
         )}
@@ -106,14 +106,14 @@ export function AssetCard({
               <button
                 type="button"
                 onClick={handleDeleteClick}
-                className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
+                className="px-2 py-1 bg-red-04 text-white text-xs rounded hover:bg-red-03 transition-colors"
               >
                 Delete
               </button>
               <button
                 type="button"
                 onClick={handleCancelDelete}
-                className="px-2 py-1 bg-gray-300 text-gray-700 text-xs rounded hover:bg-gray-400"
+                className="px-2 py-1 bg-white border border-grey-09 text-grey-04 text-xs rounded hover:bg-grey-11 transition-colors"
               >
                 Cancel
               </button>
@@ -122,7 +122,7 @@ export function AssetCard({
             <button
               type="button"
               onClick={handleDeleteClick}
-              className="p-1 bg-black/50 text-white rounded hover:bg-black/70"
+              className="p-1 bg-black/50 text-white rounded hover:bg-black/70 transition-colors"
               title="Delete asset"
             >
               <svg

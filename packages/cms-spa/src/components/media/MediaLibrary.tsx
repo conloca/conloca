@@ -2,6 +2,7 @@ import cn from 'clsx';
 import { Folder } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { type AssetEntry, useAssetFolders, useCreateFolder, useDeleteAsset } from '../../hooks';
+import { CreateFolderDialog } from '../dialogs/CreateFolderDialog';
 import { AssetCard } from './AssetCard';
 import { FolderNav } from './FolderNav';
 import type { FileTypeFilter, SortOption } from './MediaToolbar';
@@ -44,6 +45,9 @@ export function MediaLibrary({
 
   // Internal selection state (for uncontrolled mode)
   const [internalSelectedAsset, setInternalSelectedAsset] = useState<AssetEntry | null>(null);
+
+  // Create folder dialog state
+  const [showCreateFolderDialog, setShowCreateFolderDialog] = useState(false);
 
   // Use controlled selection if provided, otherwise use internal state
   const selectedAsset = controlledSelectedAsset !== undefined ? controlledSelectedAsset : internalSelectedAsset;
@@ -140,13 +144,19 @@ export function MediaLibrary({
     });
   };
 
-  // Handle create folder
-  const handleCreateFolder = () => {
-    const name = window.prompt('Enter folder name:');
-    if (!name || !name.trim()) return;
+  // Handle create folder - opens the dialog
+  const handleOpenCreateFolderDialog = () => {
+    setShowCreateFolderDialog(true);
+  };
 
-    const folderPath = currentFolder === '/' ? `/${name.trim()}` : `${currentFolder}/${name.trim()}`;
-    createFolder.mutate(folderPath);
+  // Handle folder creation from dialog
+  const handleCreateFolder = (name: string) => {
+    const folderPath = currentFolder === '/' ? `/${name}` : `${currentFolder}/${name}`;
+    createFolder.mutate(folderPath, {
+      onSuccess: () => {
+        setShowCreateFolderDialog(false);
+      },
+    });
   };
 
   // Handle folder click
@@ -170,7 +180,7 @@ export function MediaLibrary({
           onFileTypeChange={setFileType}
           sort={sort}
           onSortChange={setSort}
-          onCreateFolder={handleCreateFolder}
+          onCreateFolder={handleOpenCreateFolderDialog}
         />
       )}
 
@@ -179,7 +189,7 @@ export function MediaLibrary({
 
       {/* Loading state */}
       {isLoading ? (
-        <div className="text-center py-12 text-gray-500">Loading assets...</div>
+        <div className="text-center py-12 text-grey-04">Loading assets...</div>
       ) : (
         <>
           {/* Folder cards */}
@@ -191,12 +201,12 @@ export function MediaLibrary({
                   type="button"
                   onClick={() => handleFolderClick(folder.path)}
                   className={cn(
-                    'group flex flex-col items-center justify-center p-4 rounded-lg border-2 border-gray-200',
-                    'bg-white hover:border-blue-400 hover:bg-blue-50 transition-colors cursor-pointer',
+                    'group flex flex-col items-center justify-center p-4 rounded border border-grey-09',
+                    'bg-white hover:border-azure-04 hover:bg-grey-11 transition-colors cursor-pointer',
                   )}
                 >
-                  <Folder className="w-12 h-12 text-gray-400 group-hover:text-blue-500 transition-colors" />
-                  <span className="mt-2 text-sm text-gray-700 group-hover:text-blue-600 truncate max-w-full">
+                  <Folder className="w-12 h-12 text-grey-04 group-hover:text-azure-04 transition-colors" />
+                  <span className="mt-2 text-sm text-grey-01 group-hover:text-azure-04 truncate max-w-full">
                     {folder.name}
                   </span>
                 </button>
@@ -206,7 +216,7 @@ export function MediaLibrary({
 
           {/* Asset grid */}
           {sortedAssets.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
+            <div className="text-center py-12 text-grey-04">
               {assets.length === 0 && folders.length === 0
                 ? 'No assets yet. Upload your first image above.'
                 : 'No assets match your filter.'}
@@ -227,6 +237,14 @@ export function MediaLibrary({
           )}
         </>
       )}
+
+      {/* Create Folder Dialog */}
+      <CreateFolderDialog
+        open={showCreateFolderDialog}
+        isPending={createFolder.isPending}
+        onClose={() => setShowCreateFolderDialog(false)}
+        onCreate={handleCreateFolder}
+      />
     </div>
   );
 }

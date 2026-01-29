@@ -16,11 +16,11 @@ export function FolderNav({ currentFolder, onNavigate }: FolderNavProps) {
   });
 
   return (
-    <nav className="flex items-center gap-1 text-sm text-gray-600">
+    <nav className="flex items-center gap-1 text-sm text-grey-04">
       <button
         type="button"
         onClick={() => onNavigate('/')}
-        className="flex items-center gap-1 hover:text-blue-600 transition-colors"
+        className="flex items-center gap-1 hover:text-azure-04 transition-colors"
         title="Root assets folder"
       >
         <Home className="w-4 h-4" />
@@ -29,11 +29,11 @@ export function FolderNav({ currentFolder, onNavigate }: FolderNavProps) {
 
       {breadcrumbs.map((crumb) => (
         <span key={crumb.path} className="flex items-center gap-1">
-          <ChevronRight className="w-4 h-4 text-gray-400" />
+          <ChevronRight className="w-4 h-4 text-grey-07" />
           <button
             type="button"
             onClick={() => onNavigate(crumb.path)}
-            className="hover:text-blue-600 transition-colors"
+            className="hover:text-azure-04 transition-colors"
           >
             {crumb.name}
           </button>

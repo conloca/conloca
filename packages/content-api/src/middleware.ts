@@ -1023,6 +1023,26 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
       }
     });
 
+    // GET /assets/serve/:filename — serve actual asset file
+    app.get('/assets/serve/:filename', async (c) => {
+      try {
+        const filename = c.req.param('filename');
+        const result = await assetOps.readAssetFile(filename);
+
+        if (!result.success) {
+          return c.json(errorResponse(ErrorCodes.ASSET_NOT_FOUND, result.error), 404);
+        }
+
+        // Set caching headers (1 year for immutable hashed filenames)
+        c.header('Content-Type', result.mimeType);
+        c.header('Cache-Control', 'public, max-age=31536000, immutable');
+
+        return c.body(result.buffer);
+      } catch (error) {
+        return c.json(logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to serve asset'), 500);
+      }
+    });
+
     // GET /assets/:filename — get single asset metadata
     app.get('/assets/:filename', async (c) => {
       try {
