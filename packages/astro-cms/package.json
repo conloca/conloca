@@ -28,6 +28,12 @@
       "import": "./dist/spa-handler.mjs",
       "default": "./dist/spa-handler.mjs"
     },
+    "./cms-handler": {
+      "development": "./src/cms-handler.ts",
+      "types": "./dist/cms-handler.d.mts",
+      "import": "./dist/cms-handler.mjs",
+      "default": "./dist/cms-handler.mjs"
+    },
     "./api/content-api-handler": {
       "development": "./src/api/content-api-handler.ts",
       "types": "./dist/api/content-api-handler.d.mts",
