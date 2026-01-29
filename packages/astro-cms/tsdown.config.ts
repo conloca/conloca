@@ -6,6 +6,7 @@ export default defineConfig({
     hydration: 'src/hydration.ts',
     components: 'src/components.ts',
     'spa-handler': 'src/spa-handler.ts',
+    'cms-handler': 'src/cms-handler.ts',
     'api/content-api-handler': 'src/api/content-api-handler.ts',
     'api/data-context-handler': 'src/api/data-context-handler.ts',
     collections: 'src/collections.ts',
