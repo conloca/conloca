@@ -14,6 +14,7 @@ import {
   type AssetUsage,
   ContentAPIClient,
   type FolderListing,
+  type FolderTreeNode,
   type GitCommitResult,
   type GitPushResult,
   type GitStatus,
@@ -72,6 +73,7 @@ const queryKeys = {
   asset: (filename: string) => ['assets', filename] as const,
   assetFolders: (path?: string) => ['asset-folders', path] as const,
   assetUsage: (filename: string | null) => ['asset-usage', filename] as const,
+  folderTree: () => ['folder-tree'] as const,
 };
 
 // ===== Core Content Hooks =====
@@ -783,6 +785,39 @@ export function useAssetUsage(filename: string | null) {
   });
 }
 
+export function useFolderTree() {
+  const client = getContentAPIClient();
+
+  return useQuery({
+    queryKey: queryKeys.folderTree(),
+    queryFn: () => client.getFolderTree(),
+    staleTime: 30_000, // Cache for 30 seconds
+  });
+}
+
+export function useMoveAssets() {
+  const client = getContentAPIClient();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      filenames,
+      sourceFolder,
+      targetFolder,
+    }: {
+      filenames: string[];
+      sourceFolder: string;
+      targetFolder: string;
+    }) => client.moveAssets(filenames, sourceFolder, targetFolder),
+    onSuccess: () => {
+      // Invalidate all folder-related queries to refresh counts and listings
+      queryClient.invalidateQueries({ queryKey: queryKeys.assets() });
+      queryClient.invalidateQueries({ queryKey: ['asset-folders'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.folderTree() });
+    },
+  });
+}
+
 // Re-export for convenience
 export { ContentAPIClient, StaleWriteError, APIClientError };
-export type { AssetEntry, AssetUsage, FolderListing, GitStatus, GitCommitResult, GitPushResult };
+export type { AssetEntry, AssetUsage, FolderListing, FolderTreeNode, GitStatus, GitCommitResult, GitPushResult };
