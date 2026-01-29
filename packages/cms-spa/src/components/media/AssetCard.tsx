@@ -48,7 +48,7 @@ export function AssetCard({
       {/* Thumbnail */}
       <div className="aspect-square bg-grey-11 flex items-center justify-center overflow-hidden">
         <img
-          src={`${assetsBasePath}/${asset.filename}`}
+          src={`${assetsBasePath}/${asset.folder && asset.folder !== '/' ? `${asset.folder.replace(/^\//, '')}/${asset.filename}` : asset.filename}`}
           alt={asset.alt || asset.originalName}
           className="w-full h-full object-contain"
           loading="lazy"

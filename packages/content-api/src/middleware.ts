@@ -615,11 +615,15 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
       }
     });
 
-    // GET /assets/serve/:filename — serve actual asset file
-    app.get('/assets/serve/:filename', async (c) => {
+    // GET /assets/serve/:path{.+} — serve actual asset file (supports subfolders)
+    app.get('/assets/serve/:path{.+}', async (c) => {
       try {
-        const filename = c.req.param('filename');
-        const result = await assetOps.readAssetFile(filename);
+        const relativePath = c.req.param('path');
+        // Split into folder and filename: 'images/tasks.png' → folder='/images', filename='tasks.png'
+        const lastSlash = relativePath.lastIndexOf('/');
+        const folder = lastSlash > 0 ? `/${relativePath.slice(0, lastSlash)}` : '/';
+        const filename = lastSlash > 0 ? relativePath.slice(lastSlash + 1) : relativePath;
+        const result = await assetOps.readAssetFile(filename, folder);
 
         if (!result.success) {
           return c.json(errorResponse(ErrorCodes.ASSET_NOT_FOUND, result.error), 404);
