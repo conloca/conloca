@@ -419,7 +419,7 @@ initHydration(componentRegistry)
               {
                 name: 'conloca-dev-virtual-modules',
                 resolveId(id) {
-                  // Dev-only config module for spa-handler.ts
+                  // Dev-only config module for cms-handler.ts
                   if (id === VIRTUAL_CONFIG_MODULE) {
                     return RESOLVED_VIRTUAL_CONFIG;
                   }
@@ -441,7 +441,7 @@ initHydration(componentRegistry)
                   return null;
                 },
                 load(id) {
-                  // Dev-only config module for spa-handler.ts
+                  // Dev-only config module for cms-handler.ts
                   if (id === RESOLVED_VIRTUAL_CONFIG) {
                     return `export default ${JSON.stringify(spaConfig)};`;
                   }
@@ -549,31 +549,18 @@ if (import.meta.hot) {
           },
         });
 
-        // Inject catch-all route for the SPA
+        // Inject unified CMS handler for all CMS routes
+        // Single handler validates auth once, then routes to appropriate sub-handler
         injectRoute({
           pattern: `${cmsRoute}/[...path]`,
-          entrypoint: '@conloca/astro-cms/spa-handler',
+          entrypoint: '@conloca/astro-cms/cms-handler',
           prerender: false,
         });
 
         // Also handle the root CMS route
         injectRoute({
           pattern: cmsRoute,
-          entrypoint: '@conloca/astro-cms/spa-handler',
-          prerender: false,
-        });
-
-        // Data context endpoint for editor preview (must be before catch-all)
-        injectRoute({
-          pattern: `${cmsRoute}/api/data-context`,
-          entrypoint: '@conloca/astro-cms/api/data-context-handler',
-          prerender: false,
-        });
-
-        // Inject single catch-all API route
-        injectRoute({
-          pattern: `${cmsRoute}/api/[...path]`,
-          entrypoint: '@conloca/astro-cms/api/content-api-handler',
+          entrypoint: '@conloca/astro-cms/cms-handler',
           prerender: false,
         });
       },
