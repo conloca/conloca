@@ -1,7 +1,8 @@
-import { Loader2, Trash2, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { FolderInput, Loader2, Trash2, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import type { AssetEntry } from '../../hooks';
-import { useAssetUsage, useDeleteAsset, useUpdateAssetMetadata } from '../../hooks';
+import { useAssetUsage, useDeleteAsset, useMoveAssets, useUpdateAssetMetadata } from '../../hooks';
+import { MoveFolderDialog } from '../dialogs';
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -37,18 +38,45 @@ export function AssetDetailSidebar({
   const [altText, setAltText] = useState(asset.alt || '');
   const [tagsInput, setTagsInput] = useState(asset.tags?.join(', ') || '');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showMoveDialog, setShowMoveDialog] = useState(false);
 
   // Reset local state when asset changes
   useEffect(() => {
     setAltText(asset.alt || '');
     setTagsInput(asset.tags?.join(', ') || '');
     setConfirmDelete(false);
+    setShowMoveDialog(false);
   }, [asset.filename, asset.alt, asset.tags]);
 
   // Hooks
   const updateMetadata = useUpdateAssetMetadata();
   const deleteAsset = useDeleteAsset();
+  const moveAssets = useMoveAssets();
   const { data: usageData, isLoading: isLoadingUsage } = useAssetUsage(asset.filename);
+
+  // Derive folder from asset: use asset.folder if present, otherwise extract from filename path, default to '/'
+  const assetFolder = useMemo(() => {
+    if (asset.folder) return asset.folder;
+    // If folder field missing, derive from filename (e.g., "images/photo.jpg" -> "/images")
+    const lastSlash = asset.filename.lastIndexOf('/');
+    if (lastSlash > 0) {
+      return '/' + asset.filename.substring(0, lastSlash);
+    }
+    return '/'; // Root folder
+  }, [asset.folder, asset.filename]);
+
+  // Handle move to folder
+  const handleMove = (targetFolder: string) => {
+    moveAssets.mutate(
+      { filenames: [asset.filename], sourceFolder: assetFolder, targetFolder },
+      {
+        onSuccess: () => {
+          setShowMoveDialog(false);
+          onAssetUpdated?.();
+        },
+      },
+    );
+  };
 
   // Save alt text on blur
   const handleAltBlur = () => {
@@ -205,6 +233,18 @@ export function AssetDetailSidebar({
           )}
         </div>
 
+        {/* Move section */}
+        <div className="p-4 border-b border-grey-09">
+          <button
+            type="button"
+            onClick={() => setShowMoveDialog(true)}
+            className="flex items-center gap-2 px-3 py-2 text-grey-04 hover:text-grey-01 text-sm transition-colors"
+          >
+            <FolderInput className="w-4 h-4" />
+            <span>Move to Folder</span>
+          </button>
+        </div>
+
         {/* Delete section */}
         <div className="p-4">
           {confirmDelete ? (
@@ -240,6 +280,16 @@ export function AssetDetailSidebar({
           )}
         </div>
       </div>
+
+      {/* Move folder dialog */}
+      <MoveFolderDialog
+        isOpen={showMoveDialog}
+        assetCount={1}
+        currentFolder={assetFolder}
+        onMove={handleMove}
+        onCancel={() => setShowMoveDialog(false)}
+        isMoving={moveAssets.isPending}
+      />
     </div>
   );
 }
