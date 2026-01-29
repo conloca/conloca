@@ -1,7 +1,8 @@
-import { existsSync } from 'node:fs';
-import { mkdir, readdir, readFile, unlink, writeFile } from 'node:fs/promises';
+import { type Dirent, existsSync, type Stats } from 'node:fs';
+import { mkdir, readdir, readFile, stat, unlink, writeFile } from 'node:fs/promises';
 import { extname, join, parse, resolve } from 'node:path';
-import { type AssetEntry, AssetManifest } from './asset-manifest';
+import { imageSize } from 'image-size';
+import { type AssetEntry, AssetManifest, type AssetManifestData, type ManifestEntryData } from './asset-manifest';
 import { setupGitLfsAttributes } from './git-operations';
 
 export interface AssetConfig {
@@ -25,6 +26,29 @@ const MIME_MAP: Record<string, string> = {
   svg: 'image/svg+xml',
   ico: 'image/x-icon',
 };
+
+/** Recognized web image extensions for filesystem scanning */
+const RECOGNIZED_IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'avif', 'ico']);
+
+/** System files to skip during filesystem scanning */
+const SYSTEM_FILES = new Set(['.ds_store', 'thumbs.db', '.gitkeep', 'desktop.ini', '.asset-manifest.json']);
+
+/** Check if filename has a recognized web image extension */
+function isRecognizedImageExtension(filename: string): boolean {
+  const ext = extname(filename).slice(1).toLowerCase();
+  return RECOGNIZED_IMAGE_EXTENSIONS.has(ext);
+}
+
+/** Check if file is a system/hidden file that should be skipped */
+function isSystemFile(filename: string): boolean {
+  return filename.startsWith('.') || SYSTEM_FILES.has(filename.toLowerCase());
+}
+
+/** Derive a display name from filename (e.g., "hero-image.jpg" -> "Hero Image") */
+function deriveDisplayName(filename: string): string {
+  const name = filename.replace(/\.[^/.]+$/, '');
+  return name.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 /** Folder listing result */
 export interface FolderListing {
@@ -118,6 +142,70 @@ export class AssetOperations {
 
   private validateSize(size: number): boolean {
     return size <= this.config.maxFileSize;
+  }
+
+  /**
+   * Get image dimensions from manifest cache or by reading file headers
+   */
+  private async getDimensions(
+    filePath: string,
+    manifestEntry?: ManifestEntryData,
+  ): Promise<{ width?: number; height?: number; fromCache: boolean }> {
+    // Check manifest cache first
+    if (manifestEntry?.width && manifestEntry?.height) {
+      return { width: manifestEntry.width, height: manifestEntry.height, fromCache: true };
+    }
+
+    // Read from file headers
+    try {
+      const buffer = await readFile(filePath);
+      const result = imageSize(new Uint8Array(buffer));
+      return { width: result.width, height: result.height, fromCache: false };
+    } catch {
+      // SVGs and some formats may fail - return undefined dimensions
+      return { width: undefined, height: undefined, fromCache: false };
+    }
+  }
+
+  /**
+   * Build an AssetEntry from a directory entry, enriching with manifest metadata
+   */
+  private async buildAssetEntry(dirent: Dirent, folder: string, manifestData: AssetManifestData): Promise<AssetEntry> {
+    // Compute relative path for manifest lookup
+    const relativePath = folder === '/' ? dirent.name : `${folder.slice(1)}/${dirent.name}`;
+    const manifestEntry = manifestData[relativePath];
+
+    // Build full file path
+    const fullPath = this.getAssetPath(dirent.name, folder);
+
+    // Get file stats
+    const stats: Stats = await stat(fullPath);
+
+    // Get dimensions (from cache or file)
+    const { width, height, fromCache } = await this.getDimensions(fullPath, manifestEntry);
+
+    // Progressive caching: if dimensions were computed from file, cache them
+    if (!fromCache && width && height) {
+      this.manifest.add(relativePath, { ...manifestEntry, width, height }).catch(() => {});
+    }
+
+    // Derive mimeType from extension
+    const ext = extname(dirent.name).slice(1).toLowerCase();
+    const mimeType = MIME_MAP[ext] || `image/${ext}`;
+
+    return {
+      filename: dirent.name,
+      originalName: manifestEntry?.originalName || dirent.name,
+      mimeType,
+      size: stats.size,
+      width,
+      height,
+      alt: manifestEntry?.alt,
+      uploadedAt: manifestEntry?.uploadedAt || stats.birthtime.toISOString(),
+      uploadedBy: manifestEntry?.uploadedBy,
+      folder,
+      tags: manifestEntry?.tags,
+    };
   }
 
   async upload(
