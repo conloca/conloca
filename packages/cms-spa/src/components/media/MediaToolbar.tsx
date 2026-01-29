@@ -1,4 +1,4 @@
-import { FolderPlus, Search } from 'lucide-react';
+import { Search } from 'lucide-react';
 
 export type FileTypeFilter = 'all' | 'images' | 'svg';
 export type SortOption = 'date-newest' | 'date-oldest' | 'name-asc' | 'name-desc' | 'size-largest' | 'size-smallest';
@@ -10,7 +10,6 @@ interface MediaToolbarProps {
   onFileTypeChange: (value: FileTypeFilter) => void;
   sort: SortOption;
   onSortChange: (value: SortOption) => void;
-  onCreateFolder: () => void;
 }
 
 export function MediaToolbar({
@@ -20,7 +19,6 @@ export function MediaToolbar({
   onFileTypeChange,
   sort,
   onSortChange,
-  onCreateFolder,
 }: MediaToolbarProps) {
   return (
     <div className="flex items-center gap-3 flex-wrap">
@@ -60,16 +58,6 @@ export function MediaToolbar({
         <option value="size-largest">Size (largest)</option>
         <option value="size-smallest">Size (smallest)</option>
       </select>
-
-      {/* Create folder button */}
-      <button
-        type="button"
-        onClick={onCreateFolder}
-        className="flex items-center gap-2 px-4 py-2 bg-azure-04 text-white rounded text-sm hover:bg-azure-03 transition-colors"
-      >
-        <FolderPlus className="w-4 h-4" />
-        <span>New Folder</span>
-      </button>
     </div>
   );
 }
