@@ -153,7 +153,7 @@ export function MediaPage() {
         </div>
 
         {/* Media Library (grid) - flex-1 to fill space */}
-        <div className="flex-1 overflow-auto px-6 pb-6">
+        <div className="flex-1 overflow-auto px-6 pt-4 pb-6">
           <MediaLibrary
             mode="page"
             folder={currentFolder}
