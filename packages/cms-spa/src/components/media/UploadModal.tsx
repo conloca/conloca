@@ -185,7 +185,7 @@ export function UploadModal({ isOpen, onClose, folder, onUploadComplete }: Uploa
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="bg-white rounded-lg w-full max-w-lg shadow-xl">
+      <div className="bg-white rounded-lg w-full max-w-md mx-4 shadow-xl">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-grey-09">
           <h2 className="text-lg font-semibold text-grey-01">Upload Assets</h2>
