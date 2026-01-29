@@ -70,7 +70,9 @@ export function MoveFolderDialog({
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
   const { data, isLoading } = useFolderTree();
 
-  const tree = data?.tree ?? [];
+  // Unwrap root node - we display "All Assets" separately, so show root's children directly
+  const rawTree = data?.tree ?? [];
+  const tree = rawTree.length === 1 && rawTree[0].path === '/' ? rawTree[0].children : rawTree;
 
   const handleMove = () => {
     if (selectedFolder) {

@@ -59,7 +59,9 @@ export function FolderTreeSidebar({ currentFolder, onFolderSelect, dropTargetFol
   const { data, isLoading } = useFolderTree();
   const createFolder = useCreateFolder();
 
-  const tree = data?.tree ?? [];
+  // Unwrap root node - we display "All Assets" separately, so show root's children directly
+  const rawTree = data?.tree ?? [];
+  const tree = rawTree.length === 1 && rawTree[0].path === '/' ? rawTree[0].children : rawTree;
 
   const handleCreateFolder = (name: string) => {
     // Create folder at root level
@@ -71,8 +73,11 @@ export function FolderTreeSidebar({ currentFolder, onFolderSelect, dropTargetFol
     });
   };
 
-  // Calculate total asset count at root level
-  const rootAssetCount = tree.reduce((sum, node) => sum + node.assetCount, 0);
+  // Get total asset count from root node (includes all assets across all folders)
+  const rootAssetCount =
+    rawTree.length === 1 && rawTree[0].path === '/'
+      ? rawTree[0].assetCount
+      : tree.reduce((sum, node) => sum + node.assetCount, 0);
 
   return (
     <div className="w-56 flex-shrink-0 border-r border-grey-09 bg-white">
