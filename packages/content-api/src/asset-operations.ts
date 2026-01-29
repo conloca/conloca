@@ -44,12 +44,6 @@ function isSystemFile(filename: string): boolean {
   return filename.startsWith('.') || SYSTEM_FILES.has(filename.toLowerCase());
 }
 
-/** Derive a display name from filename (e.g., "hero-image.jpg" -> "Hero Image") */
-function deriveDisplayName(filename: string): string {
-  const name = filename.replace(/\.[^/.]+$/, '');
-  return name.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
 /** Folder listing result */
 export interface FolderListing {
   assets: AssetEntry[];
@@ -254,9 +248,25 @@ export class AssetOperations {
         ? join(this.config.assetsPath, folder.replace(/^\//, ''), filename)
         : join(this.config.assetsPath, filename);
 
-    const buffer = Buffer.from(await file.arrayBuffer());
-    await writeFile(filePath, buffer);
+    const arrayBuffer = await file.arrayBuffer();
+    await writeFile(filePath, new Uint8Array(arrayBuffer));
 
+    // Compute relative path for manifest
+    const relativePath = folder === '/' ? filename : `${folder.slice(1)}/${filename}`;
+
+    // Create manifest entry
+    const manifestEntry: ManifestEntryData = {
+      alt: metadata?.alt,
+      width: metadata?.width,
+      height: metadata?.height,
+      uploadedAt: new Date().toISOString(),
+      uploadedBy: metadata?.uploadedBy,
+      originalName: file.name,
+    };
+
+    await this.manifest.add(relativePath, manifestEntry);
+
+    // Build full AssetEntry for return
     const ext = extname(filename).slice(1).toLowerCase();
     const entry: AssetEntry = {
       filename,
@@ -266,38 +276,126 @@ export class AssetOperations {
       width: metadata?.width,
       height: metadata?.height,
       alt: metadata?.alt,
-      uploadedAt: new Date().toISOString(),
+      uploadedAt: manifestEntry.uploadedAt!,
       uploadedBy: metadata?.uploadedBy,
       folder,
     };
 
-    await this.manifest.add(entry);
     return { success: true, asset: entry };
   }
 
+  /**
+   * List all assets recursively from filesystem
+   */
   async list(): Promise<AssetEntry[]> {
-    const data = await this.manifest.read();
-    return data.assets;
+    // Load manifest once for enrichment
+    const manifestData = await this.manifest.read();
+    const assets: AssetEntry[] = [];
+
+    // Recursive scanning helper
+    const scanFolder = async (folderPath: string, folder: string): Promise<void> => {
+      let entries: Dirent[];
+      try {
+        entries = await readdir(folderPath, { withFileTypes: true });
+      } catch {
+        return;
+      }
+
+      for (const entry of entries) {
+        // Skip hidden files, system files, and symlinks
+        if (isSystemFile(entry.name) || entry.isSymbolicLink()) {
+          continue;
+        }
+
+        const entryPath = join(folderPath, entry.name);
+
+        if (entry.isDirectory()) {
+          // Recurse into subdirectories
+          const subFolder = folder === '/' ? `/${entry.name}` : `${folder}/${entry.name}`;
+          await scanFolder(entryPath, subFolder);
+        } else if (entry.isFile() && isRecognizedImageExtension(entry.name)) {
+          // Build asset entry from filesystem + manifest
+          const assetEntry = await this.buildAssetEntry(entry, folder, manifestData);
+          assets.push(assetEntry);
+        }
+      }
+    };
+
+    await scanFolder(this.config.assetsPath, '/');
+    return assets;
   }
 
-  async getAsset(filename: string): Promise<AssetEntry | undefined> {
-    return this.manifest.get(filename);
-  }
+  /**
+   * Get asset by filename and optional folder
+   */
+  async getAsset(filename: string, folder = '/'): Promise<AssetEntry | undefined> {
+    // Compute relative path and full file path
+    const relativePath = folder === '/' ? filename : `${folder.slice(1)}/${filename}`;
+    const fullPath = this.getAssetPath(filename, folder);
 
-  async delete(filename: string): Promise<{ success: true } | { success: false; error: string }> {
-    const entry = await this.manifest.get(filename);
-    if (!entry) {
-      return { success: false, error: 'Asset not found' };
+    // Check if file exists on disk
+    let stats: Stats;
+    try {
+      stats = await stat(fullPath);
+    } catch {
+      // File doesn't exist
+      return undefined;
     }
 
-    const filePath = join(this.config.assetsPath, filename);
+    if (!stats.isFile()) {
+      return undefined;
+    }
+
+    // Load manifest for enrichment
+    const manifestData = await this.manifest.read();
+    const manifestEntry = manifestData[relativePath];
+
+    // Get dimensions
+    const { width, height, fromCache } = await this.getDimensions(fullPath, manifestEntry);
+
+    // Progressive caching
+    if (!fromCache && width && height) {
+      this.manifest.add(relativePath, { ...manifestEntry, width, height }).catch(() => {});
+    }
+
+    // Derive mimeType from extension
+    const ext = extname(filename).slice(1).toLowerCase();
+    const mimeType = MIME_MAP[ext] || `image/${ext}`;
+
+    return {
+      filename,
+      originalName: manifestEntry?.originalName || filename,
+      mimeType,
+      size: stats.size,
+      width,
+      height,
+      alt: manifestEntry?.alt,
+      uploadedAt: manifestEntry?.uploadedAt || stats.birthtime.toISOString(),
+      uploadedBy: manifestEntry?.uploadedBy,
+      folder,
+      tags: manifestEntry?.tags,
+    };
+  }
+
+  /**
+   * Delete asset file and manifest entry
+   */
+  async delete(filename: string, folder = '/'): Promise<{ success: true } | { success: false; error: string }> {
+    // Compute relative path for manifest
+    const relativePath = folder === '/' ? filename : `${folder.slice(1)}/${filename}`;
+
+    // Build full file path
+    const filePath = this.getAssetPath(filename, folder);
+
+    // Delete file from disk (ignore if already gone)
     try {
       await unlink(filePath);
     } catch {
       // File may already be gone, continue with manifest cleanup
     }
 
-    await this.manifest.remove(filename);
+    // Remove manifest entry
+    await this.manifest.remove(relativePath);
     return { success: true };
   }
 
@@ -325,13 +423,13 @@ export class AssetOperations {
 
     // Build a File-like object from the response
     const arrayBuffer = await response.arrayBuffer();
-    const file = new File([arrayBuffer], urlFilename, { type: contentType });
+    const file = new File([new Uint8Array(arrayBuffer)], urlFilename, { type: contentType });
 
     return this.upload(file, metadata);
   }
 
   /**
-   * List assets and subfolders within a folder
+   * List assets and subfolders within a folder (filesystem-first)
    * @param subpath Folder path relative to assets root (default '/')
    */
   async listFolder(subpath = '/'): Promise<FolderListing> {
@@ -347,7 +445,7 @@ export class AssetOperations {
     }
 
     // Read directory entries
-    let entries: Awaited<ReturnType<typeof readdir<{ withFileTypes: true }>>> = [];
+    let entries: Dirent[];
     try {
       entries = await readdir(fullPath, { withFileTypes: true });
     } catch {
@@ -355,21 +453,26 @@ export class AssetOperations {
       return { assets: [], folders: [] };
     }
 
-    // Get subfolders (exclude dotfiles/dotfolders)
+    // Get subfolders (exclude hidden, symlinks)
     const folders = entries
-      .filter((e) => e.isDirectory() && !e.name.startsWith('.'))
+      .filter((e) => e.isDirectory() && !e.name.startsWith('.') && !e.isSymbolicLink())
       .map((e) => ({
         name: e.name,
         path: normalizedSubpath === '/' ? `/${e.name}` : `${normalizedSubpath}/${e.name}`,
       }));
 
-    // Get assets from manifest filtered by folder
+    // Get image files (exclude hidden, system files, symlinks, non-images)
+    const imageFiles = entries.filter(
+      (e) => e.isFile() && !isSystemFile(e.name) && !e.isSymbolicLink() && isRecognizedImageExtension(e.name),
+    );
+
+    // Load manifest for enrichment
     const manifestData = await this.manifest.read();
-    const assets = manifestData.assets.filter((a) => {
-      // Assets without folder field are treated as root '/'
-      const assetFolder = a.folder || '/';
-      return assetFolder === normalizedSubpath;
-    });
+
+    // Build asset entries from filesystem
+    const assets = await Promise.all(
+      imageFiles.map((dirent) => this.buildAssetEntry(dirent, normalizedSubpath, manifestData)),
+    );
 
     return { assets, folders };
   }
@@ -406,31 +509,41 @@ export class AssetOperations {
    * Update asset metadata (alt text, tags)
    * @param filename Asset filename
    * @param updates Metadata updates (alt, tags)
+   * @param folder Optional folder path (default '/')
    */
   async updateMetadata(
     filename: string,
-    updates: { alt?: string; tags?: string[] },
+    updates: Partial<ManifestEntryData>,
+    folder = '/',
   ): Promise<{ success: true; asset: AssetEntry } | { success: false; error: string }> {
-    const data = await this.manifest.read();
-    const index = data.assets.findIndex((a) => a.filename === filename);
+    // Compute relative path
+    const relativePath = folder === '/' ? filename : `${folder.slice(1)}/${filename}`;
 
-    if (index === -1) {
+    // Check if file exists on disk
+    const fullPath = this.getAssetPath(filename, folder);
+    try {
+      await stat(fullPath);
+    } catch {
       return { success: false, error: 'Asset not found' };
     }
 
+    // Get existing manifest entry
+    const manifestData = await this.manifest.read();
+    const existing = manifestData[relativePath] || {};
+
     // Merge updates
-    const entry = data.assets[index];
-    if (updates.alt !== undefined) {
-      entry.alt = updates.alt;
-    }
-    if (updates.tags !== undefined) {
-      entry.tags = updates.tags;
+    const merged: ManifestEntryData = { ...existing, ...updates };
+
+    // Write back to manifest
+    await this.manifest.add(relativePath, merged);
+
+    // Return updated asset entry
+    const asset = await this.getAsset(filename, folder);
+    if (!asset) {
+      return { success: false, error: 'Failed to retrieve updated asset' };
     }
 
-    // Write manifest
-    await this.manifest.write(data);
-
-    return { success: true, asset: entry };
+    return { success: true, asset };
   }
 
   /**
@@ -450,7 +563,7 @@ export class AssetOperations {
     // Recursively walk the content directory to find all .vxjson files
     const walkDir = async (dir: string): Promise<string[]> => {
       const files: string[] = [];
-      let entries: Awaited<ReturnType<typeof readdir<{ withFileTypes: true }>>> = [];
+      let entries: Dirent[];
       try {
         entries = await readdir(dir, { withFileTypes: true });
       } catch {
@@ -515,24 +628,26 @@ export class AssetOperations {
   }
 
   /**
-   * Read asset file contents for serving
+   * Read asset file contents for serving (filesystem-first)
    * @param filename Asset filename
+   * @param folder Optional folder path (default '/')
    */
   async readAssetFile(
     filename: string,
+    folder = '/',
   ): Promise<{ success: true; buffer: Buffer; mimeType: string } | { success: false; error: string }> {
-    const entry = await this.manifest.get(filename);
-    if (!entry) {
-      return { success: false, error: 'Asset not found' };
-    }
+    // Build path from folder + filename
+    const filePath = this.getAssetPath(filename, folder);
 
-    const filePath = this.getAssetPath(filename, entry.folder);
+    // Derive mimeType from extension (don't require manifest entry)
+    const ext = extname(filename).slice(1).toLowerCase();
+    const mimeType = MIME_MAP[ext] || `image/${ext}`;
 
     try {
       const buffer = await readFile(filePath);
-      return { success: true, buffer, mimeType: entry.mimeType };
+      return { success: true, buffer, mimeType };
     } catch {
-      return { success: false, error: 'Failed to read file' };
+      return { success: false, error: 'Asset not found' };
     }
   }
 
