@@ -13,6 +13,7 @@
     "fast-glob": "^3.3.2",
     "gray-matter": "^4.0.3",
     "hono": "^4.10.4",
+    "image-size": "^2.0.2",
     "jose": "^6.0.10",
     "nanoid": "^5.1.6",
     "sort-keys": "^6.0.0",

@@ -17,8 +17,20 @@ export interface AssetEntry {
   tags?: string[];
 }
 
+/** Metadata stored per-file in the manifest (keyed by relative path) */
+export interface ManifestEntryData {
+  alt?: string;
+  tags?: string[];
+  width?: number; // Cached dimensions
+  height?: number;
+  uploadedAt?: string; // If uploaded via CMS
+  uploadedBy?: string;
+  originalName?: string; // Original filename before sanitization
+}
+
+/** Object-keyed manifest structure for O(1) lookup by relative path */
 export interface AssetManifestData {
-  assets: AssetEntry[];
+  [relativePath: string]: ManifestEntryData;
 }
 
 const MANIFEST_FILENAME = '.asset-manifest.json';
@@ -35,7 +47,7 @@ export class AssetManifest {
       const raw = await readFile(this.manifestPath, 'utf-8');
       return JSON.parse(raw) as AssetManifestData;
     } catch {
-      return { assets: [] };
+      return {};
     }
   }
 
@@ -43,23 +55,36 @@ export class AssetManifest {
     await writeFile(this.manifestPath, JSON.stringify(data, null, 2), 'utf-8');
   }
 
-  async add(entry: AssetEntry): Promise<void> {
-    const data = await this.read();
-    data.assets.push(entry);
-    await this.write(data);
+  async add(relativePath: string, data: ManifestEntryData): Promise<void> {
+    const manifest = await this.read();
+    manifest[relativePath] = data;
+    await this.write(manifest);
   }
 
-  async remove(filename: string): Promise<boolean> {
-    const data = await this.read();
-    const index = data.assets.findIndex((a) => a.filename === filename);
-    if (index === -1) return false;
-    data.assets.splice(index, 1);
-    await this.write(data);
+  async remove(relativePath: string): Promise<boolean> {
+    const manifest = await this.read();
+    if (!(relativePath in manifest)) return false;
+    delete manifest[relativePath];
+    await this.write(manifest);
     return true;
   }
 
-  async get(filename: string): Promise<AssetEntry | undefined> {
-    const data = await this.read();
-    return data.assets.find((a) => a.filename === filename);
+  async get(relativePath: string): Promise<ManifestEntryData | undefined> {
+    const manifest = await this.read();
+    return manifest[relativePath];
+  }
+
+  /**
+   * Backward compat helper: search manifest keys for entry ending with /filename or equal to filename
+   * Useful during transition when only filename is known (not full relative path)
+   */
+  async getByFilename(filename: string): Promise<{ relativePath: string; data: ManifestEntryData } | undefined> {
+    const manifest = await this.read();
+    for (const [key, value] of Object.entries(manifest)) {
+      if (key === filename || key.endsWith(`/${filename}`)) {
+        return { relativePath: key, data: value };
+      }
+    }
+    return undefined;
   }
 }
