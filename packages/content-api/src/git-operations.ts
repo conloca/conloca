@@ -200,9 +200,14 @@ interface CollectedFile {
 const BINARY_ASSET_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp', '.avif', '.ico']);
 
 /**
- * Recursively collect all content files (.vxjson, .mdx) and optionally binary asset files from directories.
+ * Recursively collect all content files (.vxjson, .mdx, and .json in data/) and optionally binary asset files.
  */
-async function collectContentFiles(dirPath: string, basePath?: string, assetsPath?: string): Promise<CollectedFile[]> {
+async function collectContentFiles(
+  dirPath: string,
+  basePath?: string,
+  assetsPath?: string,
+  inDataDir = false,
+): Promise<CollectedFile[]> {
   const base = basePath ?? dirPath;
   const files: CollectedFile[] = [];
 
@@ -213,12 +218,21 @@ async function collectContentFiles(dirPath: string, basePath?: string, assetsPat
       const fullPath = join(dirPath, entry.name);
 
       if (entry.isDirectory()) {
-        const subFiles = await collectContentFiles(fullPath, base);
+        // Check if we're entering the data/ directory
+        const isDataDir = dirPath === base && entry.name === 'data';
+        const subFiles = await collectContentFiles(fullPath, base, undefined, inDataDir || isDataDir);
         files.push(...subFiles);
-      } else if (entry.isFile() && (entry.name.endsWith('.vxjson') || entry.name.endsWith('.mdx'))) {
-        const content = await readFile(fullPath, 'utf-8');
-        const relativePath = relative(join(base, '..'), fullPath);
-        files.push({ path: relativePath, content, encoding: 'utf-8' });
+      } else if (entry.isFile()) {
+        // Include .vxjson and .mdx files everywhere
+        // Include .json files only in the data/ directory
+        const isContentFile =
+          entry.name.endsWith('.vxjson') || entry.name.endsWith('.mdx') || (inDataDir && entry.name.endsWith('.json'));
+
+        if (isContentFile) {
+          const content = await readFile(fullPath, 'utf-8');
+          const relativePath = relative(join(base, '..'), fullPath);
+          files.push({ path: relativePath, content, encoding: 'utf-8' });
+        }
       }
     }
   } catch {
