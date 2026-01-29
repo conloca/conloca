@@ -70,7 +70,7 @@ export function MoveFolderDialog({
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
   const { data, isLoading } = useFolderTree();
 
-  // Unwrap root node - we display "All Assets" separately, so show root's children directly
+  // Unwrap root node - we display "Root" separately, so show root's children directly
   const rawTree = data?.tree ?? [];
   const tree = rawTree.length === 1 && rawTree[0].path === '/' ? rawTree[0].children : rawTree;
 
@@ -133,7 +133,7 @@ export function MoveFolderDialog({
                 )}
               >
                 <Folder className="w-4 h-4 flex-shrink-0" />
-                <span className="truncate flex-1">All Assets</span>
+                <span className="truncate flex-1">Root</span>
                 {currentFolder === '/' && <span className="text-xs text-grey-05">(current)</span>}
               </button>
 

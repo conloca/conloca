@@ -59,7 +59,7 @@ export function FolderTreeSidebar({ currentFolder, onFolderSelect, dropTargetFol
   const { data, isLoading } = useFolderTree();
   const createFolder = useCreateFolder();
 
-  // Unwrap root node - we display "All Assets" separately, so show root's children directly
+  // Unwrap root node - we display "Root" separately, so show root's children directly
   const rawTree = data?.tree ?? [];
   const tree = rawTree.length === 1 && rawTree[0].path === '/' ? rawTree[0].children : rawTree;
 
@@ -111,7 +111,7 @@ export function FolderTreeSidebar({ currentFolder, onFolderSelect, dropTargetFol
               })}
             >
               <Folder className="w-4 h-4 flex-shrink-0" />
-              <span className="truncate flex-1">All Assets</span>
+              <span className="truncate flex-1">Root</span>
               <span className="text-grey-05 text-xs">({rootAssetCount})</span>
             </button>
 
