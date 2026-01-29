@@ -245,7 +245,7 @@ async function handleDataContext(request: Request): Promise<Response> {
     const collections: Record<string, DataCollectionEntry[]> = {};
     let pages: PageReference[] | undefined;
 
-    if (hasCollections) {
+    if (hasCollections && routeConfig.dataBindings?.collections) {
       for (const collectionName of routeConfig.dataBindings.collections) {
         try {
           const bindingLocale = routeConfig.dataBindings.locale ?? locale;
@@ -256,7 +256,7 @@ async function handleDataContext(request: Request): Promise<Response> {
       }
     }
 
-    if (hasPages) {
+    if (hasPages && routeConfig.dataBindings?.pages) {
       try {
         const pagesConfig = routeConfig.dataBindings.pages;
         pages = await getPagesByPrefix(pagesConfig.prefix, {

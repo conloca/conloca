@@ -11,9 +11,14 @@
     "forceConsistentCasingInFileNames": true,
     "jsx": "react-jsx",
     "types": ["node"],
-    "lib": ["ES2020", "DOM", "DOM.Iterable"]
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "paths": {
+      "virtual:conloca-page-api": ["./src/virtual-modules.d.ts"],
+      "virtual:conloca-routing-config": ["./src/virtual-modules.d.ts"],
+      "virtual:conloca-config": ["./src/env.d.ts"]
+    }
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.d.ts"],
   "exclude": ["src/**/*.test.ts", "src/__tests__/**/*"],
   "references": [
     {
