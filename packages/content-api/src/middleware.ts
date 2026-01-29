@@ -452,6 +452,243 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
     }
   });
 
+  // ===== Asset Routes =====
+  // Must be registered BEFORE /:site routes to avoid route conflicts (/:site would match "assets")
+
+  if (options?.assetsPath) {
+    const assetOps = new AssetOperations({
+      assetsPath: options.assetsPath,
+      contentRoot: options.contentRoot,
+      ...options.assetConfig,
+    });
+
+    // POST /assets/move — move assets between folders
+    app.post('/assets/move', async (c) => {
+      try {
+        const { filenames, sourceFolder, targetFolder } = await c.req.json<{
+          filenames: string[];
+          sourceFolder: string;
+          targetFolder: string;
+        }>();
+
+        if (!Array.isArray(filenames)) {
+          return c.json(errorResponse(ErrorCodes.INVALID_REQUEST, 'filenames must be an array'), 400);
+        }
+        if (typeof sourceFolder !== 'string') {
+          return c.json(errorResponse(ErrorCodes.INVALID_REQUEST, 'sourceFolder is required'), 400);
+        }
+        if (typeof targetFolder !== 'string') {
+          return c.json(errorResponse(ErrorCodes.INVALID_REQUEST, 'targetFolder is required'), 400);
+        }
+
+        const result = await assetOps.moveAssets(filenames, sourceFolder, targetFolder);
+
+        if (!result.success) {
+          return c.json(errorResponse(ErrorCodes.INVALID_REQUEST, result.error), 400);
+        }
+
+        return c.json(result);
+      } catch (error) {
+        if (error instanceof Error && error.message === 'Path traversal detected') {
+          return c.json(errorResponse(ErrorCodes.INVALID_REQUEST, 'Invalid folder path'), 400);
+        }
+        return c.json(logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to move assets'), 500);
+      }
+    });
+
+    // POST /assets/upload — multipart form data upload
+    app.post('/assets/upload', async (c) => {
+      try {
+        const body = await c.req.parseBody();
+        const file = body.file;
+        if (!(file instanceof File)) {
+          return c.json(errorResponse(ErrorCodes.INVALID_REQUEST, 'No file provided in "file" field'), 400);
+        }
+
+        const alt = typeof body.alt === 'string' ? body.alt : undefined;
+        const uploadedBy = typeof body.uploadedBy === 'string' ? body.uploadedBy : undefined;
+        const width = typeof body.width === 'string' ? Number.parseInt(body.width, 10) : undefined;
+        const height = typeof body.height === 'string' ? Number.parseInt(body.height, 10) : undefined;
+        const folder = typeof body.folder === 'string' ? body.folder : undefined;
+
+        const result = await assetOps.upload(file, { alt, uploadedBy, width, height, folder });
+
+        if (!result.success) {
+          return c.json(errorResponse(ErrorCodes.ASSET_UPLOAD_FAILED, result.error), 400);
+        }
+
+        return c.json(result.asset, 201);
+      } catch (error) {
+        return c.json(logAndCreateErrorResponse(error, ErrorCodes.ASSET_UPLOAD_FAILED, 'Upload failed'), 500);
+      }
+    });
+
+    // POST /assets/import-url — import image from URL
+    app.post('/assets/import-url', async (c) => {
+      try {
+        const { url, alt, uploadedBy, folder } = await c.req.json<{
+          url: string;
+          alt?: string;
+          uploadedBy?: string;
+          folder?: string;
+        }>();
+
+        if (!url) {
+          return c.json(errorResponse(ErrorCodes.INVALID_REQUEST, 'url is required'), 400);
+        }
+
+        const result = await assetOps.importFromUrl(url, { alt, uploadedBy, folder });
+
+        if (!result.success) {
+          return c.json(errorResponse(ErrorCodes.ASSET_UPLOAD_FAILED, result.error), 400);
+        }
+
+        return c.json(result.asset, 201);
+      } catch (error) {
+        return c.json(logAndCreateErrorResponse(error, ErrorCodes.ASSET_UPLOAD_FAILED, 'URL import failed'), 500);
+      }
+    });
+
+    // GET /assets — list all assets
+    app.get('/assets', async (c) => {
+      try {
+        const assets = await assetOps.list();
+        return c.json({ assets });
+      } catch (error) {
+        return c.json(logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to list assets'), 500);
+      }
+    });
+
+    // GET /assets/folders — list assets and subfolders within a folder
+    app.get('/assets/folders', async (c) => {
+      try {
+        const path = c.req.query('path') || '/';
+        const result = await assetOps.listFolder(path);
+        return c.json(result);
+      } catch (error) {
+        if (error instanceof Error && error.message === 'Path traversal detected') {
+          return c.json(errorResponse(ErrorCodes.INVALID_REQUEST, 'Invalid folder path'), 400);
+        }
+        return c.json(logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to list folder'), 500);
+      }
+    });
+
+    // POST /assets/folders — create a folder
+    app.post('/assets/folders', async (c) => {
+      try {
+        const { path } = await c.req.json<{ path: string }>();
+
+        if (!path) {
+          return c.json(errorResponse(ErrorCodes.INVALID_REQUEST, 'path is required'), 400);
+        }
+
+        const result = await assetOps.createFolder(path);
+
+        if (!result.success) {
+          return c.json(errorResponse(ErrorCodes.INVALID_REQUEST, result.error), 400);
+        }
+
+        return c.json({ success: true }, 201);
+      } catch (error) {
+        return c.json(logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to create folder'), 500);
+      }
+    });
+
+    // GET /assets/folder-tree — get complete folder hierarchy with asset counts
+    app.get('/assets/folder-tree', async (c) => {
+      try {
+        const tree = await assetOps.getFolderTree();
+        return c.json({ tree });
+      } catch (error) {
+        return c.json(logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to get folder tree'), 500);
+      }
+    });
+
+    // GET /assets/:filename/usage — get asset usage information
+    app.get('/assets/:filename/usage', async (c) => {
+      try {
+        const filename = c.req.param('filename');
+        const usage = await assetOps.getUsage(filename);
+        return c.json({ usage });
+      } catch (error) {
+        return c.json(logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to get asset usage'), 500);
+      }
+    });
+
+    // GET /assets/serve/:filename — serve actual asset file
+    app.get('/assets/serve/:filename', async (c) => {
+      try {
+        const filename = c.req.param('filename');
+        const result = await assetOps.readAssetFile(filename);
+
+        if (!result.success) {
+          return c.json(errorResponse(ErrorCodes.ASSET_NOT_FOUND, result.error), 404);
+        }
+
+        // Set caching headers (1 year for immutable hashed filenames)
+        c.header('Content-Type', result.mimeType);
+        c.header('Cache-Control', 'public, max-age=31536000, immutable');
+
+        return c.body(result.buffer);
+      } catch (error) {
+        return c.json(logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to serve asset'), 500);
+      }
+    });
+
+    // GET /assets/:filename — get single asset metadata
+    app.get('/assets/:filename', async (c) => {
+      try {
+        const filename = c.req.param('filename');
+        const asset = await assetOps.getAsset(filename);
+
+        if (!asset) {
+          return c.json(errorResponse(ErrorCodes.ASSET_NOT_FOUND, 'Asset not found'), 404);
+        }
+
+        return c.json(asset);
+      } catch (error) {
+        return c.json(logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to get asset'), 500);
+      }
+    });
+
+    // PATCH /assets/:filename — update asset metadata
+    app.patch('/assets/:filename', async (c) => {
+      try {
+        const filename = c.req.param('filename');
+        const { alt, tags } = await c.req.json<{ alt?: string; tags?: string[] }>();
+
+        const result = await assetOps.updateMetadata(filename, { alt, tags });
+
+        if (!result.success) {
+          return c.json(errorResponse(ErrorCodes.ASSET_NOT_FOUND, result.error), 404);
+        }
+
+        return c.json(result.asset);
+      } catch (error) {
+        return c.json(logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to update asset'), 500);
+      }
+    });
+
+    // DELETE /assets/:filename — delete asset
+    app.delete('/assets/:filename', async (c) => {
+      try {
+        const filename = c.req.param('filename');
+        const result = await assetOps.delete(filename);
+
+        if (!result.success) {
+          return c.json(errorResponse(ErrorCodes.ASSET_NOT_FOUND, result.error), 404);
+        }
+
+        return c.json({ success: true });
+      } catch (error) {
+        return c.json(logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to delete asset'), 500);
+      }
+    });
+  }
+
+  // ===== Site Routes =====
+  // These use /:site parameter which matches any path segment
+
   // GET /:site/collections - Get collections for a site
   app.get('/:site/collections', async (c) => {
     const site = c.req.param('site');
@@ -903,240 +1140,6 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
       return c.json(logAndCreateErrorResponse(error, ErrorCodes.GIT_PUSH_FAILED, 'Failed to push to origin'), 500);
     }
   });
-
-  // ===== Asset Routes =====
-  // Only mounted when assetsPath is configured
-
-  if (options?.assetsPath) {
-    const assetOps = new AssetOperations({
-      assetsPath: options.assetsPath,
-      contentRoot: options.contentRoot,
-      ...options.assetConfig,
-    });
-
-    // POST /assets/upload — multipart form data upload
-    app.post('/assets/upload', async (c) => {
-      try {
-        const body = await c.req.parseBody();
-        const file = body.file;
-        if (!(file instanceof File)) {
-          return c.json(errorResponse(ErrorCodes.INVALID_REQUEST, 'No file provided in "file" field'), 400);
-        }
-
-        const alt = typeof body.alt === 'string' ? body.alt : undefined;
-        const uploadedBy = typeof body.uploadedBy === 'string' ? body.uploadedBy : undefined;
-        const width = typeof body.width === 'string' ? Number.parseInt(body.width, 10) : undefined;
-        const height = typeof body.height === 'string' ? Number.parseInt(body.height, 10) : undefined;
-        const folder = typeof body.folder === 'string' ? body.folder : undefined;
-
-        const result = await assetOps.upload(file, { alt, uploadedBy, width, height, folder });
-
-        if (!result.success) {
-          return c.json(errorResponse(ErrorCodes.ASSET_UPLOAD_FAILED, result.error), 400);
-        }
-
-        return c.json(result.asset, 201);
-      } catch (error) {
-        return c.json(logAndCreateErrorResponse(error, ErrorCodes.ASSET_UPLOAD_FAILED, 'Upload failed'), 500);
-      }
-    });
-
-    // POST /assets/import-url — import image from URL
-    app.post('/assets/import-url', async (c) => {
-      try {
-        const { url, alt, uploadedBy, folder } = await c.req.json<{
-          url: string;
-          alt?: string;
-          uploadedBy?: string;
-          folder?: string;
-        }>();
-
-        if (!url) {
-          return c.json(errorResponse(ErrorCodes.INVALID_REQUEST, 'url is required'), 400);
-        }
-
-        const result = await assetOps.importFromUrl(url, { alt, uploadedBy, folder });
-
-        if (!result.success) {
-          return c.json(errorResponse(ErrorCodes.ASSET_UPLOAD_FAILED, result.error), 400);
-        }
-
-        return c.json(result.asset, 201);
-      } catch (error) {
-        return c.json(logAndCreateErrorResponse(error, ErrorCodes.ASSET_UPLOAD_FAILED, 'URL import failed'), 500);
-      }
-    });
-
-    // GET /assets — list all assets
-    app.get('/assets', async (c) => {
-      try {
-        const assets = await assetOps.list();
-        return c.json({ assets });
-      } catch (error) {
-        return c.json(logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to list assets'), 500);
-      }
-    });
-
-    // GET /assets/folders — list assets and subfolders within a folder
-    app.get('/assets/folders', async (c) => {
-      try {
-        const path = c.req.query('path') || '/';
-        const result = await assetOps.listFolder(path);
-        return c.json(result);
-      } catch (error) {
-        if (error instanceof Error && error.message === 'Path traversal detected') {
-          return c.json(errorResponse(ErrorCodes.INVALID_REQUEST, 'Invalid folder path'), 400);
-        }
-        return c.json(logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to list folder'), 500);
-      }
-    });
-
-    // POST /assets/folders — create a folder
-    app.post('/assets/folders', async (c) => {
-      try {
-        const { path } = await c.req.json<{ path: string }>();
-
-        if (!path) {
-          return c.json(errorResponse(ErrorCodes.INVALID_REQUEST, 'path is required'), 400);
-        }
-
-        const result = await assetOps.createFolder(path);
-
-        if (!result.success) {
-          return c.json(errorResponse(ErrorCodes.INVALID_REQUEST, result.error), 400);
-        }
-
-        return c.json({ success: true }, 201);
-      } catch (error) {
-        return c.json(logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to create folder'), 500);
-      }
-    });
-
-    // POST /assets/move — move assets between folders
-    app.post('/assets/move', async (c) => {
-      try {
-        const { filenames, sourceFolder, targetFolder } = await c.req.json<{
-          filenames: string[];
-          sourceFolder: string;
-          targetFolder: string;
-        }>();
-
-        if (!Array.isArray(filenames)) {
-          return c.json(errorResponse(ErrorCodes.INVALID_REQUEST, 'filenames must be an array'), 400);
-        }
-        if (typeof sourceFolder !== 'string') {
-          return c.json(errorResponse(ErrorCodes.INVALID_REQUEST, 'sourceFolder is required'), 400);
-        }
-        if (typeof targetFolder !== 'string') {
-          return c.json(errorResponse(ErrorCodes.INVALID_REQUEST, 'targetFolder is required'), 400);
-        }
-
-        const result = await assetOps.moveAssets(filenames, sourceFolder, targetFolder);
-
-        if (!result.success) {
-          return c.json(errorResponse(ErrorCodes.INVALID_REQUEST, result.error), 400);
-        }
-
-        return c.json(result);
-      } catch (error) {
-        if (error instanceof Error && error.message === 'Path traversal detected') {
-          return c.json(errorResponse(ErrorCodes.INVALID_REQUEST, 'Invalid folder path'), 400);
-        }
-        return c.json(logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to move assets'), 500);
-      }
-    });
-
-    // GET /assets/folder-tree — get complete folder hierarchy with asset counts
-    app.get('/assets/folder-tree', async (c) => {
-      try {
-        const tree = await assetOps.getFolderTree();
-        return c.json({ tree });
-      } catch (error) {
-        return c.json(logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to get folder tree'), 500);
-      }
-    });
-
-    // GET /assets/:filename/usage — get asset usage information
-    app.get('/assets/:filename/usage', async (c) => {
-      try {
-        const filename = c.req.param('filename');
-        const usage = await assetOps.getUsage(filename);
-        return c.json({ usage });
-      } catch (error) {
-        return c.json(logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to get asset usage'), 500);
-      }
-    });
-
-    // GET /assets/serve/:filename — serve actual asset file
-    app.get('/assets/serve/:filename', async (c) => {
-      try {
-        const filename = c.req.param('filename');
-        const result = await assetOps.readAssetFile(filename);
-
-        if (!result.success) {
-          return c.json(errorResponse(ErrorCodes.ASSET_NOT_FOUND, result.error), 404);
-        }
-
-        // Set caching headers (1 year for immutable hashed filenames)
-        c.header('Content-Type', result.mimeType);
-        c.header('Cache-Control', 'public, max-age=31536000, immutable');
-
-        return c.body(result.buffer);
-      } catch (error) {
-        return c.json(logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to serve asset'), 500);
-      }
-    });
-
-    // GET /assets/:filename — get single asset metadata
-    app.get('/assets/:filename', async (c) => {
-      try {
-        const filename = c.req.param('filename');
-        const asset = await assetOps.getAsset(filename);
-
-        if (!asset) {
-          return c.json(errorResponse(ErrorCodes.ASSET_NOT_FOUND, 'Asset not found'), 404);
-        }
-
-        return c.json(asset);
-      } catch (error) {
-        return c.json(logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to get asset'), 500);
-      }
-    });
-
-    // PATCH /assets/:filename — update asset metadata
-    app.patch('/assets/:filename', async (c) => {
-      try {
-        const filename = c.req.param('filename');
-        const { alt, tags } = await c.req.json<{ alt?: string; tags?: string[] }>();
-
-        const result = await assetOps.updateMetadata(filename, { alt, tags });
-
-        if (!result.success) {
-          return c.json(errorResponse(ErrorCodes.ASSET_NOT_FOUND, result.error), 404);
-        }
-
-        return c.json(result.asset);
-      } catch (error) {
-        return c.json(logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to update asset'), 500);
-      }
-    });
-
-    // DELETE /assets/:filename — delete asset
-    app.delete('/assets/:filename', async (c) => {
-      try {
-        const filename = c.req.param('filename');
-        const result = await assetOps.delete(filename);
-
-        if (!result.success) {
-          return c.json(errorResponse(ErrorCodes.ASSET_NOT_FOUND, result.error), 404);
-        }
-
-        return c.json({ success: true });
-      } catch (error) {
-        return c.json(logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to delete asset'), 500);
-      }
-    });
-  }
 
   return app;
 }
