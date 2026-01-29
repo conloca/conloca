@@ -13,10 +13,7 @@ export function CMSDashboard() {
   const dataCount = dataEntries?.items?.length ?? 0;
 
   const rawTree = folderTree?.tree ?? [];
-  const mediaCount =
-    rawTree.length === 1 && rawTree[0].path === '/'
-      ? rawTree[0].assetCount
-      : rawTree.reduce((sum, node) => sum + node.assetCount, 0);
+  const mediaCount = rawTree.reduce((sum, node) => sum + node.assetCount, 0);
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -27,7 +24,7 @@ export function CMSDashboard() {
       </div>
 
       {/* Section Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <SectionCard
           to="/pages"
           icon={<FileText className="h-6 w-6 text-gray-600 group-hover:text-blue-500 transition-colors" />}
@@ -42,7 +39,7 @@ export function CMSDashboard() {
           to="/media"
           icon={<Image className="h-6 w-6 text-gray-600 group-hover:text-blue-500 transition-colors" />}
           title="Media"
-          description="Upload and manage images and assets for your website."
+          description="Images, documents, and other files for your site."
           count={mediaCount}
           countLabel={mediaCount === 1 ? 'asset' : 'assets'}
           isLoading={mediaLoading}
