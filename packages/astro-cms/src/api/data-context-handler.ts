@@ -1,6 +1,6 @@
 import { contentOptions, getDataCollection, getPagesByPrefix } from 'virtual:conloca-page-api';
 import routingConfig from 'virtual:conloca-routing-config';
-import { createContentAPI } from '@conloca/content-api/node';
+import { createContentAPI, validateCFAccessRequest } from '@conloca/content-api/node';
 import type { APIRoute } from 'astro';
 import type { DataCollectionEntry, DataContext, PageReference, ResolvedRoutingConfig } from '../types.js';
 
@@ -16,6 +16,15 @@ import type { DataCollectionEntry, DataContext, PageReference, ResolvedRoutingCo
  * Returns { dataContext } for pages with data bindings, or {} for pages without.
  */
 export const GET: APIRoute = async ({ request }) => {
+  // Validate CF Access (matches content-api-handler.ts pattern)
+  const cfResult = await validateCFAccessRequest(request);
+  if (!cfResult.valid && cfResult.required) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
   try {
     const url = new URL(request.url);
     const pageId = url.searchParams.get('pageId');
