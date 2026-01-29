@@ -8,7 +8,6 @@ import { DataList } from './components/pages/DataList';
 import { MediaPage } from './components/pages/MediaPage';
 import { PageList } from './components/pages/PageList';
 import { useDataSchemas } from './data-schemas';
-import './main.css';
 import { usePuckConfig } from './puck-config';
 
 export default function App() {

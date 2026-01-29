@@ -79,19 +79,13 @@ body {
   margin: 0;
   padding: 0;
   height: 100%;
+  font-family: var(--puck-font-family);
 }
 
 #root {
   height: 100vh;
   display: flex;
   flex-direction: column;
-}
-
-html,
-body {
-  margin: 0;
-  padding: 0;
-  height: 100%;
 }
 
 #root {
