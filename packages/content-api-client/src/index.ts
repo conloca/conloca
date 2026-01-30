@@ -1,4 +1,5 @@
 export type {
+  AssetEntry,
   ContentData,
   ContentEntry,
   ContentIdentity,
