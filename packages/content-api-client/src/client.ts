@@ -1,5 +1,6 @@
 import type {
   APIError,
+  AssetEntry,
   BatchResult,
   ContentEntry,
   ContentListResult,
@@ -16,21 +17,6 @@ import type {
   UpdateResult,
 } from '@conloca/content-api';
 import { ErrorCodes } from '@conloca/content-api';
-
-// Asset types (mirrored from content-api/node for client-side use)
-export interface AssetEntry {
-  filename: string;
-  originalName: string;
-  mimeType: string;
-  size: number;
-  width?: number;
-  height?: number;
-  alt?: string;
-  tags?: string[];
-  folder?: string;
-  uploadedAt: string;
-  uploadedBy?: string;
-}
 
 // Folder listing response
 export interface FolderListing {
@@ -531,3 +517,6 @@ export class StaleWriteError extends APIClientError {
     return this.details?.currentEtag;
   }
 }
+
+// Re-export AssetEntry for consumers who import from content-api-client
+export type { AssetEntry } from '@conloca/content-api';
