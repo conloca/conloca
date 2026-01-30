@@ -1,6 +1,6 @@
-import cn from 'clsx';
 import { useCallback, useRef, useState } from 'react';
 import { buildUploadFormData, useImportAssetUrl, useUploadAsset } from '../../hooks';
+import { cn } from '../../utils/cn';
 
 const ACCEPTED_TYPES = 'image/jpeg,image/png,image/gif,image/webp,image/svg+xml,image/avif';
 

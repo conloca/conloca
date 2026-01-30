@@ -1,7 +1,7 @@
-import cn from 'clsx';
 import { Folder, X } from 'lucide-react';
 import { useState } from 'react';
 import { type FolderTreeNode, useFolderTree } from '../../hooks';
+import { cn } from '../../utils/cn';
 
 interface MoveFolderDialogProps {
   isOpen: boolean;

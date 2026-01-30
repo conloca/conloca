@@ -1,5 +1,5 @@
-import cn from 'clsx';
 import type { AssetEntry } from '../../hooks';
+import { cn } from '../../utils/cn';
 
 interface AssetCardProps {
   asset: AssetEntry;

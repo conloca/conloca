@@ -1,7 +1,7 @@
-import cn from 'clsx';
 import { Folder, FolderPlus } from 'lucide-react';
 import { useState } from 'react';
 import { type FolderTreeNode, useCreateFolder, useFolderTree } from '../../hooks';
+import { cn } from '../../utils/cn';
 import { CreateFolderDialog } from '../dialogs/CreateFolderDialog';
 
 interface FolderTreeSidebarProps {
