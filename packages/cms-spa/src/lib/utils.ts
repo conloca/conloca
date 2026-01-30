@@ -1,10 +1,4 @@
-import { type ClassValue, clsx } from 'clsx';
-import { twMerge } from 'tailwind-merge';
 import { getUIConfig } from '../ui-config';
-
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
 
 /**
  * Build a full URL from the site base URL and a path
