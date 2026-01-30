@@ -1,14 +1,9 @@
+import { formatFileSize } from '@conloca/content-api';
 import { FolderInput, Loader2, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import type { AssetEntry } from '../../hooks';
 import { useAssetUsage, useDeleteAsset, useMoveAssets, useUpdateAssetMetadata } from '../../hooks';
 import { MoveFolderDialog } from '../dialogs';
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 function formatDate(dateString: string): string {
   const date = new Date(dateString);
