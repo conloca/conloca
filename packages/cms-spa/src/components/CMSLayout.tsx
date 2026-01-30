@@ -1,6 +1,6 @@
 import { Database, FileText, ImageIcon, LayoutDashboard, Package } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { cn } from '../lib/utils';
+import { cn } from '../utils/cn';
 import { GitStatusPanel } from './GitStatusPanel';
 import { UserAvatar } from './UserAvatar';
 

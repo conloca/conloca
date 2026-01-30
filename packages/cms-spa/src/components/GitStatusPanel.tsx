@@ -1,25 +1,25 @@
-import { AlertCircle, Check, GitBranch, Loader2, Upload } from 'lucide-react'
-import { useCommitChanges, useGitStatus, usePushChanges } from '@conloca/content-api-client'
-import { cn } from '../lib/utils'
+import { useCommitChanges, useGitStatus, usePushChanges } from '@conloca/content-api-client';
+import { AlertCircle, Check, GitBranch, Loader2, Upload } from 'lucide-react';
+import { cn } from '../utils/cn';
 
 export function GitStatusPanel() {
-  const { data: status, isLoading, error } = useGitStatus()
-  const commitMutation = useCommitChanges()
-  const pushMutation = usePushChanges()
+  const { data: status, isLoading, error } = useGitStatus();
+  const commitMutation = useCommitChanges();
+  const pushMutation = usePushChanges();
 
   // Handle commit click
   const handleCommit = () => {
     if (status?.hasChanges) {
-      commitMutation.mutate(undefined)
+      commitMutation.mutate(undefined);
     }
-  }
+  };
 
   // Handle push click
   const handlePush = () => {
     if (status && status.ahead > 0) {
-      pushMutation.mutate()
+      pushMutation.mutate();
     }
-  }
+  };
 
   // Not a repo state
   if (status && !status.isRepo) {
@@ -28,7 +28,7 @@ export function GitStatusPanel() {
         <GitBranch className="h-4 w-4" />
         <span>Not a git repo</span>
       </div>
-    )
+    );
   }
 
   // Loading state
@@ -37,7 +37,7 @@ export function GitStatusPanel() {
       <div className="flex items-center gap-2 text-gray-400">
         <Loader2 className="h-4 w-4 animate-spin" />
       </div>
-    )
+    );
   }
 
   // Error state
@@ -47,7 +47,7 @@ export function GitStatusPanel() {
         <AlertCircle className="h-4 w-4" />
         <span>Git error</span>
       </div>
-    )
+    );
   }
 
   return (
@@ -108,5 +108,5 @@ export function GitStatusPanel() {
       {commitMutation.isError ? <span className="text-red-500 text-sm">Commit failed</span> : null}
       {pushMutation.isError ? <span className="text-red-500 text-sm">Push failed</span> : null}
     </div>
-  )
+  );
 }
