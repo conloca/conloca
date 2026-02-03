@@ -25,6 +25,8 @@ in {
     git-format-staged
     jq # Used in pre-commit hook and generally useful
     alejandra # Nix formatter
+    # C++ standard library for native Node.js modules (@parcel/watcher, etc.)
+    stdenv.cc.cc.lib
   ];
 
   # https://devenv.sh/languages/
@@ -46,6 +48,8 @@ in {
   enterShell = ''
     cd "$DEVENV_ROOT/../.."
     export PATH="$PWD/tooling:$PWD/node_modules/.bin:$PATH"
+    # Add libstdc++ for native Node.js modules (@parcel/watcher, etc.)
+    export LD_LIBRARY_PATH="${pkgs.stdenv.cc.cc.lib}/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
     bun ${./setup-environment.ts}
 
     if [ -n "$DEVENV_SHELL_PWD" ]; then
