@@ -1,10 +1,13 @@
 export type {
   AssetEntry,
+  AssetUsage,
   ContentData,
   ContentEntry,
   ContentIdentity,
   ContentManifest,
   ContentType,
+  FolderListing,
+  FolderTreeNode,
   LocaleVersion,
   LocalizedEntry,
   LocalizedManifest,

@@ -6,7 +6,14 @@
  */
 
 // Asset types (browser-safe, no Node.js dependencies)
-export type { AssetEntry, AssetManifestData, ManifestEntryData } from './asset-manifest';
+export type {
+  AssetEntry,
+  AssetManifestData,
+  AssetUsage,
+  FolderListing,
+  FolderTreeNode,
+  ManifestEntryData,
+} from './asset-manifest';
 // Browser-safe exports
 export { Blocks } from './blocks';
 export * from './component-registry.types';

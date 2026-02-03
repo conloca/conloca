@@ -2,7 +2,15 @@ import { type Dirent, existsSync, type Stats } from 'node:fs';
 import { mkdir, readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { extname, join, parse, resolve } from 'node:path';
 import { imageSize } from 'image-size';
-import { type AssetEntry, AssetManifest, type AssetManifestData, type ManifestEntryData } from './asset-manifest';
+import {
+  type AssetEntry,
+  AssetManifest,
+  type AssetManifestData,
+  type AssetUsage,
+  type FolderListing,
+  type FolderTreeNode,
+  type ManifestEntryData,
+} from './asset-manifest';
 import { setupGitLfsAttributes } from './git-operations';
 
 export interface AssetConfig {
@@ -42,26 +50,6 @@ function isRecognizedImageExtension(filename: string): boolean {
 /** Check if file is a system/hidden file that should be skipped */
 function isSystemFile(filename: string): boolean {
   return filename.startsWith('.') || SYSTEM_FILES.has(filename.toLowerCase());
-}
-
-/** Folder listing result */
-export interface FolderListing {
-  assets: AssetEntry[];
-  folders: { name: string; path: string }[];
-}
-
-/** Folder tree node for hierarchical folder view */
-export interface FolderTreeNode {
-  name: string;
-  path: string;
-  assetCount: number;
-  children: FolderTreeNode[];
-}
-
-/** Asset usage reference */
-export interface AssetUsage {
-  page: string;
-  field: string;
 }
 
 export class AssetOperations {

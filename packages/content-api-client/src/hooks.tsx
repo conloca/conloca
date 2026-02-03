@@ -1,5 +1,4 @@
 import type {
-  AssetEntry,
   ContentEntry,
   ContentListResult,
   ContentManifest,
@@ -11,10 +10,7 @@ import type {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   APIClientError,
-  type AssetUsage,
   ContentAPIClient,
-  type FolderListing,
-  type FolderTreeNode,
   type GitCommitResult,
   type GitPushResult,
   type GitStatus,
@@ -820,4 +816,4 @@ export function useMoveAssets() {
 
 // Re-export for convenience
 export { ContentAPIClient, StaleWriteError, APIClientError };
-export type { AssetEntry, AssetUsage, FolderListing, FolderTreeNode, GitStatus, GitCommitResult, GitPushResult };
+export type { GitStatus, GitCommitResult, GitPushResult };

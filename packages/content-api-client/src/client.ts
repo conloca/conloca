@@ -1,6 +1,7 @@
 import type {
   APIError,
   AssetEntry,
+  AssetUsage,
   BatchResult,
   ContentEntry,
   ContentListResult,
@@ -9,6 +10,8 @@ import type {
   CreateResult,
   DeleteResult,
   ErrorCode,
+  FolderListing,
+  FolderTreeNode,
   GlobalFilters,
   LocalizedEntry,
   MoveResult,
@@ -17,26 +20,6 @@ import type {
   UpdateResult,
 } from '@conloca/content-api';
 import { ErrorCodes } from '@conloca/content-api';
-
-// Folder listing response
-export interface FolderListing {
-  assets: AssetEntry[];
-  folders: { name: string; path: string }[];
-}
-
-// Asset usage reference
-export interface AssetUsage {
-  page: string;
-  field: string;
-}
-
-// Folder tree node for hierarchical folder navigation
-export interface FolderTreeNode {
-  name: string;
-  path: string;
-  assetCount: number;
-  children: FolderTreeNode[];
-}
 
 // Git operation types
 export interface GitStatus {

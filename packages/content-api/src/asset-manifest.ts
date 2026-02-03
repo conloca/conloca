@@ -17,6 +17,26 @@ export interface AssetEntry {
   tags?: string[];
 }
 
+/** Asset usage reference - tracks where an asset is used */
+export interface AssetUsage {
+  page: string;
+  field: string;
+}
+
+/** Folder listing result */
+export interface FolderListing {
+  assets: AssetEntry[];
+  folders: { name: string; path: string }[];
+}
+
+/** Folder tree node for hierarchical folder view */
+export interface FolderTreeNode {
+  name: string;
+  path: string;
+  assetCount: number;
+  children: FolderTreeNode[];
+}
+
 /** Metadata stored per-file in the manifest (keyed by relative path) */
 export interface ManifestEntryData {
   alt?: string;
