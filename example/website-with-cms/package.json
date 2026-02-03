@@ -33,6 +33,11 @@
         },
         "continuous": true
       },
+      "build": {
+        "dependsOn": [
+          "^build"
+        ]
+      },
       "dev": {
         "continuous": true,
         "dependsOn": [
