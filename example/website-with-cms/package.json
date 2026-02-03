@@ -14,6 +14,7 @@
     "@conloca/content-api": "workspace:*",
     "@conloca/mdx": "workspace:*",
     "@astrojs/node": "^9.5.0",
+    "@node-rs/xxhash": "^1.7.6",
     "astro": "5.15.3",
     "react": "19.2.0",
     "react-dom": "19.2.0"
