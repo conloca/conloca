@@ -4,7 +4,7 @@
   "version": "0.0.1",
   "scripts": {
     "dev": "NODE_OPTIONS='--import=extensionless/register' astro dev",
-    "build": "NODE_OPTIONS='--import=extensionless/register' astro build",
+    "build": "astro build",
     "preview": "NODE_OPTIONS='--import=extensionless/register' astro preview",
     "astro": "astro"
   },
