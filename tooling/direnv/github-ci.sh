@@ -176,7 +176,32 @@ run_nx_affected() {
     create_status "$check_name" "$step_number"
     
     # Run nx affected and update status based on exit code
-    if devenv shell -- nx affected -t "$nx_task"; then
+    if devenv shell -- nx affected -t "$nx_task" --parallel=5; then
+        update_status "$check_name" "success" "$step_number"
+        return 0
+    else
+        update_status "$check_name" "failure" "$step_number"
+        return 1
+    fi
+}
+
+# Function to run multiple nx affected tasks in parallel
+run_nx_affected_parallel() {
+    local tasks="${1:-}"
+    local check_name="${2:-nx-affected-parallel}"
+    local step_number="${3:-}"
+    
+    if [ -z "$tasks" ]; then
+        echo "Error: No tasks specified"
+        echo "Usage: $0 nx-affected-parallel '<task1> <task2> <task3>' [check-name] [step-number]"
+        return 1
+    fi
+    
+    # Create status
+    create_status "$check_name" "$step_number"
+    
+    # Run nx affected with multiple tasks in parallel
+    if devenv shell -- nx affected -t $tasks --parallel=5; then
         update_status "$check_name" "success" "$step_number"
         return 0
     else
@@ -269,6 +294,9 @@ case "${1:-}" in
     "nx-affected")
         run_nx_affected "$2" "$3" "$4"
         ;;
+    "nx-affected-parallel")
+        run_nx_affected_parallel "$2" "$3" "$4"
+        ;;
     "nix-gc")
         run_garbage_collection
         ;;
@@ -276,8 +304,9 @@ case "${1:-}" in
         export_nix_store
         ;;
     *)
-        echo "Usage: $0 {restore-store|install-devenv|build-shell|nx-affected|nix-gc|export-store}"
+        echo "Usage: $0 {restore-store|install-devenv|build-shell|nx-affected|nx-affected-parallel|nix-gc|export-store}"
         echo "  nx-affected <task> [check-name] [step-number]"
+        echo "  nx-affected-parallel '<task1> <task2> <task3>' [check-name] [step-number]"
         exit 1
         ;;
 esac 
