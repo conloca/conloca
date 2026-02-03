@@ -517,6 +517,3 @@ export class StaleWriteError extends APIClientError {
     return this.details?.currentEtag;
   }
 }
-
-// Re-export AssetEntry for consumers who import from content-api-client
-export type { AssetEntry } from '@conloca/content-api';

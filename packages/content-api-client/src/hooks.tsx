@@ -1,4 +1,5 @@
 import type {
+  AssetEntry,
   ContentEntry,
   ContentListResult,
   ContentManifest,
@@ -10,7 +11,6 @@ import type {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   APIClientError,
-  type AssetEntry,
   type AssetUsage,
   ContentAPIClient,
   type FolderListing,
