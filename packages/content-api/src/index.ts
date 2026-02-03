@@ -5,7 +5,7 @@
  * For Node.js-specific APIs (filesystem, in-memory, middleware, etc.), import from '@conloca/content-api/node'
  */
 
-// Asset types (browser-safe, no Node.js dependencies)
+// Asset types (browser-safe, from asset-types.ts - no Node.js dependencies)
 export type {
   AssetEntry,
   AssetManifestData,
@@ -13,7 +13,7 @@ export type {
   FolderListing,
   FolderTreeNode,
   ManifestEntryData,
-} from './asset-manifest';
+} from './asset-types';
 // Browser-safe exports
 export { Blocks } from './blocks';
 export * from './component-registry.types';
