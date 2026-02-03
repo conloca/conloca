@@ -1,0 +1,120 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  actions: read
+  contents: read
+  statuses: write
+
+defaults:
+  run:
+    working-directory: tooling/direnv
+
+jobs:
+  main:
+    runs-on: ubuntu-latest
+    env:
+      NIX_STORE_NAR: ${{ github.workspace }}/nix-store.nar
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      # Step 1: GitHub adds "Set up job" automatically
+      # Step 2
+      - uses: actions/checkout@v4
+        with:
+          filter: tree:0
+          fetch-depth: 0
+
+      # --- Nix ----------------------------------------------------------------
+
+      # Step 3
+      - uses: DeterminateSystems/nix-installer-action@main
+        with:
+          extra-conf: |
+            keep-outputs = true
+            keep-derivations = true
+            gc-keep-derivations = true
+            gc-keep-outputs = true
+
+      # Step 4
+      # Cache Nix profiles, devenv and direnv
+      - name: Cache Nix profiles, devenv and direnv
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.NIX_STORE_NAR }}
+            ~/.nix-profile
+            ~/.local/state/nix/profiles
+            ~/.cache/nix
+            ${{ github.workspace }}/tooling/direnv/.devenv
+            ${{ github.workspace }}/tooling/direnv/.direnv
+          key:
+            ${{ runner.os }}-nar-${{ hashFiles('tooling/direnv/devenv.yaml', 'tooling/direnv/devenv.nix',
+            'tooling/direnv/devenv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-nar-
+
+      # Step 5
+      - name: Restore Nix store from NAR
+        run: ./github-ci.sh restore-store
+
+      # --- devenv shell -------------------------------------------------------
+
+      # Step 6
+      - uses: cachix/cachix-action@v13
+        with:
+          name: devenv
+
+      # Step 7
+      - name: Install devenv
+        run: ./github-ci.sh install-devenv
+
+      # Step 8
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      # Step 9
+      - name: Build devenv shell
+        run: ./github-ci.sh build-shell
+
+      # --- Nx -----------------------------------------------------------------
+
+      # Step 10
+      # Sets the base and head SHAs required for the nx affected commands
+      - uses: nrwl/nx-set-shas@v4
+
+      # Step 11
+      - name: Cache Nx
+        uses: actions/cache@v4
+        with:
+          path: .nx/cache
+          key: ${{ runner.os }}-nx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-nx-
+
+      # Step 12
+      - name: 🔨 Build
+        run: ./github-ci.sh nx-affected build "Build" 12
+
+      # Step 13
+      - name: 🔍 Lint
+        run: ./github-ci.sh nx-affected lint "Lint" 13
+
+      # Step 14
+      - name: 🧪 Unit Tests
+        run: ./github-ci.sh nx-affected test "Unit Tests" 14
+
+      # --- Cleanup ------------------------------------------------------------
+
+      - name: Cleanup and cache Nix store
+        run: |
+          ./github-ci.sh nix-gc
+          ./github-ci.sh export-store
