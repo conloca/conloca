@@ -35,6 +35,7 @@ export function CMSDashboard() {
           count={pagesCount}
           countLabel={pagesCount === 1 ? 'page' : 'pages'}
           isLoading={pagesLoading}
+          testId="section-card-pages"
         />
 
         <SectionCard
@@ -45,6 +46,7 @@ export function CMSDashboard() {
           count={mediaCount}
           countLabel={mediaCount === 1 ? 'asset' : 'assets'}
           isLoading={mediaLoading}
+          testId="section-card-media"
         />
 
         <SectionCard
@@ -55,6 +57,7 @@ export function CMSDashboard() {
           count={blocksCount}
           countLabel={blocksCount === 1 ? 'block' : 'blocks'}
           isLoading={blocksLoading}
+          testId="section-card-blocks"
         />
 
         <SectionCard
@@ -65,6 +68,7 @@ export function CMSDashboard() {
           count={dataCount}
           countLabel={dataCount === 1 ? 'entry' : 'entries'}
           isLoading={dataLoading}
+          testId="section-card-data"
         />
       </div>
     </div>
