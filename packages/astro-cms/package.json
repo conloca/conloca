@@ -81,6 +81,7 @@
     "zod": "^3.0.0"
   },
   "devDependencies": {
+    "@happy-dom/global-registrator": "^20.0.10",
     "astro": "5.15.3"
   },
   "nx": {
