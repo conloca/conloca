@@ -6,7 +6,7 @@
     "outDir": "dist/test",
     "tsBuildInfoFile": "dist/tsconfig.spec.tsbuildinfo",
     "emitDeclarationOnly": false,
-    "types": ["bun-types"]
+    "types": ["node", "bun"]
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "test/**/*.test.ts"],
   "references": [
