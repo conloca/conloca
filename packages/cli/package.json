@@ -5,7 +5,8 @@
     "access": "public"
   },
   "dependencies": {
-    "@conloca/content-api": "workspace:*"
+    "@conloca/content-api": "workspace:*",
+    "@node-rs/xxhash": "^1.7.6"
   },
   "bin": {
     "conloca": "./dist/conloca.js"
