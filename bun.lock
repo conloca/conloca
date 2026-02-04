@@ -51,6 +51,7 @@
         "@conloca/astro-cms": "workspace:*",
         "@conloca/content-api": "workspace:*",
         "@conloca/mdx": "workspace:*",
+        "@node-rs/xxhash": "^1.7.6",
         "astro": "5.15.3",
         "react": "19.2.0",
         "react-dom": "19.2.0",
@@ -142,6 +143,7 @@
         "fast-glob": "^3.3.2",
         "gray-matter": "^4.0.3",
         "hono": "^4.10.4",
+        "image-size": "^2.0.2",
         "jose": "^6.0.10",
         "nanoid": "^5.1.6",
         "sort-keys": "^6.0.0",
@@ -183,6 +185,7 @@
         "tslib": "^2.8.1",
       },
       "devDependencies": {
+        "@happy-dom/global-registrator": "^20.0.10",
         "@testing-library/react": "^16.3.0",
         "@types/react": "19.2.2",
         "@types/react-dom": "19.2.2",
@@ -2267,6 +2270,8 @@
     "ieee754": ["ieee754@1.2.1", "", {}, "sha512-dcyqhDvX1C46lXZcVqCpK+FtMRQVdIMN6/Df5js2zouUsqG7I6sFxitIC+7KYK29KdXOLHdu9zL4sFnoVQnqaA=="],
 
     "ignore": ["ignore@5.3.2", "", {}, "sha512-hsBTNUqQTDwkWtcdYI2i06Y/nUBEsNEDJKjWdigLvegy8kDuJAS8uRlpkkcQpyEXL0Z/pjDy5HBmMjRCJ2gq+g=="],
+
+    "image-size": ["image-size@2.0.2", "", { "bin": { "image-size": "bin/image-size.js" } }, "sha512-IRqXKlaXwgSMAMtpNzZa1ZAe8m+Sa1770Dhk8VkSsP9LS+iHD62Zd8FQKs8fbPiagBE7BzoFX23cxFnwshpV6w=="],
 
     "import-cwd": ["import-cwd@3.0.0", "", { "dependencies": { "import-from": "^3.0.0" } }, "sha512-4pnzH16plW+hgvRECbDWpQl3cqtvSofHWh44met7ESfZ8UZOWWddm8hEyDTqREJ9RbYHY8gi8DqmaelApoOGMg=="],
 
