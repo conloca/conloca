@@ -82,6 +82,7 @@
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "^20.0.10",
+    "@testing-library/jest-dom": "^6.9.1",
     "astro": "5.15.3"
   },
   "nx": {
