@@ -254,7 +254,6 @@ This is a hero block without ID or timestamps.`;
       const fileReads: Array<{ path: string; startTime: number }> = [];
       const originalReadFile = FileSystemContentAPI.prototype['readLocaleFile'];
 
-      // @ts-expect-error - accessing private method for testing
       FileSystemContentAPI.prototype['readLocaleFile'] = async function (filePath: string, locale: string) {
         fileReads.push({ path: filePath, startTime: Date.now() });
         // Simulate some IO delay
@@ -283,7 +282,6 @@ This is a hero block without ID or timestamps.`;
         const maxDiff = Math.max(...readTimes) - Math.min(...readTimes);
         expect(maxDiff).toBeLessThan(50);
       } finally {
-        // @ts-expect-error - restore original method
         FileSystemContentAPI.prototype['readLocaleFile'] = originalReadFile;
       }
     });

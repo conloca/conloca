@@ -97,11 +97,11 @@ describe('Conloca CLI', () => {
       expect(sitesConfig).toEqual({
         sites: {
           mysite: {
-            locales: ['en'],
+            locales: ['en', 'nl', 'de', 'fr'],
             defaultLocale: 'en',
           },
         },
-        globalLocales: ['en'],
+        globalLocales: ['en', 'nl', 'de', 'fr'],
       });
     } finally {
       await rm(tempDir, { recursive: true });

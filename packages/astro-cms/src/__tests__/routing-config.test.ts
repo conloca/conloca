@@ -81,6 +81,7 @@ describe('resolveRouteConfig', () => {
       layout: './layouts/BlogLayout.astro',
       prerender: false,
       meta: { title: 'Blog' },
+      dataBindings: { collections: [] },
     });
   });
 });
