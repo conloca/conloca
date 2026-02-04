@@ -12,9 +12,21 @@ afterEach(() => {
   testApi?.clear();
 });
 
-// TODO: Delete functionality tests need to be rewritten after UI redesign
-// These tests look for outdated testids and UI patterns that no longer exist
-describe.skip('Delete Functionality', () => {
+// Helper function to click the "More actions" menu and then the delete option
+async function clickDeleteInActionsMenu(index = 0) {
+  // The delete button is now inside a "More actions" dropdown menu
+  const moreActionsButtons = screen.getAllByRole('button', { name: /more actions/i });
+  fireEvent.click(moreActionsButtons[index]);
+
+  // Wait for and click the delete option in the dropdown
+  // The dropdown items use button role, not menuitem
+  await waitFor(() => {
+    expect(screen.getByText('Delete')).toBeDefined();
+  });
+  fireEvent.click(screen.getByText('Delete'));
+}
+
+describe('Delete Functionality', () => {
   let queryClient: QueryClient;
 
   beforeEach(() => {
@@ -30,7 +42,7 @@ describe.skip('Delete Functionality', () => {
   });
 
   describe('BlockList Delete', () => {
-    it('should show delete button for each block', async () => {
+    it('should show more actions button for each block', async () => {
       // Create test blocks using real API
       await testApi.createContent({
         type: 'mdx',
@@ -73,9 +85,9 @@ describe.skip('Delete Functionality', () => {
         expect(screen.getByText('Feature Block')).toBeDefined();
       });
 
-      // Should have delete buttons for each block
-      const deleteButtons = screen.getAllByRole('button', { name: /delete/i });
-      expect(deleteButtons).toHaveLength(2);
+      // Should have "More actions" buttons for each block
+      const moreActionsButtons = screen.getAllByRole('button', { name: /more actions/i });
+      expect(moreActionsButtons).toHaveLength(2);
     });
 
     it('should show confirmation dialog when delete is clicked', async () => {
@@ -104,9 +116,8 @@ describe.skip('Delete Functionality', () => {
 
       await screen.findByText('Hero Block');
 
-      // Click delete button
-      const deleteButton = screen.getByRole('button', { name: /delete/i });
-      fireEvent.click(deleteButton);
+      // Click "More actions" button and then delete option
+      await clickDeleteInActionsMenu();
 
       // Should show confirmation dialog
       await waitFor(() => {
@@ -145,8 +156,8 @@ describe.skip('Delete Functionality', () => {
 
       await screen.findByText('Hero Block');
 
-      // Click delete
-      fireEvent.click(screen.getByRole('button', { name: /delete/i }));
+      // Click "More actions" button and then delete option
+      await clickDeleteInActionsMenu();
 
       // Confirm deletion
       const confirmButton = await screen.findByRole('button', { name: /confirm delete/i });
@@ -193,8 +204,8 @@ describe.skip('Delete Functionality', () => {
 
       await screen.findByText('Hero Block');
 
-      // Delete and confirm
-      fireEvent.click(screen.getByRole('button', { name: /delete/i }));
+      // Delete and confirm via "More actions" menu
+      await clickDeleteInActionsMenu();
       const confirmButton = await screen.findByRole('button', { name: /confirm delete/i });
       fireEvent.click(confirmButton);
 
@@ -247,9 +258,8 @@ describe.skip('Delete Functionality', () => {
         expect(screen.getByText('Feature Block')).toBeDefined();
       });
 
-      // Delete first block
-      const deleteButtons = screen.getAllByRole('button', { name: /delete/i });
-      fireEvent.click(deleteButtons[0]);
+      // Delete first block via "More actions" menu (index 0 for first block)
+      await clickDeleteInActionsMenu(0);
 
       const confirmButton = await screen.findByRole('button', { name: /confirm delete/i });
       fireEvent.click(confirmButton);

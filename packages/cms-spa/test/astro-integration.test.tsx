@@ -13,8 +13,7 @@ afterEach(() => {
   testApi?.clear();
 });
 
-// TODO: Astro integration tests need to be rewritten after UI redesign
-describe.skip('Astro CMS Integration', () => {
+describe('Astro CMS Integration', () => {
   beforeEach(() => {
     // Setup test API with the /__cms/api base URL that Astro uses
     setupTestAPI('/__cms/api');
@@ -93,13 +92,13 @@ describe.skip('Astro CMS Integration', () => {
       </QueryClientProvider>,
     );
 
-    // Wait for dashboard to load and display stats
+    // Wait for dashboard to load and display stats using new section-card test IDs
     await waitFor(() => {
-      const pagesCard = screen.getByTestId('stat-card-pages');
+      const pagesCard = screen.getByTestId('section-card-pages');
       expect(pagesCard).toHaveTextContent('1');
 
       // Verify the blocks count
-      const blocksCard = screen.getByTestId('stat-card-blocks');
+      const blocksCard = screen.getByTestId('section-card-blocks');
       expect(blocksCard).toHaveTextContent('1');
     });
 

@@ -21,8 +21,7 @@ afterEach(() => {
   cleanup();
 });
 
-// TODO: CMS Dashboard tests need to be rewritten after UI redesign
-describe.skip('CMS Dashboard', () => {
+describe('CMS Dashboard', () => {
   test('renders with content stats', async () => {
     // Add test data to the in-memory API
     await testApi.createContent({
@@ -72,12 +71,12 @@ describe.skip('CMS Dashboard', () => {
     const { getByTestId, findByTestId } = renderWithProviders(<CMSDashboard />, {}, false);
 
     // Use findBy instead of waitFor - more efficient
-    const pagesCard = await findByTestId('stat-card-pages');
+    const pagesCard = await findByTestId('section-card-pages');
     expect(pagesCard).toBeInTheDocument();
     expect(pagesCard).toHaveTextContent('2'); // 2 pages
     expect(pagesCard).toHaveTextContent('Pages');
 
-    const blocksCard = getByTestId('stat-card-blocks');
+    const blocksCard = getByTestId('section-card-blocks');
     expect(blocksCard).toBeInTheDocument();
     expect(blocksCard).toHaveTextContent('1'); // 1 block
     expect(blocksCard).toHaveTextContent('Blocks');
@@ -208,8 +207,7 @@ describe('Create Page Dialog', () => {
   });
 });
 
-// TODO: Page Metadata Dialog tests need to be rewritten after UI redesign
-describe.skip('Page Metadata Dialog', () => {
+describe('Page Metadata Dialog', () => {
   const mockPage: PageMetadata = {
     title: 'Test Page',
     description: 'Test description',
@@ -220,10 +218,13 @@ describe.skip('Page Metadata Dialog', () => {
 
   test('updates page metadata', async () => {
     const onSave = mock();
-    const { getByLabelText, getByText } = render(<PageMetadataDialog open={true} page={mockPage} onSave={onSave} />);
+    const { getByText } = render(<PageMetadataDialog open={true} page={mockPage} onSave={onSave} />);
 
-    const descriptionInput = getByLabelText('Description');
-    fireEvent.change(descriptionInput, { target: { value: 'Updated description' } });
+    // Find the description textarea (SchemaForm renders description fields as textarea)
+    // Radix dialog renders in portal, so query from document.body
+    const descriptionTextarea = document.body.querySelector('textarea');
+    expect(descriptionTextarea).toBeTruthy();
+    fireEvent.change(descriptionTextarea!, { target: { value: 'Updated description' } });
 
     fireEvent.click(getByText('Save'));
 
