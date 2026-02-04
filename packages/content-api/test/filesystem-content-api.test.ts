@@ -253,12 +253,12 @@ describe('FileSystemContentAPI - 4KB index optimization', () => {
     const { content: _, ...metadataOnly } = baseVxjsonData;
     const metadataJson = JSON.stringify(metadataOnly, null, 2);
     const metadataWithoutClosing = metadataJson.slice(0, -1); // Remove }
-    const contentFieldPrefix = ',\\n  \"content\": ';
+    const contentFieldPrefix = ',\\n  "content": ';
     const currentSize = metadataWithoutClosing.length + contentFieldPrefix.length;
-    const maxAllowedSize = 4096 - '\"content\":'.length; // 4086
+    const maxAllowedSize = 4096 - '"content":'.length; // 4086
 
     // We need to account for the padding field structure: \"padding\": \"XXX\",\\n
-    const paddingFieldOverhead = '\"padding\": \"\",\\n  '.length;
+    const paddingFieldOverhead = '"padding": "",\\n  '.length;
     const availableForPadding = maxAllowedSize - currentSize - paddingFieldOverhead - 20; // 20 byte buffer
     const paddingNeeded = Math.max(0, availableForPadding);
 
@@ -281,7 +281,7 @@ describe('FileSystemContentAPI - 4KB index optimization', () => {
 
     // Verify it follows the VXJSON specification - \"content\": should be findable within first 4KB
     const first4KB = vxjsonString.substring(0, 4096);
-    expect(first4KB.includes('\"content\":')).toBe(true);
+    expect(first4KB.includes('"content":')).toBe(true);
 
     // Verify it's larger than 4KB
     const stats = await stat(filePath);
@@ -657,7 +657,9 @@ category: test
     const block = api.blocks.getByName('test', 'conflict-test', 'en');
     expect(block).toBeDefined();
     // Either title is acceptable as long as both files still exist
-    expect(['Original Without Locale', 'Existing With Locale']).toContain(block!.locales.en?.meta.title);
+    const title = block!.locales.en?.meta.title;
+    expect(title).toBeDefined();
+    expect(['Original Without Locale', 'Existing With Locale']).toContain(title!);
   });
 
   test('handles relative content root paths correctly', async () => {

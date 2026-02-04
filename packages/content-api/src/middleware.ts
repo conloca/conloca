@@ -633,7 +633,7 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
         c.header('Content-Type', result.mimeType);
         c.header('Cache-Control', 'public, max-age=31536000, immutable');
 
-        return c.body(result.buffer);
+        return c.body(result.buffer as unknown as ArrayBuffer);
       } catch (error) {
         return c.json(logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to serve asset'), 500);
       }
