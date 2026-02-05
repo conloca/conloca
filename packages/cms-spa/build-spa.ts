@@ -40,12 +40,17 @@ const bundleResult = await build({
   // Externalize dependencies that the consumer must provide
   // Note: Bun requires explicit strings, not regex patterns
   external: [
+    // React ecosystem
     'tailwindcss',
     'react',
     'react/jsx-runtime',
     'react/jsx-dev-runtime',
     'react-dom',
     'react-dom/client',
+    // Workspace packages (prevent circular dependency during build)
+    '@conloca/mdx',
+    '@conloca/content-api',
+    '@conloca/content-api-client',
   ],
 });
 

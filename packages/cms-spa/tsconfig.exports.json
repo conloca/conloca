@@ -17,14 +17,6 @@
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "composite": true
   },
-  "files": [
-    "src/index.ts",
-    "src/types.ts",
-    "src/data-schemas.ts",
-    "src/puck-config.ts",
-    "src/mock-puck-config.tsx",
-    "src/ui-config.ts",
-    "src/components/puck/index.ts",
-    "src/components/puck/MDXContent.tsx"
-  ]
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/**/*.spec.ts", "src/**/*.spec.tsx", "src/__tests__/**/*"]
 }

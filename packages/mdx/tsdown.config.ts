@@ -10,10 +10,13 @@ export default defineConfig({
   tsconfig: 'tsconfig.lib.json',
   clean: true,
   external: [
+    '@conloca/cms-spa',
     '@conloca/content-api',
     '@mdx-js/mdx',
     '@mdx-js/react',
     '@mdxeditor/editor',
+    '@mdxeditor/gurx',
+    'lucide-react',
     'remark-frontmatter',
     'remark-gfm',
     'remark-mdx-frontmatter',
