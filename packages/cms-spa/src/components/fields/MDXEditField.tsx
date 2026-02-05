@@ -1,8 +1,8 @@
 import type { LocalizedEntry } from '@conloca/content-api-client';
 import { useLocalizedContent, useUpdateLocalized } from '@conloca/content-api-client';
-import { MDXEditorModal } from '@conloca/mdx';
 import { Edit2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { CMSMDXEditorModal } from '../editor/CMSMDXEditor';
 
 interface MDXEditFieldProps {
   entry: LocalizedEntry;
@@ -61,7 +61,7 @@ export function MDXEditField({ entry }: MDXEditFieldProps) {
         Edit Content
       </button>
 
-      <MDXEditorModal
+      <CMSMDXEditorModal
         isOpen={editorOpen}
         onClose={() => setEditorOpen(false)}
         filePath={entry.localized.name || entry.id}

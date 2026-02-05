@@ -4,10 +4,10 @@ import {
   useSitesConfig,
   useUpdateLocalized,
 } from '@conloca/content-api-client';
-import { MDXEditorModal } from '@conloca/mdx';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { UnsavedChangesDialog } from '../dialogs/UnsavedChangesDialog';
+import { CMSMDXEditorModal } from './CMSMDXEditor';
 import { LocaleSelector } from './LocaleSelector';
 
 /**
@@ -182,7 +182,7 @@ export function BlockEditor() {
 
   return (
     <>
-      <MDXEditorModal
+      <CMSMDXEditorModal
         isOpen={true}
         onClose={() => navigate('/blocks')}
         filePath={`blocks/${blockName}`}

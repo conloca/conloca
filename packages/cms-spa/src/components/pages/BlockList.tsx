@@ -7,7 +7,6 @@ import {
   useDeleteContent,
   useUpdateLocalized,
 } from '@conloca/content-api-client';
-import { MDXEditorModal } from '@conloca/mdx';
 import { AlertCircle, Edit2, FileEdit, Loader2, MoreVertical, Package, Plus, Settings, Trash2 } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -17,6 +16,7 @@ import { slugify } from '../../utils/slugify';
 import { BlockPropertiesDialog } from '../dialogs/BlockPropertiesDialog';
 import { DeleteConfirmDialog } from '../dialogs/DeleteConfirmDialog';
 import { ErrorModal } from '../dialogs/ErrorModal';
+import { CMSMDXEditorModal } from '../editor/CMSMDXEditor';
 
 export function BlockList() {
   const [selectedCategory, setSelectedCategory] = useState<string | 'all'>('all');
@@ -543,7 +543,7 @@ export function BlockList() {
       )}
 
       {/* MDX Editor Modal */}
-      <MDXEditorModal
+      <CMSMDXEditorModal
         isOpen={showMDXEditor}
         onClose={() => setShowMDXEditor(false)}
         filePath={newBlockName}
