@@ -11,12 +11,14 @@
     "@mdx-js/react": "^3.1.0",
     "@mdxeditor/editor": "^3.48.0",
     "gray-matter": "^4.0.3",
+    "lucide-react": "^0.552.0",
     "remark-frontmatter": "^5.0.0",
     "remark-gfm": "^4.0.0",
     "remark-mdx-frontmatter": "^5.0.0",
     "tslib": "^2.8.1"
   },
   "peerDependencies": {
+    "@conloca/cms-spa": "workspace:*",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
