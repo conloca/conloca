@@ -30,7 +30,6 @@ import {
 } from '@mdxeditor/editor';
 import React, { useEffect, useState } from 'react';
 import '@mdxeditor/editor/style.css';
-import { ImagePickerDialog } from './components/ImagePickerDialog';
 
 /**
  * Error Boundary for catching React errors in MDXEditor.
@@ -92,14 +91,6 @@ export const MDXEditor = React.forwardRef<MDXEditorMethods, MDXEditorProps>(
             onSave(value);
           }
         }
-        // Image picker shortcut: Ctrl/Cmd+Shift+I
-        // Find and click the InsertImage button in the toolbar
-        // The button has aria-label="Insert image" set by MDXEditor
-        if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'i') {
-          e.preventDefault();
-          const insertImageButton = document.querySelector('[aria-label="Insert image"]') as HTMLButtonElement | null;
-          insertImageButton?.click();
-        }
       };
 
       document.addEventListener('keydown', handleKeyDown);
@@ -142,10 +133,7 @@ export const MDXEditor = React.forwardRef<MDXEditorMethods, MDXEditorProps>(
           diffSourcePlugin({ viewMode: 'rich-text' }),
           markdownShortcutPlugin(),
           jsxPlugin(),
-          imagePlugin({
-            ImageDialog: ImagePickerDialog,
-            disableImageSettingsButton: true, // Per CONTEXT: no dimension prompts
-          }),
+          imagePlugin(),
           toolbarPlugin({
             toolbarContents: () => (
               <DiffSourceToggleWrapper>
