@@ -1,8 +1,10 @@
 // Import from cms-spa (peer dependency - exports added in Task 1)
 import type { AssetEntry } from '@conloca/cms-spa';
 import { FolderTreeSidebar, MediaLibrary, UploadModal } from '@conloca/cms-spa';
-import { closeImageDialog$, imageDialogState$, insertImage$ } from '@mdxeditor/editor';
-import { useCellValue, usePublisher } from '@mdxeditor/gurx';
+// IMPORTANT: Import gurx hooks from @mdxeditor/editor, NOT from @mdxeditor/gurx directly.
+// @mdxeditor/editor re-exports gurx, and using that ensures we get the same module instance
+// as the editor internals, avoiding React context isolation issues.
+import { closeImageDialog$, imageDialogState$, insertImage$, useCellValue, usePublisher } from '@mdxeditor/editor';
 import { Upload, X } from 'lucide-react';
 import { useState } from 'react';
 

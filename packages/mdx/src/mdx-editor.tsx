@@ -21,7 +21,6 @@ import {
   MDXEditor as MDXEditorLib,
   type MDXEditorMethods,
   markdownShortcutPlugin,
-  openNewImageDialog$,
   quotePlugin,
   Separator,
   tablePlugin,
@@ -29,34 +28,9 @@ import {
   toolbarPlugin,
   UndoRedo,
 } from '@mdxeditor/editor';
-import { usePublisher } from '@mdxeditor/gurx';
 import React, { useEffect, useState } from 'react';
 import '@mdxeditor/editor/style.css';
 import { ImagePickerDialog } from './components/ImagePickerDialog';
-
-/**
- * Keyboard shortcut handler for opening the image picker.
- * Must be rendered inside MDXEditorLib context to access gurx signals.
- */
-function ImagePickerShortcut() {
-  const openImageDialog = usePublisher(openNewImageDialog$);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Image picker shortcut: Ctrl/Cmd+Shift+I (REQUIRED per CONTEXT.md)
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'i') {
-        e.preventDefault();
-        openImageDialog();
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [openImageDialog]);
-
-  // This component only handles keyboard shortcuts, renders nothing
-  return null;
-}
 
 /**
  * Error Boundary for catching React errors in MDXEditor.
@@ -110,12 +84,21 @@ export const MDXEditor = React.forwardRef<MDXEditorMethods, MDXEditorProps>(
   ({ value, onChange, onSave, readOnly = false }, ref) => {
     // Handle keyboard shortcuts
     useEffect(() => {
-      if (!onSave) return;
-
       const handleKeyDown = (e: KeyboardEvent) => {
+        // Save shortcut: Ctrl/Cmd+S
         if ((e.ctrlKey || e.metaKey) && e.key === 's') {
           e.preventDefault();
-          onSave(value);
+          if (onSave) {
+            onSave(value);
+          }
+        }
+        // Image picker shortcut: Ctrl/Cmd+Shift+I
+        // Find and click the InsertImage button in the toolbar
+        // The button has aria-label="Insert image" set by MDXEditor
+        if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'i') {
+          e.preventDefault();
+          const insertImageButton = document.querySelector('[aria-label="Insert image"]') as HTMLButtonElement | null;
+          insertImageButton?.click();
         }
       };
 
@@ -165,25 +148,22 @@ export const MDXEditor = React.forwardRef<MDXEditorMethods, MDXEditorProps>(
           }),
           toolbarPlugin({
             toolbarContents: () => (
-              <>
-                <ImagePickerShortcut />
-                <DiffSourceToggleWrapper>
-                  <UndoRedo />
-                  <Separator />
-                  <BoldItalicUnderlineToggles />
-                  <Separator />
-                  <ListsToggle />
-                  <Separator />
-                  <BlockTypeSelect />
-                  <Separator />
-                  <CreateLink />
-                  <InsertImage />
-                  <InsertTable />
-                  <InsertThematicBreak />
-                  <Separator />
-                  <InsertCodeBlock />
-                </DiffSourceToggleWrapper>
-              </>
+              <DiffSourceToggleWrapper>
+                <UndoRedo />
+                <Separator />
+                <BoldItalicUnderlineToggles />
+                <Separator />
+                <ListsToggle />
+                <Separator />
+                <BlockTypeSelect />
+                <Separator />
+                <CreateLink />
+                <InsertImage />
+                <InsertTable />
+                <InsertThematicBreak />
+                <Separator />
+                <InsertCodeBlock />
+              </DiffSourceToggleWrapper>
             ),
           }),
         ]}
