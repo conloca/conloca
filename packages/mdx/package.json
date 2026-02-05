@@ -56,6 +56,15 @@
     "test": "tsc-bun-test",
     "test:watch": "bun test --watch"
   },
+  "nx": {
+    "targets": {
+      "test": {
+        "dependsOn": [
+          "^build"
+        ]
+      }
+    }
+  },
   "type": "module",
   "types": "./dist/index.d.mts"
 }
