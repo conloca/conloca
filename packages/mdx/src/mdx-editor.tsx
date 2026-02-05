@@ -9,8 +9,10 @@ import {
   frontmatterPlugin,
   headingsPlugin,
   InsertCodeBlock,
+  InsertImage,
   InsertTable,
   InsertThematicBreak,
+  imagePlugin,
   jsxPlugin,
   ListsToggle,
   linkDialogPlugin,
@@ -19,6 +21,7 @@ import {
   MDXEditor as MDXEditorLib,
   type MDXEditorMethods,
   markdownShortcutPlugin,
+  openNewImageDialog$,
   quotePlugin,
   Separator,
   tablePlugin,
@@ -26,8 +29,34 @@ import {
   toolbarPlugin,
   UndoRedo,
 } from '@mdxeditor/editor';
+import { usePublisher } from '@mdxeditor/gurx';
 import React, { useEffect, useState } from 'react';
 import '@mdxeditor/editor/style.css';
+import { ImagePickerDialog } from './components/ImagePickerDialog';
+
+/**
+ * Keyboard shortcut handler for opening the image picker.
+ * Must be rendered inside MDXEditorLib context to access gurx signals.
+ */
+function ImagePickerShortcut() {
+  const openImageDialog = usePublisher(openNewImageDialog$);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Image picker shortcut: Ctrl/Cmd+Shift+I (REQUIRED per CONTEXT.md)
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'i') {
+        e.preventDefault();
+        openImageDialog();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [openImageDialog]);
+
+  // This component only handles keyboard shortcuts, renders nothing
+  return null;
+}
 
 /**
  * Error Boundary for catching React errors in MDXEditor.
@@ -130,9 +159,14 @@ export const MDXEditor = React.forwardRef<MDXEditorMethods, MDXEditorProps>(
           diffSourcePlugin({ viewMode: 'rich-text' }),
           markdownShortcutPlugin(),
           jsxPlugin(),
+          imagePlugin({
+            ImageDialog: ImagePickerDialog,
+            disableImageSettingsButton: true, // Per CONTEXT: no dimension prompts
+          }),
           toolbarPlugin({
             toolbarContents: () => (
               <>
+                <ImagePickerShortcut />
                 <DiffSourceToggleWrapper>
                   <UndoRedo />
                   <Separator />
@@ -143,6 +177,7 @@ export const MDXEditor = React.forwardRef<MDXEditorMethods, MDXEditorProps>(
                   <BlockTypeSelect />
                   <Separator />
                   <CreateLink />
+                  <InsertImage />
                   <InsertTable />
                   <InsertThematicBreak />
                   <Separator />
