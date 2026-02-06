@@ -22,6 +22,12 @@
       "import": "./dist/data-schemas.js",
       "default": "./dist/data-schemas.js"
     },
+    "./page-schemas": {
+      "development": "./src/page-schemas.ts",
+      "types": "./dist/page-schemas.d.ts",
+      "import": "./dist/page-schemas.js",
+      "default": "./dist/page-schemas.js"
+    },
     "./puck-config": {
       "development": "./src/puck-config.ts",
       "types": "./dist/puck-config.d.ts",
