@@ -62,7 +62,7 @@ export async function createConlocaCollections(
   for (const name of siteCollections) {
     collections[name] = defineCollection({
       loader: conlocaLoader({ collection: name, contentRoot, site, kind: 'page' }),
-      schema: pageMetaSchema,
+      schema: pageMetaSchema.passthrough(),
     });
   }
 
