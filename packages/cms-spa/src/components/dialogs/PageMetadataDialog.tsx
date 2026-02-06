@@ -1,10 +1,51 @@
-import { pageEditableSchema } from '@conloca/content-api';
 import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import type React from 'react';
 import { useEffect, useMemo, useState } from 'react';
+import { z } from 'zod';
+import { type PageSchemas, usePageSchemas } from '../../page-schemas';
 import type { PageMetadata } from '../../types';
 import { SchemaForm } from '../forms/SchemaForm';
+
+const pageInfoSchema = z.object({
+  title: z.string().describe('Page title for SEO and browser tab'),
+  pathname: z.string().describe('URL path (e.g., /about)'),
+});
+
+const seoPublishingSchema = z.object({
+  description: z.string().optional().describe('Meta description for search engines'),
+  robots: z.string().optional().describe('Robots meta tag (e.g., index, follow)'),
+  canonical: z.string().url().optional().describe('Canonical URL for duplicate content'),
+  publishAt: z.coerce.date().nullable().optional().describe('Schedule publish date/time'),
+  unpublishAt: z.coerce.date().nullable().optional().describe('Schedule unpublish date/time'),
+});
+
+function resolvePageSchema(
+  pathname: string,
+  pageSchemas: PageSchemas,
+): { schema: z.ZodObject<z.ZodRawShape>; sectionName: string } | null {
+  let bestMatch: string | null = null;
+  for (const prefix of Object.keys(pageSchemas)) {
+    if (pathname.startsWith(prefix)) {
+      if (!bestMatch || prefix.length > bestMatch.length) {
+        bestMatch = prefix;
+      }
+    }
+  }
+  if (!bestMatch) return null;
+  const name = bestMatch.replace(/^\/|\/$/g, '');
+  const segments = name.split('/');
+  const sectionName = segments.map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join(' ') + ' Details';
+  return { schema: pageSchemas[bestMatch], sectionName };
+}
+
+function SectionHeader({ title }: { title: string }) {
+  return (
+    <h3 className="text-sm font-semibold text-grey-04 uppercase tracking-wider mt-6 mb-3 pb-2 border-b border-grey-10 first:mt-0">
+      {title}
+    </h3>
+  );
+}
 
 interface PageMetadataDialogProps {
   open: boolean;
@@ -14,6 +55,8 @@ interface PageMetadataDialogProps {
 }
 
 export function PageMetadataDialog({ open, onOpenChange, page, onSave }: PageMetadataDialogProps) {
+  const pageSchemas = usePageSchemas();
+
   // Convert PageMetadata to form values (flatten dates to strings)
   const initialValues = useMemo(
     () => ({
@@ -29,11 +72,21 @@ export function PageMetadataDialog({ open, onOpenChange, page, onSave }: PageMet
   );
 
   const [formValues, setFormValues] = useState<Record<string, unknown>>(initialValues);
+  const [customValues, setCustomValues] = useState<Record<string, unknown>>(page.customMeta || {});
 
   // Reset form when page changes
   useEffect(() => {
     setFormValues(initialValues);
   }, [initialValues]);
+
+  useEffect(() => {
+    setCustomValues(page.customMeta || {});
+  }, [page.customMeta]);
+
+  const resolvedSchema = useMemo(
+    () => resolvePageSchema((formValues.pathname as string) || page.pathname, pageSchemas),
+    [formValues.pathname, page.pathname, pageSchemas],
+  );
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,6 +100,7 @@ export function PageMetadataDialog({ open, onOpenChange, page, onSave }: PageMet
       unpublishDate: formValues.unpublishAt ? new Date(formValues.unpublishAt as string) : null,
       robots: (formValues.robots as string) || undefined,
       canonical: (formValues.canonical as string) || undefined,
+      customMeta: resolvedSchema ? customValues : undefined,
     };
 
     onSave?.(metadata);
@@ -66,7 +120,21 @@ export function PageMetadataDialog({ open, onOpenChange, page, onSave }: PageMet
           </div>
 
           <form onSubmit={handleSubmit}>
-            <SchemaForm schema={pageEditableSchema} values={formValues} onChange={setFormValues} />
+            {/* Section: Page Info */}
+            <SectionHeader title="Page Info" />
+            <SchemaForm schema={pageInfoSchema} values={formValues} onChange={setFormValues} />
+
+            {/* Section: Custom Collection Fields (only when schema exists) */}
+            {resolvedSchema && (
+              <>
+                <SectionHeader title={resolvedSchema.sectionName} />
+                <SchemaForm schema={resolvedSchema.schema} values={customValues} onChange={setCustomValues} />
+              </>
+            )}
+
+            {/* Section: SEO & Publishing */}
+            <SectionHeader title="SEO & Publishing" />
+            <SchemaForm schema={seoPublishingSchema} values={formValues} onChange={setFormValues} />
 
             <div className="flex gap-2 pt-6">
               <button

@@ -2,7 +2,7 @@ import type { LocalizedEntry, UpdateResult } from '@conloca/content-api-client';
 import type { Config } from '@measured/puck';
 import { Puck } from '@measured/puck';
 import { Monitor, Smartphone, Tablet } from 'lucide-react';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useSiteBaseUrl } from '../../hooks';
 import type { SaveState } from '../../types';
 import { ConflictDialog } from '../dialogs/ConflictDialog';
@@ -31,6 +31,42 @@ const viewports = [
   { width: 1280, height: 'auto' as const, label: 'Desktop', icon: <Monitor size={16} /> },
 ];
 
+/**
+ * Stable field type overrides for Puck.
+ * Defined at module level to maintain referential stability across renders.
+ * This prevents Puck from re-creating field components on every render,
+ * which would cause input focus loss on each keystroke.
+ */
+const fieldTypeOverrides = {
+  image: ({ onChange, value }: { onChange: (val: string) => void; value: string }) => (
+    <ImageFieldRender value={value || ''} onChange={onChange} />
+  ),
+  text: ({
+    name,
+    value,
+    onChange,
+    children,
+  }: {
+    name: string;
+    value: string;
+    onChange: (val: string) => void;
+    children: React.ReactNode;
+  }) => {
+    // Extract terminal field name segment for array items (e.g., "posts[0].imageUrl" -> "imageUrl")
+    const fieldName = name.includes('.') ? name.split('.').pop()! : name;
+    const isImageField = /image/i.test(fieldName);
+    if (isImageField) {
+      return <ImageUrlField value={value || ''} onChange={onChange} />;
+    }
+    // Non-image text fields: render default Puck field
+    return <>{children}</>;
+  },
+};
+
+const drawerItemOverride = ({ children, name }: { children: React.ReactNode; name: string }) => (
+  <DrawerItemOverride name={name}>{children}</DrawerItemOverride>
+);
+
 export function PageEditor({
   pageId,
   entry,
@@ -49,11 +85,17 @@ export function PageEditor({
   const [isDirty, setIsDirty] = useState(false);
   const [conflict, setConflict] = useState<UpdateResult | null>(null);
 
+  // Use ref for data in handleSave to keep handleSave referentially stable.
+  // Without this, handleSave would depend on `data` (which changes every keystroke),
+  // causing the memoized overrides to invalidate and Puck to remount field components.
+  const dataRef = useRef(data);
+  dataRef.current = data;
+
   const handleSave = useCallback(
     async (forceEtag?: string) => {
       setSaveState('saving');
       try {
-        const result = await onSave(data, forceEtag);
+        const result = await onSave(dataRef.current, forceEtag);
         if (result.success) {
           setSaveState('saved');
           setIsDirty(false);
@@ -68,7 +110,7 @@ export function PageEditor({
         setSaveState('error');
       }
     },
-    [data, onSave],
+    [onSave],
   );
 
   const handleDataChange = useCallback((newData: any) => {
@@ -79,11 +121,69 @@ export function PageEditor({
 
   const { buildUrl } = useSiteBaseUrl();
 
-  const handlePreview = () => {
+  const handlePreview = useCallback(() => {
     const pathname = entry.localized.pathname || '/';
     const previewUrl = buildUrl(pathname);
     window.open(previewUrl, '_blank');
+  }, [entry.localized.pathname, buildUrl]);
+
+  // Store headerActions props in a ref so the overrides object can remain referentially stable.
+  // Puck's internals use the overrides reference as a useMemo dependency for field component selection.
+  // If overrides changes, ALL field components unmount/remount, causing input focus loss.
+  // By using a ref, headerActions always renders with current props without changing the overrides reference.
+  const headerActionsPropsRef = useRef({
+    onPublish,
+    handlePreview,
+    locale: entry.localized.locale,
+    availableLocales,
+    onLocaleChange,
+    saveState,
+    isDirty,
+    handleSave,
+    onOpenMetadata,
+    onBack,
+  });
+  headerActionsPropsRef.current = {
+    onPublish,
+    handlePreview,
+    locale: entry.localized.locale,
+    availableLocales,
+    onLocaleChange,
+    saveState,
+    isDirty,
+    handleSave,
+    onOpenMetadata,
+    onBack,
   };
+
+  // Memoize overrides with NO dependencies so the reference never changes.
+  // This prevents Puck from re-creating field components on every render.
+  // Without this, each keystroke triggers: onChange -> setData -> re-render -> new overrides ref ->
+  // Puck store update -> field component unmount/remount -> focus loss.
+  const overrides = useMemo(
+    () => ({
+      fieldTypes: fieldTypeOverrides,
+      headerActions: () => {
+        const p = headerActionsPropsRef.current;
+        return (
+          <PageEditorHeaderActions
+            onPublish={p.onPublish}
+            onPreview={p.handlePreview}
+            currentLocale={p.locale}
+            availableLocales={p.availableLocales}
+            onLocaleChange={p.onLocaleChange}
+            saveState={p.saveState}
+            isDirty={p.isDirty}
+            onSave={() => p.handleSave()}
+            onOpenMetadata={p.onOpenMetadata}
+            onBack={p.onBack}
+          />
+        );
+      },
+      drawerItem: drawerItemOverride,
+    }),
+    [],
+  );
 
   // Handle keyboard shortcuts
   React.useEffect(() => {
@@ -109,36 +209,7 @@ export function PageEditor({
           onChange={handleDataChange}
           headerTitle={entry.localized.meta.title || 'Untitled Page'}
           viewports={viewports}
-          overrides={{
-            fieldTypes: {
-              image: ({ onChange, value }) => <ImageFieldRender value={value || ''} onChange={onChange} />,
-              text: ({ name, value, onChange, children }) => {
-                // Extract terminal field name segment for array items (e.g., "posts[0].imageUrl" -> "imageUrl")
-                const fieldName = name.includes('.') ? name.split('.').pop()! : name;
-                const isImageField = /image/i.test(fieldName);
-                if (isImageField) {
-                  return <ImageUrlField value={value || ''} onChange={onChange} />;
-                }
-                // Non-image text fields: render default Puck field
-                return <>{children}</>;
-              },
-            },
-            headerActions: () => (
-              <PageEditorHeaderActions
-                onPublish={onPublish}
-                onPreview={handlePreview}
-                currentLocale={entry.localized.locale}
-                availableLocales={availableLocales}
-                onLocaleChange={onLocaleChange}
-                saveState={saveState}
-                isDirty={isDirty}
-                onSave={() => handleSave()}
-                onOpenMetadata={onOpenMetadata}
-                onBack={onBack}
-              />
-            ),
-            drawerItem: ({ children, name }) => <DrawerItemOverride name={name}>{children}</DrawerItemOverride>,
-          }}
+          overrides={overrides}
         />
       </div>
 

@@ -39,6 +39,7 @@ export interface PageMetadata {
   unpublishDate: Date | null;
   robots?: string;
   canonical?: string;
+  customMeta?: Record<string, unknown>;
 }
 
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error' | 'conflict';
