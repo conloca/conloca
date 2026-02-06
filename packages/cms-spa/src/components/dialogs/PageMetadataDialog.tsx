@@ -40,11 +40,7 @@ function resolvePageSchema(
 }
 
 function SectionHeader({ title }: { title: string }) {
-  return (
-    <h3 className="text-sm font-semibold text-grey-04 uppercase tracking-wider mt-6 mb-3 pb-2 border-b border-grey-10 first:mt-0">
-      {title}
-    </h3>
-  );
+  return <p className="text-xs text-grey-06 mt-5 mb-2 first:mt-0">{title}</p>;
 }
 
 interface PageMetadataDialogProps {
