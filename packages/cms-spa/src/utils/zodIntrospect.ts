@@ -8,6 +8,8 @@ export interface FieldInfo {
   isNullable: boolean;
   /** For enum types, the list of allowed values */
   enumValues?: string[];
+  /** For string types, the max length constraint if defined */
+  maxLength?: number;
 }
 
 /**
@@ -76,8 +78,8 @@ export function getZodFieldInfo(field: z.ZodTypeAny): FieldInfo {
     return { type: 'array', description, isOptional, isNullable };
   }
   if (typeName === 'ZodString' || typeName === 'string') {
-    // Check for URL/email validators in string checks
-    const checks = (current._def.checks as Array<{ kind: string }>) || [];
+    // Check for URL/email validators and maxLength in string checks
+    const checks = (current._def.checks as Array<{ kind: string; value?: number }>) || [];
     for (const check of checks) {
       if (check.kind === 'url') {
         return { type: 'string', format: 'url', description, isOptional, isNullable };
@@ -86,7 +88,9 @@ export function getZodFieldInfo(field: z.ZodTypeAny): FieldInfo {
         return { type: 'string', format: 'email', description, isOptional, isNullable };
       }
     }
-    return { type: 'string', description, isOptional, isNullable };
+    const maxCheck = checks.find((c) => c.kind === 'max');
+    const maxLength = maxCheck?.value;
+    return { type: 'string', description, isOptional, isNullable, maxLength };
   }
 
   // Default fallback for unknown types
