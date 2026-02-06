@@ -1,6 +1,8 @@
 import { Loader2 } from 'lucide-react';
 import type { z } from 'zod';
 import { type FieldInfo, getZodShape } from '../../utils/zodIntrospect';
+import { ImageUrlField } from '../fields/ImageUrlField';
+import { ChipArrayField } from './ChipArrayField';
 
 interface SchemaFormProps {
   schema: z.ZodObject<z.ZodRawShape> | null;
@@ -185,22 +187,16 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
       );
 
     case 'array':
-      // For now, render array fields as comma-separated text input
       return (
         <div>
           <label className="block text-sm font-medium mb-1">
             {label}
             {required && <span className="text-red-500 ml-1">*</span>}
           </label>
-          <input
-            type="text"
-            value={Array.isArray(value) ? value.join(', ') : ''}
-            onChange={(e) => {
-              const val = e.target.value;
-              onChange(val ? val.split(',').map((s) => s.trim()) : []);
-            }}
-            placeholder="Enter values separated by commas"
-            className="w-full px-3 py-2 border border-grey-09 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
+          <ChipArrayField
+            value={Array.isArray(value) ? (value as string[]) : []}
+            onChange={(newValue) => onChange(newValue)}
+            placeholder={description || 'Type and press Enter to add'}
           />
           {description && <p className="mt-1 text-sm text-grey-04">{description}</p>}
         </div>
@@ -208,6 +204,21 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
 
     case 'string':
     default: {
+      // Use ImageUrlField for image URL fields (but not imageDescription, etc.)
+      const isImageField = name.toLowerCase().includes('image') && !name.toLowerCase().includes('description');
+      if (isImageField) {
+        return (
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              {label}
+              {required && <span className="text-red-500 ml-1">*</span>}
+            </label>
+            <ImageUrlField value={(value as string) || ''} onChange={(newValue) => onChange(newValue || undefined)} />
+            {description && <p className="mt-1 text-sm text-grey-04">{description}</p>}
+          </div>
+        );
+      }
+
       // Use textarea for description-like fields (based on name heuristic as fallback)
       const isTextarea =
         name.toLowerCase().includes('description') ||
@@ -246,6 +257,11 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
             className="w-full px-3 py-2 border border-grey-09 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
           />
           {description && <p className="mt-1 text-sm text-grey-04">{description}</p>}
+          {fieldInfo.maxLength && (
+            <p className="mt-1 text-xs text-grey-06">
+              {((value as string) || '').length}/{fieldInfo.maxLength} characters
+            </p>
+          )}
         </div>
       );
     }
