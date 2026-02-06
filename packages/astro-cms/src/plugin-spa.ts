@@ -59,6 +59,7 @@ export interface ConlocaCMSOptions extends Omit<UIConfig, 'basename'> {
   puckConfigPath: string; // Path to the puck config module (should be .tsx file with React components)
   dataSchemasPath?: string; // Path to the data schemas module (exports { dataSchemas })
   pageSchemasPath?: string; // Path to the page schemas module (exports { pageSchemas })
+  schemasPath?: string; // Unified schema file (replaces dataSchemasPath + pageSchemasPath)
 
   /**
    * Default layout for content pages.
@@ -197,6 +198,28 @@ export default pageSchemas;
 `;
 };
 
+// Template for the unified schemas loader virtual module
+const schemasLoader = (absoluteSchemasPath: string) => {
+  return `
+import { setPageSchemas } from '@conloca/cms-spa/page-schemas';
+import * as schemas from '${absoluteSchemasPath}';
+
+if (schemas.pageSchemas) {
+  setPageSchemas(schemas.pageSchemas);
+}
+
+if (import.meta.hot) {
+  import.meta.hot.accept('${absoluteSchemasPath}', async (newModule) => {
+    if (newModule?.pageSchemas) {
+      setPageSchemas(newModule.pageSchemas);
+    }
+  });
+}
+
+export default schemas;
+`;
+};
+
 export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
   const cmsRoute = options.route || '/__cms';
 
@@ -245,6 +268,7 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
     enableDevtools: options.enableDevtools ?? true,
     queryClientOptions: options.queryClientOptions,
     dataSchemasPath: options.dataSchemasPath,
+    schemasPath: options.schemasPath,
     projectRoot: process.cwd(),
     templates: options.templates,
   };
@@ -459,6 +483,9 @@ initHydration(componentRegistry)
                   if (id === `${cmsRoute}/page-schemas-entry.js`) {
                     return id;
                   }
+                  if (id === `${cmsRoute}/schemas-entry.js`) {
+                    return id;
+                  }
                   if (id === VIRTUAL_CMS_SPA_ENTRY) {
                     return RESOLVED_CMS_SPA_ENTRY;
                   }
@@ -502,6 +529,15 @@ initHydration(componentRegistry)
                       return pageSchemasLoader(absoluteSchemasPath);
                     }
                     // Return empty module if no page schemas path configured
+                    return 'export default {};';
+                  }
+                  if (id === `${cmsRoute}/schemas-entry.js`) {
+                    if (options.schemasPath) {
+                      const absoluteSchemasPath = options.schemasPath.startsWith('.')
+                        ? `/${options.schemasPath.slice(2)}`
+                        : options.schemasPath;
+                      return schemasLoader(absoluteSchemasPath);
+                    }
                     return 'export default {};';
                   }
                   if (id === RESOLVED_CMS_SPA_ENTRY) {
