@@ -267,15 +267,35 @@ export function PageEditorWrapper({ puckConfig }: PageEditorWrapperProps) {
       <PageMetadataDialog
         open={metadataDialogOpen}
         onOpenChange={setMetadataDialogOpen}
-        page={{
-          title: content.localized.meta.title || '',
-          description: content.localized.meta.description || '',
-          pathname: content.localized.pathname || '/',
-          publishDate: content.localized.publishAt ? new Date(content.localized.publishAt) : null,
-          unpublishDate: content.localized.unpublishAt ? new Date(content.localized.unpublishAt) : null,
-          robots: content.localized.meta.robots,
-          canonical: content.localized.meta.canonical,
-        }}
+        page={(() => {
+          // Extract custom metadata: everything in meta except core SEO fields
+          const coreMetaKeys = new Set([
+            'title',
+            'description',
+            'robots',
+            'canonical',
+            'keywords',
+            'ogTitle',
+            'ogDescription',
+            'ogImage',
+          ]);
+          const customMeta: Record<string, unknown> = {};
+          for (const [key, value] of Object.entries(content.localized.meta)) {
+            if (!coreMetaKeys.has(key)) {
+              customMeta[key] = value;
+            }
+          }
+          return {
+            title: content.localized.meta.title || '',
+            description: content.localized.meta.description || '',
+            pathname: content.localized.pathname || '/',
+            publishDate: content.localized.publishAt ? new Date(content.localized.publishAt) : null,
+            unpublishDate: content.localized.unpublishAt ? new Date(content.localized.unpublishAt) : null,
+            robots: content.localized.meta.robots,
+            canonical: content.localized.meta.canonical,
+            customMeta,
+          };
+        })()}
         onSave={async (metadata: PageMetadata) => {
           try {
             const result = await updateContent.mutateAsync({
@@ -287,6 +307,7 @@ export function PageEditorWrapper({ puckConfig }: PageEditorWrapperProps) {
                   description: metadata.description,
                   robots: metadata.robots,
                   canonical: metadata.canonical,
+                  ...(metadata.customMeta || {}),
                 },
                 pathname: metadata.pathname,
                 publishAt: metadata.publishDate?.toISOString() || null,
