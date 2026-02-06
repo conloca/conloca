@@ -58,6 +58,7 @@ export interface ConlocaCMSOptions extends Omit<UIConfig, 'basename'> {
   route?: string; // Default: /__cms
   puckConfigPath: string; // Path to the puck config module (should be .tsx file with React components)
   dataSchemasPath?: string; // Path to the data schemas module (exports { dataSchemas })
+  pageSchemasPath?: string; // Path to the page schemas module (exports { pageSchemas })
 
   /**
    * Default layout for content pages.
@@ -170,6 +171,29 @@ if (import.meta.hot) {
 }
 
 export default dataSchemas;
+`;
+};
+
+// Template for the page schemas loader virtual module
+const pageSchemasLoader = (absoluteSchemasPath: string) => {
+  return `
+// Import setPageSchemas which handles subscription notifications
+import { setPageSchemas } from '@conloca/cms-spa/page-schemas';
+import { pageSchemas } from '${absoluteSchemasPath}';
+
+// Register the schemas - subscribers are notified automatically
+setPageSchemas(pageSchemas);
+
+// Accept HMR for this module
+if (import.meta.hot) {
+  import.meta.hot.accept('${absoluteSchemasPath}', async (newModule) => {
+    if (newModule?.pageSchemas) {
+      setPageSchemas(newModule.pageSchemas);
+    }
+  });
+}
+
+export default pageSchemas;
 `;
 };
 
@@ -432,6 +456,9 @@ initHydration(componentRegistry)
                   if (id === `${cmsRoute}/data-schemas-entry.js`) {
                     return id;
                   }
+                  if (id === `${cmsRoute}/page-schemas-entry.js`) {
+                    return id;
+                  }
                   if (id === VIRTUAL_CMS_SPA_ENTRY) {
                     return RESOLVED_CMS_SPA_ENTRY;
                   }
@@ -464,6 +491,17 @@ initHydration(componentRegistry)
                       return dataSchemasLoader(absoluteSchemasPath);
                     }
                     // Return empty module if no schemas path configured
+                    return 'export default {};';
+                  }
+                  if (id === `${cmsRoute}/page-schemas-entry.js`) {
+                    if (options.pageSchemasPath) {
+                      const absoluteSchemasPath = options.pageSchemasPath.startsWith('.')
+                        ? `/${options.pageSchemasPath.slice(2)}`
+                        : options.pageSchemasPath;
+
+                      return pageSchemasLoader(absoluteSchemasPath);
+                    }
+                    // Return empty module if no page schemas path configured
                     return 'export default {};';
                   }
                   if (id === RESOLVED_CMS_SPA_ENTRY) {
