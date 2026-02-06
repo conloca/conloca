@@ -33,6 +33,7 @@ export function ImageUrlField({ value, onChange }: ImageUrlFieldProps) {
     const assetPath = `/assets${folder}/${asset.filename}`;
     onChange(assetPath);
     setLocalValue(assetPath);
+    setPickerOpen(false);
   };
 
   const handleBlur = () => {

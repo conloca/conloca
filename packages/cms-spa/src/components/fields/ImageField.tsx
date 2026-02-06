@@ -35,6 +35,7 @@ export function ImageFieldRender({ value, onChange }: ImageFieldRenderProps) {
     const assetPath = `/assets${folder}/${asset.filename}`;
     onChange(assetPath);
     setLocalValue(assetPath);
+    setModalOpen(false);
   };
 
   const handleBlur = () => {
