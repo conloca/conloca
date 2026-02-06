@@ -5,7 +5,6 @@ export { FolderNav } from './FolderNav';
 export { FolderTreeSidebar } from './FolderTreeSidebar';
 export { ImagePicker } from './ImagePicker';
 export { MediaLibrary } from './MediaLibrary';
-export { MediaLibraryModal } from './MediaLibraryModal';
 export { type FileTypeFilter, MediaToolbar, type SortOption } from './MediaToolbar';
 export { UploadModal } from './UploadModal';
 export { UploadZone } from './UploadZone';

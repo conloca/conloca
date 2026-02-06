@@ -7,6 +7,7 @@ import { useSiteBaseUrl } from '../../hooks';
 import type { SaveState } from '../../types';
 import { ConflictDialog } from '../dialogs/ConflictDialog';
 import { ImageFieldRender } from '../fields/ImageField';
+import { ImageUrlField } from '../fields/ImageUrlField';
 import { DrawerItemOverride } from './DrawerItemOverride';
 import { PageEditorHeaderActions } from './PageEditorHeaderActions';
 
@@ -111,6 +112,16 @@ export function PageEditor({
           overrides={{
             fieldTypes: {
               image: ({ onChange, value }) => <ImageFieldRender value={value || ''} onChange={onChange} />,
+              text: ({ name, value, onChange, children }) => {
+                // Extract terminal field name segment for array items (e.g., "posts[0].imageUrl" -> "imageUrl")
+                const fieldName = name.includes('.') ? name.split('.').pop()! : name;
+                const isImageField = /image/i.test(fieldName);
+                if (isImageField) {
+                  return <ImageUrlField value={value || ''} onChange={onChange} />;
+                }
+                // Non-image text fields: render default Puck field
+                return <>{children}</>;
+              },
             },
             headerActions: () => (
               <PageEditorHeaderActions
