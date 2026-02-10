@@ -39,10 +39,6 @@ function resolvePageSchema(
   return { schema: pageSchemas[bestMatch], sectionName };
 }
 
-function SectionHeader({ title }: { title: string }) {
-  return <p className="text-xs text-grey-06 mt-5 mb-2 first:mt-0">{title}</p>;
-}
-
 interface PageMetadataDialogProps {
   open: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -116,21 +112,18 @@ export function PageMetadataDialog({ open, onOpenChange, page, onSave }: PageMet
           </div>
 
           <form onSubmit={handleSubmit}>
-            {/* Section: Page Info */}
-            <SectionHeader title="Page Info" />
             <SchemaForm schema={pageInfoSchema} values={formValues} onChange={setFormValues} />
 
-            {/* Section: Custom Collection Fields (only when schema exists) */}
             {resolvedSchema && (
-              <>
-                <SectionHeader title={resolvedSchema.sectionName} />
-                <SchemaForm schema={resolvedSchema.schema} values={customValues} onChange={setCustomValues} />
-              </>
+              <SchemaForm
+                className="mt-6"
+                schema={resolvedSchema.schema}
+                values={customValues}
+                onChange={setCustomValues}
+              />
             )}
 
-            {/* Section: SEO & Publishing */}
-            <SectionHeader title="SEO & Publishing" />
-            <SchemaForm schema={seoPublishingSchema} values={formValues} onChange={setFormValues} />
+            <SchemaForm className="mt-6" schema={seoPublishingSchema} values={formValues} onChange={setFormValues} />
 
             <div className="flex gap-2 pt-6">
               <button

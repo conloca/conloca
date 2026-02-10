@@ -41,7 +41,7 @@ export function SchemaForm({ schema, values, onChange, isLoading, className }: S
 
   return (
     <div className={className}>
-      <div className="space-y-4">
+      <div className="space-y-6">
         {Object.entries(fields).map(([fieldName, fieldInfo]) => (
           <SchemaField
             key={fieldName}
