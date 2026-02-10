@@ -10,13 +10,9 @@ import { deriveComponentPaths, type HydrationDiscovery, scanForHydratableCompone
 import { normalizeRoutingConfig, resolveRouteConfig } from './lib/routing-config.js';
 
 // Get the directory of this module to resolve page-handler.astro
-// In development, __dirname points to src/. In production, it points to dist/.
-// The handlers directory is always in src/, so we need to handle both cases.
+// Works from both src/ (dev) and dist/ (published) since build copies the file
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const isInDist = __dirname.endsWith('/dist') || __dirname.includes('/dist/');
-const PAGE_HANDLER_PATH = isInDist
-  ? join(dirname(__dirname), 'src', 'handlers', 'page-handler.astro')
-  : join(__dirname, 'handlers', 'page-handler.astro');
+const PAGE_HANDLER_PATH = join(__dirname, 'handlers', 'page-handler.astro');
 
 import {
   generateLayoutModule,
