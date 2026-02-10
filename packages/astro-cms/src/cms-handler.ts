@@ -79,12 +79,7 @@ function generateDevHtml(config: typeof spaConfig): string {
     // Configure UI with plugin options
     window.__UI_CONFIG__ = ${JSON.stringify(config)};
   </script>
-  ${
-    config.schemasPath
-      ? `<script type="module" src="${config.basename}/schemas-entry.js"></script>`
-      : `<script type="module" src="${config.basename}/data-schemas-entry.js"></script>
-  <script type="module" src="${config.basename}/page-schemas-entry.js"></script>`
-  }
+  <script type="module" src="${config.basename}/schemas-entry.js"></script>
   <script type="module" src="${config.basename}/puck-entry.js"></script>
   <script type="module" src="${config.basename}/content-listener.js"></script>
 </head>
@@ -136,16 +131,12 @@ async function handleSpa(params: { path?: string | string[] }, request: Request)
       } else {
         html = await loadIndexHtml();
         // Inject CMS configuration and load virtual modules
-        const schemaScripts = spaConfig.schemasPath
-          ? `<script type="module" src="${spaConfig.basename}/schemas-entry.js"></script>`
-          : `<script type="module" src="${spaConfig.basename}/data-schemas-entry.js"></script>
-        <script type="module" src="${spaConfig.basename}/page-schemas-entry.js"></script>`;
         const configScript = `
         <script>
           // Configure UI with plugin options
           window.__UI_CONFIG__ = ${JSON.stringify(spaConfig)};
         </script>
-        ${schemaScripts}
+        <script type="module" src="${spaConfig.basename}/schemas-entry.js"></script>
         <script type="module" src="${spaConfig.basename}/puck-entry.js"></script>
         <script type="module" src="${spaConfig.basename}/content-listener.js"></script>
       `;

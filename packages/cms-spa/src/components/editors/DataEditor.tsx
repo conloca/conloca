@@ -186,7 +186,7 @@ export function DataEditor({
           To enable form editing, add a schema for "{collection}" in your
           <br />
           <code className="bg-grey-11 px-1 rounded">dataSchemas</code> config file and set{' '}
-          <code className="bg-grey-11 px-1 rounded">dataSchemasPath</code> in astro.config.mjs
+          <code className="bg-grey-11 px-1 rounded">schemasPath</code> in astro.config.mjs
         </p>
       </div>
     );

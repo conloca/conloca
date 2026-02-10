@@ -57,9 +57,7 @@ export interface ConlocaCMSOptions extends Omit<UIConfig, 'basename'> {
   canvasDir?: string;
   route?: string; // Default: /__cms
   puckConfigPath: string; // Path to the puck config module (should be .tsx file with React components)
-  dataSchemasPath?: string; // Path to the data schemas module (exports { dataSchemas })
-  pageSchemasPath?: string; // Path to the page schemas module (exports { pageSchemas })
-  schemasPath?: string; // Unified schema file (replaces dataSchemasPath + pageSchemasPath)
+  schemasPath?: string; // Path to the schemas module (exports { dataSchemas, pageSchemas })
 
   /**
    * Default layout for content pages.
@@ -152,53 +150,7 @@ export default puckConfigPromise.then(m => m.default);
 `;
 };
 
-// Template for the data schemas loader virtual module
-const dataSchemasLoader = (absoluteSchemasPath: string) => {
-  return `
-// Import setDataSchemas which handles subscription notifications
-import { setDataSchemas } from '@conloca/cms-spa/data-schemas';
-import { dataSchemas } from '${absoluteSchemasPath}';
-
-// Register the schemas - subscribers are notified automatically
-setDataSchemas(dataSchemas);
-
-// Accept HMR for this module
-if (import.meta.hot) {
-  import.meta.hot.accept('${absoluteSchemasPath}', async (newModule) => {
-    if (newModule?.dataSchemas) {
-      setDataSchemas(newModule.dataSchemas);
-    }
-  });
-}
-
-export default dataSchemas;
-`;
-};
-
-// Template for the page schemas loader virtual module
-const pageSchemasLoader = (absoluteSchemasPath: string) => {
-  return `
-// Import setPageSchemas which handles subscription notifications
-import { setPageSchemas } from '@conloca/cms-spa/page-schemas';
-import { pageSchemas } from '${absoluteSchemasPath}';
-
-// Register the schemas - subscribers are notified automatically
-setPageSchemas(pageSchemas);
-
-// Accept HMR for this module
-if (import.meta.hot) {
-  import.meta.hot.accept('${absoluteSchemasPath}', async (newModule) => {
-    if (newModule?.pageSchemas) {
-      setPageSchemas(newModule.pageSchemas);
-    }
-  });
-}
-
-export default pageSchemas;
-`;
-};
-
-// Template for the unified schemas loader virtual module
+// Template for the schemas loader virtual module
 const schemasLoader = (absoluteSchemasPath: string) => {
   return `
 import { setPageSchemas } from '@conloca/cms-spa/page-schemas';
@@ -267,7 +219,6 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
     siteBaseUrl: options.siteBaseUrl,
     enableDevtools: options.enableDevtools ?? true,
     queryClientOptions: options.queryClientOptions,
-    dataSchemasPath: options.dataSchemasPath,
     schemasPath: options.schemasPath,
     projectRoot: process.cwd(),
     templates: options.templates,
@@ -477,12 +428,6 @@ initHydration(componentRegistry)
                   if (id === `${cmsRoute}/content-listener.js`) {
                     return id;
                   }
-                  if (id === `${cmsRoute}/data-schemas-entry.js`) {
-                    return id;
-                  }
-                  if (id === `${cmsRoute}/page-schemas-entry.js`) {
-                    return id;
-                  }
                   if (id === `${cmsRoute}/schemas-entry.js`) {
                     return id;
                   }
@@ -508,28 +453,6 @@ initHydration(componentRegistry)
                   }
                   if (id === `${cmsRoute}/content-listener.js`) {
                     return contentChangeListener();
-                  }
-                  if (id === `${cmsRoute}/data-schemas-entry.js`) {
-                    if (options.dataSchemasPath) {
-                      const absoluteSchemasPath = options.dataSchemasPath.startsWith('.')
-                        ? `/${options.dataSchemasPath.slice(2)}`
-                        : options.dataSchemasPath;
-
-                      return dataSchemasLoader(absoluteSchemasPath);
-                    }
-                    // Return empty module if no schemas path configured
-                    return 'export default {};';
-                  }
-                  if (id === `${cmsRoute}/page-schemas-entry.js`) {
-                    if (options.pageSchemasPath) {
-                      const absoluteSchemasPath = options.pageSchemasPath.startsWith('.')
-                        ? `/${options.pageSchemasPath.slice(2)}`
-                        : options.pageSchemasPath;
-
-                      return pageSchemasLoader(absoluteSchemasPath);
-                    }
-                    // Return empty module if no page schemas path configured
-                    return 'export default {};';
                   }
                   if (id === `${cmsRoute}/schemas-entry.js`) {
                     if (options.schemasPath) {

@@ -14,7 +14,6 @@ interface ImportMeta {
 declare module 'virtual:conloca-config' {
   import type { UIConfig } from '@conloca/cms-spa';
   interface SpaConfig extends UIConfig {
-    dataSchemasPath?: string;
     schemasPath?: string;
     projectRoot?: string;
   }

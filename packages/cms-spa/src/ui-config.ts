@@ -15,8 +15,8 @@ export interface UIConfig {
   queryClientOptions?: QueryClientConfig;
   /** Absolute path to project root (for "Open in Editor" links) */
   projectRoot?: string;
-  /** Relative path to data schemas file (e.g., './src/schemas/data.ts') */
-  dataSchemasPath?: string;
+  /** Relative path to schemas file (e.g., './src/schemas.ts') */
+  schemasPath?: string;
   /** Page creation templates */
   templates?: Record<string, TemplateConfig>;
 }

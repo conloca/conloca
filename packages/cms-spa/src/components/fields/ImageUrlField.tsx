@@ -29,7 +29,7 @@ export function ImageUrlField({ value, onChange }: ImageUrlFieldProps) {
   }, [value]);
 
   const handleSelect = (asset: AssetEntry) => {
-    const folder = asset.folder && asset.folder !== '/' ? asset.folder : '/uploads';
+    const folder = asset.folder && asset.folder !== '/' ? asset.folder : '';
     const assetPath = `/assets${folder}/${asset.filename}`;
     onChange(assetPath);
     setLocalValue(assetPath);

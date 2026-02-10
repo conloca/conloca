@@ -23,11 +23,11 @@ import { ErrorModal } from '../dialogs/ErrorModal';
 import { DataEditor } from '../editors/DataEditor';
 
 /**
- * Generates a VSCode URI to open the data schemas file.
+ * Generates a VSCode URI to open the schemas file.
  */
-function getSchemasEditorLink(projectRoot: string, dataSchemasPath: string): string {
+function getSchemasEditorLink(projectRoot: string, schemasPath: string): string {
   // Convert relative path (./src/...) to absolute
-  const relativePath = dataSchemasPath.startsWith('./') ? dataSchemasPath.slice(2) : dataSchemasPath;
+  const relativePath = schemasPath.startsWith('./') ? schemasPath.slice(2) : schemasPath;
   return `vscode://file${projectRoot}/${relativePath}`;
 }
 
@@ -42,9 +42,7 @@ export function DataList({ dataSchemas }: DataListProps) {
   // Get config for editor links
   const config = getUIConfig();
   const schemasEditorLink =
-    config.projectRoot && config.dataSchemasPath
-      ? getSchemasEditorLink(config.projectRoot, config.dataSchemasPath)
-      : null;
+    config.projectRoot && config.schemasPath ? getSchemasEditorLink(config.projectRoot, config.schemasPath) : null;
   const [deleteDialog, openDeleteDialog, closeDeleteDialog] = useDialogState({
     entryId: '',
     entryTitle: '',
