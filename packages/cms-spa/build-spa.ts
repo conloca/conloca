@@ -15,12 +15,16 @@ await processTailwindCSS({
   minify: !isDev,
 });
 
-// Dev mode: CSS only - Vite loads source directly via virtual module
+// Step 2.5: Build library exports with tsdown (needed for both dev and prod)
+console.log('Building library exports with tsdown...');
+await $`bunx tsdown`;
+
+// Dev mode: CSS + library only - Vite loads source directly via virtual module
 if (isDev) {
   // Copy CSS to dist/spa for serving
   await $`cp ${TAILWIND_CONFIG.outputCompiled} ./dist/spa/main.css`;
   await $`rm -f ${TAILWIND_CONFIG.outputCompiled}`;
-  console.log('Dev build complete (CSS only - Vite handles JS source)');
+  console.log('Dev build complete (CSS + library exports)');
   process.exit(0);
 }
 
@@ -69,9 +73,5 @@ if (htmlFiles.length > 0 && !htmlFiles.some((f) => f.path.endsWith('index.html')
   const mainHtml = htmlFiles[0];
   await $`cp ${mainHtml.path} ./dist/spa/index.html`;
 }
-
-// Step 6: Build TypeScript for exported files only
-console.log('Building TypeScript for exported files...');
-await $`tsc --build tsconfig.exports.json`;
 
 console.log('Build complete!');
