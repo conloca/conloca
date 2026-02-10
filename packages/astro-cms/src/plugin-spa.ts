@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { UIConfig } from '@conloca/cms-spa';
@@ -460,16 +461,39 @@ initHydration(componentRegistry)
                     return 'export default {};';
                   }
                   if (id === RESOLVED_CMS_SPA_ENTRY) {
-                    // Get React refresh preamble (same pattern as puckConfigLoader)
                     const preambleCode = viteReact.preambleCode.replace('__BASE__', '/');
+
+                    // Detect whether cms-spa source is available (workspace mode)
+                    // vs only dist/ (npm install)
+                    let cmsSpaImport: string;
+                    try {
+                      const cmsSpaPackageJsonPath = import.meta.resolve('@conloca/cms-spa/package.json');
+                      const cmsSpaDir = dirname(
+                        cmsSpaPackageJsonPath.startsWith('file://')
+                          ? fileURLToPath(cmsSpaPackageJsonPath)
+                          : cmsSpaPackageJsonPath,
+                      );
+                      const srcMainPath = join(cmsSpaDir, 'src', 'main.tsx');
+
+                      if (existsSync(srcMainPath)) {
+                        // Workspace mode: import source for HMR
+                        cmsSpaImport = `import '${srcMainPath}';`;
+                      } else {
+                        // npm mode: import pre-built SPA entry
+                        cmsSpaImport = "import '@conloca/cms-spa';";
+                      }
+                    } catch {
+                      // Fallback: use package import
+                      cmsSpaImport = "import '@conloca/cms-spa';";
+                    }
 
                     return `
 // Import and execute React refresh preamble first (from @vitejs/plugin-react)
 ${preambleCode}
 
-// Import cms-spa main.tsx directly through Vite
+// Import cms-spa through Vite
 // Vite will resolve React from its pre-bundled deps (same instance as puck.config.tsx)
-import '@conloca/cms-spa/src/main.tsx';
+${cmsSpaImport}
 
 // Accept HMR
 if (import.meta.hot) {
