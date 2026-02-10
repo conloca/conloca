@@ -67,11 +67,7 @@
   },
   "files": [
     "dist",
-    "src/handlers",
-    "src/components",
-    "src/lib",
-    "src/types.ts",
-    "src/virtual-modules.d.ts",
+    "src",
     "!**/*.tsbuildinfo"
   ],
   "dependencies": {
