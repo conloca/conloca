@@ -1,6 +1,6 @@
 {
   "name": "@conloca/astro-cms",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publishConfig": {
     "access": "public"
   },
@@ -68,6 +68,9 @@
   "files": [
     "dist",
     "src/handlers",
+    "src/components",
+    "src/lib",
+    "src/types.ts",
     "src/virtual-modules.d.ts",
     "!**/*.tsbuildinfo"
   ],
