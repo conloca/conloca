@@ -38,13 +38,11 @@
   "exports": {
     "./package.json": "./package.json",
     ".": {
-      "development": "./src/index.ts",
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs",
       "default": "./dist/index.mjs"
     },
     "./node": {
-      "development": "./src/node.ts",
       "types": "./dist/node.d.mts",
       "import": "./dist/node.mjs",
       "default": "./dist/node.mjs"
@@ -52,7 +50,6 @@
   },
   "files": [
     "dist",
-    "src",
     "!**/*.tsbuildinfo"
   ],
   "scripts": {

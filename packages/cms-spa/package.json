@@ -10,48 +10,35 @@
     "directory": "packages/cms-spa"
   },
   "type": "module",
-  "main": "./dist/index.js",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
   "exports": {
     "./package.json": "./package.json",
     ".": {
-      "development": "./src/index.ts",
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "default": "./dist/index.js"
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.mjs"
     },
     "./data-schemas": {
-      "development": "./src/data-schemas.ts",
-      "types": "./dist/data-schemas.d.ts",
-      "import": "./dist/data-schemas.js",
-      "default": "./dist/data-schemas.js"
+      "types": "./dist/data-schemas.d.mts",
+      "import": "./dist/data-schemas.mjs",
+      "default": "./dist/data-schemas.mjs"
     },
     "./page-schemas": {
-      "development": "./src/page-schemas.ts",
-      "types": "./dist/page-schemas.d.ts",
-      "import": "./dist/page-schemas.js",
-      "default": "./dist/page-schemas.js"
+      "types": "./dist/page-schemas.d.mts",
+      "import": "./dist/page-schemas.mjs",
+      "default": "./dist/page-schemas.mjs"
     },
     "./puck-config": {
-      "development": "./src/puck-config.ts",
-      "types": "./dist/puck-config.d.ts",
-      "import": "./dist/puck-config.js",
-      "default": "./dist/puck-config.js"
+      "types": "./dist/puck-config.d.mts",
+      "import": "./dist/puck-config.mjs",
+      "default": "./dist/puck-config.mjs"
     },
-    "./dist/spa/*": "./dist/spa/*",
-    "./src/main.tsx": {
-      "import": "./src/main.tsx",
-      "default": "./src/main.tsx"
-    },
-    "./src/main.css": {
-      "import": "./src/main.css",
-      "default": "./src/main.css"
-    }
+    "./dist/spa/*": "./dist/spa/*"
   },
   "files": [
     "dist",
-    "src",
     "!**/*.tsbuildinfo"
   ],
   "scripts": {

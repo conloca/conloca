@@ -29,19 +29,16 @@
   "exports": {
     "./package.json": "./package.json",
     ".": {
-      "development": "./src/index.ts",
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs",
       "default": "./dist/index.mjs"
     },
     "./node": {
-      "development": "./src/node.ts",
       "types": "./dist/node.d.mts",
       "import": "./dist/node.mjs",
       "default": "./dist/node.mjs"
     },
     "./schemas": {
-      "development": "./src/schemas/index.ts",
       "types": "./dist/schemas/index.d.mts",
       "import": "./dist/schemas/index.mjs",
       "default": "./dist/schemas/index.mjs"
@@ -56,7 +53,6 @@
   "types": "./dist/index.d.mts",
   "files": [
     "dist",
-    "src",
     "!**/*.tsbuildinfo"
   ],
   "devDependencies": {}

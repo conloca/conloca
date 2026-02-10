@@ -16,25 +16,21 @@
   "exports": {
     "./package.json": "./package.json",
     ".": {
-      "development": "./src/index.ts",
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs",
       "default": "./dist/index.mjs"
     },
     "./components": {
-      "development": "./src/components.ts",
       "types": "./dist/components.d.mts",
       "import": "./dist/components.mjs",
       "default": "./dist/components.mjs"
     },
     "./cms-handler": {
-      "development": "./src/cms-handler.ts",
       "types": "./dist/cms-handler.d.mts",
       "import": "./dist/cms-handler.mjs",
       "default": "./dist/cms-handler.mjs"
     },
     "./collections": {
-      "development": "./src/collections.ts",
       "types": "./dist/collections.d.mts",
       "import": "./dist/collections.mjs",
       "default": "./dist/collections.mjs"
@@ -43,31 +39,27 @@
       "types": "./src/virtual-modules.d.ts"
     },
     "./page-handler": {
-      "development": "./src/handlers/page-handler.astro",
       "import": "./dist/handlers/page-handler.astro",
       "default": "./dist/handlers/page-handler.astro"
     },
     "./lib/hydration-script": {
-      "development": "./src/lib/hydration-script.ts",
       "types": "./dist/lib/hydration-script.d.mts",
       "import": "./dist/lib/hydration-script.mjs",
       "default": "./dist/lib/hydration-script.mjs"
     },
     "./hydration": {
-      "development": "./src/hydration.ts",
       "types": "./dist/hydration.d.mts",
       "import": "./dist/hydration.mjs",
       "default": "./dist/hydration.mjs"
     }
   },
   "scripts": {
-    "build": "tsdown",
+    "build": "tsdown && mkdir -p dist/handlers && cp src/handlers/page-handler.astro dist/handlers/",
     "test": "tsc-bun-test",
     "test:watch": "bun test --watch"
   },
   "files": [
     "dist",
-    "src",
     "!**/*.tsbuildinfo"
   ],
   "dependencies": {
