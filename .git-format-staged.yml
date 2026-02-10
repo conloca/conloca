@@ -2,14 +2,6 @@
 # This configuration replaces the multiple git-format-staged commands in pre-commit.sh
 
 formatters:
-  # ESLint for Astro files (run first as it only handles .astro files)
-  eslint:
-    command: eslint-stdout '{}'
-    patterns:
-      - *.astro
-      - !.* # Exclude hidden files
-      - !.*/** # Exclude files in hidden directories
-
   # Biome for JS/TS/JSX/TSX/JSON/HTML/CSS/GraphQL files
   biome:
     command: biome check --files-ignore-unknown=true --use-editorconfig=true '--stdin-file-path={}' --fix
