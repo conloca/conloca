@@ -1,0 +1,72 @@
+# Publish @conloca packages to npm using OIDC trusted publishing.
+#
+# Why no devenv shell?
+#   The publish job only needs Node.js, npm, and Bun. Using devenv adds Nix
+#   setup overhead (~2 min) and may not pass through the OIDC environment
+#   variables that npm needs for token exchange (see GitHub OIDC docs).
+#
+# Why no NODE_AUTH_TOKEN?
+#   OIDC trusted publishing eliminates long-lived secrets. Setting
+#   NODE_AUTH_TOKEN would override OIDC and fall back to token-based auth.
+#
+# Why no NPM_CONFIG_PROVENANCE?
+#   Provenance attestation requires the repo to be public. For private repos
+#   it fails silently, producing a confusing 0-exit-code with no attestation.
+#   Omitting it avoids this footgun entirely.
+
+name: Publish to npm
+
+on:
+  push:
+    tags:
+      - v*.*.*
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # Required for npm OIDC trusted publishing
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          filter: tree:0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org/
+
+      # npm >= 11.5.1 is required for OIDC support.
+      # GitHub-hosted runners may ship an older version.
+      - name: Ensure npm >= 11.5.1 for OIDC
+        run: |
+          npm install -g npm@latest
+          echo "npm version: $(npm --version)"
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build all releasable packages
+        run: bun run release:build
+
+      # No NODE_AUTH_TOKEN — OIDC handles authentication automatically.
+      - name: Publish to npm
+        run: bunx nx release publish
+
+      # -----------------------------------------------------------------
+      # BOOTSTRAP: First-ever publish (before OIDC trusted publishers are
+      # configured on npmjs.com). Uncomment the block below and add a
+      # NODE_AUTH_TOKEN secret to the repo. Remove it after OIDC setup.
+      #
+      # - name: Publish to npm (token-based bootstrap)
+      #   run: bunx nx release publish
+      #   env:
+      #     NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      # -----------------------------------------------------------------
