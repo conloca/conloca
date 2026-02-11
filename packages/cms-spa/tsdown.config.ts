@@ -3,6 +3,7 @@ import { defineConfig } from 'tsdown';
 export default defineConfig({
   entry: {
     index: 'src/index.ts',
+    main: 'src/main.tsx',
     'puck-config': 'src/puck-config.ts',
     'page-schemas': 'src/page-schemas.ts',
     'data-schemas': 'src/data-schemas.ts',

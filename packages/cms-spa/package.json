@@ -1,6 +1,6 @@
 {
   "name": "@conloca/cms-spa",
-  "version": "0.1.2",
+  "version": "0.1.4",
   "publishConfig": {
     "access": "public"
   },
@@ -34,6 +34,10 @@
       "types": "./dist/puck-config.d.mts",
       "import": "./dist/puck-config.mjs",
       "default": "./dist/puck-config.mjs"
+    },
+    "./main": {
+      "import": "./dist/main.mjs",
+      "default": "./dist/main.mjs"
     },
     "./dist/spa/*": "./dist/spa/*"
   },

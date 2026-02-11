@@ -479,12 +479,12 @@ initHydration(componentRegistry)
                         // Workspace mode: import source for HMR
                         cmsSpaImport = `import '${srcMainPath}';`;
                       } else {
-                        // npm mode: import pre-built SPA entry
-                        cmsSpaImport = "import '@conloca/cms-spa';";
+                        // npm mode: import pre-built SPA mounting entry
+                        cmsSpaImport = "import '@conloca/cms-spa/main';";
                       }
                     } catch {
                       // Fallback: use package import
-                      cmsSpaImport = "import '@conloca/cms-spa';";
+                      cmsSpaImport = "import '@conloca/cms-spa/main';";
                     }
 
                     return `
