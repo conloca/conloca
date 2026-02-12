@@ -1,0 +1,13 @@
+diff --git a/dist/acorn.mjs b/dist/acorn.mjs
+index 74d5fc431be2b5062245e72937ef2032164b51cd..ef89f4de1dba2346973ffc1143ddad2da28bb52c 100644
+--- a/dist/acorn.mjs
++++ b/dist/acorn.mjs
+@@ -6231,3 +6231,8 @@ function tokenizer(input, options) {
+ }
+ 
+ export { Node, Parser, Position, SourceLocation, TokContext, Token, TokenType, defaultOptions, getLineInfo, isIdentifierChar, isIdentifierStart, isNewLine, keywords as keywordTypes, lineBreak, lineBreakG, nonASCIIwhitespace, parse, parseExpressionAt, types as tokContexts, types$1 as tokTypes, tokenizer, version };
++
++// Default export for CJS interop — Node 25+ resolves the "import" condition to this
++// ESM entry, but Rollup's CJS-to-ESM conversion generates `import default from 'acorn'`
++// which requires a default export to exist.
++export default { Node, Parser, Position, SourceLocation, TokContext, Token, TokenType, defaultOptions, getLineInfo, isIdentifierChar, isIdentifierStart, isNewLine, keywordTypes: keywords, lineBreak, lineBreakG, nonASCIIwhitespace, parse, parseExpressionAt, tokContexts: types, tokTypes: types$1, tokenizer, version };
