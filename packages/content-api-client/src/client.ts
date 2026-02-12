@@ -43,6 +43,12 @@ export interface GitPushResult {
   error?: string;
 }
 
+export interface GitPullResult {
+  success: boolean;
+  summary?: string;
+  error?: string;
+}
+
 export interface ContentAPIClientOptions {
   baseUrl?: string;
   fetch?: typeof fetch;
@@ -364,6 +370,13 @@ export class ContentAPIClient {
 
   async pushChanges(): Promise<GitPushResult> {
     return this.fetchAPI<GitPushResult>(`${this.baseUrl}/git/push`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  }
+
+  async pullChanges(): Promise<GitPullResult> {
+    return this.fetchAPI<GitPullResult>(`${this.baseUrl}/git/pull`, {
       method: 'POST',
       body: JSON.stringify({}),
     });

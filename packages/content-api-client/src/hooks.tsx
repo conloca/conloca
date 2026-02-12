@@ -12,6 +12,7 @@ import {
   APIClientError,
   ContentAPIClient,
   type GitCommitResult,
+  type GitPullResult,
   type GitPushResult,
   type GitStatus,
   StaleWriteError,
@@ -672,6 +673,18 @@ export function usePushChanges() {
   });
 }
 
+export function usePullChanges() {
+  const queryClient = useQueryClient();
+  const client = getContentAPIClient();
+
+  return useMutation({
+    mutationFn: () => client.pullChanges(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.gitStatus() });
+    },
+  });
+}
+
 // ===== Asset Hooks =====
 
 export function useAssets() {
@@ -816,4 +829,4 @@ export function useMoveAssets() {
 
 // Re-export for convenience
 export { ContentAPIClient, StaleWriteError, APIClientError };
-export type { GitStatus, GitCommitResult, GitPushResult };
+export type { GitStatus, GitCommitResult, GitPushResult, GitPullResult };
