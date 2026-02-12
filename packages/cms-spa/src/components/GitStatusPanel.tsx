@@ -1,10 +1,11 @@
-import { useCommitChanges, useGitStatus, usePushChanges } from '@conloca/content-api-client';
-import { AlertCircle, Check, GitBranch, Loader2, Upload } from 'lucide-react';
+import { useCommitChanges, useGitStatus, usePullChanges, usePushChanges } from '@conloca/content-api-client';
+import { AlertCircle, ArrowDownToLine, Check, GitBranch, Loader2, Upload } from 'lucide-react';
 import { cn } from '../utils/cn';
 
 export function GitStatusPanel() {
   const { data: status, isLoading, error } = useGitStatus();
   const commitMutation = useCommitChanges();
+  const pullMutation = usePullChanges();
   const pushMutation = usePushChanges();
 
   // Handle commit click
@@ -18,6 +19,13 @@ export function GitStatusPanel() {
   const handlePush = () => {
     if (status && status.ahead > 0) {
       pushMutation.mutate();
+    }
+  };
+
+  // Handle pull click
+  const handlePull = () => {
+    if (status?.isRepo) {
+      pullMutation.mutate();
     }
   };
 
@@ -57,6 +65,28 @@ export function GitStatusPanel() {
         <GitBranch className="h-4 w-4" />
         <span>{status?.branch || 'unknown'}</span>
       </div>
+
+      {/* Commit button */}
+      <button
+        type="button"
+        onClick={handlePull}
+        disabled={!status?.isRepo || pullMutation.isPending}
+        className={cn(
+          'flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-medium transition-colors',
+          status?.isRepo
+            ? status.behind > 0
+              ? 'bg-amber-500 text-white hover:bg-amber-600'
+              : 'bg-sky-500 text-white hover:bg-sky-600'
+            : 'bg-gray-100 text-gray-400 cursor-not-allowed',
+        )}
+      >
+        {pullMutation.isPending ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <ArrowDownToLine className="h-4 w-4" />
+        )}
+        <span>Pull</span>
+      </button>
 
       {/* Commit button */}
       <button
@@ -107,6 +137,7 @@ export function GitStatusPanel() {
       {/* Error feedback */}
       {commitMutation.isError ? <span className="text-red-500 text-sm">Commit failed</span> : null}
       {pushMutation.isError ? <span className="text-red-500 text-sm">Push failed</span> : null}
+      {pullMutation.isError ? <span className="text-red-500 text-sm">Pull failed</span> : null}
     </div>
   );
 }
