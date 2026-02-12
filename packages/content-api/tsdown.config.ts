@@ -11,5 +11,4 @@ export default defineConfig({
   tsconfig: 'tsconfig.lib.json',
   clean: true,
   external: ['@node-rs/xxhash'],
-  noExternal: ['simple-git'],
 });

@@ -3,7 +3,7 @@ import { cors } from 'hono/cors';
 import { type AssetConfig, AssetOperations } from './asset-operations';
 import type { ContentAPI } from './content-api.interface';
 import { localesOf } from './content-utils';
-import { createGitOperations, type GitAuthor, type GitHubConfig } from './git-operations';
+import { createGitOperations, type GitAuthor, type GitConfig } from './git-operations';
 import type { APIError, ContentManifest, ErrorCode, FindOptions, GlobalFilters } from './types';
 import { ErrorCodes } from './types';
 
@@ -1053,43 +1053,18 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
   // ===== Git Routes =====
 
   /**
-   * Get GitHub config from environment variables.
-   * Required: GITHUB_TOKEN, GITHUB_REPO
-   * Optional: GITHUB_BRANCH (defaults to 'main'), CONTENT_PATH (defaults to 'content/')
-   */
-  function getGitConfig(): GitHubConfig {
-    const token = process.env.GITHUB_TOKEN;
-    const repo = process.env.GITHUB_REPO;
-
-    if (!token || !repo) {
-      throw new Error('GITHUB_TOKEN and GITHUB_REPO environment variables required');
-    }
-
-    return {
-      token,
-      repo,
-      branch: process.env.GITHUB_BRANCH || 'main',
-      contentPath: process.env.CONTENT_PATH || 'content/',
-    };
-  }
-
-  /**
-   * Get local-git pull config for VPS workflows.
+   * Get git config from environment variables.
    * Required: CONTENT_PATH
-   * Optional: GITHUB_BRANCH (defaults to 'main')
+   * Optional: GIT_BRANCH (defaults to current checked-out branch)
    */
-  function getGitPullConfig(): GitHubConfig {
+  function getGitConfig(): GitConfig {
     const contentPath = process.env.CONTENT_PATH;
-
     if (!contentPath) {
-      throw new Error('CONTENT_PATH environment variable required for pull');
+      throw new Error('CONTENT_PATH environment variable is required for git operations');
     }
-
     return {
-      token: process.env.GITHUB_TOKEN || '',
-      repo: process.env.GITHUB_REPO || 'local/local',
-      branch: process.env.GITHUB_BRANCH || 'main',
       contentPath,
+      branch: process.env.GIT_BRANCH,
     };
   }
 
@@ -1106,7 +1081,7 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
 
       return c.json(status);
     } catch (error) {
-      if (error instanceof Error && error.message.includes('environment variables required')) {
+      if (error instanceof Error && error.message.includes('CONTENT_PATH')) {
         return c.json(errorResponse(ErrorCodes.GIT_NOT_REPO, error.message), 400);
       }
       return c.json(logAndCreateErrorResponse(error, ErrorCodes.GIT_STATUS_FAILED, 'Failed to get git status'), 500);
@@ -1138,7 +1113,7 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
 
       return c.json(result);
     } catch (error) {
-      if (error instanceof Error && error.message.includes('environment variables required')) {
+      if (error instanceof Error && error.message.includes('CONTENT_PATH')) {
         return c.json(errorResponse(ErrorCodes.GIT_NOT_REPO, error.message), 400);
       }
       return c.json(logAndCreateErrorResponse(error, ErrorCodes.GIT_COMMIT_FAILED, 'Failed to commit changes'), 500);
@@ -1158,7 +1133,7 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
 
       return c.json(result);
     } catch (error) {
-      if (error instanceof Error && error.message.includes('environment variables required')) {
+      if (error instanceof Error && error.message.includes('CONTENT_PATH')) {
         return c.json(errorResponse(ErrorCodes.GIT_NOT_REPO, error.message), 400);
       }
       return c.json(logAndCreateErrorResponse(error, ErrorCodes.GIT_PUSH_FAILED, 'Failed to push to origin'), 500);
@@ -1168,7 +1143,7 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
   // POST /git/pull - Pull from origin with autostash + rebase
   app.post('/git/pull', async (c) => {
     try {
-      const config = getGitPullConfig();
+      const config = getGitConfig();
       const gitOps = createGitOperations(config);
       const result = await gitOps.pull();
 
@@ -1178,7 +1153,7 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
 
       return c.json(result);
     } catch (error) {
-      if (error instanceof Error && error.message.includes('environment variable required')) {
+      if (error instanceof Error && error.message.includes('CONTENT_PATH')) {
         return c.json(errorResponse(ErrorCodes.GIT_NOT_REPO, error.message), 400);
       }
       return c.json(logAndCreateErrorResponse(error, ErrorCodes.GIT_PULL_FAILED, 'Failed to pull from origin'), 500);
