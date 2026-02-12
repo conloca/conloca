@@ -27,6 +27,8 @@ const bundleResult = await build({
     // Keep these external as they have native dependencies
     '@node-rs/xxhash',
     'fast-glob',
+    // Workspace dependency - resolved via npm at install time
+    '@conloca/content-api',
   ],
   naming: {
     entry: 'conloca.js',
