@@ -302,9 +302,9 @@ async function handleContentApi(request: Request, cfResult: CFAccessResult): Pro
   // FileSystemContentAPI.create() handles caching internally
   const contentApi = await FileSystemContentAPI.create({ contentRoot, canvasDir });
 
-  // Create the Hono router with optional assets support
+  // Create the Hono router with assets and content root for git operations
   const assetsPath = import.meta.env.CONLOCA_ASSETS_PATH || '';
-  const app = createContentAPIRouter(contentApi, assetsPath ? { assetsPath } : undefined);
+  const app = createContentAPIRouter(contentApi, { ...(assetsPath && { assetsPath }), contentRoot });
 
   // Extract the path after the API base
   const url = new URL(request.url);

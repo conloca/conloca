@@ -1053,14 +1053,14 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
   // ===== Git Routes =====
 
   /**
-   * Get git config from environment variables.
-   * Required: CONTENT_PATH
+   * Get git config from router options or environment variables.
+   * contentRoot from router options takes priority over CONTENT_PATH env var.
    * Optional: GIT_BRANCH (defaults to current checked-out branch)
    */
   function getGitConfig(): GitConfig {
-    const contentPath = process.env.CONTENT_PATH;
+    const contentPath = options?.contentRoot || process.env.CONTENT_PATH;
     if (!contentPath) {
-      throw new Error('CONTENT_PATH environment variable is required for git operations');
+      throw new Error('contentRoot option or CONTENT_PATH environment variable is required for git operations');
     }
     return {
       contentPath,
@@ -1081,7 +1081,7 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
 
       return c.json(status);
     } catch (error) {
-      if (error instanceof Error && error.message.includes('CONTENT_PATH')) {
+      if (error instanceof Error && (error.message.includes('contentRoot') || error.message.includes('CONTENT_PATH'))) {
         return c.json(errorResponse(ErrorCodes.GIT_NOT_REPO, error.message), 400);
       }
       return c.json(logAndCreateErrorResponse(error, ErrorCodes.GIT_STATUS_FAILED, 'Failed to get git status'), 500);
@@ -1113,7 +1113,7 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
 
       return c.json(result);
     } catch (error) {
-      if (error instanceof Error && error.message.includes('CONTENT_PATH')) {
+      if (error instanceof Error && (error.message.includes('contentRoot') || error.message.includes('CONTENT_PATH'))) {
         return c.json(errorResponse(ErrorCodes.GIT_NOT_REPO, error.message), 400);
       }
       return c.json(logAndCreateErrorResponse(error, ErrorCodes.GIT_COMMIT_FAILED, 'Failed to commit changes'), 500);
@@ -1133,7 +1133,7 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
 
       return c.json(result);
     } catch (error) {
-      if (error instanceof Error && error.message.includes('CONTENT_PATH')) {
+      if (error instanceof Error && (error.message.includes('contentRoot') || error.message.includes('CONTENT_PATH'))) {
         return c.json(errorResponse(ErrorCodes.GIT_NOT_REPO, error.message), 400);
       }
       return c.json(logAndCreateErrorResponse(error, ErrorCodes.GIT_PUSH_FAILED, 'Failed to push to origin'), 500);
@@ -1153,7 +1153,7 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
 
       return c.json(result);
     } catch (error) {
-      if (error instanceof Error && error.message.includes('CONTENT_PATH')) {
+      if (error instanceof Error && (error.message.includes('contentRoot') || error.message.includes('CONTENT_PATH'))) {
         return c.json(errorResponse(ErrorCodes.GIT_NOT_REPO, error.message), 400);
       }
       return c.json(logAndCreateErrorResponse(error, ErrorCodes.GIT_PULL_FAILED, 'Failed to pull from origin'), 500);
