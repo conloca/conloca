@@ -1,5 +1,6 @@
+import { spawn } from 'node:child_process';
 import { access, readdir, readFile, writeFile } from 'node:fs/promises';
-import { extname, join, relative } from 'node:path';
+import { dirname, extname, join, relative, resolve } from 'node:path';
 import { Octokit } from '@octokit/rest';
 
 export interface GitStatus {
@@ -23,6 +24,12 @@ export interface PushResult {
   error?: string;
 }
 
+export interface PullResult {
+  success: boolean;
+  summary?: string;
+  error?: string;
+}
+
 export interface GitAuthor {
   name: string;
   email: string;
@@ -32,6 +39,7 @@ export interface GitOperations {
   getStatus(): Promise<GitStatus>;
   commitAll(message: string, author?: GitAuthor): Promise<CommitResult>;
   pushOrigin(): Promise<PushResult>;
+  pull(): Promise<PullResult>;
 }
 
 export interface GitHubConfig {
@@ -188,7 +196,73 @@ export function createGitOperations(config: GitHubConfig): GitOperations {
       // REST commits directly to the branch - no push needed
       return { success: true };
     },
+
+    async pull(): Promise<PullResult> {
+      try {
+        const contentRoot = resolve(contentPath);
+        const repositoryRoot = dirname(contentRoot);
+        const repositoryCheck = await runGitCommand(repositoryRoot, ['rev-parse', '--show-toplevel']);
+
+        if (repositoryCheck.exitCode !== 0) {
+          return {
+            success: false,
+            error: repositoryCheck.stderr || repositoryCheck.stdout || 'Unable to resolve git repository root',
+          };
+        }
+
+        const pullResult = await runGitCommand(repositoryRoot, ['pull', '--autostash', '--rebase', 'origin', branch]);
+
+        if (pullResult.exitCode !== 0) {
+          return {
+            success: false,
+            error: pullResult.stderr || pullResult.stdout || 'Pull failed',
+          };
+        }
+
+        return {
+          success: true,
+          summary: pullResult.stdout || `Pulled latest changes from origin/${branch}`,
+        };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Pull failed',
+        };
+      }
+    },
   };
+}
+
+interface GitCommandResult {
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+}
+
+function runGitCommand(cwd: string, args: string[]): Promise<GitCommandResult> {
+  return new Promise((resolveCommand, reject) => {
+    const process = spawn('git', args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+
+    process.stdout.on('data', (data: Buffer) => {
+      stdout += data.toString();
+    });
+
+    process.stderr.on('data', (data: Buffer) => {
+      stderr += data.toString();
+    });
+
+    process.on('error', reject);
+
+    process.on('close', (exitCode) => {
+      resolveCommand({
+        exitCode: exitCode ?? 1,
+        stdout: stdout.trim(),
+        stderr: stderr.trim(),
+      });
+    });
+  });
 }
 
 interface CollectedFile {

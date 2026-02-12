@@ -1073,6 +1073,26 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
     };
   }
 
+  /**
+   * Get local-git pull config for VPS workflows.
+   * Required: CONTENT_PATH
+   * Optional: GITHUB_BRANCH (defaults to 'main')
+   */
+  function getGitPullConfig(): GitHubConfig {
+    const contentPath = process.env.CONTENT_PATH;
+
+    if (!contentPath) {
+      throw new Error('CONTENT_PATH environment variable required for pull');
+    }
+
+    return {
+      token: process.env.GITHUB_TOKEN || '',
+      repo: process.env.GITHUB_REPO || 'local/local',
+      branch: process.env.GITHUB_BRANCH || 'main',
+      contentPath,
+    };
+  }
+
   // GET /git/status - Get git repository status
   app.get('/git/status', async (c) => {
     try {
@@ -1142,6 +1162,26 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
         return c.json(errorResponse(ErrorCodes.GIT_NOT_REPO, error.message), 400);
       }
       return c.json(logAndCreateErrorResponse(error, ErrorCodes.GIT_PUSH_FAILED, 'Failed to push to origin'), 500);
+    }
+  });
+
+  // POST /git/pull - Pull from origin with autostash + rebase
+  app.post('/git/pull', async (c) => {
+    try {
+      const config = getGitPullConfig();
+      const gitOps = createGitOperations(config);
+      const result = await gitOps.pull();
+
+      if (!result.success) {
+        return c.json(errorResponse(ErrorCodes.GIT_PULL_FAILED, result.error || 'Pull failed'), 500);
+      }
+
+      return c.json(result);
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('environment variable required')) {
+        return c.json(errorResponse(ErrorCodes.GIT_NOT_REPO, error.message), 400);
+      }
+      return c.json(logAndCreateErrorResponse(error, ErrorCodes.GIT_PULL_FAILED, 'Failed to pull from origin'), 500);
     }
   });
 
