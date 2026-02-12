@@ -7,8 +7,8 @@ export const TAILWIND_CONFIG = {
   input: './src/main.css',
   outputCompiled: './src/main.compiled.css',
   outputProcessed: './src/main.processed.css',
-  // Use the installed @tailwindcss/cli from devDependencies
-  cli: './node_modules/.bin/tailwindcss',
+  // Use tailwindcss from PATH (hoisted to root node_modules/.bin)
+  cli: 'tailwindcss',
 } as const;
 
 /**
