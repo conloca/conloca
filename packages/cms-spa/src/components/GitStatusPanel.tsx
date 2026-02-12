@@ -66,7 +66,7 @@ export function GitStatusPanel() {
         <span>{status?.branch || 'unknown'}</span>
       </div>
 
-      {/* Commit button */}
+      {/* Pull button */}
       <button
         type="button"
         onClick={handlePull}
@@ -76,7 +76,7 @@ export function GitStatusPanel() {
           status?.isRepo
             ? status.behind > 0
               ? 'bg-amber-500 text-white hover:bg-amber-600'
-              : 'bg-sky-500 text-white hover:bg-sky-600'
+              : 'bg-blue-500 text-white hover:bg-blue-600'
             : 'bg-gray-100 text-gray-400 cursor-not-allowed',
         )}
       >
