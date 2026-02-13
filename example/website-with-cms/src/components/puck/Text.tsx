@@ -1,4 +1,4 @@
-import type { ComponentConfig } from '@measured/puck';
+import type { ComponentConfig } from '@puckeditor/core';
 import React from 'react';
 import type { WithLayout } from '../Layout';
 import { withLayout } from '../Layout';

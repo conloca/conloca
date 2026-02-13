@@ -1,4 +1,4 @@
-import type { Data } from '@measured/puck';
+import type { Data } from '@puckeditor/core';
 
 /**
  * Hydration strategy for Puck components in production.
@@ -364,7 +364,7 @@ export interface PageData {
   /**
    * Puck editor data for rendering.
    *
-   * This is the Data object from @measured/puck containing:
+   * This is the Data object from @puckeditor/core containing:
    * - root: Root component props
    * - content: Array of component instances
    * - zones: Named drop zones with nested content

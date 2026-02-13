@@ -374,7 +374,7 @@ initHydration(componentRegistry)
             resolve: {
               // Dedupe React to avoid multiple instances when using symlinked packages
               // This prevents "Cannot read properties of null (reading 'useMemo')" errors
-              dedupe: ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime', '@measured/puck'],
+              dedupe: ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime', '@puckeditor/core'],
             },
             optimizeDeps: {
               // Exclude the puck config from optimization to avoid the outdated dep error
@@ -390,7 +390,7 @@ initHydration(componentRegistry)
                 'react/jsx-dev-runtime',
                 // CMS dependencies
                 '@mdxeditor/editor',
-                '@measured/puck',
+                '@puckeditor/core',
                 '@tanstack/react-query',
                 '@tanstack/react-query-devtools',
                 'react-router-dom',

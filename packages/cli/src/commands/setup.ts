@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 // Component Templates
 // ============================================================================
 
-const LAYOUT_TEMPLATE = `import type { ComponentConfig, DefaultComponentProps, ObjectField } from '@measured/puck';
+const LAYOUT_TEMPLATE = `import type { ComponentConfig, DefaultComponentProps, ObjectField } from '@puckeditor/core';
 import type { CSSProperties } from 'react';
 import { forwardRef, type ReactNode } from 'react';
 
@@ -239,7 +239,7 @@ export function HeadingComponent({ text, level = '2', size = 'm', align = 'left'
 }
 `;
 
-const HEADING_TEMPLATE = `import type { ComponentConfig } from '@measured/puck';
+const HEADING_TEMPLATE = `import type { ComponentConfig } from '@puckeditor/core';
 import React from 'react';
 import type { WithLayout } from '../Layout';
 import { withLayout } from '../Layout';
@@ -345,7 +345,7 @@ export function TextComponent({ text, size = 'm', color = 'default', align = 'le
 }
 `;
 
-const TEXT_TEMPLATE = `import type { ComponentConfig } from '@measured/puck';
+const TEXT_TEMPLATE = `import type { ComponentConfig } from '@puckeditor/core';
 import React from 'react';
 import type { WithLayout } from '../Layout';
 import { withLayout } from '../Layout';
@@ -411,7 +411,7 @@ const TextInner: ComponentConfig<TextProps> = {
 export const Text = withLayout(TextInner);
 `;
 
-const FLEX_TEMPLATE = `import type { ComponentConfig, Slot } from '@measured/puck';
+const FLEX_TEMPLATE = `import type { ComponentConfig, Slot } from '@puckeditor/core';
 import React from 'react';
 import type { WithLayout } from '../Layout';
 import { withLayout } from '../Layout';
@@ -499,7 +499,7 @@ const FlexInternal: ComponentConfig<FlexProps> = {
 export const Flex = withLayout(FlexInternal);
 `;
 
-const GRID_TEMPLATE = `import type { ComponentConfig, Slot } from '@measured/puck';
+const GRID_TEMPLATE = `import type { ComponentConfig, Slot } from '@puckeditor/core';
 import React from 'react';
 import { withLayout } from '../Layout';
 import { Section } from '../Section';
@@ -555,7 +555,7 @@ export const Grid = withLayout(GridInternal);
 // Config Templates
 // ============================================================================
 
-const PUCK_CONFIG_TEMPLATE = `import type { Config } from '@measured/puck';
+const PUCK_CONFIG_TEMPLATE = `import type { Config } from '@puckeditor/core';
 import type { FlexProps } from './components/puck/Flex';
 import { Flex } from './components/puck/Flex';
 import type { GridProps } from './components/puck/Grid';

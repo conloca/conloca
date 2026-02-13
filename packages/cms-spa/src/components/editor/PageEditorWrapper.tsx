@@ -1,6 +1,6 @@
 import { useBlocks, useLocalizedContent, useUpdateLocalized } from '@conloca/content-api-client';
-import type { ComponentConfig, Config, Data } from '@measured/puck';
-import { resolveAllData } from '@measured/puck';
+import type { ComponentConfig, Config, Data } from '@puckeditor/core';
+import { resolveAllData } from '@puckeditor/core';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';

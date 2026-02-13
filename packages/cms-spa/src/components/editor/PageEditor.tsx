@@ -1,6 +1,6 @@
 import type { LocalizedEntry, UpdateResult } from '@conloca/content-api-client';
-import type { Config } from '@measured/puck';
-import { Puck } from '@measured/puck';
+import type { Config } from '@puckeditor/core';
+import { Puck } from '@puckeditor/core';
 import { Monitor, Smartphone, Tablet } from 'lucide-react';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useSiteBaseUrl } from '../../hooks';

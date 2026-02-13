@@ -1,11 +1,11 @@
-import { Render } from '@measured/puck'
-import type { Config, Data } from '@measured/puck'
-import { HydrationWrapper } from './HydrationWrapper.js'
-import { isHydratable } from '../lib/hydration-utils.js'
+import type { Config, Data } from '@puckeditor/core';
+import { Render } from '@puckeditor/core';
+import { isHydratable } from '../lib/hydration-utils.js';
+import { HydrationWrapper } from './HydrationWrapper.js';
 
 interface RenderWithHydrationProps {
-  config: Config
-  data: Data
+  config: Config;
+  data: Data;
 }
 
 /**
@@ -23,33 +23,29 @@ export function RenderWithHydration({ config, data }: RenderWithHydrationProps) 
     ...config,
     components: Object.fromEntries(
       Object.entries(config.components).map(([name, componentConfig]) => {
-        const strategy = isHydratable(name, config)
+        const strategy = isHydratable(name, config);
 
         if (strategy === 'none') {
           // No wrapping needed - component stays static
-          return [name, componentConfig]
+          return [name, componentConfig];
         }
 
         // Wrap the render function so its output becomes HydrationWrapper children
-        const originalRender = componentConfig.render
+        const originalRender = componentConfig.render;
         return [
           name,
           {
             ...componentConfig,
             render: (props) => (
-              <HydrationWrapper
-                componentName={name}
-                strategy={strategy}
-                props={props}
-              >
+              <HydrationWrapper componentName={name} strategy={strategy} props={props}>
                 {originalRender(props)}
               </HydrationWrapper>
             ),
           },
-        ]
-      })
+        ];
+      }),
     ),
-  }
+  };
 
-  return <Render config={wrappedConfig} data={data} />
+  return <Render config={wrappedConfig} data={data} />;
 }

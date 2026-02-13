@@ -1,4 +1,4 @@
-import type { Config } from '@measured/puck';
+import type { Config } from '@puckeditor/core';
 // Import types
 import type { ButtonProps } from './components/puck/Button';
 import { Button } from './components/puck/Button';

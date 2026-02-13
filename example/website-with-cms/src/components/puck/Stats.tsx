@@ -1,4 +1,4 @@
-import type { ComponentConfig } from '@measured/puck';
+import type { ComponentConfig } from '@puckeditor/core';
 import React from 'react';
 import { Section } from '../Section';
 import { HeadingComponent } from './HeadingComponent';

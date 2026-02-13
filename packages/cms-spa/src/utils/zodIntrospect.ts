@@ -12,10 +12,13 @@ export interface FieldInfo {
   maxLength?: number;
 }
 
+// Internal Zod def shape — intentionally loosely typed since we access internals
+type ZodDef = Record<string, unknown>;
+
 /**
  * Gets the Zod type name from _def, supporting both old (typeName) and new (type) API.
  */
-function getZodTypeName(def: Record<string, unknown>): string {
+function getZodTypeName(def: ZodDef): string {
   // Zod 3.x uses typeName, Zod 4.x/mini uses type
   return (def.typeName as string) || (def.type as string) || '';
 }
@@ -26,41 +29,38 @@ function getZodTypeName(def: Record<string, unknown>): string {
  * Supports both Zod 3.x (typeName) and Zod 4.x/mini (type) structures.
  */
 export function getZodFieldInfo(field: z.ZodTypeAny): FieldInfo {
-  let current = field;
+  let current: { _def: ZodDef } = field as unknown as { _def: ZodDef };
   let isOptional = false;
   let isNullable = false;
   let description: string | undefined;
 
   // Unwrap optional/nullable/default wrappers to get to the inner type
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   while (current._def) {
-    const typeName = getZodTypeName(current._def as Record<string, unknown>);
+    const typeName = getZodTypeName(current._def);
 
     if (typeName === 'ZodOptional' || typeName === 'optional') {
       isOptional = true;
-      current = current._def.innerType;
+      current = current._def.innerType as { _def: ZodDef };
     } else if (typeName === 'ZodNullable' || typeName === 'nullable') {
       isNullable = true;
-      current = current._def.innerType;
+      current = current._def.innerType as { _def: ZodDef };
     } else if (typeName === 'ZodDefault' || typeName === 'default') {
-      current = current._def.innerType;
+      current = current._def.innerType as { _def: ZodDef };
     } else {
       break;
     }
   }
 
-  description = current._def.description;
-  const typeName = getZodTypeName(current._def as Record<string, unknown>);
+  description = current._def.description as string | undefined;
+  const typeName = getZodTypeName(current._def);
 
   // Detect type and format based on Zod type
   if (typeName === 'ZodEnum' || typeName === 'enum') {
-    // ZodEnum: Zod 3.x uses _def.values, Zod 4.x uses .options on the schema itself
     const enumValues =
       (current._def.values as string[]) || ((current as unknown as { options?: string[] }).options as string[]) || [];
     return { type: 'enum', enumValues, description, isOptional, isNullable };
   }
   if (typeName === 'ZodNativeEnum' || typeName === 'nativeEnum') {
-    // ZodNativeEnum stores values in _def.values as an object
     const nativeEnum = current._def.values as Record<string, string | number>;
     const enumValues = Object.values(nativeEnum).filter((v) => typeof v === 'string') as string[];
     return { type: 'enum', enumValues, description, isOptional, isNullable };
@@ -78,8 +78,7 @@ export function getZodFieldInfo(field: z.ZodTypeAny): FieldInfo {
     return { type: 'array', description, isOptional, isNullable };
   }
   if (typeName === 'ZodString' || typeName === 'string') {
-    // Check for URL/email validators and maxLength in string checks
-    const checks = (current._def.checks as Array<{ kind: string; value?: number }>) || [];
+    const checks = (current._def.checks as { kind: string; value?: number }[] | undefined) || [];
     for (const check of checks) {
       if (check.kind === 'url') {
         return { type: 'string', format: 'url', description, isOptional, isNullable };

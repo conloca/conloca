@@ -1,4 +1,4 @@
-import type { ComponentConfig, Slot } from '@measured/puck';
+import type { ComponentConfig, Slot } from '@puckeditor/core';
 import type React from 'react';
 import type { ReactNode } from 'react';
 import { Section } from '../Section';

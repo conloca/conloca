@@ -21,7 +21,7 @@ export default defineConfig({
     '@conloca/content-api-client',
     '@conloca/cms-spa',
     '@conloca/mdx',
-    '@measured/puck',
+    '@puckeditor/core',
     '@vitejs/plugin-react',
     'react',
     'react-dom',

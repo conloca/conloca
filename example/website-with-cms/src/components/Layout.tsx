@@ -1,4 +1,4 @@
-import type { ComponentConfig, DefaultComponentProps, ObjectField } from '@measured/puck';
+import type { ComponentConfig, DefaultComponentProps, ObjectField } from '@puckeditor/core';
 import type { CSSProperties } from 'react';
 import { forwardRef, type ReactNode } from 'react';
 

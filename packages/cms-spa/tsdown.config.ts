@@ -19,7 +19,7 @@ export default defineConfig({
     '@conloca/content-api',
     '@conloca/content-api-client',
     '@conloca/mdx',
-    '@measured/puck',
+    '@puckeditor/core',
     '@mdxeditor/editor',
     '@tanstack/react-query',
     '@tanstack/react-query-devtools',

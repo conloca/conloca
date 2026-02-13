@@ -1,4 +1,4 @@
-import { useGetPuck } from '@measured/puck';
+import { useGetPuck } from '@puckeditor/core';
 import type { ReactNode } from 'react';
 
 interface DrawerItemOverrideProps {

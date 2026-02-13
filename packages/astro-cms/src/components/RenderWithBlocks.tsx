@@ -1,8 +1,8 @@
-import type { ComponentConfig, Config, Data } from '@measured/puck';
-import { Render } from '@measured/puck';
+import type { ComponentConfig, Config, Data } from '@puckeditor/core';
+import { Render } from '@puckeditor/core';
 import type { ComponentType } from 'react';
-import { RenderWithHydration } from './RenderWithHydration.js';
 import { hasHydratableComponents } from '../lib/hydration-utils.js';
+import { RenderWithHydration } from './RenderWithHydration.js';
 
 interface MDXComponent {
   id: string;

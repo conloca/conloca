@@ -1,27 +1,15 @@
 {
-  "versionGroups": [
-    {
-      "packages": ["**"],
-      "dependencies": ["react", "react-dom"],
-      "pinVersion": "19.2.0"
-    },
-    {
-      "packages": ["**"],
-      "dependencies": ["@types/react"],
-      "pinVersion": "19.2.2"
-    },
-    {
-      "packages": ["**"],
-      "dependencies": ["@types/react-dom"],
-      "pinVersion": "19.2.2"
-    }
-  ],
   "dependencyTypes": ["dev", "peer", "prod"],
   "semverGroups": [
     {
       "packages": ["**"],
       "dependencies": ["@conloca/*"],
       "range": "workspace:*"
+    },
+    {
+      "packages": ["**"],
+      "dependencies": ["**"],
+      "range": ""
     }
   ]
 }

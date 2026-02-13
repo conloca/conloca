@@ -45,7 +45,8 @@ export async function createConlocaCollections(
   for (const name of api.blocks.collections) {
     collections[name] = defineCollection({
       loader: conlocaLoader({ collection: name, contentRoot, site, kind: 'block' }),
-      schema: blockMetaSchema,
+      // Cast needed: Astro uses Zod v3 BaseSchema types, our schemas are Zod v4
+      schema: blockMetaSchema as never,
     });
   }
 
@@ -53,7 +54,7 @@ export async function createConlocaCollections(
   for (const name of api.data.collections) {
     collections[name] = defineCollection({
       loader: conlocaLoader({ collection: name, contentRoot, site, kind: 'data' }),
-      schema: dataMetaSchema,
+      schema: dataMetaSchema as never,
     });
   }
 
@@ -62,7 +63,7 @@ export async function createConlocaCollections(
   for (const name of siteCollections) {
     collections[name] = defineCollection({
       loader: conlocaLoader({ collection: name, contentRoot, site, kind: 'page' }),
-      schema: pageMetaSchema.passthrough(),
+      schema: pageMetaSchema.passthrough() as never,
     });
   }
 

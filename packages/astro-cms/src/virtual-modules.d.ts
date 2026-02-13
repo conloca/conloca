@@ -6,7 +6,7 @@
  * and Puck config to page handlers.
  */
 
-import type { Config } from '@measured/puck';
+import type { Config } from '@puckeditor/core';
 
 import type { LayoutProps, PageData, PageReference, ResolvedRoutingConfig } from './types.js';
 

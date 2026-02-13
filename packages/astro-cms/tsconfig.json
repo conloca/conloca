@@ -4,18 +4,6 @@
   "include": [],
   "references": [
     {
-      "path": "../content-api"
-    },
-    {
-      "path": "../mdx"
-    },
-    {
-      "path": "../content-api-client"
-    },
-    {
-      "path": "../cms-spa"
-    },
-    {
       "path": "./tsconfig.lib.json"
     }
   ]

@@ -1,6 +1,6 @@
-import type { Config, Data } from '@measured/puck'
-import type { HydrationStrategy } from '../types.js'
-import type { HydrationMeta } from './withHydration.js'
+import type { Config, Data } from '@puckeditor/core';
+import type { HydrationStrategy } from '../types.js';
+import type { HydrationMeta } from './withHydration.js';
 
 /**
  * Extended ComponentConfig with hydration support.
@@ -8,8 +8,8 @@ import type { HydrationMeta } from './withHydration.js'
  */
 export interface HydratableComponentConfig {
   /** @deprecated Use withHydration() wrapper on render function instead */
-  hydration?: HydrationStrategy
-  render?: (props: unknown) => unknown
+  hydration?: HydrationStrategy;
+  render?: (props: unknown) => unknown;
 }
 
 /**
@@ -18,13 +18,13 @@ export interface HydratableComponentConfig {
  */
 export interface HydratableComponent {
   /** Component type name from Puck config */
-  type: string
+  type: string;
   /** Props to pass to the component */
-  props: Record<string, unknown>
+  props: Record<string, unknown>;
   /** Hydration strategy from ComponentConfig */
-  strategy: Exclude<HydrationStrategy, 'none'>
+  strategy: Exclude<HydrationStrategy, 'none'>;
   /** Unique ID from Puck data (for keying) */
-  id: string
+  id: string;
 }
 
 /**
@@ -37,21 +37,18 @@ export interface HydratableComponent {
  * @param config - The Puck config with component definitions
  * @returns The hydration strategy ('none', 'load', 'visible', 'idle')
  */
-export function isHydratable(
-  componentType: string,
-  config: Config
-): HydrationStrategy {
-  const componentConfig = config.components[componentType] as HydratableComponentConfig | undefined
-  if (!componentConfig?.render) return 'none'
+export function isHydratable(componentType: string, config: Config): HydrationStrategy {
+  const componentConfig = config.components[componentType] as HydratableComponentConfig | undefined;
+  if (!componentConfig?.render) return 'none';
 
   // New API: Check for __hydration metadata attached by withHydration()
-  const render = componentConfig.render as { __hydration?: HydrationMeta }
+  const render = componentConfig.render as { __hydration?: HydrationMeta };
   if (render.__hydration?.__isHydratable) {
-    return render.__hydration.strategy
+    return render.__hydration.strategy;
   }
 
   // Deprecated: Check hydration property on ComponentConfig
-  return componentConfig?.hydration ?? 'none'
+  return componentConfig?.hydration ?? 'none';
 }
 
 /**
@@ -62,23 +59,20 @@ export function isHydratable(
  * @param config - Puck config with component definitions
  * @returns Array of components that need hydration
  */
-export function findHydratableComponents(
-  data: Data,
-  config: Config
-): HydratableComponent[] {
-  const hydratable: HydratableComponent[] = []
+export function findHydratableComponents(data: Data, config: Config): HydratableComponent[] {
+  const hydratable: HydratableComponent[] = [];
 
   // Walk content array
   if (data.content) {
     for (const item of data.content) {
-      const strategy = isHydratable(item.type, config)
+      const strategy = isHydratable(item.type, config);
       if (strategy !== 'none') {
         hydratable.push({
           type: item.type,
           props: item.props ?? {},
           strategy,
           id: item.props?._id ?? item.type,
-        })
+        });
       }
     }
   }
@@ -87,20 +81,20 @@ export function findHydratableComponents(
   if (data.zones) {
     for (const [zoneName, zoneContent] of Object.entries(data.zones)) {
       for (const item of zoneContent) {
-        const strategy = isHydratable(item.type, config)
+        const strategy = isHydratable(item.type, config);
         if (strategy !== 'none') {
           hydratable.push({
             type: item.type,
             props: item.props ?? {},
             strategy,
             id: item.props?._id ?? `${zoneName}-${item.type}`,
-          })
+          });
         }
       }
     }
   }
 
-  return hydratable
+  return hydratable;
 }
 
 /**
@@ -109,18 +103,18 @@ export function findHydratableComponents(
  */
 export function hasHydratableComponents(data: Data, config: Config): boolean {
   // Check content
-  if (data.content?.some(item => isHydratable(item.type, config) !== 'none')) {
-    return true
+  if (data.content?.some((item) => isHydratable(item.type, config) !== 'none')) {
+    return true;
   }
 
   // Check zones
   if (data.zones) {
     for (const zoneContent of Object.values(data.zones)) {
-      if (zoneContent.some(item => isHydratable(item.type, config) !== 'none')) {
-        return true
+      if (zoneContent.some((item) => isHydratable(item.type, config) !== 'none')) {
+        return true;
       }
     }
   }
 
-  return false
+  return false;
 }
