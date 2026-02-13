@@ -74,12 +74,12 @@
   "peerDependencies": {
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "zod": "^3.24.0"
+    "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@happy-dom/global-registrator": "^20.0.10",
+    "@happy-dom/global-registrator": "^20.6.1",
     "@testing-library/jest-dom": "^6.9.1",
-    "astro": "5.15.3"
+    "astro": "5.17.2"
   },
   "nx": {
     "targets": {
