@@ -12,26 +12,26 @@
   "type": "module",
   "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",
-  "types": "./dist/index.d.mts",
+  "types": "./dist/index.d.ts",
   "exports": {
     "./package.json": "./package.json",
     ".": {
-      "types": "./dist/index.d.mts",
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
       "default": "./dist/index.mjs"
     },
     "./components": {
-      "types": "./dist/components.d.mts",
+      "types": "./dist/components.d.ts",
       "import": "./dist/components.mjs",
       "default": "./dist/components.mjs"
     },
     "./cms-handler": {
-      "types": "./dist/cms-handler.d.mts",
+      "types": "./dist/cms-handler.d.ts",
       "import": "./dist/cms-handler.mjs",
       "default": "./dist/cms-handler.mjs"
     },
     "./collections": {
-      "types": "./dist/collections.d.mts",
+      "types": "./dist/collections.d.ts",
       "import": "./dist/collections.mjs",
       "default": "./dist/collections.mjs"
     },
@@ -43,12 +43,12 @@
       "default": "./dist/handlers/page-handler.astro"
     },
     "./lib/hydration-script": {
-      "types": "./dist/lib/hydration-script.d.mts",
+      "types": "./dist/lib/hydration-script.d.ts",
       "import": "./dist/lib/hydration-script.mjs",
       "default": "./dist/lib/hydration-script.mjs"
     },
     "./hydration": {
-      "types": "./dist/hydration.d.mts",
+      "types": "./dist/hydration.d.ts",
       "import": "./dist/hydration.mjs",
       "default": "./dist/hydration.mjs"
     }

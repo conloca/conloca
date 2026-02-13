@@ -28,17 +28,17 @@
   "exports": {
     "./package.json": "./package.json",
     ".": {
-      "types": "./dist/index.d.mts",
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
       "default": "./dist/index.mjs"
     },
     "./node": {
-      "types": "./dist/node.d.mts",
+      "types": "./dist/node.d.ts",
       "import": "./dist/node.mjs",
       "default": "./dist/node.mjs"
     },
     "./schemas": {
-      "types": "./dist/schemas/index.d.mts",
+      "types": "./dist/schemas/index.d.ts",
       "import": "./dist/schemas/index.mjs",
       "default": "./dist/schemas/index.mjs"
     }
@@ -49,7 +49,7 @@
     "test:watch": "bun test --watch"
   },
   "type": "module",
-  "types": "./dist/index.d.mts",
+  "types": "./dist/index.d.ts",
   "files": [
     "dist",
     "!**/*.tsbuildinfo"
