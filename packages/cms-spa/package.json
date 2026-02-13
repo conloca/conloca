@@ -70,8 +70,8 @@
     "zod": "^3.24.0"
   },
   "peerDependencies": {
-    "react": "19.2.0",
-    "react-dom": "19.2.0"
+    "react": "19.2.4",
+    "react-dom": "19.2.4"
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "^20.0.10",
@@ -81,8 +81,8 @@
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.0",
     "bun-tailwindcss": "^0.0.9",
-    "react": "19.2.0",
-    "react-dom": "19.2.0",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
     "react-refresh-typescript": "^2.0.11",
     "tailwindcss": "^4.1.16",
     "typescript": "^5.9.3"

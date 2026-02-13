@@ -4,17 +4,17 @@
     {
       "packages": ["**"],
       "dependencies": ["react", "react-dom"],
-      "pinVersion": "19.2.0"
+      "pinVersion": "19.2.4"
     },
     {
       "packages": ["**"],
       "dependencies": ["@types/react"],
-      "pinVersion": "19.2.2"
+      "pinVersion": "19.2.14"
     },
     {
       "packages": ["**"],
       "dependencies": ["@types/react-dom"],
-      "pinVersion": "19.2.2"
+      "pinVersion": "19.2.3"
     }
   ],
   "semverGroups": [
