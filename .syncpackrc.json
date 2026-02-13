@@ -3,17 +3,17 @@
     {
       "packages": ["**"],
       "dependencies": ["react", "react-dom"],
-      "pinVersion": "19.1.1"
+      "pinVersion": "19.2.0"
     },
     {
       "packages": ["**"],
       "dependencies": ["@types/react"],
-      "pinVersion": "19.1.9"
+      "pinVersion": "19.2.2"
     },
     {
       "packages": ["**"],
       "dependencies": ["@types/react-dom"],
-      "pinVersion": "19.1.7"
+      "pinVersion": "19.2.2"
     }
   ],
   "dependencyTypes": ["dev", "peer", "prod"],
