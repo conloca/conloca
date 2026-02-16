@@ -50,7 +50,8 @@ try {
       packageJson.devDependencies ||= {};
       packageJson.devDependencies['@types/node'] = expectedTypesNode;
 
-      await $`echo ${JSON.stringify(packageJson)} | biome format --stdin-file-path=package.json > package.json`;
+      await file('package.json').write(JSON.stringify(packageJson));
+      await $`biome format --write package.json`;
     }
   }
 
