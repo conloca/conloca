@@ -14,17 +14,8 @@ export default defineConfig({
   tsconfig: 'tsconfig.lib.json',
   clean: true,
   external: [
-    'astro',
+    // Virtual modules not in package.json — must be explicitly externalized
     'astro:content',
-    'vite',
-    '@conloca/content-api',
-    '@conloca/content-api-client',
-    '@conloca/cms-spa',
-    '@conloca/mdx',
-    '@puckeditor/core',
-    '@vitejs/plugin-react',
-    'react',
-    'react-dom',
     /^virtual:/,
   ],
 });
