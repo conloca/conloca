@@ -179,7 +179,7 @@ async function handleSpa(params: { path?: string | string[] }, request: Request)
     return new Response(content as BodyInit, {
       headers: {
         'Content-Type': contentType,
-        'Cache-Control': 'public, max-age=31536000',
+        'Cache-Control': import.meta.env.DEV ? 'no-cache' : 'public, max-age=31536000',
       },
     });
   } catch {
