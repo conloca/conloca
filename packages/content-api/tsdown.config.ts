@@ -10,5 +10,8 @@ export default defineConfig({
   dts: true,
   tsconfig: 'tsconfig.lib.json',
   clean: true,
-  external: ['@node-rs/xxhash'],
+  // vite is externalized because node.ts exports the vite plugin, which imports from 'vite'.
+  // Without this, tsdown bundles vite and all its transitive deps (rollup, esbuild, postcss, etc.)
+  // into the output. Consumers always have vite installed already.
+  external: ['@node-rs/xxhash', 'vite'],
 });
