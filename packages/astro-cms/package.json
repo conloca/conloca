@@ -63,10 +63,10 @@
     "!**/*.tsbuildinfo"
   ],
   "dependencies": {
-    "@conloca/cms-spa": "workspace:*",
-    "@conloca/content-api": "workspace:*",
-    "@conloca/content-api-client": "workspace:*",
-    "@conloca/mdx": "workspace:*",
+    "@conloca/cms-spa": "workspace:^",
+    "@conloca/content-api": "workspace:^",
+    "@conloca/content-api-client": "workspace:^",
+    "@conloca/mdx": "workspace:^",
     "@puckeditor/core": "^0.21.1",
     "fast-glob": "^3.3.2",
     "tslib": "^2.8.1"

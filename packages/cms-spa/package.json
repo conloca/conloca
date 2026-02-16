@@ -53,8 +53,8 @@
     "test:watch": "bun test --watch"
   },
   "dependencies": {
-    "@conloca/content-api-client": "workspace:*",
-    "@conloca/mdx": "workspace:*",
+    "@conloca/content-api-client": "workspace:^",
+    "@conloca/mdx": "workspace:^",
     "@mdxeditor/editor": "^3.52.3",
     "@puckeditor/core": "^0.21.1",
     "@radix-ui/react-dialog": "^1.1.15",

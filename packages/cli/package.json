@@ -10,7 +10,7 @@
     "directory": "packages/cli"
   },
   "dependencies": {
-    "@conloca/content-api": "workspace:*",
+    "@conloca/content-api": "workspace:^",
     "@node-rs/xxhash": "^1.7.6"
   },
   "bin": {
