@@ -1,4 +1,5 @@
 import type { AssetEntry } from '../../hooks';
+import { buildAssetServeUrl } from '../../utils/asset-url';
 import { cn } from '../../utils/cn';
 
 interface AssetCardProps {
@@ -48,7 +49,7 @@ export function AssetCard({
       {/* Thumbnail */}
       <div className="aspect-square bg-grey-11 flex items-center justify-center overflow-hidden">
         <img
-          src={`${assetsBasePath}/${asset.folder && asset.folder !== '/' ? `${asset.folder.replace(/^\//, '')}/${asset.filename}` : asset.filename}`}
+          src={buildAssetServeUrl(assetsBasePath, asset.folder, asset.filename)}
           alt={asset.alt || asset.originalName}
           className="w-full h-full object-contain"
           loading="lazy"

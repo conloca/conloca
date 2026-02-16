@@ -3,6 +3,7 @@ import { FolderInput, Loader2, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import type { AssetEntry } from '../../hooks';
 import { useAssetUsage, useDeleteAsset, useMoveAssets, useUpdateAssetMetadata } from '../../hooks';
+import { buildAssetServeUrl } from '../../utils/asset-url';
 import { MoveFolderDialog } from '../dialogs';
 
 function formatDate(dateString: string): string {
@@ -137,7 +138,7 @@ export function AssetDetailSidebar({
         {/* Thumbnail preview */}
         <div className="aspect-square bg-grey-11 flex items-center justify-center overflow-hidden border-b border-grey-09">
           <img
-            src={`${assetsBasePath}/${asset.filename}`}
+            src={buildAssetServeUrl(assetsBasePath, asset.folder, asset.filename)}
             alt={asset.alt || asset.originalName}
             className="max-w-full max-h-full object-contain"
           />
