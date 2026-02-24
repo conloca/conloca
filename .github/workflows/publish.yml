@@ -56,17 +56,5 @@ jobs:
       - name: Build all releasable packages
         run: bun run release:build
 
-      # No NODE_AUTH_TOKEN — OIDC handles authentication automatically.
       - name: Publish to npm
         run: bunx nx release publish
-
-      # -----------------------------------------------------------------
-      # BOOTSTRAP: First-ever publish (before OIDC trusted publishers are
-      # configured on npmjs.com). Uncomment the block below and add a
-      # NODE_AUTH_TOKEN secret to the repo. Remove it after OIDC setup.
-      #
-      # - name: Publish to npm (token-based bootstrap)
-      #   run: bunx nx release publish
-      #   env:
-      #     NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-      # -----------------------------------------------------------------
