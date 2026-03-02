@@ -1,0 +1,235 @@
+---
+title: '@conloca/content-api'
+description: 'Core content operations engine, authentication providers, and file-based storage for Conloca CMS'
+---
+
+## Overview
+
+`@conloca/content-api` is the core engine powering Conloca CMS. It handles file-based content storage in VXJSON format,
+asset management, and provides pluggable authentication providers.
+
+Most developers interact with this package indirectly through `@conloca/astro-cms`. Direct installation is needed when:
+
+- Importing auth providers for CMS configuration
+- Using the content API programmatically (scripts, tests, CI)
+- Building custom tooling around Conloca content
+
+## Installation
+
+```bash
+bun add @conloca/content-api
+```
+
+## Entry Points
+
+### `@conloca/content-api` (browser-safe)
+
+Types and interfaces safe for browser environments. No Node.js dependencies.
+
+```typescript
+import type { ContentAPI, ContentEntry, ContentManifest } from '@conloca/content-api';
+import { Blocks, Site, ErrorCodes } from '@conloca/content-api';
+```
+
+| Export                | Kind  | Purpose                                                 |
+| --------------------- | ----- | ------------------------------------------------------- |
+| `ContentAPI`          | type  | Main API interface for content operations               |
+| `ContentEntry`        | type  | Full content entry with all locales                     |
+| `ContentManifest`     | type  | Manifest entry (metadata without content body)          |
+| `LocalizedEntry`      | type  | Single-locale content entry                             |
+| `SitesConfig`         | type  | Multi-site configuration                                |
+| `Blocks`              | class | Block collection operations                             |
+| `Site`                | class | Site-scoped content operations                          |
+| `ErrorCodes`          | enum  | Standard error codes (`NOT_FOUND`, `STALE_WRITE`, etc.) |
+| `ContentUtils`        | class | Content utility functions                               |
+| `AssetEntry`          | type  | Asset metadata entry                                    |
+| `FolderListing`       | type  | Folder contents listing                                 |
+| `FolderTreeNode`      | type  | Folder tree structure                                   |
+| `MergedBlockManifest` | type  | Block manifest with site-specific merging               |
+
+### `@conloca/content-api/node` (Node.js only)
+
+Node.js-specific implementations requiring filesystem access.
+
+```typescript
+import {
+  FileSystemContentAPI,
+  InMemoryContentAPI,
+  createContentAPIRouter,
+  cfAccess,
+  oauth,
+  apiKey,
+  noAuth,
+} from '@conloca/content-api/node';
+```
+
+#### Auth Providers
+
+| Export                       | Purpose                                                 |
+| ---------------------------- | ------------------------------------------------------- |
+| `cfAccess(options)`          | Cloudflare Access JWT authentication                    |
+| `oauth(options)`             | OAuth provider (GitHub, Google) with session management |
+| `apiKey(options)`            | API key authentication with role mapping                |
+| `noAuth()`                   | No authentication (development default)                 |
+| `registerAuthConfig(config)` | Register auth config for the CMS handler                |
+| `getRegisteredAuthConfig()`  | Retrieve registered auth config                         |
+
+#### Content API Implementations
+
+| Export                            | Purpose                                                                 |
+| --------------------------------- | ----------------------------------------------------------------------- |
+| `FileSystemContentAPI`            | Production implementation backed by filesystem + VXJSON                 |
+| `InMemoryContentAPI`              | In-memory implementation for testing                                    |
+| `createContentAPIRouter(api)`     | Create Hono router with all content middleware routes                   |
+| `createContentMiddleware(api)`    | Create content middleware for custom Hono apps                          |
+| `createContentAPI(options)`       | Factory function that creates FileSystemContentAPI with content watcher |
+| `createContentWatchHandlers(api)` | File watcher for live content updates                                   |
+
+#### Auth Utilities
+
+| Export                              | Purpose                                     |
+| ----------------------------------- | ------------------------------------------- |
+| `resolveUserRole(user, config)`     | Resolve user role from auth config mappings |
+| `matchEmailPattern(email, pattern)` | Pattern matching for role email rules       |
+| `signSession(payload)`              | Sign a JWT session token                    |
+| `verifySession(token)`              | Verify and decode a JWT session token       |
+
+#### CF Access Utilities
+
+| Export                                      | Purpose                                      |
+| ------------------------------------------- | -------------------------------------------- |
+| `validateCFAccessRequest(request, options)` | Validate Cloudflare Access JWT from request  |
+| `extractCFAccessToken(request)`             | Extract CF Access token from request headers |
+
+#### Other Node.js Exports
+
+| Export                    | Purpose                                |
+| ------------------------- | -------------------------------------- |
+| `ComponentRegistry`       | Component registration for Puck config |
+| `AssetManifest`           | Asset manifest management              |
+| `AssetOperations`         | Asset CRUD operations                  |
+| `conlocaContent(options)` | Vite plugin for content integration    |
+
+### `@conloca/content-api/schemas`
+
+Zod schemas for content metadata validation.
+
+```typescript
+import { pageMetaSchema, blockMetaSchema, pageEditableSchema, blockEditableSchema } from '@conloca/content-api/schemas';
+```
+
+| Export                | Purpose                                         |
+| --------------------- | ----------------------------------------------- |
+| `pageMetaSchema`      | Full page metadata schema (with system fields)  |
+| `pageEditableSchema`  | Editable page fields only (for CMS forms)       |
+| `blockMetaSchema`     | Full block metadata schema (with system fields) |
+| `blockEditableSchema` | Editable block fields only (for CMS forms)      |
+
+## Auth Provider Configuration
+
+### Cloudflare Access
+
+```typescript
+import { cfAccess } from '@conloca/content-api/node';
+
+const auth = cfAccess({
+  teamDomain: 'myteam.cloudflareaccess.com',
+  aud: 'your-application-audience-tag',
+});
+```
+
+### OAuth (GitHub / Google)
+
+```typescript
+import { oauth } from '@conloca/content-api/node';
+
+const auth = oauth({
+  provider: 'github', // or 'google'
+  clientId: process.env.OAUTH_CLIENT_ID,
+  clientSecret: process.env.OAUTH_CLIENT_SECRET,
+  sessionSecret: process.env.SESSION_SECRET,
+});
+```
+
+### API Key
+
+```typescript
+import { apiKey } from '@conloca/content-api/node';
+
+const auth = apiKey({
+  keys: [
+    { hash: 'sha256-hash-of-key', role: 'editor', label: 'CI pipeline' },
+    { hash: 'sha256-hash-of-key', role: 'admin', label: 'Admin CLI' },
+  ],
+});
+```
+
+### No Authentication
+
+```typescript
+import { noAuth } from '@conloca/content-api/node';
+
+const auth = noAuth(); // Default in development
+```
+
+## Key Types
+
+### AuthConfig
+
+```typescript
+interface AuthConfig {
+  provider: AuthProvider;
+  roles?: {
+    admin?: string[]; // Email patterns for admin role
+    editor?: string[]; // Email patterns for editor role
+  };
+}
+```
+
+### AuthProvider
+
+```typescript
+interface AuthProvider {
+  authenticate(request: Request): Promise<AuthResult>;
+  logout?(request: Request): Promise<Response>;
+}
+```
+
+### AuthResult
+
+```typescript
+interface AuthResult {
+  authenticated: boolean;
+  user?: AuthUser;
+  response?: Response; // Redirect response for OAuth flows
+}
+```
+
+## Examples
+
+### Programmatic Content Access
+
+```typescript
+import { createContentAPI } from '@conloca/content-api/node';
+
+const api = await createContentAPI({ contentRoot: './content' });
+
+// List pages for a site
+const pages = await api.getSite('default').listPages('en');
+
+// Get a specific block
+const block = await api.blocks.getByName('header', 'shared', 'en');
+```
+
+### Testing with InMemoryContentAPI
+
+```typescript
+import { InMemoryContentAPI, createContentAPIRouter } from '@conloca/content-api/node';
+
+const api = new InMemoryContentAPI({
+  sites: { default: { locales: ['en', 'de'] } },
+});
+
+const router = createContentAPIRouter(api);
+const response = await router.fetch(new Request('http://test/sites/default/pages'));
+```

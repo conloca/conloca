@@ -1,0 +1,153 @@
+---
+title: Blocks API
+description: Block listing, lookup, and name availability endpoints
+---
+
+The Blocks API provides endpoints for working with shared content blocks. Blocks are reusable content components (MDX or
+Puck) that can be referenced across multiple pages. Unlike pages, blocks are not site-scoped by default -- they exist
+globally, though site-specific blocks can shadow global ones.
+
+All endpoints are relative to the API base URL (default: `/__cms/api`).
+
+---
+
+## List Blocks
+
+### GET /blocks
+
+List all blocks with optional filters. When the `site` parameter is provided, returns a merged list of global and
+site-specific blocks with scope annotation (site blocks shadow global blocks with the same name).
+
+**Parameters:**
+
+| Name       | In    | Type   | Required | Description                                              |
+| ---------- | ----- | ------ | -------- | -------------------------------------------------------- |
+| collection | query | string | no       | Filter by collection (default: all)                      |
+| locale     | query | string | no       | Filter by locale                                         |
+| site       | query | string | no       | If provided, return merged global + site-specific blocks |
+
+**Response:** `200 OK`
+
+```typescript
+{
+  items: ContentManifest[]
+  total: number
+}
+```
+
+**Example:**
+
+```bash
+# List all global blocks
+curl http://localhost:4321/__cms/api/blocks
+
+# List blocks for a specific collection
+curl "http://localhost:4321/__cms/api/blocks?collection=components"
+
+# List merged blocks for a site (site-specific + global)
+curl "http://localhost:4321/__cms/api/blocks?site=default"
+```
+
+---
+
+## Check Block Name Availability
+
+### GET /blocks/name-available
+
+Check whether a block name is available within a collection. Useful for validating names before creating or renaming
+blocks.
+
+**Parameters:**
+
+| Name       | In    | Type   | Required | Description                                                    |
+| ---------- | ----- | ------ | -------- | -------------------------------------------------------------- |
+| name       | query | string | yes      | Block name to check                                            |
+| collection | query | string | no       | Collection to check in (default: `components`)                 |
+| excludeId  | query | string | no       | Exclude this content ID from the check (for rename operations) |
+| site       | query | string | no       | Check availability in site-specific scope                      |
+
+**Response:** `200 OK`
+
+```typescript
+// Available
+{
+  available: true;
+}
+
+// Taken
+{
+  available: false;
+  existingId: string; // ID of the block using this name
+}
+```
+
+**Errors:**
+
+| Status | Code                   | Description                         |
+| ------ | ---------------------- | ----------------------------------- |
+| 400    | MISSING_REQUIRED_FIELD | `name` query parameter not provided |
+
+**Example:**
+
+```bash
+curl "http://localhost:4321/__cms/api/blocks/name-available?name=hero-banner&collection=components"
+```
+
+---
+
+## Get Block by Name
+
+### GET /blocks/:name
+
+Get a block by its name. When the `site` parameter is provided, looks up the site-specific block first, falling back to
+the global block.
+
+**Parameters:**
+
+| Name       | In    | Type   | Required | Description                                       |
+| ---------- | ----- | ------ | -------- | ------------------------------------------------- |
+| name       | path  | string | yes      | Block name                                        |
+| collection | query | string | no       | Collection to look in (default: `components`)     |
+| locale     | query | string | no       | If provided, return only this locale's data       |
+| site       | query | string | no       | Site-first lookup: check site blocks, then global |
+
+**Response:** `200 OK`
+
+```typescript
+// ContentManifest (or filtered to single locale)
+{
+  id: string
+  type: 'puck' | 'mdx'
+  kind: 'block'
+  collection: string
+  locales: {
+    [locale: string]: {
+      locale: string
+      etag: string
+      created: string
+      modified: string
+      name: string
+      meta: ContentMeta
+    }
+  }
+}
+```
+
+**Errors:**
+
+| Status | Code              | Description                                         |
+| ------ | ----------------- | --------------------------------------------------- |
+| 404    | CONTENT_NOT_FOUND | No block with this name in the specified collection |
+
+**Example:**
+
+```bash
+# Get a block by name
+curl "http://localhost:4321/__cms/api/blocks/hero-banner?collection=components"
+
+# Get a block with site-first lookup
+curl "http://localhost:4321/__cms/api/blocks/hero-banner?site=default"
+
+# Get only the English locale
+curl "http://localhost:4321/__cms/api/blocks/hero-banner?locale=en"
+```

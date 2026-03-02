@@ -1,0 +1,130 @@
+---
+title: Cloudflare Access
+description: Protect your CMS with Cloudflare Access zero-trust authentication
+---
+
+Cloudflare Access provides zero-trust authentication without any login page in your application. Users authenticate
+through Cloudflare's identity layer before reaching your CMS.
+
+## Prerequisites
+
+- A domain managed by Cloudflare
+- Cloudflare Zero Trust dashboard access
+- An Access Application created for your CMS domain with an **Application Audience (AUD) tag**
+
+## Setup
+
+### 1. Create a Cloudflare Access Application
+
+In the Cloudflare Zero Trust dashboard:
+
+1. Go to **Access** > **Applications** > **Add an application**
+2. Select **Self-hosted** application type
+3. Set the **Application domain** to your CMS URL (e.g., `cms.example.com`)
+4. Configure your identity provider (Google, GitHub, email OTP, etc.)
+5. Create an **Access Policy** to control who can access the CMS
+6. Copy the **Application Audience (AUD)** tag from the application overview
+
+### 2. Configure Conloca
+
+In your `astro.config.mjs`, import the `cfAccess` provider and pass it to the `auth` option:
+
+```js
+import { defineConfig } from 'astro/config';
+import node from '@astrojs/node';
+import { conlocaCMS } from '@conloca/astro-cms';
+import { cfAccess } from '@conloca/content-api/node';
+
+export default defineConfig({
+  output: 'server',
+  adapter: node({ mode: 'standalone' }),
+  integrations: [
+    conlocaCMS({
+      contentRoot: './content',
+      puckConfigPath: './src/puck.config.tsx',
+      auth: {
+        provider: cfAccess({
+          teamDomain: 'YOUR_TEAM_NAME',
+          aud: 'YOUR_APPLICATION_AUD_TAG',
+        }),
+      },
+    }),
+  ],
+});
+```
+
+Replace `YOUR_TEAM_NAME` with your Cloudflare Zero Trust team name (the subdomain in
+`YOUR_TEAM_NAME.cloudflareaccess.com`) and `YOUR_APPLICATION_AUD_TAG` with the AUD tag from step 1.
+
+### Parameters
+
+| Parameter    | Type     | Description                                                                                   |
+| ------------ | -------- | --------------------------------------------------------------------------------------------- |
+| `teamDomain` | `string` | Your Cloudflare Zero Trust team name (e.g., `mycompany` for `mycompany.cloudflareaccess.com`) |
+| `aud`        | `string` | Application Audience (AUD) tag from the Access Application settings                           |
+
+## How it works
+
+When a user visits your CMS, Cloudflare Access intercepts the request and requires authentication through your
+configured identity provider. After successful authentication, Cloudflare sets a `CF_Authorization` JWT cookie and adds
+a `Cf-Access-Jwt-Assertion` header.
+
+The `cfAccess` provider verifies this JWT against Cloudflare's public JWKS endpoint
+(`https://YOUR_TEAM.cloudflareaccess.com/cdn-cgi/access/certs`) and extracts the user's email from the token payload.
+
+No login UI is needed in your application -- Cloudflare handles the entire authentication flow.
+
+## Role mapping
+
+By default, all authenticated users are assigned the `viewer` role. Use the `roles` option on the `auth` config to map
+specific users to higher roles:
+
+```js
+auth: {
+  provider: cfAccess({
+    teamDomain: 'YOUR_TEAM_NAME',
+    aud: 'YOUR_APPLICATION_AUD_TAG',
+  }),
+  roles: {
+    admin: ['admin@company.com'],
+    editor: ['*@company.com'],
+  },
+}
+```
+
+Role matching is evaluated in order: `admin` first, then `editor`. The first match wins. Patterns support `*` as a
+wildcard -- `*@company.com` matches any email at that domain.
+
+Users who do not match any pattern keep the default `viewer` role.
+
+## Custom role resolution
+
+For more control over role assignment, use the `resolveRole` function instead of (or alongside) pattern matching:
+
+```js
+auth: {
+  provider: cfAccess({
+    teamDomain: 'YOUR_TEAM_NAME',
+    aud: 'YOUR_APPLICATION_AUD_TAG',
+  }),
+  resolveRole: ({ email, claims }) => {
+    if (claims?.groups?.includes('cms-admins')) return 'admin'
+    if (email.endsWith('@company.com')) return 'editor'
+    return 'viewer'
+  },
+}
+```
+
+The `claims` object contains the full JWT payload from Cloudflare Access, including any custom claims from your identity
+provider.
+
+## Combining with Cloudflare Tunnel
+
+Cloudflare Access pairs naturally with [Cloudflare Tunnel](/docs/guides/deploy/cloudflare-tunnel/) -- the tunnel exposes
+your CMS without opening ports, and Access protects it with authentication.
+
+## Next steps
+
+- [Getting Started](/docs/getting-started/) -- Set up your first Conloca site
+- [Cloudflare Tunnel deployment](/docs/guides/deploy/cloudflare-tunnel/) -- Expose your CMS securely
+- [Docker deployment](/docs/guides/deploy/docker/) -- Deploy with Docker Compose

@@ -1,0 +1,37 @@
+---
+import Layout from '../layouts/Layout.astro'
+import Navbar from '../components/Navbar.astro'
+import HeroSection from '../components/HeroSection.astro'
+import QuickStartSection from '../components/QuickStartSection.astro'
+import FeaturesSection from '../components/FeaturesSection.astro'
+import HostedSection from '../components/HostedSection.astro'
+import Footer from '../components/Footer.astro'
+---
+
+<Layout>
+  <Navbar />
+  <main>
+    <HeroSection />
+    <QuickStartSection />
+    <FeaturesSection />
+    <HostedSection />
+
+  </main>
+  <Footer />
+</Layout>
+
+<style is:global>
+  .reveal {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+  }
+
+  .reveal.revealed {
+    opacity: 1;
+    transform: translateY(0);
+  }
+</style>
+
+<script src="../scripts/animations.ts"></script>
+<script src="../scripts/forms.ts"></script>

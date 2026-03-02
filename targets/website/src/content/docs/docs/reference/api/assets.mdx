@@ -1,0 +1,532 @@
+---
+title: Assets API
+description: Media library operations for uploading, organizing, and serving files
+---
+
+The Assets API manages the media library -- uploading files, organizing them in folders, serving them to the browser,
+and tracking where assets are used across content. Assets are stored in a configurable directory alongside content
+files.
+
+All endpoints are relative to the API base URL (default: `/__cms/api`).
+
+:::note Asset endpoints are only available when `assetsPath` is configured in the Conloca integration options. Without
+it, these routes do not exist. :::
+
+---
+
+## List All Assets
+
+### GET /assets
+
+List all assets in the media library as a flat list.
+
+**Parameters:** None
+
+**Response:** `200 OK`
+
+```typescript
+{
+  assets: AssetEntry[]
+}
+```
+
+Where `AssetEntry` is:
+
+```typescript
+interface AssetEntry {
+  filename: string;
+  originalName: string;
+  mimeType: string;
+  size: number;
+  width?: number; // Image dimensions (if applicable)
+  height?: number;
+  alt?: string; // Alt text for accessibility
+  uploadedAt: string; // ISO date
+  uploadedBy?: string; // Email of uploader
+  folder?: string; // Folder path (default: '/')
+  tags?: string[]; // Categorization tags
+}
+```
+
+**Example:**
+
+```bash
+curl http://localhost:4321/__cms/api/assets
+```
+
+---
+
+## List Folder Contents
+
+### GET /assets/folders
+
+List assets and subfolders within a specific folder. Use this for folder-based navigation in the media library UI.
+
+**Parameters:**
+
+| Name | In    | Type   | Required | Description                        |
+| ---- | ----- | ------ | -------- | ---------------------------------- |
+| path | query | string | no       | Folder path to list (default: `/`) |
+
+**Response:** `200 OK`
+
+```typescript
+{
+  assets: AssetEntry[]
+  folders: Array<{
+    name: string   // Folder name
+    path: string   // Full folder path
+  }>
+}
+```
+
+**Errors:**
+
+| Status | Code            | Description                            |
+| ------ | --------------- | -------------------------------------- |
+| 400    | INVALID_REQUEST | Path traversal detected in folder path |
+
+**Example:**
+
+```bash
+# List root folder
+curl http://localhost:4321/__cms/api/assets/folders
+
+# List a subfolder
+curl "http://localhost:4321/__cms/api/assets/folders?path=/images/blog"
+```
+
+---
+
+## Get Folder Tree
+
+### GET /assets/folder-tree
+
+Get the complete folder hierarchy with asset counts for each folder. Useful for rendering a folder tree sidebar.
+
+**Parameters:** None
+
+**Response:** `200 OK`
+
+```typescript
+{
+  tree: FolderTreeNode[]
+}
+```
+
+Where `FolderTreeNode` is:
+
+```typescript
+interface FolderTreeNode {
+  name: string;
+  path: string;
+  assetCount: number;
+  children: FolderTreeNode[];
+}
+```
+
+**Example:**
+
+```bash
+curl http://localhost:4321/__cms/api/assets/folder-tree
+```
+
+```json
+{
+  "tree": [
+    {
+      "name": "images",
+      "path": "/images",
+      "assetCount": 5,
+      "children": [
+        {
+          "name": "blog",
+          "path": "/images/blog",
+          "assetCount": 3,
+          "children": []
+        }
+      ]
+    }
+  ]
+}
+```
+
+---
+
+## Get Asset Metadata
+
+### GET /assets/:filename
+
+Get metadata for a single asset by filename.
+
+**Parameters:**
+
+| Name     | In   | Type   | Required | Description    |
+| -------- | ---- | ------ | -------- | -------------- |
+| filename | path | string | yes      | Asset filename |
+
+**Response:** `200 OK`
+
+Returns an `AssetEntry` object.
+
+**Errors:**
+
+| Status | Code            | Description                 |
+| ------ | --------------- | --------------------------- |
+| 404    | ASSET_NOT_FOUND | No asset with this filename |
+
+**Example:**
+
+```bash
+curl http://localhost:4321/__cms/api/assets/hero-image.jpg
+```
+
+---
+
+## Get Asset Usage
+
+### GET /assets/:filename/usage
+
+Get information about where an asset is referenced across content (which pages or blocks use it). Useful for determining
+whether an asset can be safely deleted.
+
+**Parameters:**
+
+| Name     | In   | Type   | Required | Description    |
+| -------- | ---- | ------ | -------- | -------------- |
+| filename | path | string | yes      | Asset filename |
+
+**Response:** `200 OK`
+
+```typescript
+{
+  usage: Array<{
+    page: string; // Content ID or pathname
+    field: string; // Field where the asset is referenced
+  }>;
+}
+```
+
+**Example:**
+
+```bash
+curl http://localhost:4321/__cms/api/assets/hero-image.jpg/usage
+```
+
+```json
+{
+  "usage": [
+    { "page": "/about", "field": "ogImage" },
+    { "page": "/blog/post-1", "field": "content" }
+  ]
+}
+```
+
+---
+
+## Serve Asset File
+
+### GET /assets/serve/:path
+
+Serve the actual asset file for display in the browser. Supports files in subfolders via the path parameter. Returns the
+file with appropriate `Content-Type` and long-lived cache headers.
+
+**Parameters:**
+
+| Name | In   | Type   | Required | Description                                                               |
+| ---- | ---- | ------ | -------- | ------------------------------------------------------------------------- |
+| path | path | string | yes      | Relative path to the asset (e.g., `image.jpg` or `images/blog/photo.jpg`) |
+
+**Response:** `200 OK`
+
+Headers:
+
+- `Content-Type: <mime-type>`
+- `Cache-Control: public, max-age=31536000, immutable`
+
+Body: Raw file contents
+
+**Errors:**
+
+| Status | Code            | Description                          |
+| ------ | --------------- | ------------------------------------ |
+| 404    | ASSET_NOT_FOUND | File not found at the specified path |
+
+**Example:**
+
+```bash
+# Serve a file from root
+curl http://localhost:4321/__cms/api/assets/serve/hero-image.jpg
+
+# Serve a file from a subfolder
+curl http://localhost:4321/__cms/api/assets/serve/images/blog/photo.jpg
+```
+
+---
+
+## Upload Asset
+
+### POST /assets/upload
+
+Upload a file to the media library using multipart form data. The file is stored with a sanitized filename and optional
+metadata.
+
+**Content-Type:** `multipart/form-data`
+
+**Form Fields:**
+
+| Name       | Type   | Required | Description                        |
+| ---------- | ------ | -------- | ---------------------------------- |
+| file       | File   | yes      | The file to upload                 |
+| folder     | string | no       | Target folder path (default: root) |
+| alt        | string | no       | Alt text for accessibility         |
+| uploadedBy | string | no       | Email of the uploader              |
+| width      | string | no       | Image width in pixels              |
+| height     | string | no       | Image height in pixels             |
+
+**Response:** `201 Created`
+
+Returns the created `AssetEntry`.
+
+**Errors:**
+
+| Status | Code                | Description                          |
+| ------ | ------------------- | ------------------------------------ |
+| 400    | INVALID_REQUEST     | No file provided in the `file` field |
+| 400    | ASSET_UPLOAD_FAILED | Upload validation failed             |
+
+**Example:**
+
+```bash
+curl -X POST http://localhost:4321/__cms/api/assets/upload \
+  -F "file=@./image.jpg" \
+  -F "folder=images/blog" \
+  -F "alt=Blog hero image"
+```
+
+```javascript
+const formData = new FormData();
+formData.append('file', fileInput.files[0]);
+formData.append('folder', 'images/blog');
+formData.append('alt', 'Blog hero image');
+
+const response = await fetch('/__cms/api/assets/upload', {
+  method: 'POST',
+  body: formData,
+});
+const asset = await response.json();
+```
+
+---
+
+## Import Asset from URL
+
+### POST /assets/import-url
+
+Import an asset from an external URL. The file is downloaded and stored in the media library.
+
+**Request Body:**
+
+```typescript
+{
+  url: string         // URL to download from (required)
+  alt?: string        // Alt text
+  uploadedBy?: string // Uploader email
+  folder?: string     // Target folder
+}
+```
+
+**Response:** `201 Created`
+
+Returns the created `AssetEntry`.
+
+**Errors:**
+
+| Status | Code                | Description               |
+| ------ | ------------------- | ------------------------- |
+| 400    | INVALID_REQUEST     | `url` is missing          |
+| 400    | ASSET_UPLOAD_FAILED | Download or import failed |
+
+**Example:**
+
+```bash
+curl -X POST http://localhost:4321/__cms/api/assets/import-url \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://example.com/photo.jpg",
+    "alt": "External photo",
+    "folder": "images/imported"
+  }'
+```
+
+---
+
+## Move Assets
+
+### POST /assets/move
+
+Move one or more assets between folders.
+
+**Request Body:**
+
+```typescript
+{
+  filenames: string[]    // Array of filenames to move
+  sourceFolder: string   // Current folder path
+  targetFolder: string   // Destination folder path
+}
+```
+
+**Response:** `200 OK`
+
+```typescript
+{
+  success: true;
+}
+```
+
+**Errors:**
+
+| Status | Code            | Description                                      |
+| ------ | --------------- | ------------------------------------------------ |
+| 400    | INVALID_REQUEST | Invalid filenames, sourceFolder, or targetFolder |
+| 400    | INVALID_REQUEST | Path traversal detected                          |
+
+**Example:**
+
+```bash
+curl -X POST http://localhost:4321/__cms/api/assets/move \
+  -H "Content-Type: application/json" \
+  -d '{
+    "filenames": ["photo1.jpg", "photo2.jpg"],
+    "sourceFolder": "/",
+    "targetFolder": "/images/archive"
+  }'
+```
+
+---
+
+## Create Folder
+
+### POST /assets/folders
+
+Create a new folder in the media library.
+
+**Request Body:**
+
+```typescript
+{
+  path: string; // Folder path to create (e.g., '/images/new-folder')
+}
+```
+
+**Response:** `201 Created`
+
+```typescript
+{
+  success: true;
+}
+```
+
+**Errors:**
+
+| Status | Code            | Description                                |
+| ------ | --------------- | ------------------------------------------ |
+| 400    | INVALID_REQUEST | `path` is missing or folder already exists |
+
+**Example:**
+
+```bash
+curl -X POST http://localhost:4321/__cms/api/assets/folders \
+  -H "Content-Type: application/json" \
+  -d '{ "path": "/images/2024" }'
+```
+
+---
+
+## Update Asset Metadata
+
+### PATCH /assets/:filename
+
+Update metadata for an existing asset (alt text, tags).
+
+**Parameters:**
+
+| Name     | In   | Type   | Required | Description    |
+| -------- | ---- | ------ | -------- | -------------- |
+| filename | path | string | yes      | Asset filename |
+
+**Request Body:**
+
+```typescript
+{
+  alt?: string      // Updated alt text
+  tags?: string[]   // Updated tags
+}
+```
+
+**Response:** `200 OK`
+
+Returns the updated `AssetEntry`.
+
+**Errors:**
+
+| Status | Code            | Description     |
+| ------ | --------------- | --------------- |
+| 404    | ASSET_NOT_FOUND | Asset not found |
+
+**Example:**
+
+```bash
+curl -X PATCH http://localhost:4321/__cms/api/assets/hero-image.jpg \
+  -H "Content-Type: application/json" \
+  -d '{ "alt": "Updated alt text", "tags": ["hero", "homepage"] }'
+```
+
+---
+
+## Delete Asset
+
+### DELETE /assets/:filename
+
+Delete an asset from the media library. Check usage first with the [usage endpoint](#get-assetsfilenameusage) to avoid
+breaking references.
+
+**Parameters:**
+
+| Name     | In   | Type   | Required | Description              |
+| -------- | ---- | ------ | -------- | ------------------------ |
+| filename | path | string | yes      | Asset filename to delete |
+
+**Response:** `200 OK`
+
+```typescript
+{
+  success: true;
+}
+```
+
+**Errors:**
+
+| Status | Code            | Description     |
+| ------ | --------------- | --------------- |
+| 404    | ASSET_NOT_FOUND | Asset not found |
+
+**Example:**
+
+```bash
+curl -X DELETE http://localhost:4321/__cms/api/assets/old-image.jpg
+```
+
+---
+
+## Error Codes
+
+| Code                 | Description                                   |
+| -------------------- | --------------------------------------------- |
+| ASSET_NOT_FOUND      | Asset file does not exist                     |
+| ASSET_UPLOAD_FAILED  | Upload or import operation failed             |
+| ASSET_INVALID_FORMAT | File format not supported                     |
+| ASSET_TOO_LARGE      | File exceeds the size limit                   |
+| INVALID_REQUEST      | Invalid parameters or path traversal detected |
+| INTERNAL_ERROR       | Unexpected server error                       |

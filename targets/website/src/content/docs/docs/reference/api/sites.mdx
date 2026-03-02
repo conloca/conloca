@@ -1,0 +1,291 @@
+---
+title: Sites API
+description: Site configuration, page listing, pathname validation, and page move operations
+---
+
+The Sites API provides endpoints for working with site configuration, listing site-scoped pages, checking pathname
+availability, moving pages to new URLs, and finding untranslated content. Conloca supports multiple sites, each with its
+own set of locales, collections, and content.
+
+All endpoints are relative to the API base URL (default: `/__cms/api`).
+
+---
+
+## Get Sites Configuration
+
+### GET /sites
+
+Get the full sites configuration including all sites, their locales, default locales, and domain mappings. This is the
+entry point for understanding the content structure.
+
+**Parameters:** None
+
+**Response:** `200 OK`
+
+```typescript
+// SitesConfig
+{
+  sites: {
+    [siteName: string]: {
+      locales: string[]
+      defaultLocale: string
+      domains?: {
+        [locale: string]: string
+      }
+    }
+  }
+  globalLocales: string[]
+}
+```
+
+**Example:**
+
+```bash
+curl http://localhost:4321/__cms/api/sites
+```
+
+```json
+{
+  "sites": {
+    "default": {
+      "locales": ["en", "de", "zh"],
+      "defaultLocale": "en",
+      "domains": {
+        "en": "example.com",
+        "de": "example.de"
+      }
+    }
+  },
+  "globalLocales": ["en", "de", "zh"]
+}
+```
+
+---
+
+## Get Site Collections
+
+### GET /:site/collections
+
+Get all content collections for a specific site. Also works with `blocks` as the site name to get block collections.
+
+**Parameters:**
+
+| Name | In   | Type   | Required | Description                                   |
+| ---- | ---- | ------ | -------- | --------------------------------------------- |
+| site | path | string | yes      | Site name (or `blocks` for block collections) |
+
+**Response:** `200 OK`
+
+```typescript
+{
+  collections: string[]
+}
+```
+
+**Errors:**
+
+| Status | Code           | Description            |
+| ------ | -------------- | ---------------------- |
+| 404    | SITE_NOT_FOUND | No site with this name |
+
+**Example:**
+
+```bash
+# Get collections for a site
+curl http://localhost:4321/__cms/api/default/collections
+
+# Get block collections
+curl http://localhost:4321/__cms/api/blocks/collections
+```
+
+```json
+{
+  "collections": ["blog", "pages"]
+}
+```
+
+---
+
+## List Site Pages
+
+### GET /:site/pages
+
+List all pages for a specific site. Not valid for the `blocks` scope.
+
+**Parameters:**
+
+| Name   | In    | Type   | Required | Description      |
+| ------ | ----- | ------ | -------- | ---------------- |
+| site   | path  | string | yes      | Site name        |
+| locale | query | string | no       | Filter by locale |
+
+**Response:** `200 OK`
+
+```typescript
+{
+  items: ContentManifest[]
+  total: number
+}
+```
+
+**Errors:**
+
+| Status | Code            | Description                          |
+| ------ | --------------- | ------------------------------------ |
+| 400    | INVALID_REQUEST | Cannot list pages for `blocks` scope |
+| 404    | SITE_NOT_FOUND  | No site with this name               |
+
+**Example:**
+
+```bash
+# List all pages for a site
+curl http://localhost:4321/__cms/api/default/pages
+
+# List pages filtered by locale
+curl "http://localhost:4321/__cms/api/default/pages?locale=en"
+```
+
+---
+
+## Check Pathname Availability
+
+### GET /:site/pathname-available
+
+Check whether a URL pathname is available within a site. Used by the editor to validate pathnames before creating or
+moving pages.
+
+**Parameters:**
+
+| Name      | In    | Type   | Required | Description                                     |
+| --------- | ----- | ------ | -------- | ----------------------------------------------- |
+| site      | path  | string | yes      | Site name                                       |
+| pathname  | query | string | yes      | Pathname to check (e.g., `/about`)              |
+| locale    | query | string | no       | Locale to check in (default: `en`)              |
+| excludeId | query | string | no       | Exclude this content ID (for rename operations) |
+
+**Response:** `200 OK`
+
+```typescript
+// Available
+{
+  available: true;
+}
+
+// Taken
+{
+  available: false;
+  existingId: string; // ID of the page using this pathname
+}
+```
+
+**Errors:**
+
+| Status | Code                   | Description                               |
+| ------ | ---------------------- | ----------------------------------------- |
+| 400    | MISSING_REQUIRED_FIELD | `pathname` query parameter missing        |
+| 400    | INVALID_REQUEST        | Cannot check pathnames for `blocks` scope |
+| 404    | SITE_NOT_FOUND         | No site with this name                    |
+
+**Example:**
+
+```bash
+curl "http://localhost:4321/__cms/api/default/pathname-available?pathname=/about&locale=en"
+```
+
+---
+
+## Move Page
+
+### POST /:site/move
+
+Move a page to a new pathname within a site. Uses etag-based concurrency control. The previous pathname is recorded for
+redirect handling.
+
+**Parameters:**
+
+| Name | In   | Type   | Required | Description |
+| ---- | ---- | ------ | -------- | ----------- |
+| site | path | string | yes      | Site name   |
+
+**Request Body:**
+
+```typescript
+{
+  id: string; // Content ID of the page to move
+  pathname: string; // New pathname
+  locale: string; // Locale to update
+  etag: string; // Current etag for concurrency check
+}
+```
+
+**Response:** `200 OK`
+
+```typescript
+{
+  moved: true;
+  previousPathname: string;
+  etag: string; // New etag after the move
+}
+```
+
+**Errors:**
+
+| Status | Code                   | Description                                   |
+| ------ | ---------------------- | --------------------------------------------- |
+| 400    | MISSING_REQUIRED_FIELD | Missing `id`, `pathname`, `locale`, or `etag` |
+| 404    | SITE_NOT_FOUND         | No site with this name                        |
+| 404    | CONTENT_NOT_FOUND      | Page not found                                |
+| 409    | PATHNAME_TAKEN         | Another page already uses this pathname       |
+| 412    | -                      | Etag mismatch (stale write)                   |
+
+**Example:**
+
+```bash
+curl -X POST http://localhost:4321/__cms/api/default/move \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "abc123",
+    "pathname": "/new-about",
+    "locale": "en",
+    "etag": "a1b2c3.d4e5f6"
+  }'
+```
+
+---
+
+## Find Untranslated Content
+
+### GET /untranslated/:targetLocale
+
+Find content that has not been translated to a specific locale. Useful for building translation dashboards and
+workflows.
+
+**Parameters:**
+
+| Name               | In    | Type     | Required | Description                             |
+| ------------------ | ----- | -------- | -------- | --------------------------------------- |
+| targetLocale       | path  | string   | yes      | Locale to find missing translations for |
+| excludeSites       | query | string   | no       | Comma-separated site names to exclude   |
+| includeUnpublished | query | `'true'` | no       | Include unpublished content in results  |
+
+**Response:** `200 OK`
+
+```typescript
+{
+  items: ContentManifest[]
+  total: number
+}
+```
+
+**Example:**
+
+```bash
+# Find content missing German translations
+curl http://localhost:4321/__cms/api/untranslated/de
+
+# Exclude specific sites
+curl "http://localhost:4321/__cms/api/untranslated/de?excludeSites=internal"
+
+# Include unpublished content
+curl "http://localhost:4321/__cms/api/untranslated/de?includeUnpublished=true"
+```

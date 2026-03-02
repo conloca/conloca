@@ -1,0 +1,76 @@
+---
+const features = [
+  {
+    title: 'File-Based Storage',
+    description: 'Content stored as VXJSON files in your repo. No database, no vendor lock-in.',
+    icon: `<path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />`,
+  },
+  {
+    title: 'Visual Drag & Drop Editor',
+    description: 'Powered by Puck. Build pages visually in development with drag-and-drop components.',
+    icon: `<path stroke-linecap="round" stroke-linejoin="round" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />`,
+  },
+  {
+    title: 'Git-Native',
+    description: 'Every edit can be committed to git. Changes appear in version history with proper attribution.',
+    icon: `<path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />`,
+  },
+  {
+    title: 'Multi-Locale',
+    description: 'Built-in content management for multiple languages and locales.',
+    icon: `<path stroke-linecap="round" stroke-linejoin="round" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />`,
+  },
+  {
+    title: 'MDX Support',
+    description: 'Rich content with MDX. Mix markdown and components seamlessly.',
+    icon: `<path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />`,
+  },
+  {
+    title: 'Serverless Deploy',
+    description: 'Commits via GitHub REST API. Runs on Cloudflare, no server required.',
+    icon: `<path stroke-linecap="round" stroke-linejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />`,
+  },
+  {
+    title: 'CF Access Auth',
+    description: 'Cloudflare Access authentication with JWT validation out of the box.',
+    icon: `<path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />`,
+  },
+  {
+    title: 'Config-Driven Routing',
+    description: 'Define routes in config. Your site never touches slug files.',
+    icon: `<path stroke-linecap="round" stroke-linejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />`,
+  },
+];
+---
+
+<section id="features" class="py-24 sm:py-32 relative">
+  <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(6,182,212,0.04)_0%,transparent_50%)]"></div>
+  <div class="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="text-center mb-16">
+      <p class="text-brand-400 text-sm font-medium tracking-wide uppercase mb-3">Features</p>
+      <h2 class="text-3xl sm:text-4xl font-bold text-white mb-4">
+        Everything you need, nothing you don't
+      </h2>
+      <p class="text-surface-400 max-w-xl mx-auto">
+        A CMS that respects your stack. File-based, git-native, and built for Astro.
+      </p>
+    </div>
+
+    <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+      {features.map((feature, i) => (
+        <div
+          class="reveal group bg-surface-900/40 border border-surface-800/50 rounded-xl p-6 hover:border-brand-500/30 hover:bg-surface-900/70 transition-all duration-300"
+          style={`animation-delay: ${i * 0.08}s;`}
+        >
+          <div class="w-10 h-10 rounded-lg bg-brand-500/10 border border-brand-500/20 flex items-center justify-center mb-4 group-hover:bg-brand-500/20 transition-colors duration-300">
+            <svg class="w-5 h-5 text-brand-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+              <Fragment set:html={feature.icon} />
+            </svg>
+          </div>
+          <h3 class="text-white font-medium mb-2 text-sm">{feature.title}</h3>
+          <p class="text-surface-400 text-sm leading-relaxed">{feature.description}</p>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>

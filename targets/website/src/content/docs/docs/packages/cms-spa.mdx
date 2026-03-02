@@ -1,0 +1,111 @@
+---
+title: '@conloca/cms-spa'
+description: 'React-based admin UI for Conloca CMS with Puck visual page builder'
+---
+
+## Overview
+
+`@conloca/cms-spa` is the React-based admin interface for Conloca CMS. It provides the full CMS experience: visual page
+editing with Puck, block management with MDX, a media library, data schema editing, git operations, and multi-locale
+content management.
+
+**This package is consumed by `@conloca/astro-cms` -- developers do not install it directly.** The Astro integration
+bundles and serves the SPA automatically at the configured CMS route (default: `/__cms`).
+
+## Architecture
+
+The SPA is built as a pre-bundled React application served via Astro middleware:
+
+1. **Build time:** The SPA is compiled into hashed static assets (`dist/spa/`)
+2. **Runtime:** The CMS handler injects the Puck config and UI config into the HTML
+3. **Client:** React Router handles navigation within the CMS
+
+### Key UI Areas
+
+| Area              | Description                                             |
+| ----------------- | ------------------------------------------------------- |
+| **Dashboard**     | Overview of content, recent changes, needs-review items |
+| **Pages**         | Site-scoped page list with locale management            |
+| **Blocks**        | Shared and site-specific block collections              |
+| **Data**          | Data schema editor for structured content               |
+| **Media Library** | Asset management with folders, tags, and usage tracking |
+| **Page Editor**   | Puck visual editor with drag-and-drop components        |
+| **Block Editor**  | MDX editor for block content                            |
+| **Git**           | Status panel, commit, push, pull operations             |
+
+## Entry Points
+
+| Import                          | Purpose                                      |
+| ------------------------------- | -------------------------------------------- |
+| `@conloca/cms-spa`              | Main CMS application exports (UIConfig type) |
+| `@conloca/cms-spa/data-schemas` | Data schema editor component                 |
+| `@conloca/cms-spa/page-schemas` | Page schema editor component                 |
+| `@conloca/cms-spa/puck-config`  | Puck configuration wrapper and utilities     |
+| `@conloca/cms-spa/main`         | Application bootstrap entry point            |
+| `@conloca/cms-spa/dist/spa/*`   | Pre-built static SPA assets (HTML, JS, CSS)  |
+
+## Customization
+
+The CMS UI is configured through the Astro integration options, not by importing this package directly.
+
+### Puck Components
+
+Custom Puck components are provided via the `puckConfigPath` option in `conlocaCMS()`. The config file exports a Puck
+configuration object:
+
+```typescript
+// src/puck.config.tsx
+import type { Config } from '@puckeditor/core'
+
+const config: Config = {
+  components: {
+    Hero: {
+      fields: { title: { type: 'text' } },
+      render: ({ title }) => <h1>{title}</h1>,
+    },
+  },
+}
+
+export default config
+```
+
+The CMS loads this config via a Vite virtual module, enabling Hot Module Replacement during development.
+
+### Data Schemas
+
+Data schemas define structured content types beyond pages and blocks:
+
+```typescript
+// src/schemas.ts
+import { z } from 'zod';
+
+export const dataSchemas = {
+  'blog-posts': z.object({
+    title: z.string(),
+    author: z.string(),
+    publishDate: z.coerce.date(),
+  }),
+};
+```
+
+### UI Configuration
+
+The `UIConfig` type controls SPA behavior:
+
+| Field        | Type     | Purpose                   |
+| ------------ | -------- | ------------------------- |
+| `basename`   | `string` | Base path for CMS routes  |
+| `apiBaseUrl` | `string` | Base URL for API requests |
+
+## Technology Stack
+
+| Library              | Purpose                                        |
+| -------------------- | ---------------------------------------------- |
+| React 19             | UI framework                                   |
+| React Router         | Client-side routing                            |
+| TanStack React Query | Data fetching and caching                      |
+| Puck                 | Visual page editor                             |
+| MDX Editor           | Block content editing                          |
+| Tailwind CSS         | Styling                                        |
+| Radix UI             | Accessible dialog, select, dropdown components |
+| Lucide React         | Icons                                          |

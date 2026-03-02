@@ -1,0 +1,248 @@
+---
+title: '@conloca/content-api-client'
+description: 'React Query hooks and HTTP client for the Conloca Content API'
+---
+
+## Overview
+
+`@conloca/content-api-client` provides React Query hooks and an HTTP client for interacting with the Conloca Content
+API. It powers the CMS admin UI and can be used in any React application that needs to read or write CMS content.
+
+Features:
+
+- React Query hooks with automatic caching and invalidation
+- ETag-based optimistic concurrency control
+- Asset management hooks (upload, delete, move, folders)
+- Git operations hooks (commit, push, pull, status)
+- Content inheritance hooks (mark reviewed, break/revert inheritance)
+- Test utilities for unit and integration testing
+
+## Installation
+
+```bash
+bun add @conloca/content-api-client
+```
+
+## Entry Points
+
+### `@conloca/content-api-client` (main)
+
+React hooks, HTTP client, and re-exported types.
+
+```typescript
+import { useContent, useSitePages, useBlocks, ContentAPIClient, StaleWriteError } from '@conloca/content-api-client';
+```
+
+### `@conloca/content-api-client/testing`
+
+Test utilities for mocking the content API in tests.
+
+```typescript
+import { setupTestAPI, API_ROUTES } from '@conloca/content-api-client/testing';
+```
+
+## Content Hooks
+
+### Query Hooks
+
+| Hook                      | Signature                                                                       | Purpose                            |
+| ------------------------- | ------------------------------------------------------------------------------- | ---------------------------------- |
+| `useContent`              | `(id: string)`                                                                  | Fetch content entry by ID          |
+| `useLocalizedContent`     | `(id: string, locale: string)`                                                  | Fetch single-locale content        |
+| `useSitePages`            | `(site: string, locale?: string)`                                               | List pages for a site              |
+| `usePageByPathname`       | `(site: string, pathname: string, locale?: string)`                             | Find page by URL pathname          |
+| `usePathnameAvailability` | `(site: string, pathname: string, excludeId?: string)`                          | Check if pathname is available     |
+| `useBlocks`               | `(options?: UseBlocksOptions \| string, locale?: string)`                       | List blocks (supports site-scoped) |
+| `useBlockByName`          | `(name: string, collection?: string, locale?: string, site?: string)`           | Fetch single block by name         |
+| `useData`                 | `(collection?: string, locale?: string)`                                        | List data entries                  |
+| `useDataByName`           | `(name: string, collection: string, locale?: string)`                           | Fetch data entry by name           |
+| `useDataNameAvailability` | `(name: string, collection: string, excludeId?: string)`                        | Check data name availability       |
+| `useDataCollections`      | `()`                                                                            | List available data collections    |
+| `useAllContent`           | `(filters?: GlobalFilters)`                                                     | List all content with filters      |
+| `useUntranslatedContent`  | `(targetLocale: string, excludeSites?: string[], includeUnpublished?: boolean)` | Find untranslated content          |
+| `useSitesConfig`          | `()`                                                                            | Fetch multi-site configuration     |
+| `useCurrentUser`          | `()`                                                                            | Get authenticated user info        |
+
+### Mutation Hooks
+
+| Hook                   | Purpose                                       |
+| ---------------------- | --------------------------------------------- |
+| `useCreateContent()`   | Create new content (page, block, or data)     |
+| `useUpdateLocalized()` | Update localized content with ETag validation |
+| `useDeleteContent()`   | Delete content or a specific locale           |
+| `useDeleteLocalized()` | Delete a single locale from content           |
+| `useMovePage()`        | Move a page to a new pathname                 |
+| `useBatchUpdate()`     | Batch update multiple content entries         |
+
+## Asset Hooks
+
+| Hook                     | Signature                    | Purpose                           |
+| ------------------------ | ---------------------------- | --------------------------------- |
+| `useAssets`              | `()`                         | List all assets                   |
+| `useAsset`               | `(filename: string)`         | Fetch single asset metadata       |
+| `useUploadAsset`         | `()`                         | Upload asset mutation             |
+| `useImportAssetUrl`      | `()`                         | Import asset from URL mutation    |
+| `useDeleteAsset`         | `()`                         | Delete asset mutation             |
+| `useAssetFolders`        | `(path?: string)`            | List folder contents              |
+| `useCreateFolder`        | `()`                         | Create folder mutation            |
+| `useUpdateAssetMetadata` | `()`                         | Update asset alt text / tags      |
+| `useAssetUsage`          | `(filename: string \| null)` | Find where an asset is referenced |
+| `useFolderTree`          | `()`                         | Get full folder tree structure    |
+| `useMoveAssets`          | `()`                         | Move assets between folders       |
+
+## Git Hooks
+
+| Hook                 | Purpose                                          |
+| -------------------- | ------------------------------------------------ |
+| `useGitStatus()`     | Get current git status (changes, branch, remote) |
+| `useCommitChanges()` | Commit content changes mutation                  |
+| `usePushChanges()`   | Push to remote mutation                          |
+| `usePullChanges()`   | Pull from remote mutation                        |
+
+## Inheritance Hooks
+
+| Hook                            | Purpose                                      |
+| ------------------------------- | -------------------------------------------- |
+| `useNeedsReview(locale, kind?)` | List content needing inheritance review      |
+| `useMarkReviewed()`             | Mark content as reviewed after parent change |
+| `useBreakInheritance()`         | Break inheritance link for content           |
+| `useRevertToInherited()`        | Revert content to inherited version          |
+
+## ContentAPIClient
+
+The HTTP client used by all hooks. Can also be used directly for non-React code.
+
+```typescript
+import { ContentAPIClient } from '@conloca/content-api-client';
+
+const client = new ContentAPIClient({
+  baseUrl: '/__conloca/api', // default
+  fetch: customFetch, // optional custom fetch
+});
+```
+
+### Client Methods
+
+| Method                                              | Return Type                | Purpose                     |
+| --------------------------------------------------- | -------------------------- | --------------------------- |
+| `getContent(id)`                                    | `ContentEntry \| null`     | Fetch full content entry    |
+| `getLocalized(id, locale)`                          | `LocalizedEntry \| null`   | Fetch single-locale content |
+| `createContent(data)`                               | `CreateResult`             | Create new content          |
+| `updateLocalized(input)`                            | `UpdateResult`             | Update with ETag validation |
+| `deleteContent(id, etag)`                           | `DeleteResult`             | Delete entire content       |
+| `deleteLocalized(input)`                            | `DeleteResult`             | Delete single locale        |
+| `getSitePages(site, locale?)`                       | `ContentListResult`        | List site pages             |
+| `getPageByPathname(site, pathname, locale?)`        | `ContentManifest \| null`  | Find page by pathname       |
+| `isPathnameAvailable(site, pathname, excludeId?)`   | `boolean`                  | Check pathname availability |
+| `movePage(site, id, pathname, locale, etag)`        | `MoveResult`               | Move page to new pathname   |
+| `getBlocks(collection?, locale?, site?)`            | `ContentListResult`        | List blocks                 |
+| `getBlockByName(name, collection?, locale?, site?)` | `ContentManifest \| null`  | Get block by name           |
+| `getData(collection?, locale?)`                     | `ContentListResult`        | List data entries           |
+| `getDataByName(name, collection, locale?)`          | `ContentManifest \| null`  | Get data by name            |
+| `listAllContent(filters?)`                          | `ContentListResult`        | List all content            |
+| `batchUpdate(operations)`                           | `BatchResult`              | Batch update                |
+| `getGitStatus()`                                    | `GitStatus`                | Git repository status       |
+| `commitChanges(message?)`                           | `GitCommitResult`          | Commit changes              |
+| `pushChanges()`                                     | `GitPushResult`            | Push to remote              |
+| `pullChanges()`                                     | `GitPullResult`            | Pull from remote            |
+| `listAssets()`                                      | `{ assets: AssetEntry[] }` | List all assets             |
+| `uploadAsset(formData)`                             | `{ asset: AssetEntry }`    | Upload asset                |
+| `deleteAsset(filename)`                             | `{ success: boolean }`     | Delete asset                |
+| `getCurrentUser()`                                  | `{ user, role }`           | Get authenticated user      |
+
+### Error Handling
+
+```typescript
+import { StaleWriteError, APIClientError } from '@conloca/content-api-client';
+
+try {
+  await client.updateLocalized({ id, locale, data, etag });
+} catch (error) {
+  if (error instanceof StaleWriteError) {
+    // Content was modified by another user
+    // error.data.currentEtag contains the latest ETag
+    console.log('Conflict - latest ETag:', error.data.currentEtag);
+  }
+  if (error instanceof APIClientError) {
+    console.log('API error:', error.status, error.code);
+  }
+}
+```
+
+## Client Configuration
+
+### Global Client
+
+The hooks use a global client instance. Configure it before rendering:
+
+```typescript
+import { setContentAPIClient, ContentAPIClient } from '@conloca/content-api-client';
+
+setContentAPIClient(new ContentAPIClient({ baseUrl: '/api' }));
+```
+
+## Examples
+
+### Listing Pages
+
+```typescript
+import { useSitePages } from '@conloca/content-api-client'
+
+function PageList({ site }) {
+  const { data, isLoading, error } = useSitePages(site, 'en')
+
+  if (isLoading) return <p>Loading...</p>
+  if (error) return <p>Error: {error.message}</p>
+
+  return (
+    <ul>
+      {data?.items.map((page) => (
+        <li key={page.id}>
+          {page.locales.en?.pathname || page.id}
+        </li>
+      ))}
+    </ul>
+  )
+}
+```
+
+### Creating Content
+
+```typescript
+import { useCreateContent } from '@conloca/content-api-client'
+
+function CreatePageButton({ site }) {
+  const createContent = useCreateContent()
+
+  const handleCreate = () => {
+    createContent.mutate({
+      kind: 'page',
+      site,
+      collection: 'pages',
+      type: 'puck',
+      locales: {
+        en: {
+          pathname: '/new-page',
+          meta: { title: 'New Page' },
+          content: { puckData: { root: { props: {} }, content: [], zones: {} } },
+        },
+      },
+    })
+  }
+
+  return <button onClick={handleCreate}>Create Page</button>
+}
+```
+
+### Testing with Mock API
+
+```typescript
+import { setupTestAPI } from '@conloca/content-api-client/testing';
+import { InMemoryContentAPI, createContentAPIRouter } from '@conloca/content-api/node';
+
+const api = new InMemoryContentAPI({ sites: { default: { locales: ['en'] } } });
+const router = createContentAPIRouter(api);
+
+// Override global fetch to use the in-memory router
+global.fetch = (input, init) => router.fetch(new Request(input, init));
+```

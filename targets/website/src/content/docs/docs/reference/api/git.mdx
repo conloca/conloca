@@ -1,0 +1,213 @@
+---
+title: Git API
+description: Git repository status, commit, push, and pull operations
+---
+
+The Git API provides endpoints for managing the content repository's git state directly from the CMS. Content editors
+can check the repository status, commit their changes, push to the remote, and pull updates -- all without leaving the
+CMS interface.
+
+All endpoints are relative to the API base URL (default: `/__cms/api`).
+
+Git operations use the `contentRoot` path configured in the Conloca integration options (or the `CONTENT_PATH`
+environment variable) as the working directory. An optional `GIT_BRANCH` environment variable controls which branch to
+operate on.
+
+---
+
+## Attribution
+
+When a user commits changes through the CMS, the authenticated user's email is used for git attribution (`author`
+field). This connects CMS edits to specific users in the git history. If no auth provider is configured, commits are
+attributed to the system default.
+
+The typical CMS workflow is:
+
+1. Make content edits in the visual editor
+2. Check status to see pending changes
+3. Commit all changes with a descriptive message
+4. Push to share changes with the team
+
+---
+
+## Get Repository Status
+
+### GET /git/status
+
+Get the current state of the git repository including branch, changed files, and remote sync status.
+
+**Parameters:** None
+
+**Response:** `200 OK`
+
+```typescript
+// GitStatus
+{
+  isRepo: boolean           // Whether the path is a git repository
+  hasChanges: boolean       // Whether there are uncommitted changes
+  changedFiles: number      // Number of changed files
+  ahead: number             // Commits ahead of remote
+  behind: number            // Commits behind remote
+  branch: string            // Current branch name
+  remoteConfigured?: boolean // Whether a remote origin is configured
+}
+```
+
+**Errors:**
+
+| Status | Code         | Description                                                                         |
+| ------ | ------------ | ----------------------------------------------------------------------------------- |
+| 400    | GIT_NOT_REPO | Content path is not a git repository or `contentRoot`/`CONTENT_PATH` not configured |
+
+**Example:**
+
+```bash
+curl http://localhost:4321/__cms/api/git/status
+```
+
+```json
+{
+  "isRepo": true,
+  "hasChanges": true,
+  "changedFiles": 3,
+  "ahead": 0,
+  "behind": 0,
+  "branch": "main",
+  "remoteConfigured": true
+}
+```
+
+---
+
+## Commit Changes
+
+### POST /git/commit
+
+Commit all pending changes in the content directory. Stages all modified, added, and deleted files, then creates a
+commit. If no message is provided, an auto-generated message with the current date is used.
+
+The authenticated user's email and name are used as the git author for attribution.
+
+**Request Body:**
+
+```typescript
+{
+  message?: string  // Commit message (optional, auto-generated if omitted)
+}
+```
+
+**Response:** `200 OK`
+
+```typescript
+// CommitResult
+{
+  success: true;
+  commit: string; // Short commit hash
+  summary: string; // Git commit summary (e.g., "3 files changed, 45 insertions(+)")
+}
+```
+
+**Errors:**
+
+| Status | Code              | Description             |
+| ------ | ----------------- | ----------------------- |
+| 400    | GIT_NOT_REPO      | Not a git repository    |
+| 500    | GIT_COMMIT_FAILED | Commit operation failed |
+
+**Example:**
+
+```bash
+# Commit with a custom message
+curl -X POST http://localhost:4321/__cms/api/git/commit \
+  -H "Content-Type: application/json" \
+  -d '{ "message": "Update homepage hero section" }'
+
+# Commit with auto-generated message
+curl -X POST http://localhost:4321/__cms/api/git/commit
+```
+
+```json
+{
+  "success": true,
+  "commit": "a1b2c3d",
+  "summary": "3 files changed, 45 insertions(+), 12 deletions(-)"
+}
+```
+
+---
+
+## Push to Remote
+
+### POST /git/push
+
+Push committed changes to the remote origin. Requires a remote to be configured for the repository.
+
+**Request Body:** None (empty body or `{}`)
+
+**Response:** `200 OK`
+
+```typescript
+// PushResult
+{
+  success: true;
+}
+```
+
+**Errors:**
+
+| Status | Code            | Description                                            |
+| ------ | --------------- | ------------------------------------------------------ |
+| 400    | GIT_NOT_REPO    | Not a git repository                                   |
+| 500    | GIT_PUSH_FAILED | Push failed (e.g., no remote, auth failure, conflicts) |
+
+**Example:**
+
+```bash
+curl -X POST http://localhost:4321/__cms/api/git/push
+```
+
+---
+
+## Pull from Remote
+
+### POST /git/pull
+
+Pull changes from the remote origin using rebase with autostash. This safely integrates remote changes even when there
+are uncommitted local modifications.
+
+**Request Body:** None (empty body or `{}`)
+
+**Response:** `200 OK`
+
+```typescript
+// PullResult
+{
+  success: true
+  summary?: string  // Git pull summary
+}
+```
+
+**Errors:**
+
+| Status | Code            | Description                                       |
+| ------ | --------------- | ------------------------------------------------- |
+| 400    | GIT_NOT_REPO    | Not a git repository                              |
+| 500    | GIT_PULL_FAILED | Pull failed (e.g., merge conflicts, auth failure) |
+
+**Example:**
+
+```bash
+curl -X POST http://localhost:4321/__cms/api/git/pull
+```
+
+---
+
+## Error Codes
+
+| Code              | Description                          |
+| ----------------- | ------------------------------------ |
+| GIT_NOT_REPO      | Content path is not a git repository |
+| GIT_STATUS_FAILED | Could not read git status            |
+| GIT_COMMIT_FAILED | Commit operation failed              |
+| GIT_PUSH_FAILED   | Push to remote failed                |
+| GIT_PULL_FAILED   | Pull from remote failed              |

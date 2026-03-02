@@ -1,0 +1,160 @@
+---
+title: '@conloca/cli'
+description: 'Command-line interface for Conloca content operations'
+---
+
+## Overview
+
+`@conloca/cli` provides command-line tools for managing Conloca content. Use it to initialize content directory
+structures, scaffold Astro integration files, and verify content integrity.
+
+## Installation
+
+```bash
+bun add -g @conloca/cli
+```
+
+Or run without installing:
+
+```bash
+bunx @conloca/cli --help
+```
+
+## Commands
+
+### `conloca init`
+
+Initialize a new Conloca content structure for a site.
+
+```bash
+conloca init <directory> <site>
+```
+
+**Arguments:**
+
+| Argument    | Description                         |
+| ----------- | ----------------------------------- |
+| `directory` | Path to content root directory      |
+| `site`      | Site name (e.g., `default`, `blog`) |
+
+**What it creates:**
+
+- Content directory structure (`pages/`, `blocks/shared/`)
+- Site-specific directories
+- `sites.json` configuration file
+
+**Example:**
+
+```bash
+# Initialize content in current directory for 'default' site
+conloca init . default
+
+# Initialize content in a specific directory for 'blog' site
+conloca init ./content blog
+```
+
+### `conloca verify`
+
+Verify content files and auto-repair missing required fields.
+
+```bash
+conloca verify <directory>
+```
+
+**Arguments:**
+
+| Argument    | Description                         |
+| ----------- | ----------------------------------- |
+| `directory` | Path to content directory to verify |
+
+**What it does:**
+
+- Scans all VXJSON and MDX content files
+- Checks for required fields (`id`, `created`, `modified`)
+- Auto-repairs files with missing fields
+- Reports errors and displays a summary
+
+**Example:**
+
+```bash
+conloca verify ./content
+```
+
+### `conloca astro setup`
+
+Scaffold Astro integration files for a Conloca CMS project.
+
+```bash
+conloca astro setup [path]
+```
+
+**Arguments:**
+
+| Argument | Description             | Default                 |
+| -------- | ----------------------- | ----------------------- |
+| `path`   | Astro project directory | `.` (current directory) |
+
+**Options:**
+
+| Flag                | Description      | Default   |
+| ------------------- | ---------------- | --------- |
+| `-s, --site <name>` | Target site name | `default` |
+
+**What it generates:**
+
+| File                              | Purpose                                              |
+| --------------------------------- | ---------------------------------------------------- |
+| `src/pages/[...slug].astro`       | Dynamic route file for CMS pages                     |
+| `src/content.config.ts`           | Astro content collections configuration              |
+| `src/puck.config.tsx`             | Puck component configuration with starter components |
+| `src/components/Layout.tsx`       | Layout component with grid/flex support              |
+| `src/components/Section.tsx`      | Section wrapper component                            |
+| `src/components/puck/Heading.tsx` | Heading Puck component                               |
+| `src/components/puck/Text.tsx`    | Text Puck component                                  |
+| `src/components/puck/Flex.tsx`    | Flex layout Puck component                           |
+| `src/components/puck/Grid.tsx`    | Grid layout Puck component                           |
+| `src/schemas/data.ts`             | Example Zod schemas for data collections             |
+
+**Examples:**
+
+```bash
+# Set up in current directory
+conloca astro setup
+
+# Set up in a specific project
+conloca astro setup ./my-astro-project
+
+# Set up for a specific site
+conloca astro setup ./my-astro-project --site blog
+```
+
+## Global Options
+
+| Flag            | Short | Description                           |
+| --------------- | ----- | ------------------------------------- |
+| `--help`        | `-h`  | Show help message                     |
+| `--site <name>` | `-s`  | Target site name (default: `default`) |
+
+## Quick Start
+
+```bash
+# 1. Create a new Astro project
+bun create astro@latest my-site
+cd my-site
+
+# 2. Install Conloca packages
+bun add @conloca/astro-cms @conloca/content-api
+
+# 3. Initialize content structure
+bunx @conloca/cli init ./content default
+
+# 4. Scaffold Astro integration
+bunx @conloca/cli astro setup
+
+# 5. Add conlocaCMS to astro.config.mjs (see @conloca/astro-cms docs)
+
+# 6. Start development
+bun run dev
+
+# 7. Open /__cms in your browser
+```

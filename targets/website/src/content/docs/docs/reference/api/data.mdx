@@ -1,0 +1,176 @@
+---
+title: Data API
+description: Structured data collection operations for non-page content
+---
+
+The Data API manages structured data entries -- content that is not a page or block, such as navigation items, settings,
+or any custom data collections. Data entries are identified by a `name` within a `collection` and support multiple
+locales.
+
+All endpoints are relative to the API base URL (default: `/__cms/api`).
+
+---
+
+## List Data Collections
+
+### GET /data/collections
+
+List all data collections available in the system.
+
+**Parameters:** None
+
+**Response:** `200 OK`
+
+```typescript
+{
+  collections: string[]
+}
+```
+
+**Example:**
+
+```bash
+curl http://localhost:4321/__cms/api/data/collections
+```
+
+```json
+{
+  "collections": ["navigation", "settings"]
+}
+```
+
+---
+
+## Check Data Name Availability
+
+### GET /data/name-available
+
+Check whether a data entry name is available within a collection. Useful for validating names before creating or
+renaming data entries.
+
+**Parameters:**
+
+| Name       | In    | Type   | Required | Description                                                    |
+| ---------- | ----- | ------ | -------- | -------------------------------------------------------------- |
+| name       | query | string | yes      | Data entry name to check                                       |
+| collection | query | string | yes      | Collection to check in                                         |
+| excludeId  | query | string | no       | Exclude this content ID from the check (for rename operations) |
+
+**Response:** `200 OK`
+
+```typescript
+// Available
+{
+  available: true;
+}
+
+// Taken
+{
+  available: false;
+  existingId: string; // ID of the data entry using this name
+}
+```
+
+**Errors:**
+
+| Status | Code                   | Description                                         |
+| ------ | ---------------------- | --------------------------------------------------- |
+| 400    | MISSING_REQUIRED_FIELD | `name` or `collection` query parameter not provided |
+
+**Example:**
+
+```bash
+curl "http://localhost:4321/__cms/api/data/name-available?name=main-nav&collection=navigation"
+```
+
+---
+
+## List Data Entries
+
+### GET /data
+
+List data entries with optional filters.
+
+**Parameters:**
+
+| Name       | In    | Type   | Required | Description          |
+| ---------- | ----- | ------ | -------- | -------------------- |
+| collection | query | string | no       | Filter by collection |
+| locale     | query | string | no       | Filter by locale     |
+
+**Response:** `200 OK`
+
+```typescript
+{
+  items: ContentManifest[]
+  total: number
+}
+```
+
+**Example:**
+
+```bash
+# List all data entries
+curl http://localhost:4321/__cms/api/data
+
+# List data entries in a specific collection
+curl "http://localhost:4321/__cms/api/data?collection=navigation"
+```
+
+---
+
+## Get Data Entry by Name
+
+### GET /data/:name
+
+Get a data entry by its name within a collection.
+
+**Parameters:**
+
+| Name       | In    | Type   | Required | Description                                 |
+| ---------- | ----- | ------ | -------- | ------------------------------------------- |
+| name       | path  | string | yes      | Data entry name                             |
+| collection | query | string | yes      | Collection the entry belongs to             |
+| locale     | query | string | no       | If provided, return only this locale's data |
+
+**Response:** `200 OK`
+
+```typescript
+// ContentManifest (or filtered to single locale)
+{
+  id: string
+  type: 'json'
+  kind: 'data'
+  collection: string
+  locales: {
+    [locale: string]: {
+      locale: string
+      etag: string
+      created: string
+      modified: string
+      name: string
+      meta: ContentMeta
+    }
+  }
+}
+```
+
+**Errors:**
+
+| Status | Code                   | Description                                      |
+| ------ | ---------------------- | ------------------------------------------------ |
+| 400    | MISSING_REQUIRED_FIELD | `collection` query parameter not provided        |
+| 404    | CONTENT_NOT_FOUND      | Data entry not found in the specified collection |
+
+**Example:**
+
+```bash
+# Get a data entry
+curl "http://localhost:4321/__cms/api/data/main-nav?collection=navigation"
+
+# Get only the English locale
+curl "http://localhost:4321/__cms/api/data/main-nav?collection=navigation&locale=en"
+```
+
+:::note Data entries are created, updated, and deleted using the [Content API](/docs/reference/api/content/) endpoints
+with `kind: 'data'`. The Data API provides read-only lookup by name. :::

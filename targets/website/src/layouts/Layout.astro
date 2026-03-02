@@ -1,0 +1,37 @@
+---
+// biome-ignore lint/correctness/noUnusedVariables: Props type is used by Astro
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+// biome-ignore lint/correctness/noUnusedVariables: Variables are used in HTML template below
+const {
+  title = 'Conloca — File-based CMS for Astro',
+  description = 'Visual editing for marketers, full git ownership for developers. File-based CMS powered by Puck with drag-and-drop components.',
+} = Astro.props;
+---
+
+<!doctype html>
+<html lang="en" class="dark scroll-smooth">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="description" content={description} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <title>{title}</title>
+  </head>
+  <body class="bg-surface-950 text-surface-200 font-sans antialiased">
+    <slot />
+  </body>
+</html>

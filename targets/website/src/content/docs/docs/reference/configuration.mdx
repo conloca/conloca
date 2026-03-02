@@ -1,0 +1,404 @@
+---
+title: Configuration Reference
+description: Complete reference for ConlocaCMSOptions and auth provider configuration
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+This page documents every configuration option available when adding Conloca CMS to your Astro project via the
+`conlocaCMS()` integration function.
+
+## Quick Reference
+
+```js
+// astro.config.mjs
+import { conlocaCMS } from '@conloca/astro-cms';
+
+conlocaCMS({
+  // Required
+  contentRoot: './content',
+  puckConfigPath: './src/puck.config.tsx',
+
+  // Optional — content & routing
+  canvasDir: './canvas',
+  route: '/__cms',
+  schemasPath: './src/schemas/data.ts',
+  layout: './src/layouts/Layout.astro',
+  routing: true,
+  templates: {
+    /* ... */
+  },
+  componentPaths: ['src/components/puck'],
+  assetsPath: 'src/assets/uploads',
+
+  // Optional — UI
+  siteBaseUrl: '',
+  enableDevtools: false,
+  queryClientOptions: {
+    /* ... */
+  },
+
+  // Optional — authentication
+  auth: {
+    /* ... */
+  },
+});
+```
+
+## ConlocaCMSOptions
+
+The `ConlocaCMSOptions` interface extends the CMS UI configuration and adds all server-side options.
+
+### Required Options
+
+#### `contentRoot`
+
+- **Type:** `string`
+- **Required:** Yes
+
+Path to the directory where Conloca stores content files. Can be relative to the project root or absolute. The directory
+is created automatically if it does not exist.
+
+```js
+contentRoot: './content';
+```
+
+Content is stored as VXJSON files within this directory, organized by site, collection, and locale. See
+[Architecture & Concepts](/docs/concepts/architecture/) for details on the content model.
+
+#### `puckConfigPath`
+
+- **Type:** `string`
+- **Required:** Yes
+
+Path to the Puck component configuration module. Must be a `.tsx` file that default-exports a Puck `Config` object.
+
+```js
+puckConfigPath: './src/puck.config.tsx';
+```
+
+The Puck config defines which components are available in the visual editor. See the
+[Getting Started](/docs/getting-started/) guide for a minimal example.
+
+### Content Options
+
+#### `canvasDir`
+
+- **Type:** `string`
+- **Default:** `'./canvas'`
+
+Path to the canvas directory used for temporary editor state.
+
+```js
+canvasDir: './canvas';
+```
+
+#### `schemasPath`
+
+- **Type:** `string`
+- **Default:** `undefined`
+
+Path to a module that exports data schemas for structured data collections. The module should export `{ dataSchemas }` —
+an object mapping collection names to Zod schemas.
+
+```js
+schemasPath: './src/schemas/data.ts';
+```
+
+When provided, data entry forms in the CMS are generated from these schemas, giving editors structured input fields
+instead of raw JSON.
+
+### Routing Options
+
+#### `route`
+
+- **Type:** `string`
+- **Default:** `'/__cms'`
+
+Base URL path for the CMS admin interface. The admin UI is served at this path, and the content API is mounted at
+`{route}/api`.
+
+```js
+route: '/__cms';
+```
+
+#### `layout`
+
+- **Type:** `string`
+- **Default:** `undefined`
+
+Default layout component for content pages. When provided without a `routing` configuration, this enables routing with a
+catch-all pattern that wraps all content pages in this layout.
+
+```js
+layout: './src/layouts/Layout.astro';
+```
+
+For multi-route setups with different layouts per collection, use `routing.routes.{name}.layout` instead.
+
+#### `routing`
+
+- **Type:** `boolean | RoutingConfig`
+- **Default:** `undefined` (routing disabled)
+
+Content page routing configuration. When enabled, Conloca automatically injects Astro routes that serve content pages
+from your content directory.
+
+**Simple form** — enable with all defaults (catch-all route for `pages` collection):
+
+```js
+routing: true;
+```
+
+**Full form** — configure multiple routes with different collections and layouts:
+
+```js
+routing: {
+  enabled: true,
+  routes: {
+    pages: {
+      pattern: '/[...slug]',
+      collection: 'pages',
+      layout: './src/layouts/Layout.astro',
+      prerender: true,
+    },
+    blog: {
+      pattern: '/blog/[slug]',
+      collection: 'posts',
+      layout: './src/layouts/BlogLayout.astro',
+    },
+  },
+  fallback: '404',
+  siteName: 'default',
+  locale: 'en',
+}
+```
+
+##### RoutingConfig
+
+| Field        | Type                            | Default                | Description                                                                                       |
+| ------------ | ------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------- |
+| `enabled`    | `boolean`                       | `true`                 | Whether routing is active                                                                         |
+| `routes`     | `Record<string, RouteConfig>`   | catch-all `/[...slug]` | Route definitions mapping URL patterns to collections                                             |
+| `fallback`   | `'404' \| 'passthrough'`        | `'404'`                | Behavior when route matches but no content exists. `passthrough` lets Astro try the next handler. |
+| `onConflict` | `'warn' \| 'error' \| 'silent'` | `'warn'`               | What to do when an injected route conflicts with a file-based route                               |
+| `siteName`   | `string`                        | `'default'`            | Site name for content resolution in multi-site setups                                             |
+| `locale`     | `string`                        | `'en'`                 | Default locale for content resolution                                                             |
+
+##### RouteConfig
+
+| Field          | Type                      | Default     | Description                                              |
+| -------------- | ------------------------- | ----------- | -------------------------------------------------------- |
+| `pattern`      | `string`                  | —           | Astro route pattern (e.g., `/[...slug]`, `/blog/[slug]`) |
+| `collection`   | `string`                  | `'pages'`   | Content collection to query                              |
+| `layout`       | `string`                  | `undefined` | Path to layout component wrapping the rendered content   |
+| `prerender`    | `boolean`                 | `true`      | Whether to statically generate pages at build time (SSG) |
+| `meta`         | `Record<string, unknown>` | `undefined` | Additional metadata passed to the page handler           |
+| `dataBindings` | `DataBindingConfig`       | `undefined` | Data collections to inject into Puck component resolvers |
+
+#### `templates`
+
+- **Type:** `Record<string, TemplateConfig>`
+- **Default:** `undefined`
+
+Page creation templates that appear in the CMS "New Page" dialog. Templates let editors create pages with pre-defined
+component structures.
+
+```js
+templates: {
+  blog: {
+    label: 'Blog Post',
+    component: 'BlogPostTemplate',
+    pathPrefix: '/blog/',
+    description: 'A blog post with hero image and content area',
+  },
+  landing: {
+    label: 'Landing Page',
+    component: 'LandingPageTemplate',
+  },
+}
+```
+
+##### TemplateConfig
+
+| Field         | Type     | Required | Description                                                                                |
+| ------------- | -------- | -------- | ------------------------------------------------------------------------------------------ |
+| `label`       | `string` | Yes      | Display label in the template dropdown                                                     |
+| `component`   | `string` | Yes      | Puck component name to pre-drop into the page. Must match a component in your puck.config. |
+| `pathPrefix`  | `string` | No       | Auto-applied path prefix (e.g., `/blog/` turns `my-post` into `/blog/my-post`)             |
+| `description` | `string` | No       | Description shown in the dropdown                                                          |
+
+### Media Library Options
+
+#### `assetsPath`
+
+- **Type:** `string`
+- **Default:** `undefined`
+
+Path to the assets directory for image uploads. When provided, the CMS enables the Media Library and asset upload API
+routes, allowing editors to upload and manage images.
+
+```js
+assetsPath: 'src/assets/uploads';
+```
+
+#### `componentPaths`
+
+- **Type:** `string[]`
+- **Default:** `undefined`
+
+Paths to scan for hydratable Puck components. Components using `withHydration()` in these directories are
+auto-discovered for client-side hydration in production builds.
+
+```js
+componentPaths: ['src/components/puck'];
+```
+
+### UI Options
+
+These options control the CMS admin interface behavior.
+
+#### `siteBaseUrl`
+
+- **Type:** `string`
+- **Default:** `''`
+
+Base URL for the site. Used when the site is served under a subpath (e.g., `/docs`) or a different domain.
+
+```js
+siteBaseUrl: '/docs';
+```
+
+#### `enableDevtools`
+
+- **Type:** `boolean`
+- **Default:** `false`
+
+Enable React Query devtools in the CMS admin UI. Useful for debugging data fetching during development.
+
+```js
+enableDevtools: true;
+```
+
+#### `queryClientOptions`
+
+- **Type:** `QueryClientConfig` (from `@tanstack/react-query`)
+- **Default:** `{ defaultOptions: { queries: { staleTime: 300000, retry: 1 } } }`
+
+Override React Query client configuration for the CMS admin UI. Useful for tuning cache behavior during development.
+
+```js
+queryClientOptions: {
+  defaultOptions: {
+    queries: {
+      staleTime: 0,
+      refetchOnWindowFocus: true,
+      retry: 0,
+    },
+  },
+}
+```
+
+### Authentication Options
+
+#### `auth`
+
+- **Type:** `AuthConfig`
+- **Default:** `undefined` (no authentication, equivalent to `noAuth()`)
+
+Authentication configuration for CMS access control. When not provided, the CMS is accessible without authentication —
+suitable for local development but not for production.
+
+```js
+import { apiKey } from '@conloca/content-api/node'
+
+auth: {
+  provider: apiKey({
+    keys: [{ hash: '...', name: 'ci-key' }],
+  }),
+  roles: {
+    admin: ['admin@company.com'],
+    editor: ['*@company.com'],
+  },
+}
+```
+
+##### AuthConfig
+
+| Field         | Type                                      | Required | Description                                                                        |
+| ------------- | ----------------------------------------- | -------- | ---------------------------------------------------------------------------------- |
+| `provider`    | `AuthProvider`                            | Yes      | Authentication provider instance                                                   |
+| `roles`       | `{ admin?: string[], editor?: string[] }` | No       | Email pattern-based role mapping. Glob patterns supported (e.g., `*@company.com`). |
+| `resolveRole` | `(user) => Role \| undefined`             | No       | Custom function to determine user role from email and claims                       |
+
+##### Built-in Auth Providers
+
+Conloca ships four authentication providers:
+
+| Provider                             | Import                      | Use Case                                          |
+| ------------------------------------ | --------------------------- | ------------------------------------------------- |
+| `noAuth()`                           | `@conloca/content-api/node` | Development — no authentication required          |
+| `apiKey({ keys })`                   | `@conloca/content-api/node` | CI/CD pipelines — authenticate via API key header |
+| `cfAccess({ teamDomain, audience })` | `@conloca/content-api/node` | Production — Cloudflare Access JWT validation     |
+| `oauth({ issuer, clientId, ... })`   | `@conloca/content-api/node` | Production — OAuth/OIDC (GitHub, Google, etc.)    |
+
+##### Roles
+
+Conloca supports three roles with decreasing permissions:
+
+| Role     | Permissions                                                    |
+| -------- | -------------------------------------------------------------- |
+| `admin`  | Full access — create, edit, delete content and manage settings |
+| `editor` | Create and edit content, upload media                          |
+| `viewer` | Read-only access to the CMS dashboard                          |
+
+Role assignment priority:
+
+1. `resolveRole` function (if provided)
+2. `roles.admin` / `roles.editor` email pattern matching
+3. Provider-assigned role (from the auth provider itself)
+
+See the [Auth Provider Guides](/docs/guides/auth/cf-access/) for detailed setup instructions for each provider.
+
+## Complete Example
+
+This example from the [website-with-cms](https://github.com/nicobrinkkemper/conloca/tree/main/example/website-with-cms)
+canonical example shows a full development configuration:
+
+```js
+// astro.config.mjs
+import { defineConfig } from 'astro/config';
+import node from '@astrojs/node';
+import { conlocaCMS } from '@conloca/astro-cms';
+import react from '@astrojs/react';
+
+export default defineConfig({
+  output: 'server',
+  adapter: node({ mode: 'standalone' }),
+  integrations: [
+    react(),
+    conlocaCMS({
+      contentRoot: './content',
+      canvasDir: './canvas',
+      puckConfigPath: './src/puck.config.tsx',
+      schemasPath: './src/schemas/data.ts',
+      enableDevtools: true,
+      queryClientOptions: {
+        defaultOptions: {
+          queries: {
+            staleTime: 0,
+            refetchOnWindowFocus: true,
+            refetchOnMount: true,
+            retry: 0,
+          },
+        },
+      },
+    }),
+  ],
+});
+```
+
+<Aside type="tip">
+  For production deployments, add an `auth` configuration and set `enableDevtools: false`. See the deployment guides for
+  environment-specific recommendations.
+</Aside>

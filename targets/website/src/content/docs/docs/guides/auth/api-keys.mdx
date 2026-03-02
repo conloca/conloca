@@ -1,0 +1,144 @@
+---
+title: API Keys
+description: Authenticate programmatic access with API keys
+---
+
+API key authentication is designed for programmatic access -- CI/CD pipelines, scripts, and headless API consumers.
+There is no login UI; clients authenticate by sending a `Bearer` token in the `Authorization` header.
+
+## Prerequisites
+
+- A running Conloca instance
+- A secret key you generate (any string)
+
+## Setup
+
+### 1. Generate a key and its hash
+
+Conloca stores pre-hashed keys, not plaintext. Hash your secret key with SHA-256 and encode the result as base64:
+
+```bash
+# Generate a random secret key
+KEY=$(openssl rand -base64 24)
+echo "Secret key: $KEY"
+
+# Hash it in sha256:base64 format
+HASH=$(echo -n "$KEY" | shasum -a 256 | cut -d' ' -f1 | xxd -r -p | base64)
+echo "Hash: sha256:$HASH"
+```
+
+Save the secret key somewhere secure -- you will need it to authenticate. The hash is what goes in your configuration.
+
+### 2. Configure Conloca
+
+In your `astro.config.mjs`, import the `apiKey` provider and pass it to the `auth` option:
+
+```js
+import { defineConfig } from 'astro/config';
+import node from '@astrojs/node';
+import { conlocaCMS } from '@conloca/astro-cms';
+import { apiKey } from '@conloca/content-api/node';
+
+export default defineConfig({
+  output: 'server',
+  adapter: node({ mode: 'standalone' }),
+  integrations: [
+    conlocaCMS({
+      contentRoot: './content',
+      puckConfigPath: './src/puck.config.tsx',
+      auth: {
+        provider: apiKey({
+          keys: [
+            {
+              hash: 'sha256:YOUR_BASE64_HASH',
+              role: 'editor',
+              label: 'ci-deploy',
+            },
+          ],
+        }),
+      },
+    }),
+  ],
+});
+```
+
+### Parameters
+
+The `apiKey` factory accepts an `options` object with a `keys` array. Each key entry has:
+
+| Field   | Type     | Description                                               |
+| ------- | -------- | --------------------------------------------------------- |
+| `hash`  | `string` | Pre-hashed key in `sha256:BASE64_HASH` format             |
+| `role`  | `Role`   | Role assigned to this key: `admin`, `editor`, or `viewer` |
+| `label` | `string` | Human-readable label for logging and identification       |
+
+## Usage
+
+Send the secret key (not the hash) as a Bearer token in the `Authorization` header:
+
+```bash
+curl -H "Authorization: Bearer YOUR_SECRET_KEY" \
+  https://cms.example.com/__cms/api/pages
+```
+
+Or in a script:
+
+```js
+const response = await fetch('https://cms.example.com/__cms/api/pages', {
+  headers: {
+    Authorization: 'Bearer YOUR_SECRET_KEY',
+  },
+});
+const pages = await response.json();
+```
+
+## Multiple keys
+
+You can configure multiple keys with different roles and labels. This is useful for giving different access levels to
+different systems:
+
+```js
+apiKey({
+  keys: [
+    {
+      hash: 'sha256:ADMIN_HASH',
+      role: 'admin',
+      label: 'admin-cli',
+    },
+    {
+      hash: 'sha256:CI_DEPLOY_HASH',
+      role: 'editor',
+      label: 'ci-deploy',
+    },
+    {
+      hash: 'sha256:READONLY_HASH',
+      role: 'viewer',
+      label: 'monitoring',
+    },
+  ],
+});
+```
+
+## How it works
+
+When a request arrives with an `Authorization: Bearer <key>` header, the provider:
+
+1. Hashes the provided key with SHA-256
+2. Compares the hash against each configured key using timing-safe comparison
+3. If a match is found, authenticates the request with the key's configured role
+4. If no match is found, returns an authentication failure
+
+The `roles` option on `auth` is not needed with API keys because each key has its role configured directly.
+
+## Security considerations
+
+- Store secret keys in environment variables or a secrets manager, not in source code
+- Use the minimum required role for each key (`viewer` for read-only, `editor` for content updates)
+- Rotate keys periodically by adding a new key, updating consumers, then removing the old key
+- API key auth has no session or cookies -- each request is independently authenticated
+
+## Next steps
+
+- [Getting Started](/docs/getting-started/) -- Set up your first Conloca site
+- [GitHub OAuth](/docs/guides/auth/github-oauth/) -- User-facing authentication
+- [Docker deployment](/docs/guides/deploy/docker/) -- Deploy with Docker Compose

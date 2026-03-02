@@ -1,0 +1,142 @@
+---
+title: '@conloca/mdx'
+description: 'MDX processing and rendering for Conloca CMS block content'
+---
+
+## Overview
+
+`@conloca/mdx` provides MDX processing for both browser and server environments. In the browser, it powers the CMS block
+editor with a full MDX editing experience. On the server, it compiles and evaluates MDX content for static site
+generation.
+
+## Installation
+
+```bash
+bun add @conloca/mdx
+```
+
+## Entry Points
+
+### `@conloca/mdx` (browser-safe)
+
+Components and hooks for the CMS editor interface.
+
+```typescript
+import { MDXEditorModal, useMDXEvaluation } from '@conloca/mdx';
+```
+
+| Export             | Kind      | Purpose                                                                |
+| ------------------ | --------- | ---------------------------------------------------------------------- |
+| `MDXEditorModal`   | component | Full MDX editor with toolbar, preview, and modal UI                    |
+| `useMDXEvaluation` | hook      | Evaluate MDX string into a React component at runtime                  |
+| `MDXEditorMethods` | type      | Ref methods for programmatic editor control (from `@mdxeditor/editor`) |
+
+### `@conloca/mdx/node` (Node.js only)
+
+Server-side MDX compilation and evaluation.
+
+```typescript
+import {
+  compileMDX,
+  evaluateMDXToComponent,
+  evaluateMDXBlocks,
+  createMDXCompiler,
+  createComponentScope,
+} from '@conloca/mdx/node';
+```
+
+| Export                             | Purpose                                                          |
+| ---------------------------------- | ---------------------------------------------------------------- |
+| `compileMDX(source)`               | Compile MDX string to JavaScript                                 |
+| `evaluateMDXToComponent(source)`   | Compile and evaluate MDX to a React component                    |
+| `evaluateMDXBlocks(api, locale)`   | Fetch all blocks from Content API and evaluate their MDX content |
+| `createMDXCompiler()`              | Create a reusable MDX compiler instance                          |
+| `createComponentScope(components)` | Create a component scope for MDX evaluation                      |
+
+## Usage
+
+### Browser: MDX Editor
+
+The `MDXEditorModal` component provides a rich MDX editing experience inside the CMS:
+
+```tsx
+import { MDXEditorModal } from '@conloca/mdx';
+
+function BlockEditor({ initialContent, onSave }) {
+  return <MDXEditorModal markdown={initialContent} onChange={onSave} />;
+}
+```
+
+### Browser: MDX Rendering
+
+Use `useMDXEvaluation` to render MDX content as React components in the browser:
+
+```tsx
+import { useMDXEvaluation } from '@conloca/mdx';
+
+function MDXPreview({ source }) {
+  const { Component, error } = useMDXEvaluation(source);
+
+  if (error) return <p>Error rendering MDX: {error.message}</p>;
+  if (!Component) return <p>Loading...</p>;
+
+  return <Component />;
+}
+```
+
+### Server: Compile MDX
+
+```typescript
+import { compileMDX } from '@conloca/mdx/node';
+
+const result = await compileMDX('# Hello World\n\nSome **bold** text.');
+console.log(result.code); // Compiled JavaScript
+```
+
+### Server: Evaluate MDX to Component
+
+```typescript
+import { evaluateMDXToComponent } from '@conloca/mdx/node';
+
+const { Component, error } = await evaluateMDXToComponent('# Hello World');
+
+if (Component) {
+  // Render the component in your framework
+}
+```
+
+### Server: Evaluate All Blocks
+
+```typescript
+import { evaluateMDXBlocks } from '@conloca/mdx/node';
+import { createContentAPI } from '@conloca/content-api/node';
+
+const api = await createContentAPI({ contentRoot: './content' });
+const blocks = await evaluateMDXBlocks(api, 'en');
+
+// blocks is a Map of block name -> { Component, frontmatter }
+for (const [name, block] of blocks) {
+  console.log(`Block: ${name}`, block.frontmatter);
+}
+```
+
+## MDX Features
+
+The MDX compiler supports:
+
+- Standard Markdown syntax (headings, lists, bold, italic, links, images)
+- GitHub Flavored Markdown (tables, strikethrough, task lists) via `remark-gfm`
+- Frontmatter via `remark-frontmatter` and `remark-mdx-frontmatter`
+- JSX components within MDX content
+- Custom component scopes for rendering
+
+## Dependencies
+
+| Library                  | Purpose                          |
+| ------------------------ | -------------------------------- |
+| `@mdx-js/mdx`            | Core MDX compiler                |
+| `@mdx-js/react`          | React runtime for MDX            |
+| `@mdxeditor/editor`      | Rich MDX editor component        |
+| `remark-gfm`             | GitHub Flavored Markdown support |
+| `remark-frontmatter`     | YAML frontmatter parsing         |
+| `remark-mdx-frontmatter` | Frontmatter in MDX exports       |

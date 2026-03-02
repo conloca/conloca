@@ -1,0 +1,59 @@
+/* Brand-matched Starlight theme: cyan accent, dark backgrounds, Inter/JetBrains Mono */
+
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
+
+/* Force dark mode only */
+:root {
+  color-scheme: dark;
+}
+
+:root,
+[data-theme="light"] {
+  /* Accent colors — brand cyan */
+  --sl-color-accent-low: #083344;
+  --sl-color-accent: #06b6d4;
+  --sl-color-accent-high: #cffafe;
+
+  /* Text colors */
+  --sl-color-white: #f8fafc;
+  --sl-color-text: #e2e8f0;
+  --sl-color-text-accent: #22d3ee;
+
+  /* Gray scale — mapped to surface palette */
+  --sl-color-gray-1: #e2e8f0;
+  --sl-color-gray-2: #94a3b8;
+  --sl-color-gray-3: #475569;
+  --sl-color-gray-4: #334155;
+  --sl-color-gray-5: #1e293b;
+  --sl-color-gray-6: #0f172a;
+  --sl-color-gray-7: #020617;
+
+  /* Background colors */
+  --sl-color-bg-nav: #020617;
+  --sl-color-bg-sidebar: #020617;
+  --sl-color-bg: #020617;
+
+  /* Hairline (border) */
+  --sl-color-hairline: #334155;
+  --sl-color-hairline-shade: #1e293b;
+
+  /* Fonts */
+  --sl-font: "Inter", system-ui, -apple-system, sans-serif;
+  --sl-font-mono: "JetBrains Mono", "Fira Code", monospace;
+}
+
+/* Code block styling */
+.expressive-code pre {
+  background-color: #0f172a !important;
+  border-color: #334155 !important;
+}
+
+.expressive-code .frame {
+  border-color: #334155;
+}
+
+/* Sidebar link active state */
+starlight-menu-button + nav a[aria-current="page"],
+nav[aria-label="Main"] a[aria-current="page"] {
+  color: #22d3ee;
+}

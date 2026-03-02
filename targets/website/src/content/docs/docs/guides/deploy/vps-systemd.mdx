@@ -1,0 +1,181 @@
+---
+title: VPS (systemd)
+description: Deploy Conloca as a systemd service on a Linux VPS
+---
+
+Run Conloca directly on a Linux VPS as a systemd service. This is a lightweight alternative to Docker for servers where
+you want to run Bun natively.
+
+## Prerequisites
+
+- A Linux server (Ubuntu, Debian, RHEL, etc.)
+- Bun installed ([bun.sh](https://bun.sh))
+- A built Astro site with Conloca configured (`bun run build` completed)
+
+## Setup
+
+### 1. Create a system user
+
+Create a dedicated user for running the CMS:
+
+```bash
+sudo useradd -r -m -d /home/conloca -s /usr/sbin/nologin conloca
+```
+
+### 2. Deploy the application
+
+Copy your built application to `/opt/conloca`:
+
+```bash
+sudo mkdir -p /opt/conloca
+sudo cp -r dist node_modules package.json /opt/conloca/
+sudo cp -r content /opt/conloca/
+sudo chown -R conloca:conloca /opt/conloca
+```
+
+### 3. Create the systemd unit file
+
+Create `/etc/systemd/system/conloca.service`:
+
+```ini
+[Unit]
+Description=Conloca CMS
+After=network.target
+
+[Service]
+Type=simple
+User=conloca
+WorkingDirectory=/opt/conloca
+ExecStart=/home/conloca/.bun/bin/bun run ./dist/server/entry.mjs
+Restart=always
+RestartSec=3
+Environment=NODE_ENV=production
+Environment=HOST=0.0.0.0
+Environment=PORT=4321
+
+[Install]
+WantedBy=multi-user.target
+```
+
+If Bun is installed system-wide (e.g., via a package manager), adjust the `ExecStart` path accordingly:
+
+```ini
+ExecStart=/usr/local/bin/bun run ./dist/server/entry.mjs
+```
+
+### 4. Add environment variables
+
+For authentication, add environment variables to the unit file:
+
+```ini
+Environment=GITHUB_CLIENT_ID=YOUR_CLIENT_ID
+Environment=GITHUB_CLIENT_SECRET=YOUR_CLIENT_SECRET
+Environment=SESSION_SECRET=YOUR_SESSION_SECRET_AT_LEAST_32_CHARS
+```
+
+Or use an environment file for better security:
+
+```ini
+EnvironmentFile=/opt/conloca/.env
+```
+
+### 5. Enable and start
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now conloca
+```
+
+## Managing the service
+
+Check status:
+
+```bash
+sudo systemctl status conloca
+```
+
+View logs:
+
+```bash
+journalctl -u conloca -f
+```
+
+Restart after an update:
+
+```bash
+sudo systemctl restart conloca
+```
+
+## Updating
+
+To deploy a new version:
+
+```bash
+# Build on your local machine
+bun run build
+
+# Copy to server
+scp -r dist package.json node_modules user@server:/opt/conloca/
+
+# Restart
+ssh user@server 'sudo systemctl restart conloca'
+```
+
+## Reverse proxy
+
+For HTTPS, place a reverse proxy in front of Conloca. Here are examples for Caddy and nginx.
+
+### Caddy
+
+Install Caddy and create `/etc/caddy/Caddyfile`:
+
+```
+cms.YOUR_DOMAIN.com {
+  reverse_proxy localhost:4321
+}
+```
+
+Caddy automatically provisions TLS certificates via Let's Encrypt.
+
+```bash
+sudo systemctl enable --now caddy
+```
+
+### nginx
+
+Install nginx and create `/etc/nginx/sites-available/conloca`:
+
+```nginx
+server {
+    listen 80;
+    server_name cms.YOUR_DOMAIN.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:4321;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # WebSocket support for live content updates
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+```
+
+Enable the site and use certbot for TLS:
+
+```bash
+sudo ln -s /etc/nginx/sites-available/conloca /etc/nginx/sites-enabled/
+sudo certbot --nginx -d cms.YOUR_DOMAIN.com
+sudo systemctl reload nginx
+```
+
+## Next steps
+
+- [GitHub OAuth](/docs/guides/auth/github-oauth/) -- Add user authentication
+- [Cloudflare Tunnel](/docs/guides/deploy/cloudflare-tunnel/) -- Expose without opening ports
+- [Docker deployment](/docs/guides/deploy/docker/) -- Alternative container-based deployment
+- [Getting Started](/docs/getting-started/) -- Set up your first Conloca site

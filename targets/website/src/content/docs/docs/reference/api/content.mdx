@@ -1,0 +1,724 @@
+---
+title: Content API
+description: CRUD operations for pages, blocks, and data entries with etag-based concurrency control
+---
+
+The Content API manages all content in Conloca. It provides endpoints for listing, creating, updating, and deleting
+pages and blocks across sites, as well as inheritance operations for multi-locale content management.
+
+All endpoints are relative to the API base URL (default: `/__cms/api`).
+
+## Conventions
+
+- **Etag-based concurrency:** Write operations use dual-format etags (`metaEtag.contentEtag`). Include the current etag
+  to prevent conflicting writes. A `412 Precondition Failed` response indicates the content was modified since you last
+  loaded it.
+- **Error format:** All errors return `{ error: { code, message, details? } }` with a machine-readable `code`.
+- **Content types:** Content is either `puck` (visual editor JSON), `mdx` (Markdown with JSX), or `json` (structured
+  data).
+- **Content kinds:** `page` (site-scoped, has pathname), `block` (shared content blocks), or `data` (structured data
+  entries).
+
+---
+
+## List Collections
+
+### GET /content/collections
+
+List all content collections across all sites and blocks.
+
+**Parameters:** None
+
+**Response:** `200 OK`
+
+```typescript
+{
+  collections: string[]
+}
+```
+
+**Example:**
+
+```bash
+curl http://localhost:4321/__cms/api/content/collections
+```
+
+```json
+{
+  "collections": ["blog", "components", "pages"]
+}
+```
+
+---
+
+## List Content
+
+### GET /content
+
+List all content with optional filters. Returns content manifests (metadata without content bodies).
+
+**Parameters:**
+
+| Name           | In    | Type                               | Required | Description                                  |
+| -------------- | ----- | ---------------------------------- | -------- | -------------------------------------------- |
+| kind           | query | `'block' \| 'page' \| 'data'`      | no       | Filter by content kind                       |
+| site           | query | string                             | no       | Filter by site name                          |
+| collection     | query | string                             | no       | Filter by collection name                    |
+| locales        | query | string                             | no       | Comma-separated locale codes                 |
+| type           | query | `'puck' \| 'mdx' \| 'json'`        | no       | Filter by content format                     |
+| published      | query | `'true' \| 'false'`                | no       | Filter by publish status                     |
+| localization   | query | `'complete' \| 'partial' \| 'one'` | no       | Filter by localization completeness          |
+| missingLocales | query | string                             | no       | Comma-separated locales that must be missing |
+
+**Response:** `200 OK`
+
+```typescript
+{
+  items: ContentManifest[]
+  total: number
+}
+```
+
+**Example:**
+
+```bash
+curl "http://localhost:4321/__cms/api/content?kind=page&site=default"
+```
+
+```javascript
+const response = await fetch('/__cms/api/content?kind=page&site=default');
+const { items, total } = await response.json();
+```
+
+```json
+{
+  "items": [
+    {
+      "id": "abc123",
+      "type": "puck",
+      "kind": "page",
+      "site": "default",
+      "collection": "pages",
+      "locales": {
+        "en": {
+          "locale": "en",
+          "etag": "a1b2c3.d4e5f6",
+          "created": "2024-01-15T10:00:00Z",
+          "modified": "2024-01-20T14:30:00Z",
+          "pathname": "/about",
+          "meta": { "title": "About Us" }
+        }
+      }
+    }
+  ],
+  "total": 1
+}
+```
+
+---
+
+## Needs Review
+
+### GET /content/needs-review
+
+Find content items that need review due to inheritance staleness. When the default locale changes, inherited locales
+become stale and appear in this list.
+
+**Parameters:**
+
+| Name   | In    | Type                | Required | Description                   |
+| ------ | ----- | ------------------- | -------- | ----------------------------- |
+| locale | query | string              | yes      | Locale to check for staleness |
+| kind   | query | `'page' \| 'block'` | no       | Filter by content kind        |
+
+**Response:** `200 OK`
+
+```typescript
+{
+  items: ContentManifest[]
+  total: number
+}
+```
+
+**Errors:**
+
+| Status | Code                   | Description                           |
+| ------ | ---------------------- | ------------------------------------- |
+| 400    | MISSING_REQUIRED_FIELD | `locale` query parameter not provided |
+
+**Example:**
+
+```bash
+curl "http://localhost:4321/__cms/api/content/needs-review?locale=de"
+```
+
+---
+
+## Get Content
+
+### GET /content/:id
+
+Get all locales for a content item by ID. Returns the full content manifest with metadata for every locale.
+
+**Parameters:**
+
+| Name | In   | Type   | Required | Description |
+| ---- | ---- | ------ | -------- | ----------- |
+| id   | path | string | yes      | Content ID  |
+
+**Response:** `200 OK`
+
+```typescript
+// ContentEntry
+{
+  id: string
+  type: 'puck' | 'mdx' | 'json'
+  kind: 'block' | 'page' | 'data'
+  site?: string
+  collection: string
+  locales: {
+    [locale: string]: {
+      locale: string
+      etag: string
+      created: string
+      modified: string
+      pathname?: string    // pages only
+      name?: string        // blocks/data only
+      publishAt?: string
+      unpublishAt?: string
+      meta: ContentMeta
+      content: ContentData
+    }
+  }
+}
+```
+
+**Errors:**
+
+| Status | Code              | Description                    |
+| ------ | ----------------- | ------------------------------ |
+| 404    | CONTENT_NOT_FOUND | No content with this ID exists |
+
+**Example:**
+
+```bash
+curl http://localhost:4321/__cms/api/content/abc123
+```
+
+---
+
+## Get Localized Content
+
+### GET /content/:id/:locale
+
+Get content for a specific locale, including the full content body (Puck data, MDX, or JSON). The response includes an
+`ETag` header for use in subsequent write operations.
+
+**Parameters:**
+
+| Name   | In   | Type   | Required | Description                    |
+| ------ | ---- | ------ | -------- | ------------------------------ |
+| id     | path | string | yes      | Content ID                     |
+| locale | path | string | yes      | Locale code (e.g., `en`, `de`) |
+
+**Response:** `200 OK`
+
+Headers: `ETag: <metaEtag.contentEtag>`
+
+```typescript
+// LocalizedEntry
+{
+  id: string
+  type: 'puck' | 'mdx' | 'json'
+  kind: 'block' | 'page' | 'data'
+  site?: string
+  collection: string
+  localized: {
+    locale: string
+    etag: string
+    created: string
+    modified: string
+    pathname?: string
+    name?: string
+    meta: ContentMeta
+    content: ContentData
+  }
+}
+```
+
+**Errors:**
+
+| Status | Code              | Description                 |
+| ------ | ----------------- | --------------------------- |
+| 404    | CONTENT_NOT_FOUND | Content or locale not found |
+
+**Example:**
+
+```bash
+curl http://localhost:4321/__cms/api/content/abc123/en
+```
+
+```javascript
+const response = await fetch('/__cms/api/content/abc123/en');
+const etag = response.headers.get('ETag');
+const entry = await response.json();
+```
+
+---
+
+## Create Content
+
+### POST /content
+
+Create a new content item (page, block, or data entry). The authenticated user's email is automatically recorded for
+attribution.
+
+**Request Body:**
+
+```typescript
+// CreateContentInput
+{
+  kind: 'block' | 'page' | 'data'
+  site?: string          // Required for pages
+  collection: string
+  type: 'puck' | 'mdx' | 'json'
+  name?: string          // For blocks and data
+  meta?: Partial<ContentMeta>
+  locales: {
+    [locale: string]: {
+      pathname?: string  // Required for pages
+      publishAt?: string | null | false
+      unpublishAt?: string | null | false
+      meta?: Partial<ContentMeta>
+      content: ContentData
+    }
+  }
+}
+```
+
+**Response:** `201 Created`
+
+```typescript
+{
+  success: true;
+  id: string;
+  etag: string;
+  created: string; // ISO date
+}
+```
+
+**Errors:**
+
+| Status | Code               | Description                                 |
+| ------ | ------------------ | ------------------------------------------- |
+| 400    | METADATA_TOO_LARGE | Metadata exceeds size limit                 |
+| 409    | -                  | Content already exists or pathname is taken |
+
+**Example:**
+
+```bash
+curl -X POST http://localhost:4321/__cms/api/content \
+  -H "Content-Type: application/json" \
+  -d '{
+    "kind": "page",
+    "site": "default",
+    "collection": "pages",
+    "type": "puck",
+    "locales": {
+      "en": {
+        "pathname": "/new-page",
+        "meta": { "title": "New Page" },
+        "content": { "puckData": { "root": { "props": {} }, "content": [] } }
+      }
+    }
+  }'
+```
+
+```javascript
+const response = await fetch('/__cms/api/content', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    kind: 'page',
+    site: 'default',
+    collection: 'pages',
+    type: 'puck',
+    locales: {
+      en: {
+        pathname: '/new-page',
+        meta: { title: 'New Page' },
+        content: { puckData: { root: { props: {} }, content: [] } },
+      },
+    },
+  }),
+});
+const result = await response.json();
+```
+
+---
+
+## Update Content
+
+### PUT /content/:id
+
+Full update of a content item for a specific locale. Requires the current etag for concurrency control. The
+authenticated user's email is automatically recorded for attribution.
+
+**Parameters:**
+
+| Name   | In    | Type   | Required | Description                        |
+| ------ | ----- | ------ | -------- | ---------------------------------- |
+| id     | path  | string | yes      | Content ID                         |
+| locale | query | string | yes      | Locale to update                   |
+| etag   | query | string | yes      | Current etag for concurrency check |
+
+**Request Body:**
+
+```typescript
+// LocaleUpdateData
+{
+  pathname?: string           // Pages: update URL path
+  name?: string               // Blocks: update name
+  publishAt?: string | null
+  unpublishAt?: string | null
+  meta?: Partial<ContentMeta>
+  content?: ContentData
+}
+```
+
+**Response:** `200 OK`
+
+Headers: `ETag: <newEtag>`
+
+```typescript
+{
+  success: true;
+  etag: string;
+  modified: string;
+}
+```
+
+**Errors:**
+
+| Status | Code                   | Description                                           |
+| ------ | ---------------------- | ----------------------------------------------------- |
+| 400    | MISSING_REQUIRED_FIELD | `locale` query parameter missing                      |
+| 404    | CONTENT_NOT_FOUND      | Content not found                                     |
+| 412    | STALE_WRITE            | Etag mismatch -- content was modified by another user |
+
+**Example:**
+
+```bash
+curl -X PUT "http://localhost:4321/__cms/api/content/abc123?locale=en&etag=a1b2c3.d4e5f6" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "meta": { "title": "Updated Title" },
+    "content": { "puckData": { "root": { "props": {} }, "content": [] } }
+  }'
+```
+
+```javascript
+const response = await fetch(`/__cms/api/content/${id}?locale=en&etag=${currentEtag}`, {
+  method: 'PUT',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    meta: { title: 'Updated Title' },
+    content: { puckData: updatedPuckData },
+  }),
+});
+const result = await response.json();
+const newEtag = response.headers.get('ETag');
+```
+
+---
+
+## Partial Update Content
+
+### PATCH /content/:id
+
+Partial update of a content item. Behaves identically to PUT -- only the fields you provide are updated.
+
+**Parameters:** Same as [PUT /content/:id](#put-contentid).
+
+**Request Body:** Same as PUT. Only include the fields you want to change.
+
+**Response:** Same as PUT.
+
+**Example:**
+
+```bash
+curl -X PATCH "http://localhost:4321/__cms/api/content/abc123?locale=en&etag=a1b2c3.d4e5f6" \
+  -H "Content-Type: application/json" \
+  -d '{ "meta": { "title": "Just Update the Title" } }'
+```
+
+---
+
+## Delete Content
+
+### DELETE /content/:id
+
+Delete a content item entirely, or delete a specific locale. Uses the `If-Match` header for etag concurrency control.
+
+**Parameters:**
+
+| Name   | In    | Type   | Required | Description                                                          |
+| ------ | ----- | ------ | -------- | -------------------------------------------------------------------- |
+| id     | path  | string | yes      | Content ID                                                           |
+| locale | query | string | no       | If provided, delete only this locale. Otherwise, delete all locales. |
+
+**Headers:**
+
+| Name     | Required | Description                        |
+| -------- | -------- | ---------------------------------- |
+| If-Match | yes      | Current etag for concurrency check |
+
+**Response:** `200 OK`
+
+```typescript
+{
+  success: true;
+}
+```
+
+**Errors:**
+
+| Status | Code | Description       |
+| ------ | ---- | ----------------- |
+| 404    | -    | Content not found |
+| 412    | -    | Etag mismatch     |
+
+**Example:**
+
+```bash
+# Delete entire content item
+curl -X DELETE http://localhost:4321/__cms/api/content/abc123 \
+  -H "If-Match: a1b2c3.d4e5f6"
+
+# Delete only the German locale
+curl -X DELETE "http://localhost:4321/__cms/api/content/abc123?locale=de" \
+  -H "If-Match: a1b2c3.d4e5f6"
+```
+
+---
+
+## Batch Update
+
+### POST /content/batch
+
+Update multiple content items in a single request. Each operation in the batch is applied independently -- partial
+failures are possible.
+
+**Request Body:**
+
+```typescript
+{
+  operations: UpdateLocaleInput[]
+}
+```
+
+Each operation:
+
+```typescript
+{
+  id: string;
+  locale: string;
+  data: LocaleUpdateData;
+  etag: string;
+}
+```
+
+**Response:** `200 OK` (all succeeded) or `207 Multi-Status` (partial failure)
+
+```typescript
+{
+  operations: Array<{
+    id: string;
+    locale: string;
+    updated: boolean;
+    error?: string;
+    etag?: string;
+  }>;
+  success: boolean;
+  failed: number;
+  updated: number;
+}
+```
+
+**Example:**
+
+```bash
+curl -X POST http://localhost:4321/__cms/api/content/batch \
+  -H "Content-Type: application/json" \
+  -d '{
+    "operations": [
+      {
+        "id": "abc123",
+        "locale": "en",
+        "data": { "meta": { "title": "Updated A" } },
+        "etag": "a1b2c3.d4e5f6"
+      },
+      {
+        "id": "def456",
+        "locale": "en",
+        "data": { "meta": { "title": "Updated B" } },
+        "etag": "g7h8i9.j0k1l2"
+      }
+    ]
+  }'
+```
+
+---
+
+## Inheritance Operations
+
+Conloca supports content inheritance across locales. Non-default locales can inherit content from the default locale.
+When the default locale changes, inherited locales become stale and need review.
+
+The typical workflow is:
+
+1. Content is created in the default locale
+2. Other locales inherit from it automatically
+3. When the default locale changes, inherited locales are flagged for review via `/content/needs-review`
+4. Editors can review and accept, customize (break inheritance), or revert to inherited content
+
+### POST /content/:id/mark-reviewed
+
+Mark inherited content as reviewed after the default locale has changed. Updates the inheritance etag to the current
+default content etag, clearing the staleness flag.
+
+**Parameters:**
+
+| Name   | In    | Type   | Required | Description                        |
+| ------ | ----- | ------ | -------- | ---------------------------------- |
+| id     | path  | string | yes      | Content ID                         |
+| locale | query | string | yes      | Locale to mark as reviewed         |
+| etag   | query | string | yes      | Current etag for concurrency check |
+
+**Response:** `200 OK`
+
+```typescript
+{ success: true, etag: string }
+```
+
+**Errors:**
+
+| Status | Code                   | Description                |
+| ------ | ---------------------- | -------------------------- |
+| 400    | MISSING_REQUIRED_FIELD | `locale` or `etag` missing |
+| 404    | CONTENT_NOT_FOUND      | Content not found          |
+| 412    | STALE_WRITE            | Etag mismatch              |
+
+**Example:**
+
+```bash
+curl -X POST "http://localhost:4321/__cms/api/content/abc123/mark-reviewed?locale=de&etag=a1b2c3.d4e5f6"
+```
+
+### POST /content/:id/break-inheritance
+
+Break locale inheritance from the default locale, creating a local copy. After breaking, edits to the default locale no
+longer affect this locale.
+
+**Parameters:**
+
+| Name   | In    | Type   | Required | Description                        |
+| ------ | ----- | ------ | -------- | ---------------------------------- |
+| id     | path  | string | yes      | Content ID                         |
+| locale | query | string | yes      | Locale to break inheritance for    |
+| etag   | query | string | yes      | Current etag for concurrency check |
+
+**Response:** `200 OK`
+
+```typescript
+{ success: true, etag: string }
+```
+
+**Errors:**
+
+| Status | Code                   | Description                |
+| ------ | ---------------------- | -------------------------- |
+| 400    | MISSING_REQUIRED_FIELD | `locale` or `etag` missing |
+| 404    | CONTENT_NOT_FOUND      | Content not found          |
+| 412    | STALE_WRITE            | Etag mismatch              |
+
+**Example:**
+
+```bash
+curl -X POST "http://localhost:4321/__cms/api/content/abc123/break-inheritance?locale=de&etag=a1b2c3.d4e5f6"
+```
+
+### POST /content/:id/revert-to-inherited
+
+Revert a locale back to inheriting from the default locale, discarding any local customizations.
+
+**Parameters:**
+
+| Name   | In    | Type   | Required | Description                        |
+| ------ | ----- | ------ | -------- | ---------------------------------- |
+| id     | path  | string | yes      | Content ID                         |
+| locale | query | string | yes      | Locale to revert                   |
+| etag   | query | string | yes      | Current etag for concurrency check |
+
+**Response:** `200 OK`
+
+```typescript
+{ success: true, etag: string }
+```
+
+**Errors:**
+
+| Status | Code                   | Description                |
+| ------ | ---------------------- | -------------------------- |
+| 400    | MISSING_REQUIRED_FIELD | `locale` or `etag` missing |
+| 404    | CONTENT_NOT_FOUND      | Content not found          |
+| 412    | STALE_WRITE            | Etag mismatch              |
+
+**Example:**
+
+```bash
+curl -X POST "http://localhost:4321/__cms/api/content/abc123/revert-to-inherited?locale=de&etag=a1b2c3.d4e5f6"
+```
+
+---
+
+## Type Reference
+
+### ContentMeta
+
+```typescript
+interface ContentMeta {
+  title: string;
+  description?: string;
+  author?: string;
+  tags?: string[];
+  keywords?: string[];
+  ogTitle?: string;
+  ogDescription?: string;
+  ogImage?: string;
+  [key: string]: any; // Additional custom fields
+}
+```
+
+### ContentData
+
+```typescript
+interface ContentData {
+  puckData?: any; // Puck visual editor data
+  mdx?: string; // MDX source
+  data?: Record<string, unknown>; // Structured JSON data
+}
+```
+
+### Error Codes
+
+| Code                   | Description                                           |
+| ---------------------- | ----------------------------------------------------- |
+| CONTENT_NOT_FOUND      | Content item does not exist                           |
+| STALE_WRITE            | Etag mismatch -- content was modified since last read |
+| MISSING_REQUIRED_FIELD | A required parameter is missing                       |
+| ALREADY_EXISTS         | Content with this ID already exists                   |
+| PATHNAME_TAKEN         | Another page uses this pathname                       |
+| METADATA_TOO_LARGE     | Content metadata exceeds the size limit               |
+| WRITE_ERROR            | File system write operation failed                    |
+| INTERNAL_ERROR         | Unexpected server error                               |

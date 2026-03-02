@@ -1,0 +1,258 @@
+---
+title: Creating Custom Blocks
+description: Build reusable content blocks for the Puck editor
+---
+
+Blocks are the visual building pieces of your pages. Each block is a React component registered in your Puck
+configuration. The CMS editor lets content authors drag blocks onto pages, configure their properties, and arrange them
+visually.
+
+## What are blocks?
+
+Conloca supports two kinds of blocks:
+
+- **Puck components** -- React components that render in the visual drag-and-drop editor. This is what this guide
+  covers.
+- **MDX blocks** -- Rich text content created through the CMS block editor. These are content entries, not code.
+
+This guide focuses on creating Puck components -- the code-defined blocks that developers build and ship with their
+site.
+
+## Creating a Puck component
+
+Every Puck component needs three things: a props type, a `ComponentConfig` with fields and defaults, and a render
+function.
+
+Here is a complete example of a `CallToAction` component:
+
+```tsx
+// src/components/puck/CallToAction.tsx
+import type { ComponentConfig } from '@measured/puck';
+
+export type CallToActionProps = {
+  heading: string;
+  description: string;
+  buttonLabel: string;
+  buttonHref: string;
+  variant: 'primary' | 'secondary';
+};
+
+export const CallToAction: ComponentConfig<CallToActionProps> = {
+  label: 'Call to Action',
+  fields: {
+    heading: { type: 'text' },
+    description: { type: 'textarea' },
+    buttonLabel: { type: 'text' },
+    buttonHref: { type: 'text' },
+    variant: {
+      type: 'radio',
+      options: [
+        { label: 'Primary', value: 'primary' },
+        { label: 'Secondary', value: 'secondary' },
+      ],
+    },
+  },
+  defaultProps: {
+    heading: 'Ready to get started?',
+    description: 'Sign up today and start building.',
+    buttonLabel: 'Get Started',
+    buttonHref: '/signup',
+    variant: 'primary',
+  },
+  render: ({ heading, description, buttonLabel, buttonHref, variant }) => (
+    <div
+      style={{
+        padding: '48px',
+        textAlign: 'center',
+        backgroundColor: variant === 'primary' ? '#0891b2' : '#f1f5f9',
+        color: variant === 'primary' ? '#fff' : '#1e293b',
+        borderRadius: '8px',
+      }}>
+      <h2 style={{ fontSize: '28px', marginBottom: '12px' }}>{heading}</h2>
+      <p style={{ fontSize: '16px', marginBottom: '24px', opacity: 0.9 }}>{description}</p>
+      <a
+        href={buttonHref}
+        style={{
+          display: 'inline-block',
+          padding: '12px 24px',
+          backgroundColor: variant === 'primary' ? '#fff' : '#0891b2',
+          color: variant === 'primary' ? '#0891b2' : '#fff',
+          borderRadius: '6px',
+          textDecoration: 'none',
+          fontWeight: 600,
+        }}>
+        {buttonLabel}
+      </a>
+    </div>
+  ),
+};
+```
+
+## Registering the component
+
+Import your component into `puck.config.tsx` and add it to the `components` object:
+
+```tsx
+// src/puck.config.tsx
+import type { Config } from '@measured/puck';
+import type { CallToActionProps } from './components/puck/CallToAction';
+import { CallToAction } from './components/puck/CallToAction';
+
+type Components = {
+  CallToAction: CallToActionProps;
+};
+
+const puckConfig: Config<Components> = {
+  components: {
+    CallToAction,
+  },
+};
+
+export default puckConfig;
+```
+
+The key in the `components` object (e.g., `CallToAction`) becomes the block's identifier in the editor and in saved page
+data. Do not rename it after content has been created with it.
+
+## Field types
+
+Puck provides these field types for component configuration:
+
+| Type       | Description                           | Example use                   |
+| ---------- | ------------------------------------- | ----------------------------- |
+| `text`     | Single-line text input                | Headings, labels, URLs        |
+| `textarea` | Multi-line text input                 | Descriptions, paragraphs      |
+| `number`   | Numeric input                         | Padding, counts, sizes        |
+| `select`   | Dropdown selection                    | Predefined options            |
+| `radio`    | Radio button group                    | Small option sets (2-4 items) |
+| `array`    | Repeatable list of fields             | Buttons, features, links      |
+| `object`   | Nested group of fields                | Image with URL + alt text     |
+| `custom`   | Custom React component as field input | Color pickers, file uploads   |
+
+### Array fields
+
+Array fields let users add, remove, and reorder items. Each item has its own set of fields:
+
+```tsx
+buttons: {
+  type: 'array',
+  min: 1,
+  max: 4,
+  getItemSummary: (item) => item.label || 'Button',
+  defaultItemProps: {
+    label: 'Button',
+    href: '#',
+  },
+  arrayFields: {
+    label: { type: 'text' },
+    href: { type: 'text' },
+  },
+}
+```
+
+### Object fields
+
+Object fields group related properties together:
+
+```tsx
+image: {
+  type: 'object',
+  objectFields: {
+    url: { type: 'text' },
+    alt: { type: 'text' },
+  },
+}
+```
+
+### Content-editable fields
+
+Text and textarea fields support `contentEditable: true`, which lets users edit the text directly on the canvas by
+clicking on it:
+
+```tsx
+title: { type: 'text', contentEditable: true },
+```
+
+## Component categories
+
+Organize components in the editor sidebar using categories:
+
+```tsx
+const puckConfig: Config<Components> = {
+  categories: {
+    layout: {
+      components: ['Grid', 'Flex', 'Space'],
+    },
+    typography: {
+      components: ['Heading', 'Text'],
+    },
+    interactive: {
+      title: 'Actions',
+      components: ['Button', 'CallToAction'],
+    },
+  },
+  components: {
+    Grid,
+    Flex,
+    Space,
+    Heading,
+    Text,
+    Button,
+    CallToAction,
+  },
+};
+```
+
+The `title` property overrides the display name in the sidebar. If omitted, the category key is used (capitalized).
+
+Components not listed in any category appear in an "Other" section.
+
+## Using blocks in pages
+
+Once registered, your blocks appear in the Puck editor's component panel (left sidebar). Content authors can:
+
+1. **Drag** a block from the component panel onto the page canvas
+2. **Configure** the block's properties in the properties panel (right sidebar)
+3. **Rearrange** blocks by dragging them up or down on the canvas
+4. **Delete** blocks by selecting them and pressing the delete button
+
+The page data (component types, props, and arrangement) is saved as JSON in the content directory.
+
+## Edit-mode awareness
+
+Components receive a `puck` prop with editor state. Use `puck.isEditing` to adjust behavior during editing -- for
+example, preventing link navigation:
+
+```tsx
+render: ({ href, label, puck }) => (
+  <a href={href} onClick={puck.isEditing ? (e) => e.preventDefault() : undefined}>
+    {label}
+  </a>
+);
+```
+
+## MDX blocks
+
+In addition to Puck components, Conloca supports MDX blocks -- rich text content entries created through the CMS block
+editor. MDX blocks are content (not code) and are managed through the CMS UI under the Blocks section.
+
+MDX blocks can be inherited across locales using [content inheritance](/docs/concepts/content-inheritance/) and are
+rendered using the site's MDX processing pipeline.
+
+## Site-specific blocks
+
+Blocks can be scoped to a specific site in multi-site configurations. Site-specific blocks override global blocks of the
+same name for that site, while remaining invisible to other sites. See the
+[content API reference](/docs/reference/api/content/) for details on site-scoped block operations.
+
+## Working example
+
+The `example/website-with-cms` directory in the Conloca repository contains a complete working example with 9 Puck
+components (Button, Card, Grid, Hero, Heading, Flex, Stats, Text, Space) organized into categories. Use it as a
+reference for component patterns and project structure.
+
+## Next steps
+
+- [Getting Started](/docs/getting-started/) -- Set up your first Conloca site
+- [Architecture](/docs/concepts/architecture/) -- Understand how Conloca processes content
+- [Cloudflare Access auth](/docs/guides/auth/cf-access/) -- Protect your CMS

@@ -1,0 +1,206 @@
+---
+title: Docker
+description: Deploy Conloca with Docker Compose
+---
+
+Docker is the recommended way to deploy Conloca. This guide provides a complete Dockerfile and docker-compose.yml for
+running your CMS in production.
+
+## Prerequisites
+
+- Docker and Docker Compose installed on your server
+- A built Astro site with Conloca configured (`bun run build` completed)
+
+## Dockerfile
+
+Create a `Dockerfile` in your project root. This multi-stage build installs dependencies, builds the Astro site, and
+creates a minimal runtime image:
+
+```dockerfile
+FROM oven/bun:1 AS base
+WORKDIR /app
+
+# Install dependencies
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile --production
+
+# Build stage
+FROM base AS build
+RUN bun install --frozen-lockfile
+COPY . .
+RUN bun run build
+
+# Runtime
+FROM oven/bun:1-slim AS runtime
+WORKDIR /app
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/package.json ./
+
+ENV HOST=0.0.0.0
+ENV PORT=4321
+EXPOSE 4321
+CMD ["bun", "run", "./dist/server/entry.mjs"]
+```
+
+The runtime image uses `oven/bun:1-slim` to keep the image size small. The Astro SSR entry point is at
+`dist/server/entry.mjs`.
+
+## docker-compose.yml
+
+Create a `docker-compose.yml` alongside the Dockerfile:
+
+```yaml
+services:
+  conloca:
+    build: .
+    ports:
+      - '4321:4321'
+    environment:
+      - HOST=0.0.0.0
+      - PORT=4321
+    volumes:
+      - ./content:/app/content
+      - ./public/assets:/app/public/assets
+    restart: unless-stopped
+```
+
+The volume mounts are important:
+
+- `./content:/app/content` -- Persists your content directory across container restarts. This is where pages, blocks,
+  and data entries are stored.
+- `./public/assets:/app/public/assets` -- Persists uploaded media assets.
+
+## Running
+
+Build and start the container:
+
+```bash
+docker compose up -d
+```
+
+Verify the CMS is running:
+
+```bash
+curl http://localhost:4321
+```
+
+View logs:
+
+```bash
+docker compose logs -f conloca
+```
+
+Stop the container:
+
+```bash
+docker compose down
+```
+
+## Adding authentication
+
+Add authentication environment variables to `docker-compose.yml`. Here is an example with GitHub OAuth:
+
+```yaml
+services:
+  conloca:
+    build: .
+    ports:
+      - '4321:4321'
+    environment:
+      - HOST=0.0.0.0
+      - PORT=4321
+      - GITHUB_CLIENT_ID=YOUR_CLIENT_ID
+      - GITHUB_CLIENT_SECRET=YOUR_CLIENT_SECRET
+      - SESSION_SECRET=YOUR_SESSION_SECRET_AT_LEAST_32_CHARS
+    volumes:
+      - ./content:/app/content
+      - ./public/assets:/app/public/assets
+    restart: unless-stopped
+```
+
+Then reference these in your `astro.config.mjs`:
+
+```js
+import { oauth } from '@conloca/content-api/node'
+
+auth: {
+  provider: oauth({
+    github: {
+      clientId: process.env.GITHUB_CLIENT_ID,
+      clientSecret: process.env.GITHUB_CLIENT_SECRET,
+    },
+    sessionSecret: process.env.SESSION_SECRET,
+  }),
+  roles: {
+    admin: ['your-email@example.com'],
+  },
+}
+```
+
+See the [GitHub OAuth guide](/docs/guides/auth/github-oauth/) for full configuration details.
+
+## Reverse proxy
+
+For production, place a reverse proxy in front of the container to handle HTTPS termination. Here is a minimal Caddy
+example:
+
+```yaml
+services:
+  conloca:
+    build: .
+    expose:
+      - '4321'
+    environment:
+      - HOST=0.0.0.0
+      - PORT=4321
+    volumes:
+      - ./content:/app/content
+      - ./public/assets:/app/public/assets
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+```
+
+With a `Caddyfile`:
+
+```
+cms.YOUR_DOMAIN.com {
+  reverse_proxy conloca:4321
+}
+```
+
+Caddy automatically provisions and renews TLS certificates via Let's Encrypt.
+
+## Git content persistence
+
+The content directory should be a git repository for version history. Conloca uses git for content versioning -- each
+save creates a commit. The volume mount (`./content:/app/content`) preserves the git repository across container
+restarts.
+
+Initialize git in your content directory if it does not already exist:
+
+```bash
+cd content
+git init
+git add .
+git commit -m "Initial content"
+```
+
+## Next steps
+
+- [GitHub OAuth](/docs/guides/auth/github-oauth/) -- Add user authentication
+- [Cloudflare Access](/docs/guides/auth/cf-access/) -- Zero-trust authentication
+- [Cloudflare Tunnel](/docs/guides/deploy/cloudflare-tunnel/) -- Expose without opening ports
+- [Getting Started](/docs/getting-started/) -- Set up your first Conloca site

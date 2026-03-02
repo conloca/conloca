@@ -1,0 +1,290 @@
+---
+title: Architecture & Concepts
+description: 'Content model: sites, collections, pages, blocks, locales, VXJSON'
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+This page explains how Conloca works — the content model, file format, package architecture, and data flow. Read this
+before diving into guides if you want to understand the system as a whole.
+
+## Overview
+
+Conloca is a **file-based CMS** for Astro sites. There is no database. Content is stored as files on disk, edited
+through a visual editor powered by [Puck](https://github.com/measuredco/puck), and managed via an admin UI served at
+`/__cms` during development.
+
+Key design principles:
+
+- **Files as the source of truth** — content lives in your repository, versioned with git
+- **Visual editing** — drag-and-drop page builder with live preview
+- **Astro-native** — integrates as an Astro plugin, not a separate service
+- **Development-mode admin** — the CMS UI runs alongside your dev server
+
+## Content Model
+
+Conloca organizes content in a hierarchy: **Sites > Collections > Pages/Blocks/Data**, with **Locales** providing
+language variants.
+
+### Sites
+
+A site is the top-level organizational unit. Each site has its own collections, locales, and configuration.
+
+A monorepo can host multiple sites (e.g., a marketing site and a blog), each with independent content. Sites are
+configured in a `sites.json` file at the root of the content directory:
+
+```json
+{
+  "sites": {
+    "default": {
+      "locales": ["en", "nl", "de", "fr"],
+      "defaultLocale": "en"
+    }
+  },
+  "globalLocales": ["en", "nl", "de", "fr"]
+}
+```
+
+Most projects use a single site named `default`. Multi-site setups are useful when you need separate locale
+configurations or content boundaries within one codebase.
+
+### Collections
+
+A collection groups related content within a site. Each collection maps to a filesystem directory and contains items of
+the same kind.
+
+Examples:
+
+- `pages` — general website pages (/, /about, /contact)
+- `posts` — blog entries
+- `products` — product listing pages
+
+Collections are auto-discovered from the directory structure. There is no separate collection configuration file.
+
+### Pages
+
+A page is an individual content item with a URL pathname. Each page belongs to one collection within one site and can
+have content in multiple locales.
+
+Pages are stored as files (VXJSON or MDX format) organized by locale:
+
+```
+content/
+  default/           # site
+    pages/           # collection
+      en/            # locale
+        home.vxjson  # page content
+      de/
+        home.vxjson  # German translation
+```
+
+Each page file contains metadata (title, description, timestamps, etags) and content (Puck component data or MDX
+markup).
+
+### Blocks
+
+Blocks are reusable content fragments — think of them as "components for content" rather than "components for code."
+While Puck components define the structure and rendering, blocks provide shareable content that can appear across pages.
+
+There are two scopes:
+
+- **Global blocks** — available across all sites, stored in the top-level `blocks/` directory
+- **Site-specific blocks** — scoped to a single site, stored within that site's `blocks/` directory
+
+Blocks support both VXJSON (visual editor content) and MDX (rich text) formats.
+
+### Locales
+
+Locales provide language and region variants for content. Each site declares its supported locales and a default locale
+in `sites.json`.
+
+Every page and block can have content per locale. The default locale holds the primary content; other locales either
+provide translated versions or inherit from the default (see [Content Inheritance](#content-inheritance) below).
+
+### Data
+
+Data collections hold structured key-value entries separate from page content. Examples include navigation menus, site
+settings, team member lists, or testimonial collections.
+
+Data entries have a name (identifier) and typed content. When combined with data schemas (via `schemasPath` in the
+configuration), the CMS generates structured forms for editing data entries.
+
+## VXJSON Format
+
+VXJSON (Variant JSON) is Conloca's file format for storing content. It is standard JSON with two guarantees:
+
+1. **The `content` field is always last** in the object — this enables atomic writes where metadata can be updated
+   without rewriting content
+2. **Field order is deterministic** — ensures consistent etag calculation across reads and writes
+
+A VXJSON file looks like this:
+
+```json
+{
+  "id": "abc123",
+  "type": "puck",
+  "created": "2026-01-15T10:00:00Z",
+  "modified": "2026-01-20T14:30:00Z",
+  "meta": {
+    "title": "About Us",
+    "description": "Learn about our team"
+  },
+  "content": {
+    "puckData": {
+      "root": { "props": {} },
+      "content": [{ "type": "Heading", "props": { "text": "About Us" } }],
+      "zones": {}
+    }
+  }
+}
+```
+
+### Etag-Based Concurrency
+
+Conloca uses optimistic concurrency control via etags. Each content file has a dual-format etag: `metaEtag.contentEtag`.
+
+- The **meta etag** covers metadata fields (title, timestamps, scheduling)
+- The **content etag** covers the content payload (Puck data or MDX)
+
+When saving, the CMS sends the expected etag. If the file has been modified since it was loaded (etag mismatch), the
+write is rejected with a `STALE_WRITE` error. This prevents accidental overwrites when multiple editors work on the same
+content.
+
+The dual-format design allows the system to distinguish between metadata-only changes and content changes, which is
+important for features like content inheritance staleness detection.
+
+## Package Architecture
+
+Conloca is built as four packages, each with a clear responsibility:
+
+```
+content-api          Core content engine
+    |                (file I/O, indexing, auth, VXJSON)
+    v
+content-api-client   React Query hooks
+    |                (usePage, useBlocks, mutations)
+    v
+cms-spa              Admin UI
+    |                (dashboard, editors, media library)
+    v
+astro-cms            Astro integration
+                     (routes, API handler, virtual modules)
+```
+
+### content-api
+
+The core package. Provides `FileSystemContentAPI` — a class that reads and writes content files, maintains an in-memory
+index for fast lookups, and handles concurrency via etags. Also contains the authentication provider system.
+
+This package has no React dependency and can be used in any Node.js/Bun environment.
+
+### content-api-client
+
+React hooks built on [TanStack Query](https://tanstack.com/query) (React Query). Provides `usePage`, `useBlocks`,
+`useLocales`, `useCreatePage`, and other hooks that manage server state for the CMS UI.
+
+Handles caching, background refetching, optimistic updates, and error handling. All API communication goes through an
+HTTP client that calls the content API endpoints.
+
+### cms-spa
+
+The CMS admin interface — a React single-page application. Contains the dashboard, page editor (Puck integration), block
+editor, data editor, media library, and settings pages.
+
+Served as a static SPA bundle at the CMS route (default: `/__cms`). During development, Vite serves it with hot module
+replacement.
+
+### astro-cms
+
+The Astro integration that ties everything together. Provides the `conlocaCMS()` function for `astro.config.mjs`.
+Handles:
+
+- Injecting API routes (content CRUD, asset uploads, auth)
+- Serving the CMS SPA
+- Content page routing (mapping URL patterns to content)
+- Virtual modules for configuration injection
+- File watching and HMR during development
+
+## Data Flow
+
+Here is how a content edit flows through the system, from the editor's action to the file on disk:
+
+```
+Editor makes change in Puck visual editor
+          |
+          v
+cms-spa dispatches React Query mutation
+          |
+          v
+content-api-client sends PUT request
+to /__cms/api/content/:id
+          |
+          v
+astro-cms Hono middleware receives request,
+validates auth, routes to content-api
+          |
+          v
+content-api FileSystemContentAPI:
+  1. Reads current file, checks etag
+  2. Merges changes
+  3. Calculates new etag
+  4. Writes VXJSON file atomically
+  5. Updates in-memory index
+          |
+          v
+File written to disk with new etag,
+timestamps, and attribution
+          |
+          v
+Vite file watcher detects change,
+sends HMR update to browser
+```
+
+For **reading** content (page loads, listings), the flow is reversed: the in-memory index provides fast lookups without
+scanning the filesystem on every request.
+
+## Authentication
+
+Conloca uses a pluggable authentication system. The `AuthProvider` interface defines a single method —
+`validate(request)` — that checks whether an incoming request is authenticated and returns the user's identity and role.
+
+Four providers ship with the `content-api` package:
+
+| Provider                             | Use Case                                                    |
+| ------------------------------------ | ----------------------------------------------------------- |
+| `noAuth()`                           | Local development — all requests pass, user gets admin role |
+| `apiKey({ keys })`                   | CI/CD and API access — authenticate via `X-API-Key` header  |
+| `cfAccess({ teamDomain, audience })` | Cloudflare Access — validates CF JWT tokens                 |
+| `oauth({ issuer, clientId, ... })`   | OAuth/OIDC — GitHub, Google, or any OIDC provider           |
+
+Three roles control access levels:
+
+- **admin** — full access (create, edit, delete, settings)
+- **editor** — create and edit content, upload media
+- **viewer** — read-only dashboard access
+
+Role assignment uses email pattern matching (e.g., `*@company.com` for all company emails) or a custom `resolveRole`
+function. See the [Configuration Reference](/docs/reference/configuration/#authentication-options) for setup details.
+
+## Content Inheritance
+
+For multi-locale sites, Conloca supports content inheritance to reduce duplication. A non-default locale page can set
+`sameAsDefault: true`, which means it displays the default locale's content without maintaining a separate copy.
+
+Key behaviors:
+
+- **Inheriting pages** show the default locale content automatically
+- **Staleness detection** — when the default locale content changes, inheriting pages are flagged as "needs review" via
+  content etag comparison
+- **Breaking inheritance** — editors can break inheritance to customize content for a specific locale, which copies the
+  current default content as a starting point
+- **Reverting** — editors can revert a customized locale back to inheriting from the default
+
+This is particularly useful for sites with many locales where most content is identical across languages, and only
+specific pages need translation.
+
+<Aside type="tip">
+  The [example/website-with-cms](https://github.com/nicobrinkkemper/conloca/tree/main/example/website-with-cms) in the
+  Conloca repository demonstrates all these concepts in a working setup. It is the best starting point for exploring the
+  architecture hands-on.
+</Aside>

@@ -1,0 +1,140 @@
+---
+title: Cloudflare Tunnel
+description: Expose your CMS through Cloudflare Tunnel without opening ports
+---
+
+Cloudflare Tunnel lets you expose your Conloca CMS to the internet without opening any ports on your server. Traffic
+routes through Cloudflare's network, providing automatic HTTPS and DDoS protection.
+
+## Prerequisites
+
+- A Cloudflare account with a domain configured
+- `cloudflared` installed on your server
+  ([install guide](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/))
+- Conloca running locally (e.g., on `http://localhost:4321`)
+
+## Why Cloudflare Tunnel
+
+- No open ports on your server -- all traffic flows outbound through the tunnel
+- Automatic HTTPS -- Cloudflare terminates TLS, no certificate management needed
+- Works behind NAT, firewalls, and restrictive networks
+- Pairs naturally with [Cloudflare Access](/docs/guides/auth/cf-access/) for zero-trust authentication
+
+## Setup via Dashboard
+
+The simplest way to create a tunnel:
+
+1. Go to [Cloudflare Zero Trust](https://one.dash.cloudflare.com/) > **Networks** > **Tunnels**
+2. Click **Create a tunnel** and choose **Cloudflared** as the connector
+3. Give the tunnel a name (e.g., "conloca")
+4. Follow the instructions to install and run the `cloudflared` connector on your server
+5. Add a **Public hostname**:
+   - **Subdomain**: `cms` (or your preferred subdomain)
+   - **Domain**: select your domain
+   - **Service**: `http://localhost:4321`
+6. Save the tunnel
+
+Your CMS is now accessible at `https://cms.YOUR_DOMAIN.com`.
+
+## Setup via CLI
+
+For more control or automated deployments, use the CLI.
+
+### 1. Authenticate
+
+```bash
+cloudflared tunnel login
+```
+
+This opens a browser to authorize `cloudflared` with your Cloudflare account.
+
+### 2. Create the tunnel
+
+```bash
+cloudflared tunnel create conloca
+```
+
+This creates a tunnel and generates a credentials file at `~/.cloudflared/YOUR_TUNNEL_ID.json`.
+
+### 3. Configure the tunnel
+
+Create `~/.cloudflared/config.yml`:
+
+```yaml
+tunnel: YOUR_TUNNEL_ID
+credentials-file: /root/.cloudflared/YOUR_TUNNEL_ID.json
+ingress:
+  - hostname: cms.YOUR_DOMAIN.com
+    service: http://localhost:4321
+  - service: http_status:404
+```
+
+Replace `YOUR_TUNNEL_ID` with the ID from step 2 and `YOUR_DOMAIN` with your domain.
+
+### 4. Route DNS
+
+Create a DNS record pointing to the tunnel:
+
+```bash
+cloudflared tunnel route dns conloca cms.YOUR_DOMAIN.com
+```
+
+### 5. Run the tunnel
+
+```bash
+cloudflared tunnel run conloca
+```
+
+## Running as a systemd service
+
+For production, run `cloudflared` as a systemd service so it starts automatically:
+
+```bash
+sudo cloudflared service install
+sudo systemctl enable --now cloudflared
+```
+
+Or create a custom unit file at `/etc/systemd/system/cloudflared.service`:
+
+```ini
+[Unit]
+Description=Cloudflare Tunnel
+After=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/local/bin/cloudflared tunnel --config /root/.cloudflared/config.yml run conloca
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now cloudflared
+```
+
+## Combining with Cloudflare Access
+
+Cloudflare Tunnel and Cloudflare Access are a natural pair. The tunnel exposes your CMS without opening ports, and
+Access protects it with authentication.
+
+To add Access protection:
+
+1. Go to **Cloudflare Zero Trust** > **Access** > **Applications**
+2. Create a self-hosted application for `cms.YOUR_DOMAIN.com`
+3. Configure an Access Policy with your identity provider
+4. Configure Conloca with the [Cloudflare Access auth provider](/docs/guides/auth/cf-access/)
+
+With this setup, users authenticate through Cloudflare Access before reaching your CMS, and the tunnel ensures your
+server has no exposed ports.
+
+## Next steps
+
+- [Cloudflare Access auth](/docs/guides/auth/cf-access/) -- Add zero-trust authentication
+- [Docker deployment](/docs/guides/deploy/docker/) -- Container-based deployment
+- [VPS deployment](/docs/guides/deploy/vps-systemd/) -- systemd-based deployment
+- [Getting Started](/docs/getting-started/) -- Set up your first Conloca site

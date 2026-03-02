@@ -1,0 +1,82 @@
+---
+title: Auth API
+description: User authentication endpoint for retrieving the current session
+---
+
+The Auth API provides an endpoint to retrieve the current authenticated user. Authentication itself is handled by the
+configured auth provider (Cloudflare Access, OAuth, API keys, or no-auth for development). The `/auth/user` endpoint
+reads from the resolved session set by the permission middleware.
+
+All endpoints are relative to the API base URL (default: `/__cms/api`).
+
+:::note Auth callback routes (`/auth/callback`, `/auth/login`, `/auth/logout`) are handled internally by the auth
+provider and are not part of the content API. See the [auth provider guides](/docs/guides/auth/cf-access/) for setup
+instructions. :::
+
+---
+
+## Get Current User
+
+### GET /auth/user
+
+Get the currently authenticated user's information. Returns the user's email, display name, and resolved role. The role
+is determined by the auth configuration's role mapping rules, not the raw provider claims.
+
+**Parameters:** None
+
+**Response:** `200 OK`
+
+When authenticated:
+
+```typescript
+{
+  authenticated: true;
+  user: {
+    email: string; // User's email address
+    name: string; // Display name
+    role: 'admin' | 'editor' | 'viewer';
+  }
+}
+```
+
+When not authenticated:
+
+```typescript
+{
+  authenticated: false;
+}
+```
+
+**Example:**
+
+```bash
+curl http://localhost:4321/__cms/api/auth/user
+```
+
+```json
+{
+  "authenticated": true,
+  "user": {
+    "email": "editor@example.com",
+    "name": "Editor",
+    "role": "editor"
+  }
+}
+```
+
+### Roles
+
+Conloca uses three roles for permission control:
+
+| Role     | Permissions                                             |
+| -------- | ------------------------------------------------------- |
+| `admin`  | Full access: read, create, edit, delete, git operations |
+| `editor` | Content management: read, create, edit                  |
+| `viewer` | Read-only: can view content but cannot make changes     |
+
+Roles are resolved in the following order:
+
+1. `authConfig.resolveRole()` custom function (if configured)
+2. `authConfig.roles.admin` / `authConfig.roles.editor` email pattern matching
+3. Provider-assigned role (from the auth provider itself)
+4. Default: `admin` in development mode (no auth provider configured)

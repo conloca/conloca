@@ -1,0 +1,206 @@
+---
+title: '@conloca/astro-cms'
+description:
+  'Astro integration for Conloca CMS -- visual editing, content management, and media library for Astro sites'
+---
+
+## Overview
+
+`@conloca/astro-cms` is the main integration package that adds Conloca CMS to any Astro site. Install this package to
+get visual page editing with Puck, content management, a media library, multi-locale support, and pluggable
+authentication.
+
+When added to your Astro config, the integration:
+
+- Mounts the CMS admin UI at `/__cms` (configurable)
+- Sets up content API routes for CRUD operations
+- Provides Astro Content Collections loaders for build-time content access
+- Supports interactive component hydration via `withHydration()`
+- Handles authentication via pluggable auth providers
+
+## Installation
+
+```bash
+bun add @conloca/astro-cms @conloca/content-api
+```
+
+## Configuration
+
+```typescript
+// astro.config.mjs
+import { conlocaCMS } from '@conloca/astro-cms';
+import { apiKey } from '@conloca/content-api/node';
+
+export default defineConfig({
+  integrations: [
+    conlocaCMS({
+      contentRoot: './content',
+      puckConfigPath: './src/puck.config.tsx',
+      assetsPath: 'src/assets/uploads',
+      schemasPath: './src/schemas.ts',
+      layout: './src/layouts/Layout.astro',
+      auth: {
+        provider: apiKey({ keys: [{ hash: '...', role: 'admin', label: 'dev' }] }),
+      },
+    }),
+  ],
+});
+```
+
+### ConlocaCMSOptions
+
+| Option           | Type                             | Default    | Description                                      |
+| ---------------- | -------------------------------- | ---------- | ------------------------------------------------ |
+| `contentRoot`    | `string`                         | required   | Path to content directory                        |
+| `puckConfigPath` | `string`                         | required   | Path to Puck component config (`.tsx` file)      |
+| `route`          | `string`                         | `'/__cms'` | CMS admin UI route prefix                        |
+| `assetsPath`     | `string`                         | -          | Path to assets directory (enables Media Library) |
+| `schemasPath`    | `string`                         | -          | Path to data/page schema definitions             |
+| `layout`         | `string`                         | -          | Default Astro layout for content pages           |
+| `routing`        | `RoutingConfigInput`             | -          | Content page routing configuration               |
+| `templates`      | `Record<string, TemplateConfig>` | -          | Page creation templates                          |
+| `componentPaths` | `string[]`                       | -          | Directories to scan for hydratable components    |
+| `auth`           | `AuthConfig`                     | `noAuth()` | Authentication configuration                     |
+| `canvasDir`      | `string`                         | -          | Canvas directory for visual editing              |
+
+## Entry Points
+
+### `@conloca/astro-cms` (main)
+
+The main entry point for `astro.config.mjs`. Exports the integration function and Zod schemas.
+
+```typescript
+import { conlocaCMS, conlocaLoader, pageMetaSchema, blockMetaSchema } from '@conloca/astro-cms';
+```
+
+| Export                               | Purpose                                         |
+| ------------------------------------ | ----------------------------------------------- |
+| `conlocaCMS(options)`                | Astro integration factory                       |
+| `conlocaLoader(options)`             | Content Collections loader                      |
+| `pageMetaSchema`                     | Zod schema for page metadata                    |
+| `blockMetaSchema`                    | Zod schema for block metadata                   |
+| `withHydration(component, strategy)` | Wrap React components for client-side hydration |
+| `scanForHydratableComponents(paths)` | Build-time scanner for hydratable components    |
+| `extractSlugFromPathname(pathname)`  | Convert URL pathname to Astro slug              |
+| `pathnameFromSlug(slug)`             | Convert Astro slug to URL pathname              |
+| `serializeProps(props)`              | Serialize component props for hydration         |
+
+### `@conloca/astro-cms/collections`
+
+Astro Content Collections helpers. Separate entry point to avoid loading `astro:content` during config.
+
+```typescript
+// src/content.config.ts
+import { createConlocaCollections } from '@conloca/astro-cms/collections';
+
+export const { collections } = await createConlocaCollections();
+```
+
+| Export                               | Purpose                                                           |
+| ------------------------------------ | ----------------------------------------------------------------- |
+| `createConlocaCollections(options?)` | Auto-discover and define Content Collections from indexed content |
+
+### `@conloca/astro-cms/components`
+
+Rendering utilities for content pages.
+
+```typescript
+import { createPageRendererWithBlocks } from '@conloca/astro-cms/components';
+```
+
+| Export                           | Purpose                                               |
+| -------------------------------- | ----------------------------------------------------- |
+| `createPageRendererWithBlocks()` | Create a page renderer that resolves block references |
+
+### `@conloca/astro-cms/cms-handler`
+
+Unified CMS route handler. Handles API requests, SPA serving, and authentication in a single entry point.
+
+### `@conloca/astro-cms/hydration`
+
+Client-side hydration for interactive Puck components.
+
+```typescript
+import { withHydration } from '@conloca/astro-cms/hydration';
+
+const InteractiveCounter = withHydration(Counter, 'load');
+```
+
+| Export                               | Purpose                                          |
+| ------------------------------------ | ------------------------------------------------ |
+| `withHydration(component, strategy)` | Wrap a React component for client-side hydration |
+
+Strategies: `'load'` (immediate), `'idle'` (when idle), `'visible'` (when visible).
+
+### `@conloca/astro-cms/virtual-modules`
+
+TypeScript declaration file for virtual module imports used internally by the CMS handler. Add to your `env.d.ts` for
+type support.
+
+### `@conloca/astro-cms/page-handler`
+
+Astro page handler (`.astro` file) for dynamic CMS routes. Injected automatically by the integration.
+
+### `@conloca/astro-cms/lib/hydration-script`
+
+Client-side hydration bootstrap script. Discovers and hydrates components marked with `withHydration()`.
+
+## Examples
+
+### Minimal Setup
+
+```typescript
+// astro.config.mjs
+import { conlocaCMS } from '@conloca/astro-cms';
+
+export default defineConfig({
+  integrations: [
+    conlocaCMS({
+      contentRoot: './content',
+      puckConfigPath: './src/puck.config.tsx',
+    }),
+  ],
+});
+```
+
+### With Authentication and Media Library
+
+```typescript
+// astro.config.mjs
+import { conlocaCMS } from '@conloca/astro-cms';
+import { oauth } from '@conloca/content-api/node';
+
+export default defineConfig({
+  integrations: [
+    conlocaCMS({
+      contentRoot: './content',
+      puckConfigPath: './src/puck.config.tsx',
+      assetsPath: 'src/assets/uploads',
+      auth: {
+        provider: oauth({
+          provider: 'github',
+          clientId: process.env.GITHUB_CLIENT_ID,
+          clientSecret: process.env.GITHUB_CLIENT_SECRET,
+          sessionSecret: process.env.SESSION_SECRET,
+        }),
+        roles: {
+          admin: ['admin@company.com'],
+          editor: ['*@company.com'],
+        },
+      },
+    }),
+  ],
+});
+```
+
+### Content Collections
+
+```typescript
+// src/content.config.ts
+import { createConlocaCollections } from '@conloca/astro-cms/collections';
+
+export const { collections } = await createConlocaCollections({
+  contentRoot: './content',
+  site: 'default',
+});
+```

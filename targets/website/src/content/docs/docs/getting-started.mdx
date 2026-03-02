@@ -1,0 +1,157 @@
+---
+title: Getting Started
+description: Install and configure Conloca CMS in your Astro project
+---
+
+import { Steps, Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+This guide walks you through adding Conloca CMS to an Astro project. By the end, you will have a working visual editor
+at `/__cms` where you can create and edit pages.
+
+## Prerequisites
+
+Before starting, you need:
+
+- **[Bun](https://bun.sh/)** installed (v1.0+)
+- An **existing Astro project** with SSR enabled, or a new one created with `bun create astro@latest`
+- Basic familiarity with Astro — see the [Astro docs](https://docs.astro.build/) if you are new
+
+<Aside type="tip">
+  The [example/website-with-cms](https://github.com/nicobrinkkemper/conloca/tree/main/example/website-with-cms) in the
+  Conloca repository is the canonical reference for a working setup. Every code example in this guide is derived from
+  it.
+</Aside>
+
+## Installation
+
+Install the required packages:
+
+```bash
+bun add @conloca/astro-cms @conloca/content-api @astrojs/react @astrojs/node react react-dom @measured/puck
+```
+
+| Package                | Purpose                                                                                  |
+| ---------------------- | ---------------------------------------------------------------------------------------- |
+| `@conloca/astro-cms`   | Astro integration — injects CMS routes, API handler, and admin UI                        |
+| `@conloca/content-api` | Content engine — reads and writes VXJSON files, manages content index                    |
+| `@astrojs/react`       | React support for Astro — required because the Puck visual editor is a React application |
+| `@astrojs/node`        | Node.js SSR adapter — the CMS API needs a server runtime                                 |
+| `react`, `react-dom`   | React peer dependencies                                                                  |
+| `@measured/puck`       | Visual page editor — drag-and-drop component-based editing                               |
+
+## Configuration
+
+Open your `astro.config.mjs` and add the Conloca integration:
+
+```js
+// astro.config.mjs
+import { defineConfig } from 'astro/config';
+import node from '@astrojs/node';
+import { conlocaCMS } from '@conloca/astro-cms';
+import react from '@astrojs/react';
+
+export default defineConfig({
+  output: 'server',
+  adapter: node({ mode: 'standalone' }),
+  integrations: [
+    react(),
+    conlocaCMS({
+      contentRoot: './content',
+      puckConfigPath: './src/puck.config.tsx',
+    }),
+  ],
+});
+```
+
+| Option           | Description                                                                                       |
+| ---------------- | ------------------------------------------------------------------------------------------------- |
+| `contentRoot`    | Directory where Conloca stores content files (VXJSON format). Created automatically on first use. |
+| `puckConfigPath` | Path to your Puck component configuration file (see next step).                                   |
+
+<Aside>
+  This is the minimal configuration. Conloca supports many more options including routing, templates, media library, and
+  authentication. See the [Configuration Reference](/docs/reference/configuration/) for the complete list.
+</Aside>
+
+## Create Your First Puck Config
+
+The Puck config defines the components available in the visual editor. Create a minimal config with a single Heading
+component:
+
+```tsx
+// src/puck.config.tsx
+import type { Config } from '@measured/puck';
+
+const config: Config = {
+  components: {
+    Heading: {
+      fields: {
+        text: { type: 'text' },
+      },
+      defaultProps: {
+        text: 'Hello, World!',
+      },
+      render: ({ text }) => <h1>{text}</h1>,
+    },
+  },
+};
+
+export default config;
+```
+
+This registers a `Heading` component with a single text field. You can add as many components as your site needs — see
+the [Creating Custom Blocks](/docs/guides/custom-blocks/) guide for more advanced patterns.
+
+## Create the Content Directory
+
+Create the directory where Conloca will store your content:
+
+```bash
+mkdir -p content
+```
+
+Conloca uses this directory to store content as [VXJSON files](/docs/concepts/architecture/#vxjson-format) — a JSON
+format designed for atomic writes and optimistic concurrency. You do not need to create any files manually; the CMS
+creates them when you save content.
+
+## Start Development
+
+Start the Astro dev server:
+
+```bash
+bun run dev
+```
+
+Navigate to **http://localhost:4321/\_\_cms** in your browser. You will see the Conloca CMS dashboard.
+
+### Create Your First Page
+
+<Steps>
+1. Click **New Page** in the CMS dashboard.
+
+2. Enter a title (e.g., "Home") and a pathname (e.g., `/`).
+
+3. The Puck visual editor opens. Drag the **Heading** component from the left panel onto the canvas.
+
+4. Edit the heading text in the right panel.
+
+5. Click **Save**. The save indicator in the top bar confirms the content was written to disk.
+
+6. Open **http://localhost:4321/** in a new tab to see your page rendered with the heading you just created.
+
+</Steps>
+
+Your content is now stored in the `content/` directory as VXJSON files. These files are plain JSON that you can commit
+to version control alongside your code.
+
+## Next Steps
+
+You now have a working Conloca CMS installation. Here is where to go next:
+
+- **[Architecture & Concepts](/docs/concepts/architecture/)** — Understand the content model: sites, collections, pages,
+  blocks, locales, and how data flows through the system
+- **[Creating Custom Blocks](/docs/guides/custom-blocks/)** — Build rich, reusable Puck components for your site
+- **[Configuration Reference](/docs/reference/configuration/)** — Explore all available options including routing,
+  templates, media library, and authentication
+- **[Auth Provider Guides](/docs/guides/auth/cf-access/)** — Set up authentication to protect the CMS in production
+- **[Deployment Guides](/docs/guides/deploy/docker/)** — Deploy your site with Conloca to production
