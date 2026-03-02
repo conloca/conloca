@@ -1,6 +1,11 @@
+import type { FolderTreeNode } from '@conloca/content-api';
 import { useBlocks, useData, useFolderTree, useSitePages } from '@conloca/content-api-client';
 import { Database, FileText, Image, Package } from 'lucide-react';
 import { SectionCard } from './cards/SectionCard';
+
+function countAllAssets(nodes: FolderTreeNode[]): number {
+  return nodes.reduce((sum, node) => sum + node.assetCount + countAllAssets(node.children), 0);
+}
 
 export function CMSDashboard() {
   const { data: sitePages, isLoading: pagesLoading } = useSitePages('default');
@@ -12,8 +17,7 @@ export function CMSDashboard() {
   const blocksCount = blocks?.items?.length ?? 0;
   const dataCount = dataEntries?.items?.length ?? 0;
 
-  const rawTree = folderTree?.tree ?? [];
-  const mediaCount = rawTree.reduce((sum, node) => sum + node.assetCount, 0);
+  const mediaCount = countAllAssets(folderTree?.tree ?? []);
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
