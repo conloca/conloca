@@ -383,7 +383,7 @@ describe('CMS Integration Tests', () => {
 
         // Verify window.open was called with the correct pathname
         expect(mockOpen).toHaveBeenCalledTimes(1);
-        expect(mockOpen).toHaveBeenCalledWith('/preview-test', '_blank');
+        expect(mockOpen).toHaveBeenCalledWith(expect.stringMatching(/^\/preview-test\?_t=\d+$/), '_blank');
       } finally {
         window.open = originalOpen;
       }
