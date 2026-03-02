@@ -124,7 +124,8 @@ export function PageEditor({
   const handlePreview = useCallback(() => {
     const pathname = entry.localized.pathname || '/';
     const previewUrl = buildUrl(pathname);
-    window.open(previewUrl, '_blank');
+    const cacheBustedUrl = `${previewUrl}${previewUrl.includes('?') ? '&' : '?'}_t=${Date.now()}`;
+    window.open(cacheBustedUrl, '_blank');
   }, [entry.localized.pathname, buildUrl]);
 
   // Store headerActions props in a ref so the overrides object can remain referentially stable.
