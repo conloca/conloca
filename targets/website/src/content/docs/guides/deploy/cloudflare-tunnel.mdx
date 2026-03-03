@@ -18,7 +18,7 @@ routes through Cloudflare's network, providing automatic HTTPS and DDoS protecti
 - No open ports on your server -- all traffic flows outbound through the tunnel
 - Automatic HTTPS -- Cloudflare terminates TLS, no certificate management needed
 - Works behind NAT, firewalls, and restrictive networks
-- Pairs naturally with [Cloudflare Access](/docs/guides/auth/cf-access/) for zero-trust authentication
+- Pairs naturally with [Cloudflare Access](/guides/auth/cf-access/) for zero-trust authentication
 
 ## Setup via Dashboard
 
@@ -127,14 +127,14 @@ To add Access protection:
 1. Go to **Cloudflare Zero Trust** > **Access** > **Applications**
 2. Create a self-hosted application for `cms.YOUR_DOMAIN.com`
 3. Configure an Access Policy with your identity provider
-4. Configure Conloca with the [Cloudflare Access auth provider](/docs/guides/auth/cf-access/)
+4. Configure Conloca with the [Cloudflare Access auth provider](/guides/auth/cf-access/)
 
 With this setup, users authenticate through Cloudflare Access before reaching your CMS, and the tunnel ensures your
 server has no exposed ports.
 
 ## Next steps
 
-- [Cloudflare Access auth](/docs/guides/auth/cf-access/) -- Add zero-trust authentication
-- [Docker deployment](/docs/guides/deploy/docker/) -- Container-based deployment
-- [VPS deployment](/docs/guides/deploy/vps-systemd/) -- systemd-based deployment
-- [Getting Started](/docs/getting-started/) -- Set up your first Conloca site
+- [Cloudflare Access auth](/guides/auth/cf-access/) -- Add zero-trust authentication
+- [Docker deployment](/guides/deploy/docker/) -- Container-based deployment
+- [VPS deployment](/guides/deploy/vps-systemd/) -- systemd-based deployment
+- [Getting Started](/getting-started/) -- Set up your first Conloca site

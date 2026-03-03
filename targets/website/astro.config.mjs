@@ -9,36 +9,36 @@ export default defineConfig({
       customCss: ['./src/styles/global.css', './src/styles/custom.css'],
       expressiveCode: { themes: ['starlight-dark'] },
       sidebar: [
-        { label: 'Getting Started', slug: 'docs/getting-started' },
+        { label: 'Getting Started', slug: 'getting-started' },
         {
           label: 'Concepts',
-          autogenerate: { directory: 'docs/concepts' },
+          autogenerate: { directory: 'concepts' },
         },
         {
           label: 'Guides',
           items: [
-            { label: 'Custom Blocks', slug: 'docs/guides/custom-blocks' },
+            { label: 'Custom Blocks', slug: 'guides/custom-blocks' },
             {
               label: 'Authentication',
-              autogenerate: { directory: 'docs/guides/auth' },
+              autogenerate: { directory: 'guides/auth' },
             },
             {
               label: 'Deployment',
-              autogenerate: { directory: 'docs/guides/deploy' },
+              autogenerate: { directory: 'guides/deploy' },
             },
           ],
         },
         {
           label: 'API Reference',
-          autogenerate: { directory: 'docs/reference/api' },
+          autogenerate: { directory: 'reference/api' },
         },
         {
           label: 'Configuration',
-          slug: 'docs/reference/configuration',
+          slug: 'reference/configuration',
         },
         {
           label: 'Packages',
-          autogenerate: { directory: 'docs/packages' },
+          autogenerate: { directory: 'packages' },
         },
       ],
     }),

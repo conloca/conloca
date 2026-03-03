@@ -70,7 +70,7 @@ export default defineConfig({
 
 <Aside>
   This is the minimal configuration. Conloca supports many more options including routing, templates, media library, and
-  authentication. See the [Configuration Reference](/docs/reference/configuration/) for the complete list.
+  authentication. See the [Configuration Reference](/reference/configuration/) for the complete list.
 </Aside>
 
 ## Create Your First Puck Config
@@ -100,7 +100,7 @@ export default config;
 ```
 
 This registers a `Heading` component with a single text field. You can add as many components as your site needs — see
-the [Creating Custom Blocks](/docs/guides/custom-blocks/) guide for more advanced patterns.
+the [Creating Custom Blocks](/guides/custom-blocks/) guide for more advanced patterns.
 
 ## Create the Content Directory
 
@@ -110,9 +110,9 @@ Create the directory where Conloca will store your content:
 mkdir -p content
 ```
 
-Conloca uses this directory to store content as [VXJSON files](/docs/concepts/architecture/#vxjson-format) — a JSON
-format designed for atomic writes and optimistic concurrency. You do not need to create any files manually; the CMS
-creates them when you save content.
+Conloca uses this directory to store content as [VXJSON files](/concepts/architecture/#vxjson-format) — a JSON format
+designed for atomic writes and optimistic concurrency. You do not need to create any files manually; the CMS creates
+them when you save content.
 
 ## Start Development
 
@@ -148,10 +148,10 @@ to version control alongside your code.
 
 You now have a working Conloca CMS installation. Here is where to go next:
 
-- **[Architecture & Concepts](/docs/concepts/architecture/)** — Understand the content model: sites, collections, pages,
+- **[Architecture & Concepts](/concepts/architecture/)** — Understand the content model: sites, collections, pages,
   blocks, locales, and how data flows through the system
-- **[Creating Custom Blocks](/docs/guides/custom-blocks/)** — Build rich, reusable Puck components for your site
-- **[Configuration Reference](/docs/reference/configuration/)** — Explore all available options including routing,
-  templates, media library, and authentication
-- **[Auth Provider Guides](/docs/guides/auth/cf-access/)** — Set up authentication to protect the CMS in production
-- **[Deployment Guides](/docs/guides/deploy/docker/)** — Deploy your site with Conloca to production
+- **[Creating Custom Blocks](/guides/custom-blocks/)** — Build rich, reusable Puck components for your site
+- **[Configuration Reference](/reference/configuration/)** — Explore all available options including routing, templates,
+  media library, and authentication
+- **[Auth Provider Guides](/guides/auth/cf-access/)** — Set up authentication to protect the CMS in production
+- **[Deployment Guides](/guides/deploy/docker/)** — Deploy your site with Conloca to production
