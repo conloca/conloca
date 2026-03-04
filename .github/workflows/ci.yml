@@ -23,7 +23,7 @@ jobs:
     steps:
       # Step 1: GitHub adds "Set up job" automatically
       # Step 2
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           filter: tree:0
           fetch-depth: 0
@@ -31,7 +31,7 @@ jobs:
       # --- Nix ----------------------------------------------------------------
 
       # Step 3
-      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/nix-installer-action@e50d5f73bfe71c2dd0aa4218de8f4afa59f8f81d # v16
         with:
           extra-conf: |
             keep-outputs = true
@@ -42,7 +42,7 @@ jobs:
       # Step 4
       # Cache Nix profiles, devenv and direnv
       - name: Cache Nix profiles, devenv and direnv
-        uses: actions/cache@v4
+        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
         with:
           path: |
             ${{ env.NIX_STORE_NAR }}
@@ -64,7 +64,7 @@ jobs:
       # --- devenv shell -------------------------------------------------------
 
       # Step 6
-      - uses: cachix/cachix-action@v13
+      - uses: cachix/cachix-action@ad2ddac53f961de1989924296a1f236fcfbaa4fc # v15
         with:
           name: devenv
 
@@ -74,7 +74,7 @@ jobs:
 
       # Step 8
       - name: Cache node_modules
-        uses: actions/cache@v4
+        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
         with:
           path: node_modules
           key: ${{ runner.os }}-node-${{ hashFiles('bun.lock') }}
@@ -89,11 +89,11 @@ jobs:
 
       # Step 10
       # Sets the base and head SHAs required for the nx affected commands
-      - uses: nrwl/nx-set-shas@v4
+      - uses: nrwl/nx-set-shas@15514ee4353489ef5a1644bcdae44f0ae2ea45f3 # v4.4.0
 
       # Step 11
       - name: Cache Nx
-        uses: actions/cache@v4
+        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
         with:
           path: .nx/cache
           key: ${{ runner.os }}-nx-${{ github.sha }}
