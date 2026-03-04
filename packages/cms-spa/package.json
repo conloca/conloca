@@ -6,8 +6,8 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/conloca/private",
-    "directory": "packages/cms-spa"
+    "url": "git+https://github.com/conloca/conloca.git",
+    "directory": "cms-spa"
   },
   "type": "module",
   "main": "./dist/index.mjs",

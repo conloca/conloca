@@ -6,8 +6,8 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/conloca/private",
-    "directory": "packages/content-api"
+    "url": "git+https://github.com/conloca/conloca.git",
+    "directory": "content-api"
   },
   "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",

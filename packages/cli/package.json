@@ -6,8 +6,8 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/conloca/private",
-    "directory": "packages/cli"
+    "url": "git+https://github.com/conloca/conloca.git",
+    "directory": "cli"
   },
   "dependencies": {
     "@conloca/content-api": "workspace:^",

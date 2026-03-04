@@ -6,8 +6,8 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/conloca/private",
-    "directory": "packages/astro-cms"
+    "url": "git+https://github.com/conloca/conloca.git",
+    "directory": "astro-cms"
   },
   "type": "module",
   "main": "./dist/index.mjs",

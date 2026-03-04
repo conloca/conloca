@@ -6,8 +6,8 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/conloca/private",
-    "directory": "packages/mdx"
+    "url": "git+https://github.com/conloca/conloca.git",
+    "directory": "mdx"
   },
   "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",
