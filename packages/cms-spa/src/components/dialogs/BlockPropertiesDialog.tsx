@@ -1,4 +1,4 @@
-import { type BlockEditable, blockEditableSchema } from '@conloca/content-api';
+import { type BlockEditable, blockEditableSchema } from '@conloca/content-api-client';
 import { useEffect, useMemo, useState } from 'react';
 import { SchemaForm } from '../forms/SchemaForm';
 

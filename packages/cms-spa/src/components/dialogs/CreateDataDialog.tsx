@@ -1,4 +1,4 @@
-import { dataEditableSchema } from '@conloca/content-api';
+import { dataEditableSchema } from '@conloca/content-api-client';
 import { useState } from 'react';
 import { SchemaForm } from '../forms/SchemaForm';
 

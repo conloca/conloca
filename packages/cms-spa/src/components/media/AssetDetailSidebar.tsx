@@ -1,4 +1,4 @@
-import { formatFileSize } from '@conloca/content-api';
+import { formatFileSize } from '@conloca/content-api-client';
 import { FolderInput, Loader2, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import type { AssetEntry } from '../../hooks';

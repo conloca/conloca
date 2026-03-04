@@ -1,4 +1,4 @@
-import type { DataEditable } from '@conloca/content-api';
+import type { DataEditable } from '@conloca/content-api-client';
 import {
   type ContentManifest,
   localesOf,

@@ -1,4 +1,4 @@
-import type { FolderTreeNode } from '@conloca/content-api';
+import type { FolderTreeNode } from '@conloca/content-api-client';
 import { useBlocks, useData, useFolderTree, useSitePages } from '@conloca/content-api-client';
 import { Database, FileText, Image, Package } from 'lucide-react';
 import { SectionCard } from './cards/SectionCard';

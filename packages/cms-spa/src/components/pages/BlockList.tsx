@@ -1,4 +1,4 @@
-import type { BlockEditable } from '@conloca/content-api';
+import type { BlockEditable } from '@conloca/content-api-client';
 import {
   type ContentManifest,
   localesOf,

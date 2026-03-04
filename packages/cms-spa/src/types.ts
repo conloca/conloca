@@ -1,4 +1,4 @@
-import type { BlockEditable, DataEditable } from '@conloca/content-api';
+import type { BlockEditable, DataEditable } from '@conloca/content-api-client';
 
 export interface Page {
   id: string;

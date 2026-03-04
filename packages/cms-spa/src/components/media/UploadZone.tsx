@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { buildUploadFormData, useImportAssetUrl, useUploadAsset } from '../../hooks';
 import { cn } from '../../utils/cn';
 
@@ -28,6 +28,19 @@ export function UploadZone({ folder = '/', onUploadComplete }: UploadZoneProps) 
 
   const uploadMutation = useUploadAsset();
   const importMutation = useImportAssetUrl();
+
+  const previewUrl = useMemo(() => {
+    if (!pendingFile) return null;
+    return URL.createObjectURL(pendingFile);
+  }, [pendingFile]);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
 
   const isUploading = uploadMutation.isPending || importMutation.isPending || (uploadProgress?.inProgress ?? false);
   const error = uploadMutation.error || importMutation.error;
@@ -196,7 +209,7 @@ export function UploadZone({ folder = '/', onUploadComplete }: UploadZoneProps) 
             <div className="space-y-3">
               <div className="flex items-center gap-3">
                 <div className="w-16 h-16 bg-grey-09 rounded overflow-hidden flex-shrink-0">
-                  <img src={URL.createObjectURL(pendingFile)} alt="Preview" className="w-full h-full object-contain" />
+                  <img src={previewUrl!} alt="Preview" className="w-full h-full object-contain" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-grey-01 truncate">{pendingFile.name}</p>
