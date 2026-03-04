@@ -68,6 +68,14 @@ export class AssetOperations {
     this.manifest = new AssetManifest(config.assetsPath);
   }
 
+  /** Resolve folder from manifest when only filename is known */
+  private async resolveFolder(filename: string): Promise<string> {
+    const entry = await this.manifest.getByFilename(filename);
+    if (!entry) return '/';
+    const lastSlash = entry.relativePath.lastIndexOf('/');
+    return lastSlash > 0 ? `/${entry.relativePath.slice(0, lastSlash)}` : '/';
+  }
+
   private async ensureDir(subpath?: string): Promise<void> {
     const targetPath = subpath ? join(this.config.assetsPath, subpath) : this.config.assetsPath;
     if (!subpath && this.dirEnsured) return;
@@ -325,6 +333,11 @@ export class AssetOperations {
    * Get asset by filename and optional folder
    */
   async getAsset(filename: string, folder = '/'): Promise<AssetEntry | undefined> {
+    // Resolve actual folder from manifest when caller only provides filename
+    if (folder === '/') {
+      folder = await this.resolveFolder(filename);
+    }
+
     // Compute relative path and full file path
     const relativePath = folder === '/' ? filename : `${folder.slice(1)}/${filename}`;
     const fullPath = this.getAssetPath(filename, folder);
@@ -377,6 +390,11 @@ export class AssetOperations {
    * Delete asset file and manifest entry
    */
   async delete(filename: string, folder = '/'): Promise<{ success: true } | { success: false; error: string }> {
+    // Resolve actual folder from manifest when caller only provides filename
+    if (folder === '/') {
+      folder = await this.resolveFolder(filename);
+    }
+
     // Compute relative path for manifest
     const relativePath = folder === '/' ? filename : `${folder.slice(1)}/${filename}`;
 
@@ -512,6 +530,11 @@ export class AssetOperations {
     updates: Partial<ManifestEntryData>,
     folder = '/',
   ): Promise<{ success: true; asset: AssetEntry } | { success: false; error: string }> {
+    // Resolve actual folder from manifest when caller only provides filename
+    if (folder === '/') {
+      folder = await this.resolveFolder(filename);
+    }
+
     // Compute relative path
     const relativePath = folder === '/' ? filename : `${folder.slice(1)}/${filename}`;
 
@@ -620,7 +643,8 @@ export class AssetOperations {
    */
   getAssetPath(filename: string, folder?: string): string {
     const subpath = folder && folder !== '/' ? folder.replace(/^\/+|\/+$/g, '') : '';
-    return subpath ? join(this.config.assetsPath, subpath, filename) : join(this.config.assetsPath, filename);
+    const combined = subpath ? `${subpath}/${filename}` : filename;
+    return this.validateSubpath(combined);
   }
 
   /**

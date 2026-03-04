@@ -462,6 +462,17 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
       ...options.assetConfig,
     });
 
+    // Split a relative asset path into folder and filename
+    // e.g. 'uploads/photo.png' → { folder: '/uploads', filename: 'photo.png' }
+    // e.g. 'photo.png' → { folder: '/', filename: 'photo.png' }
+    function splitAssetPath(relativePath: string): { folder: string; filename: string } {
+      const lastSlash = relativePath.lastIndexOf('/');
+      if (lastSlash > 0) {
+        return { folder: `/${relativePath.slice(0, lastSlash)}`, filename: relativePath.slice(lastSlash + 1) };
+      }
+      return { folder: '/', filename: relativePath };
+    }
+
     // POST /assets/move — move assets between folders
     app.post('/assets/move', async (c) => {
       try {
@@ -604,10 +615,10 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
       }
     });
 
-    // GET /assets/:filename/usage — get asset usage information
-    app.get('/assets/:filename/usage', async (c) => {
+    // GET /assets/usage/:path{.+} — get asset usage information (supports subfolders)
+    app.get('/assets/usage/:path{.+}', async (c) => {
       try {
-        const filename = c.req.param('filename');
+        const { filename } = splitAssetPath(c.req.param('path'));
         const usage = await assetOps.getUsage(filename);
         return c.json({ usage });
       } catch (error) {
@@ -618,32 +629,29 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
     // GET /assets/serve/:path{.+} — serve actual asset file (supports subfolders)
     app.get('/assets/serve/:path{.+}', async (c) => {
       try {
-        const relativePath = c.req.param('path');
-        // Split into folder and filename: 'images/tasks.png' → folder='/images', filename='tasks.png'
-        const lastSlash = relativePath.lastIndexOf('/');
-        const folder = lastSlash > 0 ? `/${relativePath.slice(0, lastSlash)}` : '/';
-        const filename = lastSlash > 0 ? relativePath.slice(lastSlash + 1) : relativePath;
+        const { folder, filename } = splitAssetPath(c.req.param('path'));
         const result = await assetOps.readAssetFile(filename, folder);
 
         if (!result.success) {
           return c.json(errorResponse(ErrorCodes.ASSET_NOT_FOUND, result.error), 404);
         }
 
-        // Set caching headers (1 year for immutable hashed filenames)
-        c.header('Content-Type', result.mimeType);
-        c.header('Cache-Control', 'public, max-age=31536000, immutable');
-
-        return c.body(result.buffer as unknown as ArrayBuffer);
+        return new Response(new Uint8Array(result.buffer), {
+          headers: {
+            'Content-Type': result.mimeType,
+            'Cache-Control': 'public, max-age=31536000, immutable',
+          },
+        });
       } catch (error) {
         return c.json(logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to serve asset'), 500);
       }
     });
 
-    // GET /assets/:filename — get single asset metadata
-    app.get('/assets/:filename', async (c) => {
+    // GET /assets/meta/:path{.+} — get single asset metadata (supports subfolders)
+    app.get('/assets/meta/:path{.+}', async (c) => {
       try {
-        const filename = c.req.param('filename');
-        const asset = await assetOps.getAsset(filename);
+        const { folder, filename } = splitAssetPath(c.req.param('path'));
+        const asset = await assetOps.getAsset(filename, folder);
 
         if (!asset) {
           return c.json(errorResponse(ErrorCodes.ASSET_NOT_FOUND, 'Asset not found'), 404);
@@ -655,13 +663,13 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
       }
     });
 
-    // PATCH /assets/:filename — update asset metadata
-    app.patch('/assets/:filename', async (c) => {
+    // PATCH /assets/meta/:path{.+} — update asset metadata (supports subfolders)
+    app.patch('/assets/meta/:path{.+}', async (c) => {
       try {
-        const filename = c.req.param('filename');
+        const { folder, filename } = splitAssetPath(c.req.param('path'));
         const { alt, tags } = await c.req.json<{ alt?: string; tags?: string[] }>();
 
-        const result = await assetOps.updateMetadata(filename, { alt, tags });
+        const result = await assetOps.updateMetadata(filename, { alt, tags }, folder);
 
         if (!result.success) {
           return c.json(errorResponse(ErrorCodes.ASSET_NOT_FOUND, result.error), 404);
@@ -673,11 +681,11 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
       }
     });
 
-    // DELETE /assets/:filename — delete asset
-    app.delete('/assets/:filename', async (c) => {
+    // DELETE /assets/meta/:path{.+} — delete asset (supports subfolders)
+    app.delete('/assets/meta/:path{.+}', async (c) => {
       try {
-        const filename = c.req.param('filename');
-        const result = await assetOps.delete(filename);
+        const { folder, filename } = splitAssetPath(c.req.param('path'));
+        const result = await assetOps.delete(filename, folder);
 
         if (!result.success) {
           return c.json(errorResponse(ErrorCodes.ASSET_NOT_FOUND, result.error), 404);
