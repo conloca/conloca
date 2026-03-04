@@ -1,3 +1,24 @@
+## 0.1.13 (2026-03-04)
+
+### 🩹 Fixes
+
+- **80-01:** fix private repo sync workflows token and permission bugs
+  ([923c768](https://github.com/conloca/private/commit/923c768))
+- **80-01:** update package.json repository fields for npm OIDC publishing
+  ([3a9b92e](https://github.com/conloca/private/commit/3a9b92e))
+- **Q123:** path traversal protection, debug log removal, buffer type safety
+  ([b139776](https://github.com/conloca/private/commit/b139776))
+- **Q123:** eliminate layer violations and fix object URL memory leak
+  ([b0cba99](https://github.com/conloca/private/commit/b0cba99))
+- **build:** make packages/ self-contained for subtree sync (GL-63)
+  ([85592f6](https://github.com/conloca/private/commit/85592f6))
+- **ci:** remove PUBLIC_REPO_TOKEN from sync-public checkout step
+  ([d3c38cb](https://github.com/conloca/private/commit/d3c38cb))
+
+### ❤️ Thank You
+
+- Niko Tsiklauri
+
 ## 0.1.12 (2026-03-02)
 
 ### 🚀 Features
