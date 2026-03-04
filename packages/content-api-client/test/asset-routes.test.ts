@@ -19,9 +19,9 @@ describe('Asset routes with subfolder paths', () => {
     await mkdir(join(assetsPath, 'uploads'), { recursive: true });
 
     // Create a test image file in the subfolder
-    await writeFile(join(assetsPath, 'uploads', 'test-image.png'), Buffer.from('fake-png-data'));
+    await writeFile(join(assetsPath, 'uploads', 'test-image.png'), new Uint8Array(Buffer.from('fake-png-data')));
     // Create a root-level file too
-    await writeFile(join(assetsPath, 'root-image.png'), Buffer.from('fake-png-data'));
+    await writeFile(join(assetsPath, 'root-image.png'), new Uint8Array(Buffer.from('fake-png-data')));
 
     contentApi = new InMemoryContentAPI({
       sites: { default: { locales: ['en'], defaultLocale: 'en' } },
@@ -36,6 +36,7 @@ describe('Asset routes with subfolder paths', () => {
       const request = new Request(`http://localhost${path}`, { ...init, body: init?.body });
       return honoApp.fetch(request);
     };
+    (globalThis.fetch as { preconnect?: () => void }).preconnect = () => {};
 
     client = new ContentAPIClient({ baseUrl: 'http://test/__conloca/api' });
 
