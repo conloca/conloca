@@ -26,9 +26,10 @@ Set these environment variables in your deployment:
 
 When both variables are set, Conloca automatically validates the `CF_Authorization` JWT on every request.
 
-:::note[Local development] When `CF_ACCESS_TEAM_NAME` or `CF_ACCESS_AUD` is not set, JWT validation is automatically
-skipped. All requests proceed unauthenticated in local dev — you do not need Cloudflare credentials to run the CMS
-locally. :::
+<Aside type="note" title="Local development">
+  When `CF_ACCESS_TEAM_NAME` or `CF_ACCESS_AUD` is not set, JWT validation is automatically skipped. All requests
+  proceed unauthenticated in local dev — you do not need Cloudflare credentials to run the CMS locally.
+</Aside>
 
 The role system (admin, editor, viewer) and `resolveRole` shown below require the pluggable auth system (Coming Soon).
 
