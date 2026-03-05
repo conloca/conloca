@@ -31,7 +31,6 @@ bun add @conloca/astro-cms @conloca/content-api
 ```typescript
 // astro.config.mjs
 import { conlocaCMS } from '@conloca/astro-cms';
-import { apiKey } from '@conloca/content-api/node';
 
 export default defineConfig({
   integrations: [
@@ -41,9 +40,6 @@ export default defineConfig({
       assetsPath: 'src/assets/uploads',
       schemasPath: './src/schemas.ts',
       layout: './src/layouts/Layout.astro',
-      auth: {
-        provider: apiKey({ keys: [{ hash: '...', role: 'admin', label: 'dev' }] }),
-      },
     }),
   ],
 });
@@ -62,7 +58,7 @@ export default defineConfig({
 | `routing`        | `RoutingConfigInput`             | -          | Content page routing configuration               |
 | `templates`      | `Record<string, TemplateConfig>` | -          | Page creation templates                          |
 | `componentPaths` | `string[]`                       | -          | Directories to scan for hydratable components    |
-| `auth`           | `AuthConfig`                     | `noAuth()` | Authentication configuration                     |
+| `auth`           | `AuthConfig`                     | -          | Authentication configuration (Coming Soon)       |
 | `canvasDir`      | `string`                         | -          | Canvas directory for visual editing              |
 
 ## Entry Points
