@@ -45,13 +45,13 @@ import {
 } from '@conloca/mdx/node';
 ```
 
-| Export                             | Purpose                                                          |
-| ---------------------------------- | ---------------------------------------------------------------- |
-| `compileMDX(source)`               | Compile MDX string to JavaScript                                 |
-| `evaluateMDXToComponent(source)`   | Compile and evaluate MDX to a React component                    |
-| `evaluateMDXBlocks(api, locale)`   | Fetch all blocks from Content API and evaluate their MDX content |
-| `createMDXCompiler()`              | Create a reusable MDX compiler instance                          |
-| `createComponentScope(components)` | Create a component scope for MDX evaluation                      |
+| Export                              | Purpose                                                            |
+| ----------------------------------- | ------------------------------------------------------------------ |
+| `compileMDX(content, components)`   | Compile MDX string to JavaScript with a component scope            |
+| `evaluateMDXToComponent(source)`    | Compile and evaluate MDX to a React component                      |
+| `evaluateMDXBlocks(api, locale)`    | Fetch all blocks from Content API and evaluate their MDX content   |
+| `createMDXCompiler(componentScope)` | Create a reusable MDX compiler instance with fixed component scope |
+| `createComponentScope(components)`  | Create a component scope for MDX evaluation                        |
 
 ## Usage
 
@@ -63,9 +63,32 @@ The `MDXEditorModal` component provides a rich MDX editing experience inside the
 import { MDXEditorModal } from '@conloca/mdx';
 
 function BlockEditor({ initialContent, onSave }) {
-  return <MDXEditorModal markdown={initialContent} onChange={onSave} />;
+  const [isOpen, setIsOpen] = useState(true);
+
+  return (
+    <MDXEditorModal
+      isOpen={isOpen}
+      onClose={() => setIsOpen(false)}
+      initialContent={initialContent}
+      onSave={async (content) => {
+        onSave(content);
+      }}
+    />
+  );
 }
 ```
+
+**MDXEditorModal Props:**
+
+| Prop             | Type                                   | Required | Description                                 |
+| ---------------- | -------------------------------------- | -------- | ------------------------------------------- |
+| `isOpen`         | `boolean`                              | Yes      | Controls modal visibility                   |
+| `onClose`        | `() => void`                           | Yes      | Called when modal closes                    |
+| `initialContent` | `string`                               | Yes      | Initial MDX content for the editor          |
+| `onSave`         | `(content: string) => void \| Promise` | Yes      | Called with edited content on save          |
+| `filePath`       | `string`                               | No       | File path shown in the modal title          |
+| `headerExtra`    | `ReactNode`                            | No       | Extra elements rendered in the modal header |
+| `onBeforeClose`  | `() => boolean`                        | No       | Return `false` to prevent closing the modal |
 
 ### Browser: MDX Rendering
 
@@ -75,10 +98,16 @@ Use `useMDXEvaluation` to render MDX content as React components in the browser:
 import { useMDXEvaluation } from '@conloca/mdx';
 
 function MDXPreview({ source }) {
-  const { Component, error } = useMDXEvaluation(source);
+  const { Component, error, isLoading, retry } = useMDXEvaluation({ mdxContent: source });
 
-  if (error) return <p>Error rendering MDX: {error.message}</p>;
-  if (!Component) return <p>Loading...</p>;
+  if (isLoading) return <p>Loading...</p>;
+  if (error)
+    return (
+      <p>
+        Error rendering MDX: {error.message} <button onClick={retry}>Retry</button>
+      </p>
+    );
+  if (!Component) return null;
 
   return <Component />;
 }
@@ -87,10 +116,14 @@ function MDXPreview({ source }) {
 ### Server: Compile MDX
 
 ```typescript
-import { compileMDX } from '@conloca/mdx/node';
+import { compileMDX, createComponentScope } from '@conloca/mdx/node';
 
-const result = await compileMDX('# Hello World\n\nSome **bold** text.');
+const components = createComponentScope({
+  /* custom components */
+});
+const result = await compileMDX('# Hello World\n\nSome **bold** text.', components);
 console.log(result.code); // Compiled JavaScript
+console.log(result.metadata); // Extracted frontmatter
 ```
 
 ### Server: Evaluate MDX to Component
@@ -114,9 +147,10 @@ import { createContentAPI } from '@conloca/content-api/node';
 const api = await createContentAPI({ contentRoot: './content' });
 const blocks = await evaluateMDXBlocks(api, 'en');
 
-// blocks is a Map of block name -> { Component, frontmatter }
-for (const [name, block] of blocks) {
-  console.log(`Block: ${name}`, block.frontmatter);
+// blocks is an Array of { id, title, Component }
+for (const block of blocks) {
+  console.log(`Block: ${block.id} (${block.title})`);
+  // Render block.Component in your React app
 }
 ```
 
