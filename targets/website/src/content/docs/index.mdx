@@ -3,4 +3,48 @@ title: Conloca CMS Documentation
 description: File-based CMS for Astro with visual editing
 ---
 
-Content coming soon.
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+Conloca is a file-based CMS for Astro sites with visual editing powered by [Puck](https://github.com/measuredco/puck).
+Content is stored as files in your repository, versioned with git, and edited through a drag-and-drop page builder
+served alongside your dev server.
+
+## Get Started
+
+<CardGrid>
+  <LinkCard
+    title="Getting Started"
+    description="Install Conloca and set up your first CMS-powered Astro site."
+    href="/guides/getting-started/"
+  />
+  <LinkCard
+    title="Architecture"
+    description="Understand the content model, package structure, and data flow."
+    href="/concepts/architecture/"
+  />
+</CardGrid>
+
+## Packages
+
+<CardGrid>
+  <LinkCard
+    title="@conloca/astro-cms"
+    description="Astro integration -- the main package you install."
+    href="/packages/astro-cms/"
+  />
+  <LinkCard
+    title="@conloca/content-api"
+    description="Core content engine, auth providers, and file storage."
+    href="/packages/content-api/"
+  />
+  <LinkCard
+    title="@conloca/content-api-client"
+    description="React Query hooks and HTTP client."
+    href="/packages/content-api-client/"
+  />
+  <LinkCard
+    title="@conloca/cms-spa"
+    description="React-based admin UI with Puck visual editor."
+    href="/packages/cms-spa/"
+  />
+</CardGrid>

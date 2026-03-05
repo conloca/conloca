@@ -58,8 +58,13 @@ export default defineConfig({
 | `routing`        | `RoutingConfigInput`             | -            | Content page routing configuration               |
 | `templates`      | `Record<string, TemplateConfig>` | -            | Page creation templates                          |
 | `componentPaths` | `string[]`                       | -            | Directories to scan for hydratable components    |
-| `auth`           | `AuthConfig`                     | -            | Authentication configuration (Coming Soon)       |
 | `canvasDir`      | `string`                         | `'./canvas'` | Canvas directory for visual editing              |
+
+<Aside type="note">
+  The `auth` option (`AuthConfig`) for built-in authentication is planned but not yet available in the current release.
+  See the [Authentication](/concepts/architecture/#authentication) section for details on the upcoming auth provider
+  system.
+</Aside>
 
 ## Entry Points
 

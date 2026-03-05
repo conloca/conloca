@@ -42,7 +42,7 @@ import { Blocks, Site, ErrorCodes } from '@conloca/content-api';
 | `SitesConfig`     | type  | Multi-site configuration                                |
 | `Blocks`          | class | Block collection operations                             |
 | `Site`            | class | Site-scoped content operations                          |
-| `ErrorCodes`      | enum  | Standard error codes (`NOT_FOUND`, `STALE_WRITE`, etc.) |
+| `ErrorCodes`      | const | Standard error codes (`NOT_FOUND`, `STALE_WRITE`, etc.) |
 | `ContentUtils`    | class | Content utility functions                               |
 | `AssetEntry`      | type  | Asset metadata entry                                    |
 | `FolderListing`   | type  | Folder contents listing                                 |
@@ -239,5 +239,5 @@ const api = new InMemoryContentAPI({
 });
 
 const router = createContentAPIRouter(api);
-const response = await router.fetch(new Request('http://test/sites/default/pages'));
+const response = await router.fetch(new Request('http://test/default/pages'));
 ```
