@@ -92,16 +92,16 @@ export const dataSchemas = {
 
 The `UIConfig` type controls SPA behavior:
 
-| Field                | Type                             | Purpose                                     |
-| -------------------- | -------------------------------- | ------------------------------------------- |
-| `basename`           | `string`                         | Base path for CMS routes                    |
-| `apiBaseUrl`         | `string`                         | Base URL for API requests                   |
-| `siteBaseUrl`        | `string`                         | Base URL for the live site                  |
-| `enableDevtools`     | `boolean`                        | Show React Query devtools (default: `true`) |
-| `queryClientOptions` | `QueryClientConfig`              | TanStack Query client configuration         |
-| `projectRoot`        | `string`                         | Project root path for file operations       |
-| `schemasPath`        | `string`                         | Path to schemas directory                   |
-| `templates`          | `Record<string, TemplateConfig>` | Page creation templates                     |
+| Field                | Type                             | Purpose                                      |
+| -------------------- | -------------------------------- | -------------------------------------------- |
+| `basename`           | `string`                         | Base path for CMS routes                     |
+| `apiBaseUrl`         | `string`                         | Base URL for API requests                    |
+| `siteBaseUrl`        | `string`                         | Base URL for the live site                   |
+| `enableDevtools`     | `boolean`                        | Show React Query devtools (default: `false`) |
+| `queryClientOptions` | `QueryClientConfig`              | TanStack Query client configuration          |
+| `projectRoot`        | `string`                         | Project root path for file operations        |
+| `schemasPath`        | `string`                         | Path to schemas directory                    |
+| `templates`          | `Record<string, TemplateConfig>` | Page creation templates                      |
 
 ## Technology Stack
 

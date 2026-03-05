@@ -33,20 +33,20 @@ import type { ContentAPI, ContentEntry, ContentManifest } from '@conloca/content
 import { Blocks, Site, ErrorCodes } from '@conloca/content-api';
 ```
 
-| Export            | Kind  | Purpose                                                 |
-| ----------------- | ----- | ------------------------------------------------------- |
-| `ContentAPI`      | type  | Main API interface for content operations               |
-| `ContentEntry`    | type  | Full content entry with all locales                     |
-| `ContentManifest` | type  | Manifest entry (metadata without content body)          |
-| `LocalizedEntry`  | type  | Single-locale content entry                             |
-| `SitesConfig`     | type  | Multi-site configuration                                |
-| `Blocks`          | class | Block collection operations                             |
-| `Site`            | class | Site-scoped content operations                          |
-| `ErrorCodes`      | const | Standard error codes (`NOT_FOUND`, `STALE_WRITE`, etc.) |
-| `ContentUtils`    | class | Content utility functions                               |
-| `AssetEntry`      | type  | Asset metadata entry                                    |
-| `FolderListing`   | type  | Folder contents listing                                 |
-| `FolderTreeNode`  | type  | Folder tree structure                                   |
+| Export            | Kind  | Purpose                                                     |
+| ----------------- | ----- | ----------------------------------------------------------- |
+| `ContentAPI`      | type  | Main API interface for content operations                   |
+| `ContentEntry`    | type  | Full content entry with all locales                         |
+| `ContentManifest` | type  | Manifest entry (metadata without content body)              |
+| `LocalizedEntry`  | type  | Single-locale content entry                                 |
+| `SitesConfig`     | type  | Multi-site configuration                                    |
+| `Blocks`          | class | Block collection operations                                 |
+| `Site`            | class | Site-scoped content operations                              |
+| `ErrorCodes`      | const | Standard error codes (`NOT_FOUND`, `STALE_WRITE`, etc.)     |
+| `ContentUtils`    | const | Content utility functions (object with pure helper methods) |
+| `AssetEntry`      | type  | Asset metadata entry                                        |
+| `FolderListing`   | type  | Folder contents listing                                     |
+| `FolderTreeNode`  | type  | Folder tree structure                                       |
 
 ### `@conloca/content-api/node` (Node.js only)
 
@@ -126,12 +126,14 @@ Zod schemas for content metadata validation.
 import { pageMetaSchema, blockMetaSchema, pageEditableSchema, blockEditableSchema } from '@conloca/content-api/schemas';
 ```
 
-| Export                | Purpose                                         |
-| --------------------- | ----------------------------------------------- |
-| `pageMetaSchema`      | Full page metadata schema (with system fields)  |
-| `pageEditableSchema`  | Editable page fields only (for CMS forms)       |
-| `blockMetaSchema`     | Full block metadata schema (with system fields) |
-| `blockEditableSchema` | Editable block fields only (for CMS forms)      |
+| Export                | Purpose                                              |
+| --------------------- | ---------------------------------------------------- |
+| `pageMetaSchema`      | Full page metadata schema (with system fields)       |
+| `pageEditableSchema`  | Editable page fields only (for CMS forms)            |
+| `blockMetaSchema`     | Full block metadata schema (with system fields)      |
+| `blockEditableSchema` | Editable block fields only (for CMS forms)           |
+| `dataMetaSchema`      | Full data entry metadata schema (with system fields) |
+| `dataEditableSchema`  | Editable data entry fields only (for CMS forms)      |
 
 ## Auth Provider Configuration
 

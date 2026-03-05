@@ -214,7 +214,7 @@ try {
     console.log('Conflict - latest ETag:', error.data.currentEtag);
   }
   if (error instanceof APIClientError) {
-    console.log('API error:', error.status, error.code);
+    console.log('API error:', error.code, error.details);
   }
 }
 ```
