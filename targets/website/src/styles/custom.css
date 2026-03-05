@@ -52,8 +52,15 @@
   border-color: #334155;
 }
 
-/* Sidebar link active state */
-starlight-menu-button + nav a[aria-current="page"],
-nav[aria-label="Main"] a[aria-current="page"] {
-  color: #22d3ee;
+/* Hide theme chooser — dark-only site */
+starlight-theme-select {
+  display: none !important;
+}
+
+/* Sidebar link active state — white text on accent-low background for readability */
+[data-current="true"] > a,
+a[aria-current="page"] {
+  color: #f8fafc !important;
+  background-color: #083344 !important;
+  font-weight: 600;
 }
