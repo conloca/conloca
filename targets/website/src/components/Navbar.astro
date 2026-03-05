@@ -68,22 +68,37 @@ const links = [
   </div>
 </nav>
 
+<div
+  id="mobile-menu-backdrop"
+  class="fixed inset-0 z-40 bg-surface-950/60 backdrop-blur-sm hidden md:hidden"
+></div>
+
 <script>
   const navbar = document.getElementById('navbar');
   const btn = document.getElementById('mobile-menu-btn');
   const menu = document.getElementById('mobile-menu');
+  const backdrop = document.getElementById('mobile-menu-backdrop');
 
   let menuOpen = false;
 
-  btn?.addEventListener('click', () => {
-    menuOpen = !menuOpen;
+  function toggleMenu(open: boolean) {
+    menuOpen = open;
     menu?.classList.toggle('hidden', !menuOpen);
+    backdrop?.classList.toggle('hidden', !menuOpen);
+    document.body.classList.toggle('overflow-hidden', menuOpen);
+  }
+
+  btn?.addEventListener('click', () => {
+    toggleMenu(!menuOpen);
+  });
+
+  backdrop?.addEventListener('click', () => {
+    toggleMenu(false);
   });
 
   menu?.querySelectorAll('a').forEach((a) => {
     a.addEventListener('click', () => {
-      menuOpen = false;
-      menu?.classList.add('hidden');
+      toggleMenu(false);
     });
   });
 
