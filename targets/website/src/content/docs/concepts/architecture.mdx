@@ -250,7 +250,8 @@ scanning the filesystem on every request.
 </Aside>
 
 Conloca uses a pluggable authentication system. The `AuthProvider` interface defines a single method —
-`validate(request)` — that checks whether an incoming request is authenticated and returns the user's identity and role.
+`authenticate(request)` — that checks whether an incoming request is authenticated and returns the user's identity and
+role.
 
 Four providers ship with the `content-api` package:
 

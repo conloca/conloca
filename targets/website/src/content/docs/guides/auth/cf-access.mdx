@@ -13,6 +13,22 @@ import { Aside } from '@astrojs/starlight/components';
 Cloudflare Access provides zero-trust authentication without any login page in your application. Users authenticate
 through Cloudflare's identity layer before reaching your CMS.
 
+## Available Today
+
+Basic Cloudflare Access protection is available now using environment variables — no code changes required.
+
+Set these environment variables in your deployment:
+
+| Variable              | Description                                                         |
+| --------------------- | ------------------------------------------------------------------- |
+| `CF_ACCESS_TEAM_NAME` | Your Cloudflare Zero Trust team name (e.g., `mycompany`)            |
+| `CF_ACCESS_AUD`       | Application Audience (AUD) tag from the Access Application settings |
+
+When both variables are set, Conloca automatically validates the `CF_Authorization` JWT on every request. When they are
+not set (local dev), validation is skipped — all requests proceed unauthenticated.
+
+The role system (admin, editor, viewer) and `resolveRole` shown below require the pluggable auth system (Coming Soon).
+
 ## Prerequisites
 
 - A domain managed by Cloudflare
