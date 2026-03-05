@@ -155,15 +155,15 @@ curl http://localhost:4321/__cms/api/assets/folder-tree
 
 ## Get Asset Metadata
 
-### GET /assets/:filename
+### GET /assets/meta/:path
 
-Get metadata for a single asset by filename.
+Get metadata for a single asset by path. The `:path` parameter supports subfolder paths (e.g., `images/hero.jpg`).
 
 **Parameters:**
 
-| Name     | In   | Type   | Required | Description    |
-| -------- | ---- | ------ | -------- | -------------- |
-| filename | path | string | yes      | Asset filename |
+| Name | In   | Type   | Required | Description                                                              |
+| ---- | ---- | ------ | -------- | ------------------------------------------------------------------------ |
+| path | path | string | yes      | Asset path, including subfolders (e.g., `hero.jpg` or `images/hero.jpg`) |
 
 **Response:** `200 OK`
 
@@ -178,23 +178,26 @@ Returns an `AssetEntry` object.
 **Example:**
 
 ```bash
-curl http://localhost:4321/__cms/api/assets/hero-image.jpg
+curl http://localhost:4321/__cms/api/assets/meta/hero-image.jpg
+
+# Asset in a subfolder
+curl http://localhost:4321/__cms/api/assets/meta/images/blog/photo.jpg
 ```
 
 ---
 
 ## Get Asset Usage
 
-### GET /assets/:filename/usage
+### GET /assets/usage/:path
 
 Get information about where an asset is referenced across content (which pages or blocks use it). Useful for determining
-whether an asset can be safely deleted.
+whether an asset can be safely deleted. The `:path` parameter supports subfolder paths.
 
 **Parameters:**
 
-| Name     | In   | Type   | Required | Description    |
-| -------- | ---- | ------ | -------- | -------------- |
-| filename | path | string | yes      | Asset filename |
+| Name | In   | Type   | Required | Description                                                              |
+| ---- | ---- | ------ | -------- | ------------------------------------------------------------------------ |
+| path | path | string | yes      | Asset path, including subfolders (e.g., `hero.jpg` or `images/hero.jpg`) |
 
 **Response:** `200 OK`
 
@@ -210,7 +213,7 @@ whether an asset can be safely deleted.
 **Example:**
 
 ```bash
-curl http://localhost:4321/__cms/api/assets/hero-image.jpg/usage
+curl http://localhost:4321/__cms/api/assets/usage/hero-image.jpg
 ```
 
 ```json
@@ -446,15 +449,15 @@ curl -X POST http://localhost:4321/__cms/api/assets/folders \
 
 ## Update Asset Metadata
 
-### PATCH /assets/:filename
+### PATCH /assets/meta/:path
 
-Update metadata for an existing asset (alt text, tags).
+Update metadata for an existing asset (alt text, tags). The `:path` parameter supports subfolder paths.
 
 **Parameters:**
 
-| Name     | In   | Type   | Required | Description    |
-| -------- | ---- | ------ | -------- | -------------- |
-| filename | path | string | yes      | Asset filename |
+| Name | In   | Type   | Required | Description                                                              |
+| ---- | ---- | ------ | -------- | ------------------------------------------------------------------------ |
+| path | path | string | yes      | Asset path, including subfolders (e.g., `hero.jpg` or `images/hero.jpg`) |
 
 **Request Body:**
 
@@ -478,7 +481,7 @@ Returns the updated `AssetEntry`.
 **Example:**
 
 ```bash
-curl -X PATCH http://localhost:4321/__cms/api/assets/hero-image.jpg \
+curl -X PATCH http://localhost:4321/__cms/api/assets/meta/hero-image.jpg \
   -H "Content-Type: application/json" \
   -d '{ "alt": "Updated alt text", "tags": ["hero", "homepage"] }'
 ```
@@ -487,16 +490,16 @@ curl -X PATCH http://localhost:4321/__cms/api/assets/hero-image.jpg \
 
 ## Delete Asset
 
-### DELETE /assets/:filename
+### DELETE /assets/meta/:path
 
-Delete an asset from the media library. Check usage first with the [usage endpoint](#get-assetsfilenameusage) to avoid
-breaking references.
+Delete an asset from the media library. Check usage first with the [usage endpoint](#get-assetsusagepath) to avoid
+breaking references. The `:path` parameter supports subfolder paths.
 
 **Parameters:**
 
-| Name     | In   | Type   | Required | Description              |
-| -------- | ---- | ------ | -------- | ------------------------ |
-| filename | path | string | yes      | Asset filename to delete |
+| Name | In   | Type   | Required | Description                                                                        |
+| ---- | ---- | ------ | -------- | ---------------------------------------------------------------------------------- |
+| path | path | string | yes      | Asset path to delete, including subfolders (e.g., `hero.jpg` or `images/hero.jpg`) |
 
 **Response:** `200 OK`
 
@@ -515,7 +518,7 @@ breaking references.
 **Example:**
 
 ```bash
-curl -X DELETE http://localhost:4321/__cms/api/assets/old-image.jpg
+curl -X DELETE http://localhost:4321/__cms/api/assets/meta/old-image.jpg
 ```
 
 ---

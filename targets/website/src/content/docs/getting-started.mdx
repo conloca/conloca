@@ -27,7 +27,7 @@ Before starting, you need:
 Install the required packages:
 
 ```bash
-bun add @conloca/astro-cms @conloca/content-api @astrojs/react @astrojs/node react react-dom @measured/puck
+bun add @conloca/astro-cms @conloca/content-api @astrojs/react @astrojs/node react react-dom @puckeditor/core
 ```
 
 | Package                | Purpose                                                                                  |
@@ -37,7 +37,7 @@ bun add @conloca/astro-cms @conloca/content-api @astrojs/react @astrojs/node rea
 | `@astrojs/react`       | React support for Astro — required because the Puck visual editor is a React application |
 | `@astrojs/node`        | Node.js SSR adapter — the CMS API needs a server runtime                                 |
 | `react`, `react-dom`   | React peer dependencies                                                                  |
-| `@measured/puck`       | Visual page editor — drag-and-drop component-based editing                               |
+| `@puckeditor/core`     | Visual page editor — drag-and-drop component-based editing                               |
 
 ## Configuration
 
@@ -80,7 +80,7 @@ component:
 
 ```tsx
 // src/puck.config.tsx
-import type { Config } from '@measured/puck';
+import type { Config } from '@puckeditor/core';
 
 const config: Config = {
   components: {
