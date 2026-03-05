@@ -47,23 +47,23 @@ import { setupTestAPI, API_ROUTES } from '@conloca/content-api-client/testing';
 
 ### Query Hooks
 
-| Hook                      | Signature                                                                       | Purpose                            |
-| ------------------------- | ------------------------------------------------------------------------------- | ---------------------------------- |
-| `useContent`              | `(id: string)`                                                                  | Fetch content entry by ID          |
-| `useLocalizedContent`     | `(id: string, locale: string)`                                                  | Fetch single-locale content        |
-| `useSitePages`            | `(site: string, locale?: string)`                                               | List pages for a site              |
-| `usePageByPathname`       | `(site: string, pathname: string, locale?: string)`                             | Find page by URL pathname          |
-| `usePathnameAvailability` | `(site: string, pathname: string, excludeId?: string)`                          | Check if pathname is available     |
-| `useBlocks`               | `(options?: UseBlocksOptions \| string, locale?: string)`                       | List blocks (supports site-scoped) |
-| `useBlockByName`          | `(name: string, collection?: string, locale?: string, site?: string)`           | Fetch single block by name         |
-| `useData`                 | `(collection?: string, locale?: string)`                                        | List data entries                  |
-| `useDataByName`           | `(name: string, collection: string, locale?: string)`                           | Fetch data entry by name           |
-| `useDataNameAvailability` | `(name: string, collection: string, excludeId?: string)`                        | Check data name availability       |
-| `useDataCollections`      | `()`                                                                            | List available data collections    |
-| `useAllContent`           | `(filters?: GlobalFilters)`                                                     | List all content with filters      |
-| `useUntranslatedContent`  | `(targetLocale: string, excludeSites?: string[], includeUnpublished?: boolean)` | Find untranslated content          |
-| `useSitesConfig`          | `()`                                                                            | Fetch multi-site configuration     |
-| `useCurrentUser`          | `()`                                                                            | Get authenticated user info        |
+| Hook                      | Signature                                                                       | Purpose                         |
+| ------------------------- | ------------------------------------------------------------------------------- | ------------------------------- |
+| `useContent`              | `(id: string)`                                                                  | Fetch content entry by ID       |
+| `useLocalizedContent`     | `(id: string, locale: string)`                                                  | Fetch single-locale content     |
+| `useSitePages`            | `(site: string, locale?: string)`                                               | List pages for a site           |
+| `usePageByPathname`       | `(site: string, pathname: string, locale?: string)`                             | Find page by URL pathname       |
+| `usePathnameAvailability` | `(site: string, pathname: string, excludeId?: string)`                          | Check if pathname is available  |
+| `useBlocks`               | `(collection?: string, locale?: string)`                                        | List blocks                     |
+| `useBlockByName`          | `(name: string, collection?: string, locale?: string)`                          | Fetch single block by name      |
+| `useData`                 | `(collection?: string, locale?: string)`                                        | List data entries               |
+| `useDataByName`           | `(name: string, collection: string, locale?: string)`                           | Fetch data entry by name        |
+| `useDataNameAvailability` | `(name: string, collection: string, excludeId?: string)`                        | Check data name availability    |
+| `useDataCollections`      | `()`                                                                            | List available data collections |
+| `useAllContent`           | `(filters?: GlobalFilters)`                                                     | List all content with filters   |
+| `useUntranslatedContent`  | `(targetLocale: string, excludeSites?: string[], includeUnpublished?: boolean)` | Find untranslated content       |
+| `useSitesConfig`          | `()`                                                                            | Fetch multi-site configuration  |
+| `useCurrentUser`          | `()`                                                                            | Get authenticated user info     |
 
 ### Mutation Hooks
 

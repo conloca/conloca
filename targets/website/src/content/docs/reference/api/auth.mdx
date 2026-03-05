@@ -27,8 +27,8 @@ instructions. :::
 
 ### GET /auth/user
 
-Get the currently authenticated user's information. Returns the user's email, display name, and resolved role. The role
-is determined by the auth configuration's role mapping rules, not the raw provider claims.
+Get the currently authenticated user's information. Returns the user's email and subject identifier. The user object
+reflects the authenticated session set by the configured auth provider.
 
 **Parameters:** None
 
@@ -41,8 +41,7 @@ When authenticated:
   authenticated: true;
   user: {
     email: string; // User's email address
-    name: string; // Display name
-    role: 'admin' | 'editor' | 'viewer';
+    sub: string; // Subject identifier from the auth provider
   }
 }
 ```
@@ -66,8 +65,7 @@ curl http://localhost:4321/__cms/api/auth/user
   "authenticated": true,
   "user": {
     "email": "editor@example.com",
-    "name": "Editor",
-    "role": "editor"
+    "sub": "user-123"
   }
 }
 ```

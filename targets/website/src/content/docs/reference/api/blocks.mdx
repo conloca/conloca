@@ -27,11 +27,11 @@ site-specific blocks with scope annotation (site blocks shadow global blocks wit
 
 **Parameters:**
 
-| Name       | In    | Type   | Required | Description                                              |
-| ---------- | ----- | ------ | -------- | -------------------------------------------------------- |
-| collection | query | string | no       | Filter by collection (default: all)                      |
-| locale     | query | string | no       | Filter by locale                                         |
-| site       | query | string | no       | If provided, return merged global + site-specific blocks |
+| Name       | In    | Type   | Required | Description                                                            |
+| ---------- | ----- | ------ | -------- | ---------------------------------------------------------------------- |
+| collection | query | string | no       | Filter by collection (default: all)                                    |
+| locale     | query | string | no       | Filter by locale                                                       |
+| site       | query | string | no       | If provided, return merged global + site-specific blocks (Coming Soon) |
 
 **Response:** `200 OK`
 
@@ -71,7 +71,7 @@ blocks.
 | name       | query | string | yes      | Block name to check                                            |
 | collection | query | string | no       | Collection to check in (default: `components`)                 |
 | excludeId  | query | string | no       | Exclude this content ID from the check (for rename operations) |
-| site       | query | string | no       | Check availability in site-specific scope                      |
+| site       | query | string | no       | Check availability in site-specific scope (Coming Soon)        |
 
 **Response:** `200 OK`
 
@@ -111,12 +111,12 @@ the global block.
 
 **Parameters:**
 
-| Name       | In    | Type   | Required | Description                                       |
-| ---------- | ----- | ------ | -------- | ------------------------------------------------- |
-| name       | path  | string | yes      | Block name                                        |
-| collection | query | string | no       | Collection to look in (default: `components`)     |
-| locale     | query | string | no       | If provided, return only this locale's data       |
-| site       | query | string | no       | Site-first lookup: check site blocks, then global |
+| Name       | In    | Type   | Required | Description                                                     |
+| ---------- | ----- | ------ | -------- | --------------------------------------------------------------- |
+| name       | path  | string | yes      | Block name                                                      |
+| collection | query | string | no       | Collection to look in (default: `components`)                   |
+| locale     | query | string | no       | If provided, return only this locale's data                     |
+| site       | query | string | no       | Site-first lookup: check site blocks, then global (Coming Soon) |
 
 **Response:** `200 OK`
 

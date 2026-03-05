@@ -58,10 +58,13 @@ import {
   FileSystemContentAPI,
   InMemoryContentAPI,
   createContentAPIRouter,
-  cfAccess,
-  oauth,
-  apiKey,
-  noAuth,
+  createContentMiddleware,
+  createContentAPI,
+  createContentWatchHandlers,
+  ComponentRegistry,
+  AssetManifest,
+  AssetOperations,
+  conlocaContent,
 } from '@conloca/content-api/node';
 ```
 
@@ -91,7 +94,7 @@ import {
 | `createContentAPI(options)`       | Factory function that creates FileSystemContentAPI with content watcher |
 | `createContentWatchHandlers(api)` | File watcher for live content updates                                   |
 
-#### Auth Utilities
+#### Auth Utilities (Coming Soon)
 
 | Export                              | Purpose                                     |
 | ----------------------------------- | ------------------------------------------- |
@@ -100,7 +103,7 @@ import {
 | `signSession(payload)`              | Sign a JWT session token                    |
 | `verifySession(token)`              | Verify and decode a JWT session token       |
 
-#### CF Access Utilities
+#### CF Access Utilities (Coming Soon)
 
 | Export                                      | Purpose                                      |
 | ------------------------------------------- | -------------------------------------------- |
