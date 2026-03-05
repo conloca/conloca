@@ -3,6 +3,8 @@ title: Content API
 description: CRUD operations for pages, blocks, and data entries with etag-based concurrency control
 ---
 
+import { Aside } from '@astrojs/starlight/components';
+
 The Content API manages all content in Conloca. It provides endpoints for listing, creating, updating, and deleting
 pages and blocks across sites, as well as inheritance operations for multi-locale content management.
 
@@ -571,6 +573,10 @@ curl -X POST http://localhost:4321/__cms/api/content/batch \
 ---
 
 ## Inheritance Operations
+
+<Aside type="caution">
+  **Coming Soon** — The following inheritance endpoints are on the `dev` branch, not yet available in a stable release.
+</Aside>
 
 Conloca supports content inheritance across locales. Non-default locales can inherit content from the default locale.
 When the default locale changes, inherited locales become stale and need review.

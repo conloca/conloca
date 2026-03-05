@@ -3,9 +3,16 @@ title: Blocks API
 description: Block listing, lookup, and name availability endpoints
 ---
 
+import { Aside } from '@astrojs/starlight/components';
+
 The Blocks API provides endpoints for working with shared content blocks. Blocks are reusable content components (MDX or
 Puck) that can be referenced across multiple pages. Unlike pages, blocks are not site-scoped by default -- they exist
 globally, though site-specific blocks can shadow global ones.
+
+<Aside type="caution">
+  **Coming Soon** — The `site` query parameter for site-specific block scoping and merging is on the `dev` branch, not
+  yet available in a stable release. Global blocks work today.
+</Aside>
 
 All endpoints are relative to the API base URL (default: `/__cms/api`).
 

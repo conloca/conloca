@@ -4,6 +4,8 @@ description:
   'Astro integration for Conloca CMS -- visual editing, content management, and media library for Astro sites'
 ---
 
+import { Aside } from '@astrojs/starlight/components';
+
 ## Overview
 
 `@conloca/astro-cms` is the main integration package that adds Conloca CMS to any Astro site. Install this package to
@@ -164,6 +166,10 @@ export default defineConfig({
 ```
 
 ### With Authentication and Media Library
+
+<Aside type="caution">
+  **Coming Soon** — This section describes a feature on the `dev` branch, not yet available in a stable release.
+</Aside>
 
 ```typescript
 // astro.config.mjs

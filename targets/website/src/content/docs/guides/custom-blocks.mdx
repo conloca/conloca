@@ -3,6 +3,8 @@ title: Creating Custom Blocks
 description: Build reusable content blocks for the Puck editor
 ---
 
+import { Aside } from '@astrojs/starlight/components';
+
 Blocks are the visual building pieces of your pages. Each block is a React component registered in your Puck
 configuration. The CMS editor lets content authors drag blocks onto pages, configure their properties, and arrange them
 visually.
@@ -240,6 +242,10 @@ MDX blocks can be inherited across locales using [content inheritance](/concepts
 are rendered using the site's MDX processing pipeline.
 
 ## Site-specific blocks
+
+<Aside type="caution">
+  **Coming Soon** — This section describes a feature on the `dev` branch, not yet available in a stable release.
+</Aside>
 
 Blocks can be scoped to a specific site in multi-site configurations. Site-specific blocks override global blocks of the
 same name for that site, while remaining invisible to other sites. See the

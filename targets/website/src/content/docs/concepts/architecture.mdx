@@ -245,6 +245,10 @@ scanning the filesystem on every request.
 
 ## Authentication
 
+<Aside type="caution">
+  **Coming Soon** — This section describes a feature on the `dev` branch, not yet available in a stable release.
+</Aside>
+
 Conloca uses a pluggable authentication system. The `AuthProvider` interface defines a single method —
 `validate(request)` — that checks whether an incoming request is authenticated and returns the user's identity and role.
 
@@ -267,6 +271,10 @@ Role assignment uses email pattern matching (e.g., `*@company.com` for all compa
 function. See the [Configuration Reference](/reference/configuration/#authentication-options) for setup details.
 
 ## Content Inheritance
+
+<Aside type="caution">
+  **Coming Soon** — This section describes a feature on the `dev` branch, not yet available in a stable release.
+</Aside>
 
 For multi-locale sites, Conloca supports content inheritance to reduce duplication. A non-default locale page can set
 `sameAsDefault: true`, which means it displays the default locale's content without maintaining a separate copy.
