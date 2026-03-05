@@ -100,6 +100,9 @@ conloca astro setup [path]
 | ------------------- | ---------------- | --------- |
 | `-s, --site <name>` | Target site name | `default` |
 
+> **Note:** The `--site` flag is accepted but silently ignored. `conloca astro setup` always configures the `default`
+> site.
+
 **What it generates:**
 
 | File                              | Purpose                                              |
@@ -134,6 +137,9 @@ conloca astro setup ./my-astro-project --site blog
 | --------------- | ----- | ------------------------------------- |
 | `--help`        | `-h`  | Show help message                     |
 | `--site <name>` | `-s`  | Target site name (default: `default`) |
+
+> **Note:** For `conloca astro setup`, the `--site` flag is accepted but silently ignored — the command always
+> configures the `default` site.
 
 ## Quick Start
 

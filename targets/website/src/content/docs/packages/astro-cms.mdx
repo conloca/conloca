@@ -47,19 +47,19 @@ export default defineConfig({
 
 ### ConlocaCMSOptions
 
-| Option           | Type                             | Default    | Description                                      |
-| ---------------- | -------------------------------- | ---------- | ------------------------------------------------ |
-| `contentRoot`    | `string`                         | required   | Path to content directory                        |
-| `puckConfigPath` | `string`                         | required   | Path to Puck component config (`.tsx` file)      |
-| `route`          | `string`                         | `'/__cms'` | CMS admin UI route prefix                        |
-| `assetsPath`     | `string`                         | -          | Path to assets directory (enables Media Library) |
-| `schemasPath`    | `string`                         | -          | Path to data/page schema definitions             |
-| `layout`         | `string`                         | -          | Default Astro layout for content pages           |
-| `routing`        | `RoutingConfigInput`             | -          | Content page routing configuration               |
-| `templates`      | `Record<string, TemplateConfig>` | -          | Page creation templates                          |
-| `componentPaths` | `string[]`                       | -          | Directories to scan for hydratable components    |
-| `auth`           | `AuthConfig`                     | -          | Authentication configuration (Coming Soon)       |
-| `canvasDir`      | `string`                         | -          | Canvas directory for visual editing              |
+| Option           | Type                             | Default      | Description                                      |
+| ---------------- | -------------------------------- | ------------ | ------------------------------------------------ |
+| `contentRoot`    | `string`                         | required     | Path to content directory                        |
+| `puckConfigPath` | `string`                         | required     | Path to Puck component config (`.tsx` file)      |
+| `route`          | `string`                         | `'/__cms'`   | CMS admin UI route prefix                        |
+| `assetsPath`     | `string`                         | -            | Path to assets directory (enables Media Library) |
+| `schemasPath`    | `string`                         | -            | Path to data/page schema definitions             |
+| `layout`         | `string`                         | -            | Default Astro layout for content pages           |
+| `routing`        | `RoutingConfigInput`             | -            | Content page routing configuration               |
+| `templates`      | `Record<string, TemplateConfig>` | -            | Page creation templates                          |
+| `componentPaths` | `string[]`                       | -            | Directories to scan for hydratable components    |
+| `auth`           | `AuthConfig`                     | -            | Authentication configuration (Coming Soon)       |
+| `canvasDir`      | `string`                         | `'./canvas'` | Canvas directory for visual editing              |
 
 ## Entry Points
 
