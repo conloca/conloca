@@ -71,17 +71,28 @@ The main entry point for `astro.config.mjs`. Exports the integration function an
 import { conlocaCMS, conlocaLoader, pageMetaSchema, blockMetaSchema } from '@conloca/astro-cms';
 ```
 
-| Export                               | Purpose                                         |
-| ------------------------------------ | ----------------------------------------------- |
-| `conlocaCMS(options)`                | Astro integration factory                       |
-| `conlocaLoader(options)`             | Content Collections loader                      |
-| `pageMetaSchema`                     | Zod schema for page metadata                    |
-| `blockMetaSchema`                    | Zod schema for block metadata                   |
-| `withHydration(component, strategy)` | Wrap React components for client-side hydration |
-| `scanForHydratableComponents(paths)` | Build-time scanner for hydratable components    |
-| `extractSlugFromPathname(pathname)`  | Convert URL pathname to Astro slug              |
-| `pathnameFromSlug(slug)`             | Convert Astro slug to URL pathname              |
-| `serializeProps(props)`              | Serialize component props for hydration         |
+| Export                                       | Purpose                                         |
+| -------------------------------------------- | ----------------------------------------------- |
+| `conlocaCMS(options)`                        | Astro integration factory                       |
+| `conlocaLoader(options)`                     | Content Collections loader                      |
+| `pageMetaSchema`                             | Zod schema for page metadata                    |
+| `blockMetaSchema`                            | Zod schema for block metadata                   |
+| `withHydration(component, strategy)`         | Wrap React components for client-side hydration |
+| `scanForHydratableComponents(paths)`         | Build-time scanner for hydratable components    |
+| `extractSlugFromPathname(pathname, pattern)` | Convert URL pathname to Astro slug              |
+| `pathnameFromSlug(slug, pattern)`            | Convert Astro slug to URL pathname              |
+| `serializeProps(props)`                      | Serialize component props for hydration         |
+
+#### ConlocaLoaderOptions
+
+Options for the `conlocaLoader()` function:
+
+| Field         | Type                          | Required | Description                                                                                           |
+| ------------- | ----------------------------- | -------- | ----------------------------------------------------------------------------------------------------- |
+| `collection`  | `string`                      | Yes      | Astro content collection name to populate                                                             |
+| `contentRoot` | `string`                      | Yes      | Path to the content directory (e.g., `./src/content`)                                                 |
+| `site`        | `string`                      | No       | Site name for page collections. Omit to use the default site.                                         |
+| `kind`        | `'page' \| 'block' \| 'data'` | No       | Content kind. Inferred from collection name if omitted (`blocks` → `block`, everything else → `page`) |
 
 ### `@conloca/astro-cms/collections`
 
@@ -128,7 +139,19 @@ const InteractiveCounter = withHydration(Counter, 'load');
 | ------------------------------------ | ------------------------------------------------ |
 | `withHydration(component, strategy)` | Wrap a React component for client-side hydration |
 
-Strategies: `'load'` (immediate), `'idle'` (when idle), `'visible'` (when visible).
+#### HydrationStrategy
+
+The `strategy` argument is a `HydrationStrategy` union type:
+
+| Value       | Astro directive  | Description                                                               |
+| ----------- | ---------------- | ------------------------------------------------------------------------- |
+| `'none'`    | (no JS shipped)  | Pure static HTML — no client-side JavaScript. Default when not specified. |
+| `'load'`    | `client:load`    | Hydrate immediately on page load.                                         |
+| `'visible'` | `client:visible` | Hydrate when the component enters the viewport (lazy hydration).          |
+| `'idle'`    | `client:idle`    | Hydrate when the browser is idle, after higher-priority work is done.     |
+
+Only components explicitly wrapped with `withHydration()` ship JavaScript to the browser — unmarked components render as
+static HTML.
 
 ### `@conloca/astro-cms/virtual-modules`
 
@@ -206,3 +229,69 @@ export const { collections } = await createConlocaCollections({
   site: 'default',
 });
 ```
+
+## Type Reference
+
+### PageData
+
+Passed to layout components and page handlers when routing is enabled. Contains the full page record loaded from the
+content directory.
+
+| Field         | Type                                   | Description                                                          |
+| ------------- | -------------------------------------- | -------------------------------------------------------------------- |
+| `id`          | `string`                               | Unique page identifier (typically matches the URL path)              |
+| `title`       | `string \| undefined`                  | Page title — used for `<title>` tag and layout heading               |
+| `description` | `string \| undefined`                  | Page description for SEO `<meta name="description">`                 |
+| `pathname`    | `string`                               | Full URL pathname starting with `/`                                  |
+| `puckData`    | `Data`                                 | Puck editor data (`root`, `content`, `zones`) — pass to `<Render />` |
+| `collection`  | `string`                               | Content collection name (e.g., `'pages'`, `'posts'`)                 |
+| `route`       | `{ name, pattern, meta? }`             | Route configuration that matched this page                           |
+| `meta`        | `Record<string, unknown> \| undefined` | Custom fields from the page's frontmatter/metadata                   |
+| `timestamps`  | `{ created?, modified?, published? }`  | Page timestamps                                                      |
+
+### PageReference
+
+A lightweight page record used in `getStaticPaths()` and `DataContext.pages`. Does not include `puckData`.
+
+| Field        | Type                                   | Description                                                                |
+| ------------ | -------------------------------------- | -------------------------------------------------------------------------- |
+| `id`         | `string`                               | Page identifier                                                            |
+| `pathname`   | `string`                               | Full URL pathname                                                          |
+| `title`      | `string \| undefined`                  | Page title                                                                 |
+| `collection` | `string`                               | Content collection name                                                    |
+| `meta`       | `Record<string, unknown> \| undefined` | Author, excerpt, tags, featured image, and other fields from page metadata |
+| `timestamps` | `{ created?, modified? }`              | Page timestamps for sorting and display                                    |
+
+### LayoutProps
+
+Props received by layout components specified in `routing.routes.{name}.layout`. Layouts must accept at minimum `title`
+and `description`.
+
+| Field         | Type                  | Description                                                                            |
+| ------------- | --------------------- | -------------------------------------------------------------------------------------- |
+| `title`       | `string`              | Page title for the document `<head>`                                                   |
+| `description` | `string \| undefined` | Page description for the SEO meta tag                                                  |
+| `children`    | `unknown`             | Rendered Puck content. Use `<slot />` in Astro layouts, `{children}` in React layouts. |
+
+### DataContext
+
+Passed as `metadata` in Puck component `resolveData()` calls when `dataBindings` is configured for the route. Cast it
+with `metadata as DataContext` to access typed fields.
+
+| Field         | Type                                    | Description                                                                                        |
+| ------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `collections` | `Record<string, DataCollectionEntry[]>` | Collection data keyed by collection name. Each key matches a name from `dataBindings.collections`. |
+| `pages`       | `PageReference[] \| undefined`          | Pages matching the `dataBindings.pages` filter. Only present if `pages` is configured.             |
+| `locale`      | `string`                                | Current locale used for data fetching                                                              |
+| `siteName`    | `string`                                | Site name from routing configuration                                                               |
+
+### DataCollectionEntry
+
+A single entry from a data collection, as returned in `DataContext.collections[name]`.
+
+| Field  | Type                                   | Description                                                   |
+| ------ | -------------------------------------- | ------------------------------------------------------------- |
+| `id`   | `string`                               | Unique identifier for the entry                               |
+| `name` | `string`                               | Human-readable name of the entry                              |
+| `data` | `Record<string, unknown>`              | Entry data content — access fields via `entry.data.fieldName` |
+| `meta` | `Record<string, unknown> \| undefined` | Optional metadata (title, description, custom fields)         |

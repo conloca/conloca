@@ -114,6 +114,35 @@ import { setupTestAPI, API_ROUTES } from '@conloca/content-api-client/testing';
 | `useBreakInheritance()`         | Break inheritance link for content           |
 | `useRevertToInherited()`        | Revert content to inherited version          |
 
+## Schemas
+
+`@conloca/content-api-client` re-exports the Zod schemas from `@conloca/content-api` for use in CMS form generation and
+content validation.
+
+| Export                | Type        | Description                                                                                                                                       |
+| --------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `blockEditableSchema` | `ZodObject` | Zod schema for editable block metadata (`title`, `description`, `category`, `tags`). Use with `.extend()` to add block-specific fields.           |
+| `dataEditableSchema`  | `ZodObject` | Zod schema for editable data entry metadata (`title`, `description`, `category`, `tags`). Parallel to `blockEditableSchema` for data collections. |
+
+Both schemas expose the same four organizational fields:
+
+| Field         | Type                  | Description                              |
+| ------------- | --------------------- | ---------------------------------------- |
+| `title`       | `string`              | Display name for the block or data entry |
+| `description` | `string` (optional)   | Brief description                        |
+| `category`    | `string` (optional)   | Category for organizing entries          |
+| `tags`        | `string[]` (optional) | Tags for filtering and organization      |
+
+```typescript
+import { blockEditableSchema, dataEditableSchema } from '@conloca/content-api-client';
+
+// Extend to add custom fields to a data schema
+const teamMemberSchema = dataEditableSchema.extend({
+  role: z.string().describe('Job title'),
+  avatar: z.string().url().optional().describe('Profile image URL'),
+});
+```
+
 ## ContentAPIClient
 
 The HTTP client used by all hooks. Can also be used directly for non-React code.

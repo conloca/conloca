@@ -191,6 +191,39 @@ routing: {
 | `meta`         | `Record<string, unknown>` | `undefined` | Additional metadata passed to the page handler           |
 | `dataBindings` | `DataBindingConfig`       | `undefined` | Data collections to inject into Puck component resolvers |
 
+##### DataBindingConfig
+
+When `dataBindings` is set on a route, Conloca fetches the specified collections and page lists at render time and
+injects them into Puck component `resolveData()` calls via `metadata` (typed as `DataContext`).
+
+| Field          | Type                                   | Description                                                                               |
+| -------------- | -------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `collections`  | `string[]`                             | Data collection names to fetch. Available as `metadata.collections[name]` in resolveData. |
+| `pages.prefix` | `string`                               | URL prefix filter — only pages whose pathname starts with this value are included.        |
+| `pages.limit`  | `number`                               | Maximum number of pages to return.                                                        |
+| `pages.sort`   | `'date-desc' \| 'date-asc' \| 'title'` | Sort order for pages. Defaults to `'date-desc'` (newest first).                           |
+| `locale`       | `string`                               | Locale override for data fetching. Defaults to the route's locale setting.                |
+
+```js
+routing: {
+  routes: {
+    blog: {
+      pattern: '/blog/[...slug]',
+      collection: 'posts',
+      dataBindings: {
+        collections: ['team', 'testimonials'],
+        pages: {
+          prefix: '/blog/',
+          sort: 'date-desc',
+          limit: 10,
+        },
+        locale: 'en',
+      },
+    },
+  },
+}
+```
+
 #### `templates`
 
 - **Type:** `Record<string, TemplateConfig>`

@@ -19,13 +19,16 @@ Basic Cloudflare Access protection is available now using environment variables 
 
 Set these environment variables in your deployment:
 
-| Variable              | Description                                                         |
-| --------------------- | ------------------------------------------------------------------- |
-| `CF_ACCESS_TEAM_NAME` | Your Cloudflare Zero Trust team name (e.g., `mycompany`)            |
-| `CF_ACCESS_AUD`       | Application Audience (AUD) tag from the Access Application settings |
+| Variable              | Type     | Required | Description                                                                                                                                       |
+| --------------------- | -------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CF_ACCESS_TEAM_NAME` | `string` | Yes      | Your Cloudflare Zero Trust team name — the subdomain prefix in `<team>.cloudflareaccess.com`. Found in Zero Trust dashboard > Settings > General. |
+| `CF_ACCESS_AUD`       | `string` | Yes      | Application Audience (AUD) tag. Found in Zero Trust dashboard > Access > Applications > (your app) > Overview page.                               |
 
-When both variables are set, Conloca automatically validates the `CF_Authorization` JWT on every request. When they are
-not set (local dev), validation is skipped — all requests proceed unauthenticated.
+When both variables are set, Conloca automatically validates the `CF_Authorization` JWT on every request.
+
+:::note[Local development] When `CF_ACCESS_TEAM_NAME` or `CF_ACCESS_AUD` is not set, JWT validation is automatically
+skipped. All requests proceed unauthenticated in local dev — you do not need Cloudflare credentials to run the CMS
+locally. :::
 
 The role system (admin, editor, viewer) and `resolveRole` shown below require the pluggable auth system (Coming Soon).
 
