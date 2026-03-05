@@ -3,6 +3,14 @@ title: Auth API
 description: User authentication endpoint for retrieving the current session
 ---
 
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="caution">
+  **Coming Soon** — This authentication provider is not yet available in a stable release. It is implemented on the
+  `dev` branch and will ship in a future version. Install the stable release from
+  [npm](https://www.npmjs.com/package/@conloca/astro-cms) to get features available today.
+</Aside>
+
 The Auth API provides an endpoint to retrieve the current authenticated user. Authentication itself is handled by the
 configured auth provider (Cloudflare Access, OAuth, API keys, or no-auth for development). The `/auth/user` endpoint
 reads from the resolved session set by the permission middleware.

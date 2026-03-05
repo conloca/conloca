@@ -3,6 +3,14 @@ title: API Keys
 description: Authenticate programmatic access with API keys
 ---
 
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="caution">
+  **Coming Soon** — This authentication provider is not yet available in a stable release. It is implemented on the
+  `dev` branch and will ship in a future version. Install the stable release from
+  [npm](https://www.npmjs.com/package/@conloca/astro-cms) to get features available today.
+</Aside>
+
 API key authentication is designed for programmatic access -- CI/CD pipelines, scripts, and headless API consumers.
 There is no login UI; clients authenticate by sending a `Bearer` token in the `Authorization` header.
 

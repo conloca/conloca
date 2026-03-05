@@ -3,6 +3,13 @@ title: Cloudflare Access
 description: Protect your CMS with Cloudflare Access zero-trust authentication
 ---
 
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="caution">
+  **Coming Soon** — The `roles` and `resolveRole` configuration shown on this page requires the pluggable auth system,
+  which is not yet in a stable release. Basic Cloudflare Access protection (header-based) is available today.
+</Aside>
+
 Cloudflare Access provides zero-trust authentication without any login page in your application. Users authenticate
 through Cloudflare's identity layer before reaching your CMS.
 
