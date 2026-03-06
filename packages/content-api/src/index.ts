@@ -20,6 +20,8 @@ export * from './component-registry.types';
 export type { ContentAPI } from './content-api.interface';
 export * from './content-operations';
 export * from './content-utils';
+// Git types (browser-safe, pure interfaces - no Node.js dependencies)
+export type { GitCommitResult, GitPullResult, GitPushResult, GitStatus } from './git-operations';
 export * from './schemas';
 export { Site } from './site';
 export * from './types';

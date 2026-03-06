@@ -12,19 +12,19 @@ export interface GitStatus {
   remoteConfigured?: boolean;
 }
 
-export interface CommitResult {
+export interface GitCommitResult {
   success: boolean;
   commit?: string;
   summary?: string;
   error?: string;
 }
 
-export interface PushResult {
+export interface GitPushResult {
   success: boolean;
   error?: string;
 }
 
-export interface PullResult {
+export interface GitPullResult {
   success: boolean;
   summary?: string;
   error?: string;
@@ -37,9 +37,9 @@ export interface GitAuthor {
 
 export interface GitOperations {
   getStatus(): Promise<GitStatus>;
-  commitAll(message: string, author?: GitAuthor): Promise<CommitResult>;
-  pushOrigin(): Promise<PushResult>;
-  pull(): Promise<PullResult>;
+  commitAll(message: string, author?: GitAuthor): Promise<GitCommitResult>;
+  pushOrigin(): Promise<GitPushResult>;
+  pull(): Promise<GitPullResult>;
 }
 
 export interface GitConfig {
@@ -155,7 +155,7 @@ export function createGitOperations(config: GitConfig): GitOperations {
       }
     },
 
-    async commitAll(message: string, author?: GitAuthor): Promise<CommitResult> {
+    async commitAll(message: string, author?: GitAuthor): Promise<GitCommitResult> {
       try {
         const repoRoot = await getCachedRepoRoot();
         if (!repoRoot) {
@@ -206,7 +206,7 @@ export function createGitOperations(config: GitConfig): GitOperations {
       }
     },
 
-    async pushOrigin(): Promise<PushResult> {
+    async pushOrigin(): Promise<GitPushResult> {
       try {
         const repoRoot = await getCachedRepoRoot();
         if (!repoRoot) {
@@ -262,7 +262,7 @@ export function createGitOperations(config: GitConfig): GitOperations {
       }
     },
 
-    async pull(): Promise<PullResult> {
+    async pull(): Promise<GitPullResult> {
       try {
         const repoRoot = await getCachedRepoRoot();
         if (!repoRoot) {
