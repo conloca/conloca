@@ -92,6 +92,80 @@ describe('AssetManifest', () => {
     });
   });
 
+  describe('withManifest', () => {
+    test('reads current data, passes to callback, writes result -- single entry added', async () => {
+      await manifest.withManifest((data) => {
+        data['hero.jpg'] = { alt: 'Hero image' };
+        return data;
+      });
+      const result = await manifest.read();
+      expect(result['hero.jpg']).toEqual({ alt: 'Hero image' });
+    });
+
+    test('callback that removes a key -- entry deleted after call', async () => {
+      await manifest.add('to-remove.jpg', { alt: 'Remove me' });
+      await manifest.withManifest((data) => {
+        delete data['to-remove.jpg'];
+        return data;
+      });
+      const result = await manifest.read();
+      expect(result['to-remove.jpg']).toBeUndefined();
+    });
+
+    test('callback can return data unchanged (no-op write is safe)', async () => {
+      await manifest.add('existing.jpg', { alt: 'Keep me' });
+      await manifest.withManifest((data) => data);
+      const result = await manifest.read();
+      expect(result['existing.jpg']).toEqual({ alt: 'Keep me' });
+    });
+  });
+
+  describe('concurrency', () => {
+    test('10 concurrent withManifest calls each incrementing a counter -- final count equals 10', async () => {
+      // Seed with counter = 0
+      await manifest.write({ __counter: { width: 0 } });
+
+      const promises = Array.from({ length: 10 }, () =>
+        manifest.withManifest((data) => {
+          const current = data['__counter']?.width ?? 0;
+          data['__counter'] = { width: current + 1 };
+          return data;
+        }),
+      );
+
+      await Promise.all(promises);
+      const result = await manifest.read();
+      expect(result['__counter']?.width).toBe(10);
+    });
+
+    test('10 concurrent add() calls for different keys -- all 10 keys present', async () => {
+      const promises = Array.from({ length: 10 }, (_, i) => manifest.add(`file-${i}.jpg`, { alt: `File ${i}` }));
+
+      await Promise.all(promises);
+      const result = await manifest.read();
+      for (let i = 0; i < 10; i++) {
+        expect(result[`file-${i}.jpg`]).toBeDefined();
+      }
+      expect(Object.keys(result)).toHaveLength(10);
+    });
+
+    test('concurrent add + remove on same key -- manifest is consistent', async () => {
+      await manifest.add('race.jpg', { alt: 'Initial' });
+
+      // Run add and remove concurrently -- result should be one or the other, not corrupt
+      await Promise.all([manifest.add('race.jpg', { alt: 'Updated' }), manifest.remove('race.jpg')]);
+
+      const result = await manifest.read();
+      // Either key exists with 'Updated' or key was removed -- both are valid
+      const entry = result['race.jpg'];
+      if (entry) {
+        expect(entry.alt).toBe('Updated');
+      } else {
+        expect(result['race.jpg']).toBeUndefined();
+      }
+    });
+  });
+
   describe('getByFilename', () => {
     test('finds entry matching exact filename key', async () => {
       await manifest.add('logo.png', { alt: 'Logo' });
