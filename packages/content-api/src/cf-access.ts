@@ -17,8 +17,8 @@ const JWKS = CF_ACCESS_TEAM_NAME
   : null;
 
 export interface CFAccessUser {
-  email: string;
-  sub: string;
+  email?: string;
+  sub?: string;
 }
 
 export interface CFAccessResult {
@@ -71,8 +71,8 @@ export async function validateCFAccessRequest(request: Request): Promise<CFAcces
       valid: true,
       required: true,
       user: {
-        email: typeof payload.email === 'string' ? payload.email : '',
-        sub: payload.sub || '',
+        email: typeof payload.email === 'string' && payload.email ? payload.email : undefined,
+        sub: typeof payload.sub === 'string' && payload.sub ? payload.sub : undefined,
       },
     };
   } catch (error) {
