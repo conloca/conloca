@@ -28,7 +28,7 @@ import {
   toolbarPlugin,
   UndoRedo,
 } from '@mdxeditor/editor';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import '@mdxeditor/editor/style.css';
 import { ImagePickerDialog } from './ImagePickerDialog';
 
@@ -86,6 +86,8 @@ export interface CMSMDXEditorProps {
  */
 export const CMSMDXEditor = React.forwardRef<MDXEditorMethods, CMSMDXEditorProps>(
   ({ value, onChange, onSave, readOnly = false }, ref) => {
+    const insertImageRef = useRef<HTMLButtonElement>(null);
+
     // Handle keyboard shortcuts
     useEffect(() => {
       const handleKeyDown = (e: KeyboardEvent) => {
@@ -97,12 +99,14 @@ export const CMSMDXEditor = React.forwardRef<MDXEditorMethods, CMSMDXEditorProps
           }
         }
         // Image picker shortcut: Ctrl/Cmd+Shift+I
-        // Find and click the InsertImage button in the toolbar
-        // The button has aria-label="Insert image" set by MDXEditor
+        // Open image picker via ref — avoids brittle aria-label DOM query
         if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'i') {
           e.preventDefault();
-          const insertImageButton = document.querySelector('[aria-label="Insert image"]') as HTMLButtonElement | null;
-          insertImageButton?.click();
+          if (insertImageRef.current) {
+            insertImageRef.current.click();
+          } else {
+            console.warn('[CMSMDXEditor] InsertImage ref not attached — toolbar may not be rendered');
+          }
         }
       };
 
@@ -162,7 +166,12 @@ export const CMSMDXEditor = React.forwardRef<MDXEditorMethods, CMSMDXEditorProps
                 <BlockTypeSelect />
                 <Separator />
                 <CreateLink />
-                <InsertImage />
+                {/* InsertImage is ForwardRefExoticComponent<HTMLButtonElement> but its type
+                    uses Record<string, never> which blocks ref prop in TS.
+                    Cast through unknown to pass ref safely — runtime behavior is correct. */}
+                {React.createElement(InsertImage as unknown as React.FC<{ ref: React.Ref<HTMLButtonElement> }>, {
+                  ref: insertImageRef,
+                })}
                 <InsertTable />
                 <InsertThematicBreak />
                 <Separator />
