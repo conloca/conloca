@@ -215,6 +215,11 @@ if (hasPuckData && page && resolvedPuckData) {
     PageRenderer = undefined;
   }
 }
+
+// Log full error details server-side in production (not needed in dev - shown in browser)
+if (loadError && !import.meta.env.DEV) {
+  console.error('[Conloca] Page load error:', loadError)
+}
 ---
 
 {Layout && page ? (
@@ -267,7 +272,7 @@ if (hasPuckData && page && resolvedPuckData) {
     <body>
       <div class="conloca-error">
         <h1>Error Loading Page</h1>
-        <p>{loadError?.message || 'An unknown error occurred.'}</p>
+        <p>{import.meta.env.DEV ? (loadError?.message || 'An unknown error occurred.') : 'An error occurred while loading this page.'}</p>
       </div>
     </body>
   </html>
