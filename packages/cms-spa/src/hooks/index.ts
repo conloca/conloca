@@ -17,3 +17,5 @@ export { useDialogState } from './useDialogState';
 export { useErrorModal } from './useErrorModal';
 export { useSiteBaseUrl } from './useSiteBaseUrl';
 export { buildUploadFormData, getImageDimensions, useImportUrl, useUpload } from './useUpload';
+export type { UploadProgress, UseUploadFlowReturn } from './useUploadFlow';
+export { ACCEPTED_TYPES, useUploadFlow } from './useUploadFlow';
