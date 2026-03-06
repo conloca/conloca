@@ -1,12 +1,12 @@
-import type { ReactNode } from 'react'
-import type { HydrationStrategy } from '../types.js'
-import { serializeProps } from '../lib/serialize-props.js'
+import type { ReactNode } from 'react';
+import { serializeProps } from '../lib/serialize-props.js';
+import type { HydrationStrategy } from '../types.js';
 
 interface HydrationWrapperProps {
-  componentName: string
-  strategy: HydrationStrategy
-  props: Record<string, unknown>
-  children: ReactNode
+  componentName: string;
+  strategy: HydrationStrategy;
+  props: Record<string, unknown>;
+  children: ReactNode;
 }
 
 /**
@@ -16,25 +16,21 @@ interface HydrationWrapperProps {
  * Otherwise, wraps in a div with data-hydrate attributes that the browser
  * hydration script uses to find and hydrate components.
  */
-export function HydrationWrapper({
-  componentName,
-  strategy,
-  props,
-  children,
-}: HydrationWrapperProps) {
+export function HydrationWrapper({ componentName, strategy, props, children }: HydrationWrapperProps) {
   // No hydration needed - render children directly without wrapper
   if (strategy === 'none') {
-    return <>{children}</>
+    return <>{children}</>;
   }
 
   // Wrap with hydration markers for the browser script to find
   return (
     <div
+      style={{ display: 'contents' }}
       data-hydrate={componentName}
       data-hydrate-strategy={strategy}
       data-props={serializeProps(props)}
     >
       {children}
     </div>
-  )
+  );
 }
