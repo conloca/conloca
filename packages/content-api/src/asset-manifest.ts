@@ -17,6 +17,7 @@ const MANIFEST_FILENAME = '.asset-manifest.json';
 
 export class AssetManifest {
   private manifestPath: string;
+  private _lock: Promise<void> = Promise.resolve();
 
   constructor(assetsPath: string) {
     this.manifestPath = join(assetsPath, MANIFEST_FILENAME);
@@ -35,18 +36,38 @@ export class AssetManifest {
     await writeFile(this.manifestPath, JSON.stringify(data, null, 2), 'utf-8');
   }
 
+  /** Atomic read-modify-write with promise-based mutex to prevent concurrent corruption */
+  async withManifest(fn: (data: AssetManifestData) => AssetManifestData): Promise<void> {
+    const prev = this._lock;
+    let release: () => void;
+    this._lock = new Promise<void>((r) => {
+      release = r;
+    });
+    await prev;
+    try {
+      const data = await this.read();
+      const updated = fn(data);
+      await this.write(updated);
+    } finally {
+      release!();
+    }
+  }
+
   async add(relativePath: string, data: ManifestEntryData): Promise<void> {
-    const manifest = await this.read();
-    manifest[relativePath] = data;
-    await this.write(manifest);
+    await this.withManifest((manifest) => {
+      manifest[relativePath] = data;
+      return manifest;
+    });
   }
 
   async remove(relativePath: string): Promise<boolean> {
-    const manifest = await this.read();
-    if (!(relativePath in manifest)) return false;
-    delete manifest[relativePath];
-    await this.write(manifest);
-    return true;
+    let existed = false;
+    await this.withManifest((manifest) => {
+      existed = relativePath in manifest;
+      if (existed) delete manifest[relativePath];
+      return manifest;
+    });
+    return existed;
   }
 
   async get(relativePath: string): Promise<ManifestEntryData | undefined> {
