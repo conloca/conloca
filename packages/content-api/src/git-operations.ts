@@ -113,7 +113,7 @@ export function createGitOperations(config: GitConfig): GitOperations {
         const currentBranch = branchResult.exitCode === 0 ? branchResult.stdout : 'unknown';
 
         // Get changed files count
-        const statusResult = await runGitCommand(repoRoot, ['status', '--porcelain']);
+        const statusResult = await runGitCommand(repoRoot, ['status', '--porcelain', '--', contentPath]);
         const changedLines = statusResult.stdout ? statusResult.stdout.split('\n').filter((l) => l.trim()) : [];
         const changedFiles = changedLines.length;
         const hasChanges = changedFiles > 0;
@@ -154,19 +154,19 @@ export function createGitOperations(config: GitConfig): GitOperations {
         }
 
         // Stage all changes
-        const addResult = await runGitCommand(repoRoot, ['add', '-A']);
+        const addResult = await runGitCommand(repoRoot, ['add', '-A', '--', contentPath]);
         if (addResult.exitCode !== 0) {
           return { success: false, error: addResult.stderr || 'Failed to stage changes' };
         }
 
         // Check if there's anything to commit after staging
-        const diffResult = await runGitCommand(repoRoot, ['diff', '--cached', '--quiet']);
+        const diffResult = await runGitCommand(repoRoot, ['diff', '--cached', '--quiet', '--', contentPath]);
         if (diffResult.exitCode === 0) {
           return { success: false, error: 'No changes to commit' };
         }
 
         // Count staged files for summary
-        const diffStatResult = await runGitCommand(repoRoot, ['diff', '--cached', '--numstat']);
+        const diffStatResult = await runGitCommand(repoRoot, ['diff', '--cached', '--numstat', '--', contentPath]);
         const fileCount = diffStatResult.stdout ? diffStatResult.stdout.split('\n').filter((l) => l.trim()).length : 0;
 
         // Build commit command

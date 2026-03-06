@@ -116,7 +116,7 @@ describe('createGitOperations', () => {
       await initGitRepo();
       await createInitialCommit();
       // Create an uncommitted file
-      await writeFile(join(tempDir, 'new-file.txt'), 'hello');
+      await writeFile(join(contentPath, 'new-file.txt'), 'hello');
       const ops = createGitOperations({ contentPath });
       const status = await ops.getStatus();
       expect(status.hasChanges).toBe(true);
@@ -178,7 +178,7 @@ describe('createGitOperations', () => {
     test('stages and commits changes, returns success:true with commit SHA', async () => {
       await initGitRepo();
       await createInitialCommit();
-      await writeFile(join(tempDir, 'file.txt'), 'content');
+      await writeFile(join(contentPath, 'file.txt'), 'content');
       const ops = createGitOperations({ contentPath });
       const result = await ops.commitAll('test: add file');
       expect(result.success).toBe(true);
@@ -209,7 +209,7 @@ describe('createGitOperations', () => {
     test('with author sets --author flag', async () => {
       await initGitRepo();
       await createInitialCommit();
-      await writeFile(join(tempDir, 'authored.txt'), 'data');
+      await writeFile(join(contentPath, 'authored.txt'), 'data');
       const ops = createGitOperations({ contentPath });
       const result = await ops.commitAll('test: authored commit', {
         name: 'Custom Author',
