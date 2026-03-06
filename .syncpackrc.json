@@ -1,5 +1,4 @@
 {
-  "dependencyTypes": ["dev", "peer", "prod"],
   "versionGroups": [
     {
       "packages": ["**"],

@@ -87,8 +87,8 @@
       "peerDependencies": {
         "@vitejs/plugin-react": "^4.0.0",
         "astro": "^5.0.0",
-        "react": "19.2.4",
-        "react-dom": "19.2.4",
+        "react": "^19.0.0",
+        "react-dom": "^19.0.0",
         "vite": "^6.0.0",
         "zod": "^4.3.6",
       },
@@ -142,8 +142,8 @@
         "typescript": "^5.9.3",
       },
       "peerDependencies": {
-        "react": "19.2.4",
-        "react-dom": "19.2.4",
+        "react": "^19.0.0",
+        "react-dom": "^19.0.0",
       },
     },
     "packages/content-api": {
@@ -179,8 +179,8 @@
         "@types/react": "19.2.14",
       },
       "peerDependencies": {
-        "react": "19.2.4",
-        "react-dom": "19.2.4",
+        "react": "^19.0.0",
+        "react-dom": "^19.0.0",
       },
     },
     "packages/mdx": {
@@ -207,8 +207,8 @@
         "react-dom": "19.2.4",
       },
       "peerDependencies": {
-        "react": "19.2.4",
-        "react-dom": "19.2.4",
+        "react": "^19.0.0",
+        "react-dom": "^19.0.0",
       },
     },
     "tooling": {
