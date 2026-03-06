@@ -1,11 +1,12 @@
-import { mkdir, readFile, rename, unlink, writeFile } from 'fs/promises';
-import { dirname, join } from 'path';
+import { mkdir, readFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import sortKeys from 'sort-keys';
 import type {
   ComponentEntry,
   ComponentEntryWithId,
   ComponentRegistry as ComponentRegistryType,
 } from './component-registry.types';
+import { atomicWriteFile } from './utils/atomic-write';
 
 /**
  * Component Registry for managing linked and unlinked components
@@ -57,28 +58,14 @@ export class ComponentRegistry {
    * Save registry to disk atomically
    */
   private async save(): Promise<void> {
-    const tempPath = `${this.registryPath}.tmp.${Date.now()}.${Math.random().toString(36).substring(2, 9)}`;
+    // Ensure directory exists
+    await mkdir(dirname(this.registryPath), { recursive: true });
 
-    try {
-      // Ensure directory exists
-      await mkdir(dirname(this.registryPath), { recursive: true });
+    // Sort keys for consistent output
+    const sorted = sortKeys(this.registry, { deep: true });
+    const content = JSON.stringify(sorted, null, 2);
 
-      // Sort keys for consistent output
-      const sorted = sortKeys(this.registry, { deep: true });
-      const content = JSON.stringify(sorted, null, 2);
-
-      // Write to temp file
-      await writeFile(tempPath, content);
-
-      // Atomic rename
-      await rename(tempPath, this.registryPath);
-    } catch (error) {
-      // Clean up temp file on error
-      try {
-        await unlink(tempPath);
-      } catch {}
-      throw error;
-    }
+    await atomicWriteFile(this.registryPath, content);
   }
 
   /**

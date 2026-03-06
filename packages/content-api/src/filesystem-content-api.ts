@@ -49,6 +49,7 @@ import type {
   UpdateResult,
   VXJSONFile,
 } from './types';
+import { atomicWriteFile } from './utils/atomic-write';
 
 interface ReindexResult {
   filesProcessed: number;
@@ -1521,22 +1522,8 @@ export class FileSystemContentAPI implements ContentAPI {
 
         const mdxContent = serializeMdxWithFrontmatter(frontmatterData, mdxContentPart);
 
-        // Use atomic write for MDX files too
-        const hrtime = process.hrtime.bigint();
-        const tempFile = `${targetFilePath}.tmp.${process.pid}.${hrtime}`;
-
-        try {
-          await writeFile(tempFile, mdxContent);
-          await rename(tempFile, targetFilePath);
-        } catch (error) {
-          // Clean up temp file if rename fails
-          try {
-            await unlink(tempFile);
-          } catch {
-            // Ignore cleanup errors
-          }
-          throw error;
-        }
+        // Atomic write for MDX files
+        await atomicWriteFile(targetFilePath, mdxContent);
       } else if (targetFilePath.endsWith('.json')) {
         // Data files use "data" field instead of "content"
         const fileContent = JSON.parse(await readFile(filePath, 'utf-8'));
@@ -1573,21 +1560,8 @@ export class FileSystemContentAPI implements ContentAPI {
         // Serialize data file
         const serializedContent = JSON.stringify(sortKeys(updatedFile, { deep: true }), null, '\t');
 
-        // Use atomic write
-        const hrtime = process.hrtime.bigint();
-        const tempFile = `${targetFilePath}.tmp.${process.pid}.${hrtime}`;
-
-        try {
-          await writeFile(tempFile, serializedContent);
-          await rename(tempFile, targetFilePath);
-        } catch (error) {
-          try {
-            await unlink(tempFile);
-          } catch {
-            // Ignore cleanup errors
-          }
-          throw error;
-        }
+        // Atomic write for JSON data files
+        await atomicWriteFile(targetFilePath, serializedContent);
       } else {
         // VXJSON for pages (puck)
         const fileContent = JSON.parse(await readFile(filePath, 'utf-8'));
@@ -1636,23 +1610,8 @@ export class FileSystemContentAPI implements ContentAPI {
         // Serialize using VXJSON format to ensure content is last
         const serializedContent = VXJSON.serialize(updatedFile);
 
-        // Use atomic write with better temp file naming
-        // Include process.pid and hrtime for better uniqueness and easier debugging
-        const hrtime = process.hrtime.bigint();
-        const tempFile = `${targetFilePath}.tmp.${process.pid}.${hrtime}`;
-
-        try {
-          await writeFile(tempFile, serializedContent);
-          await rename(tempFile, targetFilePath);
-        } catch (error) {
-          // Clean up temp file if rename fails
-          try {
-            await unlink(tempFile);
-          } catch {
-            // Ignore cleanup errors
-          }
-          throw error;
-        }
+        // Atomic write for VXJSON page files
+        await atomicWriteFile(targetFilePath, serializedContent);
       }
 
       // Calculate new etag from the written file

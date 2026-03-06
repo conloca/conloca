@@ -1,7 +1,8 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import type { AssetManifestData, ManifestEntryData } from './asset-types';
+import { atomicWriteFile } from './utils/atomic-write';
 
 // Re-export types for backwards compatibility
 export type {
@@ -33,7 +34,7 @@ export class AssetManifest {
   }
 
   async write(data: AssetManifestData): Promise<void> {
-    await writeFile(this.manifestPath, JSON.stringify(data, null, 2), 'utf-8');
+    await atomicWriteFile(this.manifestPath, JSON.stringify(data, null, 2));
   }
 
   /** Atomic read-modify-write with promise-based mutex to prevent concurrent corruption */
