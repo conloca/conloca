@@ -2,7 +2,7 @@ import { localesOf, useCreateContent, useDeleteContent, useSitePages } from '@co
 import { AlertCircle, Clock, Edit, FileText, Loader2, Plus, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useErrorModal } from '../../hooks';
+import { useErrorModal, useSiteBaseUrl } from '../../hooks';
 import type { CreatePageData, Page } from '../../types';
 import { getUIConfig } from '../../ui-config';
 import { CreatePageDialog } from '../dialogs/CreatePageDialog';
@@ -28,10 +28,16 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
   }>({ isOpen: false, pageId: '', pageTitle: '', locale: '', etag: '', hasMultipleLocales: false });
 
   const { showError, errorModalProps } = useErrorModal();
+  const { buildUrl } = useSiteBaseUrl();
 
   const navigate = useNavigate();
   const createContent = useCreateContent();
   const deleteContent = useDeleteContent();
+
+  const getPreviewUrl = (pagePath: string) => {
+    const previewUrl = buildUrl(pagePath);
+    return `${previewUrl}${previewUrl.includes('?') ? '&' : '?'}_t=${Date.now()}`;
+  };
 
   // Use provided site or default
   const currentSite = selectedSite || 'default';
@@ -359,12 +365,35 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
                   <td className="p-4">
                     <div className="flex items-center gap-2">
                       <FileText className="h-4 w-4 text-grey-04" />
-                      <span className="font-medium" data-testid={`page-title-${page.id}`}>
+                      <a
+                        href={buildUrl(page.path)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-medium text-azure-04 hover:text-azure-03 hover:underline transition-colors"
+                        data-testid={`page-title-${page.id}`}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          window.open(getPreviewUrl(page.path), '_blank');
+                        }}
+                      >
                         {page.title}
-                      </span>
+                      </a>
                     </div>
                   </td>
-                  <td className="p-4 text-grey-04">{page.path}</td>
+                  <td className="p-4">
+                    <a
+                      href={buildUrl(page.path)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-grey-04 hover:text-azure-03 hover:underline transition-colors"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        window.open(getPreviewUrl(page.path), '_blank');
+                      }}
+                    >
+                      {page.path}
+                    </a>
+                  </td>
                   <td className="p-4">
                     <span className={`capitalize ${statusColors[page.status]}`}>{page.status}</span>
                   </td>
