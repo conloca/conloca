@@ -142,6 +142,23 @@ describe('createGitOperations', () => {
       expect(status.branch).toBe(branchName);
     });
 
+    test('only reports changes within contentPath', async () => {
+      await initGitRepo();
+      await createInitialCommit();
+      // Write a file OUTSIDE contentPath
+      await writeFile(join(tempDir, 'outside-status.txt'), 'outside content');
+      const ops = createGitOperations({ contentPath });
+      // Should NOT report changes for files outside contentPath
+      const status1 = await ops.getStatus();
+      expect(status1.hasChanges).toBe(false);
+      expect(status1.changedFiles).toBe(0);
+      // Write a file INSIDE contentPath
+      await writeFile(join(contentPath, 'inside-status.txt'), 'inside content');
+      const status2 = await ops.getStatus();
+      expect(status2.hasChanges).toBe(true);
+      expect(status2.changedFiles).toBe(1);
+    });
+
     test('returns isRepo:false when contentPath is not in a git repo', async () => {
       // Use a plain temp dir (no git init)
       const plainDir = join(tmpdir(), `conloca-nongit-${Date.now()}-${Math.random().toString(36).slice(2)}`);
@@ -168,6 +185,25 @@ describe('createGitOperations', () => {
       expect(result.commit).toBeDefined();
       expect(result.commit).toHaveLength(40); // Full SHA
       expect(result.summary).toContain('1 files committed');
+    });
+
+    test('does not stage files outside contentPath', async () => {
+      await initGitRepo();
+      await createInitialCommit();
+      // Write a file OUTSIDE contentPath (repo root)
+      await writeFile(join(tempDir, 'outside.txt'), 'should not be staged');
+      // Write a file INSIDE contentPath
+      await writeFile(join(contentPath, 'inside.txt'), 'should be staged');
+      const ops = createGitOperations({ contentPath });
+      const result = await ops.commitAll('test: scoped commit');
+      expect(result.success).toBe(true);
+      // Check committed files via git show --stat
+      const showOutput = execSync('git show --stat HEAD', { cwd: tempDir }).toString();
+      expect(showOutput).toContain('content/inside.txt');
+      expect(showOutput).not.toContain('outside.txt');
+      // Verify outside.txt still appears as untracked
+      const statusOutput = execSync('git status --porcelain', { cwd: tempDir }).toString();
+      expect(statusOutput).toContain('outside.txt');
     });
 
     test('with author sets --author flag', async () => {
