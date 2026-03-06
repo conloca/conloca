@@ -1,5 +1,5 @@
-import { type Dirent, existsSync, type Stats } from 'node:fs';
-import { mkdir, readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
+import type { Dirent, Stats } from 'node:fs';
+import { access, mkdir, readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { extname, join, parse, resolve } from 'node:path';
 import { imageSize } from 'image-size';
 import {
@@ -108,7 +108,7 @@ export class AssetOperations {
    * @param originalName Original filename
    * @param folder Optional folder path (relative to assets root)
    */
-  private resolveFilename(originalName: string, folder?: string): string {
+  private async resolveFilename(originalName: string, folder?: string): Promise<string> {
     const { name, ext } = parse(originalName);
     // Sanitize: lowercase, replace spaces with dashes, remove non-alphanumeric except dash/dot
     const sanitized = name
@@ -126,9 +126,15 @@ export class AssetOperations {
     let candidate = `${sanitized}${safeExt}`;
     let counter = 0;
 
-    while (existsSync(join(baseDir, candidate))) {
-      counter++;
-      candidate = `${sanitized}-${counter}${safeExt}`;
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      try {
+        await access(join(baseDir, candidate));
+        counter++;
+        candidate = `${sanitized}-${counter}${safeExt}`;
+      } catch {
+        break;
+      }
     }
 
     return candidate;
@@ -245,7 +251,7 @@ export class AssetOperations {
       this.lfsSetup = true;
     }
 
-    const filename = this.resolveFilename(file.name, folder);
+    const filename = await this.resolveFilename(file.name, folder);
 
     // Determine file path (in folder if specified)
     const filePath =
