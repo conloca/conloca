@@ -1,11 +1,9 @@
-import { useBlocks, useLocalizedContent, useUpdateLocalized } from '@conloca/content-api-client';
+import { useBlocks, useDataContext, useLocalizedContent, useUpdateLocalized } from '@conloca/content-api-client';
 import type { ComponentConfig, Config, Data } from '@puckeditor/core';
 import { resolveAllData } from '@puckeditor/core';
-import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { PageMetadata } from '../../types';
-import { getUIConfig } from '../../ui-config';
 import { PageMetadataDialog } from '../dialogs/PageMetadataDialog';
 import { BlockContentWrapper, BlockFieldWrapper } from './BlockWrappers';
 import { PageEditor } from './PageEditor';
@@ -75,16 +73,7 @@ export function PageEditorWrapper({ puckConfig }: PageEditorWrapperProps) {
   const { data: blocksData } = useBlocks();
 
   // Load DataContext for data-bound components (e.g. BlogPostGrid)
-  const apiBaseUrl = getUIConfig().apiBaseUrl || '/__cms/api';
-  const { data: dataContextResponse, isLoading: isLoadingDataContext } = useQuery({
-    queryKey: ['data-context', id],
-    queryFn: () =>
-      fetch(`${apiBaseUrl}/data-context?pageId=${id}`)
-        .then((r) => (r.ok ? r.json() : null))
-        .catch(() => null),
-    enabled: !!id,
-    retry: false,
-  });
+  const { data: dataContextResponse, isLoading: isLoadingDataContext } = useDataContext(id);
 
   // Store current ETag for optimistic locking
   const [currentEtag, setCurrentEtag] = useState<string>('');
