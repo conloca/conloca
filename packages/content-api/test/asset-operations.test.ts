@@ -493,6 +493,47 @@ describe('AssetOperations', () => {
     });
   });
 
+  describe('resolveFilename collision resolution', () => {
+    test('appends incrementing suffix for 3+ collisions', async () => {
+      // Upload photo.jpg 3 times -- should produce photo.jpg, photo-1.jpg, photo-2.jpg
+      const r1 = await ops.upload(createTestFile('photo.jpg', 100));
+      expect(r1.success).toBe(true);
+      if (r1.success) expect(r1.asset.filename).toBe('photo.jpg');
+
+      const r2 = await ops.upload(createTestFile('photo.jpg', 100));
+      expect(r2.success).toBe(true);
+      if (r2.success) expect(r2.asset.filename).toBe('photo-1.jpg');
+
+      const r3 = await ops.upload(createTestFile('photo.jpg', 100));
+      expect(r3.success).toBe(true);
+      if (r3.success) expect(r3.asset.filename).toBe('photo-2.jpg');
+    });
+
+    test('resolves collisions within subfolders', async () => {
+      // Create /photos folder, upload beach.jpg to /photos twice
+      await mkdir(join(assetsPath, 'photos'), { recursive: true });
+
+      const r1 = await ops.upload(createTestFile('beach.jpg', 100), { folder: '/photos' });
+      expect(r1.success).toBe(true);
+      if (r1.success) expect(r1.asset.filename).toBe('beach.jpg');
+
+      const r2 = await ops.upload(createTestFile('beach.jpg', 100), { folder: '/photos' });
+      expect(r2.success).toBe(true);
+      if (r2.success) expect(r2.asset.filename).toBe('beach-1.jpg');
+    });
+
+    test('sanitizes AND deduplicates filenames', async () => {
+      // Upload "My Photo.jpg" twice -- should produce my-photo.jpg, my-photo-1.jpg
+      const r1 = await ops.upload(createTestFile('My Photo.jpg', 100));
+      expect(r1.success).toBe(true);
+      if (r1.success) expect(r1.asset.filename).toBe('my-photo.jpg');
+
+      const r2 = await ops.upload(createTestFile('My Photo.jpg', 100));
+      expect(r2.success).toBe(true);
+      if (r2.success) expect(r2.asset.filename).toBe('my-photo-1.jpg');
+    });
+  });
+
   describe('getFolderTree', () => {
     test('returns root node with correct asset count', async () => {
       await writeFile(join(assetsPath, 'a.jpg'), new Uint8Array([0xff]));
