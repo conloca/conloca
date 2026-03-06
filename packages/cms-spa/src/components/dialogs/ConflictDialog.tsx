@@ -1,5 +1,5 @@
 import type { UpdateResult } from '@conloca/content-api-client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ContentDiff } from '../editor/ContentDiff';
 
 interface ConflictDialogProps {
@@ -12,6 +12,10 @@ interface ConflictDialogProps {
 
 export function ConflictDialog({ conflict, onReload, onForceSave, onCancel, showDiff = false }: ConflictDialogProps) {
   const [showReloadConfirm, setShowReloadConfirm] = useState(false);
+
+  useEffect(() => {
+    setShowReloadConfirm(false);
+  }, [conflict]);
 
   if (conflict.success || conflict.reason !== 'stale_write') {
     return null;

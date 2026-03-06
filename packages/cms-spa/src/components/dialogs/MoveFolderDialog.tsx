@@ -1,5 +1,5 @@
 import { Folder, X } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { type FolderTreeNode, useFolderTree } from '../../hooks';
 import { cn } from '../../utils/cn';
 
@@ -68,6 +68,13 @@ export function MoveFolderDialog({
   isMoving = false,
 }: MoveFolderDialogProps) {
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedFolder(null);
+    }
+  }, [isOpen]);
+
   const { data, isLoading } = useFolderTree();
 
   // Unwrap root node - we display "Root" separately, so show root's children directly
