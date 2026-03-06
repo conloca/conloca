@@ -12,6 +12,7 @@ import {
   validateCFAccessRequest,
 } from '@conloca/content-api/node';
 import type { APIRoute } from 'astro';
+import { safeJsonStringify } from './safe-json-stringify.js';
 import type { DataCollectionEntry, DataContext, PageReference, ResolvedRoutingConfig } from './types.js';
 
 // Get the path to the cms-spa package by resolving its package.json
@@ -77,7 +78,7 @@ function generateDevHtml(config: typeof spaConfig): string {
   <link rel="stylesheet" href="${config.basename}/main.css" />
   <script>
     // Configure UI with plugin options
-    window.__UI_CONFIG__ = ${JSON.stringify(config)};
+    window.__UI_CONFIG__ = ${safeJsonStringify(config)};
   </script>
   <script type="module" src="${config.basename}/schemas-entry.js"></script>
   <script type="module" src="${config.basename}/puck-entry.js"></script>
@@ -134,7 +135,7 @@ async function handleSpa(params: { path?: string | string[] }, request: Request)
         const configScript = `
         <script>
           // Configure UI with plugin options
-          window.__UI_CONFIG__ = ${JSON.stringify(spaConfig)};
+          window.__UI_CONFIG__ = ${safeJsonStringify(spaConfig)};
         </script>
         <script type="module" src="${spaConfig.basename}/schemas-entry.js"></script>
         <script type="module" src="${spaConfig.basename}/puck-entry.js"></script>
