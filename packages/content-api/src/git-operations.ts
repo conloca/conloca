@@ -100,10 +100,19 @@ async function resolveRepoRoot(contentPath: string): Promise<string | null> {
 export function createGitOperations(config: GitConfig): GitOperations {
   const { contentPath, branch } = config;
 
+  let cachedRepoRoot: string | null | undefined;
+
+  async function getCachedRepoRoot(): Promise<string | null> {
+    if (cachedRepoRoot === undefined) {
+      cachedRepoRoot = await resolveRepoRoot(contentPath);
+    }
+    return cachedRepoRoot;
+  }
+
   return {
     async getStatus(): Promise<GitStatus> {
       try {
-        const repoRoot = await resolveRepoRoot(contentPath);
+        const repoRoot = await getCachedRepoRoot();
         if (!repoRoot) {
           return { isRepo: false, hasChanges: false, changedFiles: 0, ahead: 0, behind: 0, branch: 'unknown' };
         }
@@ -148,7 +157,7 @@ export function createGitOperations(config: GitConfig): GitOperations {
 
     async commitAll(message: string, author?: GitAuthor): Promise<CommitResult> {
       try {
-        const repoRoot = await resolveRepoRoot(contentPath);
+        const repoRoot = await getCachedRepoRoot();
         if (!repoRoot) {
           return { success: false, error: 'Not a git repository' };
         }
@@ -199,7 +208,7 @@ export function createGitOperations(config: GitConfig): GitOperations {
 
     async pushOrigin(): Promise<PushResult> {
       try {
-        const repoRoot = await resolveRepoRoot(contentPath);
+        const repoRoot = await getCachedRepoRoot();
         if (!repoRoot) {
           return { success: false, error: 'Not a git repository' };
         }
@@ -255,7 +264,7 @@ export function createGitOperations(config: GitConfig): GitOperations {
 
     async pull(): Promise<PullResult> {
       try {
-        const repoRoot = await resolveRepoRoot(contentPath);
+        const repoRoot = await getCachedRepoRoot();
         if (!repoRoot) {
           return { success: false, error: 'Not a git repository' };
         }

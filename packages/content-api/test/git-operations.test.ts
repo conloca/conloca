@@ -268,4 +268,20 @@ describe('createGitOperations', () => {
       expect(result.error).toBeDefined();
     });
   });
+
+  test('caches resolveRepoRoot across multiple method calls', async () => {
+    await initGitRepo();
+    await createInitialCommit();
+    // Call getStatus() twice, commitAll() once -- all should work
+    // This proves caching doesn't break any method
+    const ops = createGitOperations({ contentPath });
+    const status1 = await ops.getStatus();
+    expect(status1.isRepo).toBe(true);
+    const status2 = await ops.getStatus();
+    expect(status2.isRepo).toBe(true);
+    // commitAll should also work (uses same cached root)
+    await writeFile(join(contentPath, 'cache-test.txt'), 'data');
+    const result = await ops.commitAll('test: cache validation');
+    expect(result.success).toBe(true);
+  });
 });
