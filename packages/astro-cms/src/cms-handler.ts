@@ -12,6 +12,7 @@ import {
   validateCFAccessRequest,
 } from '@conloca/content-api/node';
 import type { APIRoute } from 'astro';
+import { isPathWithinBase } from './path-validation.js';
 import { safeJsonStringify } from './safe-json-stringify.js';
 import type { DataCollectionEntry, DataContext, PageReference, ResolvedRoutingConfig } from './types.js';
 
@@ -167,7 +168,14 @@ async function handleSpa(params: { path?: string | string[] }, request: Request)
 
   // For asset requests, serve them from the cms-spa dist/spa directory
   try {
-    const assetPath = join(cmsSpaPath, 'dist/spa', path);
+    const spaBase = join(cmsSpaPath, 'dist/spa');
+    const assetPath = join(spaBase, path);
+
+    if (!isPathWithinBase(spaBase, assetPath)) {
+      console.warn('[security] Path traversal attempt blocked:', path);
+      return new Response('Forbidden', { status: 403 });
+    }
+
     const content = await readFile(assetPath);
 
     // Determine content type
