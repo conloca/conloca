@@ -1,5 +1,5 @@
 import { Upload, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { ACCEPTED_TYPES, useUploadFlow } from '../../hooks';
 import { cn } from '../../utils/cn';
 
@@ -11,8 +11,6 @@ interface UploadModalProps {
 }
 
 export function UploadModal({ isOpen, onClose, folder, onUploadComplete }: UploadModalProps) {
-  const [customName, setCustomName] = useState('');
-
   const {
     activeTab,
     setActiveTab,
@@ -39,11 +37,6 @@ export function UploadModal({ isOpen, onClose, folder, onUploadComplete }: Uploa
     reset,
   } = useUploadFlow({ folder, onUploadComplete, onSuccess: onClose });
 
-  // Reset customName when a new file is selected
-  useEffect(() => {
-    setCustomName('');
-  }, [pendingFile]);
-
   // Handle escape key to close modal
   useEffect(() => {
     if (!isOpen) return;
@@ -62,14 +55,8 @@ export function UploadModal({ isOpen, onClose, folder, onUploadComplete }: Uploa
   useEffect(() => {
     if (!isOpen) {
       reset();
-      setCustomName('');
     }
   }, [isOpen, reset]);
-
-  const onCancel = () => {
-    handleCancel();
-    setCustomName('');
-  };
 
   if (!isOpen) return null;
 
@@ -161,22 +148,6 @@ export function UploadModal({ isOpen, onClose, folder, onUploadComplete }: Uploa
                       <p className="text-sm font-medium text-grey-01 truncate">{pendingFile.name}</p>
                       <p className="text-xs text-grey-04">{(pendingFile.size / 1024).toFixed(1)} KB</p>
                     </div>
-                  </div>
-
-                  {/* Custom name field (UI-only for display purposes) */}
-                  <div>
-                    <label htmlFor="custom-name" className="block text-xs text-grey-04 uppercase tracking-wide mb-1">
-                      Asset Name (optional)
-                    </label>
-                    <input
-                      id="custom-name"
-                      type="text"
-                      value={customName}
-                      onChange={(e) => setCustomName(e.target.value)}
-                      placeholder={pendingFile.name}
-                      className="w-full px-3 py-2 border border-grey-09 rounded text-sm focus:outline-none focus:ring-2 focus:ring-azure-04 focus:border-azure-04"
-                    />
-                    <p className="mt-1 text-xs text-grey-07">Leave blank to use original filename</p>
                   </div>
 
                   {/* Alt text field */}
@@ -271,7 +242,7 @@ export function UploadModal({ isOpen, onClose, folder, onUploadComplete }: Uploa
         <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-grey-09 bg-grey-11 rounded-b-lg">
           <button
             type="button"
-            onClick={pendingFile ? onCancel : onClose}
+            onClick={pendingFile ? handleCancel : onClose}
             disabled={isUploading}
             className="px-4 py-2 bg-white border border-grey-09 text-grey-04 text-sm rounded hover:bg-grey-11 disabled:opacity-50 transition-colors"
           >
