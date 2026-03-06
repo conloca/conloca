@@ -301,6 +301,13 @@ describe('AssetOperations', () => {
   describe('importFromUrl', () => {
     const originalFetch = globalThis.fetch;
 
+    /** Create a mock fetch with the `preconnect` property required by Bun's `typeof fetch` */
+    function mockFetch(impl: (...args: unknown[]) => unknown) {
+      const mocked = mock(impl);
+      (mocked as { preconnect?: () => void }).preconnect = () => {};
+      globalThis.fetch = mocked as unknown as typeof fetch;
+    }
+
     afterEach(() => {
       globalThis.fetch = originalFetch;
     });
@@ -322,7 +329,7 @@ describe('AssetOperations', () => {
     });
 
     test('returns error when fetch fails (network error)', async () => {
-      globalThis.fetch = mock(() => Promise.reject(new Error('Network error')));
+      mockFetch(() => Promise.reject(new Error('Network error')));
       const result = await ops.importFromUrl('https://example.com/image.jpg');
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -331,7 +338,7 @@ describe('AssetOperations', () => {
     });
 
     test('returns error when response not ok (404)', async () => {
-      globalThis.fetch = mock(() => Promise.resolve(new Response('Not Found', { status: 404 })));
+      mockFetch(() => Promise.resolve(new Response('Not Found', { status: 404 })));
       const result = await ops.importFromUrl('https://example.com/image.jpg');
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -341,7 +348,7 @@ describe('AssetOperations', () => {
 
     test('returns error when Content-Length exceeds maxFileSize', async () => {
       const smallOps = new AssetOperations({ assetsPath, maxFileSize: 100 });
-      globalThis.fetch = mock(() =>
+      mockFetch(() =>
         Promise.resolve(
           new Response(new Uint8Array(50), {
             status: 200,
@@ -362,7 +369,7 @@ describe('AssetOperations', () => {
     test('returns error when actual body exceeds maxFileSize', async () => {
       const smallOps = new AssetOperations({ assetsPath, maxFileSize: 50 });
       // No Content-Length header, but body is bigger than limit
-      globalThis.fetch = mock(() =>
+      mockFetch(() =>
         Promise.resolve(
           new Response(new Uint8Array(100), {
             status: 200,
@@ -379,7 +386,7 @@ describe('AssetOperations', () => {
 
     test('succeeds for valid public URL with valid image response', async () => {
       const imageData = new Uint8Array([0xff, 0xd8, 0xff, 0xe0]);
-      globalThis.fetch = mock(() =>
+      mockFetch(() =>
         Promise.resolve(
           new Response(imageData, {
             status: 200,
