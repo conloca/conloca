@@ -10,6 +10,20 @@ import { searchForWorkspaceRoot } from 'vite';
 import { deriveComponentPaths, type HydrationDiscovery, scanForHydratableComponents } from './lib/hydration-scanner.js';
 import { normalizeRoutingConfig, resolveRouteConfig } from './lib/routing-config.js';
 
+// FRAGILE: viteReact.preambleCode is an undocumented internal API of @vitejs/plugin-react.
+// It provides the React Fast Refresh preamble script needed for HMR in virtual modules.
+// If @vitejs/plugin-react removes or renames this property, the assertion below will
+// fail immediately at dev startup. Test after any @vitejs/plugin-react update.
+if (typeof viteReact.preambleCode !== 'string') {
+  throw new Error(
+    '@vitejs/plugin-react internal API changed: viteReact.preambleCode is no longer a string. ' +
+      'This is an undocumented API used by @conloca/astro-cms for React Fast Refresh in virtual modules. ' +
+      'Check @vitejs/plugin-react release notes and update the preamble injection logic.',
+  );
+}
+
+const reactRefreshPreamble = viteReact.preambleCode.replace('__BASE__', '/');
+
 // Get the directory of this module to resolve page-handler.astro
 // Works from both src/ (dev) and dist/ (published) since build copies the file
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -106,15 +120,11 @@ export default {};
 
 // Template for the puck config loader virtual module
 const puckConfigLoader = (absolutePuckPath: string) => {
-  // Get the exact preamble code from the React plugin
-  // The base needs to be '/' so the import becomes '/@react-refresh'
-  const preambleCode = viteReact.preambleCode.replace('__BASE__', '/');
-
   // We need to ensure the preamble executes before ANY module evaluation
   // So we'll use a dynamic import after the preamble is set up
   return `
 // Import and execute React refresh preamble first (from @vitejs/plugin-react)
-${preambleCode}
+${reactRefreshPreamble}
 
 // Import the setPuckConfig function from cms-spa
 import { setPuckConfig } from '@conloca/cms-spa/puck-config';
@@ -461,8 +471,6 @@ initHydration(componentRegistry)
                     return 'export default {};';
                   }
                   if (id === RESOLVED_CMS_SPA_ENTRY) {
-                    const preambleCode = viteReact.preambleCode.replace('__BASE__', '/');
-
                     // Detect whether cms-spa source is available (workspace mode)
                     // vs only dist/ (npm install)
                     let cmsSpaImport: string;
@@ -489,7 +497,7 @@ initHydration(componentRegistry)
 
                     return `
 // Import and execute React refresh preamble first (from @vitejs/plugin-react)
-${preambleCode}
+${reactRefreshPreamble}
 
 // Import cms-spa through Vite
 // Vite will resolve React from its pre-bundled deps (same instance as puck.config.tsx)
