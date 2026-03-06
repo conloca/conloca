@@ -778,37 +778,37 @@ export class AssetOperations {
       return { success: false, error: 'Target folder does not exist' };
     }
 
-    // Move each file
-    let movedCount = 0;
+    // Move files on disk first, collect successful moves
+    const moves: { oldPath: string; newPath: string }[] = [];
     for (const filename of filenames) {
       const sourceFile = join(sourcePath, filename);
       const targetFile = join(targetPath, filename);
-
-      // Compute manifest paths
       const oldRelativePath = normalizedSource === '/' ? filename : `${normalizedSource.slice(1)}/${filename}`;
       const newRelativePath = normalizedTarget === '/' ? filename : `${normalizedTarget.slice(1)}/${filename}`;
 
       try {
-        // Move the file on disk
         await rename(sourceFile, targetFile);
-
-        // Update manifest: remove old entry and add new one
-        const manifestData = await this.manifest.read();
-        const oldEntry = manifestData[oldRelativePath];
-
-        if (oldEntry) {
-          await this.manifest.remove(oldRelativePath);
-          await this.manifest.add(newRelativePath, oldEntry);
-        }
-
-        movedCount++;
+        moves.push({ oldPath: oldRelativePath, newPath: newRelativePath });
       } catch (err) {
-        // Continue with other files even if one fails
         console.error(`[AssetOperations] Failed to move ${filename}:`, err);
       }
     }
 
-    return { success: true, moved: movedCount };
+    // Single atomic manifest update for all moves (1 read + 1 write)
+    if (moves.length > 0) {
+      await this.manifest.withManifest((data) => {
+        for (const { oldPath, newPath } of moves) {
+          const entry = data[oldPath];
+          if (entry) {
+            delete data[oldPath];
+            data[newPath] = entry;
+          }
+        }
+        return data;
+      });
+    }
+
+    return { success: true, moved: moves.length };
   }
 
   /**
