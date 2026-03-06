@@ -322,8 +322,12 @@ async function handleContentApi(request: Request, cfResult: CFAccessResult): Pro
   // Pass user to Hono via headers for downstream use (needed for git commit attribution)
   const headers = new Headers(request.headers);
   if (cfResult.user) {
-    headers.set('X-CF-User-Email', cfResult.user.email);
-    headers.set('X-CF-User-Sub', cfResult.user.sub);
+    if (cfResult.user.email) {
+      headers.set('X-CF-User-Email', cfResult.user.email);
+    }
+    if (cfResult.user.sub) {
+      headers.set('X-CF-User-Sub', cfResult.user.sub);
+    }
   }
 
   // Create a new request with the correct path for Hono
