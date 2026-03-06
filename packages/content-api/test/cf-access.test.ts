@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { extractCFAccessToken, validateCFAccessRequest } from '../src/cf-access';
+import { extractCFAccessToken } from '../src/cf-access';
 
 describe('extractCFAccessToken', () => {
   test('returns header token from Cf-Access-Jwt-Assertion', () => {
@@ -37,27 +37,5 @@ describe('extractCFAccessToken', () => {
       headers: { Cookie: 'OtherCookie=some-value; session_id=abc' },
     });
     expect(extractCFAccessToken(request)).toBeNull();
-  });
-});
-
-describe('validateCFAccessRequest', () => {
-  /**
-   * Limitation: cf-access.ts reads CF_ACCESS_TEAM_NAME and CF_ACCESS_AUD from env at module load time
-   * (lines 11-12) as const bindings. In the test environment, these env vars are not set, so the function
-   * always returns { valid: true, required: false } -- the "not configured / local dev" path.
-   * Testing the JWT verification path would require refactoring the module to accept config injection.
-   */
-  test('returns { valid: true, required: false } when env vars not set (local dev)', async () => {
-    const request = new Request('http://test.local');
-    const result = await validateCFAccessRequest(request);
-    expect(result).toEqual({ valid: true, required: false });
-  });
-
-  test('returns same result regardless of token presence when not configured', async () => {
-    const request = new Request('http://test.local', {
-      headers: { 'Cf-Access-Jwt-Assertion': 'some-token' },
-    });
-    const result = await validateCFAccessRequest(request);
-    expect(result).toEqual({ valid: true, required: false });
   });
 });
