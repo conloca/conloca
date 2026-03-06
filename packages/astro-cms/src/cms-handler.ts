@@ -12,9 +12,12 @@ import {
   validateCFAccessRequest,
 } from '@conloca/content-api/node';
 import type { APIRoute } from 'astro';
+import { SPA_MIME_TYPES } from './mime-types.js';
 import { isPathWithinBase } from './path-validation.js';
 import { safeJsonStringify } from './safe-json-stringify.js';
 import type { DataCollectionEntry, DataContext, PageReference, ResolvedRoutingConfig } from './types.js';
+
+export { SPA_MIME_TYPES } from './mime-types.js';
 
 // Get the path to the cms-spa package by resolving its package.json
 const require = createRequire(import.meta.url);
@@ -172,12 +175,9 @@ async function handleSpa(params: { path?: string | string[] }, request: Request)
 
     const content = await readFile(assetPath);
 
-    // Determine content type
-    let contentType = 'application/octet-stream';
-    if (path.endsWith('.js')) contentType = 'application/javascript';
-    else if (path.endsWith('.css')) contentType = 'text/css';
-    else if (path.endsWith('.html')) contentType = 'text/html';
-    else if (path.endsWith('.json')) contentType = 'application/json';
+    // Determine content type from extension map with octet-stream fallback
+    const ext = path.substring(path.lastIndexOf('.'));
+    const contentType = SPA_MIME_TYPES[ext] ?? 'application/octet-stream';
 
     return new Response(content as BodyInit, {
       headers: {
