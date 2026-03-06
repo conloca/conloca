@@ -2,12 +2,12 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { deriveComponentPaths, scanForHydratableComponents } from '../src/lib/hydration-scanner.js';
-
-// Copy regex patterns from source for direct unit testing (not exported)
-const HYDRATION_IMPORT_PATTERN =
-  /import\s+\{[^}]*withHydration[^}]*\}\s+from\s+['"]@conloca\/astro-cms(?:\/hydration)?['"]/;
-const HYDRATION_PATTERN = /withHydration\s*\(\s*\w+\s*,\s*['"](\w+)['"]\s*\)/g;
+import {
+  deriveComponentPaths,
+  HYDRATION_IMPORT_PATTERN,
+  HYDRATION_PATTERN,
+  scanForHydratableComponents,
+} from '../src/lib/hydration-scanner.js';
 
 describe('Hydration Scanner', () => {
   // -----------------------------------------------------------------
