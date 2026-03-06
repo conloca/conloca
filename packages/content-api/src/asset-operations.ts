@@ -12,6 +12,7 @@ import {
   type ManifestEntryData,
 } from './asset-manifest';
 import { setupGitLfsAttributes } from './git-operations';
+import { validateFetchUrl } from './url-validation';
 
 export interface AssetConfig {
   assetsPath: string;
@@ -415,28 +416,53 @@ export class AssetOperations {
 
   /**
    * Import an image from a URL (server-side fetch, no CORS issues)
+   * Validates URL against SSRF, enforces 30s timeout, and checks response size.
    */
   async importFromUrl(
     url: string,
     metadata?: { alt?: string; uploadedBy?: string; folder?: string },
   ): Promise<{ success: true; asset: AssetEntry } | { success: false; error: string }> {
+    // Validate URL: block private IPs and non-http(s) schemes
+    try {
+      validateFetchUrl(url);
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : 'Invalid URL' };
+    }
+
+    // Fetch with 30-second timeout
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000);
     let response: Response;
     try {
-      response = await fetch(url);
+      response = await fetch(url, { signal: controller.signal });
     } catch {
       return { success: false, error: 'Failed to fetch URL' };
+    } finally {
+      clearTimeout(timeout);
     }
 
     if (!response.ok) {
       return { success: false, error: `Fetch failed with status ${response.status}` };
     }
 
+    // Early size check from Content-Length header
+    const contentLength = response.headers.get('content-length');
+    if (contentLength && Number.parseInt(contentLength, 10) > this.config.maxFileSize) {
+      const maxMB = Math.round(this.config.maxFileSize / (1024 * 1024));
+      return { success: false, error: `Remote file too large. Maximum: ${maxMB}MB` };
+    }
+
     const contentType = response.headers.get('content-type') || '';
     const urlPath = new URL(url).pathname;
     const urlFilename = urlPath.split('/').pop() || 'imported-image.jpg';
 
-    // Build a File-like object from the response
+    // Read response body and verify actual size
     const arrayBuffer = await response.arrayBuffer();
+    if (arrayBuffer.byteLength > this.config.maxFileSize) {
+      const maxMB = Math.round(this.config.maxFileSize / (1024 * 1024));
+      return { success: false, error: `Remote file too large. Maximum: ${maxMB}MB` };
+    }
+
     const file = new File([new Uint8Array(arrayBuffer)], urlFilename, { type: contentType });
 
     return this.upload(file, metadata);
