@@ -26,6 +26,7 @@ export const API_ROUTES = {
   COLLECTIONS: '/content/collections',
   BATCH_UPDATE: '/content/batch',
   FIND_UNTRANSLATED: '/content/find-untranslated',
+  DATA_CONTEXT: '/data-context',
 } as const;
 
 export interface MockResponse {

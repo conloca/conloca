@@ -8,6 +8,7 @@ import type {
   ContentManifest,
   CreateContentInput,
   CreateResult,
+  DataContext,
   DeleteResult,
   ErrorCode,
   FolderListing,
@@ -313,6 +314,11 @@ export class ContentAPIClient {
   async getDataCollections(): Promise<string[]> {
     const response = await this.fetchAPI<{ collections: string[] }>(`${this.baseUrl}/data/collections`);
     return response.collections;
+  }
+
+  // Data context operations
+  async getDataContext(pageId: string): Promise<{ dataContext: DataContext }> {
+    return this.fetchAPI<{ dataContext: DataContext }>(`${this.baseUrl}/data-context?pageId=${pageId}`);
   }
 
   // Global operations

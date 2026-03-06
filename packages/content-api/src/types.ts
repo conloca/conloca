@@ -392,6 +392,65 @@ export interface BatchOperationResult {
   etag?: string;
 }
 
+// ===== Data Context Types =====
+
+/**
+ * Minimal page reference for listing/navigation in data context.
+ *
+ * Used in dataBindings.pages for blog listing components
+ * and getStaticPaths() to enumerate available pages.
+ */
+export interface PageReference {
+  /** Page identifier. */
+  id: string;
+  /** URL pathname. */
+  pathname: string;
+  /** Page title (if available without full load). */
+  title?: string;
+  /** Content collection. */
+  collection: string;
+  /** Page metadata from content. */
+  meta?: Record<string, unknown>;
+  /** Page timestamps for sorting and display. */
+  timestamps?: {
+    created?: Date;
+    modified?: Date;
+  };
+}
+
+/**
+ * A single entry from a data collection.
+ *
+ * Simplified representation of collection data for use in component resolvers.
+ */
+export interface DataCollectionEntry {
+  /** Unique identifier for the entry. */
+  id: string;
+  /** Human-readable name of the entry. */
+  name: string;
+  /** The entry's data content. */
+  data: Record<string, unknown>;
+  /** Optional metadata for the entry. */
+  meta?: Record<string, unknown>;
+}
+
+/**
+ * Context object passed to Puck component resolvers via metadata.
+ *
+ * Contains fetched collection data and contextual information
+ * for data-driven component rendering.
+ */
+export interface DataContext {
+  /** Collection data keyed by collection name. */
+  collections: Record<string, DataCollectionEntry[]>;
+  /** Pages matching the dataBindings.pages filter. */
+  pages?: PageReference[];
+  /** Current locale used for data fetching. */
+  locale: string;
+  /** Site name from routing configuration. */
+  siteName: string;
+}
+
 // Internal type for locale data returned by readLocaleFile
 export interface LocaleFileData {
   locale: string;

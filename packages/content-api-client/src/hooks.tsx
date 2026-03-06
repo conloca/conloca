@@ -62,6 +62,7 @@ const queryKeys = {
   dataNameAvailability: (name: string, collection: string, excludeId?: string) =>
     ['data', 'name-availability', name, collection, excludeId] as const,
   dataCollections: () => ['data', 'collections'] as const,
+  dataContext: (pageId?: string) => ['data-context', pageId] as const,
   allContent: (filters?: GlobalFilters) => ['content', 'all', filters] as const,
   untranslatedContent: (targetLocale: string, excludeSites?: string[], includeUnpublished?: boolean) =>
     ['content', 'untranslated', targetLocale, excludeSites, includeUnpublished] as const,
@@ -493,6 +494,18 @@ export function useDataCollections() {
   return useQuery({
     queryKey: queryKeys.dataCollections(),
     queryFn: () => client.getDataCollections(),
+  });
+}
+
+// ===== Data Context Hooks =====
+
+export function useDataContext(pageId?: string) {
+  const client = getContentAPIClient();
+
+  return useQuery({
+    queryKey: queryKeys.dataContext(pageId),
+    queryFn: () => client.getDataContext(pageId!),
+    enabled: !!pageId,
   });
 }
 

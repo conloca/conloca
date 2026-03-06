@@ -434,61 +434,6 @@ export interface PageData {
 }
 
 /**
- * Minimal page reference for listing/navigation.
- *
- * Used in getStaticPaths() to enumerate available pages
- * without loading full content, and in dataBindings.pages
- * for blog listing components.
- */
-export interface PageReference {
-  /**
-   * Page identifier.
-   */
-  id: string;
-
-  /**
-   * URL pathname.
-   */
-  pathname: string;
-
-  /**
-   * Page title (if available without full load).
-   */
-  title?: string;
-
-  /**
-   * Content collection.
-   */
-  collection: string;
-
-  /**
-   * Page metadata from content.
-   *
-   * Contains author, excerpt, tags, featured image, and other
-   * custom fields from the page's frontmatter/metadata.
-   * Useful for blog cards, listings, and SEO.
-   */
-  meta?: Record<string, unknown>;
-
-  /**
-   * Page timestamps for sorting and display.
-   *
-   * Used by getPagesByPrefix for date-based sorting.
-   */
-  timestamps?: {
-    /**
-     * When the page was first created.
-     */
-    created?: Date;
-
-    /**
-     * When the page was last modified.
-     */
-    modified?: Date;
-  };
-}
-
-/**
  * Props passed to layout components wrapping page content.
  *
  * Layouts receive common props (title, description) that work with
@@ -678,91 +623,8 @@ export interface DataBindingConfig {
   };
 }
 
-/**
- * Context object passed to Puck component resolvers via metadata.
- *
- * Contains fetched collection data and contextual information
- * for data-driven component rendering.
- *
- * @example Accessing data in a Puck component resolver
- * ```typescript
- * const TeamListConfig: ComponentConfig<TeamListProps> = {
- *   resolveData: async (data, { metadata }) => {
- *     const context = metadata as DataContext;
- *     const team = context.collections.team || [];
- *     return {
- *       props: {
- *         members: team.map(entry => ({
- *           id: entry.id,
- *           name: entry.data.name,
- *           role: entry.data.role,
- *         })),
- *       },
- *     };
- *   },
- * };
- * ```
- */
-export interface DataContext {
-  /**
-   * Collection data keyed by collection name.
-   *
-   * Each key matches a collection name from DataBindingConfig.collections.
-   * Value is an array of entries from that collection.
-   */
-  collections: Record<string, DataCollectionEntry[]>;
-
-  /**
-   * Pages matching the dataBindings.pages filter.
-   *
-   * Only present if dataBindings.pages is configured for the route.
-   * Contains PageReference objects with meta and timestamps for blog display.
-   */
-  pages?: PageReference[];
-
-  /**
-   * Current locale used for data fetching.
-   */
-  locale: string;
-
-  /**
-   * Site name from routing configuration.
-   */
-  siteName: string;
-}
-
-/**
- * A single entry from a data collection.
- *
- * Simplified representation of collection data for use in component resolvers.
- * Contains the entry's identifier, name, and localized content.
- */
-export interface DataCollectionEntry {
-  /**
-   * Unique identifier for the entry.
-   */
-  id: string;
-
-  /**
-   * Human-readable name of the entry.
-   */
-  name: string;
-
-  /**
-   * The entry's data content.
-   *
-   * Schema depends on the collection's structure.
-   * Access typed fields via `entry.data.fieldName`.
-   */
-  data: Record<string, unknown>;
-
-  /**
-   * Optional metadata for the entry.
-   *
-   * May include title, description, or custom fields.
-   */
-  meta?: Record<string, unknown>;
-}
+// Data context types re-exported from content-api (canonical source)
+export type { DataCollectionEntry, DataContext, PageReference } from '@conloca/content-api';
 
 /**
  * Configuration for a page creation template.
