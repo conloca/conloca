@@ -4,6 +4,13 @@
     {
       "packages": ["**"],
       "dependencies": ["react", "react-dom"],
+      "dependencyTypes": ["peer"],
+      "pinVersion": "^19.0.0"
+    },
+    {
+      "packages": ["**"],
+      "dependencies": ["react", "react-dom"],
+      "dependencyTypes": ["dev", "prod"],
       "pinVersion": "19.2.4"
     },
     {
