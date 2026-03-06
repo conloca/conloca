@@ -3,20 +3,16 @@ import type {
   ContentListResult,
   ContentManifest,
   CreateContentInput,
+  GitCommitResult,
+  GitPullResult,
+  GitPushResult,
+  GitStatus,
   GlobalFilters,
   LocalizedEntry,
   UpdateLocaleInput,
 } from '@conloca/content-api';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  APIClientError,
-  ContentAPIClient,
-  type GitCommitResult,
-  type GitPullResult,
-  type GitPushResult,
-  type GitStatus,
-  StaleWriteError,
-} from './client';
+import { APIClientError, ContentAPIClient, StaleWriteError } from './client';
 
 // Global client instance
 let globalClient: ContentAPIClient | null = null;

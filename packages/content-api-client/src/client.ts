@@ -13,6 +13,10 @@ import type {
   ErrorCode,
   FolderListing,
   FolderTreeNode,
+  GitCommitResult,
+  GitPullResult,
+  GitPushResult,
+  GitStatus,
   GlobalFilters,
   LocalizedEntry,
   MoveResult,
@@ -21,34 +25,6 @@ import type {
   UpdateResult,
 } from '@conloca/content-api';
 import { ErrorCodes } from '@conloca/content-api';
-
-// Git operation types
-export interface GitStatus {
-  hasChanges: boolean;
-  changedFiles: number;
-  ahead: number;
-  behind: number;
-  branch: string;
-  isRepo: boolean;
-}
-
-export interface GitCommitResult {
-  success: boolean;
-  commit?: string;
-  summary?: string;
-  error?: string;
-}
-
-export interface GitPushResult {
-  success: boolean;
-  error?: string;
-}
-
-export interface GitPullResult {
-  success: boolean;
-  summary?: string;
-  error?: string;
-}
 
 export interface ContentAPIClientOptions {
   baseUrl?: string;
