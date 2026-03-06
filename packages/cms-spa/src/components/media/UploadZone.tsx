@@ -1,8 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { buildUploadFormData, useImportAssetUrl, useUploadAsset } from '../../hooks';
+import { ACCEPTED_TYPES, useUploadFlow } from '../../hooks';
 import { cn } from '../../utils/cn';
-
-const ACCEPTED_TYPES = 'image/jpeg,image/png,image/gif,image/webp,image/svg+xml,image/avif';
 
 interface UploadZoneProps {
   /** Folder to upload files to */
@@ -10,146 +7,31 @@ interface UploadZoneProps {
   onUploadComplete?: () => void;
 }
 
-interface UploadProgress {
-  total: number;
-  completed: number;
-  failed: number;
-  inProgress: boolean;
-}
-
 export function UploadZone({ folder = '/', onUploadComplete }: UploadZoneProps) {
-  const [isDragOver, setIsDragOver] = useState(false);
-  const [altText, setAltText] = useState('');
-  const [pendingFile, setPendingFile] = useState<File | null>(null);
-  const [activeTab, setActiveTab] = useState<'file' | 'url'>('file');
-  const [importUrl, setImportUrl] = useState('');
-  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const uploadMutation = useUploadAsset();
-  const importMutation = useImportAssetUrl();
-
-  const previewUrl = useMemo(() => {
-    if (!pendingFile) return null;
-    return URL.createObjectURL(pendingFile);
-  }, [pendingFile]);
-
-  useEffect(() => {
-    return () => {
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-      }
-    };
-  }, [previewUrl]);
-
-  const isUploading = uploadMutation.isPending || importMutation.isPending || (uploadProgress?.inProgress ?? false);
-  const error = uploadMutation.error || importMutation.error;
-
-  // Handle single file selection (shows alt text input)
-  const handleSingleFile = useCallback((file: File) => {
-    setPendingFile(file);
-    setAltText('');
-  }, []);
-
-  // Handle multiple files (uploads directly without alt text prompt)
-  const handleMultipleFiles = useCallback(
-    async (files: File[]) => {
-      if (files.length === 0) return;
-
-      // If only one file, use the single file flow with alt text prompt
-      if (files.length === 1) {
-        handleSingleFile(files[0]);
-        return;
-      }
-
-      // Multi-file upload: upload all in parallel without alt text prompts
-      setUploadProgress({ total: files.length, completed: 0, failed: 0, inProgress: true });
-
-      const uploadPromises = files.map(async (file) => {
-        const formData = await buildUploadFormData(file, undefined, folder);
-        return uploadMutation.mutateAsync(formData);
-      });
-
-      const results = await Promise.allSettled(uploadPromises);
-
-      const completed = results.filter((r) => r.status === 'fulfilled').length;
-      const failed = results.filter((r) => r.status === 'rejected').length;
-
-      setUploadProgress({ total: files.length, completed, failed, inProgress: false });
-
-      // Clear progress after a delay
-      setTimeout(() => {
-        setUploadProgress(null);
-        if (completed > 0) {
-          onUploadComplete?.();
-        }
-      }, 2000);
-    },
-    [folder, uploadMutation, handleSingleFile, onUploadComplete],
-  );
-
-  const handleFiles = useCallback(
-    (fileList: FileList | null) => {
-      if (!fileList || fileList.length === 0) return;
-      const files = Array.from(fileList);
-      handleMultipleFiles(files);
-    },
-    [handleMultipleFiles],
-  );
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-  }, []);
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragOver(false);
-      handleFiles(e.dataTransfer.files);
-    },
-    [handleFiles],
-  );
-
-  const handleUpload = async () => {
-    if (!pendingFile) return;
-
-    const formData = await buildUploadFormData(pendingFile, altText || undefined, folder);
-    uploadMutation.mutate(formData, {
-      onSuccess: () => {
-        setPendingFile(null);
-        setAltText('');
-        if (fileInputRef.current) fileInputRef.current.value = '';
-        onUploadComplete?.();
-      },
-    });
-  };
-
-  const handleImportUrl = () => {
-    if (!importUrl.trim()) return;
-
-    importMutation.mutate(
-      { url: importUrl.trim(), alt: altText || undefined, folder },
-      {
-        onSuccess: () => {
-          setImportUrl('');
-          setAltText('');
-          onUploadComplete?.();
-        },
-      },
-    );
-  };
-
-  const handleCancel = () => {
-    setPendingFile(null);
-    setAltText('');
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  };
+  const {
+    activeTab,
+    setActiveTab,
+    isDragOver,
+    pendingFile,
+    altText,
+    setAltText,
+    importUrl,
+    setImportUrl,
+    uploadProgress,
+    fileInputRef,
+    previewUrl,
+    isUploading,
+    error,
+    uploadMutationIsPending,
+    importMutationIsPending,
+    handleFiles,
+    handleDragOver,
+    handleDragLeave,
+    handleDrop,
+    handleUpload,
+    handleImportUrl,
+    handleCancel,
+  } = useUploadFlow({ folder, onUploadComplete });
 
   return (
     <div className="border border-grey-09 rounded-lg bg-grey-11 p-4">
@@ -232,7 +114,7 @@ export function UploadZone({ folder = '/', onUploadComplete }: UploadZoneProps) 
                   disabled={isUploading}
                   className="px-4 py-2 bg-azure-04 text-white text-sm rounded hover:bg-azure-03 disabled:opacity-50 transition-colors"
                 >
-                  {uploadMutation.isPending ? 'Uploading...' : 'Upload'}
+                  {uploadMutationIsPending ? 'Uploading...' : 'Upload'}
                 </button>
                 <button
                   type="button"
@@ -314,7 +196,7 @@ export function UploadZone({ folder = '/', onUploadComplete }: UploadZoneProps) 
             disabled={isUploading || !importUrl.trim()}
             className="px-4 py-2 bg-azure-04 text-white text-sm rounded hover:bg-azure-03 disabled:opacity-50 transition-colors"
           >
-            {importMutation.isPending ? 'Importing...' : 'Import'}
+            {importMutationIsPending ? 'Importing...' : 'Import'}
           </button>
         </div>
       )}

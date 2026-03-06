@@ -1,9 +1,7 @@
 import { Upload, X } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { buildUploadFormData, useImportAssetUrl, useUploadAsset } from '../../hooks';
+import { useEffect, useState } from 'react';
+import { ACCEPTED_TYPES, useUploadFlow } from '../../hooks';
 import { cn } from '../../utils/cn';
-
-const ACCEPTED_TYPES = 'image/jpeg,image/png,image/gif,image/webp,image/svg+xml,image/avif';
 
 interface UploadModalProps {
   isOpen: boolean;
@@ -12,53 +10,39 @@ interface UploadModalProps {
   onUploadComplete?: () => void;
 }
 
-interface UploadProgress {
-  total: number;
-  completed: number;
-  failed: number;
-  inProgress: boolean;
-}
-
 export function UploadModal({ isOpen, onClose, folder, onUploadComplete }: UploadModalProps) {
-  const [activeTab, setActiveTab] = useState<'file' | 'url'>('file');
-  const [isDragOver, setIsDragOver] = useState(false);
-  const [pendingFile, setPendingFile] = useState<File | null>(null);
-  const [altText, setAltText] = useState('');
   const [customName, setCustomName] = useState('');
-  const [importUrl, setImportUrl] = useState('');
-  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const uploadMutation = useUploadAsset();
-  const importMutation = useImportAssetUrl();
+  const {
+    activeTab,
+    setActiveTab,
+    isDragOver,
+    pendingFile,
+    altText,
+    setAltText,
+    importUrl,
+    setImportUrl,
+    uploadProgress,
+    fileInputRef,
+    previewUrl,
+    isUploading,
+    error,
+    uploadMutationIsPending,
+    importMutationIsPending,
+    handleFiles,
+    handleDragOver,
+    handleDragLeave,
+    handleDrop,
+    handleUpload,
+    handleImportUrl,
+    handleCancel,
+    reset,
+  } = useUploadFlow({ folder, onUploadComplete, onSuccess: onClose });
 
-  const previewUrl = useMemo(() => {
-    if (!pendingFile) return null;
-    return URL.createObjectURL(pendingFile);
-  }, [pendingFile]);
-
+  // Reset customName when a new file is selected
   useEffect(() => {
-    return () => {
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-      }
-    };
-  }, [previewUrl]);
-
-  const isUploading = uploadMutation.isPending || importMutation.isPending || (uploadProgress?.inProgress ?? false);
-  const error = uploadMutation.error || importMutation.error;
-
-  // Reset all state when modal closes
-  const resetState = useCallback(() => {
-    setPendingFile(null);
-    setAltText('');
     setCustomName('');
-    setImportUrl('');
-    setUploadProgress(null);
-    setActiveTab('file');
-    setIsDragOver(false);
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  }, []);
+  }, [pendingFile]);
 
   // Handle escape key to close modal
   useEffect(() => {
@@ -77,116 +61,14 @@ export function UploadModal({ isOpen, onClose, folder, onUploadComplete }: Uploa
   // Reset state when modal closes
   useEffect(() => {
     if (!isOpen) {
-      resetState();
+      reset();
+      setCustomName('');
     }
-  }, [isOpen, resetState]);
+  }, [isOpen, reset]);
 
-  // Handle single file selection (shows alt text input)
-  const handleSingleFile = useCallback((file: File) => {
-    setPendingFile(file);
-    setAltText('');
+  const onCancel = () => {
+    handleCancel();
     setCustomName('');
-  }, []);
-
-  // Handle multiple files (uploads directly without alt text prompt)
-  const handleMultipleFiles = useCallback(
-    async (files: File[]) => {
-      if (files.length === 0) return;
-
-      // If only one file, use the single file flow with alt text prompt
-      if (files.length === 1) {
-        handleSingleFile(files[0]);
-        return;
-      }
-
-      // Multi-file upload: upload all in parallel without alt text prompts
-      setUploadProgress({ total: files.length, completed: 0, failed: 0, inProgress: true });
-
-      const uploadPromises = files.map(async (file) => {
-        const formData = await buildUploadFormData(file, undefined, folder);
-        return uploadMutation.mutateAsync(formData);
-      });
-
-      const results = await Promise.allSettled(uploadPromises);
-
-      const completed = results.filter((r) => r.status === 'fulfilled').length;
-      const failed = results.filter((r) => r.status === 'rejected').length;
-
-      setUploadProgress({ total: files.length, completed, failed, inProgress: false });
-
-      // Clear progress after a delay and close modal
-      setTimeout(() => {
-        if (completed > 0) {
-          onUploadComplete?.();
-        }
-        onClose();
-      }, 2000);
-    },
-    [folder, uploadMutation, handleSingleFile, onUploadComplete, onClose],
-  );
-
-  const handleFiles = useCallback(
-    (fileList: FileList | null) => {
-      if (!fileList || fileList.length === 0) return;
-      const files = Array.from(fileList);
-      handleMultipleFiles(files);
-    },
-    [handleMultipleFiles],
-  );
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-  }, []);
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragOver(false);
-      handleFiles(e.dataTransfer.files);
-    },
-    [handleFiles],
-  );
-
-  const handleUpload = async () => {
-    if (!pendingFile) return;
-
-    // NOTE: customName is UI-only for display purposes. The backend buildUploadFormData
-    // signature is `buildUploadFormData(file: File, alt?: string, folder?: string)` and
-    // does NOT accept a custom name. The uploaded file uses its original filename.
-    const formData = await buildUploadFormData(pendingFile, altText || undefined, folder);
-    uploadMutation.mutate(formData, {
-      onSuccess: () => {
-        onUploadComplete?.();
-        onClose();
-      },
-    });
-  };
-
-  const handleImportUrl = () => {
-    if (!importUrl.trim()) return;
-
-    importMutation.mutate(
-      { url: importUrl.trim(), alt: altText || undefined, folder },
-      {
-        onSuccess: () => {
-          onUploadComplete?.();
-          onClose();
-        },
-      },
-    );
-  };
-
-  const handleCancel = () => {
-    setPendingFile(null);
-    setAltText('');
-    setCustomName('');
-    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   if (!isOpen) return null;
@@ -389,7 +271,7 @@ export function UploadModal({ isOpen, onClose, folder, onUploadComplete }: Uploa
         <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-grey-09 bg-grey-11 rounded-b-lg">
           <button
             type="button"
-            onClick={pendingFile ? handleCancel : onClose}
+            onClick={pendingFile ? onCancel : onClose}
             disabled={isUploading}
             className="px-4 py-2 bg-white border border-grey-09 text-grey-04 text-sm rounded hover:bg-grey-11 disabled:opacity-50 transition-colors"
           >
@@ -403,7 +285,7 @@ export function UploadModal({ isOpen, onClose, folder, onUploadComplete }: Uploa
               className="flex items-center gap-2 px-4 py-2 bg-azure-04 text-white text-sm rounded hover:bg-azure-03 disabled:opacity-50 transition-colors"
             >
               <Upload className="w-4 h-4" />
-              {uploadMutation.isPending ? 'Uploading...' : 'Upload'}
+              {uploadMutationIsPending ? 'Uploading...' : 'Upload'}
             </button>
           ) : (
             <button
@@ -413,7 +295,7 @@ export function UploadModal({ isOpen, onClose, folder, onUploadComplete }: Uploa
               className="flex items-center gap-2 px-4 py-2 bg-azure-04 text-white text-sm rounded hover:bg-azure-03 disabled:opacity-50 transition-colors"
             >
               <Upload className="w-4 h-4" />
-              {importMutation.isPending ? 'Importing...' : 'Import'}
+              {importMutationIsPending ? 'Importing...' : 'Import'}
             </button>
           )}
         </div>
