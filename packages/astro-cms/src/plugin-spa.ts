@@ -261,10 +261,11 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
         updateConfig({
           vite: {
             ssr: {
-              // Force these packages through Vite's resolver during SSR
-              // This ensures symlinked packages use the consumer's React, not their own
-              // Without this, symlinked packages resolve React from their node_modules
-              noExternal: ['@conloca/astro-cms', '@conloca/cms-spa'],
+              // Force @conloca packages and Puck through Vite's bundler during SSR.
+              // When packages are symlinked via bun link, this ensures their React
+              // imports go through Vite's resolver (which respects resolve.alias and
+              // preserveSymlinks), preventing dual React instance crashes.
+              noExternal: [/^@conloca\//, '@puckeditor/core'],
               // Externalize native Node modules for SSR builds
               // These cannot be bundled and must be available at runtime
               external: ['@node-rs/xxhash'],
@@ -382,9 +383,21 @@ initHydration(componentRegistry)
               'import.meta.env.CONLOCA_ASSETS_PATH': JSON.stringify(options.assetsPath || ''),
             },
             resolve: {
-              // Dedupe React to avoid multiple instances when using symlinked packages
-              // This prevents "Cannot read properties of null (reading 'useMemo')" errors
-              dedupe: ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime', '@puckeditor/core'],
+              // Dedupe React and React Query to avoid multiple instances when using symlinked packages.
+              // Without this, bun link causes esbuild to find nested copies in the symlink target's
+              // node_modules, creating separate React.createContext() calls = broken context sharing.
+              dedupe: [
+                'react',
+                'react-dom',
+                'react/jsx-runtime',
+                'react/jsx-dev-runtime',
+                '@puckeditor/core',
+                '@tanstack/react-query',
+              ],
+              // Prevent symlinked packages (via bun link) from resolving dependencies
+              // from their real path. Ensures @conloca packages find React from the
+              // consumer project's node_modules, not from their source repo.
+              preserveSymlinks: true,
             },
             optimizeDeps: {
               // Exclude the puck config from optimization to avoid the outdated dep error
@@ -422,6 +435,26 @@ initHydration(componentRegistry)
               ],
             },
             plugins: [
+              // Normalize @conloca/* imports from symlinked source files (bun link).
+              // When main.tsx is loaded via /@fs/<real-path>, its @conloca/* imports
+              // resolve relative to the real filesystem location, creating duplicate
+              // module instances. This plugin re-resolves them from the consumer
+              // project root so all @conloca packages use the same module identity.
+              {
+                name: 'conloca-resolve-normalizer',
+                enforce: 'pre' as const,
+                async resolveId(source, importer) {
+                  // Only normalize @conloca/* bare specifiers
+                  if (!source.startsWith('@conloca/')) return null;
+                  // Only when imported from outside the project (symlinked source files)
+                  if (!importer || importer.startsWith(astroRoot)) return null;
+                  // Skip virtual modules (prefixed with \0)
+                  if (importer.startsWith('\0')) return null;
+                  // Re-resolve from project root to ensure consumer's node_modules is used
+                  const resolved = await this.resolve(source, join(astroRoot, '_resolveAnchor.js'), { skipSelf: true });
+                  return resolved;
+                },
+              },
               {
                 name: 'conloca-dev-virtual-modules',
                 resolveId(id) {
