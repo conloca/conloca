@@ -1,7 +1,10 @@
+import { getContentAPIClient } from '@conloca/content-api-client';
+import { useQueryClient } from '@tanstack/react-query';
+import cn from 'clsx';
 import { Image } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { AssetEntry } from '../../hooks';
-import { useDeleteAsset, useMoveAssets } from '../../hooks';
+import { useMoveAssets } from '../../hooks';
 import { DeleteConfirmDialog, MoveFolderDialog } from '../dialogs';
 import {
   AssetDetailSidebar,
@@ -40,9 +43,13 @@ export function MediaPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
 
+  // Bulk delete state
+  const [bulkDeleteResult, setBulkDeleteResult] = useState<{ success: number; failed: number } | null>(null);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+
   // Mutations
   const moveAssets = useMoveAssets();
-  const deleteAsset = useDeleteAsset();
+  const queryClient = useQueryClient();
 
   // Toggle asset in selection set
   const handleToggleSelect = (filename: string) => {
@@ -78,24 +85,36 @@ export function MediaPage() {
     setIsSelectMode(false);
   };
 
-  // Bulk delete selected assets
+  // Bulk delete selected assets via direct client calls (bypasses hook per-call cache invalidation)
   const handleBulkDelete = async () => {
     const filenames = Array.from(selectedAssets);
+    const client = getContentAPIClient();
+    setIsBulkDeleting(true);
+    setBulkDeleteResult(null);
+
     let successCount = 0;
+    let failCount = 0;
 
     for (const filename of filenames) {
       try {
-        await deleteAsset.mutateAsync(filename);
+        await client.deleteAsset(filename);
         successCount++;
       } catch {
-        // Continue with remaining deletes
+        failCount++;
       }
     }
 
+    // Single cache invalidation after all deletes
+    queryClient.invalidateQueries({ queryKey: ['assets'] });
+    queryClient.invalidateQueries({ queryKey: ['asset-folders'] });
+
+    setIsBulkDeleting(false);
+    setBulkDeleteResult({ success: successCount, failed: failCount });
+
     if (successCount > 0) {
       setSelectedAssets(new Set());
-      setShowDeleteConfirm(false);
     }
+    setShowDeleteConfirm(false);
   };
 
   // Bulk move selected assets
@@ -122,6 +141,13 @@ export function MediaPage() {
   const handleCloseDetail = () => {
     setSelectedAsset(null);
   };
+
+  // Auto-dismiss bulk delete result banner after 5 seconds
+  useEffect(() => {
+    if (!bulkDeleteResult) return;
+    const timer = setTimeout(() => setBulkDeleteResult(null), 5000);
+    return () => clearTimeout(timer);
+  }, [bulkDeleteResult]);
 
   return (
     <div className="flex h-full">
@@ -151,6 +177,30 @@ export function MediaPage() {
             onUploadClick={() => setShowUploadModal(true)}
           />
         </div>
+
+        {/* Bulk delete result banner */}
+        {bulkDeleteResult && (
+          <div
+            className={cn(
+              'mx-6 mt-2 px-4 py-2 rounded text-sm flex items-center justify-between',
+              bulkDeleteResult.failed > 0
+                ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                : 'bg-green-50 text-green-800 border border-green-200',
+            )}
+          >
+            <span>
+              {bulkDeleteResult.success} deleted
+              {bulkDeleteResult.failed > 0 ? `, ${bulkDeleteResult.failed} failed` : ''}
+            </span>
+            <button
+              type="button"
+              onClick={() => setBulkDeleteResult(null)}
+              className="ml-4 text-current opacity-60 hover:opacity-100"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
 
         {/* Media Library (grid) - flex-1 to fill space */}
         <div className="flex-1 overflow-auto px-6 pt-4 pb-6">
@@ -200,7 +250,7 @@ export function MediaPage() {
         message={`Are you sure you want to delete ${selectedAssets.size} selected asset${selectedAssets.size !== 1 ? 's' : ''}?`}
         onConfirm={handleBulkDelete}
         onCancel={() => setShowDeleteConfirm(false)}
-        isDeleting={deleteAsset.isPending}
+        isDeleting={isBulkDeleting}
       />
 
       {/* Upload modal */}
