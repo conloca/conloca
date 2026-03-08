@@ -755,6 +755,31 @@ export function useDeleteAsset() {
   });
 }
 
+export function useBulkDeleteAssets() {
+  const client = getContentAPIClient();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (filenames: string[]) => {
+      let successCount = 0;
+      let failCount = 0;
+      for (const filename of filenames) {
+        try {
+          await client.deleteAsset(filename);
+          successCount++;
+        } catch {
+          failCount++;
+        }
+      }
+      return { successCount, failCount };
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.assets() });
+      queryClient.invalidateQueries({ queryKey: ['asset-folders'] });
+    },
+  });
+}
+
 // ===== Media Library Hooks =====
 
 export function useAssetFolders(path?: string) {

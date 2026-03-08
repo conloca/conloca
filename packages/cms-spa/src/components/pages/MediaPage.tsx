@@ -1,10 +1,8 @@
-import { getContentAPIClient } from '@conloca/content-api-client';
-import { useQueryClient } from '@tanstack/react-query';
 import cn from 'clsx';
 import { Image } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { AssetEntry } from '../../hooks';
-import { useMoveAssets } from '../../hooks';
+import { useBulkDeleteAssets, useMoveAssets } from '../../hooks';
 import { DeleteConfirmDialog, MoveFolderDialog } from '../dialogs';
 import {
   AssetDetailSidebar,
@@ -45,11 +43,10 @@ export function MediaPage() {
 
   // Bulk delete state
   const [bulkDeleteResult, setBulkDeleteResult] = useState<{ success: number; failed: number } | null>(null);
-  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
   // Mutations
   const moveAssets = useMoveAssets();
-  const queryClient = useQueryClient();
+  const bulkDelete = useBulkDeleteAssets();
 
   // Toggle asset in selection set
   const handleToggleSelect = (filename: string) => {
@@ -85,33 +82,15 @@ export function MediaPage() {
     setIsSelectMode(false);
   };
 
-  // Bulk delete selected assets via direct client calls (bypasses hook per-call cache invalidation)
+  // Bulk delete selected assets
   const handleBulkDelete = async () => {
     const filenames = Array.from(selectedAssets);
-    const client = getContentAPIClient();
-    setIsBulkDeleting(true);
     setBulkDeleteResult(null);
 
-    let successCount = 0;
-    let failCount = 0;
+    const result = await bulkDelete.mutateAsync(filenames);
+    setBulkDeleteResult({ success: result.successCount, failed: result.failCount });
 
-    for (const filename of filenames) {
-      try {
-        await client.deleteAsset(filename);
-        successCount++;
-      } catch {
-        failCount++;
-      }
-    }
-
-    // Single cache invalidation after all deletes
-    queryClient.invalidateQueries({ queryKey: ['assets'] });
-    queryClient.invalidateQueries({ queryKey: ['asset-folders'] });
-
-    setIsBulkDeleting(false);
-    setBulkDeleteResult({ success: successCount, failed: failCount });
-
-    if (successCount > 0) {
+    if (result.successCount > 0) {
       setSelectedAssets(new Set());
     }
     setShowDeleteConfirm(false);
@@ -250,7 +229,7 @@ export function MediaPage() {
         message={`Are you sure you want to delete ${selectedAssets.size} selected asset${selectedAssets.size !== 1 ? 's' : ''}?`}
         onConfirm={handleBulkDelete}
         onCancel={() => setShowDeleteConfirm(false)}
-        isDeleting={isBulkDeleting}
+        isDeleting={bulkDelete.isPending}
       />
 
       {/* Upload modal */}

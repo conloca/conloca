@@ -4,6 +4,7 @@ export {
   useAssetFolders,
   useAssets,
   useAssetUsage,
+  useBulkDeleteAssets,
   useCreateFolder,
   useDeleteAsset,
   useFolderTree,
