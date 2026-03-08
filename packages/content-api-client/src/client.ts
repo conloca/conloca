@@ -48,6 +48,13 @@ export class ContentAPIClient {
     this.baseUrl = options.baseUrl || '/__conloca/api';
   }
 
+  private encodeAssetPath(filename: string): string {
+    return filename
+      .split('/')
+      .map((s) => encodeURIComponent(s))
+      .join('/');
+  }
+
   private async fetchAPI<T>(url: string, options?: RequestInit): Promise<T> {
     const response = await this.fetch(url, {
       ...options,
@@ -371,7 +378,7 @@ export class ContentAPIClient {
 
   async getAsset(filename: string): Promise<AssetEntry | null> {
     try {
-      const response = await this.fetch(`${this.baseUrl}/assets/${encodeURIComponent(filename)}`);
+      const response = await this.fetch(`${this.baseUrl}/assets/meta/${this.encodeAssetPath(filename)}`);
       if (response.status === 404) {
         return null;
       }
@@ -413,7 +420,7 @@ export class ContentAPIClient {
   }
 
   async deleteAsset(filename: string): Promise<{ success: boolean }> {
-    return this.fetchAPI<{ success: boolean }>(`${this.baseUrl}/assets/${encodeURIComponent(filename)}`, {
+    return this.fetchAPI<{ success: boolean }>(`${this.baseUrl}/assets/meta/${this.encodeAssetPath(filename)}`, {
       method: 'DELETE',
     });
   }
@@ -434,7 +441,7 @@ export class ContentAPIClient {
 
   // Asset metadata operations
   async updateAssetMetadata(filename: string, updates: { alt?: string; tags?: string[] }): Promise<AssetEntry> {
-    return this.fetchAPI<AssetEntry>(`${this.baseUrl}/assets/${encodeURIComponent(filename)}`, {
+    return this.fetchAPI<AssetEntry>(`${this.baseUrl}/assets/meta/${this.encodeAssetPath(filename)}`, {
       method: 'PATCH',
       body: JSON.stringify(updates),
     });
@@ -442,7 +449,7 @@ export class ContentAPIClient {
 
   // Asset usage tracking
   async getAssetUsage(filename: string): Promise<AssetUsage[]> {
-    return this.fetchAPI<AssetUsage[]>(`${this.baseUrl}/assets/${encodeURIComponent(filename)}/usage`);
+    return this.fetchAPI<AssetUsage[]>(`${this.baseUrl}/assets/usage/${this.encodeAssetPath(filename)}`);
   }
 
   // Move assets between folders
