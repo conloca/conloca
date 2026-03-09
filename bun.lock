@@ -67,7 +67,7 @@
     },
     "packages/astro-cms": {
       "name": "@conloca/astro-cms",
-      "version": "0.1.13",
+      "version": "0.1.14",
       "dependencies": {
         "@conloca/cms-spa": "workspace:^",
         "@conloca/content-api": "workspace:^",
@@ -95,7 +95,7 @@
     },
     "packages/cli": {
       "name": "@conloca/cli",
-      "version": "0.1.13",
+      "version": "0.1.14",
       "bin": {
         "conloca": "./dist/conloca.js",
       },
@@ -109,7 +109,7 @@
     },
     "packages/cms-spa": {
       "name": "@conloca/cms-spa",
-      "version": "0.1.13",
+      "version": "0.1.14",
       "dependencies": {
         "@conloca/content-api-client": "workspace:^",
         "@conloca/mdx": "workspace:^",
@@ -148,7 +148,7 @@
     },
     "packages/content-api": {
       "name": "@conloca/content-api",
-      "version": "0.1.13",
+      "version": "0.1.14",
       "dependencies": {
         "@hono/node-server": "^1.19.9",
         "@node-rs/xxhash": "^1.7.6",
@@ -166,7 +166,7 @@
     },
     "packages/content-api-client": {
       "name": "@conloca/content-api-client",
-      "version": "0.1.13",
+      "version": "0.1.14",
       "dependencies": {
         "@conloca/content-api": "workspace:^",
         "@tanstack/react-query": "^5.90.21",
@@ -185,7 +185,7 @@
     },
     "packages/mdx": {
       "name": "@conloca/mdx",
-      "version": "0.1.13",
+      "version": "0.1.14",
       "dependencies": {
         "@mdx-js/mdx": "^3.1.1",
         "@mdx-js/react": "^3.1.1",
