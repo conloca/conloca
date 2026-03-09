@@ -225,6 +225,11 @@ run_garbage_collection() {
 
 # Function to export Nix store to NAR
 export_nix_store() {
+    echo "=== Verifying Nix store integrity ==="
+    echo "Repairing any hash mismatches (e.g. from cachix substitution)..."
+    sudo $nix_store_cmd --verify --check-contents --repair 2>&1 || true
+    echo "Store verification complete"
+
     echo "=== Finding all GC roots ==="
     # Get ALL GC root targets without filtering  
     ALL_GC_ROOT_TARGETS=$(sudo find /nix/var/nix/gcroots -type l -exec readlink {} \; 2>/dev/null | sort -u)
