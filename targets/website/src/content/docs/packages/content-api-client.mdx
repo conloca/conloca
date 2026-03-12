@@ -151,13 +151,14 @@ The HTTP client used by all hooks. Can also be used directly for non-React code.
 import { ContentAPIClient } from '@conloca/content-api-client';
 
 const client = new ContentAPIClient({
-  baseUrl: '/__conloca/api', // default value
+  baseUrl: '/__conloca/api', // library default
   fetch: customFetch, // optional custom fetch
 });
 ```
 
-The default `baseUrl` is `'/__conloca/api'`, which matches the standard Conloca API mount path. For cross-origin setups,
-provide the full base URL (e.g., `https://cms.example.com/__cms/api`).
+The library default `baseUrl` is `'/__conloca/api'`. When used with `@conloca/astro-cms`, the standard CMS API mount
+path is `'/__cms/api'`, so pass that explicitly (or use the CMS SPA defaults). For cross-origin setups, provide the full
+base URL (e.g., `https://cms.example.com/__cms/api`).
 
 ### Client Methods
 

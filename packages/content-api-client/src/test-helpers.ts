@@ -25,7 +25,7 @@ export const API_ROUTES = {
   BLOCKS: '/blocks',
   COLLECTIONS: '/content/collections',
   BATCH_UPDATE: '/content/batch',
-  FIND_UNTRANSLATED: '/content/find-untranslated',
+  FIND_UNTRANSLATED: (locale: string) => `/untranslated/${locale}`,
   DATA_CONTEXT: '/data-context',
 } as const;
 
