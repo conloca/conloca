@@ -159,7 +159,7 @@ Conloca is built as four packages, each with a clear responsibility:
 
 ```
 content-api          Core content engine
-    |                (file I/O, indexing, auth, VXJSON)
+    |                (file I/O, indexing, CF Access validation, VXJSON)
     v
 content-api-client   React Query hooks
     |                (usePage, useBlocks, mutations)
@@ -174,7 +174,8 @@ astro-cms            Astro integration
 ### content-api
 
 The core package. Provides `FileSystemContentAPI` — a class that reads and writes content files, maintains an in-memory
-index for fast lookups, and handles concurrency via etags. Also contains the authentication provider system.
+index for fast lookups, and handles concurrency via etags. It also contains the current Cloudflare Access validation
+helpers used by the Astro integration.
 
 This package has no React dependency and can be used in any Node.js/Bun environment.
 
@@ -199,7 +200,7 @@ replacement.
 The Astro integration that ties everything together. Provides the `conlocaCMS()` function for `astro.config.mjs`.
 Handles:
 
-- Injecting API routes (content CRUD, asset uploads, auth)
+- Injecting API routes (content CRUD, asset uploads, `/auth/user`)
 - Serving the CMS SPA
 - Content page routing (mapping URL patterns to content)
 - Virtual modules for configuration injection
@@ -221,7 +222,8 @@ to /__cms/api/content/:id
           |
           v
 astro-cms Hono middleware receives request,
-validates auth, routes to content-api
+validates Cloudflare Access when configured,
+routes to content-api
           |
           v
 content-api FileSystemContentAPI:
@@ -246,35 +248,34 @@ scanning the filesystem on every request.
 ## Authentication
 
 <Aside type="caution">
-  **Coming Soon** — This section describes a feature on the `dev` branch, not yet available in a stable release.
+  The pluggable auth provider system is still planned. This section only documents the authentication behavior that is
+  actually present on this branch today.
 </Aside>
 
-Conloca uses a pluggable authentication system. The `AuthProvider` interface defines a single method —
-`authenticate(request)` — that checks whether an incoming request is authenticated and returns the user's identity and
-role.
+Conloca currently supports one authentication path in the shipped code: optional Cloudflare Access JWT validation for
+CMS requests.
 
-Four providers ship with the `content-api` package:
+When both environment variables below are set, the CMS handler validates the incoming Cloudflare Access token before
+serving `/__cms` and `/__cms/api` routes:
 
-| Provider                             | Use Case                                                    |
-| ------------------------------------ | ----------------------------------------------------------- |
-| `noAuth()`                           | Local development — all requests pass, user gets admin role |
-| `apiKey({ keys })`                   | CI/CD and API access — authenticate via `X-API-Key` header  |
-| `cfAccess({ teamDomain, audience })` | Cloudflare Access — validates CF JWT tokens                 |
-| `oauth({ issuer, clientId, ... })`   | OAuth/OIDC — GitHub, Google, or any OIDC provider           |
+| Variable              | Purpose                                                   |
+| --------------------- | --------------------------------------------------------- |
+| `CF_ACCESS_TEAM_NAME` | Zero Trust team name, used to resolve the JWKS endpoint   |
+| `CF_ACCESS_AUD`       | Access application audience (`aud`) to validate the token |
 
-Three roles control access levels:
+When either variable is missing, validation is skipped so local development works without Cloudflare Access.
 
-- **admin** — full access (create, edit, delete, settings)
-- **editor** — create and edit content, upload media
-- **viewer** — read-only dashboard access
+The validated user identity is then exposed to the CMS via `/__cms/api/auth/user`, which returns the email and `sub`
+claim extracted from the token.
 
-Role assignment uses email pattern matching (e.g., `*@company.com` for all company emails) or a custom `resolveRole`
-function. See the [Configuration Reference](/reference/configuration/#authentication-options) for setup details.
+Role mapping, OAuth login flows, and API key providers are planned, but they are not part of the current branch yet. See
+the [Cloudflare Access guide](/guides/auth/cf-access/) for the supported production setup.
 
 ## Content Inheritance
 
 <Aside type="caution">
-  **Coming Soon** — This section describes a feature on the `dev` branch, not yet available in a stable release.
+  **Dev Branch Preview** — This section describes a feature available on the `dev` branch, but not on the current branch
+  documented by this site.
 </Aside>
 
 For multi-locale sites, Conloca supports content inheritance to reduce duplication. A non-default locale page can set

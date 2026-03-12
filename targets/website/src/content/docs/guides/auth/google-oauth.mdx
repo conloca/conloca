@@ -6,102 +6,36 @@ description: Authenticate CMS users with Google OAuth
 import { Aside } from '@astrojs/starlight/components';
 
 <Aside type="caution">
-  **Coming Soon** — This authentication provider is not yet available in a stable release. It is implemented on the
-  `dev` branch and will ship in a future version. Install the stable release from
-  [npm](https://www.npmjs.com/package/@conloca/astro-cms) to get features available today.
+  **Dev Branch Preview** — Google OAuth exists on the `dev` branch, but it is not implemented on the current branch yet.
+  There is currently no `oauth()` export or `conlocaCMS({auth})` API here.
 </Aside>
 
-Google OAuth lets your team sign in to the CMS using their Google accounts. Conloca handles the full OAuth flow -- login
-redirect, callback, and session management.
+This page is roadmap documentation only. It should not be treated as a working setup guide for the current branch.
 
-## Prerequisites
+## Current status
 
-- A Google Cloud Console project
-- Your CMS accessible at a URL (localhost works for development)
+- No built-in Google OAuth flow is shipped here
+- No login, callback, or session endpoints are available on this branch
+- The public configuration API for this feature is still pending implementation
 
-## Setup
+## What to use today
 
-### 1. Create Google OAuth credentials
+For production protection today, use [Cloudflare Access](/guides/auth/cf-access/). That is the only documented auth flow
+that matches the current code.
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com/) > **APIs & Services** > **Credentials**
-2. Click **Create Credentials** > **OAuth 2.0 Client ID**
-3. Select **Web application** as the application type
-4. Set a name (e.g., "Conloca CMS")
-5. Under **Authorized redirect URIs**, add `https://YOUR_DOMAIN/__cms/auth/callback`
-   - For local development, add `http://localhost:4321/__cms/auth/callback`
-6. Click **Create**
-7. Copy the **Client ID** and **Client Secret**
+## Planned use case
 
-If you have not configured an OAuth consent screen yet, Google will prompt you to do so first. Set the user type to
-**Internal** (for Google Workspace organizations) or **External** (for any Google account).
+The intended direction is team login through Google accounts, but the final configuration shape, callback handling, and
+session model are not part of the current codebase yet.
 
-### 2. Configure Conloca
+## Dev Branch Preview
 
-In your `astro.config.mjs`, import the `oauth` provider and pass it to the `auth` option:
+On the `dev` branch, Google OAuth is configured through the same `oauth()` provider with a `google` block:
 
 ```js
-import { defineConfig } from 'astro/config';
-import node from '@astrojs/node';
-import { conlocaCMS } from '@conloca/astro-cms';
+// dev branch preview only
 import { oauth } from '@conloca/content-api/node';
 
-export default defineConfig({
-  output: 'server',
-  adapter: node({ mode: 'standalone' }),
-  integrations: [
-    conlocaCMS({
-      contentRoot: './content',
-      puckConfigPath: './src/puck.config.tsx',
-      auth: {
-        provider: oauth({
-          google: {
-            clientId: 'YOUR_CLIENT_ID',
-            clientSecret: 'YOUR_CLIENT_SECRET',
-          },
-          sessionSecret: 'YOUR_SESSION_SECRET_AT_LEAST_32_CHARS',
-        }),
-        roles: {
-          admin: ['your-email@example.com'],
-        },
-      },
-    }),
-  ],
-});
-```
-
-The `oauth` factory accepts either `github` or `google` -- not both at the same time. The configuration is otherwise
-identical.
-
-### Parameters
-
-| Parameter        | Type     | Required | Description                                                                                 |
-| ---------------- | -------- | -------- | ------------------------------------------------------------------------------------------- |
-| `google`         | `object` | Yes      | Object with `clientId` and `clientSecret` from Google Cloud Console                         |
-| `sessionSecret`  | `string` | Yes      | Secret for signing session cookies. Must be at least 32 characters. Keep this value secret. |
-| `sessionMaxAge`  | `number` | No       | Session duration in seconds. Default: 604800 (7 days)                                       |
-| `basePath`       | `string` | No       | CMS base path for cookie scoping. Default: `/__cms`                                         |
-| `cookieDomain`   | `string` | No       | Cookie domain for cross-subdomain sessions (e.g., `.company.com`)                           |
-| `redirectOrigin` | `string` | No       | Origin for OAuth redirect URI when behind a reverse proxy (e.g., `https://cms.company.com`) |
-
-## Generating a session secret
-
-The session secret signs session cookies. Use a cryptographically random string of at least 32 characters:
-
-```bash
-openssl rand -base64 32
-```
-
-Store this value securely -- in an environment variable, not committed to source control:
-
-```js
-sessionSecret: process.env.SESSION_SECRET,
-```
-
-## Role mapping
-
-All authenticated users default to the `viewer` role. Map users to roles with the `roles` option:
-
-```js
 auth: {
   provider: oauth({
     google: {
@@ -117,62 +51,10 @@ auth: {
 }
 ```
 
-Patterns support `*` as a wildcard. `*@company.com` matches any email at that domain.
-
-## Google Workspace restriction
-
-If you use Google Workspace and set the OAuth consent screen to **Internal**, only users in your organization can sign
-in. This is the simplest way to restrict access to your team.
-
-For **External** OAuth apps, you can limit access through role mapping -- users who authenticate but do not match any
-role pattern are assigned the `viewer` role.
-
-## Production: reverse proxy
-
-When running behind a reverse proxy, use `redirectOrigin` to ensure OAuth callbacks target the correct public-facing
-domain:
-
-```js
-oauth({
-  google: {
-    clientId: process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-  },
-  sessionSecret: process.env.SESSION_SECRET,
-  redirectOrigin: 'https://cms.example.com',
-});
-```
-
-## Cross-subdomain sessions
-
-For multi-branch editing with the branch proxy, set `cookieDomain` so the session cookie works across subdomains:
-
-```js
-oauth({
-  google: {
-    clientId: process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-  },
-  sessionSecret: process.env.SESSION_SECRET,
-  cookieDomain: '.company.com',
-  redirectOrigin: 'https://cms.company.com',
-});
-```
-
-## How it works
-
-1. User visits `/__cms` and is redirected to `/__cms/auth/login`
-2. The OAuth provider redirects to Google's authorization page
-3. User signs in with their Google account and authorizes the app
-4. Google redirects back to `/__cms/auth/callback` with an authorization code
-5. Conloca exchanges the code for an access token, fetches the user's email and name, and creates a signed session
-   cookie
-6. User is redirected to the CMS dashboard
-
-The session cookie (`conloca_session`) is `HttpOnly`, `SameSite=Lax`, and `Secure` (except on localhost).
+As on the GitHub preview, the `dev` branch implementation includes login/callback routes and signed session cookies.
 
 ## Next steps
 
 - [Getting Started](/getting-started/) -- Set up your first Conloca site
-- [GitHub OAuth](/guides/auth/github-oauth/) -- Alternative OAuth provider
+- [Cloudflare Access](/guides/auth/cf-access/) -- Current production-ready protection
 - [Docker deployment](/guides/deploy/docker/) -- Deploy with Docker Compose

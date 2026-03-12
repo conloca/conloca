@@ -99,7 +99,8 @@ docker compose down
 
 ## Adding authentication
 
-Add authentication environment variables to `docker-compose.yml`. Here is an example with GitHub OAuth:
+Today, the documented authentication option for a Docker deployment is Cloudflare Access in front of the container. Add
+the Cloudflare Access environment variables to `docker-compose.yml`:
 
 ```yaml
 services:
@@ -110,35 +111,16 @@ services:
     environment:
       - HOST=0.0.0.0
       - PORT=4321
-      - GITHUB_CLIENT_ID=YOUR_CLIENT_ID
-      - GITHUB_CLIENT_SECRET=YOUR_CLIENT_SECRET
-      - SESSION_SECRET=YOUR_SESSION_SECRET_AT_LEAST_32_CHARS
+      - CF_ACCESS_TEAM_NAME=YOUR_TEAM_NAME
+      - CF_ACCESS_AUD=YOUR_APPLICATION_AUD_TAG
     volumes:
       - ./content:/app/content
       - ./public/assets:/app/public/assets
     restart: unless-stopped
 ```
 
-Then reference these in your `astro.config.mjs`:
-
-```js
-import { oauth } from '@conloca/content-api/node'
-
-auth: {
-  provider: oauth({
-    github: {
-      clientId: process.env.GITHUB_CLIENT_ID,
-      clientSecret: process.env.GITHUB_CLIENT_SECRET,
-    },
-    sessionSecret: process.env.SESSION_SECRET,
-  }),
-  roles: {
-    admin: ['your-email@example.com'],
-  },
-}
-```
-
-See the [GitHub OAuth guide](/guides/auth/github-oauth/) for full configuration details.
+No `astro.config.mjs` auth block is required for this setup on the current branch. See the
+[Cloudflare Access guide](/guides/auth/cf-access/) for the full configuration details.
 
 ## Reverse proxy
 

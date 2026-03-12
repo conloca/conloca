@@ -10,8 +10,8 @@ Puck) that can be referenced across multiple pages. Unlike pages, blocks are not
 globally, though site-specific blocks can shadow global ones.
 
 <Aside type="caution">
-  **Coming Soon** — The `site` query parameter for site-specific block scoping and merging is on the `dev` branch, not
-  yet available in a stable release. Global blocks work today.
+  **Dev Branch Preview** — The `site` query parameter for site-specific block scoping and merging exists on the `dev`
+  branch, but not on the current branch documented by this site. Global blocks work today.
 </Aside>
 
 All endpoints are relative to the API base URL (default: `/__cms/api`).
@@ -27,11 +27,11 @@ site-specific blocks with scope annotation (site blocks shadow global blocks wit
 
 **Parameters:**
 
-| Name       | In    | Type   | Required | Description                                                            |
-| ---------- | ----- | ------ | -------- | ---------------------------------------------------------------------- |
-| collection | query | string | no       | Filter by collection (default: all)                                    |
-| locale     | query | string | no       | Filter by locale                                                       |
-| site       | query | string | no       | If provided, return merged global + site-specific blocks (Coming Soon) |
+| Name       | In    | Type   | Required | Description                                                                   |
+| ---------- | ----- | ------ | -------- | ----------------------------------------------------------------------------- |
+| collection | query | string | no       | Filter by collection (default: all)                                           |
+| locale     | query | string | no       | Filter by locale                                                              |
+| site       | query | string | no       | If provided, return merged global + site-specific blocks (Dev Branch Preview) |
 
 **Response:** `200 OK`
 
@@ -71,7 +71,7 @@ blocks.
 | name       | query | string | yes      | Block name to check                                            |
 | collection | query | string | no       | Collection to check in (default: `components`)                 |
 | excludeId  | query | string | no       | Exclude this content ID from the check (for rename operations) |
-| site       | query | string | no       | Check availability in site-specific scope (Coming Soon)        |
+| site       | query | string | no       | Check availability in site-specific scope (Dev Branch Preview) |
 
 **Response:** `200 OK`
 
@@ -111,12 +111,12 @@ the global block.
 
 **Parameters:**
 
-| Name       | In    | Type   | Required | Description                                                     |
-| ---------- | ----- | ------ | -------- | --------------------------------------------------------------- |
-| name       | path  | string | yes      | Block name                                                      |
-| collection | query | string | no       | Collection to look in (default: `components`)                   |
-| locale     | query | string | no       | If provided, return only this locale's data                     |
-| site       | query | string | no       | Site-first lookup: check site blocks, then global (Coming Soon) |
+| Name       | In    | Type   | Required | Description                                                            |
+| ---------- | ----- | ------ | -------- | ---------------------------------------------------------------------- |
+| name       | path  | string | yes      | Block name                                                             |
+| collection | query | string | no       | Collection to look in (default: `components`)                          |
+| locale     | query | string | no       | If provided, return only this locale's data                            |
+| site       | query | string | no       | Site-first lookup: check site blocks, then global (Dev Branch Preview) |
 
 **Response:** `200 OK`
 

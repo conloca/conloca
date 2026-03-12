@@ -1,6 +1,6 @@
 ---
 title: Configuration Reference
-description: Complete reference for ConlocaCMSOptions and auth provider configuration
+description: Complete reference for ConlocaCMSOptions and current authentication behavior
 ---
 
 import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
@@ -328,26 +328,40 @@ queryClientOptions: {
 }
 ```
 
-### Authentication Options
+### Authentication
 
-<Aside type="caution">
-  **Coming Soon** — This section describes a feature on the `dev` branch, not yet available in a stable release.
+`ConlocaCMSOptions` does not currently expose an `auth` option on this branch.
+
+Today, CMS request protection is limited to Cloudflare Access validation driven by environment variables. When both
+variables below are set, the CMS handler validates the incoming Cloudflare Access JWT before serving `/__cms` or
+`/__cms/api` requests:
+
+| Variable              | Type     | Required | Description                                                                 |
+| --------------------- | -------- | -------- | --------------------------------------------------------------------------- |
+| `CF_ACCESS_TEAM_NAME` | `string` | Yes      | Zero Trust team name, used to resolve `https://<team>.cloudflareaccess.com` |
+| `CF_ACCESS_AUD`       | `string` | Yes      | Access application audience (`aud`)                                         |
+
+When either variable is missing, validation is skipped so local development keeps working without Cloudflare Access.
+
+<Aside type="note">
+  **Dev Branch Preview** — Provider factories such as `oauth()`, `apiKey()`, role mapping, and `conlocaCMS({ auth: ... })`
+  are implemented on the `dev` branch, but they are not available on this branch yet.
 </Aside>
 
-#### `auth`
+See the [Cloudflare Access guide](/guides/auth/cf-access/) for the current production setup.
 
-- **Type:** `AuthConfig`
-- **Default:** `undefined` (no authentication, equivalent to `noAuth()`)
+#### Dev Branch Preview: `auth`
 
-Authentication configuration for CMS access control. When not provided, the CMS is accessible without authentication —
-suitable for local development but not for production.
+If you are following the `dev` branch specifically, the preview config shape is:
 
 ```js
-import { apiKey } from '@conloca/content-api/node'
-
 auth: {
-  provider: apiKey({
-    keys: [{ hash: '...', name: 'ci-key' }],
+  provider: oauth({
+    github: {
+      clientId: process.env.GITHUB_CLIENT_ID,
+      clientSecret: process.env.GITHUB_CLIENT_SECRET,
+    },
+    sessionSecret: process.env.SESSION_SECRET,
   }),
   roles: {
     admin: ['admin@company.com'],
@@ -356,42 +370,7 @@ auth: {
 }
 ```
 
-##### AuthConfig
-
-| Field         | Type                                      | Required | Description                                                                        |
-| ------------- | ----------------------------------------- | -------- | ---------------------------------------------------------------------------------- |
-| `provider`    | `AuthProvider`                            | Yes      | Authentication provider instance                                                   |
-| `roles`       | `{ admin?: string[], editor?: string[] }` | No       | Email pattern-based role mapping. Glob patterns supported (e.g., `*@company.com`). |
-| `resolveRole` | `(user) => Role \| undefined`             | No       | Custom function to determine user role from email and claims                       |
-
-##### Built-in Auth Providers
-
-Conloca ships four authentication providers:
-
-| Provider                             | Import                      | Use Case                                          |
-| ------------------------------------ | --------------------------- | ------------------------------------------------- |
-| `noAuth()`                           | `@conloca/content-api/node` | Development — no authentication required          |
-| `apiKey({ keys })`                   | `@conloca/content-api/node` | CI/CD pipelines — authenticate via API key header |
-| `cfAccess({ teamDomain, audience })` | `@conloca/content-api/node` | Production — Cloudflare Access JWT validation     |
-| `oauth({ issuer, clientId, ... })`   | `@conloca/content-api/node` | Production — OAuth/OIDC (GitHub, Google, etc.)    |
-
-##### Roles
-
-Conloca supports three roles with decreasing permissions:
-
-| Role     | Permissions                                                    |
-| -------- | -------------------------------------------------------------- |
-| `admin`  | Full access — create, edit, delete content and manage settings |
-| `editor` | Create and edit content, upload media                          |
-| `viewer` | Read-only access to the CMS dashboard                          |
-
-Role assignment priority:
-
-1. `resolveRole` function (if provided)
-2. `roles.admin` / `roles.editor` email pattern matching
-3. Provider-assigned role (from the auth provider itself)
-
-See the [Auth Provider Guides](/guides/auth/cf-access/) for detailed setup instructions for each provider.
+That preview API should be treated as branch-specific until it lands outside `dev`.
 
 ## Complete Example
 

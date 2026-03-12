@@ -8,7 +8,7 @@ import { Aside } from '@astrojs/starlight/components';
 ## Overview
 
 `@conloca/content-api` is the core engine powering Conloca CMS. It handles file-based content storage in VXJSON format,
-asset management, and provides pluggable authentication providers.
+asset management, and provides Cloudflare Access validation helpers for Node.js integrations.
 
 Most developers interact with this package indirectly through `@conloca/astro-cms`. Direct installation is needed when:
 
@@ -67,20 +67,19 @@ import {
 } from '@conloca/content-api/node';
 ```
 
-#### Auth Providers
+#### Authentication Helpers
 
 <Aside type="caution">
-  **Coming Soon** — This section describes a feature on the `dev` branch, not yet available in a stable release.
+  **Dev Branch Preview** — Provider factories such as `oauth()` and `apiKey()` exist on the `dev` branch, but they are
+  not exported on the current branch documented by this site.
 </Aside>
 
-| Export                       | Purpose                                                 |
-| ---------------------------- | ------------------------------------------------------- |
-| `cfAccess(options)`          | Cloudflare Access JWT authentication                    |
-| `oauth(options)`             | OAuth provider (GitHub, Google) with session management |
-| `apiKey(options)`            | API key authentication with role mapping                |
-| `noAuth()`                   | No authentication (development default)                 |
-| `registerAuthConfig(config)` | Register auth config for the CMS handler                |
-| `getRegisteredAuthConfig()`  | Retrieve registered auth config                         |
+| Export                             | Purpose                                                       |
+| ---------------------------------- | ------------------------------------------------------------- |
+| `validateCFAccessRequest(request)` | Validate a Cloudflare Access JWT from the incoming request    |
+| `extractCFAccessToken(request)`    | Read the CF Access token from request headers or cookies      |
+| `CFAccessResult`                   | Result type returned by `validateCFAccessRequest()`           |
+| `CFAccessUser`                     | User shape extracted from a validated Cloudflare Access token |
 
 #### Content API Implementations
 
@@ -92,22 +91,6 @@ import {
 | `createContentMiddleware(api)`    | Create content middleware for custom Hono apps                          |
 | `createContentAPI(options)`       | Factory function that creates FileSystemContentAPI with content watcher |
 | `createContentWatchHandlers(api)` | File watcher for live content updates                                   |
-
-#### Auth Utilities (Coming Soon)
-
-| Export                              | Purpose                                     |
-| ----------------------------------- | ------------------------------------------- |
-| `resolveUserRole(user, config)`     | Resolve user role from auth config mappings |
-| `matchEmailPattern(email, pattern)` | Pattern matching for role email rules       |
-| `signSession(payload)`              | Sign a JWT session token                    |
-| `verifySession(token)`              | Verify and decode a JWT session token       |
-
-#### CF Access Utilities (Coming Soon)
-
-| Export                                      | Purpose                                      |
-| ------------------------------------------- | -------------------------------------------- |
-| `validateCFAccessRequest(request, options)` | Validate Cloudflare Access JWT from request  |
-| `extractCFAccessToken(request)`             | Extract CF Access token from request headers |
 
 #### Other Node.js Exports
 
@@ -135,85 +118,32 @@ import { pageMetaSchema, blockMetaSchema, pageEditableSchema, blockEditableSchem
 | `dataMetaSchema`      | Full data entry metadata schema (with system fields) |
 | `dataEditableSchema`  | Editable data entry fields only (for CMS forms)      |
 
-## Auth Provider Configuration
+## Current Authentication Support
 
-### Cloudflare Access
+Today, `@conloca/content-api` exposes low-level Cloudflare Access helpers only. In the standard Astro integration, you
+normally do not call these functions yourself. Instead, `@conloca/astro-cms` uses them automatically when these
+environment variables are present:
 
-```typescript
-import { cfAccess } from '@conloca/content-api/node';
+| Variable              | Description                                         |
+| --------------------- | --------------------------------------------------- |
+| `CF_ACCESS_TEAM_NAME` | Zero Trust team name, used to resolve the JWKS URL  |
+| `CF_ACCESS_AUD`       | Access application audience (`aud`) to validate JWT |
 
-const auth = cfAccess({
-  teamDomain: 'myteam.cloudflareaccess.com',
-  aud: 'your-application-audience-tag',
-});
-```
+When these variables are missing, validation is skipped so local development can run without Cloudflare Access.
 
-### OAuth (GitHub / Google)
+## Dev Branch Preview
 
-```typescript
-import { oauth } from '@conloca/content-api/node';
+The `dev` branch currently adds a fuller auth surface to `@conloca/content-api/node`, including:
 
-const auth = oauth({
-  provider: 'github', // or 'google'
-  clientId: process.env.OAUTH_CLIENT_ID,
-  clientSecret: process.env.OAUTH_CLIENT_SECRET,
-  sessionSecret: process.env.SESSION_SECRET,
-});
-```
+| Export         | Purpose                                                         |
+| -------------- | --------------------------------------------------------------- |
+| `apiKey()`     | Bearer-token API key authentication                             |
+| `oauth()`      | GitHub or Google OAuth with signed session cookies              |
+| `noAuth()`     | Explicit development-mode provider                              |
+| `AuthConfig`   | `provider`, `roles`, and `resolveRole` configuration            |
+| `AuthProvider` | Shared provider interface with `validate()` and optional logout |
 
-### API Key
-
-```typescript
-import { apiKey } from '@conloca/content-api/node';
-
-const auth = apiKey({
-  keys: [
-    { hash: 'sha256-hash-of-key', role: 'editor', label: 'CI pipeline' },
-    { hash: 'sha256-hash-of-key', role: 'admin', label: 'Admin CLI' },
-  ],
-});
-```
-
-### No Authentication
-
-```typescript
-import { noAuth } from '@conloca/content-api/node';
-
-const auth = noAuth(); // Default in development
-```
-
-## Key Types
-
-### AuthConfig
-
-```typescript
-interface AuthConfig {
-  provider: AuthProvider;
-  roles?: {
-    admin?: string[]; // Email patterns for admin role
-    editor?: string[]; // Email patterns for editor role
-  };
-}
-```
-
-### AuthProvider
-
-```typescript
-interface AuthProvider {
-  authenticate(request: Request): Promise<AuthResult>;
-  logout?(request: Request): Promise<Response>;
-}
-```
-
-### AuthResult
-
-```typescript
-interface AuthResult {
-  authenticated: boolean;
-  user?: AuthUser;
-  response?: Response; // Redirect response for OAuth flows
-}
-```
+Treat that API as preview material until it lands on the branch you are deploying from.
 
 ## Examples
 

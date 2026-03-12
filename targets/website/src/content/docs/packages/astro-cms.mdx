@@ -9,8 +9,8 @@ import { Aside } from '@astrojs/starlight/components';
 ## Overview
 
 `@conloca/astro-cms` is the main integration package that adds Conloca CMS to any Astro site. Install this package to
-get visual page editing with Puck, content management, a media library, multi-locale support, and pluggable
-authentication.
+get visual page editing with Puck, content management, a media library, multi-locale support, and optional Cloudflare
+Access request validation.
 
 When added to your Astro config, the integration:
 
@@ -18,7 +18,7 @@ When added to your Astro config, the integration:
 - Sets up content API routes for CRUD operations
 - Provides Astro Content Collections loaders for build-time content access
 - Supports interactive component hydration via `withHydration()`
-- Handles authentication via pluggable auth providers
+- Validates Cloudflare Access requests when the relevant environment variables are set
 
 ## Installation
 
@@ -61,9 +61,9 @@ export default defineConfig({
 | `canvasDir`      | `string`                         | `'./canvas'` | Canvas directory for visual editing              |
 
 <Aside type="note">
-  The `auth` option (`AuthConfig`) for built-in authentication is planned but not yet available in the current release.
-  See the [Authentication](/concepts/architecture/#authentication) section for details on the upcoming auth provider
-  system.
+  **Dev Branch Preview** — the `auth` option (`AuthConfig`) exists on the `dev` branch, but it is not available on the
+  current branch documented by this site. See the [Authentication](/concepts/architecture/#authentication) section for
+  current behavior and preview context.
 </Aside>
 
 ## Entry Points
@@ -128,7 +128,8 @@ import { createPageRendererWithBlocks } from '@conloca/astro-cms/components';
 
 ### `@conloca/astro-cms/cms-handler`
 
-Unified CMS route handler. Handles API requests, SPA serving, and authentication in a single entry point.
+Unified CMS route handler. Handles API requests, SPA serving, `/auth/user`, and Cloudflare Access validation in a single
+entry point.
 
 ### `@conloca/astro-cms/hydration`
 
@@ -189,14 +190,30 @@ export default defineConfig({
 });
 ```
 
-### With Authentication and Media Library
-
-<Aside type="caution">
-  **Coming Soon** — This section describes a feature on the `dev` branch, not yet available in a stable release.
-</Aside>
+### With Media Library
 
 ```typescript
 // astro.config.mjs
+import { conlocaCMS } from '@conloca/astro-cms';
+
+export default defineConfig({
+  integrations: [
+    conlocaCMS({
+      contentRoot: './content',
+      puckConfigPath: './src/puck.config.tsx',
+      assetsPath: 'src/assets/uploads',
+    }),
+  ],
+});
+```
+
+### Dev Branch Preview: `auth`
+
+On the `dev` branch, `conlocaCMS()` also accepts an `auth` option. That preview API is not available on the current
+branch yet.
+
+```typescript
+// dev branch preview only
 import { conlocaCMS } from '@conloca/astro-cms';
 import { oauth } from '@conloca/content-api/node';
 
@@ -205,18 +222,14 @@ export default defineConfig({
     conlocaCMS({
       contentRoot: './content',
       puckConfigPath: './src/puck.config.tsx',
-      assetsPath: 'src/assets/uploads',
       auth: {
         provider: oauth({
-          provider: 'github',
-          clientId: process.env.GITHUB_CLIENT_ID,
-          clientSecret: process.env.GITHUB_CLIENT_SECRET,
+          github: {
+            clientId: process.env.GITHUB_CLIENT_ID,
+            clientSecret: process.env.GITHUB_CLIENT_SECRET,
+          },
           sessionSecret: process.env.SESSION_SECRET,
         }),
-        roles: {
-          admin: ['admin@company.com'],
-          editor: ['*@company.com'],
-        },
       },
     }),
   ],

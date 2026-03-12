@@ -104,7 +104,7 @@ import { setupFetchMock, MockAPIResponses, API_ROUTES } from '@conloca/content-a
 ## Inheritance Hooks
 
 <Aside type="caution">
-  **Coming Soon** — This section describes a feature on the `dev` branch, not yet available in a stable release.
+  **Dev Branch Preview** — These hooks exist on the `dev` branch, but not on the current branch documented by this site.
 </Aside>
 
 | Hook                            | Purpose                                      |
@@ -161,44 +161,44 @@ provide the full base URL (e.g., `https://cms.example.com/__cms/api`).
 
 ### Client Methods
 
-| Method                                                                      | Return Type                  | Purpose                             |
-| --------------------------------------------------------------------------- | ---------------------------- | ----------------------------------- |
-| `getContent(id)`                                                            | `ContentEntry \| null`       | Fetch full content entry            |
-| `getLocalized(id, locale)`                                                  | `LocalizedEntry \| null`     | Fetch single-locale content         |
-| `createContent(data)`                                                       | `CreateResult`               | Create new content                  |
-| `updateLocalized(input)`                                                    | `UpdateResult`               | Update with ETag validation         |
-| `deleteContent(id, etag)`                                                   | `DeleteResult`               | Delete entire content               |
-| `deleteLocalized(input)`                                                    | `DeleteResult`               | Delete single locale                |
-| `getSitePages(site, locale?)`                                               | `ContentListResult`          | List site pages                     |
-| `getPageByPathname(site, pathname, locale?)`                                | `ContentManifest \| null`    | Find page by pathname (Coming Soon) |
-| `isPathnameAvailable(site, pathname, excludeId?)`                           | `boolean`                    | Check pathname availability         |
-| `movePage(site, id, pathname, locale, etag)`                                | `MoveResult`                 | Move page to new pathname           |
-| `getBlocks(collection?, locale?)`                                           | `ContentListResult`          | List blocks                         |
-| `getBlockByName(name, collection?, locale?)`                                | `ContentManifest \| null`    | Get block by name                   |
-| `getData(collection?, locale?)`                                             | `ContentListResult`          | List data entries                   |
-| `getDataByName(name, collection, locale?)`                                  | `ContentManifest \| null`    | Get data by name                    |
-| `listAllContent(filters?)`                                                  | `ContentListResult`          | List all content                    |
-| `batchUpdate(operations)`                                                   | `BatchResult`                | Batch update                        |
-| `getGitStatus()`                                                            | `GitStatus`                  | Git repository status               |
-| `commitChanges(message?)`                                                   | `GitCommitResult`            | Commit changes                      |
-| `pushChanges()`                                                             | `GitPushResult`              | Push to remote                      |
-| `pullChanges()`                                                             | `GitPullResult`              | Pull from remote                    |
-| `listAssets()`                                                              | `{ assets: AssetEntry[] }`   | List all assets                     |
-| `uploadAsset(formData)`                                                     | `{ asset: AssetEntry }`      | Upload asset                        |
-| `deleteAsset(filename)`                                                     | `{ success: boolean }`       | Delete asset                        |
-| `getCurrentUser()`                                                          | `{ user, role }`             | Get authenticated user              |
-| `isDataNameAvailable(name, collection, excludeId?)`                         | `boolean`                    | Check data name availability        |
-| `getDataCollections()`                                                      | `string[]`                   | List data collections               |
-| `findUntranslatedContent(targetLocale, excludeSites?, includeUnpublished?)` | `ContentListResult`          | Find untranslated content           |
-| `getSitesConfig()`                                                          | `SitesConfig`                | Get multi-site configuration        |
-| `getAsset(filename)`                                                        | `AssetEntry \| null`         | Get single asset metadata           |
-| `importAssetUrl(url, alt?, folder?)`                                        | `{ asset: AssetEntry }`      | Import asset from URL               |
-| `listFolder(path?)`                                                         | `FolderListing`              | List folder contents                |
-| `createFolder(path)`                                                        | `void`                       | Create new folder                   |
-| `updateAssetMetadata(filename, updates)`                                    | `AssetEntry`                 | Update asset alt text / tags        |
-| `getAssetUsage(filename)`                                                   | `AssetUsage[]`               | Find where asset is used            |
-| `moveAssets(filenames, sourceFolder, targetFolder)`                         | `{ success, moved? }`        | Move assets between folders         |
-| `getFolderTree()`                                                           | `{ tree: FolderTreeNode[] }` | Get folder hierarchy                |
+| Method                                                                      | Return Type                  | Purpose                                    |
+| --------------------------------------------------------------------------- | ---------------------------- | ------------------------------------------ |
+| `getContent(id)`                                                            | `ContentEntry \| null`       | Fetch full content entry                   |
+| `getLocalized(id, locale)`                                                  | `LocalizedEntry \| null`     | Fetch single-locale content                |
+| `createContent(data)`                                                       | `CreateResult`               | Create new content                         |
+| `updateLocalized(input)`                                                    | `UpdateResult`               | Update with ETag validation                |
+| `deleteContent(id, etag)`                                                   | `DeleteResult`               | Delete entire content                      |
+| `deleteLocalized(input)`                                                    | `DeleteResult`               | Delete single locale                       |
+| `getSitePages(site, locale?)`                                               | `ContentListResult`          | List site pages                            |
+| `getPageByPathname(site, pathname, locale?)`                                | `ContentManifest \| null`    | Find page by pathname (Dev Branch Preview) |
+| `isPathnameAvailable(site, pathname, excludeId?)`                           | `boolean`                    | Check pathname availability                |
+| `movePage(site, id, pathname, locale, etag)`                                | `MoveResult`                 | Move page to new pathname                  |
+| `getBlocks(collection?, locale?)`                                           | `ContentListResult`          | List blocks                                |
+| `getBlockByName(name, collection?, locale?)`                                | `ContentManifest \| null`    | Get block by name                          |
+| `getData(collection?, locale?)`                                             | `ContentListResult`          | List data entries                          |
+| `getDataByName(name, collection, locale?)`                                  | `ContentManifest \| null`    | Get data by name                           |
+| `listAllContent(filters?)`                                                  | `ContentListResult`          | List all content                           |
+| `batchUpdate(operations)`                                                   | `BatchResult`                | Batch update                               |
+| `getGitStatus()`                                                            | `GitStatus`                  | Git repository status                      |
+| `commitChanges(message?)`                                                   | `GitCommitResult`            | Commit changes                             |
+| `pushChanges()`                                                             | `GitPushResult`              | Push to remote                             |
+| `pullChanges()`                                                             | `GitPullResult`              | Pull from remote                           |
+| `listAssets()`                                                              | `{ assets: AssetEntry[] }`   | List all assets                            |
+| `uploadAsset(formData)`                                                     | `{ asset: AssetEntry }`      | Upload asset                               |
+| `deleteAsset(filename)`                                                     | `{ success: boolean }`       | Delete asset                               |
+| `getCurrentUser()`                                                          | `{ user, role }`             | Get authenticated user                     |
+| `isDataNameAvailable(name, collection, excludeId?)`                         | `boolean`                    | Check data name availability               |
+| `getDataCollections()`                                                      | `string[]`                   | List data collections                      |
+| `findUntranslatedContent(targetLocale, excludeSites?, includeUnpublished?)` | `ContentListResult`          | Find untranslated content                  |
+| `getSitesConfig()`                                                          | `SitesConfig`                | Get multi-site configuration               |
+| `getAsset(filename)`                                                        | `AssetEntry \| null`         | Get single asset metadata                  |
+| `importAssetUrl(url, alt?, folder?)`                                        | `{ asset: AssetEntry }`      | Import asset from URL                      |
+| `listFolder(path?)`                                                         | `FolderListing`              | List folder contents                       |
+| `createFolder(path)`                                                        | `void`                       | Create new folder                          |
+| `updateAssetMetadata(filename, updates)`                                    | `AssetEntry`                 | Update asset alt text / tags               |
+| `getAssetUsage(filename)`                                                   | `AssetUsage[]`               | Find where asset is used                   |
+| `moveAssets(filenames, sourceFolder, targetFolder)`                         | `{ success, moved? }`        | Move assets between folders                |
+| `getFolderTree()`                                                           | `{ tree: FolderTreeNode[] }` | Get folder hierarchy                       |
 
 ### Error Handling
 

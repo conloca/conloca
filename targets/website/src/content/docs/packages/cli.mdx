@@ -24,7 +24,7 @@ bunx @conloca/cli --help
 
 ### `conloca init`
 
-Initialize a new Conloca content structure for a site.
+Initialize a new Conloca content structure inside a project directory.
 
 ```bash
 conloca init <directory> <site>
@@ -32,16 +32,20 @@ conloca init <directory> <site>
 
 **Arguments:**
 
-| Argument    | Description                         |
-| ----------- | ----------------------------------- |
-| `directory` | Path to content root directory      |
-| `site`      | Site name (e.g., `default`, `blog`) |
+| Argument    | Description                                                      |
+| ----------- | ---------------------------------------------------------------- |
+| `directory` | Path to the project directory where `content/` should be created |
+| `site`      | Site name (e.g., `default`, `blog`)                              |
 
-**What it creates:**
+**What it creates inside `<directory>`:**
 
-- Content directory structure (`pages/`, `blocks/shared/`)
-- Site-specific directories
-- `sites.json` configuration file
+- `content/`
+- `content/<site>/pages/`
+- `content/blocks/shared/`
+- `content/sites.json`
+
+> **Note:** `conloca init` always creates a `content/` directory inside the path you pass. If you run
+> `conloca init ./content default`, the result will be `./content/content/...`.
 
 **Example:**
 
@@ -49,13 +53,13 @@ conloca init <directory> <site>
 # Initialize content in current directory for 'default' site
 conloca init . default
 
-# Initialize content in a specific directory for 'blog' site
-conloca init ./content blog
+# Initialize content in a specific project directory for 'blog' site
+conloca init ./my-astro-project blog
 ```
 
 ### `conloca verify`
 
-Verify content files and auto-repair missing required fields.
+Verify content files in an existing Conloca `content/` directory and auto-repair missing required fields.
 
 ```bash
 conloca verify <directory>
@@ -63,9 +67,9 @@ conloca verify <directory>
 
 **Arguments:**
 
-| Argument    | Description                         |
-| ----------- | ----------------------------------- |
-| `directory` | Path to content directory to verify |
+| Argument    | Description                                |
+| ----------- | ------------------------------------------ |
+| `directory` | Path to the `content/` directory to verify |
 
 **What it does:**
 

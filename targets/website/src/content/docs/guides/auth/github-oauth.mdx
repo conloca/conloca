@@ -6,97 +6,36 @@ description: Authenticate CMS users with GitHub OAuth
 import { Aside } from '@astrojs/starlight/components';
 
 <Aside type="caution">
-  **Coming Soon** — This authentication provider is not yet available in a stable release. It is implemented on the
-  `dev` branch and will ship in a future version. Install the stable release from
-  [npm](https://www.npmjs.com/package/@conloca/astro-cms) to get features available today.
+  **Dev Branch Preview** — GitHub OAuth exists on the `dev` branch, but it is not implemented on the current branch yet.
+  There is currently no `oauth()` export or `conlocaCMS({auth})` API here.
 </Aside>
 
-GitHub OAuth lets your team sign in to the CMS using their GitHub accounts. Conloca handles the full OAuth flow -- login
-redirect, callback, and session management.
+This page is roadmap documentation only. It should not be treated as a working setup guide for the current branch.
 
-## Prerequisites
+## Current status
 
-- A GitHub account with permission to create OAuth Apps
-- Your CMS accessible at a URL (localhost works for development)
+- No built-in GitHub OAuth flow is shipped here
+- No login, callback, or session endpoints are available on this branch
+- The public configuration API for this feature is still pending implementation
 
-## Setup
+## What to use today
 
-### 1. Create a GitHub OAuth App
+For production protection today, use [Cloudflare Access](/guides/auth/cf-access/). That is the only documented auth flow
+that matches the current code.
 
-1. Go to [GitHub Settings](https://github.com/settings/developers) > **Developer settings** > **OAuth Apps** > **New
-   OAuth App**
-2. Set **Application name** to something like "Conloca CMS"
-3. Set **Homepage URL** to your CMS URL (e.g., `https://cms.example.com`)
-4. Set **Authorization callback URL** to `https://YOUR_DOMAIN/__cms/auth/callback`
-   - For local development: `http://localhost:4321/__cms/auth/callback`
-5. Click **Register application**
-6. Copy the **Client ID**
-7. Click **Generate a new client secret** and copy the **Client Secret**
+## Planned use case
 
-### 2. Configure Conloca
+The intended direction is team login through GitHub accounts, but the final configuration shape, callback handling, and
+session model are not part of the current codebase yet.
 
-In your `astro.config.mjs`, import the `oauth` provider and pass it to the `auth` option:
+## Dev Branch Preview
+
+On the `dev` branch, GitHub OAuth is configured through the `oauth()` provider:
 
 ```js
-import { defineConfig } from 'astro/config';
-import node from '@astrojs/node';
-import { conlocaCMS } from '@conloca/astro-cms';
+// dev branch preview only
 import { oauth } from '@conloca/content-api/node';
 
-export default defineConfig({
-  output: 'server',
-  adapter: node({ mode: 'standalone' }),
-  integrations: [
-    conlocaCMS({
-      contentRoot: './content',
-      puckConfigPath: './src/puck.config.tsx',
-      auth: {
-        provider: oauth({
-          github: {
-            clientId: 'YOUR_CLIENT_ID',
-            clientSecret: 'YOUR_CLIENT_SECRET',
-          },
-          sessionSecret: 'YOUR_SESSION_SECRET_AT_LEAST_32_CHARS',
-        }),
-        roles: {
-          admin: ['your-email@example.com'],
-        },
-      },
-    }),
-  ],
-});
-```
-
-### Parameters
-
-| Parameter        | Type     | Required | Description                                                                                 |
-| ---------------- | -------- | -------- | ------------------------------------------------------------------------------------------- |
-| `github`         | `object` | Yes      | Object with `clientId` and `clientSecret` from GitHub                                       |
-| `sessionSecret`  | `string` | Yes      | Secret for signing session cookies. Must be at least 32 characters. Keep this value secret. |
-| `sessionMaxAge`  | `number` | No       | Session duration in seconds. Default: 604800 (7 days)                                       |
-| `basePath`       | `string` | No       | CMS base path for cookie scoping. Default: `/__cms`                                         |
-| `cookieDomain`   | `string` | No       | Cookie domain for cross-subdomain sessions (e.g., `.company.com`)                           |
-| `redirectOrigin` | `string` | No       | Origin for OAuth redirect URI when behind a reverse proxy (e.g., `https://cms.company.com`) |
-
-## Generating a session secret
-
-The session secret signs session cookies. Use a cryptographically random string of at least 32 characters:
-
-```bash
-openssl rand -base64 32
-```
-
-Store this value securely -- in an environment variable, not committed to source control:
-
-```js
-sessionSecret: process.env.SESSION_SECRET,
-```
-
-## Role mapping
-
-All authenticated users default to the `viewer` role. Map users to roles with the `roles` option:
-
-```js
 auth: {
   provider: oauth({
     github: {
@@ -112,60 +51,11 @@ auth: {
 }
 ```
 
-Patterns support `*` as a wildcard. `*@company.com` matches any email at that domain.
-
-## Production: reverse proxy
-
-When running behind a reverse proxy (nginx, Caddy, Cloudflare), the OAuth callback URL must match the public-facing
-origin. Use `redirectOrigin` to ensure callbacks target the correct domain:
-
-```js
-oauth({
-  github: {
-    clientId: process.env.GITHUB_CLIENT_ID,
-    clientSecret: process.env.GITHUB_CLIENT_SECRET,
-  },
-  sessionSecret: process.env.SESSION_SECRET,
-  redirectOrigin: 'https://cms.example.com',
-});
-```
-
-Without `redirectOrigin`, the callback URL is derived from the incoming request, which may show an internal hostname
-when behind a proxy.
-
-## Cross-subdomain sessions
-
-If you use the branch proxy for multi-branch editing, set `cookieDomain` so the session cookie is accessible across
-subdomains:
-
-```js
-oauth({
-  github: {
-    clientId: process.env.GITHUB_CLIENT_ID,
-    clientSecret: process.env.GITHUB_CLIENT_SECRET,
-  },
-  sessionSecret: process.env.SESSION_SECRET,
-  cookieDomain: '.company.com',
-  redirectOrigin: 'https://cms.company.com',
-});
-```
-
-When `cookieDomain` is set, the session cookie uses `Path=/` and includes the `Domain` attribute so it works across all
-subdomains.
-
-## How it works
-
-1. User visits `/__cms` and is redirected to `/__cms/auth/login`
-2. The OAuth provider redirects to GitHub's authorization page
-3. User authorizes the app on GitHub
-4. GitHub redirects back to `/__cms/auth/callback` with an authorization code
-5. Conloca exchanges the code for an access token, fetches the user's email, and creates a signed session cookie
-6. User is redirected to the CMS dashboard
-
-The session cookie (`conloca_session`) is `HttpOnly`, `SameSite=Lax`, and `Secure` (except on localhost).
+The current `dev` implementation also adds `/__cms/auth/login` and `/__cms/auth/callback` routes plus signed session
+cookies.
 
 ## Next steps
 
 - [Getting Started](/getting-started/) -- Set up your first Conloca site
-- [Google OAuth](/guides/auth/google-oauth/) -- Alternative OAuth provider
+- [Cloudflare Access](/guides/auth/cf-access/) -- Current production-ready protection
 - [Docker deployment](/guides/deploy/docker/) -- Deploy with Docker Compose

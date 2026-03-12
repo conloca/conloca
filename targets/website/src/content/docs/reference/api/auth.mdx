@@ -1,25 +1,18 @@
 ---
 title: Auth API
-description: User authentication endpoint for retrieving the current session
+description: Current request identity endpoint for the CMS API
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+The Auth API currently exposes a single endpoint: `/auth/user`.
 
-<Aside type="caution">
-  **Coming Soon** — This authentication provider is not yet available in a stable release. It is implemented on the
-  `dev` branch and will ship in a future version. Install the stable release from
-  [npm](https://www.npmjs.com/package/@conloca/astro-cms) to get features available today.
-</Aside>
-
-The Auth API provides an endpoint to retrieve the current authenticated user. Authentication itself is handled by the
-configured auth provider (Cloudflare Access, OAuth, API keys, or no-auth for development). The `/auth/user` endpoint
-reads from the resolved session set by the permission middleware.
+On this branch, the endpoint reports the Cloudflare Access identity that `@conloca/astro-cms` attached to the request
+after successful JWT validation. If Cloudflare Access is not configured, or the request does not contain a verified user
+email, the endpoint returns `authenticated: false`.
 
 All endpoints are relative to the API base URL (default: `/__cms/api`).
 
-:::note Auth callback routes (`/auth/callback`, `/auth/login`, `/auth/logout`) are handled internally by the auth
-provider and are not part of the content API. See the [auth provider guides](/guides/auth/cf-access/) for setup
-instructions. :::
+:::note There are no built-in login, logout, or callback endpoints on this branch. Planned auth providers are documented
+separately as roadmap material, not as currently available API routes. :::
 
 ---
 
@@ -27,8 +20,7 @@ instructions. :::
 
 ### GET /auth/user
 
-Get the currently authenticated user's information. Returns the user's email and subject identifier. The user object
-reflects the authenticated session set by the configured auth provider.
+Get the currently authenticated user's information from the validated Cloudflare Access request.
 
 **Parameters:** None
 
@@ -70,19 +62,7 @@ curl http://localhost:4321/__cms/api/auth/user
 }
 ```
 
-### Roles
+## Current scope
 
-Conloca uses three roles for permission control:
-
-| Role     | Permissions                                             |
-| -------- | ------------------------------------------------------- |
-| `admin`  | Full access: read, create, edit, delete, git operations |
-| `editor` | Content management: read, create, edit                  |
-| `viewer` | Read-only: can view content but cannot make changes     |
-
-Roles are resolved in the following order:
-
-1. `authConfig.resolveRole()` custom function (if configured)
-2. `authConfig.roles.admin` / `authConfig.roles.editor` email pattern matching
-3. Provider-assigned role (from the auth provider itself)
-4. Default: `admin` in development mode (no auth provider configured)
+- Implemented today: request identity passthrough for validated Cloudflare Access requests
+- Not implemented on this branch: role mapping, session cookies, OAuth login flows, API key auth providers

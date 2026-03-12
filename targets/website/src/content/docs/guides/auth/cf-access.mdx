@@ -6,8 +6,9 @@ description: Protect your CMS with Cloudflare Access zero-trust authentication
 import { Aside } from '@astrojs/starlight/components';
 
 <Aside type="caution">
-  **Coming Soon** — The `roles` and `resolveRole` configuration shown on this page requires the pluggable auth system,
-  which is not yet in a stable release. Basic Cloudflare Access protection (header-based) is available today.
+  This guide documents the authentication flow that is actually available today on this branch: environment-variable-
+  driven Cloudflare Access validation. Provider configuration through `conlocaCMS({ auth: ... })` is not implemented
+  here.
 </Aside>
 
 Cloudflare Access provides zero-trust authentication without any login page in your application. Users authenticate
@@ -31,7 +32,7 @@ When both variables are set, Conloca automatically validates the `CF_Authorizati
   proceed unauthenticated in local dev — you do not need Cloudflare credentials to run the CMS locally.
 </Aside>
 
-The role system (admin, editor, viewer) and `resolveRole` shown below require the pluggable auth system (Coming Soon).
+There is no app-level login UI. Cloudflare handles authentication before requests reach the CMS.
 
 ## Prerequisites
 
@@ -52,43 +53,17 @@ In the Cloudflare Zero Trust dashboard:
 5. Create an **Access Policy** to control who can access the CMS
 6. Copy the **Application Audience (AUD)** tag from the application overview
 
-### 2. Configure Conloca
+### 2. Configure environment variables
 
-In your `astro.config.mjs`, import the `cfAccess` provider and pass it to the `auth` option:
+Set these variables in the environment where your Astro server runs:
 
-```js
-import { defineConfig } from 'astro/config';
-import node from '@astrojs/node';
-import { conlocaCMS } from '@conloca/astro-cms';
-import { cfAccess } from '@conloca/content-api/node';
-
-export default defineConfig({
-  output: 'server',
-  adapter: node({ mode: 'standalone' }),
-  integrations: [
-    conlocaCMS({
-      contentRoot: './content',
-      puckConfigPath: './src/puck.config.tsx',
-      auth: {
-        provider: cfAccess({
-          teamDomain: 'YOUR_TEAM_NAME',
-          aud: 'YOUR_APPLICATION_AUD_TAG',
-        }),
-      },
-    }),
-  ],
-});
+```bash
+CF_ACCESS_TEAM_NAME=YOUR_TEAM_NAME
+CF_ACCESS_AUD=YOUR_APPLICATION_AUD_TAG
 ```
 
 Replace `YOUR_TEAM_NAME` with your Cloudflare Zero Trust team name (the subdomain in
 `YOUR_TEAM_NAME.cloudflareaccess.com`) and `YOUR_APPLICATION_AUD_TAG` with the AUD tag from step 1.
-
-### Parameters
-
-| Parameter    | Type     | Description                                                                                   |
-| ------------ | -------- | --------------------------------------------------------------------------------------------- |
-| `teamDomain` | `string` | Your Cloudflare Zero Trust team name (e.g., `mycompany` for `mycompany.cloudflareaccess.com`) |
-| `aud`        | `string` | Application Audience (AUD) tag from the Access Application settings                           |
 
 ## How it works
 
@@ -96,54 +71,16 @@ When a user visits your CMS, Cloudflare Access intercepts the request and requir
 configured identity provider. After successful authentication, Cloudflare sets a `CF_Authorization` JWT cookie and adds
 a `Cf-Access-Jwt-Assertion` header.
 
-The `cfAccess` provider verifies this JWT against Cloudflare's public JWKS endpoint
+Conloca verifies this JWT against Cloudflare's public JWKS endpoint
 (`https://YOUR_TEAM.cloudflareaccess.com/cdn-cgi/access/certs`) and extracts the user's email from the token payload.
 
 No login UI is needed in your application -- Cloudflare handles the entire authentication flow.
 
-## Role mapping
+## Current limitations
 
-By default, all authenticated users are assigned the `viewer` role. Use the `roles` option on the `auth` config to map
-specific users to higher roles:
-
-```js
-auth: {
-  provider: cfAccess({
-    teamDomain: 'YOUR_TEAM_NAME',
-    aud: 'YOUR_APPLICATION_AUD_TAG',
-  }),
-  roles: {
-    admin: ['admin@company.com'],
-    editor: ['*@company.com'],
-  },
-}
-```
-
-Role matching is evaluated in order: `admin` first, then `editor`. The first match wins. Patterns support `*` as a
-wildcard -- `*@company.com` matches any email at that domain.
-
-Users who do not match any pattern keep the default `viewer` role.
-
-## Custom role resolution
-
-For more control over role assignment, use the `resolveRole` function instead of (or alongside) pattern matching:
-
-```js
-auth: {
-  provider: cfAccess({
-    teamDomain: 'YOUR_TEAM_NAME',
-    aud: 'YOUR_APPLICATION_AUD_TAG',
-  }),
-  resolveRole: ({ email, claims }) => {
-    if (claims?.groups?.includes('cms-admins')) return 'admin'
-    if (email.endsWith('@company.com')) return 'editor'
-    return 'viewer'
-  },
-}
-```
-
-The `claims` object contains the full JWT payload from Cloudflare Access, including any custom claims from your identity
-provider.
+- There is no `auth` option in `conlocaCMS()` on this branch
+- Role mapping (`admin`, `editor`, `viewer`) is not implemented yet
+- OAuth and API key providers are documented as planned work only
 
 ## Combining with Cloudflare Tunnel
 
