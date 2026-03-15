@@ -10,8 +10,7 @@
     "astro": "astro",
     "deploy": "bunx wrangler@4.73.0 deploy",
     "deploy:dry": "bunx wrangler@4.73.0 deploy --dry-run",
-    "db:migrate:local": "bunx wrangler@4.73.0 d1 migrations apply conloca-website-db --local",
-    "db:migrate:prod": "bun run scripts/apply-remote-d1-migrations.ts"
+    "db:migrate:local": "bunx wrangler@4.73.0 d1 migrations apply conloca-website-db --local"
   },
   "dependencies": {
     "@astrojs/starlight": "^0.37.0",

@@ -14,7 +14,6 @@ Run all commands from `private/targets/website`.
 | `bun run deploy:dry`       | Validate the unified website Worker deployment         |
 | `bun run deploy`           | Deploy the unified website Worker                      |
 | `bun run db:migrate:local` | Apply D1 migrations to the local database              |
-| `bun run db:migrate:prod`  | Apply D1 migrations to the remote D1 database          |
 
 ## Workspace Notes
 
@@ -24,8 +23,7 @@ Run all commands from `private/targets/website`.
 - Cloudflare deployment is configured in `wrangler.toml`
 - The D1 database is provisioned via Wrangler using `binding = "DB"` and `database_name = "conloca-website-db"` without
   checked-in IDs
-- Remote D1 migrations use `scripts/apply-remote-d1-migrations.ts` to resolve the database UUID at runtime and keep IDs
-  out of git
+- GitHub Actions injects `CLOUDFLARE_D1_DATABASE_ID` at runtime for remote D1 migrations, so the UUID stays out of git
 - The deployed Worker serves static assets from `dist/` and handles `/api/subscribe`
 
 ## Related Docs
