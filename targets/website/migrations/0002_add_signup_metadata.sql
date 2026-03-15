@@ -1,0 +1,10 @@
+ALTER TABLE subscribers ADD COLUMN ip_address TEXT;
+ALTER TABLE subscribers ADD COLUMN user_agent TEXT;
+ALTER TABLE subscribers ADD COLUMN country TEXT;
+ALTER TABLE subscribers ADD COLUMN city TEXT;
+ALTER TABLE subscribers ADD COLUMN region TEXT;
+ALTER TABLE subscribers ADD COLUMN region_code TEXT;
+ALTER TABLE subscribers ADD COLUMN continent TEXT;
+ALTER TABLE subscribers ADD COLUMN timezone TEXT;
+ALTER TABLE subscribers ADD COLUMN colo TEXT;
+ALTER TABLE subscribers ADD COLUMN referer TEXT;

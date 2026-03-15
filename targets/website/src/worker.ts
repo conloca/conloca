@@ -11,6 +11,20 @@ interface AssetFetcher {
   fetch(input: Request | string | URL, init?: RequestInit): Promise<Response>;
 }
 
+type RequestCf = {
+  city?: string;
+  continent?: string;
+  country?: string;
+  region?: string;
+  regionCode?: string;
+  timezone?: string;
+  colo?: string;
+};
+
+type CloudflareRequest = Request & {
+  cf?: RequestCf;
+};
+
 interface Env {
   DB: D1DatabaseBinding;
   ASSETS: AssetFetcher;
@@ -25,6 +39,33 @@ type SubscribePayload = {
 
 function jsonResponse(body: unknown, status = 200) {
   return Response.json(body, { status });
+}
+
+function readColoHeader(request: Request) {
+  const cfRay = request.headers.get('CF-Ray');
+
+  if (!cfRay) return null;
+
+  const rayParts = cfRay.split('-');
+
+  return rayParts[1] ?? null;
+}
+
+function readSignupMetadata(request: CloudflareRequest) {
+  const { cf } = request;
+
+  return {
+    ipAddress: request.headers.get('CF-Connecting-IP'),
+    userAgent: request.headers.get('User-Agent'),
+    referer: request.headers.get('Referer'),
+    country: request.headers.get('CF-IPCountry') ?? cf?.country ?? null,
+    city: cf?.city ?? null,
+    region: cf?.region ?? null,
+    regionCode: cf?.regionCode ?? null,
+    continent: cf?.continent ?? null,
+    timezone: cf?.timezone ?? null,
+    colo: cf?.colo ?? readColoHeader(request),
+  };
 }
 
 async function handleSubscribe(request: Request, env: Env) {
@@ -43,6 +84,7 @@ async function handleSubscribe(request: Request, env: Env) {
 
   try {
     const { email, intent } = (await request.json()) as SubscribePayload;
+    const metadata = readSignupMetadata(request as CloudflareRequest);
 
     if (!email || !emailPattern.test(email)) {
       return jsonResponse({ error: 'Invalid email address' }, 400);
@@ -52,11 +94,37 @@ async function handleSubscribe(request: Request, env: Env) {
     const source = intent === 'hosted' ? 'waitlist' : 'newsletter';
 
     await env.DB.prepare(
-      `INSERT INTO subscribers (email, source)
-       VALUES (?, ?)
+      `INSERT INTO subscribers (
+         email,
+         source,
+         ip_address,
+         user_agent,
+         country,
+         city,
+         region,
+         region_code,
+         continent,
+         timezone,
+         colo,
+         referer
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (email, source) DO NOTHING`,
     )
-      .bind(normalizedEmail, source)
+      .bind(
+        normalizedEmail,
+        source,
+        metadata.ipAddress,
+        metadata.userAgent,
+        metadata.country,
+        metadata.city,
+        metadata.region,
+        metadata.regionCode,
+        metadata.continent,
+        metadata.timezone,
+        metadata.colo,
+        metadata.referer,
+      )
       .run();
 
     return jsonResponse({ ok: true });
