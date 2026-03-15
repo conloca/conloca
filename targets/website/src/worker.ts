@@ -82,17 +82,25 @@ async function handleSubscribe(request: Request, env: Env) {
     return jsonResponse({ error: 'Method not allowed' }, 405);
   }
 
+  let payload: SubscribePayload;
+
   try {
-    const { email, intent } = (await request.json()) as SubscribePayload;
-    const metadata = readSignupMetadata(request as CloudflareRequest);
+    payload = (await request.json()) as SubscribePayload;
+  } catch {
+    return jsonResponse({ error: 'Invalid JSON body' }, 400);
+  }
 
-    if (!email || !emailPattern.test(email)) {
-      return jsonResponse({ error: 'Invalid email address' }, 400);
-    }
+  const { email, intent } = payload;
+  const metadata = readSignupMetadata(request as CloudflareRequest);
 
-    const normalizedEmail = email.trim().toLowerCase();
-    const source = intent === 'hosted' ? 'waitlist' : 'newsletter';
+  if (!email || !emailPattern.test(email)) {
+    return jsonResponse({ error: 'Invalid email address' }, 400);
+  }
 
+  const normalizedEmail = email.trim().toLowerCase();
+  const source = intent === 'hosted' ? 'waitlist' : 'newsletter';
+
+  try {
     await env.DB.prepare(
       `INSERT INTO subscribers (
          email,
