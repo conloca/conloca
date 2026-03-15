@@ -22,6 +22,10 @@ Run all commands from `private/targets/website`.
 - The docs content lives in `src/content/docs/`
 - Site configuration lives in `astro.config.mjs` and `src/content.config.ts`
 - Cloudflare deployment is configured in `wrangler.toml`
+- The D1 database is provisioned via Wrangler using `binding = "DB"` and `database_name = "conloca-website-db"` without
+  checked-in IDs
+- Remote D1 migrations use `scripts/apply-remote-d1-migrations.ts` to resolve the database UUID at runtime and keep IDs
+  out of git
 - The deployed Worker serves static assets from `dist/` and handles `/api/subscribe`
 
 ## Related Docs
