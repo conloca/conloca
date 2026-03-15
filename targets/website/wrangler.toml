@@ -1,6 +1,11 @@
 name = "conloca-website"
 main = "src/worker.ts"
 compatibility_date = "2026-03-15"
+workers_dev = false
+
+[[routes]]
+pattern = "conloca.com"
+custom_domain = true
 
 [assets]
 directory = "./dist"
