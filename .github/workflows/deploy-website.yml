@@ -19,6 +19,7 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_D1_DATABASE_ID: ${{ vars.CLOUDFLARE_D1_DATABASE_ID }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
@@ -40,6 +41,22 @@ jobs:
             echo 'Missing Cloudflare deploy secrets.' >&2
             exit 1
           fi
+
+          if [ -z "$CLOUDFLARE_D1_DATABASE_ID" ]; then
+            echo 'Missing repository variable CLOUDFLARE_D1_DATABASE_ID.' >&2
+            exit 1
+          fi
+
+      - name: Inject D1 database id
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          wrangler_path = Path('targets/website/wrangler.toml')
+          content = wrangler_path.read_text()
+          content = content.replace('<YOUR_D1_DATABASE_ID>', '${{ env.CLOUDFLARE_D1_DATABASE_ID }}')
+          wrangler_path.write_text(content)
+          PY
 
       - name: Apply D1 migrations
         working-directory: targets/website
