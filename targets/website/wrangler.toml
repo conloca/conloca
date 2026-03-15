@@ -1,0 +1,15 @@
+name = "conloca-website"
+main = "src/worker.ts"
+compatibility_date = "2026-03-15"
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "404-page"
+run_worker_first = ["/api/*"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "conloca-website"
+database_id = "<YOUR_D1_DATABASE_ID>"
+migrations_dir = "migrations"
