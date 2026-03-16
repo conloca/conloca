@@ -1,4 +1,4 @@
-const WORKER_URL = (import.meta as { env?: { PUBLIC_WORKER_URL?: string } }).env?.PUBLIC_WORKER_URL ?? '/api/subscribe';
+const WORKER_URL = '/api/subscribe';
 
 function setupForm(formId: string, msgId: string) {
   const form = document.getElementById(formId) as HTMLFormElement | null;
@@ -8,7 +8,7 @@ function setupForm(formId: string, msgId: string) {
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const formData = new FormData(form);
-    const email = formData.get('email') as string;
+    const email = (formData.get('email') as string).trim();
     const intent = formData.get('intent') as string;
     const btn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
 
