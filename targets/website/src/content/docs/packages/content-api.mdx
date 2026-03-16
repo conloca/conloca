@@ -158,7 +158,7 @@ const api = await createContentAPI({ contentRoot: './content' });
 const pages = await api.getSite('default').listPages('en');
 
 // Get a specific block
-const block = await api.blocks.getByName('header', 'shared', 'en');
+const block = await api.blocks.getByName('shared', 'header', 'en');
 ```
 
 ### Testing with InMemoryContentAPI

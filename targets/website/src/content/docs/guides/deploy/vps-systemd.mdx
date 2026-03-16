@@ -65,12 +65,11 @@ ExecStart=/usr/local/bin/bun run ./dist/server/entry.mjs
 
 ### 4. Add environment variables
 
-For authentication, add environment variables to the unit file:
+For authentication with Cloudflare Access, add these environment variables to the unit file:
 
 ```ini
-Environment=GITHUB_CLIENT_ID=YOUR_CLIENT_ID
-Environment=GITHUB_CLIENT_SECRET=YOUR_CLIENT_SECRET
-Environment=SESSION_SECRET=YOUR_SESSION_SECRET_AT_LEAST_32_CHARS
+Environment=CF_ACCESS_TEAM_NAME=YOUR_TEAM_NAME
+Environment=CF_ACCESS_AUD=YOUR_APPLICATION_AUD_TAG
 ```
 
 Or use an environment file for better security:
@@ -78,6 +77,8 @@ Or use an environment file for better security:
 ```ini
 EnvironmentFile=/opt/conloca/.env
 ```
+
+See the [Cloudflare Access guide](/guides/auth/cf-access/) for how to obtain these values.
 
 ### 5. Enable and start
 
