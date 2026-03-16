@@ -85,6 +85,7 @@ import { setupFetchMock, MockAPIResponses, API_ROUTES } from '@conloca/content-a
 | `useUploadAsset`         | `()`                         | Upload asset mutation             |
 | `useImportAssetUrl`      | `()`                         | Import asset from URL mutation    |
 | `useDeleteAsset`         | `()`                         | Delete asset mutation             |
+| `useBulkDeleteAssets`    | `()`                         | Delete multiple assets mutation   |
 | `useAssetFolders`        | `(path?: string)`            | List folder contents              |
 | `useCreateFolder`        | `()`                         | Create folder mutation            |
 | `useUpdateAssetMetadata` | `()`                         | Update asset alt text / tags      |
@@ -187,7 +188,7 @@ base URL (e.g., `https://cms.example.com/__cms/api`).
 | `listAssets()`                                                              | `{ assets: AssetEntry[] }`   | List all assets              |
 | `uploadAsset(formData)`                                                     | `{ asset: AssetEntry }`      | Upload asset                 |
 | `deleteAsset(filename)`                                                     | `{ success: boolean }`       | Delete asset                 |
-| `getCurrentUser()`                                                          | `{ user, role }`             | Get authenticated user       |
+| `getCurrentUser()`                                                          | `{ authenticated, user? }`   | Get authenticated user       |
 | `isDataNameAvailable(name, collection, excludeId?)`                         | `boolean`                    | Check data name availability |
 | `getDataCollections()`                                                      | `string[]`                   | List data collections        |
 | `findUntranslatedContent(targetLocale, excludeSites?, includeUnpublished?)` | `ContentListResult`          | Find untranslated content    |
