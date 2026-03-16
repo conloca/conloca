@@ -5,6 +5,10 @@ description: 'Core content operations engine, authentication providers, and file
 
 import { Aside } from '@astrojs/starlight/components';
 
+`@conloca/content-api` is the core content engine for Conloca CMS. It reads and writes VXJSON content files, maintains
+an in-memory index for fast lookups, handles optimistic concurrency via etags, and provides the `FileSystemContentAPI`
+class that all other packages depend on.
+
 ## Overview
 
 `@conloca/content-api` is the core engine powering Conloca CMS. It handles file-based content storage in VXJSON format,
