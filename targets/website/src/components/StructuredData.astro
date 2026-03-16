@@ -1,0 +1,63 @@
+---
+interface Props {
+  type?: 'landing' | 'page'
+}
+
+const { type = 'page' } = Astro.props
+
+const organization = {
+  '@type': 'Organization',
+  name: 'Conloca',
+  url: 'https://conloca.com',
+  logo: 'https://conloca.com/favicon.svg',
+  sameAs: ['https://github.com/conloca/conloca'],
+}
+
+const softwareApplication = {
+  '@type': 'SoftwareApplication',
+  name: 'Conloca',
+  applicationCategory: 'DeveloperApplication',
+  applicationSubCategory: 'Content Management System',
+  operatingSystem: 'Cross-platform',
+  description:
+    'Conloca is a free, open-source, file-based content management system built specifically for Astro websites. It stores all content as version-controlled files in your git repository with visual drag-and-drop editing powered by Puck.',
+  offers: {
+    '@type': 'Offer',
+    price: '0',
+    priceCurrency: 'USD',
+    description: 'Free and open source under the MIT License',
+  },
+  featureList: [
+    'File-based storage with VXJSON format',
+    'Visual drag-and-drop editor powered by Puck',
+    'Git-native version control with author attribution',
+    'Built-in multi-locale content management',
+    'MDX support for rich content',
+    'Self-hosted deployment with Bun runtime',
+    'Cloudflare Access authentication',
+    'Config-driven routing',
+  ],
+  license: 'https://opensource.org/licenses/MIT',
+}
+
+const webSite = {
+  '@type': 'WebSite',
+  name: 'Conloca',
+  url: 'https://conloca.com',
+  description: 'The file-based CMS that lives in your git repo. Visual editing for Astro websites.',
+}
+
+const landingSchema = {
+  '@context': 'https://schema.org',
+  '@graph': [organization, softwareApplication, webSite],
+}
+
+const pageSchema = {
+  '@context': 'https://schema.org',
+  '@graph': [organization],
+}
+
+const schema = type === 'landing' ? landingSchema : pageSchema
+---
+
+<script type="application/ld+json" set:html={JSON.stringify(schema)} />

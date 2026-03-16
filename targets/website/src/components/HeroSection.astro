@@ -2,13 +2,16 @@
   <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(6,182,212,0.08)_0%,transparent_70%)]"></div>
   <div class="absolute inset-0" style="background-image: radial-gradient(rgba(148,163,184,0.07) 1px, transparent 1px); background-size: 32px 32px;"></div>
 
-  <div class="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+  <div class="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center" itemscope itemtype="https://schema.org/SoftwareApplication">
+    <meta itemprop="applicationCategory" content="Content Management System" />
+    <meta itemprop="operatingSystem" content="Cross-platform" />
     <div class="inline-flex items-center gap-2 border border-surface-700/60 rounded-full px-4 py-1.5 mb-8 text-xs text-surface-400 animate-fade-in">
       <span class="w-1.5 h-1.5 rounded-full bg-brand-400 animate-pulse"></span>
       Open source &middot; MIT Licensed
     </div>
 
     <h1
+      itemprop="name"
       class="text-4xl sm:text-5xl lg:text-6xl font-bold text-white leading-tight tracking-tight mb-6 opacity-0 animate-slide-up"
     >
       The file-based CMS that lives in
@@ -24,7 +27,7 @@
     </p>
 
     <div
-      class="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16 opacity-0 animate-slide-up"
+      class="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8 opacity-0 animate-slide-up"
       style="animation-delay: 0.3s;"
     >
       <a
@@ -43,6 +46,17 @@
         Join Waitlist
       </a>
     </div>
+
+    <p
+      itemprop="description"
+      class="text-sm text-surface-500 max-w-xl mx-auto mb-16 opacity-0 animate-slide-up"
+      style="animation-delay: 0.35s;"
+    >
+      Conloca is a free, open-source, file-based content management system (CMS) built specifically for Astro websites.
+      It stores all content as version-controlled files in your git repository &mdash; no database required.
+      Developers define drag-and-drop components with Puck, and content editors build pages visually through a
+      browser-based interface at the /__cms route.
+    </p>
 
     <div
       class="max-w-lg mx-auto opacity-0 animate-slide-up"

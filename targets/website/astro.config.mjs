@@ -3,6 +3,7 @@ import starlight from '@astrojs/starlight';
 import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
+  site: 'https://conloca.com',
   integrations: [
     starlight({
       title: 'Conloca CMS',
