@@ -1,0 +1,147 @@
+---
+import Layout from '../layouts/Layout.astro'
+import Navbar from '../components/Navbar.astro'
+import Footer from '../components/Footer.astro'
+
+const faqItems = [
+  {
+    question: 'What is Conloca?',
+    answer:
+      'Conloca is a free, open-source, file-based content management system (CMS) built specifically for Astro websites. It provides a visual drag-and-drop editor powered by Puck that runs at the /__cms route, allowing content editors to build and edit pages in the browser while developers maintain full control over components and code.',
+  },
+  {
+    question: 'Is Conloca free?',
+    answer:
+      'Yes, Conloca is completely free and open source under the MIT License. You can use it in personal and commercial projects without any cost. An optional hosted version (Conloca Cloud) with managed deployment and team features is coming soon.',
+  },
+  {
+    question: 'What is a file-based CMS?',
+    answer:
+      'A file-based CMS stores all content as files in your project repository instead of a separate database. With Conloca, content is saved as VXJSON files directly in your git repo. This means every edit creates a git commit, you get full version history, and there is no database to manage or external API to depend on.',
+  },
+  {
+    question: 'How do I add Conloca to my Astro project?',
+    answer:
+      'Adding Conloca takes three steps: First, install the packages with "bun add @conloca/astro-cms @conloca/content-api". Second, add the Conloca integration to your astro.config.mjs. Third, define your Puck components (blocks) that editors will use to build pages. The visual editor becomes available at /__cms in development.',
+  },
+  {
+    question: 'Does Conloca require a database?',
+    answer:
+      'No. Conloca uses VXJSON files stored directly in your git repository. There is no database to set up, no connection strings to manage, and no external service dependency. Your content lives alongside your code as version-controlled files.',
+  },
+  {
+    question: 'How does visual editing work in Conloca?',
+    answer:
+      'Conloca provides a browser-based visual editor at the /__cms route of your Astro site. Content editors drag and drop components (blocks) defined by developers to build pages. The editor is powered by Puck and renders a live preview. When editors save, changes are written to VXJSON files and committed to git.',
+  },
+  {
+    question: 'How is Conloca different from Storyblok or Contentful?',
+    answer:
+      'Unlike Storyblok and Contentful, which are cloud-hosted API-based CMSs, Conloca is file-based and self-hosted. Your content lives in your git repository as files, not in a third-party cloud service. This means no vendor lock-in, no API rate limits, no monthly fees, and full ownership of your data.',
+  },
+  {
+    question: 'Can I use Conloca with frameworks other than Astro?',
+    answer:
+      'Conloca is currently built specifically for Astro. The integration uses Astro\'s middleware, routing, and build system for a tight, native experience. Supporting other frameworks is not on the current roadmap, as the Astro-specific design allows for deeper integration than a generic CMS could provide.',
+  },
+  {
+    question: 'Does Conloca support multiple languages?',
+    answer:
+      'Yes. Conloca has built-in multi-locale content management. You can define locales in your configuration, and the CMS will manage content for each locale separately. Editors can switch between locales in the visual editor, and your Astro pages can render locale-specific content automatically.',
+  },
+  {
+    question: 'How does Conloca handle content versioning?',
+    answer:
+      'Every content edit in Conloca produces a git commit with author attribution from the authenticated user. This gives you a complete version history of all content changes, the ability to diff and revert content, and audit trails showing who changed what and when.',
+  },
+  {
+    question: 'What deployment options does Conloca support?',
+    answer:
+      'Conloca runs on the Bun JavaScript runtime and can be deployed anywhere Bun runs. Common deployment options include Docker containers, VPS with systemd, and behind a Cloudflare Tunnel for secure access. The documentation includes guides for each deployment method.',
+  },
+  {
+    question: 'Can multiple people edit content at the same time?',
+    answer:
+      'Yes. Conloca supports concurrent editing with etag-based conflict detection. If two editors modify the same page simultaneously, the system detects the conflict and presents a resolution dialog instead of silently overwriting changes.',
+  },
+]
+
+const faqSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: faqItems.map((item) => ({
+    '@type': 'Question',
+    name: item.question,
+    acceptedAnswer: {
+      '@type': 'Answer',
+      text: item.answer,
+    },
+  })),
+}
+---
+
+<Layout
+  title="FAQ -- Conloca CMS"
+  description="Frequently asked questions about Conloca, the file-based CMS for Astro. Learn about setup, features, pricing, and how it compares to other CMS options."
+>
+  <Navbar />
+  <main class="pt-24 pb-20">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-16">
+        <p class="text-brand-400 text-sm font-medium tracking-wide uppercase mb-3">Support</p>
+        <h1 class="text-3xl sm:text-4xl font-bold text-white mb-4">
+          Frequently Asked Questions
+        </h1>
+        <p class="text-surface-400 max-w-xl mx-auto">
+          Common questions about Conloca CMS
+        </p>
+      </div>
+
+      <div class="space-y-4">
+        {faqItems.map((item) => (
+          <details class="group bg-surface-900/40 border border-surface-800/50 rounded-xl overflow-hidden">
+            <summary class="flex items-center justify-between cursor-pointer px-6 py-5 text-white font-medium text-sm hover:bg-surface-800/30 transition-colors">
+              {item.question}
+              <svg
+                class="w-5 h-5 text-surface-500 shrink-0 ml-4 transition-transform group-open:rotate-180"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </summary>
+            <div class="px-6 pb-5 text-sm text-surface-400 leading-relaxed border-t border-surface-800/30 pt-4">
+              {item.answer}
+            </div>
+          </details>
+        ))}
+      </div>
+
+      <div class="mt-16 text-center space-y-4">
+        <p class="text-surface-500 text-sm">Have more questions?</p>
+        <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+          <a
+            href="/getting-started/"
+            class="inline-flex items-center gap-2 bg-brand-500 hover:bg-brand-400 text-surface-950 font-semibold px-6 py-3 rounded-lg transition-all duration-200 hover:shadow-lg hover:shadow-brand-500/20 text-sm"
+          >
+            Read the Docs
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+            </svg>
+          </a>
+          <a
+            href="/"
+            class="inline-flex items-center gap-2 border border-surface-600 hover:border-surface-500 text-surface-300 hover:text-white font-medium px-6 py-3 rounded-lg transition-all duration-200 text-sm"
+          >
+            Back to Home
+          </a>
+        </div>
+      </div>
+    </div>
+  </main>
+  <Footer />
+</Layout>
+
+<script type="application/ld+json" set:html={JSON.stringify(faqSchema)} />
