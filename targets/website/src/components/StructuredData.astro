@@ -16,11 +16,14 @@ const organization = {
 const softwareApplication = {
   '@type': 'SoftwareApplication',
   name: 'Conloca',
+  alternateName: ['Conloca CMS', 'Conloca Visual CMS'],
   applicationCategory: 'DeveloperApplication',
   applicationSubCategory: 'Content Management System',
   operatingSystem: 'Cross-platform',
   description:
     'Conloca is a free, open-source, file-based content management system built specifically for Astro websites. It stores all content as version-controlled files in your git repository with visual drag-and-drop editing powered by Puck.',
+  keywords:
+    'CMS for Astro, file-based CMS, git-based CMS, visual editor, drag-and-drop CMS, open source CMS, headless CMS alternative, Storyblok alternative, Contentful alternative',
   offers: {
     '@type': 'Offer',
     price: '0',
@@ -40,6 +43,40 @@ const softwareApplication = {
   license: 'https://opensource.org/licenses/MIT',
 }
 
+const howTo = {
+  '@type': 'HowTo',
+  name: 'How to Add a Visual CMS to an Astro Website',
+  description:
+    'Install and configure Conloca CMS in your Astro project to get visual drag-and-drop editing with git-based content storage.',
+  totalTime: 'PT10M',
+  step: [
+    {
+      '@type': 'HowToStep',
+      position: 1,
+      name: 'Install',
+      text: 'Add the Conloca CMS package: bun add @conloca/astro-cms @conloca/content-api',
+    },
+    {
+      '@type': 'HowToStep',
+      position: 2,
+      name: 'Configure',
+      text: 'Add conlocaCMS() to your astro.config.mjs integrations array with contentRoot and puckConfigPath options.',
+    },
+    {
+      '@type': 'HowToStep',
+      position: 3,
+      name: 'Define Components',
+      text: 'Create Puck components (blocks) with fields and render functions that editors will use to build pages.',
+    },
+    {
+      '@type': 'HowToStep',
+      position: 4,
+      name: 'Start Editing',
+      text: 'Run bun run dev and navigate to /__cms to start creating pages visually.',
+    },
+  ],
+}
+
 const webSite = {
   '@type': 'WebSite',
   name: 'Conloca',
@@ -49,7 +86,7 @@ const webSite = {
 
 const landingSchema = {
   '@context': 'https://schema.org',
-  '@graph': [organization, softwareApplication, webSite],
+  '@graph': [organization, softwareApplication, webSite, howTo],
 }
 
 const pageSchema = {

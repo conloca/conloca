@@ -82,10 +82,34 @@ const pageSchema = {
     name: 'Conloca',
   },
   mentions: [
-    { '@type': 'SoftwareApplication', name: 'Storyblok' },
-    { '@type': 'SoftwareApplication', name: 'Contentful' },
-    { '@type': 'SoftwareApplication', name: 'Decap CMS' },
-    { '@type': 'SoftwareApplication', name: 'Tina CMS' },
+    {
+      '@type': 'SoftwareApplication',
+      name: 'Storyblok',
+      applicationCategory: 'DeveloperApplication',
+      applicationSubCategory: 'Content Management System',
+      description: 'Cloud-hosted headless CMS with visual editor. Paid with free tier.',
+    },
+    {
+      '@type': 'SoftwareApplication',
+      name: 'Contentful',
+      applicationCategory: 'DeveloperApplication',
+      applicationSubCategory: 'Content Management System',
+      description: 'Cloud-hosted API-first headless CMS. Paid with free tier.',
+    },
+    {
+      '@type': 'SoftwareApplication',
+      name: 'Decap CMS',
+      applicationCategory: 'DeveloperApplication',
+      applicationSubCategory: 'Content Management System',
+      description: 'Open-source git-based CMS with markdown editing UI.',
+    },
+    {
+      '@type': 'SoftwareApplication',
+      name: 'Tina CMS',
+      applicationCategory: 'DeveloperApplication',
+      applicationSubCategory: 'Content Management System',
+      description: 'Open-source git-based CMS with inline visual editing and cloud sync option.',
+    },
   ],
 }
 
@@ -114,6 +138,11 @@ function getValueStyle(value: string): string {
           Choosing a CMS for your Astro site? Here's how Conloca compares to popular alternatives.
           Conloca is the only file-based CMS built specifically for Astro with visual drag-and-drop editing
           and full git ownership.
+        </p>
+        <p class="text-surface-400 text-sm max-w-2xl mx-auto mt-3">
+          Conloca is the only CMS that combines file-based git storage, native Astro integration, and visual
+          drag-and-drop editing in a single free, open-source package. Unlike cloud-hosted options like Storyblok
+          and Contentful, Conloca requires no external API, no database, and no monthly subscription.
         </p>
       </div>
 

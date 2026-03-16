@@ -41,7 +41,8 @@ export default defineConfig({
 ];
 ---
 
-<section id="quickstart" class="py-24 sm:py-32 relative">
+<section id="quickstart" class="py-24 sm:py-32 relative" itemscope itemtype="https://schema.org/HowTo">
+  <meta itemprop="name" content="How to add Conloca CMS to an Astro project" />
   <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
     <div class="text-center mb-16">
       <p class="text-brand-400 text-sm font-medium tracking-wide uppercase mb-3">Quick Start</p>
@@ -55,11 +56,11 @@ export default defineConfig({
 
     <div class="grid gap-6 lg:gap-8">
       {steps.map((step) => (
-        <div class="reveal group grid lg:grid-cols-[280px_1fr] gap-6 bg-surface-900/50 border border-surface-800/60 rounded-2xl p-6 lg:p-8 hover:border-surface-700/80 transition-all duration-300">
+        <div class="reveal group grid lg:grid-cols-[280px_1fr] gap-6 bg-surface-900/50 border border-surface-800/60 rounded-2xl p-6 lg:p-8 hover:border-surface-700/80 transition-all duration-300" itemprop="step" itemscope itemtype="https://schema.org/HowToStep">
           <div>
             <span class="text-brand-400 font-mono text-sm font-medium">{step.number}</span>
-            <h3 class="text-xl font-semibold text-white mt-1">{step.title}</h3>
-            <p class="text-surface-400 text-sm mt-2 leading-relaxed">{step.description}</p>
+            <h3 class="text-xl font-semibold text-white mt-1" itemprop="name">{step.title}</h3>
+            <p class="text-surface-400 text-sm mt-2 leading-relaxed" itemprop="text">{step.description}</p>
           </div>
           <div class="bg-surface-950 border border-surface-800 rounded-xl overflow-hidden">
             <div class="flex items-center gap-2 px-4 py-2.5 border-b border-surface-800/60">

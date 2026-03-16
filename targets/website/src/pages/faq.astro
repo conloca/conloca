@@ -25,6 +25,11 @@ const faqItems = [
       'Adding Conloca takes three steps: First, install the packages with "bun add @conloca/astro-cms @conloca/content-api". Second, add the Conloca integration to your astro.config.mjs. Third, define your Puck components (blocks) that editors will use to build pages. The visual editor becomes available at /__cms in development.',
   },
   {
+    question: 'Why choose Conloca over other CMS options for Astro?',
+    answer:
+      'Conloca is the only CMS built from the ground up for Astro. Other options like Storyblok, Contentful, and Tina connect to Astro through generic plugins, but Conloca uses Astro middleware, routing, and build pipelines natively. This means tighter integration, fewer moving parts, and a developer experience designed specifically for the Astro ecosystem. It is also free, open source, and stores content in your git repository with no external dependencies.',
+  },
+  {
     question: 'Does Conloca require a database?',
     answer:
       'No. Conloca uses VXJSON files stored directly in your git repository. There is no database to set up, no connection strings to manage, and no external service dependency. Your content lives alongside your code as version-controlled files.',
