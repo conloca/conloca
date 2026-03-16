@@ -92,12 +92,13 @@ async function handleSubscribe(request: Request, env: Env) {
 
   const { email, intent } = payload;
   const metadata = readSignupMetadata(request as CloudflareRequest);
+  const trimmedEmail = email?.trim();
 
-  if (!email || !emailPattern.test(email)) {
+  if (!trimmedEmail || !emailPattern.test(trimmedEmail)) {
     return jsonResponse({ error: 'Invalid email address' }, 400);
   }
 
-  const normalizedEmail = email.trim().toLowerCase();
+  const normalizedEmail = trimmedEmail.toLowerCase();
   const source = intent === 'hosted' ? 'waitlist' : 'newsletter';
 
   try {
