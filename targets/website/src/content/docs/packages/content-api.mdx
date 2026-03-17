@@ -46,7 +46,7 @@ import { Blocks, Site, ErrorCodes } from '@conloca/content-api';
 | `SitesConfig`     | type  | Multi-site configuration                                    |
 | `Blocks`          | class | Block collection operations                                 |
 | `Site`            | class | Site-scoped content operations                              |
-| `ErrorCodes`      | const | Standard error codes (`NOT_FOUND`, `STALE_WRITE`, etc.)     |
+| `ErrorCodes`      | const | Standard error codes (`CONTENT_NOT_FOUND`, `STALE_WRITE`, etc.) |
 | `ContentUtils`    | const | Content utility functions (object with pure helper methods) |
 | `AssetEntry`      | type  | Asset metadata entry                                        |
 | `FolderListing`   | type  | Folder contents listing                                     |
@@ -158,11 +158,11 @@ import { createContentAPI } from '@conloca/content-api/node';
 
 const api = await createContentAPI({ contentRoot: './content' });
 
-// List pages for a site
-const pages = await api.getSite('default').listPages('en');
+// List pages for a site (listPages is a generator)
+const pages = Array.from(api.getSite('default')!.listPages('en'));
 
-// Get a specific block
-const block = await api.blocks.getByName('shared', 'header', 'en');
+// Get a specific block (synchronous)
+const block = api.blocks.getByName('shared', 'header', 'en');
 ```
 
 ### Testing with InMemoryContentAPI
@@ -171,7 +171,8 @@ const block = await api.blocks.getByName('shared', 'header', 'en');
 import { InMemoryContentAPI, createContentAPIRouter } from '@conloca/content-api/node';
 
 const api = new InMemoryContentAPI({
-  sites: { default: { locales: ['en', 'de'] } },
+  sites: { default: { locales: ['en', 'de'], defaultLocale: 'en' } },
+  globalLocales: ['en', 'de'],
 });
 
 const router = createContentAPIRouter(api);

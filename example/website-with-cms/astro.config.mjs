@@ -14,7 +14,7 @@ export default defineConfig({
       contentRoot: './content',
       canvasDir: './canvas',
       puckConfigPath: './src/puck.config.tsx',
-      dataSchemasPath: './src/schemas/data.ts',
+      schemasPath: './src/schemas/data.ts',
       assetsPath: './public/assets',
       routing: true, // That's it - Conloca handles all routing
     }),

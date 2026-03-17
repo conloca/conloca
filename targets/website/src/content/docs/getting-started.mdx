@@ -29,17 +29,20 @@ Before starting, you need:
 Install the required packages:
 
 ```bash
-bun add @conloca/astro-cms @conloca/content-api @astrojs/react @astrojs/node react react-dom @puckeditor/core
+bun add @conloca/astro-cms @astrojs/react @astrojs/node react react-dom
 ```
 
-| Package                | Purpose                                                                                  |
-| ---------------------- | ---------------------------------------------------------------------------------------- |
-| `@conloca/astro-cms`   | Astro integration — injects CMS routes, API handler, and admin UI                        |
-| `@conloca/content-api` | Content engine — reads and writes VXJSON files, manages content index                    |
-| `@astrojs/react`       | React support for Astro — required because the Puck visual editor is a React application |
-| `@astrojs/node`        | Node.js SSR adapter — the CMS API needs a server runtime                                 |
-| `react`, `react-dom`   | React peer dependencies                                                                  |
-| `@puckeditor/core`     | Visual page editor — drag-and-drop component-based editing                               |
+| Package              | Purpose                                                                                  |
+| -------------------- | ---------------------------------------------------------------------------------------- |
+| `@conloca/astro-cms` | Astro integration — injects CMS routes, API handler, and admin UI                        |
+| `@astrojs/react`     | React support for Astro — required because the Puck visual editor is a React application |
+| `@astrojs/node`      | Node.js SSR adapter — the CMS API needs a server runtime                                 |
+| `react`, `react-dom` | React peer dependencies                                                                  |
+
+<Aside>
+  `@conloca/content-api` and `@puckeditor/core` are pulled in automatically as dependencies of `@conloca/astro-cms` —
+  you do not need to install them separately.
+</Aside>
 
 ## Configuration
 

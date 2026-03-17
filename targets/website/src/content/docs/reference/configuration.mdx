@@ -96,8 +96,8 @@ canvasDir: './canvas';
 - **Type:** `string`
 - **Default:** `undefined`
 
-Path to a module that exports data schemas for structured data collections. The module should export `{ dataSchemas }` —
-an object mapping collection names to Zod schemas.
+Path to a module that exports schemas for the CMS. The module can export `{ dataSchemas, pageSchemas }` — `dataSchemas`
+maps collection names to Zod schemas for structured data forms, and `pageSchemas` registers page-level schemas.
 
 ```js
 schemasPath: './src/schemas/data.ts';
@@ -397,17 +397,8 @@ export default defineConfig({
       canvasDir: './canvas',
       puckConfigPath: './src/puck.config.tsx',
       schemasPath: './src/schemas/data.ts',
-      enableDevtools: true,
-      queryClientOptions: {
-        defaultOptions: {
-          queries: {
-            staleTime: 0,
-            refetchOnWindowFocus: true,
-            refetchOnMount: true,
-            retry: 0,
-          },
-        },
-      },
+      assetsPath: './public/assets',
+      routing: true,
     }),
   ],
 });

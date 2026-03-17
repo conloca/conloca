@@ -166,7 +166,7 @@ content-api          Core content engine
     |                (file I/O, indexing, CF Access validation, VXJSON)
     v
 content-api-client   React Query hooks
-    |                (usePage, useBlocks, mutations)
+    |                (useSitePages, useBlocks, mutations)
     v
 cms-spa              Admin UI
     |                (dashboard, editors, media library)
@@ -185,8 +185,9 @@ This package has no React dependency and can be used in any Node.js/Bun environm
 
 ### content-api-client
 
-React hooks built on [TanStack Query](https://tanstack.com/query) (React Query). Provides `usePage`, `useBlocks`,
-`useLocales`, `useCreatePage`, and other hooks that manage server state for the CMS UI.
+React hooks built on [TanStack Query](https://tanstack.com/query) (React Query). Provides `useSitePages`,
+`usePageByPathname`, `useBlocks`, `useSitesConfig`, `useCreateContent`, and other hooks that manage server state for the
+CMS UI.
 
 Handles caching, background refetching, optimistic updates, and error handling. All API communication goes through an
 HTTP client that calls the content API endpoints.
