@@ -1,4 +1,11 @@
 @layer base, starlight, theme, components, utilities;
+
+/* Remove underline from all links */
+@layer base {
+  a {
+    text-decoration: none;
+  }
+}
 @import "@astrojs/starlight-tailwind";
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
