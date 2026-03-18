@@ -92,6 +92,11 @@
   --color-grid: var(--color-surface-200);
 }
 
+.grid-dots {
+  background-image: radial-gradient(var(--color-grid) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
 [data-theme='dark'] {
   --color-bg-primary: var(--color-surface-950);
   --color-bg-secondary: var(--color-surface-900);

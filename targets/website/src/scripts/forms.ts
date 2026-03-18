@@ -31,7 +31,7 @@ function setupForm(formId: string, msgId: string) {
       if (res.ok) {
         msg.textContent =
           intent === 'hosted' ? "You're on the list! We'll be in touch." : 'Subscribed! Check your inbox.';
-        msg.className = 'mt-3 text-sm text-brand-400';
+        msg.className = 'mt-3 text-sm text-brand-600 dark:text-brand-400';
         form.reset();
       } else {
         throw new Error('Request failed');

@@ -116,7 +116,7 @@ const pageSchema = {
 function getValueStyle(value: string): string {
   const positiveValues = ['Yes', 'Built-in', 'Native', 'Free', 'No', 'None', 'Automatic']
   const isConlocaPositive = positiveValues.some((p) => value.startsWith(p))
-  if (isConlocaPositive) return 'text-brand-400'
+  if (isConlocaPositive) return 'text-brand-600 dark:text-brand-400'
   return 'text-surface-500 dark:text-surface-400'
 }
 ---
@@ -130,7 +130,7 @@ function getValueStyle(value: string): string {
   <main class="pt-24 pb-20">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="text-center mb-16">
-        <p class="text-brand-400 text-sm font-medium tracking-wide uppercase mb-3">Comparison</p>
+        <p class="text-brand-600 dark:text-brand-400 text-sm font-medium tracking-wide uppercase mb-3">Comparison</p>
         <h1 class="text-3xl sm:text-4xl font-bold text-surface-900 dark:text-white mb-4">
           How Conloca Compares
         </h1>
@@ -159,7 +159,7 @@ function getValueStyle(value: string): string {
                     scope="col"
                     class:list={[
                       'text-center text-sm font-medium px-4 py-4',
-                      i === 0 ? 'text-brand-400' : 'text-surface-500 dark:text-surface-400',
+                      i === 0 ? 'text-brand-600 dark:text-brand-400' : 'text-surface-500 dark:text-surface-400',
                     ]}
                   >
                     {cms}
