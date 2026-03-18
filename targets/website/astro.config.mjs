@@ -8,7 +8,7 @@ export default defineConfig({
     starlight({
       title: 'Conloca CMS',
       customCss: ['./src/styles/global.css', './src/styles/custom.css'],
-      expressiveCode: { themes: ['starlight-dark'] },
+      expressiveCode: { themes: ['starlight-dark', 'starlight-light'] },
       sidebar: [
         { label: 'Getting Started', slug: 'getting-started' },
         {

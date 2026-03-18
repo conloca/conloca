@@ -25,8 +25,15 @@ const resolvedOgImage = ogImage || 'https://conloca.com/favicon.svg'
 ---
 
 <!doctype html>
-<html lang="en" class="dark scroll-smooth">
+<html lang="en" class="scroll-smooth">
   <head>
+    <script is:inline>
+      ;(function() {
+        var s = typeof localStorage !== 'undefined' && localStorage.getItem('starlight-theme')
+        var t = s || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+        document.documentElement.dataset.theme = t === 'light' ? 'light' : 'dark'
+      })()
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -49,7 +56,7 @@ const resolvedOgImage = ogImage || 'https://conloca.com/favicon.svg'
     <StructuredData type={schemaType} />
     <title>{title}</title>
   </head>
-  <body class="bg-surface-950 text-surface-200 font-sans antialiased">
+  <body class="bg-bg-primary text-text-primary font-sans antialiased">
     <slot />
   </body>
 </html>

@@ -2,13 +2,16 @@
 
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
 
-/* Force dark mode only */
+/* Dark mode by default, light when explicitly set */
 :root {
   color-scheme: dark;
 }
+:root[data-theme='light'] {
+  color-scheme: light;
+}
 
-:root,
-[data-theme="light"] {
+/* Dark theme Starlight variables (default) */
+:root {
   /* Accent colors — brand cyan */
   --sl-color-accent-low: #083344;
   --sl-color-accent: #06b6d4;
@@ -42,25 +45,54 @@
   --sl-font-mono: "JetBrains Mono", "Fira Code", monospace;
 }
 
+/* Light theme Starlight variables */
+[data-theme="light"] {
+  --sl-color-accent-low: #cffafe;
+  --sl-color-accent: #0891b2;
+  --sl-color-accent-high: #083344;
+  --sl-color-white: #020617;
+  --sl-color-text: #334155;
+  --sl-color-text-accent: #0891b2;
+  --sl-color-gray-1: #334155;
+  --sl-color-gray-2: #475569;
+  --sl-color-gray-3: #94a3b8;
+  --sl-color-gray-4: #cbd5e1;
+  --sl-color-gray-5: #e2e8f0;
+  --sl-color-gray-6: #f1f5f9;
+  --sl-color-gray-7: #f8fafc;
+  --sl-color-bg-nav: #f8fafc;
+  --sl-color-bg-sidebar: #f8fafc;
+  --sl-color-bg: #ffffff;
+  --sl-color-hairline: #e2e8f0;
+  --sl-color-hairline-shade: #f1f5f9;
+}
+
 /* Code block styling */
 .expressive-code pre {
   background-color: #0f172a !important;
   border-color: #334155 !important;
 }
+[data-theme='light'] .expressive-code pre {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+}
 
 .expressive-code .frame {
   border-color: #334155;
 }
-
-/* Hide theme chooser — dark-only site */
-starlight-theme-select {
-  display: none !important;
+[data-theme='light'] .expressive-code .frame {
+  border-color: #e2e8f0;
 }
 
-/* Sidebar link active state — white text on accent-low background for readability */
+/* Sidebar link active state — dark theme */
 [data-current="true"] > a,
 a[aria-current="page"] {
   color: #f8fafc !important;
   background-color: #083344 !important;
   font-weight: 600;
+}
+[data-theme='light'] [data-current="true"] > a,
+[data-theme='light'] a[aria-current="page"] {
+  color: #020617 !important;
+  background-color: #cffafe !important;
 }
