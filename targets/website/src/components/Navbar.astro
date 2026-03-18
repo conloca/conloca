@@ -21,14 +21,14 @@ const links = [
         <div class="w-8 h-8 rounded-lg bg-brand-500 flex items-center justify-center text-white font-bold text-sm transition-transform group-hover:scale-110">
           C
         </div>
-        <span class="text-white font-semibold text-lg tracking-tight">Conloca</span>
+        <span class="text-surface-900 dark:text-white font-semibold text-lg tracking-tight">Conloca</span>
       </a>
 
       <div class="hidden md:flex items-center gap-8">
         {links.map((link) => (
           <a
             href={link.href}
-            class="text-sm text-surface-400 hover:text-white transition-colors duration-200"
+            class="text-sm text-surface-500 dark:text-surface-400 hover:text-surface-900 dark:hover:text-white transition-colors duration-200"
             {...(link.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
           >
             {link.label}
@@ -39,11 +39,25 @@ const links = [
             )}
           </a>
         ))}
+        <button
+          id="theme-toggle"
+          class="text-surface-400 hover:text-surface-900 dark:hover:text-white transition-colors p-2"
+          aria-label="Toggle theme"
+        >
+          <!-- Sun icon (shown in dark mode, clicking switches to light) -->
+          <svg id="theme-icon-sun" class="w-5 h-5 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+          </svg>
+          <!-- Moon icon (shown in light mode, clicking switches to dark) -->
+          <svg id="theme-icon-moon" class="w-5 h-5 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+          </svg>
+        </button>
       </div>
 
       <button
         id="mobile-menu-btn"
-        class="md:hidden text-surface-400 hover:text-white transition-colors p-2"
+        class="md:hidden text-surface-500 dark:text-surface-400 hover:text-surface-900 dark:hover:text-white transition-colors p-2"
         aria-label="Toggle menu"
       >
         <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -55,13 +69,26 @@ const links = [
 
   <div
     id="mobile-menu"
-    class="md:hidden hidden border-t border-surface-800/50 bg-surface-950/95 backdrop-blur-xl"
+    class="md:hidden hidden border-t border-surface-200 dark:border-surface-800/50 bg-white/95 dark:bg-surface-950/95 backdrop-blur-xl"
   >
     <div class="px-4 py-4 space-y-3">
+      <button
+        id="mobile-theme-toggle"
+        class="flex items-center gap-2 text-sm text-surface-500 dark:text-surface-400 hover:text-surface-900 dark:hover:text-white transition-colors py-2"
+        aria-label="Toggle theme"
+      >
+        <svg id="mobile-theme-icon-sun" class="w-5 h-5 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+        </svg>
+        <svg id="mobile-theme-icon-moon" class="w-5 h-5 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+        </svg>
+        <span id="mobile-theme-label">Toggle theme</span>
+      </button>
       {links.map((link) => (
         <a
           href={link.href}
-          class="block text-sm text-surface-400 hover:text-white transition-colors py-2"
+          class="block text-sm text-surface-500 dark:text-surface-400 hover:text-surface-900 dark:hover:text-white transition-colors py-2"
           {...(link.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
         >
           {link.label}
@@ -77,39 +104,76 @@ const links = [
 ></div>
 
 <script>
-  const navbar = document.getElementById('navbar');
-  const btn = document.getElementById('mobile-menu-btn');
-  const menu = document.getElementById('mobile-menu');
-  const backdrop = document.getElementById('mobile-menu-backdrop');
+  const navbar = document.getElementById('navbar')
+  const btn = document.getElementById('mobile-menu-btn')
+  const menu = document.getElementById('mobile-menu')
+  const backdrop = document.getElementById('mobile-menu-backdrop')
 
-  let menuOpen = false;
+  let menuOpen = false
 
   function toggleMenu(open: boolean) {
-    menuOpen = open;
-    menu?.classList.toggle('hidden', !menuOpen);
-    backdrop?.classList.toggle('hidden', !menuOpen);
-    document.body.classList.toggle('overflow-hidden', menuOpen);
+    menuOpen = open
+    menu?.classList.toggle('hidden', !menuOpen)
+    backdrop?.classList.toggle('hidden', !menuOpen)
+    document.body.classList.toggle('overflow-hidden', menuOpen)
   }
 
   btn?.addEventListener('click', () => {
-    toggleMenu(!menuOpen);
-  });
+    toggleMenu(!menuOpen)
+  })
 
   backdrop?.addEventListener('click', () => {
-    toggleMenu(false);
-  });
+    toggleMenu(false)
+  })
 
   menu?.querySelectorAll('a').forEach((a) => {
     a.addEventListener('click', () => {
-      toggleMenu(false);
-    });
-  });
+      toggleMenu(false)
+    })
+  })
 
   window.addEventListener('scroll', () => {
     if (window.scrollY > 20) {
-      navbar?.classList.add('bg-surface-950/80', 'backdrop-blur-xl', 'border-b', 'border-surface-800/50');
+      navbar?.classList.add('bg-white/80', 'dark:bg-surface-950/80', 'backdrop-blur-xl', 'border-b', 'border-surface-200', 'dark:border-surface-800/50')
     } else {
-      navbar?.classList.remove('bg-surface-950/80', 'backdrop-blur-xl', 'border-b', 'border-surface-800/50');
+      navbar?.classList.remove('bg-white/80', 'dark:bg-surface-950/80', 'backdrop-blur-xl', 'border-b', 'border-surface-200', 'dark:border-surface-800/50')
     }
-  });
+  })
+
+  // Theme toggle logic
+  function updateThemeIcons(theme: string) {
+    const sunIcon = document.getElementById('theme-icon-sun')
+    const moonIcon = document.getElementById('theme-icon-moon')
+    const mobileSunIcon = document.getElementById('mobile-theme-icon-sun')
+    const mobileMoonIcon = document.getElementById('mobile-theme-icon-moon')
+    const mobileLabel = document.getElementById('mobile-theme-label')
+
+    if (theme === 'dark') {
+      sunIcon?.classList.remove('hidden')
+      moonIcon?.classList.add('hidden')
+      mobileSunIcon?.classList.remove('hidden')
+      mobileMoonIcon?.classList.add('hidden')
+      if (mobileLabel) mobileLabel.textContent = 'Switch to light'
+    } else {
+      sunIcon?.classList.add('hidden')
+      moonIcon?.classList.remove('hidden')
+      mobileSunIcon?.classList.add('hidden')
+      mobileMoonIcon?.classList.remove('hidden')
+      if (mobileLabel) mobileLabel.textContent = 'Switch to dark'
+    }
+  }
+
+  function toggleTheme() {
+    const current = document.documentElement.dataset.theme || 'dark'
+    const next = current === 'dark' ? 'light' : 'dark'
+    document.documentElement.dataset.theme = next
+    localStorage.setItem('starlight-theme', next)
+    updateThemeIcons(next)
+  }
+
+  document.getElementById('theme-toggle')?.addEventListener('click', toggleTheme)
+  document.getElementById('mobile-theme-toggle')?.addEventListener('click', toggleTheme)
+
+  // Initialize icons on load
+  updateThemeIcons(document.documentElement.dataset.theme || 'dark')
 </script>

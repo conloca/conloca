@@ -94,18 +94,18 @@ const faqSchema = {
     <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="text-center mb-16">
         <p class="text-brand-400 text-sm font-medium tracking-wide uppercase mb-3">Support</p>
-        <h1 class="text-3xl sm:text-4xl font-bold text-white mb-4">
+        <h1 class="text-3xl sm:text-4xl font-bold text-surface-900 dark:text-white mb-4">
           Frequently Asked Questions
         </h1>
-        <p class="text-surface-400 max-w-xl mx-auto">
+        <p class="text-surface-500 dark:text-surface-400 max-w-xl mx-auto">
           Common questions about Conloca CMS
         </p>
       </div>
 
       <div class="space-y-4">
         {faqItems.map((item) => (
-          <details class="group bg-surface-900/40 border border-surface-800/50 rounded-xl overflow-hidden">
-            <summary class="flex items-center justify-between cursor-pointer px-6 py-5 text-white font-medium text-sm hover:bg-surface-800/30 transition-colors">
+          <details class="group bg-surface-100/60 dark:bg-surface-900/40 border border-surface-200/80 dark:border-surface-800/50 rounded-xl overflow-hidden">
+            <summary class="flex items-center justify-between cursor-pointer px-6 py-5 text-surface-900 dark:text-white font-medium text-sm hover:bg-surface-200/50 dark:hover:bg-surface-800/30 transition-colors">
               {item.question}
               <svg
                 class="w-5 h-5 text-surface-500 shrink-0 ml-4 transition-transform group-open:rotate-180"
@@ -117,7 +117,7 @@ const faqSchema = {
                 <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
               </svg>
             </summary>
-            <div class="px-6 pb-5 text-sm text-surface-400 leading-relaxed border-t border-surface-800/30 pt-4">
+            <div class="px-6 pb-5 text-sm text-surface-500 dark:text-surface-400 leading-relaxed border-t border-surface-200/30 dark:border-surface-800/30 pt-4">
               <Fragment set:html={item.answer} />
             </div>
           </details>
@@ -138,7 +138,7 @@ const faqSchema = {
           </a>
           <a
             href="/"
-            class="inline-flex items-center gap-2 border border-surface-600 hover:border-surface-500 text-surface-300 hover:text-white font-medium px-6 py-3 rounded-lg transition-all duration-200 text-sm"
+            class="inline-flex items-center gap-2 border border-surface-300 dark:border-surface-600 hover:border-surface-400 dark:hover:border-surface-500 text-surface-600 dark:text-surface-300 hover:text-surface-900 dark:hover:text-white font-medium px-6 py-3 rounded-lg transition-all duration-200 text-sm"
           >
             Back to Home
           </a>
