@@ -3,6 +3,7 @@ const features = [
   {
     title: 'File-Based Storage',
     description: 'Content stored as VXJSON files in your repo. No database, no vendor lock-in.',
+    link: { label: 'Learn about VxJSON', href: '/vxjson/' },
     icon: `<path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />`,
   },
   {
@@ -69,6 +70,14 @@ const features = [
           </div>
           <h3 class="text-white font-medium mb-2 text-sm">{feature.title}</h3>
           <p class="text-surface-400 text-sm leading-relaxed">{feature.description}</p>
+          {feature.link && (
+            <a href={feature.link.href} class="inline-flex items-center gap-1 text-brand-400 hover:text-brand-300 text-xs mt-2 transition-colors">
+              {feature.link.label}
+              <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+              </svg>
+            </a>
+          )}
         </div>
       ))}
     </div>

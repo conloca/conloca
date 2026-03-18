@@ -17,7 +17,7 @@ const faqItems = [
   {
     question: 'What is a file-based CMS?',
     answer:
-      'A file-based CMS stores all content as files in your project repository instead of a separate database. With Conloca, content is saved as VXJSON files directly in your git repo. This means every edit creates a git commit, you get full version history, and there is no database to manage or external API to depend on.',
+      'A file-based CMS stores all content as files in your project repository instead of a separate database. With Conloca, content is saved as <a href="/vxjson/" class="text-brand-400 hover:text-brand-300 underline underline-offset-2">VXJSON files</a> directly in your git repo. This means every edit creates a git commit, you get full version history, and there is no database to manage or external API to depend on.',
   },
   {
     question: 'How do I add Conloca to my Astro project?',
@@ -32,12 +32,12 @@ const faqItems = [
   {
     question: 'Does Conloca require a database?',
     answer:
-      'No. Conloca uses VXJSON files stored directly in your git repository. There is no database to set up, no connection strings to manage, and no external service dependency. Your content lives alongside your code as version-controlled files.',
+      'No. Conloca uses <a href="/vxjson/" class="text-brand-400 hover:text-brand-300 underline underline-offset-2">VXJSON files</a> stored directly in your git repository. There is no database to set up, no connection strings to manage, and no external service dependency. Your content lives alongside your code as version-controlled files.',
   },
   {
     question: 'How does visual editing work in Conloca?',
     answer:
-      'Conloca provides a browser-based visual editor at the /__cms route of your Astro site. Content editors drag and drop components (blocks) defined by developers to build pages. The editor is powered by Puck and renders a live preview. When editors save, changes are written to VXJSON files and committed to git.',
+      'Conloca provides a browser-based visual editor at the /__cms route of your Astro site. Content editors drag and drop components (blocks) defined by developers to build pages. The editor is powered by Puck and renders a live preview. When editors save, changes are written to <a href="/vxjson/" class="text-brand-400 hover:text-brand-300 underline underline-offset-2">VXJSON files</a> and committed to git.',
   },
   {
     question: 'How is Conloca different from Storyblok or Contentful?',
@@ -118,7 +118,7 @@ const faqSchema = {
               </svg>
             </summary>
             <div class="px-6 pb-5 text-sm text-surface-400 leading-relaxed border-t border-surface-800/30 pt-4">
-              {item.answer}
+              <Fragment set:html={item.answer} />
             </div>
           </details>
         ))}
