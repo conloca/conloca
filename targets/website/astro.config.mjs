@@ -9,6 +9,9 @@ export default defineConfig({
       title: 'Conloca CMS',
       customCss: ['./src/styles/global.css', './src/styles/custom.css'],
       expressiveCode: { themes: ['starlight-dark', 'starlight-light'] },
+      components: {
+        ThemeSelect: './src/components/ThemeSelect.astro',
+      },
       sidebar: [
         { label: 'Getting Started', slug: 'getting-started' },
         {
