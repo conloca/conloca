@@ -13,12 +13,13 @@
     "db:migrate:local": "bunx wrangler@4.73.0 d1 migrations apply conloca-website-db --local"
   },
   "dependencies": {
-    "@astrojs/starlight": "^0.37.0",
+    "@astrojs/internal-helpers": "^0.8.0",
+    "@astrojs/starlight": "^0.38.0",
     "@astrojs/starlight-tailwind": "^4.0.0",
     "@tailwindcss/vite": "^4.1.0",
-    "astro": "^5.2.5",
+    "astro": "^6.0.0",
     "sharp": "^0.33.0",
     "tailwindcss": "^4.1.0",
-    "zod": "3.25.76"
+    "zod": "^4.3.6"
   }
 }
