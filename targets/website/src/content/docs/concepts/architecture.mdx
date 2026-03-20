@@ -117,12 +117,12 @@ configuration), the CMS generates structured forms for editing data entries.
 
 VXJSON (Variant JSON) is Conloca's file format for storing content. It is standard JSON with two guarantees:
 
-1. **The `content` field is always last** in the object — this enables atomic writes where metadata can be updated
-   without rewriting content
+1. **The `content` field is always last** in the object — this enables the indexer to read all metadata from the first
+   4KB of each file without parsing the full content payload
 2. **Field order is deterministic** — ensures consistent etag calculation across reads and writes
 
 <Aside type="tip">
-  See the [VxJSON explainer page](/vxjson/) for a visual overview of how VxJSON enables crash-safe writes and 4KB-optimized indexing.
+  See the [VxJSON explainer page](/vxjson/) for a visual overview of the VxJSON format, including content-last field ordering and 4KB-optimized metadata indexing.
 </Aside>
 
 A VXJSON file looks like this:

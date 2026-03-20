@@ -6,15 +6,15 @@ import Footer from '../components/Footer.astro'
 const pageSchema = {
   '@context': 'https://schema.org',
   '@type': 'TechArticle',
-  name: 'VxJSON -- Crash-Safe Content Storage for Conloca CMS',
-  description: 'How VxJSON stores CMS content as crash-safe, git-friendly JSON files with 4KB-optimized indexing.',
+  name: 'VxJSON -- Content Storage Format for Conloca CMS',
+  description: 'VxJSON stores CMS content as git-friendly JSON files with content-last field ordering for 4KB-optimized metadata indexing and deterministic ETags.',
   about: { '@type': 'SoftwareApplication', name: 'Conloca' },
 }
 ---
 
 <Layout
-  title="VxJSON -- Crash-Safe Content Storage"
-  description="How VxJSON stores CMS content as crash-safe, git-friendly JSON files with 4KB-optimized indexing and deterministic ETags."
+  title="VxJSON -- Content Storage Format"
+  description="VxJSON stores CMS content as git-friendly JSON files with content-last field ordering for 4KB-optimized metadata indexing and deterministic ETags."
   schemaType="page"
 >
   <Navbar />
@@ -28,8 +28,8 @@ const pageSchema = {
           VxJSON
         </h1>
         <p class="text-surface-500 dark:text-surface-400 max-w-2xl mx-auto">
-          Conloca's crash-safe, git-friendly content storage format. Standard JSON with deterministic field order
-          and atomic writes.
+          Conloca's git-friendly content storage format. Standard JSON with content-last field ordering for fast
+          metadata indexing and deterministic ETags.
         </p>
       </div>
 
@@ -119,7 +119,9 @@ const pageSchema = {
       <section class="mb-20">
         <h2 class="text-2xl sm:text-3xl font-bold text-surface-900 dark:text-white mb-4">Crash-Safe Writes</h2>
         <p class="text-surface-500 dark:text-surface-400 text-sm leading-relaxed mb-6">
-          Every file write in Conloca is atomic. If the process crashes mid-write, the original file is never corrupted.
+          Every file write in Conloca uses an atomic write strategy. Content is written to a temporary file first,
+          then atomically renamed to the target path. This is a Conloca runtime feature -- independent of the VxJSON
+          format -- ensuring the original file is never corrupted if the process crashes mid-write.
         </p>
 
         <div class="space-y-4">
