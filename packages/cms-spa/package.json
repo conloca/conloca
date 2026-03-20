@@ -74,7 +74,7 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "@happy-dom/global-registrator": "^20.6.1",
+    "@happy-dom/global-registrator": "20.6.1",
     "hono": "^4.11.9",
     "@tailwindcss/cli": "4.1.18",
     "@tailwindcss/typography": "^0.5.19",

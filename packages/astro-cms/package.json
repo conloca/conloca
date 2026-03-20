@@ -80,7 +80,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@happy-dom/global-registrator": "^20.6.1",
+    "@happy-dom/global-registrator": "20.6.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@vitejs/plugin-react": "^4.5.2",
     "astro": "5.17.2",
