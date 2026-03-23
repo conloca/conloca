@@ -1,6 +1,7 @@
 ---
 import '../styles/global.css'
 import StructuredData from '../components/StructuredData.astro'
+import { DEFAULT_OG_IMAGE_URL, DEFAULT_ROBOTS, SITE_DESCRIPTION } from '../seo'
 
 // biome-ignore lint/correctness/noUnusedVariables: Props type is used by Astro
 interface Props {
@@ -9,19 +10,21 @@ interface Props {
   canonicalUrl?: string;
   ogImage?: string;
   schemaType?: 'landing' | 'page';
+  robots?: string;
 }
 
 // biome-ignore lint/correctness/noUnusedVariables: Variables are used in HTML template below
 const {
   title = 'Conloca — File-based CMS for Astro',
-  description = 'Visual editing for marketers, full git ownership for developers. File-based CMS powered by Puck with drag-and-drop components.',
+  description = SITE_DESCRIPTION,
   canonicalUrl,
   ogImage,
   schemaType = 'page',
+  robots = DEFAULT_ROBOTS,
 } = Astro.props;
 
 const resolvedCanonical = canonicalUrl || Astro.url.href
-const resolvedOgImage = ogImage || 'https://conloca.com/favicon.svg'
+const resolvedOgImage = ogImage || DEFAULT_OG_IMAGE_URL
 ---
 
 <!doctype html>
@@ -38,22 +41,26 @@ const resolvedOgImage = ogImage || 'https://conloca.com/favicon.svg'
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="canonical" href={resolvedCanonical} />
+    <link rel="sitemap" href="/sitemap-index.xml" />
     <meta name="description" content={description} />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:type" content="website" />
     <meta property="og:url" content={resolvedCanonical} />
     <meta property="og:image" content={resolvedOgImage} />
+    <meta property="og:site_name" content="Conloca" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={resolvedOgImage} />
+    <meta name="robots" content={robots} />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
-    <StructuredData type={schemaType} />
+    <StructuredData type={schemaType} title={title} description={description} url={resolvedCanonical} />
     <title>{title}</title>
   </head>
   <body class="bg-bg-primary text-text-primary font-sans antialiased">

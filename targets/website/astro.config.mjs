@@ -7,8 +7,11 @@ export default defineConfig({
   integrations: [
     starlight({
       title: 'Conloca CMS',
+      description:
+        'Visual editing for marketers, full git ownership for developers. File-based CMS powered by Puck with drag-and-drop components.',
       customCss: ['./src/styles/global.css', './src/styles/custom.css'],
       expressiveCode: { themes: ['starlight-dark', 'starlight-light'] },
+      routeMiddleware: './src/route-data.ts',
       components: {
         ThemeSelect: './src/components/ThemeSelect.astro',
       },

@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://conloca.com/sitemap-index.xml

@@ -1,17 +1,22 @@
 ---
+import { DEFAULT_OG_IMAGE_URL, SITE_NAME, SITE_URL, createOrganizationSchema, createWebPageSchema, createWebsiteSchema } from '../seo'
+
 interface Props {
   type?: 'landing' | 'page'
+  title?: string
+  description?: string
+  url?: string
 }
 
-const { type = 'page' } = Astro.props
+const {
+  type = 'page',
+  title = 'Conloca — File-based CMS for Astro',
+  description = 'Visual editing for marketers, full git ownership for developers. File-based CMS powered by Puck with drag-and-drop components.',
+  url = SITE_URL,
+} = Astro.props
 
-const organization = {
-  '@type': 'Organization',
-  name: 'Conloca',
-  url: 'https://conloca.com',
-  logo: 'https://conloca.com/favicon.svg',
-  sameAs: ['https://github.com/conloca/conloca'],
-}
+const organization = createOrganizationSchema()
+const webSite = createWebsiteSchema()
 
 const softwareApplication = {
   '@type': 'SoftwareApplication',
@@ -41,6 +46,7 @@ const softwareApplication = {
     'Config-driven routing',
   ],
   license: 'https://opensource.org/licenses/MIT',
+  image: DEFAULT_OG_IMAGE_URL,
 }
 
 const howTo = {
@@ -77,13 +83,6 @@ const howTo = {
   ],
 }
 
-const webSite = {
-  '@type': 'WebSite',
-  name: 'Conloca',
-  url: 'https://conloca.com',
-  description: 'The file-based CMS that lives in your git repo. Visual editing for Astro websites.',
-}
-
 const landingSchema = {
   '@context': 'https://schema.org',
   '@graph': [organization, softwareApplication, webSite, howTo],
@@ -91,7 +90,7 @@ const landingSchema = {
 
 const pageSchema = {
   '@context': 'https://schema.org',
-  '@graph': [organization],
+  '@graph': [organization, webSite, createWebPageSchema({ title, description, url })],
 }
 
 const schema = type === 'landing' ? landingSchema : pageSchema
