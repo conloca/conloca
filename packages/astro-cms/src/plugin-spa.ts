@@ -2,7 +2,6 @@ import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { UIConfig } from '@conloca/cms-spa';
-import { createContentAPI, createContentWatchHandlers } from '@conloca/content-api/node';
 import viteReact from '@vitejs/plugin-react';
 import type { AstroIntegration } from 'astro';
 import { searchForWorkspaceRoot } from 'vite';
@@ -65,6 +64,10 @@ const RESOLVED_HYDRATION_ENTRY = `\0${VIRTUAL_HYDRATION_ENTRY}`;
 // Virtual module for CMS SPA source loading (dev only)
 const VIRTUAL_CMS_SPA_ENTRY = 'virtual:conloca-cms-spa-entry';
 const RESOLVED_CMS_SPA_ENTRY = `\0${VIRTUAL_CMS_SPA_ENTRY}`;
+
+async function loadContentApiNode() {
+  return import('@conloca/content-api/node')
+}
 
 export interface ConlocaCMSOptions extends Omit<UIConfig, 'basename'> {
   contentRoot: string;
@@ -267,10 +270,12 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
           '@conloca/mdx',
           '@conloca/mdx/node',
         ]
-        const blockCollectionsPromise = createContentAPI({
-          contentRoot: options.contentRoot,
-          canvasDir: options.canvasDir || './canvas',
-        }).then((api) => Array.from(api.blocks.collections))
+        const blockCollectionsPromise = loadContentApiNode().then(({ createContentAPI }) =>
+          createContentAPI({
+            contentRoot: options.contentRoot,
+            canvasDir: options.canvasDir || './canvas',
+          }).then((api) => Array.from(api.blocks.collections)),
+        )
 
         updateConfig({
           vite: {
@@ -568,6 +573,8 @@ if (import.meta.hot) {
               {
                 name: 'conloca-content-watcher',
                 async configureServer(server) {
+                  const { createContentAPI, createContentWatchHandlers } = await loadContentApiNode()
+
                   // Initialize content API using the extracted function
                   const contentApi = await createContentAPI({
                     contentRoot: options.contentRoot,
