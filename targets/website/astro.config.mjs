@@ -55,6 +55,19 @@ export default defineConfig({
     conlocaCMS({
       contentRoot: './content',
       puckConfigPath: './src/puck.config.tsx',
+      routing: {
+        routes: {
+          pages: {
+            pattern: '/[...slug]',
+            collection: 'pages',
+            layout: './src/layouts/CMSPageLayout.astro',
+          },
+        },
+        fallback: 'passthrough',
+        onConflict: 'warn',
+        siteName: 'default',
+        locale: 'en',
+      },
     }),
   ],
   vite: {
