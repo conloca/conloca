@@ -3,10 +3,11 @@ import { defineConfig } from 'tsdown';
 export default defineConfig({
   entry: {
     index: 'src/index.ts',
+    'node/index': 'node/index.ts',
+    'node/content': 'node/content.ts',
     hydration: 'src/hydration.ts',
     components: 'src/components.ts',
-    'cms-handler': 'src/cms-handler.ts',
-    collections: 'src/collections.ts',
+    'internal/cms-handler': 'src/cms-handler.ts',
     'lib/hydration-script': 'src/lib/hydration-script.ts',
   },
   format: ['esm'],

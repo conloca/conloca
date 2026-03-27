@@ -1,3 +1,4 @@
+import { createContentAPI } from '@conloca/content-api/node';
 import type { Loader, LoaderContext } from 'astro/loaders';
 
 export interface ConlocaLoaderOptions {
@@ -16,7 +17,6 @@ export function conlocaLoader(options: ConlocaLoaderOptions): Loader {
   return {
     name: 'conloca-loader',
     async load(context: LoaderContext): Promise<void> {
-      const { createContentAPI } = await import('@conloca/content-api/node')
       const { store, parseData, generateDigest, logger } = context;
 
       // Create content API instance

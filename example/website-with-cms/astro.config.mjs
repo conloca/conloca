@@ -1,7 +1,7 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import node from '@astrojs/node';
-import { conlocaCMS } from '@conloca/astro-cms';
+import { conlocaCMS } from '@conloca/astro-cms/node';
 import react from '@astrojs/react';
 
 // https://astro.build/config

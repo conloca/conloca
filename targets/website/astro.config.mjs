@@ -1,7 +1,7 @@
 import { defineConfig } from 'astro/config';
 import react from '@astrojs/react';
 import starlight from '@astrojs/starlight';
-import { conlocaCMS } from '@conloca/astro-cms';
+import { conlocaCMS } from '@conloca/astro-cms/node';
 import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({

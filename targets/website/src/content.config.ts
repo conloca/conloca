@@ -1,5 +1,5 @@
 import { defineCollection } from 'astro:content';
-import { createConlocaCollections } from '@conloca/astro-cms/collections';
+import { createConlocaCollections } from '@conloca/astro-cms/node/content';
 import { docsLoader } from '@astrojs/starlight/loaders';
 import { docsSchema } from '@astrojs/starlight/schema';
 

@@ -15,7 +15,7 @@ This page documents every configuration option available when adding Conloca CMS
 
 ```js
 // astro.config.mjs
-import { conlocaCMS } from '@conloca/astro-cms';
+import { conlocaCMS } from '@conloca/astro-cms/node';
 
 conlocaCMS({
   // Required
@@ -384,7 +384,7 @@ canonical example shows a full development configuration:
 // astro.config.mjs
 import { defineConfig } from 'astro/config';
 import node from '@astrojs/node';
-import { conlocaCMS } from '@conloca/astro-cms';
+import { conlocaCMS } from '@conloca/astro-cms/node';
 import react from '@astrojs/react';
 
 export default defineConfig({

@@ -12,49 +12,45 @@
   "type": "module",
   "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",
-  "types": "./dist/index.d.ts",
+  "types": "./dist/index.d.mts",
   "exports": {
     "./package.json": "./package.json",
     ".": {
-      "types": "./dist/index.d.ts",
+      "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs",
       "default": "./dist/index.mjs"
     },
+    "./node": {
+      "types": "./dist/node/index.d.mts",
+      "import": "./dist/node/index.mjs",
+      "default": "./dist/node/index.mjs"
+    },
+    "./node/content": {
+      "types": "./dist/node/content.d.mts",
+      "import": "./dist/node/content.mjs",
+      "default": "./dist/node/content.mjs"
+    },
     "./components": {
-      "types": "./dist/components.d.ts",
+      "types": "./dist/components.d.mts",
       "import": "./dist/components.mjs",
       "default": "./dist/components.mjs"
-    },
-    "./cms-handler": {
-      "types": "./dist/cms-handler.d.ts",
-      "import": "./dist/cms-handler.mjs",
-      "default": "./dist/cms-handler.mjs"
-    },
-    "./collections": {
-      "types": "./dist/collections.d.ts",
-      "import": "./dist/collections.mjs",
-      "default": "./dist/collections.mjs"
     },
     "./virtual-modules": {
       "types": "./src/virtual-modules.d.ts"
     },
-    "./page-handler": {
-      "import": "./dist/handlers/page-handler.astro",
-      "default": "./dist/handlers/page-handler.astro"
-    },
     "./lib/hydration-script": {
-      "types": "./dist/lib/hydration-script.d.ts",
+      "types": "./dist/lib/hydration-script.d.mts",
       "import": "./dist/lib/hydration-script.mjs",
       "default": "./dist/lib/hydration-script.mjs"
     },
     "./hydration": {
-      "types": "./dist/hydration.d.ts",
+      "types": "./dist/hydration.d.mts",
       "import": "./dist/hydration.mjs",
       "default": "./dist/hydration.mjs"
     }
   },
   "scripts": {
-    "build": "tsdown && mkdir -p dist/handlers && cp src/handlers/page-handler.astro dist/handlers/",
+    "build": "tsdown && mkdir -p dist/internal && cp src/handlers/page-handler.astro dist/internal/page-handler.astro",
     "test": "tsc-bun-test",
     "test:watch": "bun test --watch"
   },
@@ -65,7 +61,6 @@
   "dependencies": {
     "@conloca/cms-spa": "workspace:^",
     "@conloca/content-api": "workspace:^",
-    "@conloca/content-api-client": "workspace:^",
     "@conloca/mdx": "workspace:^",
     "@puckeditor/core": "^0.21.1",
     "fast-glob": "^3.3.2",

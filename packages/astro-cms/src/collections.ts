@@ -1,4 +1,5 @@
 import { defineCollection } from 'astro:content';
+import { createContentAPI } from '@conloca/content-api/node';
 import { blockMetaSchema, dataMetaSchema, pageMetaSchema } from '@conloca/content-api/schemas';
 import { conlocaLoader } from './loader';
 
@@ -27,7 +28,7 @@ export interface ConlocaCollectionsResult {
  * @example
  * ```typescript
  * // src/content.config.ts
- * import { createConlocaCollections } from '@conloca/astro-cms/collections';
+ * import { createConlocaCollections } from '@conloca/astro-cms/node/content';
  *
  * export const { collections } = await createConlocaCollections();
  * ```
@@ -37,7 +38,6 @@ export async function createConlocaCollections(
 ): Promise<ConlocaCollectionsResult> {
   const { contentRoot = './content', site = 'default' } = options;
 
-  const { createContentAPI } = await import('@conloca/content-api/node')
   const api = await createContentAPI({ contentRoot });
   const collections: Record<string, ReturnType<typeof defineCollection>> = {};
 

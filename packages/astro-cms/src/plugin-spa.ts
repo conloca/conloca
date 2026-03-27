@@ -26,7 +26,8 @@ const reactRefreshPreamble = viteReact.preambleCode.replace('__BASE__', '/');
 // Get the directory of this module to resolve page-handler.astro
 // Works from both src/ (dev) and dist/ (published) since build copies the file
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const PAGE_HANDLER_PATH = join(__dirname, 'handlers', 'page-handler.astro');
+const PAGE_HANDLER_PATH = join(__dirname, '..', 'internal', 'page-handler.astro');
+const CMS_HANDLER_PATH = join(__dirname, '..', 'internal', 'cms-handler.mjs');
 
 import {
   generateBlockCollectionsModule,
@@ -638,14 +639,14 @@ if (import.meta.hot) {
         // Single handler validates auth once, then routes to appropriate sub-handler
         injectRoute({
           pattern: `${cmsRoute}/[...path]`,
-          entrypoint: '@conloca/astro-cms/cms-handler',
+          entrypoint: CMS_HANDLER_PATH,
           prerender: false,
         });
 
         // Also handle the root CMS route
         injectRoute({
           pattern: cmsRoute,
-          entrypoint: '@conloca/astro-cms/cms-handler',
+          entrypoint: CMS_HANDLER_PATH,
           prerender: false,
         });
       },

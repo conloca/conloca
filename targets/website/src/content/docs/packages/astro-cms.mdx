@@ -34,7 +34,7 @@ bun add @conloca/astro-cms @conloca/content-api
 
 ```typescript
 // astro.config.mjs
-import { conlocaCMS } from '@conloca/astro-cms';
+import { conlocaCMS } from '@conloca/astro-cms/node';
 
 export default defineConfig({
   integrations: [
@@ -74,16 +74,17 @@ export default defineConfig({
 
 ### `@conloca/astro-cms` (main)
 
-The main entry point for `astro.config.mjs`. Exports the integration function and Zod schemas.
+Static-safe utilities, route helpers, and schemas. Node-only Astro integration APIs live under dedicated `node`
+entry points.
 
 ```typescript
-import { conlocaCMS, conlocaLoader, pageMetaSchema, blockMetaSchema } from '@conloca/astro-cms';
+import { pageMetaSchema, blockMetaSchema } from '@conloca/astro-cms';
+import { conlocaCMS } from '@conloca/astro-cms/node';
+import { conlocaLoader } from '@conloca/astro-cms/node/content';
 ```
 
 | Export                                       | Purpose                                         |
 | -------------------------------------------- | ----------------------------------------------- |
-| `conlocaCMS(options)`                        | Astro integration factory                       |
-| `conlocaLoader(options)`                     | Content Collections loader                      |
 | `pageMetaSchema`                             | Zod schema for page metadata                    |
 | `blockMetaSchema`                            | Zod schema for block metadata                   |
 | `withHydration(component, strategy)`         | Wrap React components for client-side hydration |
@@ -91,6 +92,31 @@ import { conlocaCMS, conlocaLoader, pageMetaSchema, blockMetaSchema } from '@con
 | `extractSlugFromPathname(pathname, pattern)` | Convert URL pathname to Astro slug              |
 | `pathnameFromSlug(slug, pattern)`            | Convert Astro slug to URL pathname              |
 | `serializeProps(props)`                      | Serialize component props for hydration         |
+
+### `@conloca/astro-cms/node`
+
+Node-only Astro integration entry point.
+
+```typescript
+import { conlocaCMS } from '@conloca/astro-cms/node';
+```
+
+| Export                | Purpose                   |
+| --------------------- | ------------------------- |
+| `conlocaCMS(options)` | Astro integration factory |
+
+### `@conloca/astro-cms/node/content`
+
+Node-only Astro content helpers.
+
+```typescript
+import { conlocaLoader, createConlocaCollections } from '@conloca/astro-cms/node/content';
+```
+
+| Export                               | Purpose                                                           |
+| ------------------------------------ | ----------------------------------------------------------------- |
+| `conlocaLoader(options)`             | Content Collections loader                                        |
+| `createConlocaCollections(options?)` | Auto-discover and define Content Collections from indexed content |
 
 #### ConlocaLoaderOptions
 
@@ -103,21 +129,6 @@ Options for the `conlocaLoader()` function:
 | `site`        | `string`                      | No       | Site name for page collections. Omit to use the default site.                                         |
 | `kind`        | `'page' \| 'block' \| 'data'` | No       | Content kind. Inferred from collection name if omitted (`blocks` → `block`, everything else → `page`) |
 
-### `@conloca/astro-cms/collections`
-
-Astro Content Collections helpers. Separate entry point to avoid loading `astro:content` during config.
-
-```typescript
-// src/content.config.ts
-import { createConlocaCollections } from '@conloca/astro-cms/collections';
-
-export const { collections } = await createConlocaCollections();
-```
-
-| Export                               | Purpose                                                           |
-| ------------------------------------ | ----------------------------------------------------------------- |
-| `createConlocaCollections(options?)` | Auto-discover and define Content Collections from indexed content |
-
 ### `@conloca/astro-cms/components`
 
 Rendering utilities for content pages.
@@ -129,11 +140,6 @@ import { createPageRendererWithBlocks } from '@conloca/astro-cms/components';
 | Export                           | Purpose                                               |
 | -------------------------------- | ----------------------------------------------------- |
 | `createPageRendererWithBlocks()` | Create a page renderer that resolves block references |
-
-### `@conloca/astro-cms/cms-handler`
-
-Unified CMS route handler. Handles API requests, SPA serving, `/auth/user`, and Cloudflare Access validation in a single
-entry point.
 
 ### `@conloca/astro-cms/hydration`
 
@@ -168,10 +174,6 @@ static HTML.
 TypeScript declaration file for virtual module imports used internally by the CMS handler. Add to your `env.d.ts` for
 type support.
 
-### `@conloca/astro-cms/page-handler`
-
-Astro page handler (`.astro` file) for dynamic CMS routes. Injected automatically by the integration.
-
 ### `@conloca/astro-cms/lib/hydration-script`
 
 Client-side hydration bootstrap script. Discovers and hydrates components marked with `withHydration()`.
@@ -182,7 +184,7 @@ Client-side hydration bootstrap script. Discovers and hydrates components marked
 
 ```typescript
 // astro.config.mjs
-import { conlocaCMS } from '@conloca/astro-cms';
+import { conlocaCMS } from '@conloca/astro-cms/node';
 
 export default defineConfig({
   integrations: [
@@ -198,7 +200,7 @@ export default defineConfig({
 
 ```typescript
 // astro.config.mjs
-import { conlocaCMS } from '@conloca/astro-cms';
+import { conlocaCMS } from '@conloca/astro-cms/node';
 
 export default defineConfig({
   integrations: [
@@ -218,7 +220,7 @@ branch yet.
 
 ```typescript
 // dev branch preview only
-import { conlocaCMS } from '@conloca/astro-cms';
+import { conlocaCMS } from '@conloca/astro-cms/node';
 import { oauth } from '@conloca/content-api/node';
 
 export default defineConfig({
@@ -244,7 +246,7 @@ export default defineConfig({
 
 ```typescript
 // src/content.config.ts
-import { createConlocaCollections } from '@conloca/astro-cms/collections';
+import { createConlocaCollections } from '@conloca/astro-cms/node/content';
 
 export const { collections } = await createConlocaCollections({
   contentRoot: './content',
