@@ -256,35 +256,24 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
           });
         }
 
-        // Always apply SSR externalization for native modules (needed for both dev and build)
-        // This must be outside the dev-only block to fix build errors
+        const devSsrNoExternal = [/^@conloca\//, '@puckeditor/core']
+        const serverOnlyExternal = [
+          '@conloca/content-api',
+          '@conloca/content-api/node',
+          '@conloca/content-api/schemas',
+          '@conloca/mdx',
+          '@conloca/mdx/node',
+        ]
+
         updateConfig({
           vite: {
             ssr: {
-              // Force @conloca packages and Puck through Vite's bundler during SSR.
-              // When packages are symlinked via bun link, this ensures their React
-              // imports go through Vite's resolver (which respects resolve.alias and
-              // preserveSymlinks), preventing dual React instance crashes.
-              noExternal: [/^@conloca\//, '@puckeditor/core'],
-              // Externalize native Node modules for SSR builds
-              // These cannot be bundled and must be available at runtime
-               external: [
-                 '@node-rs/xxhash',
-                 '@node-rs/xxhash-darwin-x64',
-                 '@node-rs/xxhash-darwin-arm64',
-                 '@node-rs/xxhash-win32-x64-msvc',
-                 '@node-rs/xxhash-linux-x64-gnu',
-                 '@node-rs/xxhash-android-arm64',
-                 '@node-rs/xxhash-linux-arm64-gnu',
-                 '@node-rs/xxhash-linux-arm64-musl',
-                 '@node-rs/xxhash-win32-arm64-msvc',
-                 '@node-rs/xxhash-linux-arm-gnueabihf',
-                 '@node-rs/xxhash-linux-x64-musl',
-                 '@node-rs/xxhash-freebsd-x64',
-                 '@node-rs/xxhash-win32-ia32-msvc',
-                 '@node-rs/xxhash-android-arm-eabi',
-                 '@node-rs/xxhash-wasm32-wasi',
-               ],
+              // In dev, linked workspace packages need to be bundled so React resolves
+              // through Vite and HMR works from source.
+              noExternal: command === 'dev' ? devSsrNoExternal : [],
+              // Keep Node-only content processing packages external so SSR builds do not
+              // try to bundle native dependencies like xxhash.
+              external: serverOnlyExternal,
             },
             // Virtual modules for routing - needed in both dev and build
             plugins: [
