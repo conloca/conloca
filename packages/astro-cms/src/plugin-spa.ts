@@ -268,7 +268,23 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
               noExternal: [/^@conloca\//, '@puckeditor/core'],
               // Externalize native Node modules for SSR builds
               // These cannot be bundled and must be available at runtime
-              external: ['@node-rs/xxhash'],
+               external: [
+                 '@node-rs/xxhash',
+                 '@node-rs/xxhash-darwin-x64',
+                 '@node-rs/xxhash-darwin-arm64',
+                 '@node-rs/xxhash-win32-x64-msvc',
+                 '@node-rs/xxhash-linux-x64-gnu',
+                 '@node-rs/xxhash-android-arm64',
+                 '@node-rs/xxhash-linux-arm64-gnu',
+                 '@node-rs/xxhash-linux-arm64-musl',
+                 '@node-rs/xxhash-win32-arm64-msvc',
+                 '@node-rs/xxhash-linux-arm-gnueabihf',
+                 '@node-rs/xxhash-linux-x64-musl',
+                 '@node-rs/xxhash-freebsd-x64',
+                 '@node-rs/xxhash-win32-ia32-msvc',
+                 '@node-rs/xxhash-android-arm-eabi',
+                 '@node-rs/xxhash-wasm32-wasi',
+               ],
             },
             // Virtual modules for routing - needed in both dev and build
             plugins: [
