@@ -1,10 +1,13 @@
 import { defineConfig } from 'astro/config';
+import react from '@astrojs/react';
 import starlight from '@astrojs/starlight';
+import { conlocaCMS } from '@conloca/astro-cms';
 import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
   site: 'https://conloca.com',
   integrations: [
+    react(),
     starlight({
       title: 'Conloca CMS',
       description:
@@ -48,6 +51,10 @@ export default defineConfig({
           autogenerate: { directory: 'packages' },
         },
       ],
+    }),
+    conlocaCMS({
+      contentRoot: './content',
+      puckConfigPath: './src/puck.config.tsx',
     }),
   ],
   vite: {

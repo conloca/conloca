@@ -1,0 +1,9 @@
+{
+  "sites": {
+    "default": {
+      "locales": ["en"],
+      "defaultLocale": "en"
+    }
+  },
+  "globalLocales": ["en"]
+}
