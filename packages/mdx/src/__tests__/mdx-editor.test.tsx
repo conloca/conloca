@@ -14,7 +14,9 @@ describe('MDXEditor', () => {
       render(<MDXEditor value={initialValue} onChange={() => {}} />);
 
       // The MDX editor should render with the initial content
-      expect(screen.getByText('Hello MDX')).toBeDefined();
+      return screen.findByText('Hello MDX').then((element) => {
+        expect(element).toBeDefined();
+      });
     });
 
     test('calls onChange when content changes', async () => {
@@ -25,49 +27,50 @@ describe('MDXEditor', () => {
 
       const { container } = render(<MDXEditor value="# Initial" onChange={onChange} />);
 
-      // Wait for editor to fully initialize
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      const editor = await waitFor(() => {
+        const contentEditable = container.querySelector('[contenteditable="true"]');
+        expect(contentEditable).toBeDefined();
+        return contentEditable as HTMLElement;
+      });
 
-      // The MDXEditor uses Lexical under the hood
-      // We need to trigger a proper Lexical state change
-      const editor = container.querySelector('[contenteditable="true"]');
-      expect(editor).toBeDefined();
+      // Focus the editor first
+      fireEvent.focus(editor);
 
-      if (editor) {
-        // Focus the editor first
-        fireEvent.focus(editor);
+      // Clear existing content
+      fireEvent.keyDown(editor, { key: 'a', ctrlKey: true });
 
-        // Clear existing content
-        fireEvent.keyDown(editor, { key: 'a', ctrlKey: true });
+      // Type new content
+      fireEvent.input(editor, {
+        target: { innerHTML: '<p># Updated Content</p>' },
+        data: '# Updated Content',
+      });
 
-        // Type new content
-        fireEvent.input(editor, {
-          target: { innerHTML: '<p># Updated Content</p>' },
-          data: '# Updated Content',
-        });
-
-        // Wait for debounced onChange
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-
-      // onChange should be called with new content
-      expect(capturedValue).toContain('Updated Content');
+      await waitFor(() => {
+        expect(capturedValue).toContain('Updated Content');
+      });
     });
 
-    test('renders in read-only mode', () => {
+    test('renders in read-only mode', async () => {
       const { container } = render(<MDXEditor value="# Read Only Content" onChange={() => {}} readOnly={true} />);
 
-      const editor = container.querySelector('[contenteditable]');
+      const editor = await waitFor(() => {
+        const contentEditable = container.querySelector('[contenteditable]');
+        expect(contentEditable).toBeDefined();
+        return contentEditable;
+      });
+
       expect(editor?.getAttribute('contenteditable')).toBe('false');
     });
 
-    test('calls onSave when provided', () => {
+    test('calls onSave when provided', async () => {
       let savedValue = '';
       const onSave = (value: string) => {
         savedValue = value;
       };
 
       render(<MDXEditor value="# Content to Save" onChange={() => {}} onSave={onSave} />);
+
+      await screen.findByText('Content to Save');
 
       // Simulate Ctrl+S
       fireEvent.keyDown(document, {
@@ -77,7 +80,9 @@ describe('MDXEditor', () => {
         preventDefault: () => {},
       });
 
-      expect(savedValue).toBe('# Content to Save');
+      await waitFor(() => {
+        expect(savedValue).toBe('# Content to Save');
+      });
     });
   });
 
@@ -131,7 +136,7 @@ describe('MDXEditor', () => {
       expect(container.firstChild).toBeNull();
     });
 
-    test('calls onClose when close button is clicked', () => {
+    test('calls onClose when close button is clicked', async () => {
       let closed = false;
       const onClose = () => {
         closed = true;
@@ -146,6 +151,8 @@ describe('MDXEditor', () => {
           onSave={() => {}}
         />,
       );
+
+      await screen.findByTestId('deferred-editor-ready');
 
       const closeButton = screen.getByLabelText('Close');
       fireEvent.click(closeButton);
@@ -173,6 +180,8 @@ describe('MDXEditor', () => {
           onSave={onSave}
         />,
       );
+
+      await screen.findByTestId('deferred-editor-ready');
 
       // Find save button
       const saveButton = screen.getByText('Save');
@@ -210,11 +219,13 @@ describe('MDXEditor', () => {
     test('includes essential markdown plugins', async () => {
       const { container } = render(<MDXEditor value="# Test" onChange={() => {}} />);
 
-      // Wait for editor to fully initialize
-      await new Promise((resolve) => setTimeout(resolve, 200));
-
       // Check for toolbar buttons that indicate plugin presence
-      const toolbar = container.querySelector('[role="toolbar"]');
+      const toolbar = await waitFor(() => {
+        const toolbarElement = container.querySelector('[role="toolbar"]');
+        expect(toolbarElement).toBeDefined();
+        return toolbarElement;
+      });
+
       expect(toolbar).toBeDefined();
 
       // Check for specific toolbar buttons by aria-label
@@ -229,7 +240,7 @@ describe('MDXEditor', () => {
       expect(linkButton).toBeDefined();
     });
 
-    test('supports MDX JSX components', () => {
+    test('supports MDX JSX components', async () => {
       const mdxContent = `# Hello
 
 <Button variant="primary">Click me</Button>
@@ -239,8 +250,8 @@ Some regular markdown.`;
       render(<MDXEditor value={mdxContent} onChange={() => {}} />);
 
       // The editor should render JSX components without errors
-      expect(screen.getByText('Hello')).toBeDefined();
-      expect(screen.getByText('Click me')).toBeDefined();
+      expect(await screen.findByText('Hello')).toBeDefined();
+      expect(await screen.findByText('Click me')).toBeDefined();
     });
   });
 });
