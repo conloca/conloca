@@ -1,5 +1,4 @@
 import { defineCollection } from 'astro:content';
-import { createContentAPI } from '@conloca/content-api/node';
 import { blockMetaSchema, dataMetaSchema, pageMetaSchema } from '@conloca/content-api/schemas';
 import { conlocaLoader } from './loader';
 
@@ -38,6 +37,7 @@ export async function createConlocaCollections(
 ): Promise<ConlocaCollectionsResult> {
   const { contentRoot = './content', site = 'default' } = options;
 
+  const { createContentAPI } = await import('@conloca/content-api/node')
   const api = await createContentAPI({ contentRoot });
   const collections: Record<string, ReturnType<typeof defineCollection>> = {};
 
