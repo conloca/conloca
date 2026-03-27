@@ -41,6 +41,17 @@ export function generateLayoutModule(routing: RoutingConfig | undefined): string
 }
 
 /**
+ * Generate the virtual:conloca-block-collections module.
+ *
+ * Exposes the discovered block collection names so static page rendering can
+ * load MDX block source from Astro content collections instead of reaching back
+ * into the filesystem ContentAPI at route render time.
+ */
+export function generateBlockCollectionsModule(collections: string[]): string {
+  return `export default ${JSON.stringify(collections, null, 2)};`
+}
+
+/**
  * Options for generating the page API module.
  */
 export interface PageApiModuleOptions {

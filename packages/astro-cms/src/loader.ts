@@ -45,12 +45,18 @@ export function conlocaLoader(options: ConlocaLoaderOptions): Loader {
 
           // For data and page collections, fetch full content to get the actual content fields
           let dataContent: Record<string, unknown> | undefined;
+          let mdxContent: string | undefined;
           let puckData: unknown | undefined;
 
           if (kind === 'data') {
             const fullContent = await api.getLocalized(manifest.id, locale);
             if (fullContent?.localized.content?.data) {
               dataContent = fullContent.localized.content.data;
+            }
+          } else if (kind === 'block') {
+            const fullContent = await api.getLocalized(manifest.id, locale);
+            if (fullContent?.localized.content?.mdx) {
+              mdxContent = fullContent.localized.content.mdx;
             }
           } else if (kind === 'page') {
             // For page collections, fetch full content to get puckData
@@ -67,11 +73,17 @@ export function conlocaLoader(options: ConlocaLoaderOptions): Loader {
             ...(localeVersion.pathname && { pathname: localeVersion.pathname }),
             ...(localeVersion.name && { name: localeVersion.name }),
             ...localeVersion.meta,
+            created: localeVersion.created,
+            modified: localeVersion.modified,
             publishAt: localeVersion.publishAt,
             unpublishAt: localeVersion.unpublishAt,
             // Include the data content for data collections
             ...(dataContent && { data: dataContent }),
           };
+
+          if (mdxContent !== undefined) {
+            data.mdx = mdxContent;
+          }
 
           // Include puckData for page collections (added separately to avoid spread type issues)
           if (puckData !== undefined) {

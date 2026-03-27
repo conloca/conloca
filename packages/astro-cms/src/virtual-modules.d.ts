@@ -37,15 +37,16 @@ declare module 'virtual:conloca-layout' {
   export default Layout;
 }
 
+declare module 'virtual:conloca-block-collections' {
+  const blockCollections: string[];
+  export default blockCollections;
+}
+
 /**
  * Virtual module: virtual:conloca-page-api
  *
- * Provides page loading functions wrapping ContentAPI.
- * Used by page-handler.astro for:
- * - getStaticPaths(): getAllPages()
- * - Page rendering: getPage()
- * - 404 checks: pageExists()
- * - MDX evaluation: contentOptions
+ * Provides ContentAPI-backed helpers for the dev-only CMS runtime.
+ * Public page routing uses Astro content collections directly.
  */
 declare module 'virtual:conloca-page-api' {
   /**

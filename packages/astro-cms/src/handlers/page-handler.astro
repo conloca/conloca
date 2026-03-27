@@ -9,214 +9,418 @@
  * MDX blocks are evaluated at build time and rendered as React components.
  */
 
-import { Render, resolveAllData } from '@puckeditor/core';
-import type { ComponentType } from 'react';
+import { getCollection } from 'astro:content'
+import type { GetStaticPaths } from 'astro'
+import { Render, resolveAllData, type Data } from '@puckeditor/core'
+import React from 'react'
+import type { ComponentType } from 'react'
 
-// MDX evaluation imports
-import { createContentAPI } from '@conloca/content-api/node';
-import { evaluateMDXBlocks } from '@conloca/mdx/node';
-import { createPageRendererWithBlocks, RenderWithHydration } from '@conloca/astro-cms/components';
+import { evaluateMDXToComponent } from '@conloca/mdx/node'
+import { createPageRendererWithBlocks, RenderWithHydration } from '@conloca/astro-cms/components'
+import { hasHydratableComponents, extractSlugFromPathname } from '@conloca/astro-cms'
+import type { DataCollectionEntry, DataContext, PageData, PageReference, ResolvedRoutingConfig } from '@conloca/astro-cms'
 
-// Hydration support
-import { hasHydratableComponents, extractSlugFromPathname } from '@conloca/astro-cms';
-import type { DataCollectionEntry, DataContext, PageData, PageReference, ResolvedRoutingConfig } from '@conloca/astro-cms';
+import blockCollections from 'virtual:conloca-block-collections'
+import routingConfig from 'virtual:conloca-routing-config'
+import Layout from 'virtual:conloca-layout'
+import puckConfig from 'virtual:conloca-puck-config'
 
-// Virtual modules configured by the Vite plugin
-import routingConfig from 'virtual:conloca-routing-config';
-import Layout from 'virtual:conloca-layout';
-import { getAllPages, getPage, getDataCollection, getPagesByPrefix, contentOptions } from 'virtual:conloca-page-api';
-import puckConfig from 'virtual:conloca-puck-config';
+export const prerender = true
 
-import type { GetStaticPaths } from 'astro';
+type AstroCollectionEntry = Awaited<ReturnType<typeof getCollection>>[number]
 
-// Default to prerender: true for static site generation
-export const prerender = true;
+interface BaseEntryData {
+  id: string
+  locale: string
+  title?: string
+  description?: string
+  created?: string | Date
+  modified?: string | Date
+  publishAt?: string | Date | null
+  unpublishAt?: string | Date | null
+}
 
-/**
- * Generate static paths for all content pages.
- *
- * Iterates through all configured routes and their collections
- * to discover pages and generate the params/props for each.
- */
-export const getStaticPaths: GetStaticPaths = async () => {
-  // Import config inside getStaticPaths to ensure it's available at build time
-  // (Astro hoists getStaticPaths and runs it before module initialization)
-  const config = routingConfig as ResolvedRoutingConfig;
+interface PageEntryData extends BaseEntryData {
+  pathname?: string
+  puckData?: Data
+}
 
-  const paths: {
-    params: { slug: string | undefined };
-    props: { routeName: string; collection: string; pathname: string };
-  }[] = [];
+interface BlockEntryData extends BaseEntryData {
+  name?: string
+  mdx?: string
+}
 
-  // Skip if routing is disabled
-  if (!config.enabled) {
-    return paths;
+interface DataEntryData extends BaseEntryData {
+  name?: string
+  data?: Record<string, unknown>
+}
+
+const collectionCache = new Map<string, Promise<AstroCollectionEntry[]>>()
+
+function toDate(value: string | Date | null | undefined) {
+  if (!value) {
+    return undefined
   }
 
-  // For each configured route
+  if (value instanceof Date) {
+    return value
+  }
+
+  const parsed = new Date(value)
+
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed
+}
+
+function isPublished(data: BaseEntryData) {
+  const now = new Date()
+  const publishAt = toDate(data.publishAt)
+  const unpublishAt = toDate(data.unpublishAt)
+
+  if (publishAt && publishAt > now) {
+    return false
+  }
+
+  if (unpublishAt && unpublishAt <= now) {
+    return false
+  }
+
+  return true
+}
+
+async function loadCollectionEntries(collectionName: string) {
+  let entriesPromise = collectionCache.get(collectionName)
+
+  if (!entriesPromise) {
+    entriesPromise = (getCollection(collectionName as never) as Promise<AstroCollectionEntry[]>).catch((error) => {
+      if (error instanceof Error && error.message.includes(`The collection "${collectionName}" does not exist or is empty`)) {
+        return []
+      }
+
+      throw error
+    })
+    collectionCache.set(collectionName, entriesPromise)
+  }
+
+  return entriesPromise
+}
+
+async function getPageEntries(collectionName: string, locale: string) {
+  const entries = await loadCollectionEntries(collectionName)
+
+  return entries
+    .map((entry) => ({ entry, data: entry.data as Partial<PageEntryData> }))
+    .filter(({ data }) => data.locale === locale && typeof data.pathname === 'string' && isPublished(data as BaseEntryData))
+}
+
+function toPageReference(data: PageEntryData, collection: string): PageReference {
+  return {
+    id: data.id,
+    pathname: data.pathname || '/',
+    title: data.title,
+    collection,
+    meta: {
+      title: data.title,
+      description: data.description,
+    },
+    timestamps: {
+      created: toDate(data.created),
+      modified: toDate(data.modified),
+    },
+  }
+}
+
+async function getPagesByPrefix(prefix: string, locale: string, config: ResolvedRoutingConfig, options?: { sort?: 'date-desc' | 'date-asc' | 'title'; limit?: number }) {
+  const pageCollections = Array.from(new Set(Object.values(config.routes).map((route) => route.collection)))
+  const pages = (
+    await Promise.all(
+      pageCollections.map(async (collectionName) => {
+        const entries = await getPageEntries(collectionName, locale)
+
+        return entries.map(({ data }) => toPageReference(data as PageEntryData, collectionName))
+      }),
+    )
+  ).flat()
+
+  let filtered = pages.filter((page) => page.pathname.startsWith(prefix) && page.pathname !== prefix && page.pathname !== prefix.slice(0, -1))
+
+  if (options?.sort === 'date-asc') {
+    filtered.sort((a, b) => (a.timestamps?.modified || a.timestamps?.created || new Date(0)).getTime() - (b.timestamps?.modified || b.timestamps?.created || new Date(0)).getTime())
+  } else if (options?.sort === 'title') {
+    filtered.sort((a, b) => (a.title || '').localeCompare(b.title || ''))
+  } else {
+    filtered.sort((a, b) => (b.timestamps?.modified || b.timestamps?.created || new Date(0)).getTime() - (a.timestamps?.modified || a.timestamps?.created || new Date(0)).getTime())
+  }
+
+  if (options?.limit && options.limit > 0) {
+    filtered = filtered.slice(0, options.limit)
+  }
+
+  return filtered
+}
+
+async function getDataCollectionEntries(collectionName: string, locale: string) {
+  const entries = await loadCollectionEntries(collectionName)
+
+  return entries
+    .map((entry) => ({ entry, data: entry.data as Partial<DataEntryData> }))
+    .filter(({ data }) => data.locale === locale && typeof data.name === 'string' && isPublished(data as BaseEntryData))
+    .map(({ data }) => ({
+      id: data.id || '',
+      name: data.name || '',
+      data: data.data || {},
+      meta: {
+        title: data.title,
+        description: data.description,
+      },
+    })) satisfies DataCollectionEntry[]
+}
+
+async function loadMdxComponents(locale: string) {
+  const entries = (
+    await Promise.all(
+      blockCollections.map(async (collectionName) => {
+        const collectionEntries = await loadCollectionEntries(collectionName)
+
+        return collectionEntries.map((entry) => ({ entry, data: entry.data as Partial<BlockEntryData> }))
+      }),
+    )
+  ).flat()
+
+  return Promise.all(
+    entries
+      .filter(({ data }) => data.locale === locale && typeof data.id === 'string' && isPublished(data as BaseEntryData))
+      .map(async ({ data }) => {
+        const title = data.title || data.name || data.id
+        const mdx = data.mdx
+
+        if (!mdx) {
+          return {
+            id: data.id || title,
+            title,
+            Component: () =>
+              React.createElement(
+                'div',
+                { className: 'p-4 bg-gray-100 border border-gray-300 rounded text-gray-600' },
+                `No content found for block: ${title}`,
+              ),
+          }
+        }
+
+        const { Component, error } = await evaluateMDXToComponent(mdx)
+
+        if (!Component || error) {
+          const errorMessage = error?.message || 'MDX evaluation failed'
+
+          return {
+            id: data.id || title,
+            title,
+            Component: () =>
+              React.createElement(
+                'div',
+                { className: 'p-4 bg-red-50 border border-red-200 rounded text-red-600' },
+                React.createElement('p', { className: 'font-semibold mb-2' }, 'MDX Compilation Error'),
+                React.createElement('p', { className: 'text-sm' }, `Block: ${title}`),
+                React.createElement('p', { className: 'text-xs mt-2' }, errorMessage),
+              ),
+          }
+        }
+
+        return {
+          id: data.id || title,
+          title,
+          Component,
+        }
+      }),
+  )
+}
+
+export const getStaticPaths: GetStaticPaths = async () => {
+  const config = routingConfig as ResolvedRoutingConfig
+  const paths: {
+    params: { slug: string | undefined }
+    props: { routeName: string; collection: string; pathname: string }
+  }[] = []
+
+  if (!config.enabled) {
+    return paths
+  }
+
   for (const [routeName, routeConfig] of Object.entries(config.routes)) {
     try {
-      // Get all pages from this route's collection
-      const pages = await getAllPages(routeConfig.collection);
+      const pages = (await getCollection(routeConfig.collection as never) as AstroCollectionEntry[])
+        .map((entry) => entry.data as Partial<PageEntryData>)
+        .filter((data) => {
+          if (data.locale !== config.locale || typeof data.pathname !== 'string') {
+            return false
+          }
 
-      for (const page of pages) {
-        // Convert pathname to slug params
-        // Pattern: /blog/[...slug] + pathname: /blog/post-1 = slug: 'post-1'
-        const slug = extractSlugFromPathname(page.pathname, routeConfig.pattern);
+          const now = new Date()
+          const publishAt = data.publishAt ? new Date(data.publishAt) : undefined
+          const unpublishAt = data.unpublishAt ? new Date(data.unpublishAt) : undefined
+
+          if (publishAt && publishAt > now) {
+            return false
+          }
+
+          if (unpublishAt && unpublishAt <= now) {
+            return false
+          }
+
+          return true
+        })
+
+      for (const data of pages) {
+        const pathname = data.pathname || '/'
+        const slug = extractSlugFromPathname(pathname, routeConfig.pattern)
 
         paths.push({
           params: { slug },
           props: {
             routeName,
             collection: routeConfig.collection,
-            pathname: page.pathname,
+            pathname,
           },
-        });
+        })
       }
     } catch (error) {
-      console.error(`[Conloca] Error loading pages for route '${routeName}':`, error);
+      console.error(`[Conloca] Error loading pages for route '${routeName}':`, error)
     }
   }
 
-  return paths;
-};
-
-// Props passed from getStaticPaths
-interface Props {
-  routeName: string;
-  collection: string;
-  pathname: string;
+  return paths
 }
 
-const { routeName, collection, pathname } = Astro.props as Props;
+interface Props {
+  routeName: string
+  collection: string
+  pathname: string
+}
 
-// Cast routing config for component body
-const config = routingConfig as ResolvedRoutingConfig;
+const { routeName, collection, pathname } = Astro.props as Props
+const config = routingConfig as ResolvedRoutingConfig
 
-// Load page data
-let page: PageData | undefined;
-let loadError: Error | undefined;
+let page: PageData | undefined
+let loadError: Error | undefined
 
 try {
-  page = await getPage(pathname, collection);
+  const entries = await getPageEntries(collection, config.locale)
+  const matchedPage = entries.find(({ data }) => data.pathname === pathname)
 
-  // Enrich with route information
-  if (page && config.routes[routeName]) {
-    const routeConfig = config.routes[routeName];
-    page.route = {
+  if (!matchedPage) {
+    const error = new Error(`Page not found: ${pathname}`) as Error & { code?: string }
+    error.code = 'PAGE_NOT_FOUND'
+    throw error
+  }
+
+  const data = matchedPage.data as PageEntryData
+  const routeConfig = config.routes[routeName]
+
+  page = {
+    id: data.id,
+    title: data.title || data.id,
+    description: data.description,
+    pathname,
+    puckData: data.puckData as Data,
+    collection,
+    route: {
       name: routeName,
       pattern: routeConfig.pattern,
       meta: routeConfig.meta,
-    };
+    },
+    meta: {
+      title: data.title,
+      description: data.description,
+    },
+    timestamps: {
+      created: toDate(data.created),
+      modified: toDate(data.modified),
+      published: toDate(data.publishAt),
+    },
   }
 } catch (error) {
-  loadError = error as Error;
+  loadError = error as Error
 
-  // Handle 404 based on fallback configuration
   if ((error as { code?: string }).code === 'PAGE_NOT_FOUND') {
     if (config.fallback === 'passthrough') {
-      // Let Astro continue to next route
-      return Astro.redirect('/404', 307);
+      return Astro.redirect('/404', 307)
     }
-    // Return 404 response
-    return new Response('Page not found', { status: 404 });
+
+    return new Response('Page not found', { status: 404 })
   }
 
-  // Re-throw other errors
-  throw error;
+  throw error
 }
 
-// Build metadata with collection data for resolvers
-let dataContext: DataContext | undefined;
+let dataContext: DataContext | undefined
 
-const routeConfig = config.routes[routeName];
-const hasCollections = routeConfig?.dataBindings?.collections?.length;
-const hasPages = routeConfig?.dataBindings?.pages?.prefix;
+const routeConfig = config.routes[routeName]
+const hasCollections = routeConfig?.dataBindings?.collections?.length
+const hasPages = routeConfig?.dataBindings?.pages?.prefix
 
 if (hasCollections || hasPages) {
-  const collections: Record<string, DataCollectionEntry[]> = {};
-  let pages: PageReference[] | undefined;
+  const collections: Record<string, DataCollectionEntry[]> = {}
+  let pages: PageReference[] | undefined
 
-  // Fetch collections
   if (hasCollections) {
     for (const collectionName of routeConfig.dataBindings.collections) {
       try {
-        const locale = routeConfig.dataBindings.locale ?? contentOptions.locale;
-        collections[collectionName] = await getDataCollection(collectionName, locale);
+        const locale = routeConfig.dataBindings.locale ?? config.locale
+        collections[collectionName] = await getDataCollectionEntries(collectionName, locale)
       } catch (error) {
-        console.error(`[Conloca] Failed to fetch collection '${collectionName}':`, error);
-        collections[collectionName] = [];
+        console.error(`[Conloca] Failed to fetch collection '${collectionName}':`, error)
+        collections[collectionName] = []
       }
     }
   }
 
-  // Fetch pages by prefix
   if (hasPages) {
     try {
-      const pagesConfig = routeConfig.dataBindings.pages;
-      pages = await getPagesByPrefix(pagesConfig.prefix, {
+      const pagesConfig = routeConfig.dataBindings.pages
+      pages = await getPagesByPrefix(pagesConfig.prefix, routeConfig.dataBindings.locale ?? config.locale, config, {
         sort: pagesConfig.sort,
         limit: pagesConfig.limit,
-      });
+      })
     } catch (error) {
-      console.error(`[Conloca] Failed to fetch pages with prefix '${routeConfig.dataBindings.pages.prefix}':`, error);
-      pages = [];
+      console.error(`[Conloca] Failed to fetch pages with prefix '${routeConfig.dataBindings.pages.prefix}':`, error)
+      pages = []
     }
   }
 
   dataContext = {
     collections,
     pages,
-    locale: routeConfig.dataBindings.locale ?? contentOptions.locale,
-    siteName: contentOptions.siteName,
-  };
+    locale: routeConfig.dataBindings.locale ?? config.locale,
+    siteName: config.siteName,
+  }
 }
 
-// Handle missing puckData gracefully
-const hasPuckData = page?.puckData && Object.keys(page.puckData).length > 0;
-
-// Resolve component data if we have bindings
-let resolvedPuckData = page?.puckData;
+const hasPuckData = !!page?.puckData && Object.keys(page.puckData).length > 0
+let resolvedPuckData = page?.puckData
 
 if (hasPuckData && page && dataContext) {
   try {
     resolvedPuckData = await resolveAllData(page.puckData, puckConfig, {
       metadata: dataContext,
-    });
+    })
   } catch (error) {
-    console.error('[Conloca] resolveAllData failed:', error);
-    // Fall back to original puckData if resolution fails
+    console.error('[Conloca] resolveAllData failed:', error)
   }
 }
 
-// Check if page has hydratable components (for conditional script injection)
-const needsHydration = hasPuckData && resolvedPuckData && hasHydratableComponents(resolvedPuckData, puckConfig);
+const needsHydration = hasPuckData && resolvedPuckData && hasHydratableComponents(resolvedPuckData, puckConfig)
 
-// Create PageRenderer with MDX blocks support
-// This evaluates all MDX blocks at build time and creates a renderer with them baked in
-let PageRenderer: ComponentType | undefined;
+let PageRenderer: ComponentType | undefined
 
 if (hasPuckData && page && resolvedPuckData) {
   try {
-    // Create ContentAPI for MDX evaluation using options from virtual module
-    const contentApi = await createContentAPI({
-      contentRoot: contentOptions.contentRoot,
-      canvasDir: contentOptions.canvasDir,
-    });
-
-    // Evaluate MDX blocks - converts MDX content to React components
-    const mdxComponents = await evaluateMDXBlocks(contentApi, contentOptions.locale);
-
-    // Create renderer with MDX components baked in via closure
-    PageRenderer = createPageRendererWithBlocks(puckConfig, resolvedPuckData, mdxComponents);
+    const mdxComponents = await loadMdxComponents(config.locale)
+    PageRenderer = createPageRendererWithBlocks(puckConfig, resolvedPuckData, mdxComponents)
   } catch (error) {
-    // If MDX evaluation fails, log and fall back to plain Render
-    console.error('[Conloca] MDX evaluation failed, falling back to plain render:', error);
-    PageRenderer = undefined;
+    console.error('[Conloca] MDX evaluation failed, falling back to plain render:', error)
+    PageRenderer = undefined
   }
 }
 
-// Log full error details server-side in production (not needed in dev - shown in browser)
 if (loadError && !import.meta.env.DEV) {
   console.error('[Conloca] Page load error:', loadError)
 }
@@ -278,7 +482,6 @@ if (loadError && !import.meta.env.DEV) {
   </html>
 )}
 
-{/* Hydration script - conditionally loaded only on pages with hydratable components */}
 {Layout && needsHydration && <script>import 'virtual:conloca-hydration-entry'</script>}
 
 <style>
