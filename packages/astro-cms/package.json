@@ -50,7 +50,7 @@
     }
   },
   "scripts": {
-    "build": "tsdown && mkdir -p dist/internal && cp src/handlers/page-handler.astro dist/internal/page-handler.astro",
+    "build": "tsdown && mkdir -p dist/internal && cp src/handlers/page-handler.astro dist/internal/page-handler.astro && cp src/internal/acorn-default.mjs dist/internal/acorn-default.mjs",
     "test": "tsc-bun-test",
     "test:watch": "bun test --watch"
   },

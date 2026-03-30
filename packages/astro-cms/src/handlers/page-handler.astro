@@ -15,7 +15,6 @@ import { Render, resolveAllData, type Data } from '@puckeditor/core'
 import React from 'react'
 import type { ComponentType } from 'react'
 
-import { evaluateMDXToComponent } from '@conloca/mdx/node'
 import { createPageRendererWithBlocks, RenderWithHydration } from '@conloca/astro-cms/components'
 import { hasHydratableComponents, extractSlugFromPathname } from '@conloca/astro-cms'
 import type { DataCollectionEntry, DataContext, PageData, PageReference, ResolvedRoutingConfig } from '@conloca/astro-cms'
@@ -56,6 +55,13 @@ interface DataEntryData extends BaseEntryData {
 }
 
 const collectionCache = new Map<string, Promise<AstroCollectionEntry[]>>()
+let evaluateMDXToComponentPromise: Promise<typeof import('@conloca/mdx/node').evaluateMDXToComponent> | undefined
+
+async function loadEvaluateMDXToComponent() {
+  evaluateMDXToComponentPromise ??= import('@conloca/mdx/node').then((module) => module.evaluateMDXToComponent)
+
+  return evaluateMDXToComponentPromise
+}
 
 async function getCollectionEntries(collectionName: string) {
   return (getCollection(collectionName as never) as Promise<AstroCollectionEntry[]>).catch((error) => {
@@ -184,6 +190,8 @@ async function getDataCollectionEntries(collectionName: string, locale: string) 
 }
 
 async function loadMdxComponents(locale: string) {
+  const evaluateMDXToComponent = await loadEvaluateMDXToComponent()
+
   const entries = (
     await Promise.all(
       blockCollections.map(async (collectionName) => {

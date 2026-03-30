@@ -28,6 +28,7 @@ const reactRefreshPreamble = viteReact.preambleCode.replace('__BASE__', '/');
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PAGE_HANDLER_PATH = join(__dirname, '..', 'internal', 'page-handler.astro');
 const CMS_HANDLER_PATH = join(__dirname, '..', 'internal', 'cms-handler.mjs');
+const ACORN_DEFAULT_SHIM_PATH = join(__dirname, '..', 'internal', 'acorn-default.mjs');
 
 import {
   generateBlockCollectionsModule,
@@ -282,6 +283,11 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
 
         updateConfig({
           vite: {
+            resolve: {
+              alias: {
+                acorn: ACORN_DEFAULT_SHIM_PATH,
+              },
+            },
             ssr: {
               // In dev, linked workspace packages need to be bundled so React resolves
               // through Vite and HMR works from source.
