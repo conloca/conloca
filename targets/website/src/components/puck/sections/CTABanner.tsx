@@ -17,10 +17,26 @@ export type CTABannerProps = {
   buttons: CTAButton[];
 };
 
+const arrowIcon = (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M5 12h14M12 5l7 7-7 7" />
+  </svg>
+);
+
 const buttonPrimaryStyle: CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',
+  gap: '6px',
   padding: `${buttonSpacing.lg.paddingY} ${buttonSpacing.lg.paddingX}`,
   borderRadius: radius.md,
   fontFamily: typography.fonts.body,
@@ -178,6 +194,7 @@ export const CTABanner: ComponentConfig<CTABannerProps> = {
                   onClick={puck.isEditing ? (e) => e.preventDefault() : undefined}
                 >
                   {button.label}
+                  {button.variant === 'primary' && arrowIcon}
                 </a>
               ))}
             </div>

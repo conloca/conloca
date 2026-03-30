@@ -144,3 +144,23 @@
   --color-card-border-subtle: rgba(30, 41, 59, 0.3);
   --color-stripe-bg: rgba(30, 41, 59, 0.3);
 }
+
+/* Responsive helpers for Puck components (inline styles can't use @media) */
+.hero-buttons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 640px) {
+  .hero-buttons {
+    flex-direction: column;
+    width: 100%;
+  }
+  .hero-buttons > a {
+    width: 100%;
+    justify-content: center;
+  }
+}

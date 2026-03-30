@@ -21,6 +21,7 @@ const buttonPrimaryStyle: CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',
+  gap: '6px',
   padding: `${buttonSpacing.lg.paddingY} ${buttonSpacing.lg.paddingX}`,
   borderRadius: radius.md,
   fontFamily: typography.fonts.body,
@@ -186,8 +187,8 @@ export const Hero: ComponentConfig<HeroProps> = {
                 itemProp="name"
                 style={{
                   fontFamily: typography.fonts.body,
-                  fontSize: typography.display.lg.fontSize,
-                  lineHeight: typography.display.lg.lineHeight,
+                  fontSize: 'clamp(30px, 6vw, 48px)',
+                  lineHeight: 'clamp(38px, 7vw, 60px)',
                   fontWeight: typography.weights.bold,
                   color: colors.text.heading,
                   margin: 0,
@@ -201,8 +202,8 @@ export const Hero: ComponentConfig<HeroProps> = {
               <p
                 style={{
                   fontFamily: typography.fonts.body,
-                  fontSize: typography.text.xl.fontSize,
-                  lineHeight: typography.text.xl.lineHeight,
+                  fontSize: 'clamp(16px, 2.5vw, 20px)',
+                  lineHeight: 'clamp(24px, 3.5vw, 28px)',
                   fontWeight: typography.weights.regular,
                   color: colors.text.secondary,
                   maxWidth: '640px',
@@ -214,15 +215,7 @@ export const Hero: ComponentConfig<HeroProps> = {
               </p>
 
               {/* Buttons */}
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '16px',
-                  flexWrap: 'wrap',
-                }}
-              >
+              <div className="hero-buttons">
                 {buttons.map((button) => (
                   <a
                     key={button.id}
@@ -231,6 +224,20 @@ export const Hero: ComponentConfig<HeroProps> = {
                     onClick={puck.isEditing ? (e) => e.preventDefault() : undefined}
                   >
                     {button.label}
+                    {button.variant === 'primary' && (
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M6 9l6 6 6-6" />
+                      </svg>
+                    )}
                   </a>
                 ))}
               </div>

@@ -259,7 +259,7 @@ export const HostedComparisonRender = ({
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(2, 1fr)',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
             gap: '24px',
             marginBottom: '64px',
           }}

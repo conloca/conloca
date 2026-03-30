@@ -177,7 +177,7 @@ export const FeatureCards: ComponentConfig<FeatureCardsProps> = {
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: `repeat(${numColumns}, 1fr)`,
+              gridTemplateColumns: `repeat(auto-fit, minmax(${numColumns <= 2 ? '280px' : '240px'}, 1fr))`,
               gap: '16px',
             }}
           >

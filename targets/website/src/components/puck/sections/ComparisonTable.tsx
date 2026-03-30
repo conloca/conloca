@@ -36,6 +36,21 @@ export type ComparisonTableProps = {
   ctaButtons: CTAButton[];
 };
 
+const arrowIcon = (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M5 12h14M12 5l7 7-7 7" />
+  </svg>
+);
+
 const buttonPrimaryStyle: CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
@@ -359,7 +374,7 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
               <div
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(2, 1fr)',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
                   gap: '24px',
                 }}
               >
@@ -451,6 +466,7 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
                   onClick={puck.isEditing ? (e) => e.preventDefault() : undefined}
                 >
                   {button.label}
+                  {button.variant === 'primary' && arrowIcon}
                 </a>
               ))}
             </div>

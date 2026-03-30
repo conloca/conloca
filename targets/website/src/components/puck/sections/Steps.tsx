@@ -175,7 +175,7 @@ export default defineConfig({
                 itemType="https://schema.org/HowToStep"
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: '280px 1fr',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
                   gap: '24px',
                   backgroundColor: colors.bg.card,
                   border: `1px solid ${colors.border.primary}`,
