@@ -2,7 +2,7 @@
 import { DEFAULT_OG_IMAGE_URL, SITE_NAME, SITE_URL, createOrganizationSchema, createWebPageSchema, createWebsiteSchema } from '../seo'
 
 interface Props {
-  type?: 'landing' | 'page'
+  type?: 'landing' | 'page' | 'techArticle'
   title?: string
   description?: string
   url?: string
@@ -93,7 +93,18 @@ const pageSchema = {
   '@graph': [organization, webSite, createWebPageSchema({ title, description, url })],
 }
 
-const schema = type === 'landing' ? landingSchema : pageSchema
+const techArticleSchema = {
+  '@context': 'https://schema.org',
+  '@graph': [organization, webSite, createWebPageSchema({ title, description, url, type: 'TechArticle' })],
+}
+
+const schemaMap = {
+  landing: landingSchema,
+  page: pageSchema,
+  techArticle: techArticleSchema,
+} as const
+
+const schema = schemaMap[type] ?? pageSchema
 ---
 
 <script type="application/ld+json" set:html={JSON.stringify(schema)} />

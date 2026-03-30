@@ -1,5 +1,8 @@
 ---
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import Footer from '../components/Footer.astro'
+import { createComparePageSchema, createFAQPageSchema } from '../seo'
 import Layout from './Layout.astro'
 
 interface Props {
@@ -8,9 +11,41 @@ interface Props {
 }
 
 const { title, description } = Astro.props
+const pathname = Astro.url.pathname
+
+const schemaType = (() => {
+  if (pathname === '/' || pathname === '') return 'landing'
+  if (pathname === '/faq/' || pathname === '/faq') return 'faq'
+  if (pathname === '/compare/' || pathname === '/compare') return 'compare'
+  if (pathname === '/vxjson/' || pathname === '/vxjson') return 'techArticle'
+  return 'page'
+})() as 'landing' | 'page' | 'techArticle' | 'faq' | 'compare'
+
+// For StructuredData.astro, map faq/compare to 'page' (extra schemas injected separately in body)
+const structuredDataType = schemaType === 'faq' || schemaType === 'compare' ? 'page' : schemaType
+
+let faqItems: { question: string; answer: string }[] | undefined
+
+if (schemaType === 'faq') {
+  try {
+    const faqPath = join(process.cwd(), 'content/default/pages/faq.en.vxjson')
+    const faqData = JSON.parse(readFileSync(faqPath, 'utf-8'))
+    const faqComponent = faqData.content?.puckData?.content?.find(
+      (c: { type: string }) => c.type === 'FAQ'
+    )
+    if (faqComponent?.props?.items) {
+      faqItems = faqComponent.props.items.map((item: { question: string; answer: string }) => ({
+        question: item.question,
+        answer: item.answer.replace(/<[^>]*>/g, ''),
+      }))
+    }
+  } catch {
+    // FAQ schema will be omitted if file read fails
+  }
+}
 ---
 
-<Layout title={title} description={description} schemaType="page">
+<Layout title={title} description={description} schemaType={structuredDataType}>
   <nav class="fixed top-0 left-0 right-0 z-50 border-b border-surface-200/80 bg-white/85 backdrop-blur-xl dark:border-surface-800/50 dark:bg-surface-950/80">
     <div class="max-w-6xl mx-auto flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
       <a href="/" class="flex items-center gap-2">
@@ -36,4 +71,10 @@ const { title, description } = Astro.props
     <slot />
   </main>
   <Footer />
+  {faqItems && (
+    <script type="application/ld+json" set:html={JSON.stringify(createFAQPageSchema(faqItems))} />
+  )}
+  {schemaType === 'compare' && (
+    <script type="application/ld+json" set:html={JSON.stringify(createComparePageSchema({ title: title || '', description: description || '', url: Astro.url.href }))} />
+  )}
 </Layout>
