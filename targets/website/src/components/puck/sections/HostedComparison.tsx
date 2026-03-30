@@ -125,8 +125,8 @@ function WaitlistForm({ isEditing }: { isEditing: boolean }) {
           style={{
             flex: 1,
             backgroundColor: colors.bg.card,
-            border: `1px solid ${colors.border.primary}`,
-            borderRadius: radius.lg,
+            border: `1px solid ${colors.interactive.secondary.border}`,
+            borderRadius: radius.md,
             padding: '12px 16px',
             fontSize: typography.text.sm.fontSize,
             lineHeight: typography.text.sm.lineHeight,
@@ -145,7 +145,7 @@ function WaitlistForm({ isEditing }: { isEditing: boolean }) {
             fontSize: typography.text.sm.fontSize,
             lineHeight: typography.text.sm.lineHeight,
             padding: `${buttonSpacing.lg.paddingY} ${buttonSpacing.lg.paddingX}`,
-            borderRadius: radius.lg,
+            borderRadius: radius.md,
             border: 'none',
             cursor: 'pointer',
             whiteSpace: 'nowrap',
@@ -230,8 +230,8 @@ export const HostedComparisonRender = ({
           <h2
             style={{
               fontFamily: typography.fonts.body,
-              fontSize: typography.display.sm.fontSize,
-              lineHeight: typography.display.sm.lineHeight,
+              fontSize: typography.display.md.fontSize,
+              lineHeight: typography.display.md.lineHeight,
               fontWeight: typography.weights.bold,
               color: colors.text.heading,
               margin: 0,

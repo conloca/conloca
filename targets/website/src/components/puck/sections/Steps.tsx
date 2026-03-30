@@ -122,7 +122,7 @@ export default defineConfig({
                   fontWeight: typography.weights.medium,
                   color: colors.brand[600],
                   textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
+                  letterSpacing: '0.025em',
                   margin: 0,
                   marginBottom: '12px',
                 }}
@@ -133,8 +133,8 @@ export default defineConfig({
             <h2
               style={{
                 fontFamily: typography.fonts.body,
-                fontSize: typography.display.sm.fontSize,
-                lineHeight: typography.display.sm.lineHeight,
+                fontSize: typography.display.md.fontSize,
+                lineHeight: typography.display.md.lineHeight,
                 fontWeight: typography.weights.bold,
                 color: colors.text.heading,
                 margin: 0,
@@ -206,6 +206,7 @@ export default defineConfig({
                       color: colors.text.heading,
                       margin: 0,
                       marginTop: '4px',
+                      marginBottom: '20px',
                     }}
                   >
                     {step.title}
@@ -277,7 +278,7 @@ export default defineConfig({
                   <pre
                     style={{
                       margin: 0,
-                      padding: '20px 16px',
+                      padding: '16px 20px',
                       overflowX: 'auto',
                     }}
                   >
