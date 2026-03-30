@@ -7,6 +7,8 @@ type FeatureCard = {
   iconSvgPath: string;
   title: string;
   description: string;
+  href?: string;
+  linkLabel?: string;
 };
 
 type FeatureColumns = '2' | '3' | '4';
@@ -47,12 +49,16 @@ export const FeatureCards: ComponentConfig<FeatureCardsProps> = {
         iconSvgPath: 'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z',
         title: 'Feature Title',
         description: 'Feature description goes here.',
+        href: '',
+        linkLabel: '',
       },
       arrayFields: {
         id: { type: 'text', label: 'ID (unique)' },
         iconSvgPath: { type: 'textarea', label: 'SVG path d attribute' },
         title: { type: 'text' },
         description: { type: 'textarea' },
+        href: { type: 'text', label: 'Link URL (optional)' },
+        linkLabel: { type: 'text', label: 'Link Label (optional)' },
       },
     },
     columns: {
@@ -230,6 +236,37 @@ export const FeatureCards: ComponentConfig<FeatureCardsProps> = {
                 >
                   {card.description}
                 </p>
+                {card.href && (
+                  <a
+                    href={card.href}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      marginTop: '12px',
+                      fontFamily: typography.fonts.body,
+                      fontSize: typography.text.xs.fontSize,
+                      lineHeight: typography.text.xs.lineHeight,
+                      fontWeight: typography.weights.medium,
+                      color: colors.brand[600],
+                      textDecoration: 'none',
+                    }}
+                  >
+                    {card.linkLabel || 'Learn more'}
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M5 12h14M12 5l7 7-7 7" />
+                    </svg>
+                  </a>
+                )}
               </div>
             ))}
           </div>
