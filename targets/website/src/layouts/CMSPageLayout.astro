@@ -2,6 +2,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import Footer from '../components/Footer.astro'
+import Navbar from '../components/Navbar.astro'
 import { createComparePageSchema, createFAQPageSchema } from '../seo'
 import Layout from './Layout.astro'
 
@@ -46,27 +47,7 @@ if (schemaType === 'faq') {
 ---
 
 <Layout title={title} description={description} schemaType={structuredDataType}>
-  <nav class="fixed top-0 left-0 right-0 z-50 border-b border-surface-200/80 bg-white/85 backdrop-blur-xl dark:border-surface-800/50 dark:bg-surface-950/80">
-    <div class="max-w-6xl mx-auto flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
-      <a href="/" class="flex items-center gap-2">
-        <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-500 text-sm font-bold text-white">C</div>
-        <span class="text-lg font-semibold tracking-tight text-surface-900 dark:text-white">Conloca</span>
-      </a>
-
-      <div class="flex items-center gap-5 text-sm text-surface-500 dark:text-surface-400">
-        <a href="/getting-started/" class="transition-colors hover:text-surface-900 dark:hover:text-white">Docs</a>
-        <a href="/faq/" class="transition-colors hover:text-surface-900 dark:hover:text-white">FAQ</a>
-        <a
-          href="https://github.com/conloca/conloca"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="transition-colors hover:text-surface-900 dark:hover:text-white"
-        >
-          GitHub
-        </a>
-      </div>
-    </div>
-  </nav>
+  <Navbar />
   <main class="pt-24 min-h-screen">
     <slot />
   </main>
@@ -78,3 +59,32 @@ if (schemaType === 'faq') {
     <script type="application/ld+json" set:html={JSON.stringify(createComparePageSchema({ title: title || '', description: description || '', url: Astro.url.href }))} />
   )}
 </Layout>
+
+<style is:global>
+  .reveal {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+  }
+  .reveal.revealed {
+    opacity: 1;
+    transform: translateY(0);
+  }
+</style>
+
+<script src="../scripts/animations.ts"></script>
+
+<script>
+  const command = 'bun add @conloca/astro-cms'
+  const el = document.getElementById('typed-command')
+  let i = 0
+  function type() {
+    if (!el) return
+    if (i < command.length) {
+      el.textContent += command[i]
+      i++
+      setTimeout(type, 60 + Math.random() * 40)
+    }
+  }
+  setTimeout(type, 1200)
+</script>
