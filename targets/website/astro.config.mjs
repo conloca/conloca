@@ -19,6 +19,7 @@ export default defineConfig({
         ThemeSelect: './src/components/ThemeSelect.astro',
       },
       sidebar: [
+        { label: 'Overview', slug: 'overview' },
         { label: 'Getting Started', slug: 'getting-started' },
         {
           label: 'Concepts',
@@ -55,6 +56,7 @@ export default defineConfig({
     conlocaCMS({
       contentRoot: './content',
       puckConfigPath: './src/puck.config.tsx',
+      assetsPath: './public/assets',
       routing: {
         routes: {
           pages: {
