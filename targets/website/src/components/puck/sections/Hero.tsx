@@ -187,9 +187,10 @@ export const Hero: ComponentConfig<HeroProps> = {
                 itemProp="name"
                 style={{
                   fontFamily: typography.fonts.body,
-                  fontSize: 'clamp(30px, 6vw, 48px)',
-                  lineHeight: 'clamp(38px, 7vw, 60px)',
+                  fontSize: hasButtons ? 'clamp(36px, 6vw, 60px)' : typography.display.md.fontSize,
+                  lineHeight: hasButtons ? 'clamp(45px, 7.5vw, 75px)' : typography.display.md.lineHeight,
                   fontWeight: typography.weights.bold,
+                  letterSpacing: hasButtons ? '-1.5px' : undefined,
                   color: colors.text.heading,
                   margin: 0,
                   marginBottom: '24px',
@@ -206,7 +207,7 @@ export const Hero: ComponentConfig<HeroProps> = {
                   lineHeight: 'clamp(24px, 3.5vw, 28px)',
                   fontWeight: typography.weights.regular,
                   color: colors.text.secondary,
-                  maxWidth: '640px',
+                  maxWidth: '672px',
                   margin: '0 auto',
                   marginBottom: '40px',
                 }}

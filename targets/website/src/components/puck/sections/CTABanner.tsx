@@ -149,8 +149,8 @@ export const CTABanner: ComponentConfig<CTABannerProps> = {
             <h2
               style={{
                 fontFamily: typography.fonts.body,
-                fontSize: typography.display.sm.fontSize,
-                lineHeight: typography.display.sm.lineHeight,
+                fontSize: typography.display.xs.fontSize,
+                lineHeight: typography.display.xs.lineHeight,
                 fontWeight: typography.weights.bold,
                 color: colors.text.heading,
                 margin: 0,

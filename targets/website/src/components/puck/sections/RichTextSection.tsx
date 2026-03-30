@@ -25,8 +25,8 @@ export const RichTextSection: ComponentConfig<RichTextSectionProps> = {
             <h2
               style={{
                 fontFamily: typography.fonts.body,
-                fontSize: typography.display.xs.fontSize,
-                lineHeight: typography.display.xs.lineHeight,
+                fontSize: typography.display.sm.fontSize,
+                lineHeight: '36px',
                 fontWeight: typography.weights.bold,
                 color: colors.text.heading,
                 margin: 0,
