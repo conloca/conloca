@@ -1,7 +1,7 @@
 import type { ComponentConfig } from '@puckeditor/core';
 import type { CSSProperties } from 'react';
 import { Section } from '../../Section';
-import { buttonSpacing, colors, radius, sectionSpacing, typography } from '../shared/tokens';
+import { buttonSpacing, colors, radius, sectionSpacing, shadows, typography } from '../shared/tokens';
 
 type HeroButton = {
   id: string;
@@ -115,97 +115,235 @@ export const Hero: ComponentConfig<HeroProps> = {
 
     return (
       <section
+        itemScope
+        itemType="https://schema.org/SoftwareApplication"
         style={{
-          paddingTop: sectionSpacing.desktop.lg.paddingY,
-          paddingBottom: sectionSpacing.desktop.lg.paddingY,
+          position: 'relative',
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden',
+          paddingTop: '64px',
+          paddingBottom: '64px',
         }}
       >
-        <Section maxWidth="896px">
-          <div style={{ textAlign: 'center' }}>
-            {/* Badge */}
-            {badgeText && (
-              <div
+        {/* Radial gradient overlay */}
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'radial-gradient(ellipse at center, rgba(6,182,212,0.04) 0%, transparent 70%)',
+          }}
+        />
+        {/* Grid dots overlay */}
+        <div className="grid-dots" style={{ position: 'absolute', inset: 0 }} />
+
+        {/* Content container -- needs relative positioning to sit above overlays */}
+        <div style={{ position: 'relative', width: '100%' }}>
+          <Section maxWidth="896px">
+            <meta itemProp="applicationCategory" content="Content Management System" />
+            <meta itemProp="operatingSystem" content="Cross-platform" />
+            <meta
+              itemProp="description"
+              content="Conloca is a free, open-source, file-based content management system (CMS) built specifically for Astro websites. It stores all content as version-controlled files in your git repository -- no database required. Developers define drag-and-drop components with Puck, and content editors build pages visually through a browser-based interface at the /__cms route."
+            />
+            <div style={{ textAlign: 'center' }}>
+              {/* Badge */}
+              {badgeText && (
+                <div
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    border: `1px solid ${colors.surface[300]}`,
+                    borderRadius: radius.full,
+                    padding: '6px 16px',
+                    marginBottom: '32px',
+                    fontSize: typography.text.xs.fontSize,
+                    lineHeight: typography.text.xs.lineHeight,
+                    color: colors.text.secondary,
+                    fontFamily: typography.fonts.body,
+                  }}
+                >
+                  <span
+                    style={{
+                      width: '6px',
+                      height: '6px',
+                      borderRadius: '50%',
+                      backgroundColor: colors.brand[400],
+                      flexShrink: 0,
+                    }}
+                  />
+                  {badgeText}
+                </div>
+              )}
+
+              {/* Title */}
+              <h1
+                itemProp="name"
                 style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  border: `1px solid ${colors.surface[300]}`,
-                  borderRadius: radius.full,
-                  padding: '6px 16px',
-                  marginBottom: '32px',
-                  fontSize: typography.text.xs.fontSize,
-                  lineHeight: typography.text.xs.lineHeight,
-                  color: colors.text.secondary,
                   fontFamily: typography.fonts.body,
+                  fontSize: typography.display.lg.fontSize,
+                  lineHeight: typography.display.lg.lineHeight,
+                  fontWeight: typography.weights.bold,
+                  color: colors.text.heading,
+                  margin: 0,
+                  marginBottom: '24px',
                 }}
               >
-                <span
-                  style={{
-                    width: '6px',
-                    height: '6px',
-                    borderRadius: '50%',
-                    backgroundColor: colors.brand[400],
-                    flexShrink: 0,
-                  }}
-                />
-                {badgeText}
+                {renderTitle()}
+              </h1>
+
+              {/* Description */}
+              <p
+                style={{
+                  fontFamily: typography.fonts.body,
+                  fontSize: typography.text.xl.fontSize,
+                  lineHeight: typography.text.xl.lineHeight,
+                  fontWeight: typography.weights.regular,
+                  color: colors.text.secondary,
+                  maxWidth: '640px',
+                  margin: '0 auto',
+                  marginBottom: '40px',
+                }}
+              >
+                {description}
+              </p>
+
+              {/* Buttons */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '16px',
+                  flexWrap: 'wrap',
+                }}
+              >
+                {buttons.map((button) => (
+                  <a
+                    key={button.id}
+                    href={button.href}
+                    style={button.variant === 'primary' ? buttonPrimaryStyle : buttonSecondaryStyle}
+                    onClick={puck.isEditing ? (e) => e.preventDefault() : undefined}
+                  >
+                    {button.label}
+                  </a>
+                ))}
               </div>
-            )}
 
-            {/* Title */}
-            <h1
-              style={{
-                fontFamily: typography.fonts.body,
-                fontSize: typography.display.lg.fontSize,
-                lineHeight: typography.display.lg.lineHeight,
-                fontWeight: typography.weights.bold,
-                color: colors.text.heading,
-                margin: 0,
-                marginBottom: '24px',
-              }}
-            >
-              {renderTitle()}
-            </h1>
-
-            {/* Description */}
-            <p
-              style={{
-                fontFamily: typography.fonts.body,
-                fontSize: typography.text.xl.fontSize,
-                lineHeight: typography.text.xl.lineHeight,
-                fontWeight: typography.weights.regular,
-                color: colors.text.secondary,
-                maxWidth: '640px',
-                margin: '0 auto',
-                marginBottom: '40px',
-              }}
-            >
-              {description}
-            </p>
-
-            {/* Buttons */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '16px',
-                flexWrap: 'wrap',
-              }}
-            >
-              {buttons.map((button) => (
-                <a
-                  key={button.id}
-                  href={button.href}
-                  style={button.variant === 'primary' ? buttonPrimaryStyle : buttonSecondaryStyle}
-                  onClick={puck.isEditing ? (e) => e.preventDefault() : undefined}
+              {/* Terminal mock-up */}
+              <div style={{ maxWidth: '448px', margin: '48px auto 0' }}>
+                <div
+                  style={{
+                    backgroundColor: colors.surface[100],
+                    border: `1px solid ${colors.border.primary}`,
+                    borderRadius: radius.xl,
+                    overflow: 'hidden',
+                    boxShadow: shadows.xl,
+                  }}
                 >
-                  {button.label}
-                </a>
-              ))}
+                  {/* Title bar */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '10px 16px',
+                      borderBottom: `1px solid ${colors.border.primary}`,
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: '10px',
+                        height: '10px',
+                        borderRadius: '50%',
+                        backgroundColor: colors.surface[300],
+                        flexShrink: 0,
+                      }}
+                    />
+                    <span
+                      style={{
+                        width: '10px',
+                        height: '10px',
+                        borderRadius: '50%',
+                        backgroundColor: colors.surface[300],
+                        flexShrink: 0,
+                      }}
+                    />
+                    <span
+                      style={{
+                        width: '10px',
+                        height: '10px',
+                        borderRadius: '50%',
+                        backgroundColor: colors.surface[300],
+                        flexShrink: 0,
+                      }}
+                    />
+                    <span
+                      style={{
+                        fontFamily: typography.fonts.mono,
+                        fontSize: typography.text.xs.fontSize,
+                        color: colors.surface[500],
+                        marginLeft: '8px',
+                      }}
+                    >
+                      Terminal
+                    </span>
+                  </div>
+                  {/* Command line */}
+                  <div
+                    style={{
+                      padding: '16px 20px',
+                      fontFamily: typography.fonts.mono,
+                      fontSize: typography.text.sm.fontSize,
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ color: colors.brand[600] }}>$</span>
+                      <span id="typed-command" style={{ color: colors.surface[800] }} />
+                      <span
+                        id="cursor"
+                        style={{
+                          display: 'inline-block',
+                          width: '8px',
+                          height: '20px',
+                          backgroundColor: colors.brand[400],
+                          animation: 'blink 1s step-end infinite',
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
-        </Section>
+          </Section>
+        </div>
+
+        {/* Scroll-down arrow */}
+        <div
+          style={{
+            position: 'absolute',
+            bottom: '32px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+          }}
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke={colors.surface[600]}
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ animation: 'bounce 1s infinite' }}
+          >
+            <path d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+          </svg>
+        </div>
       </section>
     );
   },

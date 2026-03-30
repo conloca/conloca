@@ -76,6 +76,16 @@
     }
   }
 
+  @keyframes bounce {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-25%);
+    }
+  }
+
   /* Semantic theme tokens -- used by landing page components */
   --color-bg-primary: var(--color-surface-50);
   --color-bg-secondary: var(--color-white);
@@ -97,7 +107,7 @@
   background-size: 32px 32px;
 }
 
-[data-theme='dark'] {
+[data-theme="dark"] {
   --color-bg-primary: var(--color-surface-950);
   --color-bg-secondary: var(--color-surface-900);
   --color-bg-card: rgba(15, 23, 42, 0.4);
