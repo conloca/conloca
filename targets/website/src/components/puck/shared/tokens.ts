@@ -97,7 +97,7 @@ export const typography = {
     '2xl': { fontSize: '72px', lineHeight: '90px' },
     xl: { fontSize: '60px', lineHeight: '72px' },
     lg: { fontSize: '48px', lineHeight: '60px' },
-    md: { fontSize: '36px', lineHeight: '44px' },
+    md: { fontSize: 'clamp(30px, 5vw, 36px)', lineHeight: 'clamp(36px, 5.5vw, 40px)' },
     sm: { fontSize: '30px', lineHeight: '38px' },
     xs: { fontSize: '24px', lineHeight: '32px' },
   },
