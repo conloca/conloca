@@ -102,12 +102,15 @@ export default defineConfig({
   render: ({ label, title, subtitle, steps }) => {
     return (
       <section
+        itemScope
+        itemType="https://schema.org/HowTo"
         style={{
           paddingTop: sectionSpacing.desktop.md.paddingY,
           paddingBottom: sectionSpacing.desktop.md.paddingY,
         }}
       >
         <Section>
+          <meta itemProp="name" content="How to add Conloca CMS to an Astro project" />
           {/* Section header */}
           <div style={{ textAlign: 'center', marginBottom: '64px' }}>
             {label && (
@@ -166,6 +169,10 @@ export default defineConfig({
             {steps.map((step) => (
               <div
                 key={step.id}
+                className="reveal"
+                itemProp="step"
+                itemScope
+                itemType="https://schema.org/HowToStep"
                 style={{
                   display: 'grid',
                   gridTemplateColumns: '280px 1fr',
@@ -190,6 +197,7 @@ export default defineConfig({
                     {step.number}
                   </span>
                   <h3
+                    itemProp="name"
                     style={{
                       fontFamily: typography.fonts.body,
                       fontSize: typography.text.xl.fontSize,
@@ -203,6 +211,7 @@ export default defineConfig({
                     {step.title}
                   </h3>
                   <p
+                    itemProp="text"
                     style={{
                       fontFamily: typography.fonts.body,
                       fontSize: typography.text.sm.fontSize,

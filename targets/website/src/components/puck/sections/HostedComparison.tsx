@@ -182,11 +182,27 @@ export const HostedComparisonRender = ({
   return (
     <section
       style={{
+        position: 'relative',
+        overflow: 'hidden',
         paddingTop: sectionSpacing.desktop.md.paddingY,
         paddingBottom: sectionSpacing.desktop.lg.paddingY,
       }}
     >
-      <Section>
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'linear-gradient(to bottom, #f8fafc, rgba(241,245,249,0.5), #f8fafc)',
+        }}
+      />
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'radial-gradient(ellipse at bottom, rgba(6,182,212,0.03) 0%, transparent 60%)',
+        }}
+      />
+      <Section style={{ position: 'relative' }}>
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: '64px' }}>
           {badgeText && (
@@ -250,6 +266,7 @@ export const HostedComparisonRender = ({
           {['Screenshot: Visual editor', 'Screenshot: Git commit by marketer'].map((text) => (
             <div
               key={text}
+              className="reveal"
               style={{
                 backgroundColor: 'rgba(241,245,249,0.6)',
                 border: '1px dashed rgba(226,232,240,0.8)',
@@ -291,7 +308,7 @@ export const HostedComparisonRender = ({
         </div>
 
         {/* Comparison table */}
-        <div style={{ maxWidth: '768px', margin: '0 auto 64px' }}>
+        <div className="reveal" style={{ maxWidth: '768px', margin: '0 auto 64px' }}>
           <div
             style={{
               backgroundColor: 'rgba(241,245,249,0.6)',
@@ -384,7 +401,7 @@ export const HostedComparisonRender = ({
         </div>
 
         {/* Waitlist CTA */}
-        <div style={{ maxWidth: '448px', margin: '0 auto', textAlign: 'center' }}>
+        <div className="reveal" style={{ maxWidth: '448px', margin: '0 auto', textAlign: 'center' }}>
           <h3
             style={{
               fontFamily: typography.fonts.body,

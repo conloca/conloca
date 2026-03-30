@@ -111,11 +111,19 @@ export const FeatureCards: ComponentConfig<FeatureCardsProps> = {
     return (
       <section
         style={{
+          position: 'relative',
           paddingTop: sectionSpacing.desktop.md.paddingY,
           paddingBottom: sectionSpacing.desktop.md.paddingY,
         }}
       >
-        <Section>
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'radial-gradient(ellipse at top, rgba(6,182,212,0.02) 0%, transparent 50%)',
+          }}
+        />
+        <Section style={{ position: 'relative' }}>
           {/* Section header */}
           <div style={{ textAlign: 'center', marginBottom: '64px' }}>
             {label && (
@@ -174,6 +182,7 @@ export const FeatureCards: ComponentConfig<FeatureCardsProps> = {
             {cards.map((card) => (
               <div
                 key={card.id}
+                className="reveal"
                 style={{
                   backgroundColor: colors.bg.card,
                   border: `1px solid ${colors.border.primary}`,
