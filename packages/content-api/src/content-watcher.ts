@@ -10,6 +10,20 @@ export interface WebSocketSender {
   send(payload: { type: string; event: string; data: any }): void;
 }
 
+export interface ContentWatchEvent {
+  file: string;
+  action: 'update' | 'create' | 'delete';
+}
+
+interface ReindexResultLike {
+  updated: unknown[];
+  deleted?: Array<{ id: string; locale: string; kind: 'page' | 'block' | 'data' }>;
+}
+
+interface ReindexableContentAPI {
+  reindex(paths: string[], options?: { handleDeletions?: boolean }): Promise<ReindexResultLike>;
+}
+
 /**
  * Creates a content API instance for the given options
  */
@@ -24,9 +38,10 @@ export async function createContentAPI(options: ContentWatcherOptions): Promise<
  * Creates file change handlers for content watching
  */
 export function createContentWatchHandlers(
-  contentApi: FileSystemContentAPI,
+  contentApi: ReindexableContentAPI,
   options: ContentWatcherOptions,
   ws: WebSocketSender,
+  onReindexed?: (event: ContentWatchEvent) => void | Promise<void>,
 ) {
   const handleFileChange = async (file: string, action: 'update' | 'create' | 'delete') => {
     // Only process content files (.mdx, .vxjson, and .json in data/ directory)
@@ -75,6 +90,8 @@ export function createContentWatchHandlers(
             });
           }
         }
+
+        await onReindexed?.({ file: normalizedFile, action });
       } catch (error) {
         console.error('[Content Watcher] Reindex failed:', error);
         return;

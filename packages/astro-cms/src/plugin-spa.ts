@@ -67,7 +67,7 @@ const VIRTUAL_CMS_SPA_ENTRY = 'virtual:conloca-cms-spa-entry';
 const RESOLVED_CMS_SPA_ENTRY = `\0${VIRTUAL_CMS_SPA_ENTRY}`;
 
 async function loadContentApiNode() {
-  return import('@conloca/content-api/node')
+  return import('@conloca/content-api/node');
 }
 
 export interface ConlocaCMSOptions extends Omit<UIConfig, 'basename'> {
@@ -238,6 +238,8 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
     templates: options.templates,
   };
 
+  let refreshConlocaContent: (() => Promise<void>) | undefined;
+
   return {
     name: '@conloca/astro-cms',
     hooks: {
@@ -263,20 +265,20 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
           });
         }
 
-        const devSsrNoExternal = [/^@conloca\//, '@puckeditor/core']
+        const devSsrNoExternal = [/^@conloca\//, '@puckeditor/core'];
         const serverOnlyExternal = [
           '@conloca/content-api',
           '@conloca/content-api/node',
           '@conloca/content-api/schemas',
           '@conloca/mdx',
           '@conloca/mdx/node',
-        ]
+        ];
         const blockCollectionsPromise = loadContentApiNode().then(({ createContentAPI }) =>
           createContentAPI({
             contentRoot: options.contentRoot,
             canvasDir: options.canvasDir || './canvas',
           }).then((api) => Array.from(api.blocks.collections)),
-        )
+        );
 
         updateConfig({
           vite: {
@@ -328,9 +330,9 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
                     return generateLayoutModule(routingConfig);
                   }
                   if (id === RESOLVED_BLOCK_COLLECTIONS) {
-                    const blockCollections = await blockCollectionsPromise
+                    const blockCollections = await blockCollectionsPromise;
 
-                    return generateBlockCollectionsModule(blockCollections)
+                    return generateBlockCollectionsModule(blockCollections);
                   }
                   if (id === RESOLVED_PUCK_CONFIG) {
                     return generatePuckConfigModule(options.puckConfigPath);
@@ -527,7 +529,7 @@ initHydration(componentRegistry)
                       canvasDir: options.canvasDir || './canvas',
                       siteName: resolvedRoutingConfig?.siteName ?? 'default',
                       locale: resolvedRoutingConfig?.locale ?? 'en',
-                    })
+                    });
                   }
                   if (id === RESOLVED_CMS_SPA_ENTRY) {
                     // Detect whether cms-spa source is available (workspace mode)
@@ -574,7 +576,7 @@ if (import.meta.hot) {
               {
                 name: 'conloca-content-watcher',
                 async configureServer(server) {
-                  const { createContentAPI, createContentWatchHandlers } = await loadContentApiNode()
+                  const { createContentAPI, createContentWatchHandlers } = await loadContentApiNode();
 
                   // Initialize content API using the extracted function
                   const contentApi = await createContentAPI({
@@ -624,6 +626,9 @@ if (import.meta.hot) {
                       canvasDir: options.canvasDir || './canvas',
                     },
                     server.ws,
+                    async () => {
+                      await refreshConlocaContent?.();
+                    },
                   );
 
                   server.watcher.on('change', handlers.onChange);
@@ -651,8 +656,28 @@ if (import.meta.hot) {
         });
       },
 
-      'astro:server:setup': ({ logger }) => {
+      'astro:server:setup': ({ logger, refreshContent }) => {
         logger.info(`Conloca CMS available at ${cmsRoute}`);
+
+        let refreshChain = Promise.resolve();
+
+        refreshConlocaContent = async () => {
+          if (!refreshContent) {
+            return;
+          }
+
+          refreshChain = refreshChain
+            .catch(() => undefined)
+            .then(async () => {
+              await refreshContent({ loaders: ['conloca-loader'] });
+            });
+
+          await refreshChain;
+        };
+
+        // Register dev-time content refresh after the Vite server exists.
+        // This keeps Astro collections in sync with Conloca's own file watcher.
+        logger.debug('Registering Conloca content refresh handler');
       },
 
       'astro:routes:resolved': ({ routes, logger }) => {

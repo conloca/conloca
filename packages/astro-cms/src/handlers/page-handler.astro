@@ -57,6 +57,16 @@ interface DataEntryData extends BaseEntryData {
 
 const collectionCache = new Map<string, Promise<AstroCollectionEntry[]>>()
 
+async function getCollectionEntries(collectionName: string) {
+  return (getCollection(collectionName as never) as Promise<AstroCollectionEntry[]>).catch((error) => {
+    if (error instanceof Error && error.message.includes(`The collection "${collectionName}" does not exist or is empty`)) {
+      return []
+    }
+
+    throw error
+  })
+}
+
 function toDate(value: string | Date | null | undefined) {
   if (!value) {
     return undefined
@@ -88,16 +98,14 @@ function isPublished(data: BaseEntryData) {
 }
 
 async function loadCollectionEntries(collectionName: string) {
+  if (import.meta.env.DEV) {
+    return getCollectionEntries(collectionName)
+  }
+
   let entriesPromise = collectionCache.get(collectionName)
 
   if (!entriesPromise) {
-    entriesPromise = (getCollection(collectionName as never) as Promise<AstroCollectionEntry[]>).catch((error) => {
-      if (error instanceof Error && error.message.includes(`The collection "${collectionName}" does not exist or is empty`)) {
-        return []
-      }
-
-      throw error
-    })
+    entriesPromise = getCollectionEntries(collectionName)
     collectionCache.set(collectionName, entriesPromise)
   }
 
