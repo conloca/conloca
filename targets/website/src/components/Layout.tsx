@@ -91,7 +91,8 @@ Layout.displayName = 'Layout';
 
 export { Layout };
 
-export function withLayout<ThisComponentConfig extends ComponentConfig<DefaultComponentProps>>(
+// biome-ignore lint/suspicious/noExplicitAny: required by Puck's generic HOC type constraint pattern
+export function withLayout<ThisComponentConfig extends ComponentConfig<any> = ComponentConfig<any>>(
   componentConfig: ThisComponentConfig,
 ): ThisComponentConfig {
   return {
