@@ -113,19 +113,21 @@ export const Hero: ComponentConfig<HeroProps> = {
       ));
     };
 
+    const hasButtons = buttons.length > 0;
+
     return (
       <section
         itemScope
         itemType="https://schema.org/SoftwareApplication"
         style={{
           position: 'relative',
-          minHeight: '100vh',
+          minHeight: hasButtons ? '100vh' : undefined,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           overflow: 'hidden',
-          paddingTop: '64px',
-          paddingBottom: '64px',
+          paddingTop: hasButtons ? '64px' : '96px',
+          paddingBottom: hasButtons ? '64px' : '80px',
         }}
       >
         {/* Radial gradient overlay */}
@@ -156,7 +158,7 @@ export const Hero: ComponentConfig<HeroProps> = {
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: '8px',
-                    border: `1px solid ${colors.surface[300]}`,
+                    border: `1px solid ${colors.border.primary}`,
                     borderRadius: radius.full,
                     padding: '6px 16px',
                     marginBottom: '32px',
@@ -233,117 +235,121 @@ export const Hero: ComponentConfig<HeroProps> = {
                 ))}
               </div>
 
-              {/* Terminal mock-up */}
-              <div style={{ maxWidth: '448px', margin: '48px auto 0' }}>
-                <div
-                  style={{
-                    backgroundColor: colors.surface[100],
-                    border: `1px solid ${colors.border.primary}`,
-                    borderRadius: radius.xl,
-                    overflow: 'hidden',
-                    boxShadow: shadows.xl,
-                  }}
-                >
-                  {/* Title bar */}
+              {/* Terminal mock-up -- only shown on pages with CTA buttons (e.g. homepage) */}
+              {hasButtons && (
+                <div style={{ maxWidth: '448px', margin: '48px auto 0' }}>
                   <div
                     style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      padding: '10px 16px',
-                      borderBottom: `1px solid ${colors.border.primary}`,
+                      backgroundColor: colors.bg.card,
+                      border: `1px solid ${colors.border.primary}`,
+                      borderRadius: radius.xl,
+                      overflow: 'hidden',
+                      boxShadow: shadows.xl,
                     }}
                   >
-                    <span
+                    {/* Title bar */}
+                    <div
                       style={{
-                        width: '10px',
-                        height: '10px',
-                        borderRadius: '50%',
-                        backgroundColor: colors.surface[300],
-                        flexShrink: 0,
-                      }}
-                    />
-                    <span
-                      style={{
-                        width: '10px',
-                        height: '10px',
-                        borderRadius: '50%',
-                        backgroundColor: colors.surface[300],
-                        flexShrink: 0,
-                      }}
-                    />
-                    <span
-                      style={{
-                        width: '10px',
-                        height: '10px',
-                        borderRadius: '50%',
-                        backgroundColor: colors.surface[300],
-                        flexShrink: 0,
-                      }}
-                    />
-                    <span
-                      style={{
-                        fontFamily: typography.fonts.mono,
-                        fontSize: typography.text.xs.fontSize,
-                        color: colors.surface[500],
-                        marginLeft: '8px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '10px 16px',
+                        borderBottom: `1px solid ${colors.border.primary}`,
                       }}
                     >
-                      Terminal
-                    </span>
-                  </div>
-                  {/* Command line */}
-                  <div
-                    style={{
-                      padding: '16px 20px',
-                      fontFamily: typography.fonts.mono,
-                      fontSize: typography.text.sm.fontSize,
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ color: colors.brand[600] }}>$</span>
-                      <span id="typed-command" style={{ color: colors.surface[800] }} />
                       <span
-                        id="cursor"
                         style={{
-                          display: 'inline-block',
-                          width: '8px',
-                          height: '20px',
-                          backgroundColor: colors.brand[400],
-                          animation: 'blink 1s step-end infinite',
+                          width: '10px',
+                          height: '10px',
+                          borderRadius: '50%',
+                          backgroundColor: colors.border.hover,
+                          flexShrink: 0,
                         }}
                       />
+                      <span
+                        style={{
+                          width: '10px',
+                          height: '10px',
+                          borderRadius: '50%',
+                          backgroundColor: colors.border.hover,
+                          flexShrink: 0,
+                        }}
+                      />
+                      <span
+                        style={{
+                          width: '10px',
+                          height: '10px',
+                          borderRadius: '50%',
+                          backgroundColor: colors.border.hover,
+                          flexShrink: 0,
+                        }}
+                      />
+                      <span
+                        style={{
+                          fontFamily: typography.fonts.mono,
+                          fontSize: typography.text.xs.fontSize,
+                          color: colors.text.secondary,
+                          marginLeft: '8px',
+                        }}
+                      >
+                        Terminal
+                      </span>
+                    </div>
+                    {/* Command line */}
+                    <div
+                      style={{
+                        padding: '16px 20px',
+                        fontFamily: typography.fonts.mono,
+                        fontSize: typography.text.sm.fontSize,
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ color: colors.brand[600] }}>$</span>
+                        <span id="typed-command" style={{ color: colors.text.heading }} />
+                        <span
+                          id="cursor"
+                          style={{
+                            display: 'inline-block',
+                            width: '8px',
+                            height: '20px',
+                            backgroundColor: colors.brand[400],
+                            animation: 'blink 1s step-end infinite',
+                          }}
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
           </Section>
         </div>
 
-        {/* Scroll-down arrow */}
-        <div
-          style={{
-            position: 'absolute',
-            bottom: '32px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-          }}
-        >
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke={colors.surface[600]}
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            style={{ animation: 'bounce 1s infinite' }}
+        {/* Scroll-down arrow -- only on full-height hero */}
+        {hasButtons && (
+          <div
+            style={{
+              position: 'absolute',
+              bottom: '32px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+            }}
           >
-            <path d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-          </svg>
-        </div>
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke={colors.text.secondary}
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{ animation: 'bounce 1s infinite' }}
+            >
+              <path d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+            </svg>
+          </div>
+        )}
       </section>
     );
   },

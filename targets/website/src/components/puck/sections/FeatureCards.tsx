@@ -5,6 +5,7 @@ import { colors, radius, sectionSpacing, typography } from '../shared/tokens';
 type FeatureCard = {
   id: string;
   iconSvgPath: string;
+  iconText?: string;
   title: string;
   description: string;
   href?: string;
@@ -55,6 +56,7 @@ export const FeatureCards: ComponentConfig<FeatureCardsProps> = {
       arrayFields: {
         id: { type: 'text', label: 'ID (unique)' },
         iconSvgPath: { type: 'textarea', label: 'SVG path d attribute' },
+        iconText: { type: 'text', label: 'Icon text (shown instead of SVG when set)' },
         title: { type: 'text' },
         description: { type: 'textarea' },
         href: { type: 'text', label: 'Link URL (optional)' },
@@ -205,18 +207,32 @@ export const FeatureCards: ComponentConfig<FeatureCardsProps> = {
                     flexShrink: 0,
                   }}
                 >
-                  <svg
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke={colors.brand[600]}
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d={card.iconSvgPath} />
-                  </svg>
+                  {card.iconText ? (
+                    <span
+                      style={{
+                        fontFamily: typography.fonts.mono,
+                        fontSize: '13px',
+                        fontWeight: typography.weights.bold,
+                        color: colors.brand[600],
+                        lineHeight: 1,
+                      }}
+                    >
+                      {card.iconText}
+                    </span>
+                  ) : (
+                    <svg
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke={colors.brand[600]}
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d={card.iconSvgPath} />
+                    </svg>
+                  )}
                 </div>
                 {/* Card title */}
                 <h3

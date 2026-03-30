@@ -44,8 +44,8 @@ export const CodeBlock: ComponentConfig<CodeBlockProps> = {
         <Section maxWidth="896px">
           <div
             style={{
-              backgroundColor: 'rgba(241,245,249,0.6)',
-              border: '1px solid rgba(226,232,240,0.8)',
+              backgroundColor: 'var(--color-card-bg-alpha)',
+              border: '1px solid var(--color-card-border-alpha)',
               borderRadius: radius.xl,
               overflow: 'hidden',
             }}
@@ -57,7 +57,7 @@ export const CodeBlock: ComponentConfig<CodeBlockProps> = {
                 alignItems: 'center',
                 gap: '8px',
                 padding: '10px 16px',
-                borderBottom: '1px solid rgba(226,232,240,0.8)',
+                borderBottom: '1px solid var(--color-card-border-alpha)',
               }}
             >
               <div
@@ -65,7 +65,7 @@ export const CodeBlock: ComponentConfig<CodeBlockProps> = {
                   width: '12px',
                   height: '12px',
                   borderRadius: '50%',
-                  backgroundColor: colors.surface[300],
+                  backgroundColor: colors.border.hover,
                 }}
               />
               <span
@@ -73,7 +73,7 @@ export const CodeBlock: ComponentConfig<CodeBlockProps> = {
                   fontFamily: typography.fonts.mono,
                   fontSize: typography.text.xs.fontSize,
                   lineHeight: typography.text.xs.lineHeight,
-                  color: colors.surface[400],
+                  color: colors.text.secondary,
                 }}
               >
                 {filename}
@@ -104,7 +104,7 @@ export const CodeBlock: ComponentConfig<CodeBlockProps> = {
                   fontFamily: typography.fonts.mono,
                   fontSize: typography.text.sm.fontSize,
                   lineHeight: typography.text.sm.lineHeight,
-                  color: colors.surface[600],
+                  color: colors.text.code,
                 }}
                 dangerouslySetInnerHTML={{ __html: code }}
               />
@@ -118,7 +118,7 @@ export const CodeBlock: ComponentConfig<CodeBlockProps> = {
                   alignItems: 'center',
                   gap: '16px',
                   padding: '10px 16px',
-                  borderTop: '1px solid rgba(226,232,240,0.8)',
+                  borderTop: '1px solid var(--color-card-border-alpha)',
                   fontSize: typography.text.xs.fontSize,
                   lineHeight: typography.text.xs.lineHeight,
                 }}

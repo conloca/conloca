@@ -69,8 +69,8 @@ function FAQAccordionItem({ item }: { item: FAQItem }) {
   return (
     <div
       style={{
-        backgroundColor: 'rgba(241,245,249,0.6)',
-        border: '1px solid rgba(226,232,240,0.8)',
+        backgroundColor: 'var(--color-card-bg-alpha)',
+        border: '1px solid var(--color-card-border-alpha)',
         borderRadius: radius.xl,
         overflow: 'hidden',
       }}
@@ -123,7 +123,7 @@ function FAQAccordionItem({ item }: { item: FAQItem }) {
             lineHeight: '1.6',
             fontFamily: typography.fonts.body,
             color: colors.text.secondary,
-            borderTop: '1px solid rgba(226,232,240,0.3)',
+            borderTop: '1px solid var(--color-card-border-subtle)',
           }}
           dangerouslySetInnerHTML={{ __html: item.answer }}
         />

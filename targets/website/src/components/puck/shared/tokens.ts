@@ -1,9 +1,9 @@
 /**
  * Design System Tokens — conloca.com
  *
- * These tokens mirror the CSS variables defined in global.css.
- * Use these in Puck components instead of CSS variables (var(--xxx))
- * so components render correctly in the Puck editor iframe.
+ * Static palette values (brand, surface) use hex for broad compatibility.
+ * Semantic tokens (bg, text, border) use CSS custom properties from global.css
+ * so they automatically respond to light/dark theme via [data-theme="dark"].
  */
 import type { CSSProperties } from 'react';
 
@@ -36,25 +36,25 @@ export const colors = {
   },
   white: '#ffffff',
   black: '#000000',
-  /** Semantic background tokens (light mode) */
+  /** Semantic background tokens (theme-aware via CSS custom properties) */
   bg: {
-    primary: '#f8fafc',
-    secondary: '#ffffff',
-    card: '#f1f5f9',
-    cardHover: '#e2e8f0',
-    code: '#f1f5f9',
+    primary: 'var(--color-bg-primary)',
+    secondary: 'var(--color-bg-secondary)',
+    card: 'var(--color-bg-card)',
+    cardHover: 'var(--color-bg-card-hover)',
+    code: 'var(--color-bg-code)',
   },
-  /** Semantic text tokens (light mode) */
+  /** Semantic text tokens (theme-aware via CSS custom properties) */
   text: {
-    primary: '#0f172a',
-    secondary: '#64748b',
-    heading: '#020617',
-    code: '#334155',
+    primary: 'var(--color-text-primary)',
+    secondary: 'var(--color-text-secondary)',
+    heading: 'var(--color-text-heading)',
+    code: 'var(--color-text-code)',
   },
-  /** Semantic border tokens (light mode) */
+  /** Semantic border tokens (theme-aware via CSS custom properties) */
   border: {
-    primary: '#e2e8f0',
-    hover: '#cbd5e1',
+    primary: 'var(--color-border)',
+    hover: 'var(--color-border-hover)',
   },
   /** Badge color variants */
   badge: {
@@ -81,9 +81,9 @@ export const colors = {
       text: '#020617',
     },
     secondary: {
-      bg: '#ffffff',
-      text: '#475569',
-      border: '#cbd5e1',
+      bg: 'var(--color-interactive-secondary-bg)',
+      text: 'var(--color-interactive-secondary-text)',
+      border: 'var(--color-interactive-secondary-border)',
     },
   },
 };

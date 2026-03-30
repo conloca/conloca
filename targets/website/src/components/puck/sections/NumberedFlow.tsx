@@ -82,8 +82,8 @@ export const NumberedFlow: ComponentConfig<NumberedFlowProps> = {
               <div key={item.id}>
                 <div
                   style={{
-                    backgroundColor: 'rgba(241,245,249,0.6)',
-                    border: '1px solid rgba(226,232,240,0.8)',
+                    backgroundColor: 'var(--color-card-bg-alpha)',
+                    border: '1px solid var(--color-card-border-alpha)',
                     borderRadius: radius.xl,
                     padding: '24px',
                     display: 'flex',
@@ -150,7 +150,7 @@ export const NumberedFlow: ComponentConfig<NumberedFlowProps> = {
                       height="20"
                       viewBox="0 0 24 24"
                       fill="none"
-                      stroke={colors.surface[600]}
+                      stroke={colors.text.secondary}
                       strokeWidth="2"
                       strokeLinecap="round"
                       strokeLinejoin="round"

@@ -236,8 +236,8 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
           <div style={{ marginBottom: '80px', overflowX: 'auto' }}>
             <div
               style={{
-                backgroundColor: 'rgba(241,245,249,0.6)',
-                border: '1px solid rgba(226,232,240,0.8)',
+                backgroundColor: 'var(--color-card-bg-alpha)',
+                border: '1px solid var(--color-card-border-alpha)',
                 borderRadius: radius['2xl'],
                 overflow: 'hidden',
                 minWidth: '640px',
@@ -245,7 +245,7 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
             >
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
-                  <tr style={{ borderBottom: '1px solid rgba(226,232,240,0.8)' }}>
+                  <tr style={{ borderBottom: '1px solid var(--color-card-border-alpha)' }}>
                     <th
                       style={{
                         textAlign: 'left',
@@ -283,8 +283,8 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
                     <tr
                       key={row.id}
                       style={{
-                        borderBottom: '1px solid rgba(226,232,240,0.3)',
-                        backgroundColor: i % 2 === 0 ? 'rgba(226,232,240,0.3)' : 'transparent',
+                        borderBottom: '1px solid var(--color-card-border-subtle)',
+                        backgroundColor: i % 2 === 0 ? 'var(--color-card-border-subtle)' : 'transparent',
                       }}
                     >
                       <th
@@ -295,7 +295,7 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
                           lineHeight: typography.text.sm.lineHeight,
                           fontWeight: typography.weights.medium,
                           fontFamily: typography.fonts.body,
-                          color: colors.surface[600],
+                          color: colors.text.secondary,
                         }}
                       >
                         {row.feature}
@@ -367,8 +367,8 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
                   <div
                     key={item.id}
                     style={{
-                      backgroundColor: 'rgba(241,245,249,0.6)',
-                      border: '1px solid rgba(226,232,240,0.8)',
+                      backgroundColor: 'var(--color-card-bg-alpha)',
+                      border: '1px solid var(--color-card-border-alpha)',
                       borderRadius: radius.xl,
                       padding: '24px',
                     }}

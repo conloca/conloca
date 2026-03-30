@@ -229,7 +229,7 @@ export default defineConfig({
                 {/* Right column: terminal code block */}
                 <div
                   style={{
-                    backgroundColor: colors.surface[50],
+                    backgroundColor: colors.bg.code,
                     border: `1px solid ${colors.border.primary}`,
                     borderRadius: radius.lg,
                     overflow: 'hidden',
@@ -250,7 +250,7 @@ export default defineConfig({
                         width: '10px',
                         height: '10px',
                         borderRadius: '50%',
-                        backgroundColor: colors.surface[300],
+                        backgroundColor: colors.border.hover,
                         flexShrink: 0,
                       }}
                     />
@@ -259,7 +259,7 @@ export default defineConfig({
                         width: '10px',
                         height: '10px',
                         borderRadius: '50%',
-                        backgroundColor: colors.surface[300],
+                        backgroundColor: colors.border.hover,
                         flexShrink: 0,
                       }}
                     />
@@ -268,7 +268,7 @@ export default defineConfig({
                         width: '10px',
                         height: '10px',
                         borderRadius: '50%',
-                        backgroundColor: colors.surface[300],
+                        backgroundColor: colors.border.hover,
                         flexShrink: 0,
                       }}
                     />
@@ -286,7 +286,7 @@ export default defineConfig({
                         fontFamily: typography.fonts.mono,
                         fontSize: typography.text.sm.fontSize,
                         lineHeight: typography.text.sm.lineHeight,
-                        color: colors.surface[700],
+                        color: colors.text.code,
                         whiteSpace: 'pre-wrap',
                         wordBreak: 'break-all',
                       }}

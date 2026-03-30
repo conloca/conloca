@@ -47,7 +47,7 @@ function DashIcon() {
       height="20"
       viewBox="0 0 24 24"
       fill="none"
-      stroke={colors.surface[600]}
+      stroke={colors.text.secondary}
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -125,7 +125,7 @@ function WaitlistForm({ isEditing }: { isEditing: boolean }) {
           style={{
             flex: 1,
             backgroundColor: colors.bg.card,
-            border: `1px solid ${colors.surface[300]}`,
+            border: `1px solid ${colors.border.primary}`,
             borderRadius: radius.lg,
             padding: '12px 16px',
             fontSize: typography.text.sm.fontSize,
@@ -192,7 +192,8 @@ export const HostedComparisonRender = ({
         style={{
           position: 'absolute',
           inset: 0,
-          background: 'linear-gradient(to bottom, #f8fafc, rgba(241,245,249,0.5), #f8fafc)',
+          background:
+            'linear-gradient(to bottom, var(--color-bg-primary), var(--color-card-bg-alpha), var(--color-bg-primary))',
         }}
       />
       <div
@@ -268,8 +269,8 @@ export const HostedComparisonRender = ({
               key={text}
               className="reveal"
               style={{
-                backgroundColor: 'rgba(241,245,249,0.6)',
-                border: '1px dashed rgba(226,232,240,0.8)',
+                backgroundColor: 'var(--color-card-bg-alpha)',
+                border: '1px dashed var(--color-card-border-alpha)',
                 borderRadius: radius.xl,
                 aspectRatio: '16 / 9',
                 display: 'flex',
@@ -283,7 +284,7 @@ export const HostedComparisonRender = ({
                   height="40"
                   viewBox="0 0 24 24"
                   fill="none"
-                  stroke={colors.surface[600]}
+                  stroke={colors.text.secondary}
                   strokeWidth="1.5"
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -311,8 +312,8 @@ export const HostedComparisonRender = ({
         <div className="reveal" style={{ maxWidth: '768px', margin: '0 auto 64px' }}>
           <div
             style={{
-              backgroundColor: 'rgba(241,245,249,0.6)',
-              border: '1px solid rgba(226,232,240,0.8)',
+              backgroundColor: 'var(--color-card-bg-alpha)',
+              border: '1px solid var(--color-card-border-alpha)',
               borderRadius: radius['2xl'],
               overflow: 'hidden',
             }}
@@ -320,7 +321,7 @@ export const HostedComparisonRender = ({
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
-                  <tr style={{ borderBottom: '1px solid rgba(226,232,240,0.8)' }}>
+                  <tr style={{ borderBottom: '1px solid var(--color-card-border-alpha)' }}>
                     <th
                       style={{
                         textAlign: 'left',
@@ -375,8 +376,8 @@ export const HostedComparisonRender = ({
                     <tr
                       key={row.id}
                       style={{
-                        borderBottom: '1px solid rgba(226,232,240,0.3)',
-                        backgroundColor: i % 2 === 0 ? 'rgba(226,232,240,0.3)' : 'transparent',
+                        borderBottom: '1px solid var(--color-card-border-subtle)',
+                        backgroundColor: i % 2 === 0 ? 'var(--color-card-border-subtle)' : 'transparent',
                       }}
                     >
                       <td
@@ -385,7 +386,7 @@ export const HostedComparisonRender = ({
                           fontSize: typography.text.sm.fontSize,
                           lineHeight: typography.text.sm.lineHeight,
                           fontFamily: typography.fonts.body,
-                          color: colors.surface[600],
+                          color: colors.text.secondary,
                         }}
                       >
                         {row.feature}
