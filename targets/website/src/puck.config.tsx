@@ -11,20 +11,48 @@ import type {
   TextProps,
 } from './components/puck/primitives';
 import { Badge, Button, Divider, Flex, Grid, Heading, Image, Space, Text } from './components/puck/primitives';
-import type { CTABannerProps, FeatureCardsProps, HeroProps, StepsProps } from './components/puck/sections';
-import { CTABanner, FeatureCards, Hero, Steps } from './components/puck/sections';
+import type {
+  CodeBlockProps,
+  ComparisonTableProps,
+  CTABannerProps,
+  FAQProps,
+  FeatureCardsProps,
+  HeroProps,
+  HostedComparisonProps,
+  NumberedFlowProps,
+  RichTextSectionProps,
+  StepsProps,
+} from './components/puck/sections';
+import {
+  CodeBlock,
+  ComparisonTable,
+  CTABanner,
+  FAQ,
+  FeatureCards,
+  Hero,
+  HostedComparison,
+  NumberedFlow,
+  RichTextSection,
+  Steps,
+} from './components/puck/sections';
 
 type Components = {
   Badge: BadgeProps;
   Button: ButtonProps;
   CTABanner: CTABannerProps;
+  CodeBlock: CodeBlockProps;
+  ComparisonTable: ComparisonTableProps;
   Divider: DividerProps;
+  FAQ: FAQProps;
   FeatureCards: FeatureCardsProps;
   Flex: FlexProps;
   Grid: GridProps;
   Heading: HeadingProps;
   Hero: HeroProps;
+  HostedComparison: HostedComparisonProps;
   Image: ImageProps;
+  NumberedFlow: NumberedFlowProps;
+  RichTextSection: RichTextSectionProps;
   Space: SpaceProps;
   Steps: StepsProps;
   Text: TextProps;
@@ -35,7 +63,18 @@ const puckConfig: Config<Components> = {
     sections: {
       title: 'Page Sections',
       defaultExpanded: true,
-      components: ['Hero', 'FeatureCards', 'Steps', 'CTABanner'],
+      components: [
+        'Hero',
+        'FeatureCards',
+        'Steps',
+        'CTABanner',
+        'ComparisonTable',
+        'FAQ',
+        'RichTextSection',
+        'CodeBlock',
+        'NumberedFlow',
+        'HostedComparison',
+      ],
     },
     primitives: {
       title: 'Primitives',
@@ -50,13 +89,19 @@ const puckConfig: Config<Components> = {
     Badge,
     Button,
     CTABanner,
+    CodeBlock,
+    ComparisonTable,
     Divider,
+    FAQ,
     FeatureCards,
     Flex: { ...Flex, label: 'Flex Container' },
     Grid: { ...Grid, label: 'Grid Container' },
     Heading,
     Hero,
+    HostedComparison,
     Image,
+    NumberedFlow,
+    RichTextSection,
     Space: { ...Space, label: 'Spacer' },
     Steps,
     Text,
