@@ -19,6 +19,7 @@ import type {
   GitStatus,
   GlobalFilters,
   LocalizedEntry,
+  MDXCompileResponse,
   MoveResult,
   SitesConfig,
   UpdateLocaleInput,
@@ -245,6 +246,13 @@ export class ContentAPIClient {
       console.error('Error fetching block by name:', error);
       throw error;
     }
+  }
+
+  async compileMDX(mdxContent: string): Promise<MDXCompileResponse> {
+    return this.fetchAPI<MDXCompileResponse>(`${this.baseUrl}/mdx/compile`, {
+      method: 'POST',
+      body: JSON.stringify({ mdxContent }),
+    });
   }
 
   // Data operations

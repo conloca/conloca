@@ -8,6 +8,7 @@ import type { ReactNode } from 'react';
 import type { ContentAPIClient } from '../src/client';
 import {
   setContentAPIClient,
+  useCompileMDX,
   useContent,
   useCreateContent,
   useData,
@@ -28,7 +29,7 @@ afterEach(() => {
 describe('Content API Hooks', () => {
   let mockClient: ContentAPIClient;
   let queryClient: QueryClient;
-  let wrapper: ({ children }: { children: ReactNode }) => JSX.Element;
+  let wrapper: ({ children }: { children: ReactNode }) => ReactNode;
 
   beforeEach(() => {
     // Create a new QueryClient for each test
@@ -53,18 +54,21 @@ describe('Content API Hooks', () => {
         Promise.resolve({ success: true, etag: 'updatedMeta.updatedContent', modified: new Date() }),
       ),
       deleteContent: mock(() => Promise.resolve({ success: true })),
-      getSitePages: mock(() => Promise.resolve({ entries: [], total: 0 })),
+      getSitePages: mock(() => Promise.resolve({ items: [], total: 0 })),
       getPageByPathname: mock(() => Promise.resolve(null)),
       isPathnameAvailable: mock(() => Promise.resolve(true)),
       movePage: mock(() => Promise.resolve({ moved: true })),
-      getBlocks: mock(() => Promise.resolve({ entries: [], total: 0 })),
+      getBlocks: mock(() => Promise.resolve({ items: [], total: 0 })),
       getBlockByName: mock(() => Promise.resolve(null)),
+      compileMDX: mock(() =>
+        Promise.resolve({ code: 'return { default: function Test() { return null } }', metadata: {} }),
+      ),
       getData: mock(() => Promise.resolve({ items: [], total: 0 })),
       getDataByName: mock(() => Promise.resolve(null)),
       isDataNameAvailable: mock(() => Promise.resolve(true)),
       getDataCollections: mock(() => Promise.resolve([])),
-      listAllContent: mock(() => Promise.resolve({ entries: [], total: 0 })),
-      findUntranslatedContent: mock(() => Promise.resolve({ entries: [], total: 0 })),
+      listAllContent: mock(() => Promise.resolve({ items: [], total: 0 })),
+      findUntranslatedContent: mock(() => Promise.resolve({ items: [], total: 0 })),
       getSitesConfig: mock(() => Promise.resolve({ sites: {} })),
       batchUpdate: mock(() => Promise.resolve({ success: true, updated: 0, failed: 0, operations: [] })),
     } as any;
@@ -74,23 +78,23 @@ describe('Content API Hooks', () => {
 
   describe('useContent', () => {
     it('should fetch content by ID', async () => {
-      const mockContent: ContentWithLocales = {
+      const mockContent: ContentEntry = {
         id: 'test-id',
+        kind: 'page',
+        type: 'puck',
+        collection: 'pages',
         site: 'test-site',
         locales: {
           en: {
-            id: 'test-id',
             locale: 'en',
-            type: 'puck',
+            created: new Date().toISOString(),
             content: { puckData: {} },
             meta: {
-              pathname: '/test',
               title: 'Test',
-              published: true,
             },
             etag: '"123"',
-            modified: new Date(),
-            size: 1000,
+            modified: new Date().toISOString(),
+            pathname: '/test',
           },
         },
       };
@@ -137,19 +141,23 @@ describe('Content API Hooks', () => {
 
   describe('useLocalizedContent', () => {
     it('should fetch localized content', async () => {
-      const mockContent: LocalizedContent = {
+      const mockContent: LocalizedEntry = {
         id: 'test-id',
-        locale: 'en',
+        kind: 'page',
         type: 'puck',
-        content: { puckData: {} },
-        meta: {
+        site: 'test-site',
+        collection: 'pages',
+        localized: {
+          locale: 'en',
+          content: { puckData: {} },
+          meta: {
+            title: 'Test',
+          },
+          etag: '"123"',
+          modified: new Date().toISOString(),
+          created: new Date().toISOString(),
           pathname: '/test',
-          title: 'Test',
-          published: true,
         },
-        etag: '"123"',
-        modified: new Date(),
-        size: 1000,
       };
 
       mockClient.getLocalized = mock(() => Promise.resolve(mockContent));
@@ -162,6 +170,33 @@ describe('Content API Hooks', () => {
 
       expect(mockClient.getLocalized).toHaveBeenCalledWith('test-id', 'en');
       expect(result.current.data).toEqual(mockContent);
+    });
+  });
+
+  describe('useCompileMDX', () => {
+    it('should not compile when content is empty', () => {
+      const { result } = renderHook(() => useCompileMDX({ mdxContent: null }), { wrapper });
+
+      expect(result.current.isLoading).toBe(false);
+      expect(mockClient.compileMDX).not.toHaveBeenCalled();
+    });
+
+    it('should compile MDX content', async () => {
+      const compileResult = {
+        code: 'return { default: function Test() { return null } }',
+        metadata: { title: 'Test' },
+      };
+
+      mockClient.compileMDX = mock(() => Promise.resolve(compileResult));
+
+      const { result } = renderHook(() => useCompileMDX({ mdxContent: '# Test', cacheKey: 'etag-1' }), { wrapper });
+
+      await waitFor(() => {
+        expect(result.current.isSuccess).toBe(true);
+      });
+
+      expect(mockClient.compileMDX).toHaveBeenCalledWith('# Test');
+      expect(result.current.data).toEqual(compileResult);
     });
   });
 
@@ -282,9 +317,41 @@ describe('Content API Hooks', () => {
   describe('useSitePages', () => {
     it('should fetch site pages', async () => {
       const mockPages = {
-        entries: [
-          { id: 'page1', site: 'test-site', pathname: '/page1' },
-          { id: 'page2', site: 'test-site', pathname: '/page2' },
+        items: [
+          {
+            id: 'page1',
+            site: 'test-site',
+            kind: 'page' as const,
+            type: 'puck' as const,
+            collection: 'pages',
+            locales: {
+              en: {
+                locale: 'en',
+                pathname: '/page1',
+                etag: 'etag-1',
+                created: new Date().toISOString(),
+                modified: new Date().toISOString(),
+                meta: { title: 'Page 1' },
+              },
+            },
+          },
+          {
+            id: 'page2',
+            site: 'test-site',
+            kind: 'page' as const,
+            type: 'puck' as const,
+            collection: 'pages',
+            locales: {
+              en: {
+                locale: 'en',
+                pathname: '/page2',
+                etag: 'etag-2',
+                created: new Date().toISOString(),
+                modified: new Date().toISOString(),
+                meta: { title: 'Page 2' },
+              },
+            },
+          },
         ],
         total: 2,
       };

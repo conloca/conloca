@@ -4,6 +4,7 @@ import { type AssetConfig, AssetOperations } from './asset-operations';
 import type { ContentAPI } from './content-api.interface';
 import { localesOf } from './content-utils';
 import { createGitOperations, type GitAuthor, type GitConfig } from './git-operations';
+import { compileMDX } from './mdx/compile';
 import type { APIError, ContentManifest, ErrorCode, FindOptions, GlobalFilters } from './types';
 import { ErrorCodes } from './types';
 
@@ -26,6 +27,10 @@ function errorResponse(code: ErrorCode, message: string, details?: any): APIErro
 function logAndCreateErrorResponse(error: unknown, code: ErrorCode, message: string, details?: any): APIError {
   console.error(`[Content API] ${message}:`, error);
   return errorResponse(code, message, details);
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
 }
 
 /**
@@ -1173,21 +1178,32 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
   // that can be executed with @mdx-js/mdx's run() (which has zero dependencies).
   app.post('/mdx/compile', async (c) => {
     try {
-      const body = await c.req.json();
-      const mdxContent = body?.mdxContent;
+      let body: unknown;
 
-      if (!mdxContent || typeof mdxContent !== 'string') {
-        return c.json({ error: 'mdxContent string required' }, 400);
+      try {
+        body = await c.req.json();
+      } catch {
+        return c.json(errorResponse(ErrorCodes.INVALID_REQUEST, 'Invalid JSON body'), 400);
       }
 
-      // Lazy import to avoid loading MDX compilation deps at server startup
-      const { compileMDX } = await import('@conloca/mdx/node');
-      const { code, metadata } = await compileMDX(mdxContent, {});
+      const mdxContent =
+        typeof body === 'object' && body !== null ? (body as { mdxContent?: unknown }).mdxContent : null;
+
+      if (!mdxContent || typeof mdxContent !== 'string') {
+        return c.json(
+          errorResponse(ErrorCodes.MISSING_REQUIRED_FIELD, 'mdxContent string required', { field: 'mdxContent' }),
+          400,
+        );
+      }
+
+      const { code, metadata } = await compileMDX(mdxContent);
 
       return c.json({ code, metadata });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'MDX compilation failed';
-      return c.json({ error: message }, 422);
+      return c.json(
+        logAndCreateErrorResponse(error, ErrorCodes.MDX_COMPILE_FAILED, errorMessage(error, 'Failed to compile MDX')),
+        422,
+      );
     }
   });
 

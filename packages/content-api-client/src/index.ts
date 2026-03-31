@@ -16,6 +16,7 @@ export type {
   LocaleVersion,
   LocalizedEntry,
   LocalizedManifest,
+  MDXCompileResponse,
   PageReference,
   SitesConfig,
   UpdateResult,

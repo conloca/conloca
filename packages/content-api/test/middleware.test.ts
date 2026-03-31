@@ -287,6 +287,93 @@ describe('Content API Middleware', () => {
     });
   });
 
+  describe('POST /mdx/compile', () => {
+    test('compiles MDX into browser-runnable code', async () => {
+      const app = createContentAPIRouter(api);
+      const res = await app.fetch(
+        new Request('http://localhost/mdx/compile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mdxContent: '# Hello MDX' }),
+        }),
+      );
+
+      expect(res.status).toBe(200);
+
+      const response = await parseJsonResponse<{ code: string; metadata: Record<string, unknown> }>(res);
+
+      expect(typeof response.data.code).toBe('string');
+      expect(response.data.code.length).toBeGreaterThan(0);
+      expect(response.data.metadata).toEqual({});
+    });
+
+    test('returns a validation error when mdxContent is missing', async () => {
+      const app = createContentAPIRouter(api);
+      const res = await app.fetch(
+        new Request('http://localhost/mdx/compile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        }),
+      );
+
+      expect(res.status).toBe(400);
+
+      const response = await parseJsonResponse(res);
+      const data = response.data;
+
+      expect(isErrorResponse(data)).toBe(true);
+      if (isErrorResponse(data)) {
+        expect(data.error.code).toBe(ErrorCodes.MISSING_REQUIRED_FIELD);
+        expect(data.error.details).toEqual({ field: 'mdxContent' });
+      }
+    });
+
+    test('returns invalid request for malformed JSON', async () => {
+      const app = createContentAPIRouter(api);
+      const res = await app.fetch(
+        new Request('http://localhost/mdx/compile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{invalid',
+        }),
+      );
+
+      expect(res.status).toBe(400);
+
+      const response = await parseJsonResponse(res);
+      const data = response.data;
+
+      expect(isErrorResponse(data)).toBe(true);
+      if (isErrorResponse(data)) {
+        expect(data.error.code).toBe(ErrorCodes.INVALID_REQUEST);
+        expect(data.error.message).toBe('Invalid JSON body');
+      }
+    });
+
+    test('returns a compile error for invalid MDX', async () => {
+      const app = createContentAPIRouter(api);
+      const res = await app.fetch(
+        new Request('http://localhost/mdx/compile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mdxContent: '# Broken {' }),
+        }),
+      );
+
+      expect(res.status).toBe(422);
+
+      const response = await parseJsonResponse(res);
+      const data = response.data;
+
+      expect(isErrorResponse(data)).toBe(true);
+      if (isErrorResponse(data)) {
+        expect(data.error.code).toBe(ErrorCodes.MDX_COMPILE_FAILED);
+        expect(data.error.message).toContain('MDX compilation failed:');
+      }
+    });
+  });
+
   describe('POST /content', () => {
     test('creates new content', async () => {
       const app = createContentAPIRouter(api);

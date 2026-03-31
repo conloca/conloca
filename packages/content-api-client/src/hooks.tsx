@@ -9,6 +9,7 @@ import type {
   GitStatus,
   GlobalFilters,
   LocalizedEntry,
+  MDXCompileResponse,
   UpdateLocaleInput,
 } from '@conloca/content-api';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -40,6 +41,16 @@ function isContentListResult(value: unknown): value is ContentListResult {
   );
 }
 
+function hashString(value: string): string {
+  let hash = 0;
+  for (let index = 0; index < value.length; index++) {
+    const char = value.charCodeAt(index);
+    hash = (hash << 5) - hash + char;
+    hash |= 0;
+  }
+  return hash.toString(36);
+}
+
 // ===== Query Keys =====
 const queryKeys = {
   currentUser: () => ['auth', 'user'] as const,
@@ -68,6 +79,7 @@ const queryKeys = {
   assetFolders: (path?: string) => ['asset-folders', path] as const,
   assetUsage: (filename: string | null) => ['asset-usage', filename] as const,
   folderTree: () => ['folder-tree'] as const,
+  mdxCompile: (cacheKey: string) => ['mdx', 'compile', cacheKey] as const,
 };
 
 // ===== Core Content Hooks =====
@@ -89,6 +101,24 @@ export function useLocalizedContent(id: string, locale: string) {
     queryKey: queryKeys.localized(id, locale),
     queryFn: () => client.getLocalized(id, locale),
     enabled: !!id && !!locale,
+  });
+}
+
+export interface UseCompileMDXOptions {
+  mdxContent: string | null;
+  cacheKey?: string;
+}
+
+export function useCompileMDX({ mdxContent, cacheKey }: UseCompileMDXOptions) {
+  const client = getContentAPIClient();
+  const resolvedCacheKey = cacheKey || (mdxContent ? `mdx-${hashString(mdxContent)}` : 'mdx-empty');
+
+  return useQuery<MDXCompileResponse, Error>({
+    queryKey: queryKeys.mdxCompile(resolvedCacheKey),
+    queryFn: () => client.compileMDX(mdxContent!),
+    enabled: !!mdxContent,
+    retry: false,
+    staleTime: Number.POSITIVE_INFINITY,
   });
 }
 
@@ -861,6 +891,6 @@ export function useMoveAssets() {
   });
 }
 
+export type { GitCommitResult, GitPullResult, GitPushResult, GitStatus };
 // Re-export for convenience
-export { ContentAPIClient, StaleWriteError, APIClientError };
-export type { GitStatus, GitCommitResult, GitPushResult, GitPullResult };
+export { APIClientError, ContentAPIClient, StaleWriteError };

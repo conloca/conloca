@@ -255,6 +255,53 @@ describe('ContentAPIClient', () => {
       });
       expect(result).toEqual(mockResult);
     });
+
+    it('should compile MDX through the API', async () => {
+      const mockResult = {
+        code: 'return { default: function Test() { return null } };',
+        metadata: { title: 'Test block' },
+      };
+
+      fetchMock.mockResolvedValueOnce(
+        new Response(JSON.stringify(mockResult), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+
+      const result = await client.compileMDX('# Test block');
+
+      expect(fetchMock).toHaveBeenCalledWith('/__conloca/api/mdx/compile', {
+        method: 'POST',
+        body: JSON.stringify({ mdxContent: '# Test block' }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      expect(result).toEqual(mockResult);
+    });
+
+    it('should throw APIClientError when MDX compilation fails', async () => {
+      fetchMock.mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            error: {
+              code: 'MDX_COMPILE_FAILED',
+              message: 'Failed to compile MDX',
+            },
+          }),
+          {
+            status: 422,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        ),
+      );
+
+      await expect(client.compileMDX('# broken {')).rejects.toMatchObject({
+        code: 'MDX_COMPILE_FAILED',
+        message: 'Failed to compile MDX',
+      });
+    });
   });
 
   describe('data operations', () => {

@@ -1,7 +1,6 @@
-import type { LocalizedEntry } from '@conloca/content-api-client';
+import { type LocalizedEntry, useCompileMDX } from '@conloca/content-api-client';
 import { useMDXEvaluation } from '@conloca/mdx';
 import React, { useMemo } from 'react';
-import { getUIConfig } from '../../ui-config';
 
 interface MDXContentProps {
   entry: LocalizedEntry;
@@ -66,21 +65,34 @@ function MDXContentInner({ entry }: MDXContentProps) {
     return content.mdx || null;
   }, [entry]);
 
-  // Evaluate MDX using shared hook with ETag as cache key
-  const config = getUIConfig();
+  const cacheKey = entry.localized.etag;
   const {
-    Component,
+    data: compiledResult,
     error: compileError,
     isLoading: isCompiling,
-    retry,
-  } = useMDXEvaluation({
+    refetch: retryCompile,
+  } = useCompileMDX({
     mdxContent: actualMdxContent,
-    cacheKey: entry.localized.etag,
-    apiBaseUrl: config.apiBaseUrl || '/__cms/api',
+    cacheKey,
   });
 
+  const {
+    Component,
+    error: evaluationError,
+    isLoading: isEvaluating,
+    retry: retryEvaluation,
+  } = useMDXEvaluation({
+    compiledCode: compiledResult?.code || null,
+    cacheKey,
+  });
+
+  const retry = () => {
+    retryEvaluation();
+    void retryCompile();
+  };
+
   // Loading state
-  if (isCompiling) {
+  if (isCompiling || isEvaluating) {
     return (
       <div className="flex items-center justify-center p-8 text-grey-04">
         <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-azure-04 mr-3" />
@@ -90,15 +102,18 @@ function MDXContentInner({ entry }: MDXContentProps) {
   }
 
   // Evaluation error
-  if (compileError) {
+  if (compileError || evaluationError) {
+    const error = compileError || evaluationError;
+
     return (
       <div className="p-4 bg-red-50 border border-red-200 rounded text-red-600">
         <p className="font-semibold mb-2">Cannot Render Block Content</p>
-        <p className="text-sm mb-2">{compileError.message}</p>
+        <p className="text-sm mb-2">{error?.message}</p>
         <p className="text-xs text-red-500 mb-3">
           The block content contains invalid MDX syntax. Please edit the block to fix any syntax errors.
         </p>
         <button
+          type="button"
           onClick={retry}
           className="px-3 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
         >

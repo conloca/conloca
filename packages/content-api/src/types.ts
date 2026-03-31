@@ -12,6 +12,11 @@ export interface APIError {
   };
 }
 
+export interface MDXCompileResponse {
+  code: string;
+  metadata: Record<string, unknown>;
+}
+
 // Common error codes
 export const ErrorCodes = {
   // Content errors
@@ -33,6 +38,7 @@ export const ErrorCodes = {
   INVALID_LOCALE: 'INVALID_LOCALE',
   INVALID_CONTENT_TYPE: 'INVALID_CONTENT_TYPE',
   INVALID_REQUEST: 'INVALID_REQUEST',
+  MDX_COMPILE_FAILED: 'MDX_COMPILE_FAILED',
 
   // System errors
   INTERNAL_ERROR: 'INTERNAL_ERROR',
