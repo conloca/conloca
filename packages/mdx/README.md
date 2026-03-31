@@ -41,6 +41,12 @@ import { createContentAPI } from '@conloca/content-api/node';
 const api = await createContentAPI({ contentRoot: './content' });
 const mdxComponents = await evaluateMDXBlocks(api, 'en');
 
+for (const block of mdxComponents) {
+  if (!block.ok) {
+    console.error(`Failed to evaluate ${block.id}:`, block.error.message);
+  }
+}
+
 // Or evaluate a single MDX string
 const { Component, error } = await evaluateMDXToComponent('# Hello World');
 ```

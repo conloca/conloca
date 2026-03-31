@@ -136,9 +136,14 @@ import { createContentAPI } from '@conloca/content-api/node';
 const api = await createContentAPI({ contentRoot: './content' });
 const blocks = await evaluateMDXBlocks(api, 'en');
 
-// blocks is an Array of { id, title, Component }
+// blocks is an Array of structured success/error results
 for (const block of blocks) {
   console.log(`Block: ${block.id} (${block.title})`);
+  if (!block.ok) {
+    console.error(block.error.message);
+    continue;
+  }
+
   // Render block.Component in your React app
 }
 ```

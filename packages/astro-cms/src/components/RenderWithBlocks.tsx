@@ -1,3 +1,4 @@
+import type { MDXBlockEvaluationResult } from '@conloca/mdx/node';
 import type { ComponentConfig, Config, Data } from '@puckeditor/core';
 import { Render } from '@puckeditor/core';
 import type { ComponentType } from 'react';
@@ -14,6 +15,32 @@ interface RenderWithBlocksProps {
   config: Config;
   data: Data;
   mdxComponents: MDXComponent[];
+}
+
+function createFailedBlockComponent(block: Extract<MDXBlockEvaluationResult, { ok: false }>): ComponentType {
+  return function FailedBlockComponent() {
+    return (
+      <div className="p-4 bg-red-50 border border-red-200 rounded text-red-600">
+        <p className="font-semibold mb-2">MDX Block Error</p>
+        <p className="text-sm">Block: {block.id}</p>
+        <p className="text-xs mt-2">{block.error.message}</p>
+      </div>
+    );
+  };
+}
+
+function resolveRenderableBlocks(blocks: MDXBlockEvaluationResult[]): MDXComponent[] {
+  return blocks.map((block) => {
+    if (block.ok) {
+      return block;
+    }
+
+    return {
+      id: block.id,
+      title: block.title,
+      Component: createFailedBlockComponent(block),
+    };
+  });
 }
 
 /**
@@ -34,7 +61,7 @@ interface RenderWithBlocksProps {
  * @param props - Component props
  * @param props.config - Base Puck configuration
  * @param props.data - Puck page data containing component tree
- * @param props.mdxComponents - Array of evaluated MDX React components
+ * @param props.mdxComponents - Array of renderable MDX React components
  */
 function RenderWithBlocks({ config, data, mdxComponents }: RenderWithBlocksProps) {
   // Build enhanced config with MDX blocks
@@ -106,7 +133,7 @@ function RenderWithBlocks({ config, data, mdxComponents }: RenderWithBlocksProps
  *
  * @param config - The Puck configuration with component definitions
  * @param data - Puck page data containing component tree
- * @param mdxComponents - Array of evaluated MDX components
+ * @param mdxComponents - Array of evaluated MDX block results
  * @returns A PageRenderer component with no props needed (components in closure)
  *
  * @example
@@ -129,9 +156,15 @@ function RenderWithBlocks({ config, data, mdxComponents }: RenderWithBlocksProps
  * - Type safe React components throughout
  * - Normal React rendering with proper escaping
  */
-export function createPageRendererWithBlocks(config: Config, data: Data, mdxComponents: MDXComponent[]): ComponentType {
+export function createPageRendererWithBlocks(
+  config: Config,
+  data: Data,
+  mdxComponents: MDXBlockEvaluationResult[],
+): ComponentType {
+  const renderableBlocks = resolveRenderableBlocks(mdxComponents);
+
   // Capture components in closure - no need to pass as props
   return function PageRendererWithBlocks() {
-    return <RenderWithBlocks config={config} data={data} mdxComponents={mdxComponents} />;
+    return <RenderWithBlocks config={config} data={data} mdxComponents={renderableBlocks} />;
   };
 }

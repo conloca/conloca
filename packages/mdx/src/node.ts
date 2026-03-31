@@ -16,4 +16,9 @@ export { evaluateMDXBlocks } from './blocks.js';
 export { compileMDX } from './mdx/compile.js';
 export { evaluateMDXToComponent } from './mdx/evaluate.js';
 // MDX types
-export type { MDXCompileResult } from './types.js';
+export type {
+  EvaluatedMDXBlock,
+  FailedMDXBlockEvaluation,
+  MDXBlockEvaluationResult,
+  MDXCompileResult,
+} from './types.js';
