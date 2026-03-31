@@ -12,10 +12,10 @@
   "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",
   "dependencies": {
+    "@conloca/content-api": "workspace:^",
     "@mdx-js/mdx": "^3.1.1",
     "@mdx-js/react": "^3.1.1",
     "@mdxeditor/editor": "^3.52.3",
-    "gray-matter": "^4.0.3",
     "lucide-react": "^0.564.0",
     "remark-frontmatter": "^5.0.0",
     "remark-gfm": "^4.0.0",

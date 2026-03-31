@@ -1,9 +1,5 @@
-import { compile as mdxCompile } from '@mdx-js/mdx';
-import { readFile } from 'fs/promises';
-import matter from 'gray-matter';
-import remarkFrontmatter from 'remark-frontmatter';
-import remarkGfm from 'remark-gfm';
-import remarkMdxFrontmatter from 'remark-mdx-frontmatter';
+import { readFile } from 'node:fs/promises';
+import { compileMDX as compileSharedMDX } from '@conloca/content-api/node';
 import type { MDXCompileResult, MDXCompiler } from '../types.js';
 
 /**
@@ -22,37 +18,9 @@ import type { MDXCompileResult, MDXCompiler } from '../types.js';
  * @returns Compiled code and extracted metadata
  */
 export async function compileMDX(content: string, components: Record<string, any>): Promise<MDXCompileResult> {
-  try {
-    // Extract frontmatter for metadata (but keep original content intact)
-    const { data: metadata } = matter(content);
+  void components;
 
-    // Compile MDX to JavaScript (with frontmatter still in content)
-    const compiled = await mdxCompile(content, {
-      outputFormat: 'function-body',
-      development: process.env.NODE_ENV === 'development',
-      remarkPlugins: [
-        remarkFrontmatter, // Parse frontmatter syntax
-        remarkMdxFrontmatter, // Make frontmatter available as variables in MDX
-        remarkGfm, // Support tables, strikethrough, task lists, etc.
-      ],
-    });
-
-    // The compiled value is a VFile, extract the string value
-    const code = String(compiled.value);
-
-    return {
-      code,
-      metadata,
-    };
-  } catch (error) {
-    if (error instanceof Error) {
-      // Enhance error message for better debugging
-      const enhancedError = new Error(`MDX compilation failed: ${error.message}`);
-      enhancedError.stack = error.stack;
-      throw enhancedError;
-    }
-    throw error;
-  }
+  return compileSharedMDX(content);
 }
 
 /**
