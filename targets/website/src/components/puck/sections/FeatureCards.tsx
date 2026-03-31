@@ -114,8 +114,8 @@ export const FeatureCards: ComponentConfig<FeatureCardsProps> = {
       <section
         style={{
           position: 'relative',
-          paddingTop: sectionSpacing.desktop.md.paddingY,
-          paddingBottom: sectionSpacing.desktop.md.paddingY,
+          paddingTop: sectionSpacing.desktop.lg.paddingY,
+          paddingBottom: sectionSpacing.desktop.lg.paddingY,
         }}
       >
         <div

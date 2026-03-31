@@ -1,7 +1,5 @@
-import { withHydration } from '@conloca/astro-cms/hydration';
 import type { ComponentConfig } from '@puckeditor/core';
-import type { CSSProperties, JSX } from 'react';
-import { useState } from 'react';
+import type { CSSProperties } from 'react';
 import { Section } from '../../Section';
 import { buttonSpacing, colors, radius, sectionSpacing, typography } from '../shared/tokens';
 
@@ -79,10 +77,9 @@ const buttonSecondaryStyle: CSSProperties = {
 };
 
 function FAQAccordionItem({ item }: { item: FAQItem }) {
-  const [open, setOpen] = useState(false);
-
   return (
-    <div
+    <details
+      className="faq-details"
       style={{
         backgroundColor: 'var(--color-card-bg-alpha)',
         border: '1px solid var(--color-card-border-alpha)',
@@ -90,14 +87,11 @@ function FAQAccordionItem({ item }: { item: FAQItem }) {
         overflow: 'hidden',
       }}
     >
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
+      <summary
         style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          width: '100%',
           cursor: 'pointer',
           padding: '20px 24px',
           fontSize: typography.text.sm.fontSize,
@@ -105,13 +99,12 @@ function FAQAccordionItem({ item }: { item: FAQItem }) {
           fontWeight: typography.weights.medium,
           fontFamily: typography.fonts.body,
           color: colors.text.heading,
-          backgroundColor: 'transparent',
-          border: 'none',
-          textAlign: 'left',
+          listStyle: 'none',
         }}
       >
         {item.question}
         <svg
+          className="faq-chevron"
           width="20"
           height="20"
           viewBox="0 0 24 24"
@@ -124,30 +117,27 @@ function FAQAccordionItem({ item }: { item: FAQItem }) {
             flexShrink: 0,
             marginLeft: '16px',
             transition: 'transform 0.2s ease',
-            transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
           }}
         >
           <path d="M19 9l-7 7-7-7" />
         </svg>
-      </button>
-      {open && (
-        <div
-          style={{
-            padding: '16px 24px 20px',
-            fontSize: typography.text.sm.fontSize,
-            lineHeight: '1.6',
-            fontFamily: typography.fonts.body,
-            color: colors.text.secondary,
-            borderTop: '1px solid var(--color-card-border-subtle)',
-          }}
-          dangerouslySetInnerHTML={{ __html: item.answer }}
-        />
-      )}
-    </div>
+      </summary>
+      <div
+        style={{
+          padding: '16px 24px 20px',
+          fontSize: typography.text.sm.fontSize,
+          lineHeight: '1.6',
+          fontFamily: typography.fonts.body,
+          color: colors.text.secondary,
+          borderTop: '1px solid var(--color-card-border-subtle)',
+        }}
+        dangerouslySetInnerHTML={{ __html: item.answer }}
+      />
+    </details>
   );
 }
 
-export const FAQRender = ({
+const FAQRender = ({
   label,
   title,
   subtitle,
@@ -155,7 +145,7 @@ export const FAQRender = ({
   ctaText,
   ctaButtons,
   puck,
-}: FAQProps & { puck: { isEditing: boolean } }): JSX.Element => {
+}: FAQProps & { puck: { isEditing: boolean } }) => {
   return (
     <section
       style={{
@@ -309,5 +299,5 @@ export const FAQ: ComponentConfig<FAQProps> = {
     ctaText: 'Have more questions?',
     ctaButtons: [{ id: 'btn-1', label: 'Read the Docs', href: '/getting-started/', variant: 'primary' }],
   },
-  render: withHydration(FAQRender, 'visible'),
+  render: FAQRender,
 };

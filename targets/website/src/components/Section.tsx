@@ -16,6 +16,7 @@ export const Section = forwardRef<HTMLDivElement, SectionProps>(
         ref={ref}
         style={{
           width: '100%',
+          boxSizing: 'border-box',
           marginLeft: 'auto',
           marginRight: 'auto',
           paddingLeft: '24px',

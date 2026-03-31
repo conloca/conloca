@@ -184,7 +184,7 @@ export const HostedComparisonRender = ({
       style={{
         position: 'relative',
         overflow: 'hidden',
-        paddingTop: sectionSpacing.desktop.md.paddingY,
+        paddingTop: sectionSpacing.desktop.lg.paddingY,
         paddingBottom: sectionSpacing.desktop.lg.paddingY,
       }}
     >

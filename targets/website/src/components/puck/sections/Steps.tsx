@@ -67,7 +67,7 @@ export const Steps: ComponentConfig<StepsProps> = {
         number: '02',
         title: 'Configure',
         description: 'Add the integration to your Astro config and point it to your content directory.',
-        code: `import { conlocaCMS } from '@conloca/astro-cms/node'
+        code: `import { conlocaCMS } from '@conloca/astro-cms';
 
 export default defineConfig({
   integrations: [
@@ -76,7 +76,7 @@ export default defineConfig({
       puckConfigPath: './src/puck.config.tsx',
     })
   ],
-})`,
+});`,
       },
       {
         id: 'step-3',
@@ -88,7 +88,7 @@ export default defineConfig({
     fields: { title: { type: "text" } },
     render: ({ title }) => <h1>{title}</h1>,
   },
-}`,
+};`,
       },
       {
         id: 'step-4',
@@ -105,8 +105,8 @@ export default defineConfig({
         itemScope
         itemType="https://schema.org/HowTo"
         style={{
-          paddingTop: sectionSpacing.desktop.md.paddingY,
-          paddingBottom: sectionSpacing.desktop.md.paddingY,
+          paddingTop: sectionSpacing.desktop.lg.paddingY,
+          paddingBottom: sectionSpacing.desktop.lg.paddingY,
         }}
       >
         <Section>
