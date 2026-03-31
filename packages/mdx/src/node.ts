@@ -7,11 +7,10 @@
  * @example
  * ```typescript
  * // Server-side code (Astro, Next.js, etc.)
- * import { evaluateMDXToComponent, evaluateMDXBlocks } from '@conloca/mdx/node';
+ * import { evaluateMDXToComponent } from '@conloca/mdx/node';
  * ```
  */
 
-// High-level block helpers (requires Content API)
 export { evaluateMDXBlocks } from './blocks.js';
 // MDX compilation and evaluation (Node.js only)
 export { compileMDX, createComponentScope, createMDXCompiler } from './mdx/compile.js';

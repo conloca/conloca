@@ -112,8 +112,7 @@ function RenderWithBlocks({ config, data, mdxComponents }: RenderWithBlocksProps
  * @example
  * ```astro
  * ---
- * import { createPageRendererWithBlocks } from '@conloca/astro-cms/components';
- * import { evaluateMDXBlocks } from '@conloca/mdx/node';
+ * import { createPageRendererWithBlocks, evaluateMDXBlocks } from '@conloca/astro-cms/components';
  * import { createContentAPI } from '@conloca/content-api/node';
  * import config from '../puck.config';
  *

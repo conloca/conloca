@@ -41,9 +41,8 @@ function hashString(str: string): string {
 }
 
 export interface UseMDXEvaluationOptions {
-  mdxContent: string | null;
+  compiledCode: string | null;
   cacheKey?: string;
-  apiBaseUrl: string;
 }
 
 export interface UseMDXEvaluationResult {
@@ -54,49 +53,45 @@ export interface UseMDXEvaluationResult {
 }
 
 /**
- * Hook for evaluating MDX content into React components.
+ * Hook for evaluating pre-compiled MDX code into React components.
  *
- * Uses a server-side compile + browser-side run pattern:
- * 1. Sends raw MDX to the server's /mdx/compile endpoint
- * 2. Server compiles MDX → JavaScript function body (using acorn, remark, etc.)
- * 3. Browser executes the pre-compiled code with run() (zero dependencies)
+ * Uses the browser-side half of a server-compile + browser-run pattern:
+ * 1. The server compiles MDX → JavaScript function body
+ * 2. The browser executes the pre-compiled code with run() (zero compiler dependencies)
  *
- * This keeps the full MDX compilation pipeline (~200KB) on the server and
- * only ships a 3-line run() function to the browser.
+ * This keeps the full MDX compilation pipeline on the server and only ships
+ * a tiny runtime helper to the browser.
  *
- * @param options.mdxContent - The MDX string to evaluate. If null, returns null component
- * @param options.cacheKey - Optional cache key. If not provided, uses hash of content
- * @param options.apiBaseUrl - Base URL for the CMS API (e.g. '/__cms/api')
+ * @param options.compiledCode - The pre-compiled MDX function body. If null, returns null component
+ * @param options.cacheKey - Optional cache key. If not provided, uses hash of code
  *
  * @returns Object containing Component, error, isLoading, retry
  */
-export function useMDXEvaluation({
-  mdxContent,
-  cacheKey,
-  apiBaseUrl,
-}: UseMDXEvaluationOptions): UseMDXEvaluationResult {
+export function useMDXEvaluation({ compiledCode, cacheKey }: UseMDXEvaluationOptions): UseMDXEvaluationResult {
   const [Component, setComponent] = useState<React.ComponentType | null>(null);
   const [error, setError] = useState<Error | null>(null);
-  const [isLoading, setIsLoading] = useState(!!mdxContent);
+  const [isLoading, setIsLoading] = useState(!!compiledCode);
   const [retryCount, setRetryCount] = useState(0);
 
   const retry = () => {
-    if (mdxContent) {
-      const key = cacheKey || `mdx-${hashString(mdxContent)}`;
+    if (compiledCode) {
+      const key = cacheKey || `mdx-${hashString(compiledCode)}`;
       compiledCache.delete(key);
     }
     setRetryCount((prev) => prev + 1);
   };
 
   useEffect(() => {
-    if (!mdxContent) {
+    void retryCount;
+
+    if (!compiledCode) {
       setComponent(null);
       setError(null);
       setIsLoading(false);
       return;
     }
 
-    const key = cacheKey || `mdx-${hashString(mdxContent)}`;
+    const key = cacheKey || `mdx-${hashString(compiledCode)}`;
     const cached = compiledCache.get(key);
     if (cached) {
       setComponent(() => cached);
@@ -112,24 +107,7 @@ export function useMDXEvaluation({
         setError(null);
         setIsLoading(true);
 
-        // 1. Send MDX to server for compilation
-        const res = await fetch(`${apiBaseUrl}/mdx/compile`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mdxContent }),
-        });
-
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          throw new Error(body.error || `MDX compilation failed (${res.status})`);
-        }
-
-        const { code } = await res.json();
-
-        if (cancelled) return;
-
-        // 2. Run pre-compiled code in browser (zero dependencies)
-        const { default: MDXComponent } = await runMDX(code, runOptions);
+        const { default: MDXComponent } = await runMDX(compiledCode, runOptions);
 
         if (cancelled) return;
 
@@ -152,7 +130,7 @@ export function useMDXEvaluation({
     return () => {
       cancelled = true;
     };
-  }, [mdxContent, cacheKey, apiBaseUrl, retryCount]);
+  }, [compiledCode, cacheKey, retryCount]);
 
   return { Component, error, isLoading, retry };
 }
