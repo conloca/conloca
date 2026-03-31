@@ -13,7 +13,7 @@
 
 export { evaluateMDXBlocks } from './blocks.js';
 // MDX compilation and evaluation (Node.js only)
-export { compileMDX, createComponentScope, createMDXCompiler } from './mdx/compile.js';
+export { compileMDX } from './mdx/compile.js';
 export { evaluateMDXToComponent } from './mdx/evaluate.js';
 // MDX types
-export type { MDXCompileResult, MDXCompiler } from './types.js';
+export type { MDXCompileResult } from './types.js';

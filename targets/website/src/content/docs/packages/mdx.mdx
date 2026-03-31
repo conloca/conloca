@@ -36,22 +36,14 @@ import { MDXEditorModal, useMDXEvaluation } from '@conloca/mdx';
 Server-side MDX compilation and evaluation.
 
 ```typescript
-import {
-  compileMDX,
-  evaluateMDXToComponent,
-  evaluateMDXBlocks,
-  createMDXCompiler,
-  createComponentScope,
-} from '@conloca/mdx/node';
+import { compileMDX, evaluateMDXToComponent, evaluateMDXBlocks } from '@conloca/mdx/node';
 ```
 
-| Export                              | Purpose                                                            |
-| ----------------------------------- | ------------------------------------------------------------------ |
-| `compileMDX(content, components)`   | Compile MDX string to JavaScript with a component scope            |
-| `evaluateMDXToComponent(source)`    | Compile and evaluate MDX to a React component                      |
-| `evaluateMDXBlocks(api, locale)`    | Fetch all blocks from a compatible API and evaluate their MDX      |
-| `createMDXCompiler(componentScope)` | Create a reusable MDX compiler instance with fixed component scope |
-| `createComponentScope(components)`  | Create a component scope for MDX evaluation                        |
+| Export                           | Purpose                                                       |
+| -------------------------------- | ------------------------------------------------------------- |
+| `compileMDX(content)`            | Compile MDX string to JavaScript and extract frontmatter      |
+| `evaluateMDXToComponent(source)` | Compile and evaluate MDX to a React component                 |
+| `evaluateMDXBlocks(api, locale)` | Fetch all blocks from a compatible API and evaluate their MDX |
 
 ## Usage
 
@@ -116,12 +108,9 @@ function MDXPreview({ compiledCode }) {
 ### Server: Compile MDX
 
 ```typescript
-import { compileMDX, createComponentScope } from '@conloca/mdx/node';
+import { compileMDX } from '@conloca/mdx/node';
 
-const components = createComponentScope({
-  /* custom components */
-});
-const result = await compileMDX('# Hello World\n\nSome **bold** text.', components);
+const result = await compileMDX('# Hello World\n\nSome **bold** text.');
 console.log(result.code); // Compiled JavaScript
 console.log(result.metadata); // Extracted frontmatter
 ```
@@ -162,7 +151,6 @@ The MDX compiler supports:
 - GitHub Flavored Markdown (tables, strikethrough, task lists) via `remark-gfm`
 - Frontmatter via `remark-frontmatter` and `remark-mdx-frontmatter`
 - JSX components within MDX content
-- Custom component scopes for rendering
 
 ## Dependencies
 
