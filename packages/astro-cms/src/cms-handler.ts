@@ -80,6 +80,7 @@ function generateDevHtml(config: typeof spaConfig): string {
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Conloca CMS</title>
   <link rel="stylesheet" href="${config.basename}/main.css" />
+  <script type="module" src="${config.basename}/site-styles.js"></script>
   <script>
     // Configure UI with plugin options
     window.__UI_CONFIG__ = ${safeJsonStringify(config)};
@@ -139,6 +140,7 @@ async function handleSpa(params: { path?: string | string[] }, request: Request)
           // Configure UI with plugin options
           window.__UI_CONFIG__ = ${safeJsonStringify(spaConfig)};
         </script>
+        <script type="module" src="${spaConfig.basename}/site-styles.js"></script>
         <script type="module" src="${spaConfig.basename}/schemas-entry.js"></script>
         <script type="module" src="${spaConfig.basename}/puck-entry.js"></script>
         <script type="module" src="${spaConfig.basename}/content-listener.js"></script>

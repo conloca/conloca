@@ -105,6 +105,17 @@ export interface ConlocaCMSOptions extends Omit<UIConfig, 'basename'> {
    * @example 'src/assets/uploads'
    */
   assetsPath?: string;
+
+  /**
+   * CSS files to load in the CMS editor for component preview styling.
+   *
+   * Processed by Vite (Tailwind, PostCSS, etc.) and mirrored into the Puck
+   * editor iframe by its built-in CopyHostStyles mechanism.
+   *
+   * @example './src/styles/global.css'
+   * @example ['./src/styles/global.css', './src/styles/theme.css']
+   */
+  siteStyles?: string | string[];
 }
 
 // Template for content change listener virtual module
@@ -184,6 +195,29 @@ if (import.meta.hot) {
 }
 
 export default schemas;
+`;
+};
+
+// Template for the site styles loader virtual module
+const siteStylesLoader = (cssPaths: string[]) => {
+  const imports = cssPaths
+    .map((p) => {
+      const absolutePath = p.startsWith('.') ? `/${p.slice(2)}` : p;
+      return `import '${absolutePath}';`;
+    })
+    .join('\n');
+
+  return `
+// Site styles for Puck editor preview.
+// CSS imports are processed by Vite and injected as <style> tags in <head>.
+// Puck's CopyHostStyles mirrors them into the editor iframe automatically.
+${imports}
+
+if (import.meta.hot) {
+  import.meta.hot.accept();
+}
+
+export default {};
 `;
 };
 
@@ -283,11 +317,6 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
 
         updateConfig({
           vite: {
-            resolve: {
-              alias: {
-                acorn: ACORN_DEFAULT_SHIM_PATH,
-              },
-            },
             ssr: {
               // In dev, linked workspace packages need to be bundled so React resolves
               // through Vite and HMR works from source.
@@ -298,6 +327,19 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
             },
             // Virtual modules for routing - needed in both dev and build
             plugins: [
+              // Alias acorn to a CJS shim only during SSR (static page builds).
+              // Must NOT apply to the browser bundle — the shim uses createRequire
+              // which is Node.js-only and crashes in the browser.
+              {
+                name: 'conloca-acorn-ssr-alias',
+                enforce: 'pre' as const,
+                resolveId(id, _importer, options) {
+                  if (id === 'acorn' && options?.ssr) {
+                    return ACORN_DEFAULT_SHIM_PATH;
+                  }
+                  return null;
+                },
+              },
               {
                 name: 'conloca-routing-virtual-modules',
                 resolveId(id) {
@@ -494,6 +536,9 @@ initHydration(componentRegistry)
                   if (id === `${cmsRoute}/schemas-entry.js`) {
                     return id;
                   }
+                  if (id === `${cmsRoute}/site-styles.js`) {
+                    return id;
+                  }
                   if (id === VIRTUAL_PAGE_API) {
                     return RESOLVED_PAGE_API;
                   }
@@ -526,6 +571,13 @@ initHydration(componentRegistry)
                         ? `/${options.schemasPath.slice(2)}`
                         : options.schemasPath;
                       return schemasLoader(absoluteSchemasPath);
+                    }
+                    return 'export default {};';
+                  }
+                  if (id === `${cmsRoute}/site-styles.js`) {
+                    if (options.siteStyles) {
+                      const paths = Array.isArray(options.siteStyles) ? options.siteStyles : [options.siteStyles];
+                      return siteStylesLoader(paths);
                     }
                     return 'export default {};';
                   }
