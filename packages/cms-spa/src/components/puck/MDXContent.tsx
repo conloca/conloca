@@ -1,6 +1,7 @@
 import type { LocalizedEntry } from '@conloca/content-api-client';
 import { useMDXEvaluation } from '@conloca/mdx';
 import React, { useMemo } from 'react';
+import { getUIConfig } from '../../ui-config';
 
 interface MDXContentProps {
   entry: LocalizedEntry;
@@ -66,6 +67,7 @@ function MDXContentInner({ entry }: MDXContentProps) {
   }, [entry]);
 
   // Evaluate MDX using shared hook with ETag as cache key
+  const config = getUIConfig();
   const {
     Component,
     error: compileError,
@@ -74,6 +76,7 @@ function MDXContentInner({ entry }: MDXContentProps) {
   } = useMDXEvaluation({
     mdxContent: actualMdxContent,
     cacheKey: entry.localized.etag,
+    apiBaseUrl: config.apiBaseUrl || '/__cms/api',
   });
 
   // Loading state

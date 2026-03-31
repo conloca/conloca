@@ -1168,6 +1168,29 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
     }
   });
 
+  // POST /mdx/compile — Server-side MDX compilation for browser-safe evaluation.
+  // The browser sends raw MDX, the server compiles it to a JavaScript function body
+  // that can be executed with @mdx-js/mdx's run() (which has zero dependencies).
+  app.post('/mdx/compile', async (c) => {
+    try {
+      const body = await c.req.json();
+      const mdxContent = body?.mdxContent;
+
+      if (!mdxContent || typeof mdxContent !== 'string') {
+        return c.json({ error: 'mdxContent string required' }, 400);
+      }
+
+      // Lazy import to avoid loading MDX compilation deps at server startup
+      const { compileMDX } = await import('@conloca/mdx/node');
+      const { code, metadata } = await compileMDX(mdxContent, {});
+
+      return c.json({ code, metadata });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'MDX compilation failed';
+      return c.json({ error: message }, 422);
+    }
+  });
+
   return app;
 }
 
