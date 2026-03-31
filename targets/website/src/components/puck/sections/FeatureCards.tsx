@@ -1,6 +1,5 @@
 import type { ComponentConfig } from '@puckeditor/core';
-import { Section } from '../../Section';
-import { colors, radius, sectionSpacing, typography } from '../shared/tokens';
+import cn from 'clsx';
 
 type FeatureCard = {
   id: string;
@@ -22,10 +21,10 @@ export type FeatureCardsProps = {
   columns: FeatureColumns;
 };
 
-const columnCountMap: Record<FeatureColumns, number> = {
-  '2': 2,
-  '3': 3,
-  '4': 4,
+const gridColsClass: Record<FeatureColumns, string> = {
+  '2': 'grid sm:grid-cols-2 gap-4 sm:gap-5',
+  '3': 'grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5',
+  '4': 'grid sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5',
 };
 
 export const FeatureCards: ComponentConfig<FeatureCardsProps> = {
@@ -108,115 +107,33 @@ export const FeatureCards: ComponentConfig<FeatureCardsProps> = {
     ],
   },
   render: ({ label, title, subtitle, cards, columns }) => {
-    const numColumns = columnCountMap[columns];
-
     return (
-      <section
-        style={{
-          position: 'relative',
-          paddingTop: sectionSpacing.desktop.lg.paddingY,
-          paddingBottom: sectionSpacing.desktop.lg.paddingY,
-        }}
-      >
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            background: 'radial-gradient(ellipse at top, rgba(6,182,212,0.02) 0%, transparent 50%)',
-          }}
-        />
-        <Section style={{ position: 'relative' }}>
+      <section id="features" className="py-24 sm:py-32 relative">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(6,182,212,0.02)_0%,transparent_50%)] dark:bg-[radial-gradient(ellipse_at_top,rgba(6,182,212,0.04)_0%,transparent_50%)]" />
+        <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Section header */}
-          <div style={{ textAlign: 'center', marginBottom: '64px' }}>
+          <div className="text-center mb-16">
             {label && (
-              <p
-                style={{
-                  fontFamily: typography.fonts.body,
-                  fontSize: typography.text.sm.fontSize,
-                  lineHeight: typography.text.sm.lineHeight,
-                  fontWeight: typography.weights.medium,
-                  color: colors.brand[600],
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.025em',
-                  margin: 0,
-                  marginBottom: '12px',
-                }}
-              >
+              <p className="text-brand-600 dark:text-brand-400 text-sm font-medium tracking-wide uppercase mb-3">
                 {label}
               </p>
             )}
-            <h2
-              style={{
-                fontFamily: typography.fonts.body,
-                fontSize: typography.display.md.fontSize,
-                lineHeight: typography.display.md.lineHeight,
-                fontWeight: typography.weights.bold,
-                color: colors.text.heading,
-                margin: 0,
-                marginBottom: '16px',
-              }}
-            >
-              {title}
-            </h2>
-            <p
-              style={{
-                fontFamily: typography.fonts.body,
-                fontSize: typography.text.md.fontSize,
-                lineHeight: typography.text.md.lineHeight,
-                fontWeight: typography.weights.regular,
-                color: colors.text.secondary,
-                maxWidth: '560px',
-                margin: '0 auto',
-              }}
-            >
-              {subtitle}
-            </p>
+            <h2 className="text-3xl sm:text-4xl font-bold text-surface-900 dark:text-white mb-4">{title}</h2>
+            <p className="text-surface-500 dark:text-surface-400 max-w-xl mx-auto">{subtitle}</p>
           </div>
 
           {/* Cards grid */}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: `repeat(auto-fit, minmax(${numColumns <= 2 ? '280px' : '240px'}, 1fr))`,
-              gap: '16px',
-            }}
-          >
-            {cards.map((card) => (
+          <div className={gridColsClass[columns]}>
+            {cards.map((card, idx) => (
               <div
                 key={card.id}
-                className="reveal"
-                style={{
-                  backgroundColor: colors.bg.card,
-                  border: `1px solid ${colors.border.primary}`,
-                  borderRadius: radius.lg,
-                  padding: '24px',
-                }}
+                className="reveal group bg-surface-100/60 dark:bg-surface-900/40 border border-surface-200/80 dark:border-surface-800/50 rounded-xl p-6 hover:border-brand-500/30 hover:bg-surface-100 dark:hover:bg-surface-900/70 transition-all duration-300"
+                style={{ animationDelay: `${idx * 0.08}s` }}
               >
                 {/* Icon wrapper */}
-                <div
-                  style={{
-                    width: '40px',
-                    height: '40px',
-                    borderRadius: radius.md,
-                    backgroundColor: `${colors.brand[500]}1a`,
-                    border: `1px solid ${colors.brand[500]}33`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginBottom: '16px',
-                    flexShrink: 0,
-                  }}
-                >
+                <div className="w-10 h-10 rounded-lg bg-brand-500/10 border border-brand-500/20 flex items-center justify-center mb-4 group-hover:bg-brand-500/20 transition-colors duration-300">
                   {card.iconText ? (
-                    <span
-                      style={{
-                        fontFamily: typography.fonts.mono,
-                        fontSize: '13px',
-                        fontWeight: typography.weights.bold,
-                        color: colors.brand[600],
-                        lineHeight: 1,
-                      }}
-                    >
+                    <span className="font-mono text-[13px] font-bold text-brand-600 dark:text-brand-400 leading-none">
                       {card.iconText}
                     </span>
                   ) : (
@@ -225,7 +142,8 @@ export const FeatureCards: ComponentConfig<FeatureCardsProps> = {
                       height="20"
                       viewBox="0 0 24 24"
                       fill="none"
-                      stroke={colors.brand[600]}
+                      className="text-brand-600 dark:text-brand-400"
+                      stroke="currentColor"
                       strokeWidth="1.5"
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -235,47 +153,13 @@ export const FeatureCards: ComponentConfig<FeatureCardsProps> = {
                   )}
                 </div>
                 {/* Card title */}
-                <h3
-                  style={{
-                    fontFamily: typography.fonts.body,
-                    fontSize: typography.text.sm.fontSize,
-                    lineHeight: typography.text.sm.lineHeight,
-                    fontWeight: typography.weights.medium,
-                    color: colors.text.heading,
-                    margin: 0,
-                    marginBottom: '8px',
-                  }}
-                >
-                  {card.title}
-                </h3>
+                <h3 className="text-surface-900 dark:text-white font-medium mb-2 text-sm">{card.title}</h3>
                 {/* Card description */}
-                <p
-                  style={{
-                    fontFamily: typography.fonts.body,
-                    fontSize: typography.text.sm.fontSize,
-                    lineHeight: '1.6',
-                    fontWeight: typography.weights.regular,
-                    color: colors.text.secondary,
-                    margin: 0,
-                  }}
-                >
-                  {card.description}
-                </p>
+                <p className="text-surface-500 dark:text-surface-400 text-sm leading-relaxed">{card.description}</p>
                 {card.href && (
                   <a
                     href={card.href}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      marginTop: '12px',
-                      fontFamily: typography.fonts.body,
-                      fontSize: typography.text.xs.fontSize,
-                      lineHeight: typography.text.xs.lineHeight,
-                      fontWeight: typography.weights.medium,
-                      color: colors.brand[600],
-                      textDecoration: 'none',
-                    }}
+                    className="inline-flex items-center gap-1 text-brand-600 dark:text-brand-400 hover:text-brand-500 dark:hover:text-brand-300 text-xs mt-2 transition-colors"
                   >
                     {card.linkLabel || 'Learn more'}
                     <svg
@@ -295,7 +179,7 @@ export const FeatureCards: ComponentConfig<FeatureCardsProps> = {
               </div>
             ))}
           </div>
-        </Section>
+        </div>
       </section>
     );
   },

@@ -1,7 +1,5 @@
 import type { ComponentConfig } from '@puckeditor/core';
-import type { CSSProperties } from 'react';
-import { Section } from '../../Section';
-import { buttonSpacing, colors, radius, sectionSpacing, typography } from '../shared/tokens';
+import cn from 'clsx';
 
 type CTAButton = {
   id: string;
@@ -15,56 +13,6 @@ export type CTABannerProps = {
   title: string;
   subtitle: string;
   buttons: CTAButton[];
-};
-
-const arrowIcon = (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M5 12h14M12 5l7 7-7 7" />
-  </svg>
-);
-
-const buttonPrimaryStyle: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: '6px',
-  padding: `${buttonSpacing.lg.paddingY} ${buttonSpacing.lg.paddingX}`,
-  borderRadius: radius.md,
-  fontFamily: typography.fonts.body,
-  fontSize: typography.text.sm.fontSize,
-  fontWeight: typography.weights.semibold,
-  lineHeight: typography.text.sm.lineHeight,
-  color: colors.interactive.primary.text,
-  backgroundColor: colors.interactive.primary.bg,
-  border: '1px solid transparent',
-  textDecoration: 'none',
-  cursor: 'pointer',
-};
-
-const buttonSecondaryStyle: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  padding: `${buttonSpacing.lg.paddingY} ${buttonSpacing.lg.paddingX}`,
-  borderRadius: radius.md,
-  fontFamily: typography.fonts.body,
-  fontSize: typography.text.sm.fontSize,
-  fontWeight: typography.weights.medium,
-  lineHeight: typography.text.sm.lineHeight,
-  color: colors.interactive.secondary.text,
-  backgroundColor: 'transparent',
-  border: `1px solid ${colors.interactive.secondary.border}`,
-  textDecoration: 'none',
-  cursor: 'pointer',
 };
 
 export const CTABanner: ComponentConfig<CTABannerProps> = {
@@ -115,91 +63,46 @@ export const CTABanner: ComponentConfig<CTABannerProps> = {
   },
   render: ({ badgeText, title, subtitle, buttons, puck }) => {
     return (
-      <section
-        style={{
-          paddingTop: sectionSpacing.desktop.md.paddingY,
-          paddingBottom: sectionSpacing.desktop.md.paddingY,
-        }}
-      >
-        <Section>
-          <div style={{ textAlign: 'center' }}>
-            {/* Badge */}
-            {badgeText && (
-              <span
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  padding: '4px 12px',
-                  backgroundColor: `${colors.brand[500]}0d`,
-                  color: colors.brand[600],
-                  border: `1px solid ${colors.brand[500]}4d`,
-                  borderRadius: radius.full,
-                  fontFamily: typography.fonts.body,
-                  fontSize: typography.text.xs.fontSize,
-                  lineHeight: typography.text.xs.lineHeight,
-                  fontWeight: typography.weights.medium,
-                  marginBottom: '24px',
-                }}
+      <section className="py-16 sm:py-24">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          {badgeText && (
+            <span className="inline-flex items-center border border-brand-500/30 bg-brand-500/5 rounded-full px-3 py-1 text-xs text-brand-600 dark:text-brand-400 font-medium mb-6">
+              {badgeText}
+            </span>
+          )}
+          <h2 className="text-xl sm:text-2xl font-bold text-surface-900 dark:text-white mb-4">{title}</h2>
+          <p className="text-surface-500 dark:text-surface-400 max-w-2xl mx-auto mb-8">{subtitle}</p>
+          <div className="flex items-center justify-center gap-4 flex-wrap">
+            {buttons.map((button) => (
+              <a
+                key={button.id}
+                href={button.href}
+                className={cn(
+                  button.variant === 'primary'
+                    ? 'inline-flex items-center gap-1.5 bg-brand-500 hover:bg-brand-400 text-surface-950 font-semibold px-6 py-3 rounded-lg transition-all duration-200 hover:shadow-lg hover:shadow-brand-500/20 text-sm'
+                    : 'inline-flex items-center border border-surface-300 dark:border-surface-600 hover:border-surface-400 dark:hover:border-surface-500 text-surface-600 dark:text-surface-300 hover:text-surface-900 dark:hover:text-white font-medium px-6 py-3 rounded-lg transition-all duration-200 text-sm',
+                )}
+                onClick={puck.isEditing ? (e) => e.preventDefault() : undefined}
               >
-                {badgeText}
-              </span>
-            )}
-
-            {/* Title */}
-            <h2
-              style={{
-                fontFamily: typography.fonts.body,
-                fontSize: typography.display.xs.fontSize,
-                lineHeight: typography.display.xs.lineHeight,
-                fontWeight: typography.weights.bold,
-                color: colors.text.heading,
-                margin: 0,
-                marginBottom: '16px',
-              }}
-            >
-              {title}
-            </h2>
-
-            {/* Subtitle */}
-            <p
-              style={{
-                fontFamily: typography.fonts.body,
-                fontSize: typography.text.md.fontSize,
-                lineHeight: typography.text.md.lineHeight,
-                fontWeight: typography.weights.regular,
-                color: colors.text.secondary,
-                maxWidth: '640px',
-                margin: '0 auto',
-                marginBottom: '32px',
-              }}
-            >
-              {subtitle}
-            </p>
-
-            {/* Buttons */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '16px',
-                flexWrap: 'wrap',
-              }}
-            >
-              {buttons.map((button) => (
-                <a
-                  key={button.id}
-                  href={button.href}
-                  style={button.variant === 'primary' ? buttonPrimaryStyle : buttonSecondaryStyle}
-                  onClick={puck.isEditing ? (e) => e.preventDefault() : undefined}
-                >
-                  {button.label}
-                  {button.variant === 'primary' && arrowIcon}
-                </a>
-              ))}
-            </div>
+                {button.label}
+                {button.variant === 'primary' && (
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M5 12h14M12 5l7 7-7 7" />
+                  </svg>
+                )}
+              </a>
+            ))}
           </div>
-        </Section>
+        </div>
       </section>
     );
   },

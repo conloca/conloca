@@ -1,6 +1,4 @@
 import type { ComponentConfig } from '@puckeditor/core';
-import { Section } from '../../Section';
-import { colors, radius, sectionSpacing, typography } from '../shared/tokens';
 
 type Step = {
   id: string;
@@ -101,205 +99,60 @@ export default defineConfig({
   },
   render: ({ label, title, subtitle, steps }) => {
     return (
-      <section
-        itemScope
-        itemType="https://schema.org/HowTo"
-        style={{
-          paddingTop: sectionSpacing.desktop.lg.paddingY,
-          paddingBottom: sectionSpacing.desktop.lg.paddingY,
-        }}
-      >
-        <Section>
-          <meta itemProp="name" content="How to add Conloca CMS to an Astro project" />
+      <section id="quickstart" className="py-24 sm:py-32 relative" itemScope itemType="https://schema.org/HowTo">
+        <meta itemProp="name" content="How to add Conloca CMS to an Astro project" />
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Section header */}
-          <div style={{ textAlign: 'center', marginBottom: '64px' }}>
+          <div className="text-center mb-16">
             {label && (
-              <p
-                style={{
-                  fontFamily: typography.fonts.body,
-                  fontSize: typography.text.sm.fontSize,
-                  lineHeight: typography.text.sm.lineHeight,
-                  fontWeight: typography.weights.medium,
-                  color: colors.brand[600],
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.025em',
-                  margin: 0,
-                  marginBottom: '12px',
-                }}
-              >
+              <p className="text-brand-600 dark:text-brand-400 text-sm font-medium tracking-wide uppercase mb-3">
                 {label}
               </p>
             )}
-            <h2
-              style={{
-                fontFamily: typography.fonts.body,
-                fontSize: typography.display.md.fontSize,
-                lineHeight: typography.display.md.lineHeight,
-                fontWeight: typography.weights.bold,
-                color: colors.text.heading,
-                margin: 0,
-                marginBottom: '16px',
-              }}
-            >
-              {title}
-            </h2>
-            <p
-              style={{
-                fontFamily: typography.fonts.body,
-                fontSize: typography.text.md.fontSize,
-                lineHeight: typography.text.md.lineHeight,
-                fontWeight: typography.weights.regular,
-                color: colors.text.secondary,
-                maxWidth: '560px',
-                margin: '0 auto',
-              }}
-            >
-              {subtitle}
-            </p>
+            <h2 className="text-3xl sm:text-4xl font-bold text-surface-900 dark:text-white mb-4">{title}</h2>
+            <p className="text-surface-500 dark:text-surface-400 max-w-xl mx-auto">{subtitle}</p>
           </div>
 
           {/* Steps list */}
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '24px',
-            }}
-          >
+          <div className="grid gap-6 lg:gap-8">
             {steps.map((step) => (
               <div
                 key={step.id}
-                className="reveal"
+                className="reveal group grid lg:grid-cols-[280px_1fr] gap-6 bg-surface-100/60 dark:bg-surface-900/50 border border-surface-200/80 dark:border-surface-800/60 rounded-2xl p-6 lg:p-8 hover:border-surface-300 dark:hover:border-surface-700/80 transition-all duration-300"
                 itemProp="step"
                 itemScope
                 itemType="https://schema.org/HowToStep"
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-                  gap: '24px',
-                  backgroundColor: colors.bg.card,
-                  border: `1px solid ${colors.border.primary}`,
-                  borderRadius: radius.xl,
-                  padding: '32px',
-                }}
               >
                 {/* Left column: step info */}
                 <div>
-                  <span
-                    style={{
-                      fontFamily: typography.fonts.mono,
-                      fontSize: typography.text.sm.fontSize,
-                      lineHeight: typography.text.sm.lineHeight,
-                      fontWeight: typography.weights.medium,
-                      color: colors.brand[600],
-                    }}
-                  >
+                  <span className="text-brand-600 dark:text-brand-400 font-mono text-sm font-medium">
                     {step.number}
                   </span>
-                  <h3
-                    itemProp="name"
-                    style={{
-                      fontFamily: typography.fonts.body,
-                      fontSize: typography.text.xl.fontSize,
-                      lineHeight: typography.text.xl.lineHeight,
-                      fontWeight: typography.weights.semibold,
-                      color: colors.text.heading,
-                      margin: 0,
-                      marginTop: '4px',
-                      marginBottom: '20px',
-                    }}
-                  >
+                  <h3 itemProp="name" className="text-xl font-semibold text-surface-900 dark:text-white mt-1">
                     {step.title}
                   </h3>
-                  <p
-                    itemProp="text"
-                    style={{
-                      fontFamily: typography.fonts.body,
-                      fontSize: typography.text.sm.fontSize,
-                      lineHeight: '1.6',
-                      fontWeight: typography.weights.regular,
-                      color: colors.text.secondary,
-                      margin: 0,
-                      marginTop: '8px',
-                    }}
-                  >
+                  <p itemProp="text" className="text-surface-500 dark:text-surface-400 text-sm mt-2 leading-relaxed">
                     {step.description}
                   </p>
                 </div>
 
                 {/* Right column: terminal code block */}
-                <div
-                  style={{
-                    backgroundColor: colors.bg.code,
-                    border: `1px solid ${colors.border.primary}`,
-                    borderRadius: radius.lg,
-                    overflow: 'hidden',
-                  }}
-                >
+                <div className="bg-surface-50 dark:bg-surface-950 border border-surface-200 dark:border-surface-800 rounded-xl overflow-hidden">
                   {/* Terminal title bar */}
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      padding: '10px 16px',
-                      borderBottom: `1px solid ${colors.border.primary}`,
-                    }}
-                  >
-                    <span
-                      style={{
-                        width: '10px',
-                        height: '10px',
-                        borderRadius: '50%',
-                        backgroundColor: colors.border.hover,
-                        flexShrink: 0,
-                      }}
-                    />
-                    <span
-                      style={{
-                        width: '10px',
-                        height: '10px',
-                        borderRadius: '50%',
-                        backgroundColor: colors.border.hover,
-                        flexShrink: 0,
-                      }}
-                    />
-                    <span
-                      style={{
-                        width: '10px',
-                        height: '10px',
-                        borderRadius: '50%',
-                        backgroundColor: colors.border.hover,
-                        flexShrink: 0,
-                      }}
-                    />
+                  <div className="flex items-center gap-2 px-4 py-2.5 border-b border-surface-200 dark:border-surface-800/60">
+                    <div className="w-2.5 h-2.5 rounded-full bg-surface-300 dark:bg-surface-700" />
+                    <div className="w-2.5 h-2.5 rounded-full bg-surface-300 dark:bg-surface-700" />
+                    <div className="w-2.5 h-2.5 rounded-full bg-surface-300 dark:bg-surface-700" />
                   </div>
                   {/* Code area */}
-                  <pre
-                    style={{
-                      margin: 0,
-                      padding: '16px 20px',
-                      overflowX: 'auto',
-                    }}
-                  >
-                    <code
-                      style={{
-                        fontFamily: typography.fonts.mono,
-                        fontSize: typography.text.sm.fontSize,
-                        lineHeight: typography.text.sm.lineHeight,
-                        color: colors.text.code,
-                        whiteSpace: 'pre-wrap',
-                        wordBreak: 'break-all',
-                      }}
-                    >
-                      {step.code}
-                    </code>
+                  <pre className="px-5 py-4 overflow-x-auto text-sm">
+                    <code className="font-mono text-surface-700 dark:text-surface-300">{step.code}</code>
                   </pre>
                 </div>
               </div>
             ))}
           </div>
-        </Section>
+        </div>
       </section>
     );
   },

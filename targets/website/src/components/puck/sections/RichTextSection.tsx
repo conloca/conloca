@@ -1,6 +1,4 @@
 import type { ComponentConfig } from '@puckeditor/core';
-import { Section } from '../../Section';
-import { colors, typography } from '../shared/tokens';
 
 export type RichTextSectionProps = {
   title: string;
@@ -19,33 +17,14 @@ export const RichTextSection: ComponentConfig<RichTextSectionProps> = {
   },
   render: ({ title, body }) => {
     return (
-      <section style={{ marginBottom: '80px' }}>
-        <Section maxWidth="896px">
-          {title && (
-            <h2
-              style={{
-                fontFamily: typography.fonts.body,
-                fontSize: typography.display.sm.fontSize,
-                lineHeight: '36px',
-                fontWeight: typography.weights.bold,
-                color: colors.text.heading,
-                margin: 0,
-                marginBottom: '16px',
-              }}
-            >
-              {title}
-            </h2>
-          )}
+      <section className="mb-20">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          {title && <h2 className="text-2xl sm:text-3xl font-bold text-surface-900 dark:text-white mb-4">{title}</h2>}
           <div
-            style={{
-              fontFamily: typography.fonts.body,
-              fontSize: typography.text.sm.fontSize,
-              lineHeight: '1.6',
-              color: colors.text.secondary,
-            }}
+            className="text-sm text-surface-500 dark:text-surface-400 leading-relaxed [&_a]:text-brand-600 dark:[&_a]:text-brand-400 [&_a]:underline [&_a]:underline-offset-2 [&_p]:mb-4 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:mb-4 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:mb-4 [&_li]:mb-1"
             dangerouslySetInnerHTML={{ __html: body }}
           />
-        </Section>
+        </div>
       </section>
     );
   },

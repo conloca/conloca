@@ -1,6 +1,4 @@
 import type { ComponentConfig } from '@puckeditor/core';
-import { Section } from '../../Section';
-import { colors, radius, typography } from '../shared/tokens';
 
 type FlowItem = {
   id: string;
@@ -44,113 +42,42 @@ export const NumberedFlow: ComponentConfig<NumberedFlowProps> = {
   },
   render: ({ title, subtitle, items }) => {
     return (
-      <section style={{ marginBottom: '80px' }}>
-        <Section maxWidth="896px">
-          {title && (
-            <h2
-              style={{
-                fontFamily: typography.fonts.body,
-                fontSize: typography.display.xs.fontSize,
-                lineHeight: typography.display.xs.lineHeight,
-                fontWeight: typography.weights.bold,
-                color: colors.text.heading,
-                margin: 0,
-                marginBottom: '16px',
-              }}
-            >
-              {title}
-            </h2>
-          )}
+      <section className="mb-20">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          {title && <h2 className="text-xl sm:text-2xl font-bold text-surface-900 dark:text-white mb-4">{title}</h2>}
           {subtitle && (
-            <p
-              style={{
-                fontFamily: typography.fonts.body,
-                fontSize: typography.text.sm.fontSize,
-                lineHeight: '1.6',
-                fontWeight: typography.weights.regular,
-                color: colors.text.secondary,
-                margin: 0,
-                marginBottom: '24px',
-              }}
-            >
-              {subtitle}
-            </p>
+            <p className="text-sm text-surface-500 dark:text-surface-400 leading-relaxed mb-6">{subtitle}</p>
           )}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div className="flex flex-col gap-4">
             {items.map((item, i) => (
               <div key={item.id}>
-                <div
-                  style={{
-                    backgroundColor: 'var(--color-card-bg-alpha)',
-                    border: '1px solid var(--color-card-border-alpha)',
-                    borderRadius: radius.xl,
-                    padding: '24px',
-                    display: 'flex',
-                    gap: '16px',
-                  }}
-                >
+                <div className="bg-surface-100/60 dark:bg-surface-900/40 border border-surface-200/80 dark:border-surface-800/50 rounded-xl p-6 flex gap-4">
                   {/* Number badge */}
-                  <div
-                    style={{
-                      width: '32px',
-                      height: '32px',
-                      borderRadius: radius.lg,
-                      backgroundColor: colors.brand[500],
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0,
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontFamily: typography.fonts.body,
-                        fontSize: typography.text.sm.fontSize,
-                        fontWeight: typography.weights.bold,
-                        color: colors.surface[950],
-                      }}
-                    >
-                      {item.number}
-                    </span>
+                  <div className="w-8 h-8 rounded-lg bg-brand-500 flex items-center justify-center shrink-0">
+                    <span className="text-sm font-bold text-surface-950">{item.number}</span>
                   </div>
 
                   {/* Content */}
                   <div>
-                    <h3
-                      style={{
-                        fontFamily: typography.fonts.body,
-                        fontSize: typography.text.sm.fontSize,
-                        lineHeight: typography.text.sm.lineHeight,
-                        fontWeight: typography.weights.semibold,
-                        color: colors.text.heading,
-                        margin: 0,
-                        marginBottom: '4px',
-                      }}
-                    >
-                      {item.title}
-                    </h3>
+                    <h3 className="text-sm font-semibold text-surface-900 dark:text-white mb-1">{item.title}</h3>
                     <div
-                      style={{
-                        fontFamily: typography.fonts.body,
-                        fontSize: typography.text.sm.fontSize,
-                        lineHeight: '1.6',
-                        color: colors.text.secondary,
-                      }}
+                      className="text-sm text-surface-500 dark:text-surface-400 leading-relaxed [&_a]:text-brand-600 dark:[&_a]:text-brand-400 [&_a]:underline [&_a]:underline-offset-2"
                       dangerouslySetInnerHTML={{ __html: item.description }}
                     />
                   </div>
                 </div>
 
-                {/* Arrow connector between items */}
+                {/* Arrow connector */}
                 {i < items.length - 1 && (
-                  <div style={{ display: 'flex', justifyContent: 'center', padding: '8px 0' }}>
+                  <div className="flex justify-center py-2">
                     <svg
                       width="20"
                       height="20"
                       viewBox="0 0 24 24"
                       fill="none"
-                      stroke={colors.text.secondary}
+                      className="text-surface-400"
+                      stroke="currentColor"
                       strokeWidth="2"
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -162,7 +89,7 @@ export const NumberedFlow: ComponentConfig<NumberedFlowProps> = {
               </div>
             ))}
           </div>
-        </Section>
+        </div>
       </section>
     );
   },

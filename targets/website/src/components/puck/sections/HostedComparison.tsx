@@ -1,9 +1,8 @@
 import { withHydration } from '@conloca/astro-cms/hydration';
 import type { ComponentConfig } from '@puckeditor/core';
-import type { CSSProperties, FormEvent, JSX } from 'react';
+import cn from 'clsx';
+import type { FormEvent, JSX } from 'react';
 import { useState } from 'react';
-import { Section } from '../../Section';
-import { buttonSpacing, colors, radius, sectionSpacing, typography } from '../shared/tokens';
 
 type ComparisonRow = {
   id: string;
@@ -29,11 +28,11 @@ function CheckIcon() {
       height="20"
       viewBox="0 0 24 24"
       fill="none"
-      stroke={colors.brand[600]}
+      className="text-brand-600 dark:text-brand-400 mx-auto"
+      stroke="currentColor"
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
-      style={{ margin: '0 auto' }}
     >
       <path d="M5 13l4 4L19 7" />
     </svg>
@@ -47,11 +46,11 @@ function DashIcon() {
       height="20"
       viewBox="0 0 24 24"
       fill="none"
-      stroke={colors.text.secondary}
+      className="text-surface-400 mx-auto"
+      stroke="currentColor"
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
-      style={{ margin: '0 auto' }}
     >
       <path d="M18 12H6" />
     </svg>
@@ -61,17 +60,7 @@ function DashIcon() {
 function renderCellValue(value: string) {
   if (value === 'true') return <CheckIcon />;
   if (value === 'false') return <DashIcon />;
-  return (
-    <span
-      style={{
-        fontSize: typography.text.xs.fontSize,
-        lineHeight: typography.text.xs.lineHeight,
-        color: colors.text.secondary,
-      }}
-    >
-      {value}
-    </span>
-  );
+  return <span className="text-xs text-surface-500">{value}</span>;
 }
 
 function WaitlistForm({ isEditing }: { isEditing: boolean }) {
@@ -105,15 +94,7 @@ function WaitlistForm({ isEditing }: { isEditing: boolean }) {
 
   return (
     <div>
-      <form
-        onSubmit={handleSubmit}
-        style={{
-          display: 'flex',
-          gap: '12px',
-          maxWidth: '448px',
-          margin: '0 auto',
-        }}
-      >
+      <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3">
         <input type="hidden" name="intent" value="hosted" />
         <input
           type="email"
@@ -122,49 +103,16 @@ function WaitlistForm({ isEditing }: { isEditing: boolean }) {
           placeholder="you@company.com"
           autoComplete="email"
           aria-label="Email address for waitlist"
-          style={{
-            flex: 1,
-            backgroundColor: colors.bg.card,
-            border: `1px solid ${colors.interactive.secondary.border}`,
-            borderRadius: radius.md,
-            padding: '12px 16px',
-            fontSize: typography.text.sm.fontSize,
-            lineHeight: typography.text.sm.lineHeight,
-            fontFamily: typography.fonts.body,
-            color: colors.text.primary,
-            outline: 'none',
-          }}
+          className="flex-1 bg-surface-100 dark:bg-surface-800/60 border border-surface-300 dark:border-surface-700/60 rounded-lg px-4 py-3 text-sm text-surface-900 dark:text-white placeholder:text-surface-400 dark:placeholder:text-surface-500 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500"
         />
         <button
           type="submit"
-          style={{
-            backgroundColor: colors.interactive.primary.bg,
-            color: colors.interactive.primary.text,
-            fontWeight: typography.weights.semibold,
-            fontFamily: typography.fonts.body,
-            fontSize: typography.text.sm.fontSize,
-            lineHeight: typography.text.sm.lineHeight,
-            padding: `${buttonSpacing.lg.paddingY} ${buttonSpacing.lg.paddingX}`,
-            borderRadius: radius.md,
-            border: 'none',
-            cursor: 'pointer',
-            whiteSpace: 'nowrap',
-          }}
+          className="bg-brand-500 hover:bg-brand-400 text-surface-950 font-semibold px-6 py-3 rounded-lg transition-all duration-200 text-sm whitespace-nowrap hover:shadow-lg hover:shadow-brand-500/20"
         >
           Join Waitlist
         </button>
       </form>
-      {message && (
-        <p
-          style={{
-            marginTop: '12px',
-            fontSize: typography.text.sm.fontSize,
-            color: colors.text.secondary,
-          }}
-        >
-          {message}
-        </p>
-      )}
+      {message && <p className={cn('mt-3 text-sm', message ? '' : 'hidden')}>{message}</p>}
     </div>
   );
 }
@@ -180,194 +128,64 @@ export const HostedComparisonRender = ({
   puck,
 }: HostedComparisonProps & { puck: { isEditing: boolean } }): JSX.Element => {
   return (
-    <section
-      style={{
-        position: 'relative',
-        overflow: 'hidden',
-        paddingTop: sectionSpacing.desktop.lg.paddingY,
-        paddingBottom: sectionSpacing.desktop.lg.paddingY,
-      }}
-    >
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          background:
-            'linear-gradient(to bottom, var(--color-bg-primary), var(--color-card-bg-alpha), var(--color-bg-primary))',
-        }}
-      />
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          background: 'radial-gradient(ellipse at bottom, rgba(6,182,212,0.03) 0%, transparent 60%)',
-        }}
-      />
-      <Section style={{ position: 'relative' }}>
+    <section id="cloud" className="py-24 sm:py-32 relative overflow-hidden">
+      <div className="absolute inset-0 bg-gradient-to-b from-surface-50 dark:from-surface-950 via-surface-100/50 dark:via-surface-900/50 to-surface-50 dark:to-surface-950" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom,rgba(6,182,212,0.03)_0%,transparent_60%)] dark:bg-[radial-gradient(ellipse_at_bottom,rgba(6,182,212,0.06)_0%,transparent_60%)]" />
+      <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
-        <div style={{ textAlign: 'center', marginBottom: '64px' }}>
+        <div className="text-center mb-16">
           {badgeText && (
-            <span
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '6px 16px',
-                backgroundColor: `${colors.brand[500]}0d`,
-                color: colors.brand[600],
-                border: `1px solid ${colors.brand[500]}4d`,
-                borderRadius: radius.full,
-                fontFamily: typography.fonts.body,
-                fontSize: typography.text.xs.fontSize,
-                lineHeight: typography.text.xs.lineHeight,
-                fontWeight: typography.weights.medium,
-                marginBottom: '24px',
-              }}
-            >
+            <span className="inline-flex items-center gap-2 border border-brand-500/30 bg-brand-500/5 rounded-full px-4 py-1.5 text-xs text-brand-600 dark:text-brand-400 font-medium mb-6">
               {badgeText}
             </span>
           )}
-          <h2
-            style={{
-              fontFamily: typography.fonts.body,
-              fontSize: typography.display.md.fontSize,
-              lineHeight: typography.display.md.lineHeight,
-              fontWeight: typography.weights.bold,
-              color: colors.text.heading,
-              margin: 0,
-              marginBottom: '16px',
-            }}
-          >
-            {title}
-          </h2>
-          <p
-            style={{
-              fontFamily: typography.fonts.body,
-              fontSize: typography.text.md.fontSize,
-              lineHeight: typography.text.md.lineHeight,
-              fontWeight: typography.weights.regular,
-              color: colors.text.secondary,
-              maxWidth: '672px',
-              margin: '0 auto',
-            }}
-          >
-            {subtitle}
-          </p>
+          <h2 className="text-3xl sm:text-4xl font-bold text-surface-900 dark:text-white mb-4">{title}</h2>
+          <p className="text-surface-500 dark:text-surface-400 max-w-2xl mx-auto">{subtitle}</p>
         </div>
 
         {/* Image placeholders */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-            gap: '24px',
-            marginBottom: '64px',
-          }}
-        >
+        <div className="grid md:grid-cols-2 gap-6 mb-16">
           {['Screenshot: Visual editor', 'Screenshot: Git commit by marketer'].map((text) => (
             <div
               key={text}
-              className="reveal"
-              style={{
-                backgroundColor: 'var(--color-card-bg-alpha)',
-                border: '1px dashed var(--color-card-border-alpha)',
-                borderRadius: radius.xl,
-                aspectRatio: '16 / 9',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
+              className="reveal bg-surface-100/60 dark:bg-surface-900/60 border border-surface-200/80 dark:border-surface-800/50 border-dashed rounded-xl aspect-video flex items-center justify-center"
             >
-              <div style={{ textAlign: 'center' }}>
+              <div className="text-center">
                 <svg
                   width="40"
                   height="40"
                   viewBox="0 0 24 24"
                   fill="none"
-                  stroke={colors.text.secondary}
+                  className="text-surface-400 mx-auto mb-3"
+                  stroke="currentColor"
                   strokeWidth="1.5"
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  style={{ margin: '0 auto 12px' }}
                 >
                   <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
-                <p
-                  style={{
-                    fontFamily: typography.fonts.body,
-                    fontSize: typography.text.sm.fontSize,
-                    fontWeight: typography.weights.medium,
-                    color: colors.text.secondary,
-                    margin: 0,
-                  }}
-                >
-                  {text}
-                </p>
+                <p className="text-surface-500 text-sm font-medium">{text}</p>
               </div>
             </div>
           ))}
         </div>
 
         {/* Comparison table */}
-        <div className="reveal" style={{ maxWidth: '768px', margin: '0 auto 64px' }}>
-          <div
-            style={{
-              backgroundColor: 'var(--color-card-bg-alpha)',
-              border: '1px solid var(--color-card-border-alpha)',
-              borderRadius: radius['2xl'],
-              overflow: 'hidden',
-            }}
-          >
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <div className="reveal max-w-3xl mx-auto mb-16">
+          <div className="bg-surface-100/60 dark:bg-surface-900/60 border border-surface-200/80 dark:border-surface-800/50 rounded-2xl overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
                 <thead>
-                  <tr style={{ borderBottom: '1px solid var(--color-card-border-alpha)' }}>
-                    <th
-                      style={{
-                        textAlign: 'left',
-                        fontSize: typography.text.sm.fontSize,
-                        lineHeight: typography.text.sm.lineHeight,
-                        fontWeight: typography.weights.medium,
-                        fontFamily: typography.fonts.body,
-                        color: colors.text.secondary,
-                        padding: '16px 24px',
-                      }}
-                    >
+                  <tr className="border-b border-surface-200/80 dark:border-surface-800/60">
+                    <th className="text-left text-sm font-medium text-surface-500 dark:text-surface-400 px-6 py-4">
                       Feature
                     </th>
-                    <th
-                      style={{
-                        textAlign: 'center',
-                        fontSize: typography.text.sm.fontSize,
-                        lineHeight: typography.text.sm.lineHeight,
-                        fontWeight: typography.weights.medium,
-                        fontFamily: typography.fonts.body,
-                        color: colors.text.secondary,
-                        padding: '16px 24px',
-                      }}
-                    >
+                    <th className="text-center text-sm font-medium text-surface-500 dark:text-surface-400 px-6 py-4">
                       Open Source
                     </th>
-                    <th
-                      style={{
-                        textAlign: 'center',
-                        fontSize: typography.text.sm.fontSize,
-                        lineHeight: typography.text.sm.lineHeight,
-                        fontWeight: typography.weights.medium,
-                        fontFamily: typography.fonts.body,
-                        padding: '16px 24px',
-                      }}
-                    >
-                      <span style={{ color: colors.brand[600] }}>Hosted</span>
-                      <span
-                        style={{
-                          color: colors.text.secondary,
-                          fontSize: typography.text.xs.fontSize,
-                          marginLeft: '4px',
-                        }}
-                      >
-                        (Coming Soon)
-                      </span>
+                    <th className="text-center text-sm font-medium px-6 py-4">
+                      <span className="text-brand-600 dark:text-brand-400">Hosted</span>
+                      <span className="text-surface-500 text-xs ml-1">(Coming Soon)</span>
                     </th>
                   </tr>
                 </thead>
@@ -375,24 +193,14 @@ export const HostedComparisonRender = ({
                   {rows.map((row, i) => (
                     <tr
                       key={row.id}
-                      style={{
-                        borderBottom: '1px solid var(--color-card-border-subtle)',
-                        backgroundColor: i % 2 === 0 ? 'var(--color-card-border-subtle)' : 'transparent',
-                      }}
+                      className={cn(
+                        'border-b border-surface-200/30 dark:border-surface-800/30',
+                        i % 2 === 0 && 'bg-surface-200/30 dark:bg-surface-800/10',
+                      )}
                     >
-                      <td
-                        style={{
-                          padding: '14px 24px',
-                          fontSize: typography.text.sm.fontSize,
-                          lineHeight: typography.text.sm.lineHeight,
-                          fontFamily: typography.fonts.body,
-                          color: colors.text.secondary,
-                        }}
-                      >
-                        {row.feature}
-                      </td>
-                      <td style={{ padding: '14px 24px', textAlign: 'center' }}>{renderCellValue(row.oss)}</td>
-                      <td style={{ padding: '14px 24px', textAlign: 'center' }}>{renderCellValue(row.hosted)}</td>
+                      <td className="px-6 py-3.5 text-sm text-surface-600 dark:text-surface-300">{row.feature}</td>
+                      <td className="px-6 py-3.5 text-center">{renderCellValue(row.oss)}</td>
+                      <td className="px-6 py-3.5 text-center">{renderCellValue(row.hosted)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -402,36 +210,12 @@ export const HostedComparisonRender = ({
         </div>
 
         {/* Waitlist CTA */}
-        <div className="reveal" style={{ maxWidth: '448px', margin: '0 auto', textAlign: 'center' }}>
-          <h3
-            style={{
-              fontFamily: typography.fonts.body,
-              fontSize: typography.text.xl.fontSize,
-              lineHeight: typography.text.xl.lineHeight,
-              fontWeight: typography.weights.semibold,
-              color: colors.text.heading,
-              margin: 0,
-              marginBottom: '8px',
-            }}
-          >
-            {ctaTitle}
-          </h3>
-          <p
-            style={{
-              fontFamily: typography.fonts.body,
-              fontSize: typography.text.sm.fontSize,
-              lineHeight: typography.text.sm.lineHeight,
-              fontWeight: typography.weights.regular,
-              color: colors.text.secondary,
-              margin: 0,
-              marginBottom: '24px',
-            }}
-          >
-            {ctaSubtitle}
-          </p>
+        <div className="reveal max-w-md mx-auto text-center">
+          <h3 className="text-xl font-semibold text-surface-900 dark:text-white mb-2">{ctaTitle}</h3>
+          <p className="text-surface-500 dark:text-surface-400 text-sm mb-6">{ctaSubtitle}</p>
           {waitlistEnabled && <WaitlistForm isEditing={puck.isEditing} />}
         </div>
-      </Section>
+      </div>
     </section>
   );
 };

@@ -1,6 +1,4 @@
 import type { ComponentConfig } from '@puckeditor/core';
-import { Section } from '../../Section';
-import { colors, radius, typography } from '../shared/tokens';
 
 type LegendItem = {
   id: string;
@@ -24,7 +22,7 @@ export const CodeBlock: ComponentConfig<CodeBlockProps> = {
     legendItems: {
       type: 'array',
       getItemSummary: (item) => item.label || 'Legend',
-      defaultItemProps: { id: `legend-${Date.now()}`, color: colors.brand[500], label: 'Label' },
+      defaultItemProps: { id: `legend-${Date.now()}`, color: '#06b6d4', label: 'Label' },
       arrayFields: {
         id: { type: 'text', label: 'ID' },
         color: { type: 'text', label: 'Color' },
@@ -40,107 +38,37 @@ export const CodeBlock: ComponentConfig<CodeBlockProps> = {
   },
   render: ({ filename, code, accentColor, legendItems }) => {
     return (
-      <section style={{ marginBottom: '80px' }}>
-        <Section maxWidth="896px">
-          <div
-            style={{
-              backgroundColor: 'var(--color-card-bg-alpha)',
-              border: '1px solid var(--color-card-border-alpha)',
-              borderRadius: radius.xl,
-              overflow: 'hidden',
-            }}
-          >
+      <section className="mb-20">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="bg-surface-100/60 dark:bg-surface-900/60 border border-surface-200/80 dark:border-surface-800/50 rounded-xl overflow-hidden">
             {/* Terminal title bar */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '10px 16px',
-                borderBottom: '1px solid var(--color-card-border-alpha)',
-              }}
-            >
-              <div
-                style={{
-                  width: '12px',
-                  height: '12px',
-                  borderRadius: '50%',
-                  backgroundColor: colors.border.hover,
-                }}
-              />
-              <span
-                style={{
-                  fontFamily: typography.fonts.mono,
-                  fontSize: typography.text.xs.fontSize,
-                  lineHeight: typography.text.xs.lineHeight,
-                  color: colors.text.secondary,
-                }}
-              >
-                {filename}
-              </span>
+            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-surface-200/80 dark:border-surface-800/50">
+              <div className="w-3 h-3 rounded-full bg-surface-300 dark:bg-surface-700" />
+              <span className="font-mono text-xs text-surface-500 dark:text-surface-400">{filename}</span>
             </div>
 
             {/* Code area */}
-            <div
-              style={{
-                display: 'flex',
-              }}
-            >
-              {accentColor && (
-                <div
-                  style={{
-                    width: '4px',
-                    backgroundColor: accentColor,
-                    opacity: 0.4,
-                    flexShrink: 0,
-                  }}
-                />
-              )}
+            <div className="flex">
+              {accentColor && <div className="w-1 shrink-0 opacity-40" style={{ backgroundColor: accentColor }} />}
               <div
-                style={{
-                  flex: 1,
-                  padding: '16px',
-                  overflowX: 'auto',
-                  fontFamily: typography.fonts.mono,
-                  fontSize: typography.text.sm.fontSize,
-                  lineHeight: typography.text.sm.lineHeight,
-                  color: colors.text.code,
-                }}
+                className="flex-1 p-4 overflow-x-auto font-mono text-sm text-surface-700 dark:text-surface-300"
                 dangerouslySetInnerHTML={{ __html: code }}
               />
             </div>
 
             {/* Legend */}
             {legendItems.length > 0 && (
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '16px',
-                  padding: '10px 16px',
-                  borderTop: '1px solid var(--color-card-border-alpha)',
-                  fontSize: typography.text.xs.fontSize,
-                  lineHeight: typography.text.xs.lineHeight,
-                }}
-              >
+              <div className="flex items-center gap-4 px-4 py-2.5 border-t border-surface-200/80 dark:border-surface-800/50 text-xs">
                 {legendItems.map((item) => (
-                  <span key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span
-                      style={{
-                        width: '8px',
-                        height: '8px',
-                        borderRadius: '50%',
-                        backgroundColor: item.color,
-                        opacity: 0.6,
-                      }}
-                    />
-                    <span style={{ color: colors.text.secondary }}>{item.label}</span>
+                  <span key={item.id} className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full opacity-60" style={{ backgroundColor: item.color }} />
+                    <span className="text-surface-500 dark:text-surface-400">{item.label}</span>
                   </span>
                 ))}
               </div>
             )}
           </div>
-        </Section>
+        </div>
       </section>
     );
   },
