@@ -7,13 +7,16 @@ Universal MDX package for both browser and Node.js environments.
 ### Browser-safe exports (`@conloca/mdx`)
 
 - **MDXEditorModal** - Full MDX editor component with UI (for admin/CMS use)
-- **useMDXEvaluation** - Hook for evaluating MDX strings into React components (for rendering)
+- **useMDXEvaluation** - Hook for running pre-compiled MDX code in the browser
+
+If you are building inside `@conloca/cms-spa`, prefer `CMSMDXEditorModal` there for the integrated media-library image
+picker.
 
 ### Node.js-only exports (`@conloca/mdx/node`)
 
 - **compileMDX** - Compile MDX strings to JavaScript
 - **evaluateMDXToComponent** - Evaluate MDX strings to React components (server-side)
-- **evaluateMDXBlocks** - High-level helper for fetching and evaluating all blocks from Content API
+- **evaluateMDXBlocks** - Fetch and evaluate MDX blocks from a compatible content API
 
 ## Usage
 
@@ -31,7 +34,7 @@ import { useMDXEvaluation } from '@conloca/mdx';
 
 ```typescript
 // In Astro, Next.js, etc.
-import { evaluateMDXToComponent, evaluateMDXBlocks } from '@conloca/mdx/node';
+import { evaluateMDXBlocks, evaluateMDXToComponent } from '@conloca/mdx/node';
 import { createContentAPI } from '@conloca/content-api/node';
 
 // Evaluate all MDX blocks for a locale
@@ -63,8 +66,11 @@ import { MDXEditorModal } from '@conloca/mdx';
 import { evaluateMDXToComponent } from '@conloca/content-api/node';
 import { evaluateMDXBlocks } from '@conloca/astro-cms/components';
 
-// After (all in one place)
-import { evaluateMDXToComponent, evaluateMDXBlocks } from '@conloca/mdx/node';
+// After
+import { evaluateMDXBlocks, evaluateMDXToComponent } from '@conloca/mdx/node';
+
+// Also re-exported from Astro helpers when you are already working there
+import { evaluateMDXBlocks } from '@conloca/astro-cms/components';
 ```
 
 ## Building

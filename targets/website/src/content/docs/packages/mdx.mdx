@@ -28,7 +28,7 @@ import { MDXEditorModal, useMDXEvaluation } from '@conloca/mdx';
 | Export             | Kind      | Purpose                                                                |
 | ------------------ | --------- | ---------------------------------------------------------------------- |
 | `MDXEditorModal`   | component | Full MDX editor with toolbar, preview, and modal UI                    |
-| `useMDXEvaluation` | hook      | Evaluate MDX string into a React component at runtime                  |
+| `useMDXEvaluation` | hook      | Run pre-compiled MDX code into a React component at runtime            |
 | `MDXEditorMethods` | type      | Ref methods for programmatic editor control (from `@mdxeditor/editor`) |
 
 ### `@conloca/mdx/node` (Node.js only)
@@ -49,7 +49,7 @@ import {
 | ----------------------------------- | ------------------------------------------------------------------ |
 | `compileMDX(content, components)`   | Compile MDX string to JavaScript with a component scope            |
 | `evaluateMDXToComponent(source)`    | Compile and evaluate MDX to a React component                      |
-| `evaluateMDXBlocks(api, locale)`    | Fetch all blocks from Content API and evaluate their MDX content   |
+| `evaluateMDXBlocks(api, locale)`    | Fetch all blocks from a compatible API and evaluate their MDX      |
 | `createMDXCompiler(componentScope)` | Create a reusable MDX compiler instance with fixed component scope |
 | `createComponentScope(components)`  | Create a component scope for MDX evaluation                        |
 
@@ -97,8 +97,8 @@ Use `useMDXEvaluation` to render MDX content as React components in the browser:
 ```tsx
 import { useMDXEvaluation } from '@conloca/mdx';
 
-function MDXPreview({ source }) {
-  const { Component, error, isLoading, retry } = useMDXEvaluation({ mdxContent: source });
+function MDXPreview({ compiledCode }) {
+  const { Component, error, isLoading, retry } = useMDXEvaluation({ compiledCode });
 
   if (isLoading) return <p>Loading...</p>;
   if (error)
