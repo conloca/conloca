@@ -328,6 +328,13 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
               // try to bundle native dependencies like xxhash.
               external: serverOnlyExternal,
             },
+            build: {
+              rollupOptions: {
+                // Externalize native deps during static builds too - they cannot be bundled
+                // into JavaScript and must be loaded by Node.js at runtime.
+                external: serverOnlyExternal,
+              },
+            },
             // Virtual modules for routing - needed in both dev and build
             plugins: [
               // Alias acorn to a CJS shim only during SSR (static page builds).
