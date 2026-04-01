@@ -311,6 +311,13 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
           '@node-rs/xxhash-linux-x64-gnu',
           '@node-rs/xxhash-linux-x64-gnu/xxhash.linux-x64-gnu.node',
         ];
+        // Native deps that cannot be bundled - separate from serverOnlyExternal
+        // because workspace packages need to be bundled in static builds
+        const nativeOnlyExternal = [
+          '@node-rs/xxhash',
+          '@node-rs/xxhash-linux-x64-gnu',
+          '@node-rs/xxhash-linux-x64-gnu/xxhash.linux-x64-gnu.node',
+        ];
         const blockCollectionsPromise = loadContentApiNode().then(({ createContentAPI }) =>
           createContentAPI({
             contentRoot: options.contentRoot,
@@ -330,9 +337,10 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
             },
             build: {
               rollupOptions: {
-                // Externalize native deps during static builds too - they cannot be bundled
-                // into JavaScript and must be loaded by Node.js at runtime.
-                external: serverOnlyExternal,
+                // Only externalize native deps during static builds.
+                // Workspace packages (@conloca/*) must be bundled for prerendering
+                // to work since they're not installed in node_modules.
+                external: nativeOnlyExternal,
               },
             },
             // Virtual modules for routing - needed in both dev and build
