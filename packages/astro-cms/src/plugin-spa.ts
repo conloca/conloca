@@ -333,6 +333,15 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
               // try to bundle native dependencies like xxhash.
               external: serverOnlyExternal,
             },
+            build: {
+              rollupOptions: {
+                external: [
+                  '@node-rs/xxhash',
+                  '@node-rs/xxhash-linux-x64-gnu',
+                  '@node-rs/xxhash-linux-x64-gnu/xxhash.linux-x64-gnu.node',
+                ],
+              },
+            },
             // Virtual modules for routing - needed in both dev and build
             plugins: [
               // Alias acorn to a CJS shim only during SSR (static page builds).
