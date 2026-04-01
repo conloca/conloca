@@ -1,5 +1,5 @@
 import { defineCollection } from 'astro:content';
-import { createContentAPI } from '@conloca/content-api/node';
+import { createContentAPI } from '@conloca/content-api/reader';
 import { blockMetaSchema, dataMetaSchema, pageMetaSchema } from '@conloca/content-api/schemas';
 import { conlocaLoader } from './loader';
 

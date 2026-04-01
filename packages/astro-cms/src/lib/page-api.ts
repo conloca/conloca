@@ -1,4 +1,4 @@
-import { createContentAPI } from '@conloca/content-api/node';
+import { createContentAPI } from '@conloca/content-api/reader';
 import type { PageData, PageReference } from '../types.js';
 
 /**

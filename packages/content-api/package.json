@@ -41,6 +41,11 @@
       "import": "./dist/node.mjs",
       "default": "./dist/node.mjs"
     },
+    "./reader": {
+      "types": "./dist/reader.d.ts",
+      "import": "./dist/reader.mjs",
+      "default": "./dist/reader.mjs"
+    },
     "./schemas": {
       "types": "./dist/schemas/index.d.ts",
       "import": "./dist/schemas/index.mjs",

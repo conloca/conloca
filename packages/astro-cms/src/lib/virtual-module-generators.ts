@@ -48,7 +48,7 @@ export function generateLayoutModule(routing: RoutingConfig | undefined): string
  * into the filesystem ContentAPI at route render time.
  */
 export function generateBlockCollectionsModule(collections: string[]): string {
-  return `export default ${JSON.stringify(collections, null, 2)};`
+  return `export default ${JSON.stringify(collections, null, 2)};`;
 }
 
 /**
@@ -77,7 +77,7 @@ export interface PageApiModuleOptions {
  */
 export function generatePageApiModule(options: PageApiModuleOptions): string {
   return `
-import { createContentAPI } from '@conloca/content-api/node';
+import { createContentAPI } from '@conloca/content-api/reader';
 
 // Export content options for MDX evaluation and other ContentAPI uses
 export const contentOptions = {
@@ -289,7 +289,7 @@ export async function getDataCollection(collection, localeOverride) {
 export function generatePuckConfigModule(puckConfigPath: string): string {
   // Convert relative path to absolute for Vite resolution
   // ./src/... -> /src/...
-  const absolutePath = puckConfigPath.startsWith('.') ? `/${puckConfigPath.slice(2)}` : puckConfigPath
+  const absolutePath = puckConfigPath.startsWith('.') ? `/${puckConfigPath.slice(2)}` : puckConfigPath;
 
-  return `export { default } from '${absolutePath}';`
+  return `export { default } from '${absolutePath}';`;
 }
