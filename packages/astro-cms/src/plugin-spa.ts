@@ -309,6 +309,7 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
           '@conloca/mdx/node',
           '@node-rs/xxhash',
           '@node-rs/xxhash-linux-x64-gnu',
+          '@node-rs/xxhash-linux-x64-gnu/xxhash.linux-x64-gnu.node',
         ];
         const blockCollectionsPromise = loadContentApiNode().then(({ createContentAPI }) =>
           createContentAPI({
