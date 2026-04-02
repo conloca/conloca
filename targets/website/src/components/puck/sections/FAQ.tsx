@@ -137,7 +137,7 @@ export const FAQ: ComponentConfig<FAQProps> = {
       arrayFields: {
         id: { type: 'text', label: 'ID' },
         question: { type: 'text' },
-        answer: { type: 'textarea', label: 'Answer (limited rich text)' },
+        answer: { type: 'textarea', label: 'Answer (markdown-ish)' },
       },
     },
     ctaText: { type: 'text', label: 'CTA Text' },

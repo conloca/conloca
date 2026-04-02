@@ -32,7 +32,7 @@ export const NumberedFlow: ComponentConfig<NumberedFlowProps> = {
         id: { type: 'text', label: 'ID' },
         number: { type: 'text', label: 'Number' },
         title: { type: 'text' },
-        description: { type: 'textarea', label: 'Description (limited rich text)' },
+        description: { type: 'textarea', label: 'Description (markdown-ish)' },
       },
     },
   },

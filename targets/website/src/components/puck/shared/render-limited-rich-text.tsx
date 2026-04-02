@@ -1,15 +1,5 @@
 import type { ReactNode } from 'react';
 
-type NodeType = 'root' | 'p' | 'a' | 'code' | 'strong' | 'em' | 'span' | 'br';
-
-type RichTextNode = {
-  type: NodeType;
-  attrs?: Record<string, string>;
-  children: Array<RichTextNode | string>;
-};
-
-const allowedTags = new Set<NodeType>(['p', 'a', 'code', 'strong', 'em', 'span', 'br']);
-
 function decodeEntities(value: string) {
   return value
     .replaceAll('&quot;', '"')
@@ -19,123 +9,80 @@ function decodeEntities(value: string) {
     .replaceAll('&amp;', '&');
 }
 
-function parseAttributes(source: string) {
-  const attrs: Record<string, string> = {};
-
-  for (const match of source.matchAll(/([a-zA-Z_:][\w:.-]*)\s*=\s*"([^"]*)"/g)) {
-    attrs[match[1]] = decodeEntities(match[2]);
-  }
-
-  return attrs;
+function normalizeLegacyHtml(source: string) {
+  return decodeEntities(source)
+    .replaceAll(/<br\s*\/?>/gi, '\n')
+    .replaceAll(/<\/p>\s*<p>/gi, '\n\n')
+    .replaceAll(/<p>/gi, '')
+    .replaceAll(/<\/p>/gi, '')
+    .replaceAll(/<strong>(.*?)<\/strong>/gi, '**$1**')
+    .replaceAll(/<em>(.*?)<\/em>/gi, '*$1*')
+    .replaceAll(/<code[^>]*>(.*?)<\/code>/gi, (_match, value: string) => `\`${decodeEntities(value)}\``)
+    .replaceAll(/<a[^>]*href="([^"]+)"[^>]*>(.*?)<\/a>/gi, (_match, href: string, label: string) => {
+      return `[${decodeEntities(label)}](${href})`;
+    })
+    .replaceAll(/<[^>]+>/g, '');
 }
 
-function parseLimitedHtml(source: string) {
-  const root: RichTextNode = { type: 'root', children: [] };
-  const stack: RichTextNode[] = [root];
-  const tagPattern = /<\/?[a-zA-Z][^>]*>|[^<]+/g;
+function renderInlineMarkdown(source: string) {
+  const nodes: ReactNode[] = [];
+  const pattern = /(\[[^\]]+\]\([^)]+\)|`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*)/g;
+  let lastIndex = 0;
 
-  for (const token of source.match(tagPattern) || []) {
-    const current = stack[stack.length - 1];
+  for (const match of source.matchAll(pattern)) {
+    const [token] = match;
+    const start = match.index || 0;
 
-    if (!token.startsWith('<')) {
-      current.children.push(decodeEntities(token));
-      continue;
+    if (start > lastIndex) {
+      nodes.push(source.slice(lastIndex, start));
     }
 
-    const closingMatch = token.match(/^<\/\s*([a-zA-Z]+)\s*>$/);
-    if (closingMatch) {
-      const tagName = closingMatch[1].toLowerCase() as NodeType;
-      if (allowedTags.has(tagName)) {
-        while (stack.length > 1) {
-          const node = stack.pop();
-          if (node?.type === tagName) {
-            break;
-          }
-        }
+    if (token.startsWith('[')) {
+      const tokenMatch = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+      if (tokenMatch) {
+        nodes.push(
+          <a key={`${start}-link`} href={tokenMatch[2]}>
+            {tokenMatch[1]}
+          </a>,
+        );
       }
-      continue;
+    } else if (token.startsWith('`')) {
+      nodes.push(<code key={`${start}-code`}>{token.slice(1, -1)}</code>);
+    } else if (token.startsWith('**')) {
+      nodes.push(<strong key={`${start}-strong`}>{token.slice(2, -2)}</strong>);
+    } else if (token.startsWith('*')) {
+      nodes.push(<em key={`${start}-em`}>{token.slice(1, -1)}</em>);
     }
 
-    const openingMatch = token.match(/^<\s*([a-zA-Z]+)([^>]*)\/?\s*>$/);
-    if (!openingMatch) {
-      current.children.push(token);
-      continue;
-    }
-
-    const tagName = openingMatch[1].toLowerCase() as NodeType;
-    const attrSource = openingMatch[2] || '';
-    const selfClosing = token.endsWith('/>') || tagName === 'br';
-
-    if (!allowedTags.has(tagName)) {
-      continue;
-    }
-
-    const node: RichTextNode = {
-      type: tagName,
-      attrs: parseAttributes(attrSource),
-      children: [],
-    };
-
-    current.children.push(node);
-
-    if (!selfClosing) {
-      stack.push(node);
-    }
+    lastIndex = start + token.length;
   }
 
-  return root.children;
-}
-
-function renderNode(node: RichTextNode | string, key: string): ReactNode {
-  if (typeof node === 'string') {
-    return node;
+  if (lastIndex < source.length) {
+    nodes.push(source.slice(lastIndex));
   }
 
-  const children = node.children.map((child, index) => renderNode(child, `${key}-${index}`));
-
-  if (node.type === 'p') {
-    return <p key={key}>{children}</p>;
-  }
-
-  if (node.type === 'a') {
-    const href = node.attrs?.href || '#';
-    return (
-      <a key={key} href={href}>
-        {children}
-      </a>
-    );
-  }
-
-  if (node.type === 'code') {
-    return <code key={key}>{children}</code>;
-  }
-
-  if (node.type === 'strong') {
-    return <strong key={key}>{children}</strong>;
-  }
-
-  if (node.type === 'em') {
-    return <em key={key}>{children}</em>;
-  }
-
-  if (node.type === 'br') {
-    return <br key={key} />;
-  }
-
-  return <span key={key}>{children}</span>;
+  return nodes;
 }
 
 export function renderLimitedRichText(source: string, wrapperClassName: string) {
-  const nodes = parseLimitedHtml(source);
-  const hasParagraph = nodes.some((node) => typeof node !== 'string' && node.type === 'p');
-
-  if (hasParagraph) {
-    return <div className={wrapperClassName}>{nodes.map((node, index) => renderNode(node, `${index}`))}</div>;
-  }
+  const normalizedSource = normalizeLegacyHtml(source);
+  const paragraphs = normalizedSource
+    .split(/\n\s*\n/g)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
 
   return (
     <div className={wrapperClassName}>
-      <p>{nodes.map((node, index) => renderNode(node, `${index}`))}</p>
+      {paragraphs.length > 0
+        ? paragraphs.map((paragraph, index) => (
+            <p key={paragraph.slice(0, 48)}>
+              {paragraph.split('\n').flatMap((line, lineIndex, lines) => {
+                const inlineNodes = renderInlineMarkdown(line);
+                return lineIndex < lines.length - 1 ? [...inlineNodes, <br key={line.slice(0, 48)} />] : inlineNodes;
+              })}
+            </p>
+          ))
+        : null}
     </div>
   );
 }
