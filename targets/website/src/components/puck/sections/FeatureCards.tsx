@@ -107,20 +107,26 @@ export const FeatureCards: ComponentConfig<FeatureCardsProps> = {
     ],
   },
   render: ({ label, title, subtitle, cards, columns }) => {
+    const hasHeader = !!(label || title || subtitle);
+
     return (
-      <section id="features" className="py-24 sm:py-32 relative">
+      <section id="features" className={cn(hasHeader ? 'py-24 sm:py-32' : 'mb-20', 'relative')}>
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(6,182,212,0.02)_0%,transparent_50%)] dark:bg-[radial-gradient(ellipse_at_top,rgba(6,182,212,0.04)_0%,transparent_50%)]" />
         <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Section header */}
-          <div className="text-center mb-16">
-            {label && (
-              <p className="text-brand-600 dark:text-brand-400 text-sm font-medium tracking-wide uppercase mb-3">
-                {label}
-              </p>
-            )}
-            <h2 className="text-3xl sm:text-4xl font-bold text-surface-900 dark:text-white mb-4">{title}</h2>
-            <p className="text-surface-500 dark:text-surface-400 max-w-xl mx-auto">{subtitle}</p>
-          </div>
+          {hasHeader && (
+            <div className="text-center mb-16">
+              {label && (
+                <p className="text-brand-600 dark:text-brand-400 text-sm font-medium tracking-wide uppercase mb-3">
+                  {label}
+                </p>
+              )}
+              {title && (
+                <h2 className="text-3xl sm:text-4xl font-bold text-surface-900 dark:text-white mb-4">{title}</h2>
+              )}
+              {subtitle && <p className="text-surface-500 dark:text-surface-400 max-w-xl mx-auto">{subtitle}</p>}
+            </div>
+          )}
 
           {/* Cards grid */}
           <div className={gridColsClass[columns]}>
