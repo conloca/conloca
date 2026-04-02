@@ -31,7 +31,6 @@ const CMS_HANDLER_PATH = join(__dirname, '..', 'internal', 'cms-handler.mjs');
 const ACORN_DEFAULT_SHIM_PATH = join(__dirname, '..', 'internal', 'acorn-default.mjs');
 
 import {
-  generateBlockCollectionsModule,
   generateLayoutModule,
   generatePageApiModule,
   generatePuckConfigModule,
@@ -46,14 +45,12 @@ const RESOLVED_VIRTUAL_CONFIG = `\0${VIRTUAL_CONFIG_MODULE}`;
 // Virtual module IDs for routing system
 const VIRTUAL_ROUTING_CONFIG = 'virtual:conloca-routing-config';
 const VIRTUAL_LAYOUT = 'virtual:conloca-layout';
-const VIRTUAL_BLOCK_COLLECTIONS = 'virtual:conloca-block-collections';
 const VIRTUAL_PAGE_API = 'virtual:conloca-page-api';
 const VIRTUAL_PUCK_CONFIG = 'virtual:conloca-puck-config';
 
 // Resolved IDs (with \0 prefix to prevent file resolution)
 const RESOLVED_ROUTING_CONFIG = `\0${VIRTUAL_ROUTING_CONFIG}`;
 const RESOLVED_LAYOUT = `\0${VIRTUAL_LAYOUT}`;
-const RESOLVED_BLOCK_COLLECTIONS = `\0${VIRTUAL_BLOCK_COLLECTIONS}`;
 const RESOLVED_PAGE_API = `\0${VIRTUAL_PAGE_API}`;
 const RESOLVED_PUCK_CONFIG = `\0${VIRTUAL_PUCK_CONFIG}`;
 
@@ -69,10 +66,6 @@ const RESOLVED_CMS_SPA_ENTRY = `\0${VIRTUAL_CMS_SPA_ENTRY}`;
 
 async function loadContentApiNode() {
   return import('@conloca/content-api/node');
-}
-
-async function loadContentApiReader() {
-  return import('@conloca/content-api/reader');
 }
 
 export interface ConlocaCMSOptions extends Omit<UIConfig, 'basename'> {
@@ -316,13 +309,6 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
           '@node-rs/xxhash-linux-x64-gnu',
           '@node-rs/xxhash-linux-x64-gnu/xxhash.linux-x64-gnu.node',
         ];
-        const blockCollectionsPromise = loadContentApiReader().then(({ createContentAPI }) =>
-          createContentAPI({
-            contentRoot: options.contentRoot,
-            canvasDir: options.canvasDir || './canvas',
-          }).then((api) => Array.from(api.blocks.collections)),
-        );
-
         updateConfig({
           vite: {
             ssr: {
@@ -367,9 +353,6 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
                   if (id === VIRTUAL_LAYOUT) {
                     return RESOLVED_LAYOUT;
                   }
-                  if (id === VIRTUAL_BLOCK_COLLECTIONS) {
-                    return RESOLVED_BLOCK_COLLECTIONS;
-                  }
                   if (id === VIRTUAL_PUCK_CONFIG) {
                     return RESOLVED_PUCK_CONFIG;
                   }
@@ -393,11 +376,6 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
                   }
                   if (id === RESOLVED_LAYOUT) {
                     return generateLayoutModule(routingConfig);
-                  }
-                  if (id === RESOLVED_BLOCK_COLLECTIONS) {
-                    const blockCollections = await blockCollectionsPromise;
-
-                    return generateBlockCollectionsModule(blockCollections);
                   }
                   if (id === RESOLVED_PUCK_CONFIG) {
                     return generatePuckConfigModule(options.puckConfigPath);

@@ -2,7 +2,7 @@ import { createContentAPI } from '@conloca/content-api/reader';
 import type { Loader, LoaderContext } from 'astro/loaders';
 
 export interface ConlocaLoaderOptions {
-  collection: string;
+  collection?: string;
   contentRoot: string;
   site?: string;
   /** Collection kind. If not provided, defaults to 'block' for 'blocks' collection, 'page' otherwise. */
@@ -100,7 +100,7 @@ export function conlocaLoader(options: ConlocaLoaderOptions): Loader {
         }
       }
 
-      logger.info(`Loaded ${store.keys().length} entries from ${options.collection}`);
+      logger.info(`Loaded ${store.keys().length} entries from ${options.collection || `${kind} content`}`);
     },
   };
 }

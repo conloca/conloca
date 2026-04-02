@@ -37,11 +37,6 @@ declare module 'virtual:conloca-layout' {
   export default Layout;
 }
 
-declare module 'virtual:conloca-block-collections' {
-  const blockCollections: string[];
-  export default blockCollections;
-}
-
 /**
  * Virtual module: virtual:conloca-page-api
  *

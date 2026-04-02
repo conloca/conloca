@@ -3,6 +3,8 @@ import { createContentAPI } from '@conloca/content-api/reader';
 import { blockMetaSchema, dataMetaSchema, pageMetaSchema } from '@conloca/content-api/schemas';
 import { conlocaLoader } from './loader';
 
+export const ALL_BLOCKS_COLLECTION = '__conloca_blocks';
+
 /**
  * Options for createConlocaCollections().
  */
@@ -40,6 +42,11 @@ export async function createConlocaCollections(
 
   const api = await createContentAPI({ contentRoot });
   const collections: Record<string, ReturnType<typeof defineCollection>> = {};
+
+  collections[ALL_BLOCKS_COLLECTION] = defineCollection({
+    loader: conlocaLoader({ contentRoot, site, kind: 'block' }),
+    schema: blockMetaSchema.passthrough() as never,
+  });
 
   // Add block collections
   for (const name of api.blocks.collections) {

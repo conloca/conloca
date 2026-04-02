@@ -18,8 +18,8 @@ import type { ComponentType } from 'react'
 import { createPageRendererWithBlocks, RenderWithHydration } from '@conloca/astro-cms/components'
 import { hasHydratableComponents, extractSlugFromPathname } from '@conloca/astro-cms'
 import type { DataCollectionEntry, DataContext, PageData, PageReference, ResolvedRoutingConfig } from '@conloca/astro-cms'
+import { ALL_BLOCKS_COLLECTION } from '@conloca/astro-cms/node/content'
 
-import blockCollections from 'virtual:conloca-block-collections'
 import routingConfig from 'virtual:conloca-routing-config'
 import Layout from 'virtual:conloca-layout'
 import puckConfig from 'virtual:conloca-puck-config'
@@ -191,16 +191,7 @@ async function getDataCollectionEntries(collectionName: string, locale: string) 
 
 async function loadMdxComponents(locale: string) {
   const evaluateMDXToComponent = await loadEvaluateMDXToComponent()
-
-  const entries = (
-    await Promise.all(
-      blockCollections.map(async (collectionName) => {
-        const collectionEntries = await loadCollectionEntries(collectionName)
-
-        return collectionEntries.map((entry) => ({ entry, data: entry.data as Partial<BlockEntryData> }))
-      }),
-    )
-  ).flat()
+  const entries = (await loadCollectionEntries(ALL_BLOCKS_COLLECTION)).map((entry) => ({ entry, data: entry.data as Partial<BlockEntryData> }))
 
   return Promise.all(
     entries
