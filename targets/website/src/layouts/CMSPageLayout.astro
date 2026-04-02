@@ -13,9 +13,10 @@ interface Props {
 
 const { title, description } = Astro.props
 const pathname = Astro.url.pathname
+const isLandingPage = pathname === '/' || pathname === ''
 
 const schemaType = (() => {
-  if (pathname === '/' || pathname === '') return 'landing'
+  if (isLandingPage) return 'landing'
   if (pathname === '/faq/' || pathname === '/faq') return 'faq'
   if (pathname === '/compare/' || pathname === '/compare') return 'compare'
   if (pathname === '/vxjson/' || pathname === '/vxjson') return 'techArticle'
@@ -48,7 +49,7 @@ if (schemaType === 'faq') {
 
 <Layout title={title} description={description} schemaType={structuredDataType}>
   <Navbar />
-  <main class="pt-24 min-h-screen">
+  <main class={isLandingPage ? 'min-h-screen' : 'pt-24 min-h-screen'}>
     <slot />
   </main>
   <Footer />
