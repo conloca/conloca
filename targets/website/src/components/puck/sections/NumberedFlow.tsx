@@ -1,4 +1,5 @@
 import type { ComponentConfig } from '@puckeditor/core';
+import { renderLimitedRichText } from '../shared/render-limited-rich-text';
 
 type FlowItem = {
   id: string;
@@ -31,7 +32,7 @@ export const NumberedFlow: ComponentConfig<NumberedFlowProps> = {
         id: { type: 'text', label: 'ID' },
         number: { type: 'text', label: 'Number' },
         title: { type: 'text' },
-        description: { type: 'textarea', label: 'Description (HTML)' },
+        description: { type: 'textarea', label: 'Description (limited rich text)' },
       },
     },
   },
@@ -61,10 +62,10 @@ export const NumberedFlow: ComponentConfig<NumberedFlowProps> = {
                   {/* Content */}
                   <div>
                     <h3 className="text-sm font-semibold text-surface-900 dark:text-white mb-1">{item.title}</h3>
-                    <div
-                      className="text-sm text-surface-500 dark:text-surface-400 leading-relaxed [&_a]:text-brand-600 dark:[&_a]:text-brand-400 [&_a]:underline [&_a]:underline-offset-2"
-                      dangerouslySetInnerHTML={{ __html: item.description }}
-                    />
+                    {renderLimitedRichText(
+                      item.description,
+                      'text-sm text-surface-500 dark:text-surface-400 leading-relaxed [&_a]:text-brand-600 dark:[&_a]:text-brand-400 [&_a]:underline [&_a]:underline-offset-2 [&_code]:font-mono [&_code]:text-[0.95em] [&_code]:text-surface-700 dark:[&_code]:text-surface-300',
+                    )}
                   </div>
                 </div>
 

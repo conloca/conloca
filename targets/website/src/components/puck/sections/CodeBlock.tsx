@@ -13,11 +13,61 @@ export type CodeBlockProps = {
   legendItems: LegendItem[];
 };
 
+function renderCodeToken(token: string, tokenType: 'plain' | 'comment' | 'key' | 'value' | 'accent', key: string) {
+  const className = {
+    plain: 'text-surface-600 dark:text-surface-300',
+    comment: 'text-surface-400 dark:text-surface-500',
+    key: 'text-brand-600 dark:text-brand-400',
+    value: 'text-green-700 dark:text-green-400',
+    accent: 'text-purple-700 dark:text-purple-400',
+  }[tokenType];
+
+  return (
+    <span key={key} className={className}>
+      {token}
+    </span>
+  );
+}
+
+function renderHighlightedLine(line: string, lineIndex: number) {
+  const segments = line.match(/\/\/.*|"[^"]*"|\.\.\.|[A-Za-z_][A-Za-z0-9_]*|\s+|./g) || [line];
+
+  return segments.map((segment, segmentIndex) => {
+    if (segment.startsWith('//')) {
+      return renderCodeToken(segment, 'comment', `${lineIndex}-${segmentIndex}`);
+    }
+
+    if (segment === 'content' || segment === 'puckData' || segment === 'contentEtag') {
+      return renderCodeToken(segment, 'accent', `${lineIndex}-${segmentIndex}`);
+    }
+
+    if (segment === 'metaEtag') {
+      return renderCodeToken(segment, 'key', `${lineIndex}-${segmentIndex}`);
+    }
+
+    if (segment.startsWith('"') && segment.endsWith('"')) {
+      const nextSegment = segments[segmentIndex + 1] || '';
+      const previousSegment = segments[segmentIndex - 1] || '';
+
+      if (nextSegment.includes(':')) {
+        const tokenType = segment === '"content"' || segment === '"puckData"' ? 'accent' : 'key';
+        return renderCodeToken(segment, tokenType, `${lineIndex}-${segmentIndex}`);
+      }
+
+      if (previousSegment.includes(':')) {
+        return renderCodeToken(segment, 'value', `${lineIndex}-${segmentIndex}`);
+      }
+    }
+
+    return renderCodeToken(segment, 'plain', `${lineIndex}-${segmentIndex}`);
+  });
+}
+
 export const CodeBlock: ComponentConfig<CodeBlockProps> = {
   label: 'Code Block',
   fields: {
     filename: { type: 'text', label: 'Filename' },
-    code: { type: 'textarea', label: 'Code (HTML)' },
+    code: { type: 'textarea', label: 'Code' },
     accentColor: { type: 'text', label: 'Accent Color' },
     legendItems: {
       type: 'array',
@@ -32,7 +82,7 @@ export const CodeBlock: ComponentConfig<CodeBlockProps> = {
   },
   defaultProps: {
     filename: 'example.vxjson',
-    code: '<code>// Code here</code>',
+    code: '// Code here',
     accentColor: '',
     legendItems: [],
   },
@@ -50,10 +100,16 @@ export const CodeBlock: ComponentConfig<CodeBlockProps> = {
             {/* Code area */}
             <div className="flex">
               {accentColor && <div className="w-1 shrink-0 opacity-40" style={{ backgroundColor: accentColor }} />}
-              <div
-                className="flex-1 p-4 overflow-x-auto font-mono text-sm text-surface-700 dark:text-surface-300"
-                dangerouslySetInnerHTML={{ __html: code }}
-              />
+              <pre className="flex-1 overflow-x-auto p-4 text-sm text-surface-700 dark:text-surface-300">
+                <code className="font-mono whitespace-pre-wrap break-words">
+                  {code.split('\n').map((line, index, lines) => (
+                    <span key={`${filename}-${line}`}>
+                      {renderHighlightedLine(line, index)}
+                      {index < lines.length - 1 ? '\n' : null}
+                    </span>
+                  ))}
+                </code>
+              </pre>
             </div>
 
             {/* Legend */}

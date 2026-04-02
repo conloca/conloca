@@ -1,5 +1,6 @@
 import type { ComponentConfig } from '@puckeditor/core';
 import cn from 'clsx';
+import { renderLimitedRichText } from '../shared/render-limited-rich-text';
 
 type FAQItem = {
   id: string;
@@ -42,10 +43,10 @@ function FAQAccordionItem({ item }: { item: FAQItem }) {
           <path d="M19 9l-7 7-7-7" />
         </svg>
       </summary>
-      <div
-        className="px-6 pb-5 text-sm text-surface-500 dark:text-surface-400 leading-relaxed border-t border-surface-200/30 dark:border-surface-800/30 pt-4 [&_a]:text-brand-600 dark:[&_a]:text-brand-400 [&_a]:hover:text-brand-500 dark:[&_a]:hover:text-brand-300 [&_a]:underline [&_a]:underline-offset-2"
-        dangerouslySetInnerHTML={{ __html: item.answer }}
-      />
+      {renderLimitedRichText(
+        item.answer,
+        'px-6 pb-5 text-sm text-surface-500 dark:text-surface-400 leading-relaxed border-t border-surface-200/30 dark:border-surface-800/30 pt-4 [&_a]:text-brand-600 dark:[&_a]:text-brand-400 [&_a]:hover:text-brand-500 dark:[&_a]:hover:text-brand-300 [&_a]:underline [&_a]:underline-offset-2 [&_code]:font-mono [&_code]:text-[0.95em] [&_code]:text-surface-700 dark:[&_code]:text-surface-300',
+      )}
     </details>
   );
 }
@@ -136,7 +137,7 @@ export const FAQ: ComponentConfig<FAQProps> = {
       arrayFields: {
         id: { type: 'text', label: 'ID' },
         question: { type: 'text' },
-        answer: { type: 'textarea', label: 'Answer (HTML)' },
+        answer: { type: 'textarea', label: 'Answer (limited rich text)' },
       },
     },
     ctaText: { type: 'text', label: 'CTA Text' },
