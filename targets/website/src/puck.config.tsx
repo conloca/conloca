@@ -14,6 +14,7 @@ import { Badge, Button, Divider, Flex, Grid, Heading, Image, Space, Text } from 
 import type {
   CodeBlockProps,
   ComparisonTableProps,
+  ContentBlockSectionProps,
   CTABannerProps,
   FAQProps,
   FeatureCardsProps,
@@ -26,6 +27,7 @@ import type {
 import {
   CodeBlock,
   ComparisonTable,
+  ContentBlockSection,
   CTABanner,
   FAQ,
   FeatureCards,
@@ -39,6 +41,7 @@ import {
 type Components = {
   Badge: BadgeProps;
   Button: ButtonProps;
+  ContentBlockSection: ContentBlockSectionProps;
   CTABanner: CTABannerProps;
   CodeBlock: CodeBlockProps;
   ComparisonTable: ComparisonTableProps;
@@ -68,13 +71,17 @@ const puckConfig: Config<Components> = {
         'FeatureCards',
         'Steps',
         'CTABanner',
+        'ContentBlockSection',
         'ComparisonTable',
         'FAQ',
-        'RichTextSection',
         'CodeBlock',
         'NumberedFlow',
         'HostedComparison',
       ],
+    },
+    legacy: {
+      title: 'Legacy',
+      components: ['RichTextSection'],
     },
     primitives: {
       title: 'Primitives',
@@ -88,6 +95,7 @@ const puckConfig: Config<Components> = {
   components: {
     Badge,
     Button,
+    ContentBlockSection,
     CTABanner,
     CodeBlock,
     ComparisonTable,

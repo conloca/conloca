@@ -2,6 +2,8 @@ export type { CodeBlockProps } from './CodeBlock';
 export { CodeBlock } from './CodeBlock';
 export type { ComparisonTableProps } from './ComparisonTable';
 export { ComparisonTable } from './ComparisonTable';
+export type { ContentBlockSectionProps } from './ContentBlockSection';
+export { ContentBlockSection } from './ContentBlockSection';
 export type { CTABannerProps } from './CTABanner';
 export { CTABanner } from './CTABanner';
 export type { FAQProps } from './FAQ';

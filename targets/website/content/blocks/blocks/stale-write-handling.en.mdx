@@ -1,0 +1,14 @@
+---
+id: vx-st4l3wr1t3
+title: Stale Write Handling
+description: Explains how Conloca handles stale writes safely.
+created: '2026-04-02T00:00:00.000Z'
+modified: '2026-04-02T00:00:00.000Z'
+type: mdx
+category: content
+---
+
+When an editor saves, the CMS sends the expected ETag. If the file was modified since it was loaded, the server rejects
+the write with a `STALE_WRITE` error and presents a conflict resolution dialog.
+
+No content is silently overwritten.

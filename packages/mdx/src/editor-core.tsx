@@ -49,6 +49,10 @@ export interface BaseMDXEditorModalProps {
   initialContent: string;
   onSave: (content: string) => void | Promise<void>;
   headerExtra?: React.ReactNode;
+  headerTools?: (tools: {
+    content: string;
+    setContent: React.Dispatch<React.SetStateAction<string>>;
+  }) => React.ReactNode;
   onBeforeClose?: () => boolean;
   EditorComponent: React.ForwardRefExoticComponent<BaseMDXEditorProps & React.RefAttributes<MDXEditorMethods>>;
 }
@@ -156,7 +160,7 @@ export const BaseMDXEditor = React.forwardRef<MDXEditorMethods, BaseMDXEditorPro
         markdown={value}
         onChange={onChange}
         readOnly={readOnly}
-        contentEditableClassName="prose max-w-none"
+        contentEditableClassName="conloca-prose conloca-prose--editor max-w-none"
         plugins={[
           headingsPlugin(),
           listsPlugin(),
@@ -282,6 +286,7 @@ export function BaseMDXEditorModal({
   initialContent,
   onSave,
   headerExtra,
+  headerTools,
   onBeforeClose,
   EditorComponent,
 }: BaseMDXEditorModalProps) {
@@ -337,7 +342,12 @@ export function BaseMDXEditorModal({
         <DialogHeader>
           <div className="flex items-center justify-between gap-4">
             <DialogTitle>{filePath ? `Edit: ${filePath}` : 'New MDX File'}</DialogTitle>
-            {headerExtra && <div className="flex items-center gap-2">{headerExtra}</div>}
+            {(headerExtra || headerTools) && (
+              <div className="flex items-center gap-2">
+                {headerExtra}
+                {headerTools?.({ content, setContent })}
+              </div>
+            )}
             <button type="button" onClick={handleClose} className="p-2 hover:bg-gray-100 rounded" aria-label="Close">
               ✕
             </button>

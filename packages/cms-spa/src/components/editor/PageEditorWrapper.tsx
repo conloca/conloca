@@ -1,10 +1,12 @@
 import { useBlocks, useDataContext, useLocalizedContent, useUpdateLocalized } from '@conloca/content-api-client';
 import type { ComponentConfig, Config, Data } from '@puckeditor/core';
 import { resolveAllData } from '@puckeditor/core';
+import cn from 'clsx';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { PageMetadata } from '../../types';
 import { PageMetadataDialog } from '../dialogs/PageMetadataDialog';
+import { type ContentBlockOption, ContentBlockSelectorField } from '../fields/ContentBlockSelectorField';
 import { BlockContentWrapper, BlockFieldWrapper } from './BlockWrappers';
 import { PageEditor } from './PageEditor';
 
@@ -52,6 +54,23 @@ interface PageEditorWrapperProps {
   puckConfig: Config;
 }
 
+interface ContentBlockSectionProps {
+  label?: string;
+  blockId: string;
+  width?: 'narrow' | 'default';
+  tone?: 'transparent' | 'subtle';
+}
+
+const contentBlockWidthClasses: Record<NonNullable<ContentBlockSectionProps['width']>, string> = {
+  narrow: 'max-w-3xl',
+  default: 'max-w-4xl',
+};
+
+const contentBlockToneClasses: Record<NonNullable<ContentBlockSectionProps['tone']>, string> = {
+  transparent: '',
+  subtle: 'rounded-3xl border border-grey-09 bg-white p-6 sm:p-8',
+};
+
 /**
  * Wrapper component for PageEditor that loads and pre-resolves data.
  *
@@ -95,6 +114,18 @@ export function PageEditorWrapper({ puckConfig }: PageEditorWrapperProps) {
   const enhancedConfig = useMemo(() => {
     if (!puckConfig || !blocksData?.items) return puckConfig;
 
+    const blockOptions: ContentBlockOption[] = blocksData.items.map((block) => {
+      const locales = Object.keys(block.locales);
+      const firstLocale = locales.length > 0 ? block.locales[locales[0]] : null;
+      const label = firstLocale?.meta?.title || firstLocale?.name || block.id;
+
+      return {
+        value: block.id,
+        label,
+        description: firstLocale?.meta?.description,
+      };
+    });
+
     const blockComponents: Record<string, ComponentConfig<{ contentId: string }>> = {};
     const blockCategoryList: string[] = [];
 
@@ -121,6 +152,43 @@ export function PageEditorWrapper({ puckConfig }: PageEditorWrapperProps) {
 
     const existingCategories = puckConfig.categories || {};
     const existingComponents = puckConfig.components || {};
+    const contentBlockSection = existingComponents.ContentBlockSection as
+      | ComponentConfig<ContentBlockSectionProps>
+      | undefined;
+
+    const enhancedContentBlockSection = contentBlockSection
+      ? {
+          ...contentBlockSection,
+          fields: {
+            ...contentBlockSection.fields,
+            blockId: {
+              type: 'custom',
+              label: 'Content Block',
+              render: ({ value, onChange }: { value: string; onChange: (value: string) => void }) => (
+                <ContentBlockSelectorField value={value} onChange={onChange} options={blockOptions} />
+              ),
+            },
+          },
+          render: ({ blockId, label, tone = 'transparent', width = 'default' }: ContentBlockSectionProps) => (
+            <section className="py-16 sm:py-20">
+              <div className={cn('mx-auto px-4 sm:px-6 lg:px-8', contentBlockWidthClasses[width])}>
+                {label ? (
+                  <p className="mb-4 text-sm font-medium uppercase tracking-[0.18em] text-azure-04">{label}</p>
+                ) : null}
+                <div className={cn(contentBlockToneClasses[tone])}>
+                  {blockId ? (
+                    <BlockContentWrapper contentId={blockId} />
+                  ) : (
+                    <div className="rounded border border-dashed border-grey-09 px-5 py-6 text-sm text-grey-04">
+                      Select an MDX content block to render here.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </section>
+          ),
+        }
+      : undefined;
 
     return {
       ...puckConfig,
@@ -133,6 +201,7 @@ export function PageEditorWrapper({ puckConfig }: PageEditorWrapperProps) {
       },
       components: {
         ...existingComponents,
+        ...(enhancedContentBlockSection && { ContentBlockSection: enhancedContentBlockSection }),
         ...blockComponents,
       } as Record<string, ComponentConfig<any>>,
     } as Config;
@@ -182,7 +251,7 @@ export function PageEditorWrapper({ puckConfig }: PageEditorWrapperProps) {
     return () => {
       cancelled = true;
     };
-  }, [content?.localized?.etag, enhancedConfig, dataContextResponse]);
+  }, [content?.localized?.content?.puckData, enhancedConfig, dataContextResponse]);
 
   // Show loading while fetching or resolving
   if (isLoadingContent || isLoadingDataContext || isResolving || !resolvedPuckData) {

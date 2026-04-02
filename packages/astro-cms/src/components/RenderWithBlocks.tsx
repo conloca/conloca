@@ -1,6 +1,7 @@
 import type { MDXBlockEvaluationResult } from '@conloca/mdx/node';
 import type { ComponentConfig, Config, Data } from '@puckeditor/core';
 import { Render } from '@puckeditor/core';
+import cn from 'clsx';
 import type { ComponentType } from 'react';
 import { hasHydratableComponents } from '../lib/hydration-utils.js';
 import { RenderWithHydration } from './RenderWithHydration.js';
@@ -11,11 +12,33 @@ interface MDXComponent {
   Component: ComponentType;
 }
 
+function isRenderableBlock(block: MDXBlockEvaluationResult | MDXComponent): block is MDXComponent {
+  return 'Component' in block && !('ok' in block);
+}
+
 interface RenderWithBlocksProps {
   config: Config;
   data: Data;
   mdxComponents: MDXComponent[];
 }
+
+interface ContentBlockSectionProps {
+  label?: string;
+  blockId: string;
+  width?: 'narrow' | 'default';
+  tone?: 'transparent' | 'subtle';
+}
+
+const contentBlockWidthClasses: Record<NonNullable<ContentBlockSectionProps['width']>, string> = {
+  narrow: 'max-w-3xl',
+  default: 'max-w-4xl',
+};
+
+const contentBlockToneClasses: Record<NonNullable<ContentBlockSectionProps['tone']>, string> = {
+  transparent: '',
+  subtle:
+    'rounded-3xl border border-surface-200/80 bg-surface-100/70 p-6 sm:p-8 dark:border-surface-800/60 dark:bg-surface-900/50',
+};
 
 function createFailedBlockComponent(block: Extract<MDXBlockEvaluationResult, { ok: false }>): ComponentType {
   return function FailedBlockComponent() {
@@ -29,8 +52,12 @@ function createFailedBlockComponent(block: Extract<MDXBlockEvaluationResult, { o
   };
 }
 
-function resolveRenderableBlocks(blocks: MDXBlockEvaluationResult[]): MDXComponent[] {
+function resolveRenderableBlocks(blocks: Array<MDXBlockEvaluationResult | MDXComponent>): MDXComponent[] {
   return blocks.map((block) => {
+    if (isRenderableBlock(block)) {
+      return block;
+    }
+
     if (block.ok) {
       return block;
     }
@@ -67,6 +94,7 @@ function RenderWithBlocks({ config, data, mdxComponents }: RenderWithBlocksProps
   // Build enhanced config with MDX blocks
   const blockComponents: Record<string, ComponentConfig> = {};
   const blockCategoryList: string[] = [];
+  const blockComponentMap = new Map(mdxComponents.map((block) => [block.id, block]));
 
   // Create component configs for each block
   mdxComponents.forEach((block) => {
@@ -82,7 +110,7 @@ function RenderWithBlocks({ config, data, mdxComponents }: RenderWithBlocksProps
       render: () => {
         // Use blockId and BlockComponent from closure - no prop dependency
         return (
-          <div className="mdx-content prose prose-sm max-w-none">
+          <div className="mdx-content conloca-prose max-w-none">
             <BlockComponent />
           </div>
         );
@@ -94,10 +122,47 @@ function RenderWithBlocks({ config, data, mdxComponents }: RenderWithBlocksProps
   // Merge with existing config
   const existingCategories = config.categories || {};
   const existingComponents = config.components || {};
+  const contentBlockSection = existingComponents.ContentBlockSection as
+    | ComponentConfig<ContentBlockSectionProps>
+    | undefined;
+
+  const enhancedContentBlockSection = contentBlockSection
+    ? {
+        ...contentBlockSection,
+        render: ({ blockId, label, tone = 'transparent', width = 'default' }: ContentBlockSectionProps) => {
+          const selectedBlock = blockComponentMap.get(blockId);
+          const SelectedBlockComponent = selectedBlock?.Component;
+
+          return (
+            <section className="py-16 sm:py-20">
+              <div className={cn('mx-auto px-4 sm:px-6 lg:px-8', contentBlockWidthClasses[width])}>
+                {label ? (
+                  <p className="mb-4 text-sm font-medium uppercase tracking-[0.18em] text-brand-700 dark:text-brand-300">
+                    {label}
+                  </p>
+                ) : null}
+                <div className={cn(contentBlockToneClasses[tone])}>
+                  {SelectedBlockComponent ? (
+                    <div className="mdx-content conloca-prose max-w-none">
+                      <SelectedBlockComponent />
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-surface-300 px-5 py-6 text-sm text-surface-500 dark:border-surface-700 dark:text-surface-400">
+                      Select an MDX content block to render here.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </section>
+          );
+        },
+      }
+    : undefined;
 
   // Merge block components with existing config components
   const mergedComponents = {
     ...existingComponents,
+    ...(enhancedContentBlockSection && { ContentBlockSection: enhancedContentBlockSection }),
     ...blockComponents,
   } as Config['components'];
 
@@ -159,7 +224,7 @@ function RenderWithBlocks({ config, data, mdxComponents }: RenderWithBlocksProps
 export function createPageRendererWithBlocks(
   config: Config,
   data: Data,
-  mdxComponents: MDXBlockEvaluationResult[],
+  mdxComponents: Array<MDXBlockEvaluationResult | MDXComponent>,
 ): ComponentType {
   const renderableBlocks = resolveRenderableBlocks(mdxComponents);
 

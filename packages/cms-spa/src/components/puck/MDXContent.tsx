@@ -146,7 +146,7 @@ function MDXContentInner({ entry }: MDXContentProps) {
   }
 
   return (
-    <div className="mdx-content prose prose-sm max-w-none">
+    <div className="mdx-content conloca-prose max-w-none">
       <Component />
     </div>
   );

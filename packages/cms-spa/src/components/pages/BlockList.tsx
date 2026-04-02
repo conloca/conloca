@@ -17,11 +17,17 @@ import { BlockPropertiesDialog } from '../dialogs/BlockPropertiesDialog';
 import { DeleteConfirmDialog } from '../dialogs/DeleteConfirmDialog';
 import { ErrorModal } from '../dialogs/ErrorModal';
 import { CMSMDXEditorModal } from '../editor/CMSMDXEditor';
+import {
+  contentBlockTemplates,
+  getContentBlockTemplate,
+  renderContentBlockTemplate,
+} from '../editor/content-block-templates';
 
 export function BlockList() {
   const [selectedCategory, setSelectedCategory] = useState<string | 'all'>('all');
   const [showMDXEditor, setShowMDXEditor] = useState(false);
   const [newBlockName, setNewBlockName] = useState('');
+  const [selectedTemplateId, setSelectedTemplateId] = useState(contentBlockTemplates[0]?.id || '');
   const [createDialog, openCreateDialog, closeCreateDialog] = useDialogState({});
   const [titleInput, setTitleInput] = useState('');
   const [deleteDialog, openDeleteDialog, closeDeleteDialog] = useDialogState({
@@ -161,6 +167,7 @@ export function BlockList() {
 
   const handleNewBlock = () => {
     setTitleInput('');
+    setSelectedTemplateId(contentBlockTemplates[0]?.id || '');
     openCreateDialog({});
   };
 
@@ -180,11 +187,13 @@ export function BlockList() {
       name: slugify(newBlockName) || 'untitled',
       meta: {
         title: newBlockName, // Keep original title for display
+        category: getContentBlockTemplate(selectedTemplateId)?.category,
       },
       locales: {
         en: {
           meta: {
             title: newBlockName, // Keep original title for display
+            category: getContentBlockTemplate(selectedTemplateId)?.category,
           },
           content: {
             mdx: content,
@@ -522,6 +531,24 @@ export function BlockList() {
               />
               <p className="mt-2 text-sm text-grey-04">This will be used as the display name for your block</p>
             </div>
+            <div className="mb-4">
+              <label htmlFor="block-template" className="block text-sm font-medium mb-2">
+                Starter Template
+              </label>
+              <select
+                id="block-template"
+                value={selectedTemplateId}
+                onChange={(e) => setSelectedTemplateId(e.target.value)}
+                className="w-full px-3 py-2 border border-grey-09 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
+              >
+                {contentBlockTemplates.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.label}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-2 text-sm text-grey-04">{getContentBlockTemplate(selectedTemplateId)?.description}</p>
+            </div>
             <div className="flex justify-end gap-3">
               <button
                 onClick={closeCreateDialog}
@@ -547,7 +574,8 @@ export function BlockList() {
         isOpen={showMDXEditor}
         onClose={() => setShowMDXEditor(false)}
         filePath={newBlockName}
-        initialContent={`# ${newBlockName}\n\nStart writing your block content here...\n`}
+        initialTemplateId={selectedTemplateId}
+        initialContent={renderContentBlockTemplate(selectedTemplateId, newBlockName)}
         onSave={handleSaveBlock}
       />
 

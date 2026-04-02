@@ -169,3 +169,140 @@
 .faq-details[open] .faq-chevron {
   transform: rotate(180deg);
 }
+
+.conloca-prose {
+  color: var(--color-text-secondary);
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1.75;
+}
+
+.conloca-prose > :first-child {
+  margin-top: 0;
+}
+
+.conloca-prose > :last-child {
+  margin-bottom: 0;
+}
+
+.conloca-prose :where(h1, h2, h3, h4, h5, h6) {
+  color: var(--color-text-heading);
+  font-weight: 700;
+  line-height: 1.2;
+  margin-top: 0;
+  margin-bottom: 1rem;
+}
+
+.conloca-prose :where(h1) {
+  font-size: clamp(2rem, 4vw, 2.75rem);
+  margin-bottom: 1.25rem;
+}
+
+.conloca-prose :where(h2) {
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  margin-top: 2.75rem;
+}
+
+.conloca-prose :where(h3) {
+  font-size: 1.25rem;
+  margin-top: 2rem;
+}
+
+.conloca-prose :where(h4, h5, h6) {
+  font-size: 1rem;
+  margin-top: 1.5rem;
+}
+
+.conloca-prose :where(p, ul, ol, blockquote, pre, table) {
+  margin-top: 0;
+  margin-bottom: 1.25rem;
+}
+
+.conloca-prose :where(ul, ol) {
+  padding-left: 1.5rem;
+}
+
+.conloca-prose :where(ul) {
+  list-style: disc;
+}
+
+.conloca-prose :where(ol) {
+  list-style: decimal;
+}
+
+.conloca-prose :where(li + li) {
+  margin-top: 0.35rem;
+}
+
+.conloca-prose :where(li > p) {
+  margin-bottom: 0.5rem;
+}
+
+.conloca-prose :where(a) {
+  color: var(--color-brand-700);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--color-brand-500) 40%, transparent);
+  text-underline-offset: 0.2em;
+}
+
+.conloca-prose :where(strong) {
+  color: var(--color-text-heading);
+  font-weight: 600;
+}
+
+.conloca-prose :where(code) {
+  background: var(--color-bg-code);
+  border: 1px solid var(--color-border);
+  border-radius: 0.4rem;
+  color: var(--color-text-code);
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  padding: 0.15rem 0.4rem;
+}
+
+.conloca-prose :where(pre) {
+  background: var(--color-bg-code);
+  border: 1px solid var(--color-border);
+  border-radius: 1rem;
+  overflow-x: auto;
+  padding: 1rem 1.25rem;
+}
+
+.conloca-prose :where(pre code) {
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+
+.conloca-prose :where(blockquote) {
+  border-left: 3px solid var(--color-brand-400);
+  color: var(--color-text-primary);
+  padding-left: 1rem;
+}
+
+.conloca-prose :where(hr) {
+  border: 0;
+  border-top: 1px solid var(--color-border);
+  margin: 2rem 0;
+}
+
+.conloca-prose :where(table) {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.conloca-prose :where(th, td) {
+  border: 1px solid var(--color-border);
+  padding: 0.75rem 0.9rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.conloca-prose :where(th) {
+  color: var(--color-text-heading);
+  font-weight: 600;
+}
+
+.conloca-prose--editor {
+  min-height: 100%;
+}
