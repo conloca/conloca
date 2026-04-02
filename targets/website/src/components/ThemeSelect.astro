@@ -39,13 +39,13 @@
   }
 </style>
 
-<script>
+<script is:inline>
   function initStarlightToggle() {
     const sunIcon = document.getElementById('sl-theme-icon-sun')
     const moonIcon = document.getElementById('sl-theme-icon-moon')
     const btn = document.getElementById('starlight-theme-toggle')
 
-    function updateIcons(theme: string) {
+    function updateIcons(theme) {
       if (theme === 'dark') {
         sunIcon?.classList.remove('hidden')
         moonIcon?.classList.add('hidden')
@@ -53,6 +53,16 @@
         sunIcon?.classList.add('hidden')
         moonIcon?.classList.remove('hidden')
       }
+    }
+
+    if (!btn) {
+      updateIcons(document.documentElement.dataset.theme || 'dark')
+      return
+    }
+
+    if (btn.dataset.bound === 'true') {
+      updateIcons(document.documentElement.dataset.theme || 'dark')
+      return
     }
 
     function toggleTheme() {
@@ -63,6 +73,7 @@
       updateIcons(next)
     }
 
+    btn.dataset.bound = 'true'
     btn?.addEventListener('click', toggleTheme)
     updateIcons(document.documentElement.dataset.theme || 'dark')
   }

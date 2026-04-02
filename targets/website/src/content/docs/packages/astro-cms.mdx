@@ -12,6 +12,11 @@ content page routing.
 
 ## Overview
 
+<Aside type="note">
+  This page documents the current branch of Conloca. If the public deployment still shows older entry points or
+  examples, treat the package source in this repo as the source of truth.
+</Aside>
+
 `@conloca/astro-cms` is the main integration package that adds Conloca CMS to any Astro site. Install this package to
 get visual page editing with Puck, content management, a media library, multi-locale support, and optional Cloudflare
 Access request validation.
@@ -74,8 +79,8 @@ export default defineConfig({
 
 ### `@conloca/astro-cms` (main)
 
-Static-safe utilities, route helpers, and schemas. Node-only Astro integration APIs live under dedicated `node`
-entry points.
+Static-safe utilities, route helpers, and schemas. Node-only Astro integration APIs live under dedicated `node` entry
+points.
 
 ```typescript
 import { pageMetaSchema, blockMetaSchema } from '@conloca/astro-cms';

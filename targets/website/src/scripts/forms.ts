@@ -1,25 +1,32 @@
 const WORKER_URL = '/api/subscribe';
 
-function setupForm(formId: string, msgId: string) {
-  const form = document.getElementById(formId) as HTMLFormElement | null;
-  const msg = document.getElementById(msgId);
-  if (!form || !msg) return;
+function setMessage(messageElement: HTMLElement, text: string, className: string) {
+  messageElement.textContent = text;
+  messageElement.className = className;
+}
+
+function setupForm(form: HTMLFormElement) {
+  const messageElement = form.parentElement?.querySelector<HTMLElement>('[data-subscribe-message]');
+  const submitButton = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+  const successMessage = form.dataset.subscribeSuccessMessage;
+
+  if (!messageElement || !submitButton || form.dataset.subscribeBound === 'true') return;
+
+  form.dataset.subscribeBound = 'true';
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const formData = new FormData(form);
-    const email = (formData.get('email') as string).trim();
-    const intent = formData.get('intent') as string;
-    const btn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+    const email = String(formData.get('email') ?? '').trim();
+    const intent = String(formData.get('intent') ?? 'newsletter');
 
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      msg.textContent = 'Please enter a valid email address.';
-      msg.className = 'mt-3 text-sm text-red-400';
+      setMessage(messageElement, 'Please enter a valid email address.', 'mt-3 text-sm text-red-400');
       return;
     }
 
-    btn.disabled = true;
-    btn.textContent = 'Sending...';
+    submitButton.disabled = true;
+    submitButton.textContent = 'Sending...';
 
     try {
       const res = await fetch(WORKER_URL, {
@@ -29,22 +36,23 @@ function setupForm(formId: string, msgId: string) {
       });
 
       if (res.ok) {
-        msg.textContent =
-          intent === 'hosted' ? "You're on the list! We'll be in touch." : 'Subscribed! Check your inbox.';
-        msg.className = 'mt-3 text-sm text-brand-600 dark:text-brand-400';
+        setMessage(
+          messageElement,
+          successMessage ||
+            (intent === 'hosted' ? "You're on the list! We'll be in touch." : 'Subscribed! Check your inbox.'),
+          'mt-3 text-sm text-brand-600 dark:text-brand-400',
+        );
         form.reset();
       } else {
         throw new Error('Request failed');
       }
     } catch {
-      msg.textContent = 'Something went wrong. Please try again.';
-      msg.className = 'mt-3 text-sm text-red-400';
+      setMessage(messageElement, 'Something went wrong. Please try again.', 'mt-3 text-sm text-red-400');
     } finally {
-      btn.disabled = false;
-      btn.textContent = intent === 'hosted' ? 'Join Waitlist' : 'Subscribe';
+      submitButton.disabled = false;
+      submitButton.textContent = intent === 'hosted' ? 'Join Waitlist' : 'Subscribe';
     }
   });
 }
 
-setupForm('waitlist-form', 'waitlist-msg');
-setupForm('newsletter-form', 'newsletter-msg');
+document.querySelectorAll<HTMLFormElement>('[data-subscribe-form]').forEach(setupForm);

@@ -1,8 +1,6 @@
-import { withHydration } from '@conloca/astro-cms/hydration';
 import type { ComponentConfig } from '@puckeditor/core';
 import cn from 'clsx';
-import type { FormEvent, JSX } from 'react';
-import { useState } from 'react';
+import type { JSX } from 'react';
 
 type ComparisonRow = {
   id: string;
@@ -18,8 +16,12 @@ export type HostedComparisonProps = {
   rows: ComparisonRow[];
   ctaTitle: string;
   ctaSubtitle: string;
-  waitlistEnabled: boolean;
+  waitlistEnabled: boolean | 'true' | 'false';
 };
+
+function shouldShowWaitlist(waitlistEnabled: HostedComparisonProps['waitlistEnabled']) {
+  return waitlistEnabled === true || waitlistEnabled === 'true';
+}
 
 function CheckIcon() {
   return (
@@ -64,37 +66,15 @@ function renderCellValue(value: string) {
 }
 
 function WaitlistForm({ isEditing }: { isEditing: boolean }) {
-  const [message, setMessage] = useState('');
-
-  function handleSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (isEditing) return;
-    const form = e.currentTarget;
-    const data = new FormData(form);
-    const email = data.get('email') as string;
-    if (!email) return;
-
-    fetch('/api/subscribe', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, intent: 'hosted' }),
-    })
-      .then((res) => {
-        if (res.ok) {
-          setMessage("Thanks! We'll be in touch.");
-          form.reset();
-        } else {
-          setMessage('Something went wrong. Please try again.');
-        }
-      })
-      .catch(() => {
-        setMessage('Something went wrong. Please try again.');
-      });
-  }
-
   return (
     <div>
-      <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3">
+      <form
+        data-subscribe-form
+        data-subscribe-success-message="You're on the list! We'll be in touch."
+        action="/api/subscribe"
+        method="post"
+        className="flex flex-col sm:flex-row gap-3"
+      >
         <input type="hidden" name="intent" value="hosted" />
         <input
           type="email"
@@ -103,16 +83,19 @@ function WaitlistForm({ isEditing }: { isEditing: boolean }) {
           placeholder="you@company.com"
           autoComplete="email"
           aria-label="Email address for waitlist"
+          disabled={isEditing}
           className="flex-1 bg-surface-100 dark:bg-surface-800/60 border border-surface-300 dark:border-surface-700/60 rounded-lg px-4 py-3 text-sm text-surface-900 dark:text-white placeholder:text-surface-400 dark:placeholder:text-surface-500 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500"
         />
         <button
           type="submit"
+          disabled={isEditing}
           className="bg-brand-500 hover:bg-brand-400 text-surface-950 font-semibold px-6 py-3 rounded-lg transition-all duration-200 text-sm whitespace-nowrap hover:shadow-lg hover:shadow-brand-500/20"
         >
           Join Waitlist
         </button>
       </form>
-      {message && <p className={cn('mt-3 text-sm', message ? '' : 'hidden')}>{message}</p>}
+      <p data-subscribe-message className={cn('mt-3 text-sm', isEditing && 'hidden')} />
+      {isEditing && <p className="mt-3 text-sm text-surface-500">Form submission is disabled while editing in Puck.</p>}
     </div>
   );
 }
@@ -213,7 +196,7 @@ export const HostedComparisonRender = ({
         <div className="reveal max-w-md mx-auto text-center">
           <h3 className="text-xl font-semibold text-surface-900 dark:text-white mb-2">{ctaTitle}</h3>
           <p className="text-surface-500 dark:text-surface-400 text-sm mb-6">{ctaSubtitle}</p>
-          {waitlistEnabled && <WaitlistForm isEditing={puck.isEditing} />}
+          {shouldShowWaitlist(waitlistEnabled) && <WaitlistForm isEditing={puck.isEditing} />}
         </div>
       </div>
     </section>
@@ -257,5 +240,5 @@ export const HostedComparison: ComponentConfig<HostedComparisonProps> = {
     ctaSubtitle: 'Be first to know when Conloca Cloud launches.',
     waitlistEnabled: true,
   },
-  render: withHydration(HostedComparisonRender, 'visible'),
+  render: HostedComparisonRender,
 };

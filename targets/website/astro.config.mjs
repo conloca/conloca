@@ -19,7 +19,6 @@ export default defineConfig({
         ThemeSelect: './src/components/ThemeSelect.astro',
       },
       sidebar: [
-        { label: 'Overview', slug: 'overview' },
         { label: 'Getting Started', slug: 'getting-started' },
         {
           label: 'Concepts',
@@ -67,7 +66,7 @@ export default defineConfig({
           },
         },
         fallback: 'passthrough',
-        onConflict: 'warn',
+        onConflict: 'silent',
         siteName: 'default',
         locale: 'en',
       },
