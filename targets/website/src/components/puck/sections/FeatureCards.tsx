@@ -1,5 +1,6 @@
 import type { ComponentConfig } from '@puckeditor/core';
 import cn from 'clsx';
+import { EmptySlotPlaceholder } from '../shared/EmptySlotPlaceholder';
 
 type FeatureCard = {
   id: string;
@@ -40,9 +41,12 @@ export const FeatureCards: ComponentConfig<FeatureCardsProps> = {
     },
     subtitle: {
       type: 'textarea',
+      contentEditable: true,
     },
     cards: {
       type: 'array',
+      min: 1,
+      max: 8,
       getItemSummary: (item) => item.title || 'Card',
       defaultItemProps: {
         id: `card-${Date.now()}`,
@@ -53,8 +57,8 @@ export const FeatureCards: ComponentConfig<FeatureCardsProps> = {
         linkLabel: '',
       },
       arrayFields: {
-        id: { type: 'text', label: 'ID (unique)' },
-        iconSvgPath: { type: 'textarea', label: 'SVG path d attribute' },
+        id: { type: 'text', visible: false },
+        iconSvgPath: { type: 'textarea', label: 'Icon SVG Path' },
         iconText: { type: 'text', label: 'Icon text (shown instead of SVG when set)' },
         title: { type: 'text' },
         description: { type: 'textarea' },
@@ -129,62 +133,66 @@ export const FeatureCards: ComponentConfig<FeatureCardsProps> = {
           )}
 
           {/* Cards grid */}
-          <div className={gridColsClass[columns]}>
-            {cards.map((card, idx) => (
-              <div
-                key={card.id}
-                className="reveal group bg-surface-100/60 dark:bg-surface-900/40 border border-surface-200/80 dark:border-surface-800/50 rounded-xl p-6 hover:border-brand-500/30 hover:bg-surface-100 dark:hover:bg-surface-900/70 transition-all duration-300"
-                style={{ animationDelay: `${idx * 0.08}s` }}
-              >
-                {/* Icon wrapper */}
-                <div className="w-10 h-10 rounded-lg bg-brand-500/10 border border-brand-500/20 flex items-center justify-center mb-4 group-hover:bg-brand-500/20 transition-colors duration-300">
-                  {card.iconText ? (
-                    <span className="font-mono text-[13px] font-bold text-brand-600 dark:text-brand-400 leading-none">
-                      {card.iconText}
-                    </span>
-                  ) : (
-                    <svg
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      className="text-brand-600 dark:text-brand-400"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
+          {cards.length === 0 ? (
+            <EmptySlotPlaceholder label="Add cards using the sidebar panel" />
+          ) : (
+            <div className={gridColsClass[columns]}>
+              {cards.map((card, idx) => (
+                <div
+                  key={card.id}
+                  className="reveal group bg-surface-100/60 dark:bg-surface-900/40 border border-surface-200/80 dark:border-surface-800/50 rounded-xl p-6 hover:border-brand-500/30 hover:bg-surface-100 dark:hover:bg-surface-900/70 transition-all duration-300"
+                  style={{ animationDelay: `${idx * 0.08}s` }}
+                >
+                  {/* Icon wrapper */}
+                  <div className="w-10 h-10 rounded-lg bg-brand-500/10 border border-brand-500/20 flex items-center justify-center mb-4 group-hover:bg-brand-500/20 transition-colors duration-300">
+                    {card.iconText ? (
+                      <span className="font-mono text-[13px] font-bold text-brand-600 dark:text-brand-400 leading-none">
+                        {card.iconText}
+                      </span>
+                    ) : (
+                      <svg
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        className="text-brand-600 dark:text-brand-400"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d={card.iconSvgPath} />
+                      </svg>
+                    )}
+                  </div>
+                  {/* Card title */}
+                  <h3 className="text-surface-900 dark:text-white font-medium mb-2 text-sm">{card.title}</h3>
+                  {/* Card description */}
+                  <p className="text-surface-500 dark:text-surface-400 text-sm leading-relaxed">{card.description}</p>
+                  {card.href && (
+                    <a
+                      href={card.href}
+                      className="inline-flex items-center gap-1 text-brand-600 dark:text-brand-400 hover:text-brand-500 dark:hover:text-brand-300 text-xs mt-2 transition-colors"
                     >
-                      <path d={card.iconSvgPath} />
-                    </svg>
+                      {card.linkLabel || 'Learn more'}
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M5 12h14M12 5l7 7-7 7" />
+                      </svg>
+                    </a>
                   )}
                 </div>
-                {/* Card title */}
-                <h3 className="text-surface-900 dark:text-white font-medium mb-2 text-sm">{card.title}</h3>
-                {/* Card description */}
-                <p className="text-surface-500 dark:text-surface-400 text-sm leading-relaxed">{card.description}</p>
-                {card.href && (
-                  <a
-                    href={card.href}
-                    className="inline-flex items-center gap-1 text-brand-600 dark:text-brand-400 hover:text-brand-500 dark:hover:text-brand-300 text-xs mt-2 transition-colors"
-                  >
-                    {card.linkLabel || 'Learn more'}
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M5 12h14M12 5l7 7-7 7" />
-                    </svg>
-                  </a>
-                )}
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
     );

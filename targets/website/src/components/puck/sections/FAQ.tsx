@@ -1,5 +1,6 @@
 import type { ComponentConfig } from '@puckeditor/core';
 import cn from 'clsx';
+import { EmptySlotPlaceholder } from '../shared/EmptySlotPlaceholder';
 import { renderLimitedRichText } from '../shared/render-limited-rich-text';
 
 type FAQItem = {
@@ -76,9 +77,11 @@ const FAQRender = ({
 
         {/* FAQ items */}
         <div className="space-y-4">
-          {items.map((item) => (
-            <FAQAccordionItem key={item.id} item={item} />
-          ))}
+          {items.length > 0 ? (
+            items.map((item) => <FAQAccordionItem key={item.id} item={item} />)
+          ) : (
+            <EmptySlotPlaceholder label="Add FAQ items using the sidebar panel" />
+          )}
         </div>
 
         {/* CTA */}
@@ -125,9 +128,10 @@ export const FAQ: ComponentConfig<FAQProps> = {
   fields: {
     label: { type: 'text', label: 'Section Label' },
     title: { type: 'text', contentEditable: true },
-    subtitle: { type: 'textarea' },
+    subtitle: { type: 'textarea', contentEditable: true },
     items: {
       type: 'array',
+      min: 1,
       getItemSummary: (item) => item.question || 'Question',
       defaultItemProps: {
         id: `faq-${Date.now()}`,
@@ -135,9 +139,9 @@ export const FAQ: ComponentConfig<FAQProps> = {
         answer: 'Answer text here.',
       },
       arrayFields: {
-        id: { type: 'text', label: 'ID' },
+        id: { type: 'text', visible: false },
         question: { type: 'text' },
-        answer: { type: 'textarea', label: 'Answer (markdown-ish)' },
+        answer: { type: 'textarea', label: 'Answer' },
       },
     },
     ctaText: { type: 'text', label: 'CTA Text' },
@@ -148,7 +152,7 @@ export const FAQ: ComponentConfig<FAQProps> = {
       getItemSummary: (item) => item.label || 'Button',
       defaultItemProps: { id: `btn-${Date.now()}`, label: 'Button', href: '#', variant: 'primary' as const },
       arrayFields: {
-        id: { type: 'text', label: 'ID' },
+        id: { type: 'text', visible: false },
         label: { type: 'text' },
         href: { type: 'text' },
         variant: {
@@ -165,7 +169,7 @@ export const FAQ: ComponentConfig<FAQProps> = {
     label: 'Support',
     title: 'Frequently Asked Questions',
     subtitle: 'Common questions about Conloca CMS',
-    items: [],
+    items: [{ id: 'faq-1', question: 'Question?', answer: 'Answer text here.' }],
     ctaText: 'Have more questions?',
     ctaButtons: [{ id: 'btn-1', label: 'Read the Docs', href: '/getting-started/', variant: 'primary' }],
   },

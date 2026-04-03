@@ -1,6 +1,7 @@
 import type { ComponentConfig } from '@puckeditor/core';
 import cn from 'clsx';
 import type { JSX } from 'react';
+import { EmptySlotPlaceholder } from '../shared/EmptySlotPlaceholder';
 
 type ComparisonRow = {
   id: string;
@@ -154,43 +155,49 @@ export const HostedComparisonRender = ({
         </div>
 
         {/* Comparison table */}
-        <div className="reveal max-w-3xl mx-auto mb-16">
-          <div className="bg-surface-100/60 dark:bg-surface-900/60 border border-surface-200/80 dark:border-surface-800/50 rounded-2xl overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-surface-200/80 dark:border-surface-800/60">
-                    <th className="text-left text-sm font-medium text-surface-500 dark:text-surface-400 px-6 py-4">
-                      Feature
-                    </th>
-                    <th className="text-center text-sm font-medium text-surface-500 dark:text-surface-400 px-6 py-4">
-                      Open Source
-                    </th>
-                    <th className="text-center text-sm font-medium px-6 py-4">
-                      <span className="text-brand-600 dark:text-brand-400">Hosted</span>
-                      <span className="text-surface-500 text-xs ml-1">(Coming Soon)</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row, i) => (
-                    <tr
-                      key={row.id}
-                      className={cn(
-                        'border-b border-surface-200/30 dark:border-surface-800/30',
-                        i % 2 === 0 && 'bg-surface-200/30 dark:bg-surface-800/10',
-                      )}
-                    >
-                      <td className="px-6 py-3.5 text-sm text-surface-600 dark:text-surface-300">{row.feature}</td>
-                      <td className="px-6 py-3.5 text-center">{renderCellValue(row.oss)}</td>
-                      <td className="px-6 py-3.5 text-center">{renderCellValue(row.hosted)}</td>
+        {rows.length === 0 ? (
+          <div className="max-w-3xl mx-auto mb-16">
+            <EmptySlotPlaceholder label="Add comparison rows using the sidebar panel" />
+          </div>
+        ) : (
+          <div className="reveal max-w-3xl mx-auto mb-16">
+            <div className="bg-surface-100/60 dark:bg-surface-900/60 border border-surface-200/80 dark:border-surface-800/50 rounded-2xl overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-surface-200/80 dark:border-surface-800/60">
+                      <th className="text-left text-sm font-medium text-surface-500 dark:text-surface-400 px-6 py-4">
+                        Feature
+                      </th>
+                      <th className="text-center text-sm font-medium text-surface-500 dark:text-surface-400 px-6 py-4">
+                        Open Source
+                      </th>
+                      <th className="text-center text-sm font-medium px-6 py-4">
+                        <span className="text-brand-600 dark:text-brand-400">Hosted</span>
+                        <span className="text-surface-500 text-xs ml-1">(Coming Soon)</span>
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {rows.map((row, i) => (
+                      <tr
+                        key={row.id}
+                        className={cn(
+                          'border-b border-surface-200/30 dark:border-surface-800/30',
+                          i % 2 === 0 && 'bg-surface-200/30 dark:bg-surface-800/10',
+                        )}
+                      >
+                        <td className="px-6 py-3.5 text-sm text-surface-600 dark:text-surface-300">{row.feature}</td>
+                        <td className="px-6 py-3.5 text-center">{renderCellValue(row.oss)}</td>
+                        <td className="px-6 py-3.5 text-center">{renderCellValue(row.hosted)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Waitlist CTA */}
         <div className="reveal max-w-md mx-auto text-center">
@@ -206,18 +213,33 @@ export const HostedComparisonRender = ({
 export const HostedComparison: ComponentConfig<HostedComparisonProps> = {
   label: 'Hosted Comparison',
   fields: {
-    badgeText: { type: 'text', label: 'Badge Text' },
+    badgeText: { type: 'text', label: 'Badge Text', contentEditable: true },
     title: { type: 'text', contentEditable: true },
-    subtitle: { type: 'textarea' },
+    subtitle: { type: 'textarea', contentEditable: true },
     rows: {
       type: 'array',
+      min: 1,
       getItemSummary: (item) => item.feature || 'Row',
       defaultItemProps: { id: `row-${Date.now()}`, feature: 'Feature', oss: 'true', hosted: 'true' },
       arrayFields: {
-        id: { type: 'text', label: 'ID' },
+        id: { type: 'text', visible: false },
         feature: { type: 'text' },
-        oss: { type: 'text', label: 'OSS (true/false/text)' },
-        hosted: { type: 'text', label: 'Hosted (true/false/text)' },
+        oss: {
+          type: 'select',
+          label: 'Open Source',
+          options: [
+            { label: 'Yes', value: 'true' },
+            { label: 'No', value: 'false' },
+          ],
+        },
+        hosted: {
+          type: 'select',
+          label: 'Hosted',
+          options: [
+            { label: 'Yes', value: 'true' },
+            { label: 'No', value: 'false' },
+          ],
+        },
       },
     },
     ctaTitle: { type: 'text', label: 'CTA Title' },

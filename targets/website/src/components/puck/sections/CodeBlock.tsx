@@ -1,5 +1,6 @@
 import type { ComponentConfig } from '@puckeditor/core';
 import cn from 'clsx';
+import { ColorFieldRender } from '../fields/ColorField';
 
 type LegendItem = {
   id: string;
@@ -72,14 +73,23 @@ export const CodeBlock: ComponentConfig<CodeBlockProps> = {
   fields: {
     filename: { type: 'text', label: 'Filename' },
     code: { type: 'textarea', label: 'Code' },
-    accentColor: { type: 'text', label: 'Accent Color' },
+    accentColor: {
+      type: 'custom',
+      label: 'Accent Color',
+      render: ({ value, onChange }) => <ColorFieldRender value={value} onChange={onChange} />,
+    },
     legendItems: {
       type: 'array',
+      max: 6,
       getItemSummary: (item) => item.label || 'Legend',
       defaultItemProps: { id: `legend-${Date.now()}`, color: '#06b6d4', label: 'Label' },
       arrayFields: {
-        id: { type: 'text', label: 'ID' },
-        color: { type: 'text', label: 'Color' },
+        id: { type: 'text', visible: false },
+        color: {
+          type: 'custom',
+          label: 'Color',
+          render: ({ value, onChange }) => <ColorFieldRender value={value} onChange={onChange} />,
+        },
         label: { type: 'text' },
       },
     },

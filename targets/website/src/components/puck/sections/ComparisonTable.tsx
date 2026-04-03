@@ -1,5 +1,6 @@
 import type { ComponentConfig } from '@puckeditor/core';
 import cn from 'clsx';
+import { EmptySlotPlaceholder } from '../shared/EmptySlotPlaceholder';
 
 type ComparisonRow = {
   id: string;
@@ -45,19 +46,20 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
   fields: {
     label: { type: 'text', label: 'Section Label' },
     title: { type: 'text', contentEditable: true },
-    subtitle: { type: 'textarea' },
+    subtitle: { type: 'textarea', contentEditable: true },
     extendedSubtitle: { type: 'textarea', label: 'Extended Subtitle' },
     columns: {
       type: 'textarea',
       label: 'Columns (one per line)',
     } as never,
-    highlightColumnIndex: { type: 'number', label: 'Highlight Column Index', min: 0 },
+    highlightColumnIndex: { type: 'number', label: 'Highlighted Column (0 = first)', min: 0 },
     rows: {
       type: 'array',
+      min: 1,
       getItemSummary: (item) => item.feature || 'Row',
       defaultItemProps: { id: `row-${Date.now()}`, feature: 'Feature', values: [] },
       arrayFields: {
-        id: { type: 'text', label: 'ID' },
+        id: { type: 'text', visible: false },
         feature: { type: 'text' },
         values: {
           type: 'textarea',
@@ -67,10 +69,11 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
     },
     differentiators: {
       type: 'array',
+      max: 6,
       getItemSummary: (item) => item.title || 'Differentiator',
       defaultItemProps: { id: `diff-${Date.now()}`, title: 'Title', description: 'Description' },
       arrayFields: {
-        id: { type: 'text', label: 'ID' },
+        id: { type: 'text', visible: false },
         title: { type: 'text' },
         description: { type: 'textarea' },
       },
@@ -84,7 +87,7 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
       getItemSummary: (item) => item.label || 'Button',
       defaultItemProps: { id: `btn-${Date.now()}`, label: 'Button', href: '#', variant: 'primary' as const },
       arrayFields: {
-        id: { type: 'text', label: 'ID' },
+        id: { type: 'text', visible: false },
         label: { type: 'text' },
         href: { type: 'text' },
         variant: {
@@ -144,60 +147,66 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
           </div>
 
           {/* Table */}
-          <div className="mb-20 overflow-x-auto">
-            <div className="bg-surface-100/60 dark:bg-surface-900/60 border border-surface-200/80 dark:border-surface-800/50 rounded-2xl overflow-hidden min-w-[640px]">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-surface-200/80 dark:border-surface-800/60">
-                    <th className="text-left text-sm font-medium text-surface-500 dark:text-surface-400 px-6 py-4 w-40">
-                      Feature
-                    </th>
-                    {columns.map((col, i) => (
-                      <th
-                        key={col}
-                        className={cn(
-                          'text-center text-sm font-medium px-4 py-4',
-                          i === highlightColumnIndex
-                            ? 'text-brand-600 dark:text-brand-400'
-                            : 'text-surface-500 dark:text-surface-400',
-                        )}
-                      >
-                        {col}
+          {rows.length === 0 ? (
+            <div className="mb-20">
+              <EmptySlotPlaceholder label="Add comparison rows using the sidebar panel" />
+            </div>
+          ) : (
+            <div className="mb-20 overflow-x-auto">
+              <div className="bg-surface-100/60 dark:bg-surface-900/60 border border-surface-200/80 dark:border-surface-800/50 rounded-2xl overflow-hidden min-w-[640px]">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-surface-200/80 dark:border-surface-800/60">
+                      <th className="text-left text-sm font-medium text-surface-500 dark:text-surface-400 px-6 py-4 w-40">
+                        Feature
                       </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row, i) => (
-                    <tr
-                      key={row.id}
-                      className={cn(
-                        'border-b border-surface-200/30 dark:border-surface-800/30',
-                        i % 2 === 0 && 'bg-surface-200/30 dark:bg-surface-800/10',
-                      )}
-                    >
-                      <th className="text-left px-6 py-3.5 text-sm text-surface-600 dark:text-surface-300 font-medium">
-                        {row.feature}
-                      </th>
-                      {row.values.map((value, j) => (
-                        <td
-                          key={`${row.id}-${columns[j]}`}
+                      {columns.map((col, i) => (
+                        <th
+                          key={col}
                           className={cn(
-                            'px-4 py-3.5 text-center text-sm',
-                            j === highlightColumnIndex && isPositiveValue(value)
+                            'text-center text-sm font-medium px-4 py-4',
+                            i === highlightColumnIndex
                               ? 'text-brand-600 dark:text-brand-400'
                               : 'text-surface-500 dark:text-surface-400',
                           )}
                         >
-                          {value}
-                        </td>
+                          {col}
+                        </th>
                       ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {rows.map((row, i) => (
+                      <tr
+                        key={row.id}
+                        className={cn(
+                          'border-b border-surface-200/30 dark:border-surface-800/30',
+                          i % 2 === 0 && 'bg-surface-200/30 dark:bg-surface-800/10',
+                        )}
+                      >
+                        <th className="text-left px-6 py-3.5 text-sm text-surface-600 dark:text-surface-300 font-medium">
+                          {row.feature}
+                        </th>
+                        {row.values.map((value, j) => (
+                          <td
+                            key={`${row.id}-${columns[j]}`}
+                            className={cn(
+                              'px-4 py-3.5 text-center text-sm',
+                              j === highlightColumnIndex && isPositiveValue(value)
+                                ? 'text-brand-600 dark:text-brand-400'
+                                : 'text-surface-500 dark:text-surface-400',
+                            )}
+                          >
+                            {value}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Differentiators */}
           {differentiators.length > 0 && (

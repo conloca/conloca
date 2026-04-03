@@ -1,4 +1,5 @@
 import type { ComponentConfig } from '@puckeditor/core';
+import { EmptySlotPlaceholder } from '../shared/EmptySlotPlaceholder';
 import { renderLimitedRichText } from '../shared/render-limited-rich-text';
 
 type FlowItem = {
@@ -18,9 +19,11 @@ export const NumberedFlow: ComponentConfig<NumberedFlowProps> = {
   label: 'Numbered Flow',
   fields: {
     title: { type: 'text', contentEditable: true },
-    subtitle: { type: 'textarea' },
+    subtitle: { type: 'textarea', contentEditable: true },
     items: {
       type: 'array',
+      min: 1,
+      max: 10,
       getItemSummary: (item) => item.title || 'Step',
       defaultItemProps: {
         id: `flow-${Date.now()}`,
@@ -29,17 +32,17 @@ export const NumberedFlow: ComponentConfig<NumberedFlowProps> = {
         description: 'Step description.',
       },
       arrayFields: {
-        id: { type: 'text', label: 'ID' },
+        id: { type: 'text', visible: false },
         number: { type: 'text', label: 'Number' },
         title: { type: 'text' },
-        description: { type: 'textarea', label: 'Description (markdown-ish)' },
+        description: { type: 'textarea', label: 'Description' },
       },
     },
   },
   defaultProps: {
     title: '',
     subtitle: '',
-    items: [],
+    items: [{ id: 'flow-1', number: '1', title: 'Step Title', description: 'Step description.' }],
   },
   render: ({ title, subtitle, items }) => {
     return (
@@ -51,6 +54,7 @@ export const NumberedFlow: ComponentConfig<NumberedFlowProps> = {
           )}
 
           <div className="flex flex-col gap-4">
+            {items.length === 0 && <EmptySlotPlaceholder label="Add steps using the sidebar panel" />}
             {items.map((item, i) => (
               <div key={item.id}>
                 <div className="bg-surface-100/60 dark:bg-surface-900/40 border border-surface-200/80 dark:border-surface-800/50 rounded-xl p-6 flex gap-4">

@@ -20,7 +20,8 @@ export const CTABanner: ComponentConfig<CTABannerProps> = {
   fields: {
     badgeText: {
       type: 'text',
-      label: 'Badge (optional)',
+      label: 'Badge Text',
+      contentEditable: true,
     },
     title: {
       type: 'text',
@@ -42,7 +43,7 @@ export const CTABanner: ComponentConfig<CTABannerProps> = {
         variant: 'primary',
       },
       arrayFields: {
-        id: { type: 'text', label: 'ID (unique)' },
+        id: { type: 'text', visible: false },
         label: { type: 'text', contentEditable: true },
         href: { type: 'text' },
         variant: {

@@ -1,4 +1,5 @@
 import type { ComponentConfig } from '@puckeditor/core';
+import { EmptySlotPlaceholder } from '../shared/EmptySlotPlaceholder';
 
 type Step = {
   id: string;
@@ -28,9 +29,12 @@ export const Steps: ComponentConfig<StepsProps> = {
     },
     subtitle: {
       type: 'textarea',
+      contentEditable: true,
     },
     steps: {
       type: 'array',
+      min: 1,
+      max: 8,
       getItemSummary: (item) => item.title || 'Step',
       defaultItemProps: {
         id: `step-${Date.now()}`,
@@ -40,7 +44,7 @@ export const Steps: ComponentConfig<StepsProps> = {
         code: 'echo "hello"',
       },
       arrayFields: {
-        id: { type: 'text', label: 'ID (unique)' },
+        id: { type: 'text', visible: false },
         number: { type: 'text', label: 'Step Number (e.g. 01)' },
         title: { type: 'text' },
         description: { type: 'textarea' },
@@ -114,44 +118,48 @@ export default defineConfig({
           </div>
 
           {/* Steps list */}
-          <div className="grid gap-6 lg:gap-8">
-            {steps.map((step) => (
-              <div
-                key={step.id}
-                className="reveal group grid lg:grid-cols-[280px_1fr] gap-6 bg-surface-100/60 dark:bg-surface-900/50 border border-surface-200/80 dark:border-surface-800/60 rounded-2xl p-6 lg:p-8 hover:border-surface-300 dark:hover:border-surface-700/80 transition-all duration-300"
-                itemProp="step"
-                itemScope
-                itemType="https://schema.org/HowToStep"
-              >
-                {/* Left column: step info */}
-                <div>
-                  <span className="text-brand-600 dark:text-brand-400 font-mono text-sm font-medium">
-                    {step.number}
-                  </span>
-                  <h3 itemProp="name" className="text-xl font-semibold text-surface-900 dark:text-white mt-1">
-                    {step.title}
-                  </h3>
-                  <p itemProp="text" className="text-surface-500 dark:text-surface-400 text-sm mt-2 leading-relaxed">
-                    {step.description}
-                  </p>
-                </div>
-
-                {/* Right column: terminal code block */}
-                <div className="bg-surface-50 dark:bg-surface-950 border border-surface-200 dark:border-surface-800 rounded-xl overflow-hidden">
-                  {/* Terminal title bar */}
-                  <div className="flex items-center gap-2 px-4 py-2.5 border-b border-surface-200 dark:border-surface-800/60">
-                    <div className="w-2.5 h-2.5 rounded-full bg-surface-300 dark:bg-surface-700" />
-                    <div className="w-2.5 h-2.5 rounded-full bg-surface-300 dark:bg-surface-700" />
-                    <div className="w-2.5 h-2.5 rounded-full bg-surface-300 dark:bg-surface-700" />
+          {steps.length === 0 ? (
+            <EmptySlotPlaceholder label="Add steps using the sidebar panel" />
+          ) : (
+            <div className="grid gap-6 lg:gap-8">
+              {steps.map((step) => (
+                <div
+                  key={step.id}
+                  className="reveal group grid lg:grid-cols-[280px_1fr] gap-6 bg-surface-100/60 dark:bg-surface-900/50 border border-surface-200/80 dark:border-surface-800/60 rounded-2xl p-6 lg:p-8 hover:border-surface-300 dark:hover:border-surface-700/80 transition-all duration-300"
+                  itemProp="step"
+                  itemScope
+                  itemType="https://schema.org/HowToStep"
+                >
+                  {/* Left column: step info */}
+                  <div>
+                    <span className="text-brand-600 dark:text-brand-400 font-mono text-sm font-medium">
+                      {step.number}
+                    </span>
+                    <h3 itemProp="name" className="text-xl font-semibold text-surface-900 dark:text-white mt-1">
+                      {step.title}
+                    </h3>
+                    <p itemProp="text" className="text-surface-500 dark:text-surface-400 text-sm mt-2 leading-relaxed">
+                      {step.description}
+                    </p>
                   </div>
-                  {/* Code area */}
-                  <pre className="px-5 py-4 overflow-x-auto text-sm">
-                    <code className="font-mono text-surface-700 dark:text-surface-300">{step.code}</code>
-                  </pre>
+
+                  {/* Right column: terminal code block */}
+                  <div className="bg-surface-50 dark:bg-surface-950 border border-surface-200 dark:border-surface-800 rounded-xl overflow-hidden">
+                    {/* Terminal title bar */}
+                    <div className="flex items-center gap-2 px-4 py-2.5 border-b border-surface-200 dark:border-surface-800/60">
+                      <div className="w-2.5 h-2.5 rounded-full bg-surface-300 dark:bg-surface-700" />
+                      <div className="w-2.5 h-2.5 rounded-full bg-surface-300 dark:bg-surface-700" />
+                      <div className="w-2.5 h-2.5 rounded-full bg-surface-300 dark:bg-surface-700" />
+                    </div>
+                    {/* Code area */}
+                    <pre className="px-5 py-4 overflow-x-auto text-sm">
+                      <code className="font-mono text-surface-700 dark:text-surface-300">{step.code}</code>
+                    </pre>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
     );

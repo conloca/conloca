@@ -35,10 +35,11 @@ export const ContentBlockSection: ComponentConfig<ContentBlockSectionProps> = {
     subtitle: {
       type: 'textarea',
       label: 'Section Subtitle',
+      contentEditable: true,
     },
     label: {
       type: 'text',
-      label: 'Small Label (uppercase)',
+      label: 'Section Label',
     },
     blockId: {
       type: 'text',
@@ -84,12 +85,12 @@ export const ContentBlockSection: ComponentConfig<ContentBlockSectionProps> = {
           )}
           <div className={cn(toneClassNames[tone])}>
             {blockId ? (
-              <div className="conloca-prose">
-                <p>Content block preview requires CMS block resolution for `{blockId}`.</p>
+              <div className="rounded-2xl border border-dashed border-brand-500/30 bg-brand-500/5 px-5 py-6 text-sm text-surface-500 dark:text-surface-400">
+                Content block preview — save and preview the page to see rendered content.
               </div>
             ) : (
               <div className="rounded-2xl border border-dashed border-surface-300 px-5 py-6 text-sm text-surface-500 dark:border-surface-700 dark:text-surface-400">
-                Select an MDX content block to render here.
+                No content block selected. Choose one from the sidebar panel.
               </div>
             )}
           </div>

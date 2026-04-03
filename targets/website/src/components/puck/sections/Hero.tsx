@@ -21,9 +21,10 @@ export const Hero: ComponentConfig<HeroProps> = {
     badgeText: {
       type: 'text',
       label: 'Badge Text',
+      contentEditable: true,
     },
     title: {
-      type: 'text',
+      type: 'textarea',
       contentEditable: true,
     },
     description: {
@@ -42,7 +43,7 @@ export const Hero: ComponentConfig<HeroProps> = {
         variant: 'primary',
       },
       arrayFields: {
-        id: { type: 'text', label: 'ID (unique)' },
+        id: { type: 'text', visible: false },
         label: { type: 'text', contentEditable: true },
         href: { type: 'text' },
         variant: {

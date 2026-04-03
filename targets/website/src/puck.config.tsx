@@ -63,25 +63,18 @@ type Components = {
 
 const puckConfig: Config<Components> = {
   categories: {
-    sections: {
-      title: 'Page Sections',
+    heroAndCta: {
+      title: 'Hero & CTA',
       defaultExpanded: true,
-      components: [
-        'Hero',
-        'FeatureCards',
-        'Steps',
-        'CTABanner',
-        'ContentBlockSection',
-        'ComparisonTable',
-        'FAQ',
-        'CodeBlock',
-        'NumberedFlow',
-        'HostedComparison',
-      ],
+      components: ['Hero', 'CTABanner'],
     },
-    legacy: {
-      title: 'Legacy',
-      components: ['RichTextSection'],
+    content: {
+      title: 'Content',
+      components: ['ContentBlockSection', 'CodeBlock', 'FAQ'],
+    },
+    showcase: {
+      title: 'Showcase',
+      components: ['FeatureCards', 'Steps', 'NumberedFlow', 'ComparisonTable', 'HostedComparison'],
     },
     primitives: {
       title: 'Primitives',
@@ -95,7 +88,7 @@ const puckConfig: Config<Components> = {
   components: {
     Badge,
     Button,
-    ContentBlockSection,
+    ContentBlockSection: { ...ContentBlockSection, label: 'Content Section' },
     CTABanner,
     CodeBlock,
     ComparisonTable,
@@ -106,9 +99,9 @@ const puckConfig: Config<Components> = {
     Grid: { ...Grid, label: 'Grid Container' },
     Heading,
     Hero,
-    HostedComparison,
+    HostedComparison: { ...HostedComparison, label: 'Plan Comparison' },
     Image,
-    NumberedFlow,
+    NumberedFlow: { ...NumberedFlow, label: 'Numbered Steps' },
     RichTextSection,
     Space: { ...Space, label: 'Spacer' },
     Steps,
