@@ -70,14 +70,34 @@ export const Hero: ComponentConfig<HeroProps> = {
     const lines = isStringTitle ? title.split('\n') : [];
     const hasButtons = buttons.length > 0;
 
+    if (!hasButtons) {
+      return (
+        <div className="text-center mb-16">
+          {badgeText && (
+            <p className="text-brand-600 dark:text-brand-400 text-sm font-medium tracking-wide uppercase mb-3">
+              {badgeText}
+            </p>
+          )}
+          <h1 className="text-3xl sm:text-4xl font-bold text-surface-900 dark:text-white mb-4">
+            {isStringTitle
+              ? lines.map((line, idx) => (
+                  <span key={`${line.slice(0, 10)}-${idx}`}>
+                    {idx === 0 ? line : <span className="text-brand-600 dark:text-brand-400">{line}</span>}
+                    {idx < lines.length - 1 && <br />}
+                  </span>
+                ))
+              : title}
+          </h1>
+          <p className="text-surface-500 dark:text-surface-400 max-w-2xl mx-auto">{description}</p>
+        </div>
+      );
+    }
+
     return (
       <section
         itemScope
         itemType="https://schema.org/SoftwareApplication"
-        className={cn(
-          'relative flex items-center justify-center overflow-hidden',
-          hasButtons ? 'min-h-screen pt-16' : 'pt-24 pb-20',
-        )}
+        className="relative flex items-center justify-center overflow-hidden min-h-screen pt-16"
       >
         <meta itemProp="applicationCategory" content="Content Management System" />
         <meta itemProp="operatingSystem" content="Cross-platform" />
@@ -92,9 +112,7 @@ export const Hero: ComponentConfig<HeroProps> = {
         <div className="absolute inset-0 grid-dots" />
 
         {/* Content container */}
-        <div
-          className={cn('relative mx-auto px-4 sm:px-6 lg:px-8 text-center', hasButtons ? 'max-w-4xl' : 'max-w-3xl')}
-        >
+        <div className="relative mx-auto px-4 sm:px-6 lg:px-8 text-center max-w-4xl">
           {/* Badge */}
           {badgeText && (
             <div className="inline-flex items-center gap-2 border border-surface-300 dark:border-surface-700/60 rounded-full px-4 py-1.5 mb-8 text-xs text-surface-500 dark:text-surface-400 animate-fade-in">
@@ -106,10 +124,7 @@ export const Hero: ComponentConfig<HeroProps> = {
           {/* Title */}
           <h1
             itemProp="name"
-            className={cn(
-              'font-bold text-surface-900 dark:text-white leading-tight tracking-tight mb-6 opacity-0 animate-slide-up',
-              hasButtons ? 'text-4xl sm:text-5xl lg:text-6xl' : 'text-3xl sm:text-4xl',
-            )}
+            className="font-bold text-surface-900 dark:text-white leading-tight tracking-tight mb-6 text-4xl sm:text-5xl lg:text-6xl opacity-0 animate-slide-up"
           >
             {isStringTitle
               ? lines.map((line, idx) => (

@@ -63,7 +63,7 @@ export const CTABanner: ComponentConfig<CTABannerProps> = {
   },
   render: ({ badgeText, title, subtitle, buttons, puck }) => {
     return (
-      <section className="py-16 sm:py-24">
+      <section className="mt-20 py-16 sm:py-24">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           {badgeText && (
             <span className="inline-flex items-center border border-brand-500/30 bg-brand-500/5 rounded-full px-3 py-1 text-xs text-brand-600 dark:text-brand-400 font-medium mb-6">
@@ -71,8 +71,8 @@ export const CTABanner: ComponentConfig<CTABannerProps> = {
             </span>
           )}
           <h2 className="text-xl sm:text-2xl font-bold text-surface-900 dark:text-white mb-4">{title}</h2>
-          <p className="text-surface-500 dark:text-surface-400 max-w-2xl mx-auto mb-8">{subtitle}</p>
-          <div className="flex items-center justify-center gap-4 flex-wrap">
+          <p className="text-surface-500 dark:text-surface-400 text-sm max-w-md mx-auto mb-4">{subtitle}</p>
+          <div className="flex items-center justify-center gap-4 flex-wrap pt-2">
             {buttons.map((button) => (
               <a
                 key={button.id}

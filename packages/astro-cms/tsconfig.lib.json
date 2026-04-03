@@ -22,13 +22,10 @@
   "exclude": ["src/**/*.test.ts", "src/__tests__/**/*"],
   "references": [
     {
-      "path": "../content-api/tsconfig.lib.json"
-    },
-    {
       "path": "../mdx/tsconfig.lib.json"
     },
     {
-      "path": "../content-api-client/tsconfig.lib.json"
+      "path": "../content-api/tsconfig.lib.json"
     },
     {
       "path": "../cms-spa/tsconfig.lib.json"

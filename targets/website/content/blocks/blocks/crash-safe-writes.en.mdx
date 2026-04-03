@@ -11,7 +11,5 @@ category: content
 ## Crash-Safe Writes
 
 Every file write in Conloca uses an atomic write strategy. Content is written to a temporary file first, then atomically
-renamed to the target path.
-
-This is a Conloca runtime feature - independent of the VxJSON format - ensuring the original file is never corrupted if
-the process crashes mid-write.
+renamed to the target path. This is a Conloca runtime feature -- independent of the VxJSON format -- ensuring the
+original file is never corrupted if the process crashes mid-write.

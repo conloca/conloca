@@ -170,7 +170,7 @@ export function PageEditorWrapper({ puckConfig }: PageEditorWrapperProps) {
             },
           },
           render: ({ blockId, label, tone = 'transparent', width = 'default' }: ContentBlockSectionProps) => (
-            <section className="py-16 sm:py-20">
+            <section className="pb-16 sm:pb-20">
               <div className={cn('mx-auto px-4 sm:px-6 lg:px-8', contentBlockWidthClasses[width])}>
                 {label ? (
                   <p className="mb-4 text-sm font-medium uppercase tracking-[0.18em] text-azure-04">{label}</p>

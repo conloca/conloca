@@ -49,7 +49,7 @@ if (schemaType === 'faq') {
 
 <Layout title={title} description={description} schemaType={structuredDataType}>
   <Navbar />
-  <main class={isLandingPage ? 'min-h-screen' : 'pt-24 pb-20 min-h-screen'}>
+  <main class={isLandingPage ? 'min-h-screen' : 'cms-subpage pt-24 pb-20'}>
     <slot />
   </main>
   <Footer />
@@ -70,6 +70,29 @@ if (schemaType === 'faq') {
   .reveal.revealed {
     opacity: 1;
     transform: translateY(0);
+  }
+  /* Tighten prose on subpages — production rendered inline Tailwind, not MDX prose */
+  .cms-subpage .mdx-content {
+    font-size: 0.875rem;
+    line-height: 1.625;
+  }
+  /* Strip component section padding on CMS subpages (layout provides pt/pb) */
+  .cms-subpage > div > section,
+  .cms-subpage > div > div {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+  /* Strip inner component wrappers inside narrative sections */
+  .narrative-section > section {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .narrative-section > section > div {
+    max-width: none !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
   }
 </style>
 

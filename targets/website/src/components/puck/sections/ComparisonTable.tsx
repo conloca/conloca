@@ -210,7 +210,7 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
                   What makes Conloca different from every other CMS option for Astro.
                 </p>
               </div>
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid sm:grid-cols-2 gap-6">
                 {differentiators.map((item) => (
                   <div
                     key={item.id}

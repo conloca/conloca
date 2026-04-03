@@ -1,4 +1,5 @@
 import type { ComponentConfig } from '@puckeditor/core';
+import cn from 'clsx';
 
 type LegendItem = {
   id: string;
@@ -6,11 +7,14 @@ type LegendItem = {
   label: string;
 };
 
+type CodeBlockSpacing = 'default' | 'compact';
+
 export type CodeBlockProps = {
   filename: string;
   code: string;
   accentColor: string;
   legendItems: LegendItem[];
+  spacing: CodeBlockSpacing;
 };
 
 function renderCodeToken(token: string, tokenType: 'plain' | 'comment' | 'key' | 'value' | 'accent', key: string) {
@@ -79,28 +83,43 @@ export const CodeBlock: ComponentConfig<CodeBlockProps> = {
         label: { type: 'text' },
       },
     },
+    spacing: {
+      type: 'radio',
+      label: 'Bottom Spacing',
+      options: [
+        { label: 'Default', value: 'default' },
+        { label: 'Compact', value: 'compact' },
+      ],
+    },
   },
   defaultProps: {
     filename: 'example.vxjson',
     code: '// Code here',
     accentColor: '',
     legendItems: [],
+    spacing: 'default',
   },
-  render: ({ filename, code, accentColor, legendItems }) => {
+  render: ({ filename, code, accentColor, legendItems, spacing = 'default' }) => {
     return (
-      <section className="mb-20">
+      <section className={spacing === 'compact' ? 'mb-6' : 'mb-20'}>
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="bg-surface-100/60 dark:bg-surface-900/60 border border-surface-200/80 dark:border-surface-800/50 rounded-xl overflow-hidden">
             {/* Terminal title bar */}
-            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-surface-200/80 dark:border-surface-800/50">
-              <div className="w-3 h-3 rounded-full bg-surface-300 dark:bg-surface-700" />
-              <span className="font-mono text-xs text-surface-500 dark:text-surface-400">{filename}</span>
-            </div>
+            {filename && (
+              <div className="flex items-center gap-2 px-4 py-2.5 border-b border-surface-200/80 dark:border-surface-800/50">
+                <div className="w-3 h-3 rounded-full bg-surface-300 dark:bg-surface-700" />
+                <span className="font-mono text-xs text-surface-500 dark:text-surface-400">{filename}</span>
+              </div>
+            )}
 
             {/* Code area */}
             <div className="flex">
               {accentColor && <div className="w-1 shrink-0 opacity-40" style={{ backgroundColor: accentColor }} />}
-              <pre className="flex-1 overflow-x-auto p-4 text-sm text-surface-700 dark:text-surface-300">
+              <pre
+                className={cn('flex-1 overflow-x-auto p-4 text-sm text-surface-700 dark:text-surface-300', {
+                  'm-0': !filename,
+                })}
+              >
                 <code className="font-mono whitespace-pre-wrap break-words">
                   {code.split('\n').map((line, index, lines) => (
                     <span key={`${filename}-${line}`}>
