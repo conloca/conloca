@@ -2,7 +2,7 @@ import type { MDXBlockEvaluationResult } from '@conloca/mdx/node';
 import type { ComponentConfig, Config, Data } from '@puckeditor/core';
 import { Render } from '@puckeditor/core';
 import cn from 'clsx';
-import type { ComponentType } from 'react';
+import type { ComponentType, JSX } from 'react';
 import { hasHydratableComponents } from '../lib/hydration-utils.js';
 import { RenderWithHydration } from './RenderWithHydration.js';
 
@@ -77,6 +77,14 @@ function resolveRenderableBlocks(blocks: Array<MDXBlockEvaluationResult | MDXCom
 /** Component types that can be merged into a narrative section following a CBS */
 const MERGEABLE_VISUAL_TYPES = new Set(['CodeBlock', 'FeatureCards', 'NumberedFlow']);
 
+/** Minimal puck context for static (non-editor) rendering */
+const staticPuckContext = {
+  isEditing: false,
+  renderDropZone: () => null,
+  metadata: {},
+  dragRef: null,
+};
+
 interface ContentItem {
   type: string;
   props: Record<string, unknown> & { id?: string };
@@ -111,7 +119,7 @@ function groupContentItems(content: ContentItem[]): RenderGroup[] {
 
   for (const item of content) {
     if (item.type === 'ContentBlockSection') {
-      const props = item.props as ContentBlockSectionProps;
+      const props = item.props as unknown as ContentBlockSectionProps;
       if (props.title) {
         // CBS with title → start a new narrative group
         if (currentNarrative) {
@@ -161,7 +169,7 @@ function renderNarrativeSection(group: NarrativeGroup, config: Config): JSX.Elem
       {group.items.slice(1).map((item, i) => {
         if (item.type === 'ContentBlockSection') {
           // Continuation CBS (no title) — render subtitle as text paragraph
-          const cbsProps = item.props as ContentBlockSectionProps;
+          const cbsProps = item.props as unknown as ContentBlockSectionProps;
           if (cbsProps.subtitle) {
             return (
               <p
@@ -177,7 +185,14 @@ function renderNarrativeSection(group: NarrativeGroup, config: Config): JSX.Elem
         // Visual component — render using its config render function
         const CompConfig = config.components[item.type] as ComponentConfig | undefined;
         if (!CompConfig?.render) return null;
-        return <CompConfig.render key={(item.props.id as string) || i} {...item.props} puck={{ isEditing: false }} />;
+        return (
+          <CompConfig.render
+            key={(item.props.id as string) || i}
+            {...item.props}
+            id={item.props.id ?? ''}
+            puck={staticPuckContext}
+          />
+        );
       })}
     </section>
   );
@@ -186,7 +201,14 @@ function renderNarrativeSection(group: NarrativeGroup, config: Config): JSX.Elem
 function renderStandaloneItem(item: ContentItem, config: Config): JSX.Element | null {
   const CompConfig = config.components[item.type] as ComponentConfig | undefined;
   if (!CompConfig?.render) return null;
-  return <CompConfig.render key={item.props.id as string} {...item.props} puck={{ isEditing: false }} />;
+  return (
+    <CompConfig.render
+      key={item.props.id as string}
+      {...item.props}
+      id={item.props.id ?? ''}
+      puck={staticPuckContext}
+    />
+  );
 }
 
 /**
@@ -333,7 +355,7 @@ function RenderWithBlocks({ config, data, mdxComponents }: RenderWithBlocksProps
 
   // Check if any CBS has a title (indicating narrative merge should be used)
   const hasNarrativeSections = (data.content as ContentItem[]).some(
-    (item) => item.type === 'ContentBlockSection' && (item.props as ContentBlockSectionProps).title,
+    (item) => item.type === 'ContentBlockSection' && (item.props as unknown as ContentBlockSectionProps).title,
   );
 
   if (needsHydration) {

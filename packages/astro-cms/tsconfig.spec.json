@@ -12,16 +12,16 @@
     "noUnusedParameters": false,
     "module": "esnext",
     "moduleResolution": "bundler",
+    "paths": {
+      "virtual:conloca-page-api": ["./src/virtual-modules.d.ts"],
+      "virtual:conloca-routing-config": ["./src/virtual-modules.d.ts"],
+      "virtual:conloca-config": ["./src/env.d.ts"]
+    },
     "forceConsistentCasingInFileNames": true,
     "jsx": "react-jsx",
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "emitDeclarationOnly": false
   },
-  "include": ["src/**/*.ts", "test/**/*.ts"],
-  "exclude": [],
-  "references": [
-    {
-      "path": "./tsconfig.lib.json"
-    }
-  ]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "test/**/*.ts"],
+  "exclude": ["dist"]
 }
