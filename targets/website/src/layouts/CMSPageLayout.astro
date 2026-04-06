@@ -99,17 +99,3 @@ if (schemaType === 'faq') {
 <script src="../scripts/animations.ts"></script>
 <script src="../scripts/forms.ts"></script>
 
-<script>
-  const command = 'bun add @conloca/astro-cms'
-  const el = document.getElementById('typed-command')
-  let i = 0
-  function type() {
-    if (!el) return
-    if (i < command.length) {
-      el.textContent += command[i]
-      i++
-      setTimeout(type, 60 + Math.random() * 40)
-    }
-  }
-  setTimeout(type, 1200)
-</script>
