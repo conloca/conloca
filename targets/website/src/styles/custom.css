@@ -1,12 +1,10 @@
 /* Brand-matched Starlight theme: cyan accent, dark backgrounds, Inter/JetBrains Mono */
 
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
-
 /* Dark mode by default, light when explicitly set */
 :root {
   color-scheme: dark;
 }
-:root[data-theme='light'] {
+:root[data-theme="light"] {
   color-scheme: light;
 }
 
@@ -72,7 +70,7 @@
   background-color: #0f172a !important;
   border-color: #334155 !important;
 }
-[data-theme='light'] .expressive-code pre {
+[data-theme="light"] .expressive-code pre {
   background-color: #f8fafc !important;
   border-color: #e2e8f0 !important;
 }
@@ -80,7 +78,7 @@
 .expressive-code .frame {
   border-color: #334155;
 }
-[data-theme='light'] .expressive-code .frame {
+[data-theme="light"] .expressive-code .frame {
   border-color: #e2e8f0;
 }
 
@@ -91,8 +89,8 @@ a[aria-current="page"] {
   background-color: #083344 !important;
   font-weight: 600;
 }
-[data-theme='light'] [data-current="true"] > a,
-[data-theme='light'] a[aria-current="page"] {
+[data-theme="light"] [data-current="true"] > a,
+[data-theme="light"] a[aria-current="page"] {
   color: #020617 !important;
   background-color: #cffafe !important;
 }
