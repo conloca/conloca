@@ -3,6 +3,8 @@ title: Data API
 description: Structured data collection operations for non-page content
 ---
 
+import { Aside } from '@astrojs/starlight/components';
+
 The Data API manages structured data entries -- content that is not a page or block, such as navigation items, settings,
 or any custom data collections. Data entries are identified by a `name` within a `collection` and support multiple
 locales.
@@ -172,5 +174,7 @@ curl "http://localhost:4321/__cms/api/data/main-nav?collection=navigation"
 curl "http://localhost:4321/__cms/api/data/main-nav?collection=navigation&locale=en"
 ```
 
-:::note Data entries are created, updated, and deleted using the [Content API](/reference/api/content/) endpoints with
-`kind: 'data'`. The Data API provides read-only lookup by name. :::
+<Aside type="note">
+  Data entries are created, updated, and deleted using the [Content API](/reference/api/content/) endpoints with `kind:
+  'data'`. The Data API provides read-only lookup by name.
+</Aside>

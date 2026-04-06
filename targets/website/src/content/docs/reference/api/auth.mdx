@@ -3,6 +3,8 @@ title: Auth API
 description: Current request identity endpoint for the CMS API
 ---
 
+import { Aside } from '@astrojs/starlight/components';
+
 The Auth API currently exposes a single endpoint: `/auth/user`.
 
 On this branch, the endpoint reports the Cloudflare Access identity that `@conloca/astro-cms` attached to the request
@@ -11,8 +13,10 @@ email, the endpoint returns `authenticated: false`.
 
 All endpoints are relative to the API base URL (default: `/__cms/api`).
 
-:::note There are no built-in login, logout, or callback endpoints on this branch. Planned auth providers are documented
-separately as roadmap material, not as currently available API routes. :::
+<Aside type="note">
+  There are no built-in login, logout, or callback endpoints on this branch. Planned auth providers are documented
+  separately as roadmap material, not as currently available API routes.
+</Aside>
 
 ---
 

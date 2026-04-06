@@ -3,14 +3,18 @@ title: Assets API
 description: Media library operations for uploading, organizing, and serving files
 ---
 
+import { Aside } from '@astrojs/starlight/components';
+
 The Assets API manages the media library -- uploading files, organizing them in folders, serving them to the browser,
 and tracking where assets are used across content. Assets are stored in a configurable directory alongside content
 files.
 
 All endpoints are relative to the API base URL (default: `/__cms/api`).
 
-:::note Asset endpoints are only available when `assetsPath` is configured in the Conloca integration options. Without
-it, these routes do not exist. :::
+<Aside type="note">
+  Asset endpoints are only available when `assetsPath` is configured in the Conloca integration options. Without it,
+  these routes do not exist.
+</Aside>
 
 ---
 
