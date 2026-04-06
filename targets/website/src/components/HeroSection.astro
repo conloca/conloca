@@ -81,18 +81,26 @@
 </section>
 
 <script>
-  const command = 'bun add @conloca/astro-cms';
-  const el = document.getElementById('typed-command');
-  let i = 0;
+  function initTypingAnimation() {
+    const command = 'bun add @conloca/astro-cms';
+    const el = document.getElementById('typed-command');
+    if (!el || el.dataset.typed === 'true') return;
+    el.dataset.typed = 'true';
+    el.textContent = '';
+    let i = 0;
 
-  function type() {
-    if (!el) return;
-    if (i < command.length) {
-      el.textContent += command[i];
-      i++;
-      setTimeout(type, 60 + Math.random() * 40);
+    function type() {
+      if (!el) return;
+      if (i < command.length) {
+        el.textContent += command[i];
+        i++;
+        setTimeout(type, 60 + Math.random() * 40);
+      }
     }
+
+    setTimeout(type, 1200);
   }
 
-  setTimeout(type, 1200);
+  initTypingAnimation();
+  document.addEventListener('astro:after-swap', initTypingAnimation);
 </script>
