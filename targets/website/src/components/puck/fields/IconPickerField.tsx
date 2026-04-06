@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 /**
  * Curated icon presets for feature cards.
@@ -130,6 +130,10 @@ interface IconPickerFieldProps {
 export function IconPickerFieldRender({ value, onChange, readOnly }: IconPickerFieldProps) {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [localValue, setLocalValue] = useState(value || '');
+
+  useEffect(() => {
+    setLocalValue(value || '');
+  }, [value]);
 
   const selectedPreset = iconPresets.find((p) => p.path === value);
 
