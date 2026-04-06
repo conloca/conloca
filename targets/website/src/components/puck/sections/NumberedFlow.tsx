@@ -17,6 +17,8 @@ export type NumberedFlowProps = {
 
 export const NumberedFlow: ComponentConfig<NumberedFlowProps> = {
   label: 'Numbered Flow',
+  // Auto-numbers items by array index. Numbers are persisted in VXJSON at save time,
+  // so production rendering doesn't need resolveAllData — saved values are already correct.
   resolveData: (data) => ({
     props: {
       ...data.props,

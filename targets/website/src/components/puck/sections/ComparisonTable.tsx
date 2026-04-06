@@ -40,6 +40,7 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
   label: 'Comparison Table',
   resolveFields: (data, { fields }) => {
     const columnCount = Array.isArray(data.props.columns) ? data.props.columns.length : 0;
+    const showCta = !!data.props.ctaTitle;
     return {
       ...fields,
       rows: {
@@ -52,6 +53,8 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
           },
         },
       },
+      ctaSubtitle: { ...fields.ctaSubtitle, visible: showCta },
+      ctaButtons: { ...fields.ctaButtons, visible: showCta },
     } as typeof fields;
   },
   fields: {

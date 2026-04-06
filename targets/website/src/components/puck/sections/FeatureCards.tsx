@@ -36,16 +36,23 @@ export const FeatureCards: ComponentConfig<FeatureCardsProps> = {
     const cardCount = data.props.cards?.length || 0;
     const columns = Number(data.props.columns);
     const mismatch = cardCount > 0 && cardCount !== columns && cardCount % columns !== 0;
+    const allOptions = [
+      { label: '2 Columns', value: '2' },
+      { label: '3 Columns', value: '3' },
+      { label: '4 Columns', value: '4' },
+    ];
+    const filteredOptions = cardCount > 0 ? allOptions.filter((o) => Number(o.value) <= cardCount) : allOptions;
     return {
       ...fields,
       columns: {
         ...fields.columns,
         visible: cardCount > 1,
+        options: filteredOptions.length > 0 ? filteredOptions : allOptions,
         ...(mismatch && {
           label: `Columns (${cardCount} cards don't fill ${columns} evenly)`,
         }),
       },
-    };
+    } as typeof fields;
   },
   fields: {
     label: {
@@ -81,11 +88,11 @@ export const FeatureCards: ComponentConfig<FeatureCardsProps> = {
           label: 'Icon',
           render: ({ value, onChange }) => <IconPickerFieldRender value={value} onChange={onChange} />,
         },
-        iconText: { type: 'text', label: 'Icon text (shown instead of SVG when set)' },
+        iconText: { type: 'text', label: 'Icon text (overrides SVG, e.g. "CMS")' },
         title: { type: 'text' },
         description: { type: 'textarea' },
         href: { type: 'text', label: 'Link URL (optional)' },
-        linkLabel: { type: 'text', label: 'Link Label (shown when URL is set)' },
+        linkLabel: { type: 'text', label: 'Link Label (when URL is set)' },
       },
     },
     columns: {

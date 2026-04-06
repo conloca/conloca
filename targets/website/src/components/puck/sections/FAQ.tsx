@@ -80,6 +80,13 @@ const FAQRender = ({
 
 export const FAQ: ComponentConfig<FAQProps> = {
   label: 'FAQ Accordion',
+  resolveFields: (data, { fields }) => {
+    const showCta = !!data.props.ctaText;
+    return {
+      ...fields,
+      ctaButtons: { ...fields.ctaButtons, visible: showCta },
+    };
+  },
   fields: {
     label: { type: 'text', label: 'Section Label', contentEditable: true },
     title: { type: 'text', contentEditable: true },

@@ -110,7 +110,7 @@ export const CodeBlock: ComponentConfig<CodeBlockProps> = {
       label: 'Bottom Spacing',
       options: [
         { label: 'Default', value: 'default' },
-        { label: 'Compact', value: 'compact' },
+        { label: 'Compact (no bottom margin)', value: 'compact' },
       ],
     },
   },
