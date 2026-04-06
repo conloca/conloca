@@ -177,8 +177,9 @@ export function ContentBlockSelectorField({ value, onChange, options }: ContentB
         </label>
 
         {/* Searchable combobox */}
-        <div ref={dropdownRef} className="relative">
+        <div ref={dropdownRef} className="relative" role="combobox" aria-expanded={isOpen} aria-haspopup="listbox">
           <div
+            id="content-block-selector"
             className="flex w-full items-center rounded border border-grey-09 bg-white text-sm cursor-pointer"
             onClick={() => {
               setIsOpen(true);
@@ -219,7 +220,10 @@ export function ContentBlockSelectorField({ value, onChange, options }: ContentB
           </div>
 
           {isOpen && (
-            <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-64 overflow-y-auto rounded border border-grey-09 bg-white shadow-lg">
+            <div
+              role="listbox"
+              className="absolute left-0 right-0 top-full z-50 mt-1 max-h-64 overflow-y-auto rounded border border-grey-09 bg-white shadow-lg"
+            >
               {/* Clear selection */}
               {value && (
                 <button
@@ -379,6 +383,8 @@ function BlockOptionItem({
   return (
     <button
       type="button"
+      role="option"
+      aria-selected={isSelected}
       onClick={onClick}
       className={cn('flex w-full flex-col items-start px-3 py-2 text-left hover:bg-grey-11', {
         'bg-azure-10': isSelected,
