@@ -373,11 +373,11 @@ authenticated user's email is automatically recorded for attribution.
 
 **Parameters:**
 
-| Name   | In    | Type   | Required | Description                        |
-| ------ | ----- | ------ | -------- | ---------------------------------- |
-| id     | path  | string | yes      | Content ID                         |
-| locale | query | string | yes      | Locale to update                   |
-| etag   | query | string | yes      | Current etag for concurrency check |
+| Name   | In    | Type   | Required    | Description                                                                                                                                                                                                          |
+| ------ | ----- | ------ | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| id     | path  | string | yes         | Content ID                                                                                                                                                                                                           |
+| locale | query | string | yes         | Locale to update                                                                                                                                                                                                     |
+| etag   | query | string | recommended | Current etag for concurrency check. Strongly recommended -- the API accepts requests without it (falling back to an empty string), but omitting it disables conflict detection and may cause stale-write overwrites. |
 
 **Request Body:**
 
