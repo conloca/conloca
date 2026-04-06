@@ -65,6 +65,7 @@ interface ContentBlockSectionProps {
   blockId: string;
   width?: 'narrow' | 'default';
   tone?: 'transparent' | 'subtle';
+  startsNewSection?: boolean | 'true' | 'false';
 }
 
 const contentBlockWidthClasses: Record<NonNullable<ContentBlockSectionProps['width']>, string> = {
@@ -74,7 +75,8 @@ const contentBlockWidthClasses: Record<NonNullable<ContentBlockSectionProps['wid
 
 const contentBlockToneClasses: Record<NonNullable<ContentBlockSectionProps['tone']>, string> = {
   transparent: '',
-  subtle: 'rounded-3xl border border-surface-200/80 bg-surface-100/70 p-6 sm:p-8',
+  subtle:
+    'rounded-3xl border border-surface-200/80 bg-surface-100/70 p-6 sm:p-8 dark:border-surface-800/60 dark:bg-surface-900/50',
 };
 
 /**
@@ -183,19 +185,30 @@ export function PageEditorWrapper({ puckConfig }: PageEditorWrapperProps) {
             subtitle,
             tone = 'transparent',
             width = 'default',
-          }: ContentBlockSectionProps & { title?: string; subtitle?: string }) => (
+            startsNewSection,
+          }: ContentBlockSectionProps & {
+            title?: string;
+            subtitle?: string;
+            startsNewSection?: boolean | 'true' | 'false';
+          }) => (
             <section className="pb-16 sm:pb-20">
               <div className={cn('mx-auto px-4 sm:px-6 lg:px-8', contentBlockWidthClasses[width])}>
-                {title ? <h2 className="text-2xl sm:text-3xl font-bold text-surface-900 mb-4">{title}</h2> : null}
-                {subtitle ? <p className="text-surface-500 text-sm leading-relaxed mb-6">{subtitle}</p> : null}
                 {label ? (
-                  <p className="mb-4 text-sm font-medium uppercase tracking-[0.18em] text-brand-700">{label}</p>
+                  <p className="mb-4 text-sm font-medium uppercase tracking-[0.18em] text-brand-700 dark:text-brand-300">
+                    {label}
+                  </p>
+                ) : null}
+                {title ? (
+                  <h2 className="text-2xl sm:text-3xl font-bold text-surface-900 dark:text-white mb-4">{title}</h2>
+                ) : null}
+                {subtitle ? (
+                  <p className="text-surface-500 dark:text-surface-400 text-sm leading-relaxed mb-6">{subtitle}</p>
                 ) : null}
                 <div className={cn(contentBlockToneClasses[tone])}>
                   {blockId ? (
                     <BlockContentWrapper contentId={blockId} />
                   ) : (
-                    <div className="rounded border border-dashed border-surface-300 px-5 py-6 text-sm text-surface-500">
+                    <div className="rounded border border-dashed border-surface-300 dark:border-surface-700 px-5 py-6 text-sm text-surface-500 dark:text-surface-400">
                       Select an MDX content block to render here.
                     </div>
                   )}
