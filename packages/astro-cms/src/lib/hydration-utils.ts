@@ -71,7 +71,7 @@ export function findHydratableComponents(data: Data, config: Config): Hydratable
           type: item.type,
           props: item.props ?? {},
           strategy,
-          id: item.props?._id ?? item.type,
+          id: item.props?.id ?? item.type,
         });
       }
     }
@@ -87,7 +87,7 @@ export function findHydratableComponents(data: Data, config: Config): Hydratable
             type: item.type,
             props: item.props ?? {},
             strategy,
-            id: item.props?._id ?? `${zoneName}-${item.type}`,
+            id: item.props?.id ?? `${zoneName}-${item.type}`,
           });
         }
       }
