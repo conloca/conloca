@@ -23,7 +23,6 @@ export const Hero: ComponentConfig<HeroProps> = {
     },
     title: {
       type: 'text',
-      contentEditable: true,
     },
     description: {
       type: 'text',
@@ -77,10 +76,7 @@ export const Hero: ComponentConfig<HeroProps> = {
       >
         <meta itemProp="applicationCategory" content="Content Management System" />
         <meta itemProp="operatingSystem" content="Cross-platform" />
-        <meta
-          itemProp="description"
-          content="Conloca is a free, open-source, file-based content management system (CMS) built specifically for Astro websites. It stores all content as version-controlled files in your git repository -- no database required. Developers define drag-and-drop components with Puck, and content editors build pages visually through a browser-based interface at the /__cms route."
-        />
+        <meta itemProp="description" content={description} />
 
         {/* Radial gradient overlay */}
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(6,182,212,0.04)_0%,transparent_70%)] dark:bg-[radial-gradient(ellipse_at_center,rgba(6,182,212,0.08)_0%,transparent_70%)]" />
