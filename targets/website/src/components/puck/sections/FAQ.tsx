@@ -1,5 +1,6 @@
 import type { ComponentConfig } from '@puckeditor/core';
 import cn from 'clsx';
+import { type CTAButton, ctaButtonArrayField } from '../shared';
 import { EmptySlotPlaceholder } from '../shared/EmptySlotPlaceholder';
 import { renderLimitedRichText } from '../shared/render-limited-rich-text';
 
@@ -7,13 +8,6 @@ type FAQItem = {
   id: string;
   question: string;
   answer: string;
-};
-
-type CTAButton = {
-  id: string;
-  label: string;
-  href: string;
-  variant: 'primary' | 'secondary';
 };
 
 export type FAQProps = {
@@ -145,25 +139,7 @@ export const FAQ: ComponentConfig<FAQProps> = {
       },
     },
     ctaText: { type: 'text', label: 'CTA Text' },
-    ctaButtons: {
-      type: 'array',
-      min: 1,
-      max: 4,
-      getItemSummary: (item) => item.label || 'Button',
-      defaultItemProps: { id: `btn-${Date.now()}`, label: 'Button', href: '#', variant: 'primary' as const },
-      arrayFields: {
-        id: { type: 'text', visible: false },
-        label: { type: 'text' },
-        href: { type: 'text' },
-        variant: {
-          type: 'radio',
-          options: [
-            { label: 'Primary', value: 'primary' },
-            { label: 'Secondary', value: 'secondary' },
-          ],
-        },
-      },
-    },
+    ctaButtons: ctaButtonArrayField(),
   },
   defaultProps: {
     label: 'Support',

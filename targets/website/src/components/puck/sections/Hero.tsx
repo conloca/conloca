@@ -1,18 +1,12 @@
 import type { ComponentConfig } from '@puckeditor/core';
 import cn from 'clsx';
-
-type HeroButton = {
-  id: string;
-  label: string;
-  href: string;
-  variant: 'primary' | 'secondary';
-};
+import { type CTAButton, ctaButtonArrayField } from '../shared';
 
 export type HeroProps = {
   badgeText: string;
   title: string;
   description: string;
-  buttons: HeroButton[];
+  buttons: CTAButton[];
 };
 
 export const Hero: ComponentConfig<HeroProps> = {
@@ -31,30 +25,7 @@ export const Hero: ComponentConfig<HeroProps> = {
       type: 'textarea',
       contentEditable: true,
     },
-    buttons: {
-      type: 'array',
-      min: 1,
-      max: 4,
-      getItemSummary: (item) => item.label || 'Button',
-      defaultItemProps: {
-        id: `btn-${Date.now()}`,
-        label: 'Button',
-        href: '#',
-        variant: 'primary',
-      },
-      arrayFields: {
-        id: { type: 'text', visible: false },
-        label: { type: 'text', contentEditable: true },
-        href: { type: 'text' },
-        variant: {
-          type: 'radio',
-          options: [
-            { label: 'Primary', value: 'primary' },
-            { label: 'Secondary', value: 'secondary' },
-          ],
-        },
-      },
-    },
+    buttons: ctaButtonArrayField(),
   },
   defaultProps: {
     badgeText: 'Open source - MIT Licensed',

@@ -1,5 +1,6 @@
 import type { ComponentConfig } from '@puckeditor/core';
 import cn from 'clsx';
+import { type CTAButton, ctaButtonArrayField } from '../shared';
 import { EmptySlotPlaceholder } from '../shared/EmptySlotPlaceholder';
 
 type ComparisonRow = {
@@ -12,13 +13,6 @@ type Differentiator = {
   id: string;
   title: string;
   description: string;
-};
-
-type CTAButton = {
-  id: string;
-  label: string;
-  href: string;
-  variant: 'primary' | 'secondary';
 };
 
 export type ComparisonTableProps = {
@@ -80,25 +74,7 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
     },
     ctaTitle: { type: 'text', label: 'CTA Title' },
     ctaSubtitle: { type: 'textarea', label: 'CTA Subtitle' },
-    ctaButtons: {
-      type: 'array',
-      min: 1,
-      max: 4,
-      getItemSummary: (item) => item.label || 'Button',
-      defaultItemProps: { id: `btn-${Date.now()}`, label: 'Button', href: '#', variant: 'primary' as const },
-      arrayFields: {
-        id: { type: 'text', visible: false },
-        label: { type: 'text' },
-        href: { type: 'text' },
-        variant: {
-          type: 'radio',
-          options: [
-            { label: 'Primary', value: 'primary' },
-            { label: 'Secondary', value: 'secondary' },
-          ],
-        },
-      },
-    },
+    ctaButtons: ctaButtonArrayField(),
   },
   defaultProps: {
     label: 'Comparison',
