@@ -1,6 +1,7 @@
 import type { ComponentConfig } from '@puckeditor/core';
 import cn from 'clsx';
 import { IconPickerFieldRender } from '../fields/IconPickerField';
+import { SectionHeader } from '../shared';
 import { EmptySlotPlaceholder } from '../shared/EmptySlotPlaceholder';
 
 type FeatureCard = {
@@ -35,6 +36,7 @@ export const FeatureCards: ComponentConfig<FeatureCardsProps> = {
     label: {
       type: 'text',
       label: 'Section Label',
+      contentEditable: true,
     },
     title: {
       type: 'text',
@@ -50,7 +52,7 @@ export const FeatureCards: ComponentConfig<FeatureCardsProps> = {
       max: 8,
       getItemSummary: (item) => item.title || 'Card',
       defaultItemProps: {
-        id: `card-${Date.now()}`,
+        id: `card-${crypto.randomUUID()}`,
         iconSvgPath: 'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z',
         title: 'Feature Title',
         description: 'Feature description goes here.',
@@ -65,8 +67,8 @@ export const FeatureCards: ComponentConfig<FeatureCardsProps> = {
           render: ({ value, onChange }) => <IconPickerFieldRender value={value} onChange={onChange} />,
         },
         iconText: { type: 'text', label: 'Icon text (shown instead of SVG when set)' },
-        title: { type: 'text' },
-        description: { type: 'textarea' },
+        title: { type: 'text', contentEditable: true },
+        description: { type: 'textarea', contentEditable: true },
         href: { type: 'text', label: 'Link URL (optional)' },
         linkLabel: { type: 'text', label: 'Link Label (optional)' },
       },
@@ -115,27 +117,14 @@ export const FeatureCards: ComponentConfig<FeatureCardsProps> = {
       },
     ],
   },
-  render: ({ label, title, subtitle, cards, columns }) => {
+  render: ({ label, title, subtitle, cards, columns, puck }) => {
     const hasHeader = !!(label || title || subtitle);
 
     return (
       <section id="features" className={cn(hasHeader ? 'py-24 sm:py-32' : 'mb-20', 'relative')}>
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(6,182,212,0.02)_0%,transparent_50%)] dark:bg-[radial-gradient(ellipse_at_top,rgba(6,182,212,0.04)_0%,transparent_50%)]" />
         <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Section header */}
-          {hasHeader && (
-            <div className="text-center mb-16">
-              {label && (
-                <p className="text-brand-600 dark:text-brand-400 text-sm font-medium tracking-wide uppercase mb-3">
-                  {label}
-                </p>
-              )}
-              {title && (
-                <h2 className="text-3xl sm:text-4xl font-bold text-surface-900 dark:text-white mb-4">{title}</h2>
-              )}
-              {subtitle && <p className="text-surface-500 dark:text-surface-400 max-w-xl mx-auto">{subtitle}</p>}
-            </div>
-          )}
+          {hasHeader && <SectionHeader label={label} title={title} subtitle={subtitle} />}
 
           {/* Cards grid */}
           {cards.length === 0 ? (
@@ -145,8 +134,11 @@ export const FeatureCards: ComponentConfig<FeatureCardsProps> = {
               {cards.map((card, idx) => (
                 <div
                   key={card.id}
-                  className="reveal group bg-surface-100/60 dark:bg-surface-900/40 border border-surface-200/80 dark:border-surface-800/50 rounded-xl p-6 hover:border-brand-500/30 hover:bg-surface-100 dark:hover:bg-surface-900/70 transition-all duration-300"
-                  style={{ animationDelay: `${idx * 0.08}s` }}
+                  className={cn(
+                    'group bg-surface-100/60 dark:bg-surface-900/40 border border-surface-200/80 dark:border-surface-800/50 rounded-xl p-6 hover:border-brand-500/30 hover:bg-surface-100 dark:hover:bg-surface-900/70 transition-all duration-300',
+                    { reveal: !puck.isEditing },
+                  )}
+                  style={puck.isEditing ? undefined : { animationDelay: `${idx * 0.08}s` }}
                 >
                   {/* Icon wrapper */}
                   <div className="w-10 h-10 rounded-lg bg-brand-500/10 border border-brand-500/20 flex items-center justify-center mb-4 group-hover:bg-brand-500/20 transition-colors duration-300">
@@ -178,6 +170,7 @@ export const FeatureCards: ComponentConfig<FeatureCardsProps> = {
                     <a
                       href={card.href}
                       className="inline-flex items-center gap-1 text-brand-600 dark:text-brand-400 hover:text-brand-500 dark:hover:text-brand-300 text-xs mt-2 transition-colors"
+                      onClick={puck.isEditing ? (e) => e.preventDefault() : undefined}
                     >
                       {card.linkLabel || 'Learn more'}
                       <svg

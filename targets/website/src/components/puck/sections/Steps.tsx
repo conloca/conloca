@@ -1,4 +1,6 @@
 import type { ComponentConfig } from '@puckeditor/core';
+import cn from 'clsx';
+import { SectionHeader } from '../shared';
 import { EmptySlotPlaceholder } from '../shared/EmptySlotPlaceholder';
 
 type Step = {
@@ -22,6 +24,7 @@ export const Steps: ComponentConfig<StepsProps> = {
     label: {
       type: 'text',
       label: 'Section Label',
+      contentEditable: true,
     },
     title: {
       type: 'text',
@@ -37,7 +40,7 @@ export const Steps: ComponentConfig<StepsProps> = {
       max: 8,
       getItemSummary: (item) => item.title || 'Step',
       defaultItemProps: {
-        id: `step-${Date.now()}`,
+        id: `step-${crypto.randomUUID()}`,
         number: '01',
         title: 'Step Title',
         description: 'Step description.',
@@ -46,8 +49,8 @@ export const Steps: ComponentConfig<StepsProps> = {
       arrayFields: {
         id: { type: 'text', visible: false },
         number: { type: 'text', label: 'Step Number (e.g. 01)' },
-        title: { type: 'text' },
-        description: { type: 'textarea' },
+        title: { type: 'text', contentEditable: true },
+        description: { type: 'textarea', contentEditable: true },
         code: { type: 'textarea', label: 'Code' },
       },
     },
@@ -101,21 +104,12 @@ export default defineConfig({
       },
     ],
   },
-  render: ({ label, title, subtitle, steps }) => {
+  render: ({ label, title, subtitle, steps, puck }) => {
     return (
       <section id="quickstart" className="py-24 sm:py-32 relative" itemScope itemType="https://schema.org/HowTo">
         <meta itemProp="name" content="How to add Conloca CMS to an Astro project" />
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Section header */}
-          <div className="text-center mb-16">
-            {label && (
-              <p className="text-brand-600 dark:text-brand-400 text-sm font-medium tracking-wide uppercase mb-3">
-                {label}
-              </p>
-            )}
-            <h2 className="text-3xl sm:text-4xl font-bold text-surface-900 dark:text-white mb-4">{title}</h2>
-            <p className="text-surface-500 dark:text-surface-400 max-w-xl mx-auto">{subtitle}</p>
-          </div>
+          <SectionHeader label={label} title={title} subtitle={subtitle} />
 
           {/* Steps list */}
           {steps.length === 0 ? (
@@ -125,7 +119,10 @@ export default defineConfig({
               {steps.map((step) => (
                 <div
                   key={step.id}
-                  className="reveal group grid lg:grid-cols-[280px_1fr] gap-6 bg-surface-100/60 dark:bg-surface-900/50 border border-surface-200/80 dark:border-surface-800/60 rounded-2xl p-6 lg:p-8 hover:border-surface-300 dark:hover:border-surface-700/80 transition-all duration-300"
+                  className={cn(
+                    'group grid lg:grid-cols-[280px_1fr] gap-6 bg-surface-100/60 dark:bg-surface-900/50 border border-surface-200/80 dark:border-surface-800/60 rounded-2xl p-6 lg:p-8 hover:border-surface-300 dark:hover:border-surface-700/80 transition-all duration-300',
+                    { reveal: !puck.isEditing },
+                  )}
                   itemProp="step"
                   itemScope
                   itemType="https://schema.org/HowToStep"

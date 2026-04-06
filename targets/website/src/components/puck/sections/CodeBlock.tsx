@@ -71,7 +71,7 @@ function renderHighlightedLine(line: string, lineIndex: number) {
 export const CodeBlock: ComponentConfig<CodeBlockProps> = {
   label: 'Code Block',
   fields: {
-    filename: { type: 'text', label: 'Filename' },
+    filename: { type: 'text', label: 'Filename', contentEditable: true },
     code: { type: 'textarea', label: 'Code' },
     accentColor: {
       type: 'custom',
@@ -82,7 +82,7 @@ export const CodeBlock: ComponentConfig<CodeBlockProps> = {
       type: 'array',
       max: 6,
       getItemSummary: (item) => item.label || 'Legend',
-      defaultItemProps: { id: `legend-${Date.now()}`, color: '#06b6d4', label: 'Label' },
+      defaultItemProps: { id: `legend-${crypto.randomUUID()}`, color: '#06b6d4', label: 'Label' },
       arrayFields: {
         id: { type: 'text', visible: false },
         color: {

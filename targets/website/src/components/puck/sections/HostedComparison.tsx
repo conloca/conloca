@@ -1,6 +1,7 @@
 import type { ComponentConfig } from '@puckeditor/core';
 import cn from 'clsx';
 import type { JSX } from 'react';
+import { SectionHeader } from '../shared';
 import { EmptySlotPlaceholder } from '../shared/EmptySlotPlaceholder';
 
 type ComparisonRow = {
@@ -132,7 +133,10 @@ export const HostedComparisonRender = ({
           {['Screenshot: Visual editor', 'Screenshot: Git commit by marketer'].map((text) => (
             <div
               key={text}
-              className="reveal bg-surface-100/60 dark:bg-surface-900/60 border border-surface-200/80 dark:border-surface-800/50 border-dashed rounded-xl aspect-video flex items-center justify-center"
+              className={cn(
+                'bg-surface-100/60 dark:bg-surface-900/60 border border-surface-200/80 dark:border-surface-800/50 border-dashed rounded-xl aspect-video flex items-center justify-center',
+                { reveal: !puck.isEditing },
+              )}
             >
               <div className="text-center">
                 <svg
@@ -160,7 +164,7 @@ export const HostedComparisonRender = ({
             <EmptySlotPlaceholder label="Add comparison rows using the sidebar panel" />
           </div>
         ) : (
-          <div className="reveal max-w-3xl mx-auto mb-16">
+          <div className={cn('max-w-3xl mx-auto mb-16', { reveal: !puck.isEditing })}>
             <div className="bg-surface-100/60 dark:bg-surface-900/60 border border-surface-200/80 dark:border-surface-800/50 rounded-2xl overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full">
@@ -200,7 +204,7 @@ export const HostedComparisonRender = ({
         )}
 
         {/* Waitlist CTA */}
-        <div className="reveal max-w-md mx-auto text-center">
+        <div className={cn('max-w-md mx-auto text-center', { reveal: !puck.isEditing })}>
           <h3 className="text-xl font-semibold text-surface-900 dark:text-white mb-2">{ctaTitle}</h3>
           <p className="text-surface-500 dark:text-surface-400 text-sm mb-6">{ctaSubtitle}</p>
           {shouldShowWaitlist(waitlistEnabled) && <WaitlistForm isEditing={puck.isEditing} />}
@@ -220,7 +224,7 @@ export const HostedComparison: ComponentConfig<HostedComparisonProps> = {
       type: 'array',
       min: 1,
       getItemSummary: (item) => item.feature || 'Row',
-      defaultItemProps: { id: `row-${Date.now()}`, feature: 'Feature', oss: 'true', hosted: 'true' },
+      defaultItemProps: { id: `row-${crypto.randomUUID()}`, feature: 'Feature', oss: 'true', hosted: 'true' },
       arrayFields: {
         id: { type: 'text', visible: false },
         feature: { type: 'text' },
@@ -242,8 +246,8 @@ export const HostedComparison: ComponentConfig<HostedComparisonProps> = {
         },
       },
     },
-    ctaTitle: { type: 'text', label: 'CTA Title' },
-    ctaSubtitle: { type: 'textarea', label: 'CTA Subtitle' },
+    ctaTitle: { type: 'text', label: 'CTA Title', contentEditable: true },
+    ctaSubtitle: { type: 'textarea', label: 'CTA Subtitle', contentEditable: true },
     waitlistEnabled: {
       type: 'radio',
       label: 'Show Waitlist Form',
@@ -257,7 +261,10 @@ export const HostedComparison: ComponentConfig<HostedComparisonProps> = {
     badgeText: 'Coming Soon',
     title: 'Conloca Cloud -- visual editing without the setup',
     subtitle: 'All the power of Conloca, fully managed. Your team edits visually while you keep full git ownership.',
-    rows: [],
+    rows: [
+      { id: 'row-1', feature: 'Visual Editor', oss: 'true', hosted: 'true' },
+      { id: 'row-2', feature: 'Managed Hosting', oss: 'false', hosted: 'true' },
+    ],
     ctaTitle: 'Get early access',
     ctaSubtitle: 'Be first to know when Conloca Cloud launches.',
     waitlistEnabled: true,

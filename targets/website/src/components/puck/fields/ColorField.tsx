@@ -42,6 +42,7 @@ export function ColorFieldRender({ value, onChange }: ColorFieldProps) {
     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
       <input
         type="color"
+        aria-label="Pick color"
         value={normalizeHex(localValue)}
         onChange={(e) => handlePickerChange(e.target.value)}
         style={{
@@ -56,6 +57,7 @@ export function ColorFieldRender({ value, onChange }: ColorFieldProps) {
       />
       <input
         type="text"
+        aria-label="Hex color value"
         value={localValue}
         onChange={(e) => setLocalValue(e.target.value)}
         onBlur={handleTextBlur}

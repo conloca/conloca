@@ -45,6 +45,19 @@ const FlexInternal: ComponentConfig<FlexProps> = {
     },
     items: {
       type: 'slot',
+      disallow: [
+        'Hero',
+        'CTABanner',
+        'ComparisonTable',
+        'HostedComparison',
+        'ContentBlockSection',
+        'FAQ',
+        'FeatureCards',
+        'Steps',
+        'NumberedFlow',
+        'RichTextSection',
+        'CodeBlock',
+      ],
     },
   },
   defaultProps: {

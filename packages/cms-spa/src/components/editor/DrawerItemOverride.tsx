@@ -35,8 +35,20 @@ export function DrawerItemOverride({ children, name }: DrawerItemOverrideProps) 
     });
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleDoubleClick();
+    }
+  };
+
   return (
-    <div onDoubleClick={handleDoubleClick} data-testid={`drawer-item-${name}`}>
+    <div
+      role="button"
+      tabIndex={0}
+      onDoubleClick={handleDoubleClick}
+      onKeyDown={handleKeyDown}
+      data-testid={`drawer-item-${name}`}
+    >
       {children}
     </div>
   );

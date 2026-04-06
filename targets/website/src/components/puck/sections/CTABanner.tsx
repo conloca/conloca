@@ -1,6 +1,5 @@
 import type { ComponentConfig } from '@puckeditor/core';
-import cn from 'clsx';
-import { type CTAButton, ctaButtonArrayField } from '../shared';
+import { type CTAButton, CTAButtonGroup, ctaButtonArrayField } from '../shared';
 
 export type CTABannerProps = {
   badgeText?: string;
@@ -44,35 +43,8 @@ export const CTABanner: ComponentConfig<CTABannerProps> = {
           )}
           <h2 className="text-xl sm:text-2xl font-bold text-surface-900 dark:text-white mb-4">{title}</h2>
           <p className="text-surface-500 dark:text-surface-400 text-sm max-w-md mx-auto mb-4">{subtitle}</p>
-          <div className="flex items-center justify-center gap-4 flex-wrap pt-2">
-            {buttons.map((button) => (
-              <a
-                key={button.id}
-                href={button.href}
-                className={cn(
-                  button.variant === 'primary'
-                    ? 'inline-flex items-center gap-1.5 bg-brand-500 hover:bg-brand-400 text-surface-950 font-semibold px-6 py-3 rounded-lg transition-all duration-200 hover:shadow-lg hover:shadow-brand-500/20 text-sm'
-                    : 'inline-flex items-center border border-surface-300 dark:border-surface-600 hover:border-surface-400 dark:hover:border-surface-500 text-surface-600 dark:text-surface-300 hover:text-surface-900 dark:hover:text-white font-medium px-6 py-3 rounded-lg transition-all duration-200 text-sm',
-                )}
-                onClick={puck.isEditing ? (e) => e.preventDefault() : undefined}
-              >
-                {button.label}
-                {button.variant === 'primary' && (
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M5 12h14M12 5l7 7-7 7" />
-                  </svg>
-                )}
-              </a>
-            ))}
+          <div className="pt-2">
+            <CTAButtonGroup buttons={buttons} isEditing={puck.isEditing} />
           </div>
         </div>
       </section>

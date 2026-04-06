@@ -1,7 +1,7 @@
 import type { ComponentConfig } from '@puckeditor/core';
 import cn from 'clsx';
 import { ArrayTextareaFieldRender } from '../fields/ArrayTextareaField';
-import { type CTAButton, ctaButtonArrayField } from '../shared';
+import { type CTAButton, CTAButtonGroup, ctaButtonArrayField, SectionHeader } from '../shared';
 import { EmptySlotPlaceholder } from '../shared/EmptySlotPlaceholder';
 
 type ComparisonRow = {
@@ -55,7 +55,7 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
     } as typeof fields;
   },
   fields: {
-    label: { type: 'text', label: 'Section Label' },
+    label: { type: 'text', label: 'Section Label', contentEditable: true },
     title: { type: 'text', contentEditable: true },
     subtitle: { type: 'textarea', contentEditable: true },
     extendedSubtitle: { type: 'textarea', label: 'Extended Subtitle' },
@@ -71,7 +71,7 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
       type: 'array',
       min: 1,
       getItemSummary: (item) => item.feature || 'Row',
-      defaultItemProps: { id: `row-${Date.now()}`, feature: 'Feature', values: [] },
+      defaultItemProps: { id: `row-${crypto.randomUUID()}`, feature: 'Feature', values: [] },
       arrayFields: {
         id: { type: 'text', visible: false },
         feature: { type: 'text' },
@@ -102,15 +102,15 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
       type: 'array',
       max: 6,
       getItemSummary: (item) => item.title || 'Differentiator',
-      defaultItemProps: { id: `diff-${Date.now()}`, title: 'Title', description: 'Description' },
+      defaultItemProps: { id: `diff-${crypto.randomUUID()}`, title: 'Title', description: 'Description' },
       arrayFields: {
         id: { type: 'text', visible: false },
-        title: { type: 'text' },
-        description: { type: 'textarea' },
+        title: { type: 'text', contentEditable: true },
+        description: { type: 'textarea', contentEditable: true },
       },
     },
-    ctaTitle: { type: 'text', label: 'CTA Title' },
-    ctaSubtitle: { type: 'textarea', label: 'CTA Subtitle' },
+    ctaTitle: { type: 'text', label: 'CTA Title', contentEditable: true },
+    ctaSubtitle: { type: 'textarea', label: 'CTA Subtitle', contentEditable: true },
     ctaButtons: ctaButtonArrayField(),
   },
   defaultProps: {
@@ -120,7 +120,10 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
     extendedSubtitle: '',
     columns: ['Conloca', 'Storyblok', 'Contentful', 'Decap CMS', 'Tina CMS'],
     highlightColumnIndex: 0,
-    rows: [],
+    rows: [
+      { id: 'row-1', feature: 'Pricing', values: ['Free', 'From $99/mo', 'From $300/mo', 'Free', 'Free'] },
+      { id: 'row-2', feature: 'Self-Hosted', values: ['Yes', 'No', 'No', 'Yes', 'Yes'] },
+    ],
     differentiators: [],
     ctaTitle: 'Ready to try Conloca?',
     ctaSubtitle: 'Get started in minutes.',
@@ -143,21 +146,12 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
     return (
       <div className="py-24 pb-20">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Header */}
-          <div className="text-center mb-16">
-            {label && (
-              <p className="text-brand-600 dark:text-brand-400 text-sm font-medium tracking-wide uppercase mb-3">
-                {label}
-              </p>
-            )}
-            <h1 className="text-3xl sm:text-4xl font-bold text-surface-900 dark:text-white mb-4">{title}</h1>
-            <p className="text-surface-500 dark:text-surface-400 max-w-2xl mx-auto">{subtitle}</p>
-            {extendedSubtitle && (
-              <p className="text-surface-500 dark:text-surface-400 text-sm max-w-2xl mx-auto mt-3">
-                {extendedSubtitle}
-              </p>
-            )}
-          </div>
+          <SectionHeader label={label} title={title} subtitle={subtitle} headingLevel="h1" />
+          {extendedSubtitle && (
+            <p className="text-surface-500 dark:text-surface-400 text-sm max-w-2xl mx-auto mt-[-48px] mb-16 text-center">
+              {extendedSubtitle}
+            </p>
+          )}
 
           {/* Table */}
           {rows.length === 0 ? (
@@ -250,35 +244,8 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
           <div className="text-center">
             <h2 className="text-xl sm:text-2xl font-bold text-surface-900 dark:text-white mb-4">{ctaTitle}</h2>
             <p className="text-surface-500 dark:text-surface-400 text-sm max-w-md mx-auto mb-4">{ctaSubtitle}</p>
-            <div className="flex items-center justify-center gap-4 flex-wrap pt-2">
-              {ctaButtons.map((button) => (
-                <a
-                  key={button.id}
-                  href={button.href}
-                  className={cn(
-                    button.variant === 'primary'
-                      ? 'inline-flex items-center gap-2 bg-brand-500 hover:bg-brand-400 text-surface-950 font-semibold px-6 py-3 rounded-lg transition-all duration-200 hover:shadow-lg hover:shadow-brand-500/20 text-sm'
-                      : 'inline-flex items-center gap-2 border border-surface-300 dark:border-surface-600 hover:border-surface-400 dark:hover:border-surface-500 text-surface-600 dark:text-surface-300 hover:text-surface-900 dark:hover:text-white font-medium px-6 py-3 rounded-lg transition-all duration-200 text-sm',
-                  )}
-                  onClick={puck.isEditing ? (e) => e.preventDefault() : undefined}
-                >
-                  {button.label}
-                  {button.variant === 'primary' && (
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M5 12h14M12 5l7 7-7 7" />
-                    </svg>
-                  )}
-                </a>
-              ))}
+            <div className="pt-2">
+              <CTAButtonGroup buttons={ctaButtons} isEditing={puck.isEditing} />
             </div>
           </div>
         </div>

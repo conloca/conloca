@@ -1,6 +1,5 @@
 import type { ComponentConfig } from '@puckeditor/core';
-import cn from 'clsx';
-import { type CTAButton, ctaButtonArrayField } from '../shared';
+import { type CTAButton, CTAButtonGroup, ctaButtonArrayField, SectionHeader } from '../shared';
 import { EmptySlotPlaceholder } from '../shared/EmptySlotPlaceholder';
 import { renderLimitedRichText } from '../shared/render-limited-rich-text';
 
@@ -58,16 +57,7 @@ const FAQRender = ({
   return (
     <div className="py-24 pb-20">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="text-center mb-16">
-          {label && (
-            <p className="text-brand-600 dark:text-brand-400 text-sm font-medium tracking-wide uppercase mb-3">
-              {label}
-            </p>
-          )}
-          <h1 className="text-3xl sm:text-4xl font-bold text-surface-900 dark:text-white mb-4">{title}</h1>
-          <p className="text-surface-500 dark:text-surface-400 max-w-xl mx-auto">{subtitle}</p>
-        </div>
+        <SectionHeader label={label} title={title} subtitle={subtitle} headingLevel="h1" />
 
         {/* FAQ items */}
         <div className="space-y-4">
@@ -81,36 +71,7 @@ const FAQRender = ({
         {/* CTA */}
         <div className="mt-16 text-center space-y-4">
           <p className="text-surface-500 text-sm">{ctaText}</p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            {ctaButtons.map((button) => (
-              <a
-                key={button.id}
-                href={button.href}
-                className={cn(
-                  button.variant === 'primary'
-                    ? 'inline-flex items-center gap-2 bg-brand-500 hover:bg-brand-400 text-surface-950 font-semibold px-6 py-3 rounded-lg transition-all duration-200 hover:shadow-lg hover:shadow-brand-500/20 text-sm'
-                    : 'inline-flex items-center gap-2 border border-surface-300 dark:border-surface-600 hover:border-surface-400 dark:hover:border-surface-500 text-surface-600 dark:text-surface-300 hover:text-surface-900 dark:hover:text-white font-medium px-6 py-3 rounded-lg transition-all duration-200 text-sm',
-                )}
-                onClick={puck.isEditing ? (e) => e.preventDefault() : undefined}
-              >
-                {button.label}
-                {button.variant === 'primary' && (
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M5 12h14M12 5l7 7-7 7" />
-                  </svg>
-                )}
-              </a>
-            ))}
-          </div>
+          <CTAButtonGroup buttons={ctaButtons} isEditing={puck.isEditing} />
         </div>
       </div>
     </div>
@@ -120,7 +81,7 @@ const FAQRender = ({
 export const FAQ: ComponentConfig<FAQProps> = {
   label: 'FAQ Accordion',
   fields: {
-    label: { type: 'text', label: 'Section Label' },
+    label: { type: 'text', label: 'Section Label', contentEditable: true },
     title: { type: 'text', contentEditable: true },
     subtitle: { type: 'textarea', contentEditable: true },
     items: {
@@ -128,17 +89,17 @@ export const FAQ: ComponentConfig<FAQProps> = {
       min: 1,
       getItemSummary: (item) => item.question || 'Question',
       defaultItemProps: {
-        id: `faq-${Date.now()}`,
+        id: `faq-${crypto.randomUUID()}`,
         question: 'Question?',
         answer: 'Answer text here.',
       },
       arrayFields: {
         id: { type: 'text', visible: false },
-        question: { type: 'text' },
+        question: { type: 'text', contentEditable: true },
         answer: { type: 'textarea', label: 'Answer' },
       },
     },
-    ctaText: { type: 'text', label: 'CTA Text' },
+    ctaText: { type: 'text', label: 'CTA Text', contentEditable: true },
     ctaButtons: ctaButtonArrayField(),
   },
   defaultProps: {

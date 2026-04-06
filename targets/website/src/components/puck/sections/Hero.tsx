@@ -11,6 +11,7 @@ export type HeroProps = {
 
 export const Hero: ComponentConfig<HeroProps> = {
   label: 'Hero Section',
+  resolvePermissions: () => ({ duplicate: false }),
   fields: {
     badgeText: {
       type: 'text',
@@ -87,8 +88,13 @@ export const Hero: ComponentConfig<HeroProps> = {
         <div className="relative mx-auto px-4 sm:px-6 lg:px-8 text-center max-w-4xl">
           {/* Badge */}
           {badgeText && (
-            <div className="inline-flex items-center gap-2 border border-surface-300 dark:border-surface-700/60 rounded-full px-4 py-1.5 mb-8 text-xs text-surface-500 dark:text-surface-400 animate-fade-in">
-              <span className="w-1.5 h-1.5 rounded-full bg-brand-400 animate-pulse" />
+            <div
+              className={cn(
+                'inline-flex items-center gap-2 border border-surface-300 dark:border-surface-700/60 rounded-full px-4 py-1.5 mb-8 text-xs text-surface-500 dark:text-surface-400',
+                { 'animate-fade-in': !puck.isEditing },
+              )}
+            >
+              <span className={cn('w-1.5 h-1.5 rounded-full bg-brand-400', { 'animate-pulse': !puck.isEditing })} />
               {badgeText}
             </div>
           )}
@@ -96,7 +102,10 @@ export const Hero: ComponentConfig<HeroProps> = {
           {/* Title */}
           <h1
             itemProp="name"
-            className="font-bold text-surface-900 dark:text-white leading-tight tracking-tight mb-6 text-4xl sm:text-5xl lg:text-6xl opacity-0 animate-slide-up"
+            className={cn(
+              'font-bold text-surface-900 dark:text-white leading-tight tracking-tight mb-6 text-4xl sm:text-5xl lg:text-6xl',
+              puck.isEditing ? '' : 'opacity-0 animate-slide-up',
+            )}
           >
             {isStringTitle
               ? lines.map((line, idx) => (
@@ -110,16 +119,22 @@ export const Hero: ComponentConfig<HeroProps> = {
 
           {/* Description */}
           <p
-            className="text-lg sm:text-xl text-surface-500 dark:text-surface-400 max-w-2xl mx-auto mb-10 opacity-0 animate-slide-up"
-            style={{ animationDelay: '0.15s' }}
+            className={cn(
+              'text-lg sm:text-xl text-surface-500 dark:text-surface-400 max-w-2xl mx-auto mb-10',
+              puck.isEditing ? '' : 'opacity-0 animate-slide-up',
+            )}
+            style={puck.isEditing ? undefined : { animationDelay: '0.15s' }}
           >
             {description}
           </p>
 
           {/* Buttons */}
           <div
-            className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8 opacity-0 animate-slide-up"
-            style={{ animationDelay: '0.3s' }}
+            className={cn(
+              'flex flex-col sm:flex-row items-center justify-center gap-4 mb-8',
+              puck.isEditing ? '' : 'opacity-0 animate-slide-up',
+            )}
+            style={puck.isEditing ? undefined : { animationDelay: '0.3s' }}
           >
             {buttons.map((button) => (
               <a
@@ -153,7 +168,10 @@ export const Hero: ComponentConfig<HeroProps> = {
 
           {/* Terminal mock-up */}
           {hasButtons && (
-            <div className="max-w-lg mx-auto opacity-0 animate-slide-up" style={{ animationDelay: '0.45s' }}>
+            <div
+              className={cn('max-w-lg mx-auto', puck.isEditing ? '' : 'opacity-0 animate-slide-up')}
+              style={puck.isEditing ? undefined : { animationDelay: '0.45s' }}
+            >
               <div className="bg-surface-100 dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-xl overflow-hidden shadow-2xl">
                 {/* Title bar */}
                 <div className="flex items-center gap-2 px-4 py-3 border-b border-surface-200 dark:border-surface-800">
@@ -167,7 +185,10 @@ export const Hero: ComponentConfig<HeroProps> = {
                   <div className="flex items-center gap-2">
                     <span className="text-brand-600 dark:text-brand-400">$</span>
                     <span id="typed-command" className="text-surface-800 dark:text-surface-200" />
-                    <span id="cursor" className="inline-block w-2 h-5 bg-brand-400 animate-blink" />
+                    <span
+                      id="cursor"
+                      className={cn('inline-block w-2 h-5 bg-brand-400', { 'animate-blink': !puck.isEditing })}
+                    />
                   </div>
                 </div>
               </div>
@@ -178,8 +199,11 @@ export const Hero: ComponentConfig<HeroProps> = {
         {/* Scroll-down arrow */}
         {hasButtons && (
           <div
-            className="absolute bottom-8 left-1/2 -translate-x-1/2 opacity-0 animate-fade-in"
-            style={{ animationDelay: '1.5s' }}
+            className={cn(
+              'absolute bottom-8 left-1/2 -translate-x-1/2',
+              puck.isEditing ? '' : 'opacity-0 animate-fade-in',
+            )}
+            style={puck.isEditing ? undefined : { animationDelay: '1.5s' }}
           >
             <svg
               width="20"
@@ -190,7 +214,7 @@ export const Hero: ComponentConfig<HeroProps> = {
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
-              className="text-surface-400 animate-bounce"
+              className={cn('text-surface-400', { 'animate-bounce': !puck.isEditing })}
             >
               <path d="M19 14l-7 7m0 0l-7-7m7 7V3" />
             </svg>

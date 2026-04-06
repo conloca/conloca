@@ -41,6 +41,7 @@ export const ContentBlockSection: ComponentConfig<ContentBlockSectionProps> = {
     label: {
       type: 'text',
       label: 'Section Label',
+      contentEditable: true,
     },
     blockId: {
       type: 'text',

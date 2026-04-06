@@ -186,6 +186,8 @@ export function IconPickerFieldRender({ value, onChange }: IconPickerFieldProps)
             key={icon.id}
             type="button"
             title={icon.label}
+            aria-label={icon.label}
+            aria-pressed={value === icon.path}
             onClick={() => {
               onChange(icon.path);
               setLocalValue(icon.path);
@@ -223,6 +225,7 @@ export function IconPickerFieldRender({ value, onChange }: IconPickerFieldProps)
       {/* Advanced toggle */}
       <button
         type="button"
+        aria-expanded={showAdvanced}
         onClick={() => setShowAdvanced(!showAdvanced)}
         style={{
           background: 'none',
@@ -240,6 +243,7 @@ export function IconPickerFieldRender({ value, onChange }: IconPickerFieldProps)
       {/* Advanced: raw SVG path input */}
       {showAdvanced && (
         <textarea
+          aria-label="Custom SVG path"
           value={localValue}
           onChange={(e) => setLocalValue(e.target.value)}
           onBlur={handleTextBlur}

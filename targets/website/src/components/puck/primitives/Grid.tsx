@@ -24,6 +24,19 @@ const GridInternal: ComponentConfig<GridProps> = {
     },
     items: {
       type: 'slot',
+      disallow: [
+        'Hero',
+        'CTABanner',
+        'ComparisonTable',
+        'HostedComparison',
+        'ContentBlockSection',
+        'FAQ',
+        'FeatureCards',
+        'Steps',
+        'NumberedFlow',
+        'RichTextSection',
+        'CodeBlock',
+      ],
     },
   },
   defaultProps: {

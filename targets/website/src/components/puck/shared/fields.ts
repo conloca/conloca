@@ -21,7 +21,7 @@ export function ctaButtonArrayField(
     ...overrides,
     getItemSummary: (item) => item.label || 'Button',
     defaultItemProps: {
-      id: `btn-${Date.now()}`,
+      id: `btn-${crypto.randomUUID()}`,
       label: 'Button',
       href: '#',
       variant: 'primary' as const,

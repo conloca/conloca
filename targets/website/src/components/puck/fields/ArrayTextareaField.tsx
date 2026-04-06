@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 
 interface ArrayTextareaFieldProps {
   value: string[];
@@ -35,6 +35,8 @@ export function ArrayTextareaFieldRender({
     onChange(lines);
   };
 
+  const fieldId = useId();
+  const warningId = `${fieldId}-warning`;
   const lineCount = localValue
     .split('\n')
     .map((line) => line.trim())
@@ -44,6 +46,9 @@ export function ArrayTextareaFieldRender({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
       <textarea
+        id={fieldId}
+        aria-label={placeholder || 'One item per line'}
+        aria-describedby={hasMismatch ? warningId : undefined}
         value={localValue}
         onChange={(e) => setLocalValue(e.target.value)}
         onBlur={handleBlur}
@@ -61,6 +66,8 @@ export function ArrayTextareaFieldRender({
       />
       {hasMismatch && (
         <p
+          id={warningId}
+          role="alert"
           style={{
             margin: 0,
             fontSize: 11,

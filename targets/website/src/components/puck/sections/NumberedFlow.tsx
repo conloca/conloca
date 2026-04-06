@@ -26,7 +26,7 @@ export const NumberedFlow: ComponentConfig<NumberedFlowProps> = {
       max: 10,
       getItemSummary: (item) => item.title || 'Step',
       defaultItemProps: {
-        id: `flow-${Date.now()}`,
+        id: `flow-${crypto.randomUUID()}`,
         number: '1',
         title: 'Step Title',
         description: 'Step description.',
@@ -34,14 +34,14 @@ export const NumberedFlow: ComponentConfig<NumberedFlowProps> = {
       arrayFields: {
         id: { type: 'text', visible: false },
         number: { type: 'text', label: 'Number' },
-        title: { type: 'text' },
+        title: { type: 'text', contentEditable: true },
         description: { type: 'textarea', label: 'Description' },
       },
     },
   },
   defaultProps: {
-    title: '',
-    subtitle: '',
+    title: 'How it works',
+    subtitle: 'Follow these steps to get started.',
     items: [{ id: 'flow-1', number: '1', title: 'Step Title', description: 'Step description.' }],
   },
   render: ({ title, subtitle, items }) => {
