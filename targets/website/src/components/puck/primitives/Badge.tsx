@@ -1,6 +1,5 @@
 import type { ComponentConfig } from '@puckeditor/core';
-import type { CSSProperties } from 'react';
-import { colors, radius, typography } from '../shared/tokens';
+import cn from 'clsx';
 
 type BadgeColor = 'brand' | 'green' | 'gray';
 type BadgeSize = 'sm' | 'md';
@@ -11,26 +10,16 @@ export type BadgeProps = {
   size: BadgeSize;
 };
 
-const getBadgeStyle = (color: BadgeColor, size: BadgeSize): CSSProperties => {
-  const colorTokens = colors.badge[color];
-  const padding = size === 'sm' ? '2px 8px' : '2px 10px';
-  const fontSize = size === 'sm' ? typography.text.xs.fontSize : typography.text.sm.fontSize;
-  const lineHeight = size === 'sm' ? typography.text.xs.lineHeight : typography.text.sm.lineHeight;
+const badgeColorClasses: Record<BadgeColor, string> = {
+  brand: 'bg-cyan-50 text-cyan-500 border-cyan-200 dark:bg-cyan-950/40 dark:text-cyan-400 dark:border-cyan-800/60',
+  green:
+    'bg-emerald-50 text-emerald-500 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/60',
+  gray: 'bg-surface-100 text-surface-500 border-surface-200 dark:bg-surface-800/40 dark:text-surface-400 dark:border-surface-700/60',
+};
 
-  return {
-    display: 'inline-flex',
-    alignItems: 'center',
-    padding,
-    backgroundColor: colorTokens.bg,
-    color: colorTokens.text,
-    border: `1px solid ${colorTokens.border}`,
-    borderRadius: radius.full,
-    fontFamily: typography.fonts.body,
-    fontSize,
-    lineHeight,
-    fontWeight: typography.weights.medium,
-    whiteSpace: 'nowrap',
-  };
+const badgeSizeClasses: Record<BadgeSize, string> = {
+  sm: 'px-2 py-0.5 text-xs',
+  md: 'px-2.5 py-0.5 text-sm',
 };
 
 export const Badge: ComponentConfig<BadgeProps> = {
@@ -64,6 +53,16 @@ export const Badge: ComponentConfig<BadgeProps> = {
     size: 'md',
   },
   render: ({ label, color, size }) => {
-    return <span style={getBadgeStyle(color, size)}>{label}</span>;
+    return (
+      <span
+        className={cn(
+          'inline-flex items-center rounded-full border font-medium whitespace-nowrap leading-snug',
+          badgeColorClasses[color],
+          badgeSizeClasses[size],
+        )}
+      >
+        {label}
+      </span>
+    );
   },
 };
