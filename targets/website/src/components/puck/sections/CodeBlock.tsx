@@ -103,8 +103,15 @@ export const CodeBlock: ComponentConfig<CodeBlockProps> = {
     },
   },
   defaultProps: {
-    filename: 'example.vxjson',
-    code: '// Code here',
+    filename: 'content/pages/home.vxjson',
+    code: `{
+  "locale": "en",
+  "slug": "home",
+  "title": "Homepage",
+  "metaEtag": "a1b2c3",
+  "contentEtag": "d4e5f6",
+  "content": "..."
+}`,
     accentColor: '',
     legendItems: [],
     spacing: 'default',

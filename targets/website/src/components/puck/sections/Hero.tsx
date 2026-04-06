@@ -11,7 +11,10 @@ export type HeroProps = {
 
 export const Hero: ComponentConfig<HeroProps> = {
   label: 'Hero Section',
-  resolvePermissions: () => ({ duplicate: false }),
+  resolvePermissions: (_data, { appState }) => {
+    const heroCount = appState.data.content.filter((item) => item.type === 'Hero').length;
+    return { duplicate: false, insert: heroCount < 1 };
+  },
   fields: {
     badgeText: {
       type: 'text',

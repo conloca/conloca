@@ -58,7 +58,7 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
     label: { type: 'text', label: 'Section Label', contentEditable: true },
     title: { type: 'text', contentEditable: true },
     subtitle: { type: 'textarea', contentEditable: true },
-    extendedSubtitle: { type: 'textarea', label: 'Extended Subtitle' },
+    extendedSubtitle: { type: 'textarea', label: 'Extended Subtitle', contentEditable: true },
     columns: {
       type: 'custom',
       label: 'Columns (one per line)',
@@ -105,8 +105,8 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
       defaultItemProps: { id: `diff-${crypto.randomUUID()}`, title: 'Title', description: 'Description' },
       arrayFields: {
         id: { type: 'text', visible: false },
-        title: { type: 'text', contentEditable: true },
-        description: { type: 'textarea', contentEditable: true },
+        title: { type: 'text' },
+        description: { type: 'textarea' },
       },
     },
     ctaTitle: { type: 'text', label: 'CTA Title', contentEditable: true },

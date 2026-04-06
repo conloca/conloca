@@ -95,7 +95,7 @@ export const FAQ: ComponentConfig<FAQProps> = {
       },
       arrayFields: {
         id: { type: 'text', visible: false },
-        question: { type: 'text', contentEditable: true },
+        question: { type: 'text' },
         answer: {
           type: 'richtext',
           label: 'Answer',
@@ -117,7 +117,26 @@ export const FAQ: ComponentConfig<FAQProps> = {
     label: 'Support',
     title: 'Frequently Asked Questions',
     subtitle: 'Common questions about Conloca CMS',
-    items: [{ id: 'faq-1', question: 'Question?', answer: 'Answer text here.' }],
+    items: [
+      {
+        id: 'faq-1',
+        question: 'How does Conloca store content?',
+        answer:
+          'All content is stored as <strong>VXJSON files</strong> directly in your git repository. No database required -- every edit is a file change that can be committed, reviewed, and rolled back.',
+      },
+      {
+        id: 'faq-2',
+        question: 'Do I need to self-host anything?',
+        answer:
+          'Conloca runs entirely within your Astro project. There are no external services to manage. Just install the package, add the integration, and the CMS is available at <code>/__cms</code>.',
+      },
+      {
+        id: 'faq-3',
+        question: 'Can non-technical editors use Conloca?',
+        answer:
+          'Yes. Editors use a visual drag-and-drop interface powered by <a href="https://puckeditor.com">Puck</a>. They can build pages, reorder sections, and edit content without touching code.',
+      },
+    ],
     ctaText: 'Have more questions?',
     ctaButtons: [{ id: 'btn-1', label: 'Read the Docs', href: '/getting-started/', variant: 'primary' }],
   },

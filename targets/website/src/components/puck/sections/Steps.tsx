@@ -2,6 +2,7 @@ import type { ComponentConfig } from '@puckeditor/core';
 import cn from 'clsx';
 import { SectionHeader } from '../shared';
 import { EmptySlotPlaceholder } from '../shared/EmptySlotPlaceholder';
+import { renderLimitedRichText } from '../shared/render-limited-rich-text';
 
 type Step = {
   id: string;
@@ -20,6 +21,15 @@ export type StepsProps = {
 
 export const Steps: ComponentConfig<StepsProps> = {
   label: 'Quick Start Steps',
+  resolveData: (data) => ({
+    props: {
+      ...data.props,
+      steps: data.props.steps.map((step, i) => ({
+        ...step,
+        number: String(i + 1).padStart(2, '0'),
+      })),
+    },
+  }),
   fields: {
     label: {
       type: 'text',
@@ -48,9 +58,20 @@ export const Steps: ComponentConfig<StepsProps> = {
       },
       arrayFields: {
         id: { type: 'text', visible: false },
-        number: { type: 'text', label: 'Step Number (e.g. 01)' },
-        title: { type: 'text', contentEditable: true },
-        description: { type: 'textarea', contentEditable: true },
+        number: { type: 'text', label: 'Step Number (auto)' },
+        title: { type: 'text' },
+        description: {
+          type: 'richtext',
+          label: 'Description',
+          options: {
+            heading: false,
+            bulletList: false,
+            orderedList: false,
+            blockquote: false,
+            codeBlock: false,
+            horizontalRule: false,
+          },
+        },
         code: { type: 'textarea', label: 'Code' },
       },
     },
@@ -135,9 +156,12 @@ export default defineConfig({
                     <h3 itemProp="name" className="text-xl font-semibold text-surface-900 dark:text-white mt-1">
                       {step.title}
                     </h3>
-                    <p itemProp="text" className="text-surface-500 dark:text-surface-400 text-sm mt-2 leading-relaxed">
-                      {step.description}
-                    </p>
+                    <div itemProp="text">
+                      {renderLimitedRichText(
+                        step.description,
+                        'text-surface-500 dark:text-surface-400 text-sm mt-2 leading-relaxed [&_a]:text-brand-600 dark:[&_a]:text-brand-400 [&_a]:underline [&_a]:underline-offset-2 [&_code]:font-mono [&_code]:text-[0.95em] [&_code]:text-surface-700 dark:[&_code]:text-surface-300',
+                      )}
+                    </div>
                   </div>
 
                   {/* Right column: terminal code block */}

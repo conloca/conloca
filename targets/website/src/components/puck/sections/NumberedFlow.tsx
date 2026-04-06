@@ -17,6 +17,15 @@ export type NumberedFlowProps = {
 
 export const NumberedFlow: ComponentConfig<NumberedFlowProps> = {
   label: 'Numbered Flow',
+  resolveData: (data) => ({
+    props: {
+      ...data.props,
+      items: data.props.items.map((item, i) => ({
+        ...item,
+        number: String(i + 1),
+      })),
+    },
+  }),
   fields: {
     title: { type: 'text', contentEditable: true },
     subtitle: { type: 'textarea', contentEditable: true },
@@ -33,8 +42,8 @@ export const NumberedFlow: ComponentConfig<NumberedFlowProps> = {
       },
       arrayFields: {
         id: { type: 'text', visible: false },
-        number: { type: 'text', label: 'Number' },
-        title: { type: 'text', contentEditable: true },
+        number: { type: 'text', label: 'Number (auto)' },
+        title: { type: 'text' },
         description: {
           type: 'richtext',
           label: 'Description',
@@ -53,7 +62,29 @@ export const NumberedFlow: ComponentConfig<NumberedFlowProps> = {
   defaultProps: {
     title: 'How it works',
     subtitle: 'Follow these steps to get started.',
-    items: [{ id: 'flow-1', number: '1', title: 'Step Title', description: 'Step description.' }],
+    items: [
+      {
+        id: 'flow-1',
+        number: '1',
+        title: 'Define your components',
+        description:
+          'Create Puck components with fields and render functions. Each component becomes a drag-and-drop block.',
+      },
+      {
+        id: 'flow-2',
+        number: '2',
+        title: 'Editors build pages visually',
+        description:
+          'Content editors open <code>/__cms</code>, drag components onto the canvas, and fill in content using the sidebar panel.',
+      },
+      {
+        id: 'flow-3',
+        number: '3',
+        title: 'Content saves to git',
+        description:
+          'Every edit is stored as a VXJSON file in your repo. Changes can be committed, reviewed in PRs, and deployed with your normal workflow.',
+      },
+    ],
   },
   render: ({ title, subtitle, items }) => {
     return (

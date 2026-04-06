@@ -32,7 +32,7 @@ export function ctaButtonArrayField(
     },
     arrayFields: {
       id: { type: 'text', visible: false },
-      label: { type: 'text', contentEditable: true },
+      label: { type: 'text' },
       href: { type: 'text' },
       variant: {
         type: 'radio',
