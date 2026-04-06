@@ -88,7 +88,7 @@ const FlexInternal: ComponentConfig<FlexProps> = {
             flexWrap: wrap,
           }}
         >
-          <Items />
+          <Items collisionAxis={direction === 'row' ? 'x' : 'y'} />
         </div>
       </Section>
     );
