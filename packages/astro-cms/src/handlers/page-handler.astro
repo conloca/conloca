@@ -54,6 +54,46 @@ interface DataEntryData extends BaseEntryData {
   data?: Record<string, unknown>
 }
 
+/**
+ * Merge component defaultProps with stored sparse props.
+ *
+ * Mirrors the editor's mergeDefaultProps in PageEditorWrapper.tsx.
+ * Without this, new top-level fields added to a component after content was saved
+ * would render as undefined in production (Puck's Render doesn't apply defaultProps).
+ */
+function mergeDefaultProps(data: Data, config: typeof puckConfig): Data {
+  if (!data?.content || !config?.components) return data
+
+  const mergeComponentProps = (item: Data['content'][0]): Data['content'][0] => {
+    const componentConfig = config.components[item.type]
+    if (!componentConfig?.defaultProps) return item
+
+    return {
+      ...item,
+      props: {
+        ...componentConfig.defaultProps,
+        ...item.props,
+      },
+    }
+  }
+
+  const mergedContent = data.content.map(mergeComponentProps)
+
+  let mergedZones = data.zones
+  if (data.zones) {
+    mergedZones = {}
+    for (const [zoneKey, zoneContent] of Object.entries(data.zones)) {
+      mergedZones[zoneKey] = zoneContent.map(mergeComponentProps)
+    }
+  }
+
+  return {
+    ...data,
+    content: mergedContent,
+    ...(mergedZones && { zones: mergedZones }),
+  }
+}
+
 const collectionCache = new Map<string, Promise<AstroCollectionEntry[]>>()
 let evaluateMDXToComponentPromise: Promise<typeof import('@conloca/mdx/node').evaluateMDXToComponent> | undefined
 
@@ -404,13 +444,17 @@ if (hasCollections || hasPages) {
 const hasPuckData = !!page?.puckData && Object.keys(page.puckData).length > 0
 let resolvedPuckData = page?.puckData
 
-if (hasPuckData && page && dataContext) {
+if (hasPuckData && page) {
+  const mergedData = mergeDefaultProps(page.puckData, puckConfig)
   try {
-    resolvedPuckData = await resolveAllData(page.puckData, puckConfig, {
-      metadata: dataContext,
-    })
+    resolvedPuckData = await resolveAllData(
+      mergedData,
+      puckConfig,
+      dataContext ? { metadata: dataContext } : undefined,
+    )
   } catch (error) {
     console.error('[Conloca] resolveAllData failed:', error)
+    resolvedPuckData = mergedData
   }
 }
 

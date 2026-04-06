@@ -29,7 +29,8 @@ interface ContentBlockSectionProps {
   blockId: string;
   width?: 'narrow' | 'default';
   tone?: 'transparent' | 'subtle';
-  startsNewSection?: boolean;
+  /** String 'true'/'false' from radio field, or boolean from legacy saved data */
+  startsNewSection?: boolean | 'true' | 'false';
 }
 
 const contentBlockWidthClasses: Record<NonNullable<ContentBlockSectionProps['width']>, string> = {
@@ -78,10 +79,15 @@ function resolveRenderableBlocks(blocks: Array<MDXBlockEvaluationResult | MDXCom
 /** Component types that can be merged into a narrative section following a CBS */
 const MERGEABLE_VISUAL_TYPES = new Set(['CodeBlock', 'FeatureCards', 'NumberedFlow', 'Steps']);
 
-/** Minimal puck context for static (non-editor) rendering */
+/** Minimal puck context for static (non-editor) rendering via MergedRender path */
 const staticPuckContext = {
   isEditing: false,
-  renderDropZone: () => null,
+  renderDropZone: () => {
+    console.warn(
+      '[Conloca] renderDropZone called in MergedRender path — nested zones are not supported here. Use the standard Puck Render path for components with DropZones.',
+    );
+    return null;
+  },
   metadata: {},
   dragRef: null,
 };
@@ -123,7 +129,11 @@ function groupContentItems(content: ContentItem[]): RenderGroup[] {
     if (item.type === 'ContentBlockSection') {
       const props = item.props as unknown as ContentBlockSectionProps;
       // Backward compat: if startsNewSection is not set, fall back to title-presence
-      const startsNew = props.startsNewSection !== undefined ? props.startsNewSection : !!props.title;
+      // Handle both boolean (legacy) and string (radio field output) for startsNewSection
+      const startsNew =
+        props.startsNewSection !== undefined
+          ? props.startsNewSection === true || props.startsNewSection === 'true'
+          : !!props.title;
 
       if (startsNew) {
         // Start a new narrative group
@@ -362,7 +372,9 @@ function RenderWithBlocks({ config, data, mdxComponents }: RenderWithBlocksProps
   const hasNarrativeSections = (data.content as ContentItem[]).some((item) => {
     if (item.type !== 'ContentBlockSection') return false;
     const props = item.props as unknown as ContentBlockSectionProps;
-    return props.startsNewSection !== undefined ? props.startsNewSection : !!props.title;
+    return props.startsNewSection !== undefined
+      ? props.startsNewSection === true || props.startsNewSection === 'true'
+      : !!props.title;
   });
 
   if (needsHydration) {

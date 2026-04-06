@@ -22,13 +22,18 @@ export function HydrationWrapper({ componentName, strategy, props, children }: H
     return <>{children}</>;
   }
 
+  // Strip Puck-internal props that aren't needed for hydration.
+  // `puck` contains functions (renderDropZone) that can't survive JSON serialization
+  // and would crash on hydration if a component called them.
+  const { puck: _puck, ...hydrateProps } = props as Record<string, unknown> & { puck?: unknown };
+
   // Wrap with hydration markers for the browser script to find
   return (
     <div
       style={{ display: 'contents' }}
       data-hydrate={componentName}
       data-hydrate-strategy={strategy}
-      data-props={serializeProps(props)}
+      data-props={serializeProps(hydrateProps)}
     >
       {children}
     </div>
