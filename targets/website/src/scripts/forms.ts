@@ -43,14 +43,29 @@ function setupForm(form: HTMLFormElement) {
           'mt-3 text-sm text-brand-600 dark:text-brand-400',
         );
         form.reset();
-      } else {
-        throw new Error('Request failed');
+        submitButton.disabled = true;
+        submitButton.textContent = 'Done';
+        return;
+      }
+
+      // Show server error message when available (e.g., rate limit)
+      try {
+        const body = (await res.json()) as { error?: string };
+        setMessage(
+          messageElement,
+          body.error || 'Something went wrong. Please try again.',
+          'mt-3 text-sm text-red-400',
+        );
+      } catch {
+        setMessage(messageElement, 'Something went wrong. Please try again.', 'mt-3 text-sm text-red-400');
       }
     } catch {
       setMessage(messageElement, 'Something went wrong. Please try again.', 'mt-3 text-sm text-red-400');
     } finally {
-      submitButton.disabled = false;
-      submitButton.textContent = intent === 'hosted' ? 'Join Waitlist' : 'Subscribe';
+      if (!submitButton.disabled) {
+        submitButton.disabled = false;
+        submitButton.textContent = intent === 'hosted' ? 'Join Waitlist' : 'Subscribe';
+      }
     }
   });
 }
