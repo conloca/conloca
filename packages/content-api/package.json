@@ -32,22 +32,22 @@
   "exports": {
     "./package.json": "./package.json",
     ".": {
-      "types": "./dist/index.d.ts",
+      "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs",
       "default": "./dist/index.mjs"
     },
     "./node": {
-      "types": "./dist/node.d.ts",
+      "types": "./dist/node.d.mts",
       "import": "./dist/node.mjs",
       "default": "./dist/node.mjs"
     },
     "./reader": {
-      "types": "./dist/reader.d.ts",
+      "types": "./dist/reader.d.mts",
       "import": "./dist/reader.mjs",
       "default": "./dist/reader.mjs"
     },
     "./schemas": {
-      "types": "./dist/schemas/index.d.ts",
+      "types": "./dist/schemas/index.d.mts",
       "import": "./dist/schemas/index.mjs",
       "default": "./dist/schemas/index.mjs"
     }
@@ -58,7 +58,7 @@
     "test:watch": "bun test --watch"
   },
   "type": "module",
-  "types": "./dist/index.d.ts",
+  "types": "./dist/index.d.mts",
   "files": [
     "dist",
     "!**/*.tsbuildinfo"
