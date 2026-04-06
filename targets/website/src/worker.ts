@@ -30,6 +30,22 @@ interface Env {
   ASSETS: AssetFetcher;
 }
 
+// Simple IP-based rate limiter: max requests per IP within the window
+const RATE_LIMIT_MAX = 5;
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+
+function isRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return false;
+  }
+  entry.count++;
+  return entry.count > RATE_LIMIT_MAX;
+}
+
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type SubscribePayload = {
@@ -80,6 +96,11 @@ async function handleSubscribe(request: Request, env: Env) {
 
   if (request.method !== 'POST') {
     return jsonResponse({ error: 'Method not allowed' }, 405);
+  }
+
+  const clientIp = request.headers.get('CF-Connecting-IP') || 'unknown';
+  if (isRateLimited(clientIp)) {
+    return jsonResponse({ error: 'Too many requests. Please try again later.' }, 429);
   }
 
   let payload: SubscribePayload;
