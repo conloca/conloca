@@ -121,11 +121,6 @@ VXJSON (Variant JSON) is Conloca's file format for storing content. It is standa
    4KB of each file without parsing the full content payload
 2. **Field order is deterministic** — ensures consistent etag calculation across reads and writes
 
-<Aside type="tip">
-  See the [content storage format](/concepts/architecture/#vxjson-format) section above for details on VxJSON
-  content-last field ordering and 4KB-optimized metadata indexing.
-</Aside>
-
 A VXJSON file looks like this:
 
 ```json
