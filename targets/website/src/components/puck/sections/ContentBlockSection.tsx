@@ -107,14 +107,14 @@ export const ContentBlockSection: ComponentConfig<ContentBlockSectionProps> = {
     return (
       <section className="mb-20">
         <div className={cn('mx-auto px-4 sm:px-6 lg:px-8', widthClassNames[width])}>
-          {title && <h2 className="text-2xl sm:text-3xl font-bold text-surface-900 dark:text-white mb-4">{title}</h2>}
-          {subtitle && (
-            <p className="text-surface-500 dark:text-surface-400 text-sm leading-relaxed mb-6">{subtitle}</p>
-          )}
           {label && (
             <p className="mb-4 text-sm font-medium uppercase tracking-[0.18em] text-brand-700 dark:text-brand-300">
               {label}
             </p>
+          )}
+          {title && <h2 className="text-2xl sm:text-3xl font-bold text-surface-900 dark:text-white mb-4">{title}</h2>}
+          {subtitle && (
+            <p className="text-surface-500 dark:text-surface-400 text-sm leading-relaxed mb-6">{subtitle}</p>
           )}
           <div className={cn(toneClassNames[tone])}>
             {blockId ? (

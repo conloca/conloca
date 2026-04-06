@@ -57,7 +57,7 @@ export const Hero: ComponentConfig<HeroProps> = {
           <h1 className="text-3xl sm:text-4xl font-bold text-surface-900 dark:text-white mb-4">
             {isStringTitle
               ? lines.map((line, idx) => (
-                  <span key={`${line.slice(0, 10)}-${idx}`}>
+                  <span key={idx}>
                     {idx === 0 ? line : <span className="text-brand-600 dark:text-brand-400">{line}</span>}
                     {idx < lines.length - 1 && <br />}
                   </span>
@@ -112,7 +112,7 @@ export const Hero: ComponentConfig<HeroProps> = {
           >
             {isStringTitle
               ? lines.map((line, idx) => (
-                  <span key={`${line.slice(0, 10)}-${idx}`}>
+                  <span key={idx}>
                     {idx === 0 ? line : <span className="text-brand-600 dark:text-brand-400">{line}</span>}
                     {idx < lines.length - 1 && <br />}
                   </span>

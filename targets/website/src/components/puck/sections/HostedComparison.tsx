@@ -1,7 +1,6 @@
 import type { ComponentConfig } from '@puckeditor/core';
 import cn from 'clsx';
 import type { JSX } from 'react';
-import { SectionHeader } from '../shared';
 import { EmptySlotPlaceholder } from '../shared/EmptySlotPlaceholder';
 
 type ComparisonRow = {

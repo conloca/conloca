@@ -183,7 +183,7 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
                       </th>
                       {columns.map((col, i) => (
                         <th
-                          key={col}
+                          key={i}
                           className={cn(
                             'text-center text-sm font-medium px-4 py-4',
                             i === highlightColumnIndex
