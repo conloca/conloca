@@ -1,1 +1,110 @@
-{"created":"2026-03-30T00:00:00.000Z","id":"vx-f4qp4g3s","meta":{"title":"FAQ -- Conloca CMS","description":"Frequently asked questions about Conloca, the file-based CMS for Astro. Learn about setup, features, pricing, and how it compares to other CMS options."},"modified":"2026-03-30T00:00:00.000Z","type":"puck","content":{"puckData":{"content":[{"type":"FAQ","props":{"id":"FAQ-u1v2w3x4","label":"Support","title":"Frequently Asked Questions","subtitle":"Common questions about Conloca CMS","items":[{"id":"faq-1","question":"What is Conloca?","answer":"Conloca is a free, open-source, file-based content management system (CMS) built specifically for Astro websites. It provides a visual drag-and-drop editor powered by Puck that runs at the /__cms route, allowing content editors to build and edit pages in the browser while developers maintain full control over components and code."},{"id":"faq-2","question":"Is Conloca free?","answer":"Yes, Conloca is completely free and open source under the MIT License. You can use it in personal and commercial projects without any cost. An optional hosted version (Conloca Cloud) with managed deployment and team features is coming soon."},{"id":"faq-3","question":"What is a file-based CMS?","answer":"A file-based CMS stores all content as files in your project repository instead of a separate database. With Conloca, content is saved as [VXJSON files](/vxjson/) directly in your git repo. This means every edit creates a git commit, you get full version history, and there is no database to manage or external API to depend on."},{"id":"faq-4","question":"How do I add Conloca to my Astro project?","answer":"Adding Conloca takes three steps: First, install the packages with \"bun add @conloca/astro-cms @conloca/content-api\". Second, add the Conloca integration to your astro.config.mjs. Third, define your Puck components (blocks) that editors will use to build pages. The visual editor becomes available at /__cms in development."},{"id":"faq-5","question":"Why choose Conloca over other CMS options for Astro?","answer":"Conloca is the only CMS built from the ground up for Astro. Other options like Storyblok, Contentful, and Tina connect to Astro through generic plugins, but Conloca uses Astro middleware, routing, and build pipelines natively. This means tighter integration, fewer moving parts, and a developer experience designed specifically for the Astro ecosystem. It is also free, open source, and stores content in your git repository with no external API or database."},{"id":"faq-6","question":"Does Conloca require a database?","answer":"No. Conloca uses [VXJSON files](/vxjson/) stored directly in your git repository. There is no database to set up, no connection strings to manage, and no external service dependency. Your content lives alongside your code as version-controlled files."},{"id":"faq-7","question":"How does visual editing work in Conloca?","answer":"Conloca provides a browser-based visual editor at the /__cms route of your Astro site. Content editors drag and drop components (blocks) defined by developers to build pages. The editor is powered by Puck and renders a live preview. When editors save, changes are written to [VXJSON files](/vxjson/) and committed to git."},{"id":"faq-8","question":"How is Conloca different from Storyblok or Contentful?","answer":"Unlike Storyblok and Contentful, which are cloud-hosted API-based CMSs, Conloca is file-based and self-hosted. Your content lives in your git repository as files, not in a third-party cloud service. This means no vendor lock-in, no API rate limits, no monthly fees, and full ownership of your data."},{"id":"faq-9","question":"Can I use Conloca with frameworks other than Astro?","answer":"Conloca is currently built specifically for Astro. The integration uses Astro's middleware, routing, and build system for a tight, native experience. Supporting other frameworks is not on the current roadmap, as the Astro-specific design allows for deeper integration than a generic CMS could provide."},{"id":"faq-10","question":"Does Conloca support multiple languages?","answer":"Yes. Conloca has built-in multi-locale content management. You can define locales in your configuration, and the CMS will manage content for each locale separately. Editors can switch between locales in the visual editor, and your Astro pages can render locale-specific content automatically."},{"id":"faq-11","question":"How does Conloca handle content versioning?","answer":"Every content edit in Conloca produces a git commit with author attribution from the authenticated user. This gives you a complete version history of all content changes, the ability to diff and revert content, and audit trails showing who changed what and when."},{"id":"faq-12","question":"What deployment options does Conloca support?","answer":"Conloca runs on the Bun JavaScript runtime and can be deployed anywhere Bun runs. Common deployment options include Docker containers, VPS with systemd, and behind a Cloudflare Tunnel for secure access. The documentation includes guides for each deployment method."},{"id":"faq-13","question":"Can multiple people edit content at the same time?","answer":"Yes. Conloca supports concurrent editing with etag-based conflict detection. If two editors modify the same page simultaneously, the system detects the conflict and presents a resolution dialog instead of silently overwriting changes."}],"ctaText":"Have more questions?","ctaButtons":[{"id":"btn-faq-1","label":"Read the Docs","href":"/getting-started/","variant":"primary"},{"id":"btn-faq-2","label":"Back to Home","href":"/","variant":"secondary"}]}}],"root":{"props":{}}}}}
+{
+	"created": "2026-03-30T00:00:00.000Z",
+	"id": "vx-f4qp4g3s",
+	"meta": {
+		"description": "Frequently asked questions about Conloca, the file-based CMS for Astro. Learn about setup, features, pricing, and how it compares to other CMS options.",
+		"title": "FAQ -- Conloca CMS"
+	},
+	"modified": "2026-03-30T00:00:00.000Z",
+	"type": "puck",
+	"content": {
+		"puckData": {
+			"content": [
+				{
+					"type": "FAQ",
+					"props": {
+						"id": "FAQ-u1v2w3x4",
+						"label": "Support",
+						"title": "Frequently Asked Questions",
+						"subtitle": "Common questions about Conloca CMS",
+						"items": [
+							{
+								"id": "faq-1",
+								"question": "What is Conloca?",
+								"answer": "Conloca is a free, open-source, file-based content management system (CMS) built specifically for Astro websites. It provides a visual drag-and-drop editor powered by Puck that runs at the /__cms route, allowing content editors to build and edit pages in the browser while developers maintain full control over components and code."
+							},
+							{
+								"id": "faq-2",
+								"question": "Is Conloca free?",
+								"answer": "Yes, Conloca is completely free and open source under the MIT License. You can use it in personal and commercial projects without any cost. An optional hosted version (Conloca Cloud) with managed deployment and team features is coming soon."
+							},
+							{
+								"id": "faq-3",
+								"question": "What is a file-based CMS?",
+								"answer": "A file-based CMS stores all content as files in your project repository instead of a separate database. With Conloca, content is saved as [VXJSON files](/vxjson/) directly in your git repo. This means every edit creates a git commit, you get full version history, and there is no database to manage or external API to depend on."
+							},
+							{
+								"id": "faq-4",
+								"question": "How do I add Conloca to my Astro project?",
+								"answer": "Adding Conloca takes three steps: First, install the packages with \"bun add @conloca/astro-cms @conloca/content-api\". Second, add the Conloca integration to your astro.config.mjs. Third, define your Puck components (blocks) that editors will use to build pages. The visual editor becomes available at /__cms in development."
+							},
+							{
+								"id": "faq-5",
+								"question": "Why choose Conloca over other CMS options for Astro?",
+								"answer": "Conloca is the only CMS built from the ground up for Astro. Other options like Storyblok, Contentful, and Tina connect to Astro through generic plugins, but Conloca uses Astro middleware, routing, and build pipelines natively. This means tighter integration, fewer moving parts, and a developer experience designed specifically for the Astro ecosystem. It is also free, open source, and stores content in your git repository with no external API or database."
+							},
+							{
+								"id": "faq-6",
+								"question": "Does Conloca require a database?",
+								"answer": "No. Conloca uses [VXJSON files](/vxjson/) stored directly in your git repository. There is no database to set up, no connection strings to manage, and no external service dependency. Your content lives alongside your code as version-controlled files."
+							},
+							{
+								"id": "faq-7",
+								"question": "How does visual editing work in Conloca?",
+								"answer": "Conloca provides a browser-based visual editor at the /__cms route of your Astro site. Content editors drag and drop components (blocks) defined by developers to build pages. The editor is powered by Puck and renders a live preview. When editors save, changes are written to [VXJSON files](/vxjson/) and committed to git."
+							},
+							{
+								"id": "faq-8",
+								"question": "How is Conloca different from Storyblok or Contentful?",
+								"answer": "Unlike Storyblok and Contentful, which are cloud-hosted API-based CMSs, Conloca is file-based and self-hosted. Your content lives in your git repository as files, not in a third-party cloud service. This means no vendor lock-in, no API rate limits, no monthly fees, and full ownership of your data."
+							},
+							{
+								"id": "faq-9",
+								"question": "Can I use Conloca with frameworks other than Astro?",
+								"answer": "Conloca is currently built specifically for Astro. The integration uses Astro's middleware, routing, and build system for a tight, native experience. Supporting other frameworks is not on the current roadmap, as the Astro-specific design allows for deeper integration than a generic CMS could provide."
+							},
+							{
+								"id": "faq-10",
+								"question": "Does Conloca support multiple languages?",
+								"answer": "Yes. Conloca has built-in multi-locale content management. You can define locales in your configuration, and the CMS will manage content for each locale separately. Editors can switch between locales in the visual editor, and your Astro pages can render locale-specific content automatically."
+							},
+							{
+								"id": "faq-11",
+								"question": "How does Conloca handle content versioning?",
+								"answer": "Every content edit in Conloca produces a git commit with author attribution from the authenticated user. This gives you a complete version history of all content changes, the ability to diff and revert content, and audit trails showing who changed what and when."
+							},
+							{
+								"id": "faq-12",
+								"question": "What deployment options does Conloca support?",
+								"answer": "Conloca runs on the Bun JavaScript runtime and can be deployed anywhere Bun runs. Common deployment options include Docker containers, VPS with systemd, and behind a Cloudflare Tunnel for secure access. The documentation includes guides for each deployment method."
+							},
+							{
+								"id": "faq-13",
+								"question": "Can multiple people edit content at the same time?",
+								"answer": "Yes. Conloca supports concurrent editing with etag-based conflict detection. If two editors modify the same page simultaneously, the system detects the conflict and presents a resolution dialog instead of silently overwriting changes."
+							}
+						],
+						"ctaText": "Have more questions?",
+						"ctaButtons": [
+							{
+								"id": "btn-faq-1",
+								"label": "Read the Docs",
+								"href": "/getting-started/",
+								"variant": "primary"
+							},
+							{
+								"id": "btn-faq-2",
+								"label": "Back to Home",
+								"href": "/",
+								"variant": "secondary"
+							}
+						]
+					}
+				}
+			],
+			"root": {
+				"props": {}
+			}
+		}
+	}
+}

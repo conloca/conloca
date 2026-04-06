@@ -1,1 +1,187 @@
-{"created":"2026-03-30T00:00:00.000Z","id":"vx-c0mp4r3p","meta":{"title":"Compare Conloca to Other CMS Options","description":"Side-by-side comparison of Conloca with Storyblok, Contentful, Decap CMS, and other content management systems for Astro websites."},"modified":"2026-03-30T00:00:00.000Z","type":"puck","content":{"puckData":{"content":[{"type":"ComparisonTable","props":{"id":"ComparisonTable-q7r8s9t0","label":"Comparison","title":"How Conloca Compares","subtitle":"Choosing a CMS for your Astro site? Here's how Conloca compares to popular alternatives. Conloca is the only file-based CMS built specifically for Astro with visual drag-and-drop editing and full git ownership.","extendedSubtitle":"Conloca is the only CMS that combines file-based git storage, native Astro integration, and visual drag-and-drop editing in a single free, open-source package. Unlike cloud-hosted options like Storyblok and Contentful, Conloca requires no external API, no database, and no monthly subscription.","columns":["Conloca","Storyblok","Contentful","Decap CMS","Tina CMS"],"highlightColumnIndex":0,"rows":[{"id":"row-1","feature":"Pricing","values":["Free / OSS","Paid (free tier)","Paid (free tier)","Free / OSS","Free / OSS"]},{"id":"row-2","feature":"Storage","values":["Git files","Cloud API","Cloud API","Git files","Git files"]},{"id":"row-3","feature":"Astro Integration","values":["Native (built for Astro)","Plugin","Plugin","Generic","Plugin"]},{"id":"row-4","feature":"Visual Editor","values":["Puck drag-and-drop","Visual editor","Web app","Markdown UI","Inline editing"]},{"id":"row-5","feature":"Database Required","values":["No","N/A (hosted)","N/A (hosted)","No","No"]},{"id":"row-6","feature":"Self-Hosted","values":["Yes","No","No","Yes","Yes (cloud available)"]},{"id":"row-7","feature":"Multi-Locale","values":["Built-in","Built-in","Built-in","Built-in","Plugin"]},{"id":"row-8","feature":"Git Commits","values":["Automatic with attribution","No","No","Yes","Yes"]},{"id":"row-9","feature":"Component-Based Pages","values":["Yes (Puck blocks)","Yes (Storyblok blocks)","Yes (content models)","No","Yes (blocks)"]},{"id":"row-10","feature":"Lock-in Risk","values":["None (files in your repo)","Medium (API-dependent)","High (API-dependent)","Low","Low"]}],"differentiators":[{"id":"diff-1","title":"No vendor lock-in","description":"Your content lives in your git repository as plain files. If you stop using Conloca, your content stays exactly where it is. There is no data migration, no export step, and no API to replace. You own your content from day one."},{"id":"diff-2","title":"Built for Astro","description":"Conloca is not a generic CMS bolted onto Astro through a plugin. It is built from the ground up for Astro, using Astro middleware, Astro routing, and Astro build pipelines. This native integration means fewer moving parts and a tighter developer experience."},{"id":"diff-3","title":"Visual + Developer","description":"Marketers and content editors use a visual drag-and-drop editor to build pages. Developers define the components, control the styling, and maintain full ownership of the codebase. Both roles work in the same repository without stepping on each other."},{"id":"diff-4","title":"Zero infrastructure","description":"No database server, no external API, no cloud dependency. Conloca runs as part of your Astro site on Bun or Node.js. Deploy it on a VPS, in a Docker container, or behind a Cloudflare Tunnel. The entire CMS is self-contained."}],"ctaTitle":"Ready to try Conloca?","ctaSubtitle":"Get started in minutes. Install the package, configure your blocks, and start editing visually.","ctaButtons":[{"id":"btn-cta-1","label":"Get Started","href":"/getting-started/","variant":"primary"},{"id":"btn-cta-2","label":"Back to Home","href":"/","variant":"secondary"}]}}],"root":{"props":{}}}}}
+{
+	"created": "2026-03-30T00:00:00.000Z",
+	"id": "vx-c0mp4r3p",
+	"meta": {
+		"description": "Side-by-side comparison of Conloca with Storyblok, Contentful, Decap CMS, and other content management systems for Astro websites.",
+		"title": "Compare Conloca to Other CMS Options"
+	},
+	"modified": "2026-03-30T00:00:00.000Z",
+	"type": "puck",
+	"content": {
+		"puckData": {
+			"content": [
+				{
+					"type": "ComparisonTable",
+					"props": {
+						"id": "ComparisonTable-q7r8s9t0",
+						"label": "Comparison",
+						"title": "How Conloca Compares",
+						"subtitle": "Choosing a CMS for your Astro site? Here's how Conloca compares to popular alternatives. Conloca is the only file-based CMS built specifically for Astro with visual drag-and-drop editing and full git ownership.",
+						"extendedSubtitle": "Conloca is the only CMS that combines file-based git storage, native Astro integration, and visual drag-and-drop editing in a single free, open-source package. Unlike cloud-hosted options like Storyblok and Contentful, Conloca requires no external API, no database, and no monthly subscription.",
+						"columns": [
+							"Conloca",
+							"Storyblok",
+							"Contentful",
+							"Decap CMS",
+							"Tina CMS"
+						],
+						"highlightColumnIndex": 0,
+						"rows": [
+							{
+								"id": "row-1",
+								"feature": "Pricing",
+								"values": [
+									"Free / OSS",
+									"Paid (free tier)",
+									"Paid (free tier)",
+									"Free / OSS",
+									"Free / OSS"
+								]
+							},
+							{
+								"id": "row-2",
+								"feature": "Storage",
+								"values": [
+									"Git files",
+									"Cloud API",
+									"Cloud API",
+									"Git files",
+									"Git files"
+								]
+							},
+							{
+								"id": "row-3",
+								"feature": "Astro Integration",
+								"values": [
+									"Native (built for Astro)",
+									"Plugin",
+									"Plugin",
+									"Generic",
+									"Plugin"
+								]
+							},
+							{
+								"id": "row-4",
+								"feature": "Visual Editor",
+								"values": [
+									"Puck drag-and-drop",
+									"Visual editor",
+									"Web app",
+									"Markdown UI",
+									"Inline editing"
+								]
+							},
+							{
+								"id": "row-5",
+								"feature": "Database Required",
+								"values": [
+									"No",
+									"N/A (hosted)",
+									"N/A (hosted)",
+									"No",
+									"No"
+								]
+							},
+							{
+								"id": "row-6",
+								"feature": "Self-Hosted",
+								"values": [
+									"Yes",
+									"No",
+									"No",
+									"Yes",
+									"Yes (cloud available)"
+								]
+							},
+							{
+								"id": "row-7",
+								"feature": "Multi-Locale",
+								"values": [
+									"Built-in",
+									"Built-in",
+									"Built-in",
+									"Built-in",
+									"Plugin"
+								]
+							},
+							{
+								"id": "row-8",
+								"feature": "Git Commits",
+								"values": [
+									"Automatic with attribution",
+									"No",
+									"No",
+									"Yes",
+									"Yes"
+								]
+							},
+							{
+								"id": "row-9",
+								"feature": "Component-Based Pages",
+								"values": [
+									"Yes (Puck blocks)",
+									"Yes (Storyblok blocks)",
+									"Yes (content models)",
+									"No",
+									"Yes (blocks)"
+								]
+							},
+							{
+								"id": "row-10",
+								"feature": "Lock-in Risk",
+								"values": [
+									"None (files in your repo)",
+									"Medium (API-dependent)",
+									"High (API-dependent)",
+									"Low",
+									"Low"
+								]
+							}
+						],
+						"differentiators": [
+							{
+								"id": "diff-1",
+								"title": "No vendor lock-in",
+								"description": "Your content lives in your git repository as plain files. If you stop using Conloca, your content stays exactly where it is. There is no data migration, no export step, and no API to replace. You own your content from day one."
+							},
+							{
+								"id": "diff-2",
+								"title": "Built for Astro",
+								"description": "Conloca is not a generic CMS bolted onto Astro through a plugin. It is built from the ground up for Astro, using Astro middleware, Astro routing, and Astro build pipelines. This native integration means fewer moving parts and a tighter developer experience."
+							},
+							{
+								"id": "diff-3",
+								"title": "Visual + Developer",
+								"description": "Marketers and content editors use a visual drag-and-drop editor to build pages. Developers define the components, control the styling, and maintain full ownership of the codebase. Both roles work in the same repository without stepping on each other."
+							},
+							{
+								"id": "diff-4",
+								"title": "Zero infrastructure",
+								"description": "No database server, no external API, no cloud dependency. Conloca runs as part of your Astro site on Bun or Node.js. Deploy it on a VPS, in a Docker container, or behind a Cloudflare Tunnel. The entire CMS is self-contained."
+							}
+						],
+						"ctaTitle": "Ready to try Conloca?",
+						"ctaSubtitle": "Get started in minutes. Install the package, configure your blocks, and start editing visually.",
+						"ctaButtons": [
+							{
+								"id": "btn-cta-1",
+								"label": "Get Started",
+								"href": "/getting-started/",
+								"variant": "primary"
+							},
+							{
+								"id": "btn-cta-2",
+								"label": "Back to Home",
+								"href": "/",
+								"variant": "secondary"
+							}
+						]
+					}
+				}
+			],
+			"root": {
+				"props": {}
+			}
+		}
+	}
+}

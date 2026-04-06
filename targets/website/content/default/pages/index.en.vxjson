@@ -1,1 +1,211 @@
-{"created":"2026-03-30T00:00:00.000Z","id":"vx-h0m3p4g3","meta":{"title":"Conloca — File-based CMS for Astro","description":"Visual editing for marketers, full git ownership for developers. File-based CMS powered by Puck with drag-and-drop components."},"modified":"2026-03-30T00:00:00.000Z","type":"puck","content":{"puckData":{"content":[{"type":"Hero","props":{"id":"Hero-a1b2c3d4","badgeText":"Open source · MIT Licensed","title":"The file-based CMS that lives in\nyour git repo","description":"Visual editing for marketers, full git ownership for developers. Powered by Puck with drag-and-drop components.","buttons":[{"id":"btn-hero-1","label":"Get Started","href":"#quickstart","variant":"primary"},{"id":"btn-hero-2","label":"Join Waitlist","href":"#waitlist","variant":"secondary"}]}},{"type":"Steps","props":{"id":"Steps-e5f6g7h8","label":"Quick Start","title":"Up and running in 4 steps","subtitle":"Add a visual CMS to any Astro project in minutes. No database required.","steps":[{"id":"step-1","number":"01","title":"Install","description":"Add the Conloca CMS package to your Astro project with a single command.","code":"bun add @conloca/astro-cms"},{"id":"step-2","number":"02","title":"Configure","description":"Add the integration to your Astro config and point it to your content directory.","code":"import { conlocaCMS } from '@conloca/astro-cms';\n\nexport default defineConfig({\n  integrations: [\n    conlocaCMS({\n      contentRoot: './content',\n      puckConfigPath: './src/puck.config.tsx',\n    })\n  ],\n});"},{"id":"step-3","number":"03","title":"Define Components","description":"Create your visual building blocks with fields and render functions.","code":"export const components = {\n  Hero: {\n    fields: { title: { type: \"text\" } },\n    render: ({ title }) => <h1>{title}</h1>,\n  },\n};"},{"id":"step-4","number":"04","title":"Edit Visually","description":"Open the CMS route in your browser and start editing pages visually.","code":"http://localhost:4321/__cms"}]}},{"type":"FeatureCards","props":{"id":"FeatureCards-i9j0k1l2","label":"Features","title":"Everything you need, nothing you don't","subtitle":"A CMS that respects your stack. File-based, git-native, and built for Astro.","columns":"4","cards":[{"id":"card-1","iconSvgPath":"M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z","title":"File-Based Storage","description":"Content stored as VXJSON files in your repo. No database, no vendor lock-in.","href":"/vxjson/","linkLabel":"Learn about VxJSON"},{"id":"card-2","iconSvgPath":"M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z","title":"Visual Drag & Drop Editor","description":"Powered by Puck. Build pages visually in development with drag-and-drop components."},{"id":"card-3","iconSvgPath":"M13 10V3L4 14h7v7l9-11h-7z","title":"Git-Native","description":"Every edit can be committed to git. Changes appear in version history with proper attribution."},{"id":"card-4","iconSvgPath":"M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z","title":"Multi-Locale","description":"Built-in content management for multiple languages and locales."},{"id":"card-5","iconSvgPath":"M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z","title":"MDX Support","description":"Rich content with MDX. Mix markdown and components seamlessly."},{"id":"card-6","iconSvgPath":"M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z","title":"Self-Hosted Deploy","description":"Deploy anywhere — Docker, VPS, or behind Cloudflare Tunnel. Runs on Bun or Node.js."},{"id":"card-7","iconSvgPath":"M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z","title":"CF Access Auth","description":"Cloudflare Access authentication with JWT validation out of the box."},{"id":"card-8","iconSvgPath":"M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7","title":"Config-Driven Routing","description":"Define routes in config. Your site never touches slug files."}]}},{"type":"HostedComparison","props":{"id":"HostedComparison-m3n4o5p6","badgeText":"Coming Soon","title":"Conloca Cloud — visual editing without the setup","subtitle":"All the power of Conloca, fully managed. Your team edits visually while you keep full git ownership.","rows":[{"id":"row-1","feature":"Visual editor","oss":"true","hosted":"true"},{"id":"row-2","feature":"File-based storage","oss":"true","hosted":"true"},{"id":"row-3","feature":"Git commits","oss":"true","hosted":"true"},{"id":"row-4","feature":"Multi-locale","oss":"true","hosted":"true"},{"id":"row-5","feature":"Authentication","oss":"Self-managed","hosted":"true"},{"id":"row-6","feature":"Hosting & deploy","oss":"Self-managed","hosted":"true"},{"id":"row-7","feature":"Team management","oss":"false","hosted":"true"},{"id":"row-8","feature":"Auto-updates","oss":"false","hosted":"true"},{"id":"row-9","feature":"Support","oss":"Community","hosted":"Priority"}],"ctaTitle":"Get early access","ctaSubtitle":"Be first to know when Conloca Cloud launches.","waitlistEnabled":true}}],"root":{"props":{}}}}}
+{
+	"created": "2026-03-30T00:00:00.000Z",
+	"id": "vx-h0m3p4g3",
+	"meta": {
+		"description": "Visual editing for marketers, full git ownership for developers. File-based CMS powered by Puck with drag-and-drop components.",
+		"title": "Conloca — File-based CMS for Astro"
+	},
+	"modified": "2026-03-30T00:00:00.000Z",
+	"type": "puck",
+	"content": {
+		"puckData": {
+			"content": [
+				{
+					"type": "Hero",
+					"props": {
+						"id": "Hero-a1b2c3d4",
+						"badgeText": "Open source · MIT Licensed",
+						"title": "The file-based CMS that lives in\nyour git repo",
+						"description": "Visual editing for marketers, full git ownership for developers. Powered by Puck with drag-and-drop components.",
+						"buttons": [
+							{
+								"id": "btn-hero-1",
+								"label": "Get Started",
+								"href": "#quickstart",
+								"variant": "primary"
+							},
+							{
+								"id": "btn-hero-2",
+								"label": "Join Waitlist",
+								"href": "#waitlist",
+								"variant": "secondary"
+							}
+						]
+					}
+				},
+				{
+					"type": "Steps",
+					"props": {
+						"id": "Steps-e5f6g7h8",
+						"label": "Quick Start",
+						"title": "Up and running in 4 steps",
+						"subtitle": "Add a visual CMS to any Astro project in minutes. No database required.",
+						"steps": [
+							{
+								"id": "step-1",
+								"number": "01",
+								"title": "Install",
+								"description": "Add the Conloca CMS package to your Astro project with a single command.",
+								"code": "bun add @conloca/astro-cms"
+							},
+							{
+								"id": "step-2",
+								"number": "02",
+								"title": "Configure",
+								"description": "Add the integration to your Astro config and point it to your content directory.",
+								"code": "import { conlocaCMS } from '@conloca/astro-cms';\n\nexport default defineConfig({\n  integrations: [\n    conlocaCMS({\n      contentRoot: './content',\n      puckConfigPath: './src/puck.config.tsx',\n    })\n  ],\n});"
+							},
+							{
+								"id": "step-3",
+								"number": "03",
+								"title": "Define Components",
+								"description": "Create your visual building blocks with fields and render functions.",
+								"code": "export const components = {\n  Hero: {\n    fields: { title: { type: \"text\" } },\n    render: ({ title }) => <h1>{title}</h1>,\n  },\n};"
+							},
+							{
+								"id": "step-4",
+								"number": "04",
+								"title": "Edit Visually",
+								"description": "Open the CMS route in your browser and start editing pages visually.",
+								"code": "http://localhost:4321/__cms"
+							}
+						]
+					}
+				},
+				{
+					"type": "FeatureCards",
+					"props": {
+						"id": "FeatureCards-i9j0k1l2",
+						"label": "Features",
+						"title": "Everything you need, nothing you don't",
+						"subtitle": "A CMS that respects your stack. File-based, git-native, and built for Astro.",
+						"columns": "4",
+						"cards": [
+							{
+								"id": "card-1",
+								"iconSvgPath": "M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z",
+								"title": "File-Based Storage",
+								"description": "Content stored as VXJSON files in your repo. No database, no vendor lock-in.",
+								"href": "/vxjson/",
+								"linkLabel": "Learn about VxJSON"
+							},
+							{
+								"id": "card-2",
+								"iconSvgPath": "M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z",
+								"title": "Visual Drag & Drop Editor",
+								"description": "Powered by Puck. Build pages visually in development with drag-and-drop components."
+							},
+							{
+								"id": "card-3",
+								"iconSvgPath": "M13 10V3L4 14h7v7l9-11h-7z",
+								"title": "Git-Native",
+								"description": "Every edit can be committed to git. Changes appear in version history with proper attribution."
+							},
+							{
+								"id": "card-4",
+								"iconSvgPath": "M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
+								"title": "Multi-Locale",
+								"description": "Built-in content management for multiple languages and locales."
+							},
+							{
+								"id": "card-5",
+								"iconSvgPath": "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z",
+								"title": "MDX Support",
+								"description": "Rich content with MDX. Mix markdown and components seamlessly."
+							},
+							{
+								"id": "card-6",
+								"iconSvgPath": "M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z",
+								"title": "Self-Hosted Deploy",
+								"description": "Deploy anywhere — Docker, VPS, or behind Cloudflare Tunnel. Runs on Bun or Node.js."
+							},
+							{
+								"id": "card-7",
+								"iconSvgPath": "M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z",
+								"title": "CF Access Auth",
+								"description": "Cloudflare Access authentication with JWT validation out of the box."
+							},
+							{
+								"id": "card-8",
+								"iconSvgPath": "M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7",
+								"title": "Config-Driven Routing",
+								"description": "Define routes in config. Your site never touches slug files."
+							}
+						]
+					}
+				},
+				{
+					"type": "HostedComparison",
+					"props": {
+						"id": "HostedComparison-m3n4o5p6",
+						"badgeText": "Coming Soon",
+						"title": "Conloca Cloud — visual editing without the setup",
+						"subtitle": "All the power of Conloca, fully managed. Your team edits visually while you keep full git ownership.",
+						"rows": [
+							{
+								"id": "row-1",
+								"feature": "Visual editor",
+								"oss": "true",
+								"hosted": "true"
+							},
+							{
+								"id": "row-2",
+								"feature": "File-based storage",
+								"oss": "true",
+								"hosted": "true"
+							},
+							{
+								"id": "row-3",
+								"feature": "Git commits",
+								"oss": "true",
+								"hosted": "true"
+							},
+							{
+								"id": "row-4",
+								"feature": "Multi-locale",
+								"oss": "true",
+								"hosted": "true"
+							},
+							{
+								"id": "row-5",
+								"feature": "Authentication",
+								"oss": "Self-managed",
+								"hosted": "true"
+							},
+							{
+								"id": "row-6",
+								"feature": "Hosting & deploy",
+								"oss": "Self-managed",
+								"hosted": "true"
+							},
+							{
+								"id": "row-7",
+								"feature": "Team management",
+								"oss": "false",
+								"hosted": "true"
+							},
+							{
+								"id": "row-8",
+								"feature": "Auto-updates",
+								"oss": "false",
+								"hosted": "true"
+							},
+							{
+								"id": "row-9",
+								"feature": "Support",
+								"oss": "Community",
+								"hosted": "Priority"
+							}
+						],
+						"ctaTitle": "Get early access",
+						"ctaSubtitle": "Be first to know when Conloca Cloud launches.",
+						"waitlistEnabled": "true"
+					}
+				}
+			],
+			"root": {
+				"props": {}
+			}
+		}
+	}
+}
