@@ -65,6 +65,7 @@ function renderInlineMarkdown(source: string) {
 }
 
 export function renderLimitedRichText(source: string, wrapperClassName: string) {
+  if (typeof source !== 'string') return <div className={wrapperClassName}>{source}</div>;
   const normalizedSource = normalizeLegacyHtml(source);
   const paragraphs = normalizedSource
     .split(/\n\s*\n/g)

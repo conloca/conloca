@@ -96,7 +96,18 @@ export const FAQ: ComponentConfig<FAQProps> = {
       arrayFields: {
         id: { type: 'text', visible: false },
         question: { type: 'text', contentEditable: true },
-        answer: { type: 'textarea', label: 'Answer' },
+        answer: {
+          type: 'richtext',
+          label: 'Answer',
+          options: {
+            heading: false,
+            bulletList: false,
+            orderedList: false,
+            blockquote: false,
+            codeBlock: false,
+            horizontalRule: false,
+          },
+        },
       },
     },
     ctaText: { type: 'text', label: 'CTA Text', contentEditable: true },
