@@ -1,3 +1,5 @@
+import cn from 'clsx';
+
 type SectionHeaderProps = {
   label?: string;
   title?: string;
@@ -20,7 +22,7 @@ export function SectionHeader({ label, title, subtitle, align = 'center', headin
         <Heading className="text-3xl sm:text-4xl font-bold text-surface-900 dark:text-white mb-4">{title}</Heading>
       )}
       {subtitle && (
-        <p className={`text-surface-500 dark:text-surface-400 max-w-xl ${align === 'center' ? 'mx-auto' : ''}`}>
+        <p className={cn('text-surface-500 dark:text-surface-400 max-w-xl', { 'mx-auto': align === 'center' })}>
           {subtitle}
         </p>
       )}

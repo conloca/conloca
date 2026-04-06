@@ -13,15 +13,21 @@ interface SharedPuckState {
   subscribers: Set<(config: PuckConfig) => void>;
 }
 
+declare global {
+  interface Window {
+    __PUCK_STATE__?: SharedPuckState;
+  }
+}
+
 const getSharedState = (): SharedPuckState => {
   if (typeof window !== 'undefined') {
-    if (!(window as any).__PUCK_STATE__) {
-      (window as any).__PUCK_STATE__ = {
+    if (!window.__PUCK_STATE__) {
+      window.__PUCK_STATE__ = {
         config: { components: {} },
         subscribers: new Set(),
       };
     }
-    return (window as any).__PUCK_STATE__;
+    return window.__PUCK_STATE__;
   }
   // SSR fallback
   return { config: { components: {} }, subscribers: new Set() };

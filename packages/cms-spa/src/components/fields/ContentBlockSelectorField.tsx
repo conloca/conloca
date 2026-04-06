@@ -1,4 +1,5 @@
 import { useCreateContent, useLocalizedContent } from '@conloca/content-api-client';
+import cn from 'clsx';
 import { useEffect, useRef, useState } from 'react';
 import { slugify } from '../../utils/slugify';
 import { CMSMDXEditorModal } from '../editor/CMSMDXEditor';
@@ -199,7 +200,7 @@ export function ContentBlockSelectorField({ value, onChange, options }: ContentB
                 className="w-full rounded bg-transparent px-3 py-2 text-sm outline-none"
               />
             ) : (
-              <span className={`block w-full px-3 py-2 ${value ? '' : 'text-grey-04'}`}>
+              <span className={cn('block w-full px-3 py-2', { 'text-grey-04': !value })}>
                 {selectedOption?.label || 'Select a content block'}
               </span>
             )}
@@ -378,7 +379,9 @@ function BlockOptionItem({
     <button
       type="button"
       onClick={onClick}
-      className={`flex w-full flex-col items-start px-3 py-2 text-left hover:bg-grey-11 ${isSelected ? 'bg-azure-10' : ''}`}
+      className={cn('flex w-full flex-col items-start px-3 py-2 text-left hover:bg-grey-11', {
+        'bg-azure-10': isSelected,
+      })}
     >
       <span className="text-sm">{option.label}</span>
       {option.description && (

@@ -70,7 +70,7 @@ const puckConfig: Config<Components> = {
     },
     content: {
       title: 'Content',
-      components: ['ContentBlockSection', 'CodeBlock', 'FAQ'],
+      components: ['ContentBlockSection', 'CodeBlock', 'FAQ', 'RichTextSection'],
     },
     showcase: {
       title: 'Showcase',
