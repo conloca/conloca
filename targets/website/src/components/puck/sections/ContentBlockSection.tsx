@@ -11,6 +11,7 @@ export type ContentBlockSectionProps = {
   blockId: string;
   width: ContentBlockSectionWidth;
   tone: ContentBlockSectionTone;
+  startsNewSection: boolean;
 };
 
 const widthClassNames: Record<ContentBlockSectionWidth, string> = {
@@ -61,6 +62,28 @@ export const ContentBlockSection: ComponentConfig<ContentBlockSectionProps> = {
         { label: 'Subtle Card', value: 'subtle' },
       ],
     },
+    startsNewSection: {
+      type: 'radio',
+      label: 'Section Grouping',
+      options: [
+        { label: 'Starts new section', value: true },
+        { label: 'Continues previous', value: false },
+      ],
+    },
+  },
+  resolveFields: (data, { fields }) => {
+    // Auto-set startsNewSection to true when title is present (for discoverability)
+    const hasTitle = !!data.props.title;
+    const startsNew = data.props.startsNewSection;
+    // Only show the field — don't auto-coerce. The default handles backward compat.
+    return {
+      ...fields,
+      startsNewSection: {
+        ...fields.startsNewSection,
+        label:
+          hasTitle && !startsNew ? 'Section Grouping (title set but section continues previous)' : 'Section Grouping',
+      },
+    };
   },
   defaultProps: {
     title: '',
@@ -69,6 +92,7 @@ export const ContentBlockSection: ComponentConfig<ContentBlockSectionProps> = {
     blockId: '',
     width: 'default',
     tone: 'transparent',
+    startsNewSection: true,
   },
   render: ({ title, subtitle, label, blockId, width, tone }) => {
     return (

@@ -29,6 +29,7 @@ interface ContentBlockSectionProps {
   blockId: string;
   width?: 'narrow' | 'default';
   tone?: 'transparent' | 'subtle';
+  startsNewSection?: boolean;
 }
 
 const contentBlockWidthClasses: Record<NonNullable<ContentBlockSectionProps['width']>, string> = {
@@ -75,7 +76,7 @@ function resolveRenderableBlocks(blocks: Array<MDXBlockEvaluationResult | MDXCom
 // ── Section Merging ──────────────────────────────────────────────────────────
 
 /** Component types that can be merged into a narrative section following a CBS */
-const MERGEABLE_VISUAL_TYPES = new Set(['CodeBlock', 'FeatureCards', 'NumberedFlow']);
+const MERGEABLE_VISUAL_TYPES = new Set(['CodeBlock', 'FeatureCards', 'NumberedFlow', 'Steps']);
 
 /** Minimal puck context for static (non-editor) rendering */
 const staticPuckContext = {
@@ -108,9 +109,10 @@ type RenderGroup = NarrativeGroup | StandaloneGroup;
 /**
  * Groups consecutive ContentBlockSection + visual components into narrative sections.
  *
- * A CBS with a `title` prop starts a new narrative group.
- * Following mergeable visual components (CodeBlock, FeatureCards, NumberedFlow)
- * and title-less CBS entries join the current group.
+ * A CBS with `startsNewSection: true` (or a title when startsNewSection is undefined,
+ * for backward compatibility) starts a new narrative group.
+ * Following mergeable visual components (CodeBlock, FeatureCards, NumberedFlow, Steps)
+ * and continuation CBS entries join the current group.
  * Non-mergeable components (Hero, CTABanner, etc.) remain standalone.
  */
 function groupContentItems(content: ContentItem[]): RenderGroup[] {
@@ -120,23 +122,26 @@ function groupContentItems(content: ContentItem[]): RenderGroup[] {
   for (const item of content) {
     if (item.type === 'ContentBlockSection') {
       const props = item.props as unknown as ContentBlockSectionProps;
-      if (props.title) {
-        // CBS with title → start a new narrative group
+      // Backward compat: if startsNewSection is not set, fall back to title-presence
+      const startsNew = props.startsNewSection !== undefined ? props.startsNewSection : !!props.title;
+
+      if (startsNew) {
+        // Start a new narrative group
         if (currentNarrative) {
           groups.push(currentNarrative);
         }
         currentNarrative = {
           type: 'narrative',
           id: (item.props.id as string) || `narrative-${groups.length}`,
-          title: props.title,
+          title: props.title || '',
           subtitle: props.subtitle || '',
           items: [item],
         };
       } else if (currentNarrative) {
-        // CBS without title → continues current narrative
+        // Continues current narrative
         currentNarrative.items.push(item);
       } else {
-        // CBS without title and no active narrative → standalone
+        // No active narrative → standalone
         groups.push({ type: 'standalone', item });
       }
     } else if (currentNarrative && MERGEABLE_VISUAL_TYPES.has(item.type)) {
@@ -353,10 +358,12 @@ function RenderWithBlocks({ config, data, mdxComponents }: RenderWithBlocksProps
   // Check if page has hydratable components
   const needsHydration = hasHydratableComponents(data, enhancedConfig);
 
-  // Check if any CBS has a title (indicating narrative merge should be used)
-  const hasNarrativeSections = (data.content as ContentItem[]).some(
-    (item) => item.type === 'ContentBlockSection' && (item.props as unknown as ContentBlockSectionProps).title,
-  );
+  // Check if any CBS starts a narrative section
+  const hasNarrativeSections = (data.content as ContentItem[]).some((item) => {
+    if (item.type !== 'ContentBlockSection') return false;
+    const props = item.props as unknown as ContentBlockSectionProps;
+    return props.startsNewSection !== undefined ? props.startsNewSection : !!props.title;
+  });
 
   if (needsHydration) {
     return <RenderWithHydration config={enhancedConfig} data={data} />;
