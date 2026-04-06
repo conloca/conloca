@@ -32,10 +32,6 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Build website
-        working-directory: targets/website
-        run: bun run build
-
       - name: Validate deployment configuration
         run: |
           if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
@@ -47,6 +43,10 @@ jobs:
             echo 'Missing repository variable CLOUDFLARE_D1_DATABASE_ID.' >&2
             exit 1
           fi
+
+      - name: Build website
+        working-directory: targets/website
+        run: bun run build
 
       - name: Inject D1 database id
         run: |
