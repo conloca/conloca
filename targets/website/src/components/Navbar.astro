@@ -139,7 +139,7 @@ const links = [
     } else {
       navbar?.classList.remove('bg-white/80', 'dark:bg-surface-950/80', 'backdrop-blur-xl', 'border-b', 'border-surface-200', 'dark:border-surface-800/50')
     }
-  })
+  }, { passive: true })
 
   // Theme toggle logic
   function updateThemeIcons(theme: string) {
