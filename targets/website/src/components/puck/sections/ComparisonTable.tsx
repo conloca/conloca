@@ -244,13 +244,17 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
           )}
 
           {/* CTA */}
-          <div className="text-center">
-            <h2 className="text-xl sm:text-2xl font-bold text-surface-900 dark:text-white mb-4">{ctaTitle}</h2>
-            <p className="text-surface-500 dark:text-surface-400 text-sm max-w-md mx-auto mb-4">{ctaSubtitle}</p>
-            <div className="pt-2">
-              <CTAButtonGroup buttons={ctaButtons} isEditing={puck.isEditing} />
+          {ctaTitle && (
+            <div className="text-center">
+              <h2 className="text-xl sm:text-2xl font-bold text-surface-900 dark:text-white mb-4">{ctaTitle}</h2>
+              {ctaSubtitle && (
+                <p className="text-surface-500 dark:text-surface-400 text-sm max-w-md mx-auto mb-4">{ctaSubtitle}</p>
+              )}
+              <div className="pt-2">
+                <CTAButtonGroup buttons={ctaButtons} isEditing={puck.isEditing} />
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     );

@@ -205,11 +205,13 @@ export const HostedComparisonRender = ({
         )}
 
         {/* Waitlist CTA */}
-        <div className={cn('max-w-md mx-auto text-center', { reveal: !puck.isEditing })}>
-          <h3 className="text-xl font-semibold text-surface-900 dark:text-white mb-2">{ctaTitle}</h3>
-          <p className="text-surface-500 dark:text-surface-400 text-sm mb-6">{ctaSubtitle}</p>
-          {shouldShowWaitlist(waitlistEnabled) && <WaitlistForm isEditing={puck.isEditing} />}
-        </div>
+        {shouldShowWaitlist(waitlistEnabled) && (
+          <div className={cn('max-w-md mx-auto text-center', { reveal: !puck.isEditing })}>
+            <h3 className="text-xl font-semibold text-surface-900 dark:text-white mb-2">{ctaTitle}</h3>
+            <p className="text-surface-500 dark:text-surface-400 text-sm mb-6">{ctaSubtitle}</p>
+            <WaitlistForm isEditing={puck.isEditing} />
+          </div>
+        )}
       </div>
     </section>
   );

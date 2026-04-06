@@ -69,10 +69,12 @@ const FAQRender = ({
         </div>
 
         {/* CTA */}
-        <div className="mt-16 text-center space-y-4">
-          <p className="text-surface-500 text-sm">{ctaText}</p>
-          <CTAButtonGroup buttons={ctaButtons} isEditing={puck.isEditing} />
-        </div>
+        {ctaText && (
+          <div className="mt-16 text-center space-y-4">
+            <p className="text-surface-500 text-sm">{ctaText}</p>
+            <CTAButtonGroup buttons={ctaButtons} isEditing={puck.isEditing} />
+          </div>
+        )}
       </div>
     </div>
   );
