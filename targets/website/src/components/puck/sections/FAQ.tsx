@@ -95,11 +95,11 @@ export const FAQ: ComponentConfig<FAQProps> = {
       type: 'array',
       min: 1,
       getItemSummary: (item) => item.question || 'Question',
-      defaultItemProps: {
-        id: `faq-${crypto.randomUUID()}`,
+      defaultItemProps: () => ({
+        id: crypto.randomUUID(),
         question: 'Question?',
         answer: 'Answer text here.',
-      },
+      }),
       arrayFields: {
         id: { type: 'text', visible: false },
         question: { type: 'text' },

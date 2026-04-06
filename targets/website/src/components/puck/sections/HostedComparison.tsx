@@ -18,6 +18,7 @@ export type HostedComparisonProps = {
   rows: ComparisonRow[];
   ctaTitle: string;
   ctaSubtitle: string;
+  /** String 'true'/'false' from radio field, or boolean from legacy saved data */
   waitlistEnabled: boolean | 'true' | 'false';
 };
 
@@ -232,7 +233,7 @@ export const HostedComparison: ComponentConfig<HostedComparisonProps> = {
       type: 'array',
       min: 1,
       getItemSummary: (item) => item.feature || 'Row',
-      defaultItemProps: { id: `row-${crypto.randomUUID()}`, feature: 'Feature', oss: 'true', hosted: 'true' },
+      defaultItemProps: () => ({ id: crypto.randomUUID(), feature: 'Feature', oss: 'true', hosted: 'true' }),
       arrayFields: {
         id: { type: 'text', visible: false },
         feature: { type: 'text' },
@@ -275,7 +276,7 @@ export const HostedComparison: ComponentConfig<HostedComparisonProps> = {
     ],
     ctaTitle: 'Get early access',
     ctaSubtitle: 'Be first to know when Conloca Cloud launches.',
-    waitlistEnabled: true,
+    waitlistEnabled: 'true',
   },
   render: HostedComparisonRender,
 };

@@ -23,15 +23,17 @@ export const Steps: ComponentConfig<StepsProps> = {
   label: 'Quick Start Steps',
   // Auto-numbers steps by array index. Numbers are persisted in VXJSON at save time,
   // so production rendering doesn't need resolveAllData — saved values are already correct.
-  resolveData: (data) => ({
-    props: {
-      ...data.props,
-      steps: data.props.steps.map((step, i) => ({
-        ...step,
-        number: String(i + 1).padStart(2, '0'),
-      })),
-    },
-  }),
+  resolveData: (data, { changed }) => {
+    if (changed.steps === false) return { props: {} };
+    return {
+      props: {
+        steps: data.props.steps.map((step, i) => ({
+          ...step,
+          number: String(i + 1).padStart(2, '0'),
+        })),
+      },
+    };
+  },
   fields: {
     label: {
       type: 'text',
@@ -51,13 +53,13 @@ export const Steps: ComponentConfig<StepsProps> = {
       min: 1,
       max: 8,
       getItemSummary: (item) => (item.number && item.title ? `${item.number} — ${item.title}` : item.title || 'Step'),
-      defaultItemProps: {
-        id: `step-${crypto.randomUUID()}`,
+      defaultItemProps: () => ({
+        id: crypto.randomUUID(),
         number: '01',
         title: 'Step Title',
         description: 'Step description.',
         code: 'echo "hello"',
-      },
+      }),
       arrayFields: {
         id: { type: 'text', visible: false },
         number: { type: 'text', label: 'Step Number (auto)', visible: false },

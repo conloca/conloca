@@ -11,7 +11,8 @@ export type ContentBlockSectionProps = {
   blockId: string;
   width: ContentBlockSectionWidth;
   tone: ContentBlockSectionTone;
-  startsNewSection: boolean;
+  /** String 'true'/'false' from radio field, or boolean from legacy saved data */
+  startsNewSection: boolean | 'true' | 'false';
 };
 
 const widthClassNames: Record<ContentBlockSectionWidth, string> = {
@@ -67,15 +68,16 @@ export const ContentBlockSection: ComponentConfig<ContentBlockSectionProps> = {
       type: 'radio',
       label: 'Section Grouping',
       options: [
-        { label: 'Starts new section', value: true },
-        { label: 'Continues previous', value: false },
+        { label: 'Starts new section', value: 'true' },
+        { label: 'Continues previous', value: 'false' },
       ],
     },
   },
   resolveFields: (data, { fields }) => {
     const hasBlock = !!data.props.blockId;
     const hasTitle = !!data.props.title;
-    const startsNew = data.props.startsNewSection;
+    // Handle both boolean (legacy saved data) and string (radio field output)
+    const startsNew = data.props.startsNewSection === true || data.props.startsNewSection === 'true';
 
     return {
       ...fields,
@@ -99,7 +101,7 @@ export const ContentBlockSection: ComponentConfig<ContentBlockSectionProps> = {
     blockId: '',
     width: 'default',
     tone: 'transparent',
-    startsNewSection: true,
+    startsNewSection: 'true',
   },
   render: ({ title, subtitle, label, blockId, width, tone }) => {
     return (

@@ -19,15 +19,17 @@ export const NumberedFlow: ComponentConfig<NumberedFlowProps> = {
   label: 'Numbered Flow',
   // Auto-numbers items by array index. Numbers are persisted in VXJSON at save time,
   // so production rendering doesn't need resolveAllData — saved values are already correct.
-  resolveData: (data) => ({
-    props: {
-      ...data.props,
-      items: data.props.items.map((item, i) => ({
-        ...item,
-        number: String(i + 1),
-      })),
-    },
-  }),
+  resolveData: (data, { changed }) => {
+    if (changed.items === false) return { props: {} };
+    return {
+      props: {
+        items: data.props.items.map((item, i) => ({
+          ...item,
+          number: String(i + 1),
+        })),
+      },
+    };
+  },
   fields: {
     title: { type: 'text', contentEditable: true },
     subtitle: { type: 'textarea', contentEditable: true },
@@ -36,12 +38,12 @@ export const NumberedFlow: ComponentConfig<NumberedFlowProps> = {
       min: 1,
       max: 10,
       getItemSummary: (item) => (item.number && item.title ? `${item.number}. ${item.title}` : item.title || 'Step'),
-      defaultItemProps: {
-        id: `flow-${crypto.randomUUID()}`,
+      defaultItemProps: () => ({
+        id: crypto.randomUUID(),
         number: '1',
         title: 'Step Title',
         description: 'Step description.',
-      },
+      }),
       arrayFields: {
         id: { type: 'text', visible: false },
         number: { type: 'text', label: 'Number (auto)', visible: false },

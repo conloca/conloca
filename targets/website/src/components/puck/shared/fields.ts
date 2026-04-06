@@ -24,12 +24,12 @@ export function ctaButtonArrayField(
     max: 4,
     ...overrides,
     getItemSummary: (item) => item.label || 'Button',
-    defaultItemProps: {
-      id: `btn-${crypto.randomUUID()}`,
+    defaultItemProps: () => ({
+      id: crypto.randomUUID(),
       label: 'Button',
       href: '#',
       variant: 'primary' as const,
-    },
+    }),
     arrayFields: {
       id: { type: 'text', visible: false },
       label: { type: 'text' },

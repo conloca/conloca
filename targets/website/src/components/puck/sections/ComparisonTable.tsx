@@ -69,12 +69,12 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
         <ArrayTextareaFieldRender value={value} onChange={onChange} placeholder="One column name per line" />
       ),
     } as never,
-    highlightColumnIndex: { type: 'number', label: 'Highlighted Column (0 = first)', min: 0 },
+    highlightColumnIndex: { type: 'number', label: 'Highlighted Column (0 = first)', min: 0, max: 20 },
     rows: {
       type: 'array',
       min: 1,
       getItemSummary: (item) => item.feature || 'Row',
-      defaultItemProps: { id: `row-${crypto.randomUUID()}`, feature: 'Feature', values: [] },
+      defaultItemProps: () => ({ id: crypto.randomUUID(), feature: 'Feature', values: [] }),
       arrayFields: {
         id: { type: 'text', visible: false },
         feature: { type: 'text' },
@@ -105,7 +105,7 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
       type: 'array',
       max: 6,
       getItemSummary: (item) => item.title || 'Differentiator',
-      defaultItemProps: { id: `diff-${crypto.randomUUID()}`, title: 'Title', description: 'Description' },
+      defaultItemProps: () => ({ id: crypto.randomUUID(), title: 'Title', description: 'Description' }),
       arrayFields: {
         id: { type: 'text', visible: false },
         title: { type: 'text' },

@@ -94,7 +94,7 @@ export const CodeBlock: ComponentConfig<CodeBlockProps> = {
       type: 'array',
       max: 6,
       getItemSummary: (item) => item.label || 'Legend',
-      defaultItemProps: { id: `legend-${crypto.randomUUID()}`, color: '#06b6d4', label: 'Label' },
+      defaultItemProps: () => ({ id: crypto.randomUUID(), color: '#06b6d4', label: 'Label' }),
       arrayFields: {
         id: { type: 'text', visible: false },
         color: {
@@ -151,7 +151,7 @@ export const CodeBlock: ComponentConfig<CodeBlockProps> = {
               >
                 <code className="font-mono whitespace-pre-wrap break-words">
                   {code.split('\n').map((line, index, lines) => (
-                    <span key={`${filename}-${line}`}>
+                    <span key={index}>
                       {renderHighlightedLine(line, index)}
                       {index < lines.length - 1 ? '\n' : null}
                     </span>
