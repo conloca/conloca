@@ -90,11 +90,15 @@ export function createContentWatchHandlers(
             });
           }
         }
-
-        await onReindexed?.({ file: normalizedFile, action });
       } catch (error) {
         console.error('[Content Watcher] Reindex failed:', error);
         return;
+      }
+
+      try {
+        await onReindexed?.({ file: normalizedFile, action });
+      } catch (error) {
+        console.error('[Content Watcher] onReindexed callback failed:', error);
       }
     }
   };
