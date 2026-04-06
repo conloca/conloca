@@ -57,7 +57,7 @@ const FAQRender = ({
   return (
     <div className="py-24 pb-20">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-        <SectionHeader label={label} title={title} subtitle={subtitle} headingLevel="h1" />
+        <SectionHeader label={label} title={title} subtitle={subtitle} headingLevel="h2" />
 
         {/* FAQ items */}
         <div className="space-y-4">

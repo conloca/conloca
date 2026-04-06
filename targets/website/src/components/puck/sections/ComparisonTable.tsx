@@ -1,4 +1,4 @@
-import type { ComponentConfig } from '@puckeditor/core';
+import type { ComponentConfig, CustomField } from '@puckeditor/core';
 import cn from 'clsx';
 import { ArrayTextareaFieldRender } from '../fields/ArrayTextareaField';
 import { type CTAButton, CTAButtonGroup, ctaButtonArrayField, SectionHeader } from '../shared';
@@ -86,7 +86,7 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
           readOnly={readOnly}
         />
       ),
-    } as never,
+    } as CustomField<string[]>,
     highlightColumnIndex: { type: 'number', label: 'Highlighted Column (0 = first)', min: 0, max: 20 },
     rows: {
       type: 'array',
@@ -119,7 +119,7 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
               placeholder="One value per line (match column order)"
             />
           ),
-        } as never,
+        } as CustomField<string[]>,
       },
     },
     differentiators: {
@@ -176,7 +176,7 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
     return (
       <div className="py-24 pb-20">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <SectionHeader label={label} title={title} subtitle={subtitle} headingLevel="h1" />
+          <SectionHeader label={label} title={title} subtitle={subtitle} headingLevel="h2" />
           {extendedSubtitle && (
             <p className="text-surface-500 dark:text-surface-400 text-sm max-w-2xl mx-auto mt-[-48px] mb-16 text-center">
               {extendedSubtitle}
