@@ -37,8 +37,8 @@ export const Hero: ComponentConfig<HeroProps> = {
     description:
       'Visual editing for marketers, full git ownership for developers. Powered by Puck with drag-and-drop components.',
     buttons: [
-      { id: 'btn-1', label: 'Get Started', href: '#quickstart', variant: 'primary' },
-      { id: 'btn-2', label: 'Join Waitlist', href: '#waitlist', variant: 'secondary' },
+      { id: crypto.randomUUID(), label: 'Get Started', href: '#quickstart', variant: 'primary' },
+      { id: crypto.randomUUID(), label: 'Join Waitlist', href: '#waitlist', variant: 'secondary' },
     ],
   },
   render: ({ badgeText, title, description, buttons, puck }) => {

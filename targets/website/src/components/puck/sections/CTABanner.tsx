@@ -30,7 +30,7 @@ export const CTABanner: ComponentConfig<CTABannerProps> = {
     badgeText: 'Coming Soon',
     title: 'Conloca Cloud — visual editing without the setup',
     subtitle: 'All the power of Conloca, fully managed. Your team edits visually while you keep full git ownership.',
-    buttons: [{ id: 'btn-cta-1', label: 'Join Waitlist', href: '#waitlist', variant: 'primary' }],
+    buttons: [{ id: crypto.randomUUID(), label: 'Join Waitlist', href: '#waitlist', variant: 'primary' }],
   },
   render: ({ badgeText, title, subtitle, buttons, puck }) => {
     return (

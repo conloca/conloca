@@ -38,12 +38,13 @@ export const FeatureCards: ComponentConfig<FeatureCardsProps> = {
     const mismatch = cardCount > 0 && cardCount !== columns && cardCount % columns !== 0;
     return {
       ...fields,
-      ...(mismatch && {
-        columns: {
-          ...fields.columns,
+      columns: {
+        ...fields.columns,
+        visible: cardCount > 1,
+        ...(mismatch && {
           label: `Columns (${cardCount} cards don't fill ${columns} evenly)`,
-        },
-      }),
+        }),
+      },
     };
   },
   fields: {
@@ -104,26 +105,26 @@ export const FeatureCards: ComponentConfig<FeatureCardsProps> = {
     columns: '4',
     cards: [
       {
-        id: 'card-1',
+        id: crypto.randomUUID(),
         iconSvgPath: 'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z',
         title: 'File-Based Storage',
         description: 'Content stored as VXJSON files in your repo. No database, no vendor lock-in.',
       },
       {
-        id: 'card-2',
+        id: crypto.randomUUID(),
         iconSvgPath:
           'M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z',
         title: 'Visual Drag & Drop Editor',
         description: 'Powered by Puck. Build pages visually in development with drag-and-drop components.',
       },
       {
-        id: 'card-3',
+        id: crypto.randomUUID(),
         iconSvgPath: 'M13 10V3L4 14h7v7l9-11h-7z',
         title: 'Git-Native',
         description: 'Every edit can be committed to git. Changes appear in version history with proper attribution.',
       },
       {
-        id: 'card-4',
+        id: crypto.randomUUID(),
         iconSvgPath:
           'M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
         title: 'Multi-Locale',

@@ -64,21 +64,21 @@ export const NumberedFlow: ComponentConfig<NumberedFlowProps> = {
     subtitle: 'Follow these steps to get started.',
     items: [
       {
-        id: 'flow-1',
+        id: crypto.randomUUID(),
         number: '1',
         title: 'Define your components',
         description:
           'Create Puck components with fields and render functions. Each component becomes a drag-and-drop block.',
       },
       {
-        id: 'flow-2',
+        id: crypto.randomUUID(),
         number: '2',
         title: 'Editors build pages visually',
         description:
           'Content editors open <code>/__cms</code>, drag components onto the canvas, and fill in content using the sidebar panel.',
       },
       {
-        id: 'flow-3',
+        id: crypto.randomUUID(),
         number: '3',
         title: 'Content saves to git',
         description:

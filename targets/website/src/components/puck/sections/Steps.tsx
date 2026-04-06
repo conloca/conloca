@@ -82,14 +82,14 @@ export const Steps: ComponentConfig<StepsProps> = {
     subtitle: 'Add a visual CMS to any Astro project in minutes. No database required.',
     steps: [
       {
-        id: 'step-1',
+        id: crypto.randomUUID(),
         number: '01',
         title: 'Install',
         description: 'Add the Conloca CMS package to your Astro project with a single command.',
         code: 'bun add @conloca/astro-cms',
       },
       {
-        id: 'step-2',
+        id: crypto.randomUUID(),
         number: '02',
         title: 'Configure',
         description: 'Add the integration to your Astro config and point it to your content directory.',
@@ -105,7 +105,7 @@ export default defineConfig({
 });`,
       },
       {
-        id: 'step-3',
+        id: crypto.randomUUID(),
         number: '03',
         title: 'Define Components',
         description: 'Create your visual building blocks with fields and render functions.',
@@ -117,7 +117,7 @@ export default defineConfig({
 };`,
       },
       {
-        id: 'step-4',
+        id: crypto.randomUUID(),
         number: '04',
         title: 'Edit Visually',
         description: 'Open the CMS route in your browser and start editing pages visually.',

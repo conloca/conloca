@@ -32,6 +32,11 @@ export const ContentBlockSection: ComponentConfig<ContentBlockSectionProps> = {
       type: 'text',
       label: 'Content Block ID',
     },
+    label: {
+      type: 'text',
+      label: 'Section Label',
+      contentEditable: true,
+    },
     title: {
       type: 'text',
       label: 'Section Title',
@@ -40,11 +45,6 @@ export const ContentBlockSection: ComponentConfig<ContentBlockSectionProps> = {
     subtitle: {
       type: 'textarea',
       label: 'Section Subtitle',
-      contentEditable: true,
-    },
-    label: {
-      type: 'text',
-      label: 'Section Label',
       contentEditable: true,
     },
     width: {
@@ -73,14 +73,20 @@ export const ContentBlockSection: ComponentConfig<ContentBlockSectionProps> = {
     },
   },
   resolveFields: (data, { fields }) => {
-    // Auto-set startsNewSection to true when title is present (for discoverability)
+    const hasBlock = !!data.props.blockId;
     const hasTitle = !!data.props.title;
     const startsNew = data.props.startsNewSection;
-    // Only show the field — don't auto-coerce. The default handles backward compat.
+
     return {
       ...fields,
+      label: { ...fields.label, visible: hasBlock },
+      title: { ...fields.title, visible: hasBlock },
+      subtitle: { ...fields.subtitle, visible: hasBlock },
+      width: { ...fields.width, visible: hasBlock },
+      tone: { ...fields.tone, visible: hasBlock },
       startsNewSection: {
         ...fields.startsNewSection,
+        visible: hasBlock,
         label:
           hasTitle && !startsNew ? 'Section Grouping (title set but section continues previous)' : 'Section Grouping',
       },

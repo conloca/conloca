@@ -254,8 +254,6 @@ export const HostedComparison: ComponentConfig<HostedComparisonProps> = {
         },
       },
     },
-    ctaTitle: { type: 'text', label: 'CTA Title', contentEditable: true },
-    ctaSubtitle: { type: 'textarea', label: 'CTA Subtitle', contentEditable: true },
     waitlistEnabled: {
       type: 'radio',
       label: 'Show Waitlist Form',
@@ -264,14 +262,16 @@ export const HostedComparison: ComponentConfig<HostedComparisonProps> = {
         { label: 'No', value: 'false' },
       ],
     },
+    ctaTitle: { type: 'text', label: 'CTA Title', contentEditable: true },
+    ctaSubtitle: { type: 'textarea', label: 'CTA Subtitle', contentEditable: true },
   },
   defaultProps: {
     badgeText: 'Coming Soon',
     title: 'Conloca Cloud -- visual editing without the setup',
     subtitle: 'All the power of Conloca, fully managed. Your team edits visually while you keep full git ownership.',
     rows: [
-      { id: 'row-1', feature: 'Visual Editor', oss: 'true', hosted: 'true' },
-      { id: 'row-2', feature: 'Managed Hosting', oss: 'false', hosted: 'true' },
+      { id: crypto.randomUUID(), feature: 'Visual Editor', oss: 'true', hosted: 'true' },
+      { id: crypto.randomUUID(), feature: 'Managed Hosting', oss: 'false', hosted: 'true' },
     ],
     ctaTitle: 'Get early access',
     ctaSubtitle: 'Be first to know when Conloca Cloud launches.',

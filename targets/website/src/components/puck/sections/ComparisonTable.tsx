@@ -121,13 +121,13 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
     columns: ['Conloca', 'Storyblok', 'Contentful', 'Decap CMS', 'Tina CMS'],
     highlightColumnIndex: 0,
     rows: [
-      { id: 'row-1', feature: 'Pricing', values: ['Free', 'From $99/mo', 'From $300/mo', 'Free', 'Free'] },
-      { id: 'row-2', feature: 'Self-Hosted', values: ['Yes', 'No', 'No', 'Yes', 'Yes'] },
+      { id: crypto.randomUUID(), feature: 'Pricing', values: ['Free', 'From $99/mo', 'From $300/mo', 'Free', 'Free'] },
+      { id: crypto.randomUUID(), feature: 'Self-Hosted', values: ['Yes', 'No', 'No', 'Yes', 'Yes'] },
     ],
     differentiators: [],
     ctaTitle: 'Ready to try Conloca?',
     ctaSubtitle: 'Get started in minutes.',
-    ctaButtons: [{ id: 'btn-1', label: 'Get Started', href: '/getting-started/', variant: 'primary' }],
+    ctaButtons: [{ id: crypto.randomUUID(), label: 'Get Started', href: '/getting-started/', variant: 'primary' }],
   },
   render: ({
     label,
