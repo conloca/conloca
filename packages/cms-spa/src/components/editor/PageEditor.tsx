@@ -88,8 +88,12 @@ export function PageEditor({
   const dataRef = useRef(data);
   dataRef.current = data;
 
+  const isSavingRef = useRef(false);
+
   const handleSave = useCallback(
     async (forceEtag?: string) => {
+      if (isSavingRef.current) return;
+      isSavingRef.current = true;
       setSaveState('saving');
       try {
         const result = await onSave(dataRef.current, forceEtag);
@@ -103,8 +107,11 @@ export function PageEditor({
         } else {
           setSaveState('error');
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
+        console.error('[PageEditor] Save failed:', error);
         setSaveState('error');
+      } finally {
+        isSavingRef.current = false;
       }
     },
     [onSave],
