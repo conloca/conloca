@@ -106,6 +106,9 @@ interface NarrativeGroup {
   id: string;
   title: string;
   subtitle: string;
+  label: string;
+  width: NonNullable<ContentBlockSectionProps['width']>;
+  tone: NonNullable<ContentBlockSectionProps['tone']>;
   items: ContentItem[];
 }
 
@@ -149,6 +152,9 @@ function groupContentItems(content: ContentItem[]): RenderGroup[] {
           id: (item.props.id as string) || `narrative-${groups.length}`,
           title: props.title || '',
           subtitle: props.subtitle || '',
+          label: props.label || '',
+          width: props.width || 'default',
+          tone: props.tone || 'transparent',
           items: [item],
         };
       } else if (currentNarrative) {
@@ -183,55 +189,66 @@ function renderNarrativeSection(
   config: Config,
   blockComponentMap: Map<string, MDXComponent>,
 ): JSX.Element {
-  // Render the leading CBS's MDX block content (title/subtitle are already in the group header)
   const leadingCbs = group.items[0];
   const leadingBlockId = (leadingCbs?.props as unknown as ContentBlockSectionProps)?.blockId;
   const LeadingBlockComponent = leadingBlockId ? blockComponentMap.get(leadingBlockId)?.Component : null;
 
   return (
-    <section key={group.id} className="narrative-section mb-20 max-w-4xl mx-auto">
-      {/* Note: narrative sections intentionally use fixed max-w-4xl layout, ignoring CBS width/tone/label props */}
+    <section
+      key={group.id}
+      className={cn('narrative-section mb-20 mx-auto px-4 sm:px-6 lg:px-8', contentBlockWidthClasses[group.width])}
+    >
+      {group.label && (
+        <p className="mb-4 text-sm font-medium uppercase tracking-[0.18em] text-brand-700 dark:text-brand-300">
+          {group.label}
+        </p>
+      )}
       <h2 className="text-2xl sm:text-3xl font-bold text-surface-900 dark:text-white mb-4">{group.title}</h2>
       {group.subtitle && (
         <p className="text-surface-500 dark:text-surface-400 text-sm leading-relaxed mb-6">{group.subtitle}</p>
       )}
-      {LeadingBlockComponent && (
-        <div className="mdx-content conloca-prose max-w-none mb-6">
-          <LeadingBlockComponent />
-        </div>
-      )}
-      {group.items.slice(1).map((item, i) => {
-        if (item.type === 'ContentBlockSection') {
-          // Continuation CBS — render subtitle + MDX block content
-          const cbsProps = item.props as unknown as ContentBlockSectionProps;
-          const BlockComponent = cbsProps.blockId ? blockComponentMap.get(cbsProps.blockId)?.Component : null;
-          const hasContent = cbsProps.subtitle || BlockComponent;
-          if (!hasContent) return null;
+      <div className={cn(contentBlockToneClasses[group.tone])}>
+        {LeadingBlockComponent && (
+          <div className="mdx-content conloca-prose max-w-none mb-6">
+            <LeadingBlockComponent />
+          </div>
+        )}
+        {group.items.slice(1).map((item, i) => {
+          if (item.type === 'ContentBlockSection') {
+            const cbsProps = item.props as unknown as ContentBlockSectionProps;
+            const BlockComponent = cbsProps.blockId ? blockComponentMap.get(cbsProps.blockId)?.Component : null;
+            const hasContent = cbsProps.title || cbsProps.subtitle || BlockComponent;
+            if (!hasContent) return null;
+            return (
+              <div key={(item.props.id as string) || i}>
+                {cbsProps.title && (
+                  <h3 className="text-xl font-semibold text-surface-900 dark:text-white mt-8 mb-3">{cbsProps.title}</h3>
+                )}
+                {cbsProps.subtitle && (
+                  <p className="text-surface-500 dark:text-surface-400 text-sm leading-relaxed mb-4">
+                    {cbsProps.subtitle}
+                  </p>
+                )}
+                {BlockComponent && (
+                  <div className="mdx-content conloca-prose max-w-none mb-6">
+                    <BlockComponent />
+                  </div>
+                )}
+              </div>
+            );
+          }
+          const CompConfig = config.components[item.type] as ComponentConfig | undefined;
+          if (!CompConfig?.render) return null;
           return (
-            <div key={(item.props.id as string) || i}>
-              {cbsProps.subtitle && (
-                <p className="text-surface-500 dark:text-surface-400 text-sm leading-relaxed">{cbsProps.subtitle}</p>
-              )}
-              {BlockComponent && (
-                <div className="mdx-content conloca-prose max-w-none mb-6">
-                  <BlockComponent />
-                </div>
-              )}
-            </div>
+            <CompConfig.render
+              key={(item.props.id as string) || i}
+              {...item.props}
+              id={item.props.id ?? ''}
+              puck={staticPuckContext}
+            />
           );
-        }
-        // Visual component — render using its config render function
-        const CompConfig = config.components[item.type] as ComponentConfig | undefined;
-        if (!CompConfig?.render) return null;
-        return (
-          <CompConfig.render
-            key={(item.props.id as string) || i}
-            {...item.props}
-            id={item.props.id ?? ''}
-            puck={staticPuckContext}
-          />
-        );
-      })}
+        })}
+      </div>
     </section>
   );
 }
