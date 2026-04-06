@@ -104,6 +104,12 @@ async function handleSubscribe(request: Request, env: Env) {
     return jsonResponse({ error: 'Too many requests. Please try again later.' }, 429);
   }
 
+  // Reject oversized request bodies (1KB should be more than enough for email + intent)
+  const contentLength = Number.parseInt(request.headers.get('Content-Length') || '0', 10);
+  if (contentLength > 1024) {
+    return jsonResponse({ error: 'Request body too large' }, 413);
+  }
+
   let payload: SubscribePayload;
 
   try {
@@ -116,7 +122,7 @@ async function handleSubscribe(request: Request, env: Env) {
   const metadata = readSignupMetadata(request as CloudflareRequest);
   const trimmedEmail = email?.trim();
 
-  if (!trimmedEmail || !emailPattern.test(trimmedEmail)) {
+  if (!trimmedEmail || trimmedEmail.length > 254 || !emailPattern.test(trimmedEmail)) {
     return jsonResponse({ error: 'Invalid email address' }, 400);
   }
 
