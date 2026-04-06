@@ -56,24 +56,6 @@ export const colors = {
     primary: 'var(--color-border)',
     hover: 'var(--color-border-hover)',
   },
-  /** Badge color variants */
-  badge: {
-    brand: {
-      bg: '#ecfeff',
-      text: '#06b6d4',
-      border: '#a5f3fc',
-    },
-    green: {
-      bg: '#ecfdf5',
-      text: '#10b981',
-      border: '#a7f3d0',
-    },
-    gray: {
-      bg: '#f1f5f9',
-      text: '#64748b',
-      border: '#e2e8f0',
-    },
-  },
   /** Interactive (button) color tokens */
   interactive: {
     primary: {
