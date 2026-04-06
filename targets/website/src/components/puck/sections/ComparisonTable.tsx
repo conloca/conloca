@@ -1,5 +1,6 @@
 import type { ComponentConfig } from '@puckeditor/core';
 import cn from 'clsx';
+import { ArrayTextareaFieldRender } from '../fields/ArrayTextareaField';
 import { type CTAButton, ctaButtonArrayField } from '../shared';
 import { EmptySlotPlaceholder } from '../shared/EmptySlotPlaceholder';
 
@@ -37,14 +38,33 @@ function isPositiveValue(value: string): boolean {
 
 export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
   label: 'Comparison Table',
+  resolveFields: (data, { fields }) => {
+    const columnCount = Array.isArray(data.props.columns) ? data.props.columns.length : 0;
+    return {
+      ...fields,
+      rows: {
+        ...fields.rows,
+        arrayFields: {
+          ...(fields.rows as any).arrayFields,
+          values: {
+            ...(fields.rows as any).arrayFields.values,
+            metadata: { columnCount },
+          },
+        },
+      },
+    } as typeof fields;
+  },
   fields: {
     label: { type: 'text', label: 'Section Label' },
     title: { type: 'text', contentEditable: true },
     subtitle: { type: 'textarea', contentEditable: true },
     extendedSubtitle: { type: 'textarea', label: 'Extended Subtitle' },
     columns: {
-      type: 'textarea',
+      type: 'custom',
       label: 'Columns (one per line)',
+      render: ({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) => (
+        <ArrayTextareaFieldRender value={value} onChange={onChange} placeholder="One column name per line" />
+      ),
     } as never,
     highlightColumnIndex: { type: 'number', label: 'Highlighted Column (0 = first)', min: 0 },
     rows: {
@@ -56,8 +76,25 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
         id: { type: 'text', visible: false },
         feature: { type: 'text' },
         values: {
-          type: 'textarea',
+          type: 'custom',
           label: 'Values (one per line)',
+          render: ({
+            value,
+            onChange,
+            field,
+          }: {
+            value: string[];
+            onChange: (v: string[]) => void;
+            field: { metadata?: { columnCount?: number } };
+          }) => (
+            <ArrayTextareaFieldRender
+              value={value}
+              onChange={onChange}
+              expectedCount={field.metadata?.columnCount}
+              expectedCountLabel="columns defined"
+              placeholder="One value per line (match column order)"
+            />
+          ),
         } as never,
       },
     },
