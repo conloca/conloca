@@ -93,6 +93,13 @@ import { setupFetchMock, MockAPIResponses, API_ROUTES } from '@conloca/content-a
 | `useFolderTree`          | `()`                         | Get full folder tree structure    |
 | `useMoveAssets`          | `()`                         | Move assets between folders       |
 
+## MDX & Data Hooks
+
+| Hook             | Parameters                   | Purpose                                |
+| ---------------- | ---------------------------- | -------------------------------------- |
+| `useCompileMDX`  | `({ mdxContent, cacheKey })` | Compile MDX content on the server      |
+| `useDataContext` | `(pageId?: string)`          | Get data context for resolveData hooks |
+
 ## Git Hooks
 
 | Hook                 | Purpose                                          |

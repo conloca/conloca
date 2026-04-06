@@ -56,18 +56,19 @@ export default defineConfig({
 
 ### ConlocaCMSOptions
 
-| Option           | Type                             | Default      | Description                                      |
-| ---------------- | -------------------------------- | ------------ | ------------------------------------------------ |
-| `contentRoot`    | `string`                         | required     | Path to content directory                        |
-| `puckConfigPath` | `string`                         | required     | Path to Puck component config (`.tsx` file)      |
-| `route`          | `string`                         | `'/__cms'`   | CMS admin UI route prefix                        |
-| `assetsPath`     | `string`                         | -            | Path to assets directory (enables Media Library) |
-| `schemasPath`    | `string`                         | -            | Path to data/page schema definitions             |
-| `layout`         | `string`                         | -            | Default Astro layout for content pages           |
-| `routing`        | `RoutingConfigInput`             | -            | Content page routing configuration               |
-| `templates`      | `Record<string, TemplateConfig>` | -            | Page creation templates                          |
-| `componentPaths` | `string[]`                       | -            | Directories to scan for hydratable components    |
-| `canvasDir`      | `string`                         | `'./canvas'` | Canvas directory for visual editing              |
+| Option           | Type                             | Default      | Description                                                       |
+| ---------------- | -------------------------------- | ------------ | ----------------------------------------------------------------- |
+| `contentRoot`    | `string`                         | required     | Path to content directory                                         |
+| `puckConfigPath` | `string`                         | required     | Path to Puck component config (`.tsx` file)                       |
+| `route`          | `string`                         | `'/__cms'`   | CMS admin UI route prefix                                         |
+| `assetsPath`     | `string`                         | -            | Path to assets directory (enables Media Library)                  |
+| `schemasPath`    | `string`                         | -            | Path to data/page schema definitions                              |
+| `layout`         | `string`                         | -            | Default Astro layout for content pages                            |
+| `routing`        | `RoutingConfigInput`             | -            | Content page routing configuration                                |
+| `templates`      | `Record<string, TemplateConfig>` | -            | Page creation templates                                           |
+| `componentPaths` | `string[]`                       | -            | Directories to scan for hydratable components                     |
+| `siteStyles`     | `string \| string[]`             | -            | CSS files to load in the CMS editor for component preview styling |
+| `canvasDir`      | `string`                         | `'./canvas'` | Canvas directory for visual editing                               |
 
 <Aside type="note">
   **Dev Branch Preview** — the `auth` option (`AuthConfig`) exists on the `dev` branch, but it is not available on the
@@ -129,7 +130,7 @@ Options for the `conlocaLoader()` function:
 
 | Field         | Type                          | Required | Description                                                                                           |
 | ------------- | ----------------------------- | -------- | ----------------------------------------------------------------------------------------------------- |
-| `collection`  | `string`                      | Yes      | Astro content collection name to populate                                                             |
+| `collection`  | `string`                      | No       | Astro content collection name to populate                                                             |
 | `contentRoot` | `string`                      | Yes      | Path to the content directory (e.g., `./src/content`)                                                 |
 | `site`        | `string`                      | No       | Site name for page collections. Omit to use the default site.                                         |
 | `kind`        | `'page' \| 'block' \| 'data'` | No       | Content kind. Inferred from collection name if omitted (`blocks` → `block`, everything else → `page`) |

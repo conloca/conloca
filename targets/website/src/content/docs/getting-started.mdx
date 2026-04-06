@@ -116,8 +116,9 @@ mkdir -p content
 ```
 
 Conloca uses this directory to store content as [VXJSON files](/concepts/architecture/#vxjson-format) — a JSON format
-designed for atomic writes and optimistic concurrency. You do not need to create any files manually; the CMS creates
-them when you save content.
+with content-last field ordering for fast metadata indexing and deterministic ETags. Crash-safe writes are handled
+separately at runtime via temp file + atomic rename. You do not need to create any files manually; the CMS creates them
+when you save content.
 
 ## Start Development
 
