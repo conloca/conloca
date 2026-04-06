@@ -170,9 +170,18 @@ export function PageEditorWrapper({ puckConfig }: PageEditorWrapperProps) {
               ),
             },
           },
-          render: ({ blockId, label, tone = 'transparent', width = 'default' }: ContentBlockSectionProps) => (
+          render: ({
+            blockId,
+            label,
+            title,
+            subtitle,
+            tone = 'transparent',
+            width = 'default',
+          }: ContentBlockSectionProps & { title?: string; subtitle?: string }) => (
             <section className="pb-16 sm:pb-20">
               <div className={cn('mx-auto px-4 sm:px-6 lg:px-8', contentBlockWidthClasses[width])}>
+                {title ? <h2 className="text-2xl sm:text-3xl font-bold text-surface-900 mb-4">{title}</h2> : null}
+                {subtitle ? <p className="text-surface-500 text-sm leading-relaxed mb-6">{subtitle}</p> : null}
                 {label ? (
                   <p className="mb-4 text-sm font-medium uppercase tracking-[0.18em] text-azure-04">{label}</p>
                 ) : null}

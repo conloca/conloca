@@ -1,6 +1,6 @@
 import type { LocalizedEntry } from '@conloca/content-api-client';
 import { useLocalizedContent, useUpdateLocalized } from '@conloca/content-api-client';
-import { Edit2 } from 'lucide-react';
+import { AlertTriangle, Edit2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { CMSMDXEditorModal } from '../editor/CMSMDXEditor';
 
@@ -51,6 +51,12 @@ export function MDXEditField({ entry }: MDXEditFieldProps) {
 
   return (
     <div className="space-y-2">
+      {/* Shared content warning */}
+      <div className="flex items-start gap-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        <span>This is a shared block. Editing it will update every page that uses it.</span>
+      </div>
+
       <button
         onClick={() => setEditorOpen(true)}
         className="w-full px-4 py-2 bg-azure-04 text-white rounded hover:bg-azure-03 transition-colors flex items-center justify-center gap-2"
