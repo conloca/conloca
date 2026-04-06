@@ -90,7 +90,7 @@ export const NumberedFlow: ComponentConfig<NumberedFlowProps> = {
       },
     ],
   },
-  render: ({ title, subtitle, items }) => {
+  render: ({ title, subtitle, items, puck }) => {
     return (
       <section className="mb-20">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -115,6 +115,7 @@ export const NumberedFlow: ComponentConfig<NumberedFlowProps> = {
                     {renderLimitedRichText(
                       item.description,
                       'text-sm text-surface-500 dark:text-surface-400 leading-relaxed [&_a]:text-brand-600 dark:[&_a]:text-brand-400 [&_a]:underline [&_a]:underline-offset-2 [&_code]:font-mono [&_code]:text-[0.95em] [&_code]:text-surface-700 dark:[&_code]:text-surface-300',
+                      puck.isEditing,
                     )}
                   </div>
                 </div>

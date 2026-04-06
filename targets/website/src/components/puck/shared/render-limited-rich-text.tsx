@@ -1,3 +1,4 @@
+import type React from 'react';
 import type { ReactNode } from 'react';
 
 function decodeEntities(value: string) {
@@ -24,7 +25,7 @@ function normalizeLegacyHtml(source: string) {
     .replaceAll(/<[^>]+>/g, '');
 }
 
-function renderInlineMarkdown(source: string) {
+function renderInlineMarkdown(source: string, isEditing?: boolean) {
   const nodes: ReactNode[] = [];
   const pattern = /(\[[^\]]+\]\([^)]+\)|`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*)/g;
   let lastIndex = 0;
@@ -41,7 +42,11 @@ function renderInlineMarkdown(source: string) {
       const tokenMatch = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
       if (tokenMatch) {
         nodes.push(
-          <a key={`${start}-link`} href={tokenMatch[2]}>
+          <a
+            key={`${start}-link`}
+            href={tokenMatch[2]}
+            onClick={isEditing ? (e: React.MouseEvent) => e.preventDefault() : undefined}
+          >
             {tokenMatch[1]}
           </a>,
         );
@@ -64,7 +69,7 @@ function renderInlineMarkdown(source: string) {
   return nodes;
 }
 
-export function renderLimitedRichText(source: string, wrapperClassName: string) {
+export function renderLimitedRichText(source: string, wrapperClassName: string, isEditing?: boolean) {
   if (typeof source !== 'string') return <div className={wrapperClassName}>{source}</div>;
   const normalizedSource = normalizeLegacyHtml(source);
   const paragraphs = normalizedSource
@@ -78,7 +83,7 @@ export function renderLimitedRichText(source: string, wrapperClassName: string) 
         ? paragraphs.map((paragraph, i) => (
             <p key={i}>
               {paragraph.split('\n').flatMap((line, lineIndex, lines) => {
-                const inlineNodes = renderInlineMarkdown(line);
+                const inlineNodes = renderInlineMarkdown(line, isEditing);
                 return lineIndex < lines.length - 1 ? [...inlineNodes, <br key={lineIndex} />] : inlineNodes;
               })}
             </p>
