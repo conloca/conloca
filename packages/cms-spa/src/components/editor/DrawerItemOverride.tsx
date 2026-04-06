@@ -21,9 +21,14 @@ export function DrawerItemOverride({ children, name }: DrawerItemOverrideProps) 
     const currentData = puck.appState.data;
     const id = generateId(name);
 
+    // Merge defaultProps from the component config so the new component renders correctly.
+    // Puck's native drag-drop insert action does this automatically, but setData bypasses it.
+    const componentConfig = puck.config?.components?.[name];
+    const defaultProps = componentConfig?.defaultProps ?? {};
+
     const newComponent = {
       type: name,
-      props: { id },
+      props: { ...defaultProps, id },
     };
 
     puck.dispatch({
