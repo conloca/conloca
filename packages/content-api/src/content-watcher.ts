@@ -1,4 +1,4 @@
-import { normalize, resolve } from 'path';
+import { normalize, resolve } from 'node:path';
 import { FileSystemContentAPI } from './filesystem-content-api';
 
 export interface ContentWatcherOptions {
