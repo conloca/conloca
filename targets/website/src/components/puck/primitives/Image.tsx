@@ -20,6 +20,7 @@ const ImageInner: ComponentConfig<ImageProps> = {
     src: {
       type: 'text',
       label: 'Image URL',
+      metadata: { fieldKind: 'image' },
     },
     alt: {
       type: 'text',

@@ -42,20 +42,17 @@ const fieldTypeOverrides = {
     <ImageFieldRender value={value || ''} onChange={onChange} />
   ),
   text: ({
-    name,
     value,
     onChange,
     children,
+    field,
   }: {
-    name: string;
     value: string;
     onChange: (val: string) => void;
     children: React.ReactNode;
+    field: { metadata?: { fieldKind?: string } };
   }) => {
-    // Extract terminal field name segment for array items (e.g., "posts[0].imageUrl" -> "imageUrl")
-    const fieldName = name.includes('.') ? name.split('.').pop()! : name;
-    const isImageField = /image/i.test(fieldName);
-    if (isImageField) {
+    if (field?.metadata?.fieldKind === 'image') {
       return <ImageUrlField value={value || ''} onChange={onChange} />;
     }
     // Non-image text fields: render default Puck field
