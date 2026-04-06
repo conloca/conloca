@@ -123,6 +123,7 @@ export function PageEditorWrapper({ puckConfig }: PageEditorWrapperProps) {
         value: block.id,
         label,
         description: firstLocale?.meta?.description,
+        category: firstLocale?.meta?.category,
       };
     });
 
