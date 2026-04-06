@@ -25,7 +25,7 @@ async function runMDX(code: string, options: Record<string, unknown>): Promise<{
  */
 function createRunOptions() {
   const isDevelopment = process.env.NODE_ENV === 'development';
-  return isDevelopment ? { ...devRuntime } : { ...runtime };
+  return isDevelopment ? { ...devRuntime, development: true } : { ...runtime };
 }
 
 const runOptions = createRunOptions();
