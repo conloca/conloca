@@ -52,6 +52,7 @@ export interface BaseMDXEditorModalProps {
   headerTools?: (tools: {
     content: string;
     setContent: React.Dispatch<React.SetStateAction<string>>;
+    editorRef: React.RefObject<MDXEditorMethods | null>;
   }) => React.ReactNode;
   onBeforeClose?: () => boolean;
   EditorComponent: React.ForwardRefExoticComponent<BaseMDXEditorProps & React.RefAttributes<MDXEditorMethods>>;
@@ -213,11 +214,12 @@ BaseMDXEditor.displayName = 'BaseMDXEditor';
 
 function DeferredMDXEditor({
   EditorComponent,
+  editorRef,
   ...props
 }: BaseMDXEditorProps & {
   EditorComponent: React.ForwardRefExoticComponent<BaseMDXEditorProps & React.RefAttributes<MDXEditorMethods>>;
+  editorRef: React.RefObject<MDXEditorMethods | null>;
 }) {
-  const editorRef = React.useRef<MDXEditorMethods>(null);
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
@@ -254,12 +256,7 @@ function Dialog({ open, onOpenChange, children }: DialogProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <button
-        type="button"
-        className="fixed inset-0 bg-black/50"
-        onClick={() => onOpenChange(false)}
-        aria-label="Close dialog"
-      />
+      <div role="presentation" className="fixed inset-0 bg-black/50" onClick={() => onOpenChange(false)} />
       <div className="relative z-50 bg-white rounded-lg shadow-lg max-w-[90vw] max-h-[90vh] overflow-hidden">
         {children}
       </div>
@@ -290,6 +287,7 @@ export function BaseMDXEditorModal({
   onBeforeClose,
   EditorComponent,
 }: BaseMDXEditorModalProps) {
+  const editorRef = React.useRef<MDXEditorMethods>(null);
   const [content, setContent] = useState(initialContent);
   const [isEditorReady, setIsEditorReady] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -345,7 +343,7 @@ export function BaseMDXEditorModal({
             {(headerExtra || headerTools) && (
               <div className="flex items-center gap-2">
                 {headerExtra}
-                {headerTools?.({ content, setContent })}
+                {headerTools?.({ content, setContent, editorRef })}
               </div>
             )}
             <button type="button" onClick={handleClose} className="p-2 hover:bg-gray-100 rounded" aria-label="Close">
@@ -358,6 +356,7 @@ export function BaseMDXEditorModal({
             <MDXEditorErrorBoundary logPrefix="[MDXEditor]">
               <DeferredMDXEditor
                 EditorComponent={EditorComponent}
+                editorRef={editorRef}
                 value={content}
                 onChange={setContent}
                 onSave={handleSave}

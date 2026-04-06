@@ -1,6 +1,7 @@
 import { BaseMDXEditor, BaseMDXEditorModal, type BaseMDXEditorModalProps, type BaseMDXEditorProps } from '@conloca/mdx';
 import type { MDXEditorMethods } from '@mdxeditor/editor';
-import React, { useMemo, useRef, useState } from 'react';
+import type React from 'react';
+import { forwardRef, useMemo, useRef, useState } from 'react';
 import { contentBlockSnippets, getContentBlockTemplate, renderContentBlockTemplate } from './content-block-templates';
 import { ImagePickerDialog } from './ImagePickerDialog';
 
@@ -10,7 +11,7 @@ export interface CMSMDXEditorProps
     'disableImageSettingsButton' | 'imageButtonRef' | 'imageDialog' | 'onImageShortcut'
   > {}
 
-export const CMSMDXEditor = React.forwardRef<MDXEditorMethods, CMSMDXEditorProps>((props, ref) => {
+export const CMSMDXEditor = forwardRef<MDXEditorMethods, CMSMDXEditorProps>((props, ref) => {
   const insertImageRef = useRef<HTMLButtonElement>(null);
 
   return (
@@ -36,10 +37,12 @@ CMSMDXEditor.displayName = 'CMSMDXEditor';
 
 function CMSMDXHeaderTools({
   setContent,
+  editorRef,
   filePath,
   initialTemplateId,
 }: {
   setContent: React.Dispatch<React.SetStateAction<string>>;
+  editorRef: React.RefObject<MDXEditorMethods | null>;
   filePath?: string;
   initialTemplateId?: string;
 }) {
@@ -54,7 +57,9 @@ function CMSMDXHeaderTools({
 
     setContent((current) => {
       const trimmed = current.trimEnd();
-      return trimmed ? `${trimmed}\n\n${snippet.content}` : snippet.content;
+      const newContent = trimmed ? `${trimmed}\n\n${snippet.content}` : snippet.content;
+      editorRef.current?.setMarkdown(newContent);
+      return newContent;
     });
   };
 
@@ -82,7 +87,11 @@ function CMSMDXHeaderTools({
       {selectedTemplate ? (
         <button
           type="button"
-          onClick={() => setContent(renderContentBlockTemplate(initialTemplateId, filePath || 'Untitled Block'))}
+          onClick={() => {
+            const newContent = renderContentBlockTemplate(initialTemplateId, filePath || 'Untitled Block');
+            setContent(newContent);
+            editorRef.current?.setMarkdown(newContent);
+          }}
           className="rounded border border-grey-09 bg-white px-3 py-2 text-sm font-medium hover:bg-grey-11"
         >
           Reset Template
@@ -103,9 +112,10 @@ export function CMSMDXEditorModal(props: CMSMDXEditorModalProps) {
     <BaseMDXEditorModal
       {...modalProps}
       EditorComponent={CMSMDXEditor}
-      headerTools={({ setContent }) => (
+      headerTools={({ setContent, editorRef }) => (
         <CMSMDXHeaderTools
           setContent={setContent}
+          editorRef={editorRef}
           filePath={modalProps.filePath}
           initialTemplateId={initialTemplateId}
         />
