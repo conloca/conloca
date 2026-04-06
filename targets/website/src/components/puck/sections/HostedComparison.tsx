@@ -14,6 +14,9 @@ export type HostedComparisonProps = {
   badgeText: string;
   title: string;
   subtitle: string;
+  ossColumnHeader: string;
+  hostedColumnHeader: string;
+  hostedColumnNote: string;
   rows: ComparisonRow[];
   ctaTitle: string;
   ctaSubtitle: string;
@@ -106,6 +109,9 @@ export const HostedComparisonRender = ({
   badgeText,
   title,
   subtitle,
+  ossColumnHeader,
+  hostedColumnHeader,
+  hostedColumnNote,
   rows,
   ctaTitle,
   ctaSubtitle,
@@ -174,11 +180,13 @@ export const HostedComparisonRender = ({
                         Feature
                       </th>
                       <th className="text-center text-sm font-medium text-surface-500 dark:text-surface-400 px-6 py-4">
-                        Open Source
+                        {ossColumnHeader}
                       </th>
                       <th className="text-center text-sm font-medium px-6 py-4">
-                        <span className="text-brand-600 dark:text-brand-400">Hosted</span>
-                        <span className="text-surface-500 text-xs ml-1">(Coming Soon)</span>
+                        <span className="text-brand-600 dark:text-brand-400">{hostedColumnHeader}</span>
+                        {hostedColumnNote && (
+                          <span className="text-surface-500 text-xs ml-1">({hostedColumnNote})</span>
+                        )}
                       </th>
                     </tr>
                   </thead>
@@ -230,6 +238,9 @@ export const HostedComparison: ComponentConfig<HostedComparisonProps> = {
     badgeText: { type: 'text', label: 'Badge Text', contentEditable: true },
     title: { type: 'text', contentEditable: true },
     subtitle: { type: 'textarea', contentEditable: true },
+    ossColumnHeader: { type: 'text', label: 'OSS Column Header' },
+    hostedColumnHeader: { type: 'text', label: 'Hosted Column Header' },
+    hostedColumnNote: { type: 'text', label: 'Hosted Column Note' },
     rows: {
       type: 'array',
       min: 1,
@@ -238,22 +249,8 @@ export const HostedComparison: ComponentConfig<HostedComparisonProps> = {
       arrayFields: {
         id: { type: 'text', visible: false },
         feature: { type: 'text' },
-        oss: {
-          type: 'select',
-          label: 'Open Source',
-          options: [
-            { label: 'Yes', value: 'true' },
-            { label: 'No', value: 'false' },
-          ],
-        },
-        hosted: {
-          type: 'select',
-          label: 'Hosted',
-          options: [
-            { label: 'Yes', value: 'true' },
-            { label: 'No', value: 'false' },
-          ],
-        },
+        oss: { type: 'text', label: 'Open Source' },
+        hosted: { type: 'text', label: 'Hosted' },
       },
     },
     waitlistEnabled: {
@@ -271,6 +268,9 @@ export const HostedComparison: ComponentConfig<HostedComparisonProps> = {
     badgeText: 'Coming Soon',
     title: 'Conloca Cloud -- visual editing without the setup',
     subtitle: 'All the power of Conloca, fully managed. Your team edits visually while you keep full git ownership.',
+    ossColumnHeader: 'Open Source',
+    hostedColumnHeader: 'Hosted',
+    hostedColumnNote: 'Coming Soon',
     rows: [
       { id: crypto.randomUUID(), feature: 'Visual Editor', oss: 'true', hosted: 'true' },
       { id: crypto.randomUUID(), feature: 'Managed Hosting', oss: 'false', hosted: 'true' },
