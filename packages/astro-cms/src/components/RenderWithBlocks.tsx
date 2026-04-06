@@ -79,7 +79,11 @@ function resolveRenderableBlocks(blocks: Array<MDXBlockEvaluationResult | MDXCom
 /** Component types that can be merged into a narrative section following a CBS */
 const MERGEABLE_VISUAL_TYPES = new Set(['CodeBlock', 'FeatureCards', 'NumberedFlow', 'Steps']);
 
-/** Minimal puck context for static (non-editor) rendering via MergedRender path */
+/**
+ * Minimal puck context for static (non-editor) rendering via MergedRender path.
+ * Note: metadata is empty — mergeable components must not read puck.metadata at render time.
+ * If a future component needs metadata, thread dataContext through RenderWithBlocksProps.
+ */
 const staticPuckContext = {
   isEditing: false,
   renderDropZone: () => {
@@ -186,6 +190,7 @@ function renderNarrativeSection(
 
   return (
     <section key={group.id} className="narrative-section mb-20 max-w-4xl mx-auto">
+      {/* Note: narrative sections intentionally use fixed max-w-4xl layout, ignoring CBS width/tone/label props */}
       <h2 className="text-2xl sm:text-3xl font-bold text-surface-900 dark:text-white mb-4">{group.title}</h2>
       {group.subtitle && (
         <p className="text-surface-500 dark:text-surface-400 text-sm leading-relaxed mb-6">{group.subtitle}</p>

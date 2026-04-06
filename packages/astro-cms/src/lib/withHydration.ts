@@ -1,19 +1,19 @@
-import type React from 'react'
+import type React from 'react';
 
 /**
  * Metadata attached to components marked for hydration.
  * Used by the build-time scanner and runtime hydration system.
  */
 export interface HydrationMeta {
-  strategy: 'load' | 'visible' | 'idle'
-  __isHydratable: true
+  strategy: 'load' | 'visible' | 'idle';
+  __isHydratable: true;
 }
 
 /**
  * Hydration strategy for the withHydration wrapper.
  * Does not include 'none' since wrapping implies hydration is desired.
  */
-export type WithHydrationStrategy = 'load' | 'visible' | 'idle'
+export type WithHydrationStrategy = 'load' | 'visible' | 'idle';
 
 /**
  * Marks a component's render function for client-side hydration.
@@ -24,6 +24,10 @@ export type WithHydrationStrategy = 'load' | 'visible' | 'idle'
  *
  * The wrapper does NOT create a new component or add runtime overhead.
  * It simply attaches a `__hydration` property to the existing function.
+ *
+ * **Constraint:** Hydratable components must not use `puck.renderDropZone`,
+ * `puck.isEditing`, or `puck.metadata` — the `puck` prop is stripped during
+ * serialization and not available at hydration time.
  *
  * @param Component - The React component to mark for hydration
  * @param strategy - When to hydrate: 'load', 'visible', or 'idle'
@@ -48,20 +52,20 @@ export type WithHydrationStrategy = 'load' | 'visible' | 'idle'
  */
 export function withHydration<T extends (props: any) => React.ReactNode>(
   Component: T,
-  strategy: WithHydrationStrategy
+  strategy: WithHydrationStrategy,
 ): T {
   // Environment variable escape hatch for debugging
   if (typeof process !== 'undefined' && process.env?.CONLOCA_DISABLE_HYDRATION === 'true') {
-    return Component
+    return Component;
   }
 
   // Attach metadata directly to the function object
   // This avoids creating a wrapper component and keeps bundle size minimal
-  const HydratableComponent = Component as T & { __hydration: HydrationMeta }
+  const HydratableComponent = Component as T & { __hydration: HydrationMeta };
   HydratableComponent.__hydration = {
     strategy,
     __isHydratable: true,
-  }
+  };
 
-  return HydratableComponent
+  return HydratableComponent;
 }
