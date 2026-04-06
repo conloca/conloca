@@ -25,6 +25,7 @@ const ImageInner: ComponentConfig<ImageProps> = {
     alt: {
       type: 'text',
       label: 'Alt Text',
+      placeholder: 'Describe the image for accessibility',
     },
     caption: {
       type: 'text',
