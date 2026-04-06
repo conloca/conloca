@@ -30,13 +30,23 @@ interface Env {
   ASSETS: AssetFetcher;
 }
 
-// Simple IP-based rate limiter: max requests per IP within the window
+// Simple IP-based rate limiter: max requests per IP within the window.
+// Best-effort only — per-isolate, not globally consistent across Cloudflare colos.
 const RATE_LIMIT_MAX = 5;
 const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX_ENTRIES = 10_000;
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 
 function isRateLimited(ip: string): boolean {
   const now = Date.now();
+
+  // Evict expired entries when the map grows too large
+  if (rateLimitMap.size > RATE_LIMIT_MAX_ENTRIES) {
+    for (const [key, val] of rateLimitMap) {
+      if (now > val.resetAt) rateLimitMap.delete(key);
+    }
+  }
+
   const entry = rateLimitMap.get(ip);
   if (!entry || now > entry.resetAt) {
     rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
@@ -85,15 +95,6 @@ function readSignupMetadata(request: CloudflareRequest) {
 }
 
 async function handleSubscribe(request: Request, env: Env) {
-  if (request.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 204,
-      headers: {
-        Allow: 'OPTIONS, POST',
-      },
-    });
-  }
-
   if (request.method !== 'POST') {
     return jsonResponse({ error: 'Method not allowed' }, 405);
   }
