@@ -36,6 +36,7 @@ conlocaCMS({
 
   // Optional — UI
   siteBaseUrl: '',
+  siteStyles: ['./src/styles/puck-preview.css'],
   enableDevtools: true,
   queryClientOptions: {
     /* ... */
@@ -330,6 +331,20 @@ queryClientOptions: {
   },
 }
 ```
+
+#### `siteStyles`
+
+- **Type:** `string | string[]`
+- **Default:** `undefined`
+
+CSS files to load in the CMS editor for component preview styling. When your Puck components use site-specific CSS
+(custom properties, utility classes, etc.), add those stylesheets here so the editor preview matches production.
+
+```js
+siteStyles: ['./src/styles/global.css'];
+```
+
+Accepts a single path or an array. Paths are resolved relative to the project root.
 
 ### Authentication
 

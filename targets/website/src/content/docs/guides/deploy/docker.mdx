@@ -167,9 +167,9 @@ Caddy automatically provisions and renews TLS certificates via Let's Encrypt.
 
 ## Git content persistence
 
-The content directory should be a git repository for version history. Conloca uses git for content versioning -- each
-save creates a commit. The volume mount (`./content:/app/content`) preserves the git repository across container
-restarts.
+The content directory should be a git repository for version history. Conloca stores content as files and exposes git
+operations (commit, push, pull) through the CMS git panel. The volume mount (`./content:/app/content`) preserves the git
+repository across container restarts.
 
 Initialize git in your content directory if it does not already exist:
 
