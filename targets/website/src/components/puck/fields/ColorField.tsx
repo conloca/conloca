@@ -30,7 +30,7 @@ export function ColorFieldRender({ value, onChange, readOnly }: ColorFieldProps)
 
   const handleTextBlur = () => {
     if (localValue !== value) {
-      onChange(localValue);
+      onChange(hexPattern.test(localValue) ? localValue : value);
     }
   };
 
