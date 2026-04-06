@@ -88,7 +88,9 @@ export const CodeBlock: ComponentConfig<CodeBlockProps> = {
     accentColor: {
       type: 'custom',
       label: 'Accent Color',
-      render: ({ value, onChange }) => <ColorFieldRender value={value} onChange={onChange} />,
+      render: ({ value, onChange, readOnly }) => (
+        <ColorFieldRender value={value} onChange={onChange} readOnly={readOnly} />
+      ),
     },
     legendItems: {
       type: 'array',
@@ -100,7 +102,9 @@ export const CodeBlock: ComponentConfig<CodeBlockProps> = {
         color: {
           type: 'custom',
           label: 'Color',
-          render: ({ value, onChange }) => <ColorFieldRender value={value} onChange={onChange} />,
+          render: ({ value, onChange, readOnly }) => (
+            <ColorFieldRender value={value} onChange={onChange} readOnly={readOnly} />
+          ),
         },
         label: { type: 'text' },
       },

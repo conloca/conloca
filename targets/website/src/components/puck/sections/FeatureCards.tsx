@@ -86,7 +86,9 @@ export const FeatureCards: ComponentConfig<FeatureCardsProps> = {
         iconSvgPath: {
           type: 'custom',
           label: 'Icon',
-          render: ({ value, onChange }) => <IconPickerFieldRender value={value} onChange={onChange} />,
+          render: ({ value, onChange, readOnly }) => (
+            <IconPickerFieldRender value={value} onChange={onChange} readOnly={readOnly} />
+          ),
         },
         iconText: { type: 'text', label: 'Icon text (overrides SVG, e.g. "CMS")' },
         title: { type: 'text' },

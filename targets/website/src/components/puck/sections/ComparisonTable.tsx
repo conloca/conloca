@@ -70,8 +70,21 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
     columns: {
       type: 'custom',
       label: 'Columns (one per line)',
-      render: ({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) => (
-        <ArrayTextareaFieldRender value={value} onChange={onChange} placeholder="One column name per line" />
+      render: ({
+        value,
+        onChange,
+        readOnly,
+      }: {
+        value: string[];
+        onChange: (v: string[]) => void;
+        readOnly?: boolean;
+      }) => (
+        <ArrayTextareaFieldRender
+          value={value}
+          onChange={onChange}
+          placeholder="One column name per line"
+          readOnly={readOnly}
+        />
       ),
     } as never,
     highlightColumnIndex: { type: 'number', label: 'Highlighted Column (0 = first)', min: 0, max: 20 },
@@ -90,14 +103,17 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
             value,
             onChange,
             field,
+            readOnly,
           }: {
             value: string[];
             onChange: (v: string[]) => void;
             field: { metadata?: { columnCount?: number } };
+            readOnly?: boolean;
           }) => (
             <ArrayTextareaFieldRender
               value={value}
               onChange={onChange}
+              readOnly={readOnly}
               expectedCount={field.metadata?.columnCount}
               expectedCountLabel="columns defined"
               placeholder="One value per line (match column order)"
