@@ -1,5 +1,6 @@
 import type { ComponentConfig } from '@puckeditor/core';
 import cn from 'clsx';
+import { IconPickerFieldRender } from '../fields/IconPickerField';
 import { EmptySlotPlaceholder } from '../shared/EmptySlotPlaceholder';
 
 type FeatureCard = {
@@ -58,7 +59,11 @@ export const FeatureCards: ComponentConfig<FeatureCardsProps> = {
       },
       arrayFields: {
         id: { type: 'text', visible: false },
-        iconSvgPath: { type: 'textarea', label: 'Icon SVG Path' },
+        iconSvgPath: {
+          type: 'custom',
+          label: 'Icon',
+          render: ({ value, onChange }) => <IconPickerFieldRender value={value} onChange={onChange} />,
+        },
         iconText: { type: 'text', label: 'Icon text (shown instead of SVG when set)' },
         title: { type: 'text' },
         description: { type: 'textarea' },
