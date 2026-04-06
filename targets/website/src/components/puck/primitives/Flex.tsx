@@ -67,7 +67,7 @@ const FlexInternal: ComponentConfig<FlexProps> = {
     gap: 24,
     wrap: 'wrap',
     layout: {
-      grow: true,
+      grow: 'true',
     },
     items: [],
   },

@@ -6,7 +6,8 @@ type LayoutFieldProps = {
   padding?: string;
   spanCol?: number;
   spanRow?: number;
-  grow?: boolean;
+  /** String 'true'/'false' from radio field, or boolean from legacy saved data */
+  grow?: boolean | 'true' | 'false';
 };
 
 export type WithLayout<Props extends DefaultComponentProps> = Props & {
@@ -38,8 +39,8 @@ export const layoutField: ObjectField<LayoutFieldProps> = {
       label: 'Flex Grow',
       type: 'radio',
       options: [
-        { label: 'true', value: true },
-        { label: 'false', value: false },
+        { label: 'true', value: 'true' },
+        { label: 'false', value: 'false' },
       ],
     },
     padding: {
@@ -78,7 +79,7 @@ const Layout = forwardRef<HTMLDivElement, LayoutProps>(({ children, className, l
         gridRow: layout?.spanRow ? `span ${Math.max(Math.min(layout.spanRow, 12), 1)}` : undefined,
         paddingTop: layout?.padding,
         paddingBottom: layout?.padding,
-        flex: layout?.grow ? '1 1 0' : undefined,
+        flex: layout?.grow === true || layout?.grow === 'true' ? '1 1 0' : undefined,
         ...style,
       }}
     >
@@ -107,14 +108,19 @@ export function withLayout<ThisComponentConfig extends ComponentConfig<any> = Co
         spanCol: 1,
         spanRow: 1,
         padding: '0px',
-        grow: false,
+        grow: 'false',
         ...componentConfig.defaultProps?.layout,
       },
     },
-    resolveFields: (_, params) => {
+    resolveFields: (data, params) => {
+      // Compose: run the wrapped component's resolveFields first (if any), then add layout fields
+      const baseFields = componentConfig.resolveFields
+        ? componentConfig.resolveFields(data, params)
+        : componentConfig.fields;
+
       if (params.parent?.type === 'Grid') {
         return {
-          ...componentConfig.fields,
+          ...baseFields,
           layout: {
             ...layoutField,
             objectFields: {
@@ -127,7 +133,7 @@ export function withLayout<ThisComponentConfig extends ComponentConfig<any> = Co
       }
       if (params.parent?.type === 'Flex') {
         return {
-          ...componentConfig.fields,
+          ...baseFields,
           layout: {
             ...layoutField,
             objectFields: {
@@ -139,7 +145,7 @@ export function withLayout<ThisComponentConfig extends ComponentConfig<any> = Co
       }
 
       return {
-        ...componentConfig.fields,
+        ...baseFields,
         layout: {
           ...layoutField,
           objectFields: {
