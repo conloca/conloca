@@ -10,9 +10,9 @@ export type DividerProps = {
 };
 
 const colorMap = {
-  light: colors.surface[200],
-  medium: colors.surface[400],
-  dark: colors.surface[700],
+  light: colors.border.primary,
+  medium: colors.text.secondary,
+  dark: colors.text.primary,
 };
 
 export const Divider: ComponentConfig<DividerProps> = {
