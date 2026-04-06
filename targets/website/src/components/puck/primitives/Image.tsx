@@ -92,7 +92,7 @@ const ImageInner: ComponentConfig<ImageProps> = {
       position: 'relative',
       width: '100%',
       aspectRatio: aspectRatio === 'auto' ? undefined : aspectRatio,
-      backgroundColor: colors.surface[100],
+      backgroundColor: colors.bg.secondary,
       borderRadius,
       overflow: 'hidden',
     };
@@ -111,7 +111,7 @@ const ImageInner: ComponentConfig<ImageProps> = {
       justifyContent: 'center',
       width: '100%',
       height: aspectRatio === 'auto' ? '200px' : '100%',
-      backgroundColor: colors.surface[100],
+      backgroundColor: colors.bg.secondary,
       borderRadius,
       color: colors.surface[400],
       fontSize: typography.text.sm.fontSize,
