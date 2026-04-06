@@ -25,6 +25,8 @@ export type ComparisonTableProps = {
   highlightColumnIndex: number;
   rows: ComparisonRow[];
   differentiators: Differentiator[];
+  differentiatorTitle: string;
+  differentiatorSubtitle: string;
   ctaTitle: string;
   ctaSubtitle: string;
   ctaButtons: CTAButton[];
@@ -41,6 +43,7 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
   resolveFields: (data, { fields }) => {
     const columnCount = Array.isArray(data.props.columns) ? data.props.columns.length : 0;
     const showCta = !!data.props.ctaTitle;
+    const hasDifferentiators = (data.props.differentiators?.length ?? 0) > 0;
     return {
       ...fields,
       rows: {
@@ -53,6 +56,8 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
           },
         },
       },
+      differentiatorTitle: { ...fields.differentiatorTitle, visible: hasDifferentiators },
+      differentiatorSubtitle: { ...fields.differentiatorSubtitle, visible: hasDifferentiators },
       ctaSubtitle: { ...fields.ctaSubtitle, visible: showCta },
       ctaButtons: { ...fields.ctaButtons, visible: showCta },
     } as typeof fields;
@@ -112,6 +117,8 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
         description: { type: 'textarea' },
       },
     },
+    differentiatorTitle: { type: 'text', label: 'Differentiator Heading', contentEditable: true },
+    differentiatorSubtitle: { type: 'textarea', label: 'Differentiator Subheading', contentEditable: true },
     ctaTitle: { type: 'text', label: 'CTA Title', contentEditable: true },
     ctaSubtitle: { type: 'textarea', label: 'CTA Subtitle', contentEditable: true },
     ctaButtons: ctaButtonArrayField(),
@@ -128,6 +135,8 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
       { id: crypto.randomUUID(), feature: 'Self-Hosted', values: ['Yes', 'No', 'No', 'Yes', 'Yes'] },
     ],
     differentiators: [],
+    differentiatorTitle: 'Key Differentiators',
+    differentiatorSubtitle: 'What makes Conloca different from every other CMS option for Astro.',
     ctaTitle: 'Ready to try Conloca?',
     ctaSubtitle: 'Get started in minutes.',
     ctaButtons: [{ id: crypto.randomUUID(), label: 'Get Started', href: '/getting-started/', variant: 'primary' }],
@@ -141,6 +150,8 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
     highlightColumnIndex,
     rows,
     differentiators,
+    differentiatorTitle,
+    differentiatorSubtitle,
     ctaTitle,
     ctaSubtitle,
     ctaButtons,
@@ -221,14 +232,18 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
           {/* Differentiators */}
           {differentiators.length > 0 && (
             <div className="mb-20">
-              <div className="text-center mb-12">
-                <h2 className="text-2xl sm:text-3xl font-bold text-surface-900 dark:text-white mb-4">
-                  Key Differentiators
-                </h2>
-                <p className="text-surface-500 dark:text-surface-400 max-w-xl mx-auto">
-                  What makes Conloca different from every other CMS option for Astro.
-                </p>
-              </div>
+              {(differentiatorTitle || differentiatorSubtitle) && (
+                <div className="text-center mb-12">
+                  {differentiatorTitle && (
+                    <h2 className="text-2xl sm:text-3xl font-bold text-surface-900 dark:text-white mb-4">
+                      {differentiatorTitle}
+                    </h2>
+                  )}
+                  {differentiatorSubtitle && (
+                    <p className="text-surface-500 dark:text-surface-400 max-w-xl mx-auto">{differentiatorSubtitle}</p>
+                  )}
+                </div>
+              )}
               <div className="grid sm:grid-cols-2 gap-6">
                 {differentiators.map((item) => (
                   <div
