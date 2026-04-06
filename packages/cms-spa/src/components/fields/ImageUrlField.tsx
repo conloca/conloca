@@ -58,6 +58,7 @@ export function ImageUrlField({ value, onChange }: ImageUrlFieldProps) {
           onClick={() => setPickerOpen(true)}
           className="px-2.5 border border-grey-09 bg-grey-11 text-grey-04 rounded-r hover:bg-grey-09 hover:text-grey-01 transition-colors"
           title="Browse Media Library"
+          aria-label="Browse images"
         >
           <FolderOpen className="w-4 h-4" />
         </button>

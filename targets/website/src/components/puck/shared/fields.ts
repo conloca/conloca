@@ -10,6 +10,10 @@ export type CTAButton = {
 /**
  * Shared field definition for CTA button arrays used across Hero, CTABanner,
  * ComparisonTable, FAQ, and other section components.
+ *
+ * Note: contentEditable on arrayFields has no effect — Puck only supports
+ * inline canvas editing for top-level text/textarea/richtext fields, not
+ * fields inside array or object items.
  */
 export function ctaButtonArrayField(
   overrides?: Partial<Pick<ArrayField<CTAButton[]>, 'min' | 'max'>>,

@@ -102,7 +102,7 @@ const puckConfig: Config<Components> = {
     HostedComparison: { ...HostedComparison, label: 'Plan Comparison' },
     Image,
     NumberedFlow: { ...NumberedFlow, label: 'Numbered Steps' },
-    RichTextSection,
+    RichTextSection: { ...RichTextSection, label: 'Rich Text (Legacy)' },
     Space: { ...Space, label: 'Spacer' },
     Steps,
     Text,

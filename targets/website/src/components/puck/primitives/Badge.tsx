@@ -38,6 +38,7 @@ export const Badge: ComponentConfig<BadgeProps> = {
     label: {
       type: 'text',
       label: 'Label',
+      contentEditable: true,
     },
     color: {
       type: 'select',
