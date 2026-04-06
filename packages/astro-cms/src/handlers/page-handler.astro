@@ -241,15 +241,13 @@ async function loadMdxComponents(locale: string) {
         const mdx = data.mdx
 
         if (!mdx) {
+          if (import.meta.env.DEV) {
+            console.warn(`[Conloca] No MDX content found for block: ${title}`)
+          }
           return {
             id: data.id || title,
             title,
-            Component: () =>
-              React.createElement(
-                'div',
-                { className: 'p-4 bg-gray-100 border border-gray-300 rounded text-gray-600' },
-                `No content found for block: ${title}`,
-              ),
+            Component: () => null,
           }
         }
 
@@ -257,18 +255,21 @@ async function loadMdxComponents(locale: string) {
 
         if (!Component || error) {
           const errorMessage = error?.message || 'MDX evaluation failed'
+          console.error(`[Conloca] MDX compilation error in block "${title}": ${errorMessage}`)
 
           return {
             id: data.id || title,
             title,
-            Component: () =>
-              React.createElement(
-                'div',
-                { className: 'p-4 bg-red-50 border border-red-200 rounded text-red-600' },
-                React.createElement('p', { className: 'font-semibold mb-2' }, 'MDX Compilation Error'),
-                React.createElement('p', { className: 'text-sm' }, `Block: ${title}`),
-                React.createElement('p', { className: 'text-xs mt-2' }, errorMessage),
-              ),
+            Component: import.meta.env.DEV
+              ? () =>
+                  React.createElement(
+                    'div',
+                    { className: 'p-4 bg-red-50 border border-red-200 rounded text-red-600' },
+                    React.createElement('p', { className: 'font-semibold mb-2' }, 'MDX Compilation Error'),
+                    React.createElement('p', { className: 'text-sm' }, `Block: ${title}`),
+                    React.createElement('p', { className: 'text-xs mt-2' }, errorMessage),
+                  )
+              : () => null,
           }
         }
 
@@ -301,19 +302,7 @@ export const getStaticPaths: GetStaticPaths = async () => {
             return false
           }
 
-          const now = new Date()
-          const publishAt = data.publishAt ? new Date(data.publishAt) : undefined
-          const unpublishAt = data.unpublishAt ? new Date(data.unpublishAt) : undefined
-
-          if (publishAt && publishAt > now) {
-            return false
-          }
-
-          if (unpublishAt && unpublishAt <= now) {
-            return false
-          }
-
-          return true
+          return isPublished(data as BaseEntryData)
         })
 
       for (const data of pages) {
@@ -494,7 +483,7 @@ if (loadError && !import.meta.env.DEV) {
     )}
   </Layout>
 ) : page ? (
-  <html lang="en">
+  <html lang={config.locale || 'en'}>
     <head>
       <meta charset="UTF-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
