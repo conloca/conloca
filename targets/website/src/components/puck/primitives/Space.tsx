@@ -34,10 +34,12 @@ export const Space: ComponentConfig<SpaceProps> = {
   fields: {
     size: {
       type: 'select',
+      label: 'Size',
       options: spacingOptions,
     },
     direction: {
       type: 'radio',
+      label: 'Direction',
       options: [
         { value: 'vertical', label: 'Vertical' },
         { value: 'horizontal', label: 'Horizontal' },

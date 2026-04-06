@@ -23,12 +23,12 @@ const sizeOptions = [
 ];
 
 const levelOptions = [
-  { label: '1', value: '1' },
-  { label: '2', value: '2' },
-  { label: '3', value: '3' },
-  { label: '4', value: '4' },
-  { label: '5', value: '5' },
-  { label: '6', value: '6' },
+  { label: 'H1', value: '1' },
+  { label: 'H2', value: '2' },
+  { label: 'H3', value: '3' },
+  { label: 'H4', value: '4' },
+  { label: 'H5', value: '5' },
+  { label: 'H6', value: '6' },
 ];
 
 /** Maps Puck size tokens to display typography values */
@@ -46,18 +46,22 @@ const HeadingInternal: ComponentConfig<HeadingProps> = {
   fields: {
     text: {
       type: 'textarea',
+      label: 'Text',
       contentEditable: true,
     },
     size: {
       type: 'select',
+      label: 'Size',
       options: sizeOptions,
     },
     level: {
       type: 'select',
+      label: 'Heading Level',
       options: levelOptions,
     },
     align: {
       type: 'radio',
+      label: 'Alignment',
       options: [
         { label: 'Left', value: 'left' },
         { label: 'Center', value: 'center' },

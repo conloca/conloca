@@ -6,6 +6,7 @@ interface ArrayTextareaFieldProps {
   expectedCount?: number;
   expectedCountLabel?: string;
   placeholder?: string;
+  readOnly?: boolean;
 }
 
 /**
@@ -18,6 +19,7 @@ export function ArrayTextareaFieldRender({
   expectedCount,
   expectedCountLabel,
   placeholder,
+  readOnly,
 }: ArrayTextareaFieldProps) {
   const textValue = Array.isArray(value) ? value.join('\n') : '';
   const [localValue, setLocalValue] = useState(textValue);
@@ -53,6 +55,7 @@ export function ArrayTextareaFieldRender({
         onChange={(e) => setLocalValue(e.target.value)}
         onBlur={handleBlur}
         placeholder={placeholder || 'One item per line'}
+        readOnly={readOnly}
         rows={4}
         style={{
           width: '100%',
@@ -62,6 +65,7 @@ export function ArrayTextareaFieldRender({
           borderRadius: 4,
           resize: 'vertical',
           fontFamily: 'inherit',
+          ...(readOnly ? { opacity: 0.6, cursor: 'not-allowed' } : {}),
         }}
       />
       {hasMismatch && (

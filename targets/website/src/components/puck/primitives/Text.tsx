@@ -16,10 +16,12 @@ const TextInner: ComponentConfig<TextProps> = {
   fields: {
     text: {
       type: 'textarea',
+      label: 'Text',
       contentEditable: true,
     },
     size: {
       type: 'select',
+      label: 'Size',
       options: [
         { label: 'S', value: 's' },
         { label: 'M', value: 'm' },
@@ -27,6 +29,7 @@ const TextInner: ComponentConfig<TextProps> = {
     },
     align: {
       type: 'radio',
+      label: 'Alignment',
       options: [
         { label: 'Left', value: 'left' },
         { label: 'Center', value: 'center' },
@@ -35,12 +38,13 @@ const TextInner: ComponentConfig<TextProps> = {
     },
     color: {
       type: 'radio',
+      label: 'Color',
       options: [
         { label: 'Default', value: 'default' },
         { label: 'Muted', value: 'muted' },
       ],
     },
-    maxWidth: { type: 'text' },
+    maxWidth: { type: 'text', label: 'Max Width', placeholder: 'e.g. 600px' },
   },
   defaultProps: {
     align: 'left',
@@ -55,23 +59,21 @@ const TextInner: ComponentConfig<TextProps> = {
 
     return (
       <Section maxWidth={maxWidth}>
-        <div style={{ maxWidth }}>
-          <p
-            style={{
-              fontFamily: typography.fonts.body,
-              fontSize,
-              lineHeight,
-              fontWeight: typography.weights.regular,
-              color: textColor,
-              textAlign: align,
-              margin: 0,
-              display: 'block',
-              width: '100%',
-            }}
-          >
-            {text}
-          </p>
-        </div>
+        <p
+          style={{
+            fontFamily: typography.fonts.body,
+            fontSize,
+            lineHeight,
+            fontWeight: typography.weights.regular,
+            color: textColor,
+            textAlign: align,
+            margin: 0,
+            display: 'block',
+            width: '100%',
+          }}
+        >
+          {text}
+        </p>
       </Section>
     );
   },

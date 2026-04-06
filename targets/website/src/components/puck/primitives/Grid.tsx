@@ -21,6 +21,7 @@ const GridInternal: ComponentConfig<GridProps> = {
       label: 'Gap',
       type: 'number',
       min: 0,
+      max: 200,
     },
     items: {
       type: 'slot',

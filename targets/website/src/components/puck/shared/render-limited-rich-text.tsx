@@ -75,11 +75,11 @@ export function renderLimitedRichText(source: string, wrapperClassName: string) 
   return (
     <div className={wrapperClassName}>
       {paragraphs.length > 0
-        ? paragraphs.map((paragraph, index) => (
-            <p key={paragraph.slice(0, 48)}>
+        ? paragraphs.map((paragraph, i) => (
+            <p key={i}>
               {paragraph.split('\n').flatMap((line, lineIndex, lines) => {
                 const inlineNodes = renderInlineMarkdown(line);
-                return lineIndex < lines.length - 1 ? [...inlineNodes, <br key={line.slice(0, 48)} />] : inlineNodes;
+                return lineIndex < lines.length - 1 ? [...inlineNodes, <br key={lineIndex} />] : inlineNodes;
               })}
             </p>
           ))

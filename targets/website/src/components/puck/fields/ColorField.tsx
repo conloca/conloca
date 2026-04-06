@@ -4,6 +4,7 @@ interface ColorFieldProps {
   value: string;
   onChange: (value: string) => void;
   label?: string;
+  readOnly?: boolean;
 }
 
 const hexPattern = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
@@ -20,7 +21,7 @@ function normalizeHex(value: string): string {
   return '#000000';
 }
 
-export function ColorFieldRender({ value, onChange }: ColorFieldProps) {
+export function ColorFieldRender({ value, onChange, readOnly }: ColorFieldProps) {
   const [localValue, setLocalValue] = useState(value || '');
 
   useEffect(() => {
@@ -39,19 +40,27 @@ export function ColorFieldRender({ value, onChange }: ColorFieldProps) {
   };
 
   return (
-    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+    <div
+      style={{
+        display: 'flex',
+        gap: '8px',
+        alignItems: 'center',
+        ...(readOnly ? { opacity: 0.6, cursor: 'not-allowed' } : {}),
+      }}
+    >
       <input
         type="color"
         aria-label="Pick color"
         value={normalizeHex(localValue)}
         onChange={(e) => handlePickerChange(e.target.value)}
+        disabled={readOnly}
         style={{
           width: 32,
           height: 32,
           padding: 0,
           border: '1px solid var(--puck-color-grey-09, #ccc)',
           borderRadius: 4,
-          cursor: 'pointer',
+          cursor: readOnly ? 'not-allowed' : 'pointer',
           background: 'transparent',
         }}
       />
@@ -61,6 +70,7 @@ export function ColorFieldRender({ value, onChange }: ColorFieldProps) {
         value={localValue}
         onChange={(e) => setLocalValue(e.target.value)}
         onBlur={handleTextBlur}
+        disabled={readOnly}
         placeholder="#000000"
         style={{
           flex: 1,

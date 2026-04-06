@@ -34,13 +34,14 @@ const FlexInternal: ComponentConfig<FlexProps> = {
       label: 'Gap',
       type: 'number',
       min: 0,
+      max: 200,
     },
     wrap: {
       label: 'Wrap',
       type: 'radio',
       options: [
-        { label: 'true', value: 'wrap' },
-        { label: 'false', value: 'nowrap' },
+        { label: 'Wrap', value: 'wrap' },
+        { label: 'No Wrap', value: 'nowrap' },
       ],
     },
     items: {

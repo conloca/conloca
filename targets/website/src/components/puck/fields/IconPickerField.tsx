@@ -124,9 +124,10 @@ const iconPresets = [
 interface IconPickerFieldProps {
   value: string;
   onChange: (value: string) => void;
+  readOnly?: boolean;
 }
 
-export function IconPickerFieldRender({ value, onChange }: IconPickerFieldProps) {
+export function IconPickerFieldRender({ value, onChange, readOnly }: IconPickerFieldProps) {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [localValue, setLocalValue] = useState(value || '');
 
@@ -188,6 +189,7 @@ export function IconPickerFieldRender({ value, onChange }: IconPickerFieldProps)
             title={icon.label}
             aria-label={icon.label}
             aria-pressed={value === icon.path}
+            disabled={readOnly}
             onClick={() => {
               onChange(icon.path);
               setLocalValue(icon.path);
@@ -201,8 +203,9 @@ export function IconPickerFieldRender({ value, onChange }: IconPickerFieldProps)
               borderRadius: 4,
               border: value === icon.path ? '2px solid #06b6d4' : '1px solid var(--puck-color-grey-09, #e5e7eb)',
               background: value === icon.path ? 'rgba(6, 182, 212, 0.08)' : 'transparent',
-              cursor: 'pointer',
+              cursor: readOnly ? 'not-allowed' : 'pointer',
               padding: 0,
+              ...(readOnly ? { pointerEvents: 'none' as const, opacity: 0.6 } : {}),
             }}
           >
             <svg
@@ -247,6 +250,7 @@ export function IconPickerFieldRender({ value, onChange }: IconPickerFieldProps)
           value={localValue}
           onChange={(e) => setLocalValue(e.target.value)}
           onBlur={handleTextBlur}
+          disabled={readOnly}
           placeholder="M3 7v10a2 2 0 002 2h14..."
           rows={3}
           style={{
@@ -257,6 +261,7 @@ export function IconPickerFieldRender({ value, onChange }: IconPickerFieldProps)
             border: '1px solid var(--puck-color-grey-09, #ccc)',
             borderRadius: 4,
             resize: 'vertical',
+            ...(readOnly ? { opacity: 0.6, cursor: 'not-allowed' } : {}),
           }}
         />
       )}

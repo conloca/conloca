@@ -7,6 +7,8 @@ type CTAButtonGroupProps = {
 };
 
 export function CTAButtonGroup({ buttons, isEditing }: CTAButtonGroupProps) {
+  if (!Array.isArray(buttons) || buttons.length === 0) return null;
+
   return (
     <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
       {buttons.map((button) => (

@@ -15,9 +15,10 @@ export const Button: ComponentConfig<ButtonProps> = {
       placeholder: 'Button label...',
       contentEditable: true,
     },
-    href: { type: 'text' },
+    href: { type: 'text', label: 'Link URL', placeholder: 'https://...' },
     variant: {
       type: 'radio',
+      label: 'Style',
       options: [
         { label: 'Primary', value: 'primary' },
         { label: 'Secondary', value: 'secondary' },
