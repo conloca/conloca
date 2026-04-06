@@ -15,7 +15,7 @@ export type TextProps = WithLayout<{
 const TextInner: ComponentConfig<TextProps> = {
   fields: {
     text: {
-      type: 'textarea',
+      type: 'text',
       label: 'Text',
       contentEditable: true,
     },

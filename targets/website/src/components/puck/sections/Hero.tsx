@@ -22,11 +22,11 @@ export const Hero: ComponentConfig<HeroProps> = {
       contentEditable: true,
     },
     title: {
-      type: 'textarea',
+      type: 'text',
       contentEditable: true,
     },
     description: {
-      type: 'textarea',
+      type: 'text',
       contentEditable: true,
     },
     buttons: ctaButtonArrayField(),

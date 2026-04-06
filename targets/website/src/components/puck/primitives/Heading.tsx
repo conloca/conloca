@@ -45,7 +45,7 @@ const sizeStyleMap: Record<string, React.CSSProperties> = {
 const HeadingInternal: ComponentConfig<HeadingProps> = {
   fields: {
     text: {
-      type: 'textarea',
+      type: 'text',
       label: 'Text',
       contentEditable: true,
     },
