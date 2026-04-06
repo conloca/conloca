@@ -36,6 +36,7 @@ function getRecentlyUsed(): string[] {
 }
 
 function addToRecentlyUsed(blockId: string) {
+  if (!blockId) return;
   try {
     const recent = getRecentlyUsed().filter((id) => id !== blockId);
     recent.unshift(blockId);

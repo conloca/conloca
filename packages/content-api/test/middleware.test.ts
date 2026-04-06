@@ -1017,8 +1017,6 @@ describe('Content API Middleware', () => {
       const data = response.data;
       expect(isContentListResponse(data)).toBe(true);
       if (isContentListResponse(data)) {
-        console.log('Items found:', data.items.length);
-        console.log('Items:', JSON.stringify(data.items, null, 2));
         expect(data.items).toHaveLength(1);
         // Content missing Dutch locale should only have English
         expect(data.items[0].locales).toHaveProperty('en');

@@ -315,7 +315,6 @@ export function PageEditorWrapper({ puckConfig }: PageEditorWrapperProps) {
             });
 
             if (result.success && result.etag) {
-              console.log('Page saved successfully');
               setCurrentEtag(result.etag);
             }
 
@@ -391,7 +390,6 @@ export function PageEditorWrapper({ puckConfig }: PageEditorWrapperProps) {
             });
 
             if (result.success && result.etag) {
-              console.log('Metadata saved successfully');
               setCurrentEtag(result.etag);
             }
           } catch (error) {
