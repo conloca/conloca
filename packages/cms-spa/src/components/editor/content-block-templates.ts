@@ -101,6 +101,7 @@ export function getContentBlockTemplate(templateId: string | undefined): Content
 }
 
 export function renderContentBlockTemplate(templateId: string | undefined, title: string): string {
-  const template = getContentBlockTemplate(templateId) || contentBlockTemplates[0];
+  const template = getContentBlockTemplate(templateId);
+  if (!template) return `# ${title}\n\nWrite your content here.\n`;
   return template.content.split('{{title}}').join(title || 'Untitled Block');
 }
