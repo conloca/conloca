@@ -48,7 +48,7 @@ export const Steps: ComponentConfig<StepsProps> = {
       type: 'array',
       min: 1,
       max: 8,
-      getItemSummary: (item) => item.title || 'Step',
+      getItemSummary: (item) => (item.number && item.title ? `${item.number} — ${item.title}` : item.title || 'Step'),
       defaultItemProps: {
         id: `step-${crypto.randomUUID()}`,
         number: '01',
@@ -58,7 +58,7 @@ export const Steps: ComponentConfig<StepsProps> = {
       },
       arrayFields: {
         id: { type: 'text', visible: false },
-        number: { type: 'text', label: 'Step Number (auto)' },
+        number: { type: 'text', label: 'Step Number (auto)', visible: false },
         title: { type: 'text' },
         description: {
           type: 'richtext',

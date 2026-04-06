@@ -70,6 +70,18 @@ function renderHighlightedLine(line: string, lineIndex: number) {
 
 export const CodeBlock: ComponentConfig<CodeBlockProps> = {
   label: 'Code Block',
+  resolveFields: (data, { fields }) => {
+    const hasLegendWithoutAccent = data.props.legendItems.length > 0 && !data.props.accentColor;
+    return {
+      ...fields,
+      ...(hasLegendWithoutAccent && {
+        accentColor: {
+          ...fields.accentColor,
+          label: 'Accent Color (legend items reference colors)',
+        },
+      }),
+    };
+  },
   fields: {
     filename: { type: 'text', label: 'Filename', contentEditable: true },
     code: { type: 'textarea', label: 'Code' },

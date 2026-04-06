@@ -16,6 +16,12 @@ import { PageEditor } from './PageEditor';
  * Puck saves sparse data - only props the user explicitly changed.
  * When loading, we need to merge defaultProps so field UI shows correct values.
  * Without this, select/radio fields show wrong defaults (first option instead of actual default).
+ *
+ * Note: This merge is intentionally shallow (`{ ...defaultProps, ...item.props }`).
+ * New top-level fields added to a component get their default value automatically.
+ * However, new fields added inside array item types (e.g., adding `linkTarget` to
+ * FeatureCard) won't be backfilled into existing saved items — component renders
+ * must handle `undefined` for any array item field that may not exist in older content.
  */
 function mergeDefaultProps(data: Data, config: Config): Data {
   if (!data?.content || !config?.components) return data;

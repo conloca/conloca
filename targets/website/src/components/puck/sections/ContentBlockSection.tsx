@@ -28,6 +28,10 @@ const toneClassNames: Record<ContentBlockSectionTone, string> = {
 export const ContentBlockSection: ComponentConfig<ContentBlockSectionProps> = {
   label: 'Content Block Section',
   fields: {
+    blockId: {
+      type: 'text',
+      label: 'Content Block ID',
+    },
     title: {
       type: 'text',
       label: 'Section Title',
@@ -43,24 +47,20 @@ export const ContentBlockSection: ComponentConfig<ContentBlockSectionProps> = {
       label: 'Section Label',
       contentEditable: true,
     },
-    blockId: {
-      type: 'text',
-      label: 'Content Block ID',
-    },
     width: {
       type: 'select',
       label: 'Width',
       options: [
-        { label: 'Narrow', value: 'narrow' },
-        { label: 'Default', value: 'default' },
+        { label: 'Narrow (max-w-3xl ~768px)', value: 'narrow' },
+        { label: 'Default (max-w-4xl ~896px)', value: 'default' },
       ],
     },
     tone: {
       type: 'radio',
       label: 'Surface',
       options: [
-        { label: 'Transparent', value: 'transparent' },
-        { label: 'Subtle Card', value: 'subtle' },
+        { label: 'Transparent (no background)', value: 'transparent' },
+        { label: 'Subtle Card (border + fill)', value: 'subtle' },
       ],
     },
     startsNewSection: {

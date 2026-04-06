@@ -32,6 +32,20 @@ const gridColsClass: Record<FeatureColumns, string> = {
 
 export const FeatureCards: ComponentConfig<FeatureCardsProps> = {
   label: 'Feature Cards',
+  resolveFields: (data, { fields }) => {
+    const cardCount = data.props.cards?.length || 0;
+    const columns = Number(data.props.columns);
+    const mismatch = cardCount > 0 && cardCount !== columns && cardCount % columns !== 0;
+    return {
+      ...fields,
+      ...(mismatch && {
+        columns: {
+          ...fields.columns,
+          label: `Columns (${cardCount} cards don't fill ${columns} evenly)`,
+        },
+      }),
+    };
+  },
   fields: {
     label: {
       type: 'text',
@@ -70,7 +84,7 @@ export const FeatureCards: ComponentConfig<FeatureCardsProps> = {
         title: { type: 'text' },
         description: { type: 'textarea' },
         href: { type: 'text', label: 'Link URL (optional)' },
-        linkLabel: { type: 'text', label: 'Link Label (optional)' },
+        linkLabel: { type: 'text', label: 'Link Label (shown when URL is set)' },
       },
     },
     columns: {

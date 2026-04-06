@@ -216,6 +216,14 @@ export const HostedComparisonRender = ({
 
 export const HostedComparison: ComponentConfig<HostedComparisonProps> = {
   label: 'Hosted Comparison',
+  resolveFields: (data, { fields }) => {
+    const showCta = shouldShowWaitlist(data.props.waitlistEnabled);
+    return {
+      ...fields,
+      ctaTitle: { ...fields.ctaTitle, visible: showCta },
+      ctaSubtitle: { ...fields.ctaSubtitle, visible: showCta },
+    };
+  },
   fields: {
     badgeText: { type: 'text', label: 'Badge Text', contentEditable: true },
     title: { type: 'text', contentEditable: true },

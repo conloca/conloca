@@ -33,7 +33,7 @@ export const NumberedFlow: ComponentConfig<NumberedFlowProps> = {
       type: 'array',
       min: 1,
       max: 10,
-      getItemSummary: (item) => item.title || 'Step',
+      getItemSummary: (item) => (item.number && item.title ? `${item.number}. ${item.title}` : item.title || 'Step'),
       defaultItemProps: {
         id: `flow-${crypto.randomUUID()}`,
         number: '1',
@@ -42,7 +42,7 @@ export const NumberedFlow: ComponentConfig<NumberedFlowProps> = {
       },
       arrayFields: {
         id: { type: 'text', visible: false },
-        number: { type: 'text', label: 'Number (auto)' },
+        number: { type: 'text', label: 'Number (auto)', visible: false },
         title: { type: 'text' },
         description: {
           type: 'richtext',
