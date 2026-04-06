@@ -10,6 +10,9 @@ const compiledCache = new Map<string, React.ComponentType>();
  * Execute pre-compiled MDX code (compiled with outputFormat: 'function-body').
  * This is the same as @mdx-js/mdx's run() — inlined here to avoid importing
  * the full @mdx-js/mdx package (which pulls acorn + remark + unified into the browser).
+ *
+ * Note: Uses AsyncFunction constructor which requires CSP `unsafe-eval`.
+ * This is acceptable since the CMS admin UI runs in a trusted environment.
  */
 const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor;
 async function runMDX(code: string, options: Record<string, unknown>): Promise<{ default: React.ComponentType }> {
