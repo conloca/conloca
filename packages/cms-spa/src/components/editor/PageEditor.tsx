@@ -7,7 +7,6 @@ import { useSiteBaseUrl } from '../../hooks';
 import type { SaveState } from '../../types';
 import { ConflictDialog } from '../dialogs/ConflictDialog';
 import { ImageFieldRender } from '../fields/ImageField';
-import { ImageUrlField } from '../fields/ImageUrlField';
 import { DrawerItemOverride } from './DrawerItemOverride';
 import { PageEditorHeaderActions } from './PageEditorHeaderActions';
 
@@ -53,7 +52,7 @@ const fieldTypeOverrides = {
     field: { metadata?: { fieldKind?: string } };
   }) => {
     if (field?.metadata?.fieldKind === 'image') {
-      return <ImageUrlField value={value || ''} onChange={onChange} />;
+      return <ImageFieldRender value={value || ''} onChange={onChange} />;
     }
     // Non-image text fields: render default Puck field
     return <>{children}</>;

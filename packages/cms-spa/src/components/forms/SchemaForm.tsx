@@ -1,7 +1,7 @@
 import { Loader2 } from 'lucide-react';
 import type { z } from 'zod';
 import { type FieldInfo, getZodShape } from '../../utils/zodIntrospect';
-import { ImageUrlField } from '../fields/ImageUrlField';
+import { ImageFieldRender } from '../fields/ImageField';
 import { ChipArrayField } from './ChipArrayField';
 
 interface SchemaFormProps {
@@ -204,7 +204,7 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
 
     case 'string':
     default: {
-      // Use ImageUrlField for image URL fields (but not imageDescription, etc.)
+      // Use ImageFieldRender for image URL fields (but not imageDescription, etc.)
       const isImageField = name.toLowerCase().includes('image') && !name.toLowerCase().includes('description');
       if (isImageField) {
         return (
@@ -213,7 +213,10 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
               {label}
               {required && <span className="text-red-500 ml-1">*</span>}
             </label>
-            <ImageUrlField value={(value as string) || ''} onChange={(newValue) => onChange(newValue || undefined)} />
+            <ImageFieldRender
+              value={(value as string) || ''}
+              onChange={(newValue) => onChange(newValue || undefined)}
+            />
             {description && <p className="mt-1 text-sm text-grey-04">{description}</p>}
           </div>
         );
