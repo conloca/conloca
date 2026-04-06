@@ -174,28 +174,46 @@ function groupContentItems(content: ContentItem[]): RenderGroup[] {
   return groups;
 }
 
-function renderNarrativeSection(group: NarrativeGroup, config: Config): JSX.Element {
+function renderNarrativeSection(
+  group: NarrativeGroup,
+  config: Config,
+  blockComponentMap: Map<string, MDXComponent>,
+): JSX.Element {
+  // Render the leading CBS's MDX block content (title/subtitle are already in the group header)
+  const leadingCbs = group.items[0];
+  const leadingBlockId = (leadingCbs?.props as unknown as ContentBlockSectionProps)?.blockId;
+  const LeadingBlockComponent = leadingBlockId ? blockComponentMap.get(leadingBlockId)?.Component : null;
+
   return (
     <section key={group.id} className="narrative-section mb-20 max-w-4xl mx-auto">
       <h2 className="text-2xl sm:text-3xl font-bold text-surface-900 dark:text-white mb-4">{group.title}</h2>
       {group.subtitle && (
         <p className="text-surface-500 dark:text-surface-400 text-sm leading-relaxed mb-6">{group.subtitle}</p>
       )}
+      {LeadingBlockComponent && (
+        <div className="mdx-content conloca-prose max-w-none mb-6">
+          <LeadingBlockComponent />
+        </div>
+      )}
       {group.items.slice(1).map((item, i) => {
         if (item.type === 'ContentBlockSection') {
-          // Continuation CBS (no title) — render subtitle as text paragraph
+          // Continuation CBS — render subtitle + MDX block content
           const cbsProps = item.props as unknown as ContentBlockSectionProps;
-          if (cbsProps.subtitle) {
-            return (
-              <p
-                key={(item.props.id as string) || i}
-                className="text-surface-500 dark:text-surface-400 text-sm leading-relaxed"
-              >
-                {cbsProps.subtitle}
-              </p>
-            );
-          }
-          return null;
+          const BlockComponent = cbsProps.blockId ? blockComponentMap.get(cbsProps.blockId)?.Component : null;
+          const hasContent = cbsProps.subtitle || BlockComponent;
+          if (!hasContent) return null;
+          return (
+            <div key={(item.props.id as string) || i}>
+              {cbsProps.subtitle && (
+                <p className="text-surface-500 dark:text-surface-400 text-sm leading-relaxed">{cbsProps.subtitle}</p>
+              )}
+              {BlockComponent && (
+                <div className="mdx-content conloca-prose max-w-none mb-6">
+                  <BlockComponent />
+                </div>
+              )}
+            </div>
+          );
         }
         // Visual component — render using its config render function
         const CompConfig = config.components[item.type] as ComponentConfig | undefined;
@@ -233,14 +251,22 @@ function renderStandaloneItem(item: ContentItem, config: Config): JSX.Element | 
  * visual components into single `<section class="mb-20">` elements,
  * matching the production page structure.
  */
-function MergedRender({ config, data }: { config: Config; data: Data }) {
+function MergedRender({
+  config,
+  data,
+  blockComponentMap,
+}: {
+  config: Config;
+  data: Data;
+  blockComponentMap: Map<string, MDXComponent>;
+}) {
   const groups = groupContentItems(data.content as ContentItem[]);
 
   return (
     <div>
       {groups.map((group) => {
         if (group.type === 'narrative') {
-          return renderNarrativeSection(group, config);
+          return renderNarrativeSection(group, config, blockComponentMap);
         }
         return renderStandaloneItem(group.item, config);
       })}
@@ -329,13 +355,9 @@ function RenderWithBlocks({ config, data, mdxComponents }: RenderWithBlocksProps
                   </p>
                 ) : null}
                 <div className={cn(contentBlockToneClasses[tone])}>
-                  {SelectedBlockComponent ? (
+                  {SelectedBlockComponent && (
                     <div className="mdx-content conloca-prose max-w-none">
                       <SelectedBlockComponent />
-                    </div>
-                  ) : (
-                    <div className="rounded-2xl border border-dashed border-surface-300 px-5 py-6 text-sm text-surface-500 dark:border-surface-700 dark:text-surface-400">
-                      Select an MDX content block to render here.
                     </div>
                   )}
                 </div>
@@ -377,13 +399,16 @@ function RenderWithBlocks({ config, data, mdxComponents }: RenderWithBlocksProps
       : !!props.title;
   });
 
+  // MergedRender doesn't support zones — fall back to standard render if zones have content
+  const hasZoneContent = data.zones && Object.values(data.zones).some((zone) => zone.length > 0);
+
   if (needsHydration) {
     return <RenderWithHydration config={enhancedConfig} data={data} />;
   }
 
-  // Use merged rendering when narrative sections are present
-  if (hasNarrativeSections) {
-    return <MergedRender config={enhancedConfig} data={data} />;
+  // Use merged rendering when narrative sections are present and no zone content
+  if (hasNarrativeSections && !hasZoneContent) {
+    return <MergedRender config={enhancedConfig} data={data} blockComponentMap={blockComponentMap} />;
   }
 
   // Fallback: standard Puck render (no narrative sections)
