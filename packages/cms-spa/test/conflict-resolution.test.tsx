@@ -328,7 +328,7 @@ describe('Conflict Resolution', () => {
       expect(onForceSave).toHaveBeenCalledWith('newer.etag');
     });
 
-    it('should show diff view when content differs', () => {
+    it('should show content change details when content differs', () => {
       const mockConflict: UpdateResult = {
         success: false,
         reason: 'stale_write',
@@ -358,9 +358,8 @@ describe('Conflict Resolution', () => {
         />,
       );
 
-      // Should show side-by-side comparison
-      expect(screen.getByText(/your version/i)).toBeDefined();
-      expect(screen.getByText(/server version/i)).toBeDefined();
+      // Should show content-only change details
+      expect(screen.getByTestId('conflict-details').textContent).toBe('Only content has changed.');
     });
 
     it('should handle metadata-only conflicts', () => {
