@@ -1,72 +1,74 @@
-import { defineRouteMiddleware } from '@astrojs/starlight/route-data'
+import { defineRouteMiddleware } from '@astrojs/starlight/route-data';
 import {
-  DEFAULT_OG_IMAGE_URL,
-  DEFAULT_ROBOTS,
-  SITE_DESCRIPTION,
   createOrganizationSchema,
   createWebPageSchema,
   createWebsiteSchema,
+  DEFAULT_OG_IMAGE_URL,
+  DEFAULT_ROBOTS,
   resolveSiteUrl,
-} from './seo'
+  SITE_DESCRIPTION,
+} from './seo';
 
 type HeadTag = {
-  tag: string
-  attrs?: Record<string, string | boolean | undefined>
-  content?: string
-}
+  tag: string;
+  attrs?: Record<string, string | boolean | undefined>;
+  content?: string;
+};
 
 function getHeadTagIdentity(entry: HeadTag) {
   if (entry.tag === 'meta') {
     for (const key of ['name', 'property', 'http-equiv'] as const) {
-      const value = entry.attrs?.[key]
+      const value = entry.attrs?.[key];
 
       if (value) {
-        return [key, value] as const
+        return [key, value] as const;
       }
     }
   }
 
   if (entry.tag === 'link' && (entry.attrs?.rel === 'canonical' || entry.attrs?.rel === 'sitemap')) {
-    return ['rel', entry.attrs.rel] as const
+    return ['rel', entry.attrs.rel] as const;
   }
 }
 
 function hasHeadTag(head: HeadTag[], entry: HeadTag) {
   if (entry.tag === 'title') {
-    return head.some((candidate) => candidate.tag === 'title')
+    return head.some((candidate) => candidate.tag === 'title');
   }
 
-  const identity = getHeadTagIdentity(entry)
+  const identity = getHeadTagIdentity(entry);
 
   if (!identity) {
-    return false
+    return false;
   }
 
-  const [key, value] = identity
+  const [key, value] = identity;
 
-  return head.some((candidate) => candidate.tag === entry.tag && candidate.attrs?.[key] === value)
+  return head.some((candidate) => candidate.tag === entry.tag && candidate.attrs?.[key] === value);
 }
 
 function pushHeadTag(head: HeadTag[], entry: HeadTag) {
   if (hasHeadTag(head, entry)) {
-    return
+    return;
   }
 
-  head.push(entry)
+  head.push(entry);
 }
 
 export const onRequest = defineRouteMiddleware((context) => {
-  const { starlightRoute } = context.locals
-  const description = starlightRoute.entry.data.description ?? SITE_DESCRIPTION
-  const title = starlightRoute.entry.data.title ?? starlightRoute.siteTitle
-  const url = resolveSiteUrl(context.url.pathname)
+  const { starlightRoute } = context.locals;
+  const description = starlightRoute.entry.data.description ?? SITE_DESCRIPTION;
+  const title = starlightRoute.entry.data.title ?? starlightRoute.siteTitle;
+  const url = resolveSiteUrl(context.url.pathname);
 
-  pushHeadTag(starlightRoute.head, { tag: 'meta', attrs: { property: 'og:image', content: DEFAULT_OG_IMAGE_URL } })
-  pushHeadTag(starlightRoute.head, { tag: 'meta', attrs: { name: 'twitter:title', content: title } })
-  pushHeadTag(starlightRoute.head, { tag: 'meta', attrs: { name: 'twitter:description', content: description } })
-  pushHeadTag(starlightRoute.head, { tag: 'meta', attrs: { name: 'twitter:image', content: DEFAULT_OG_IMAGE_URL } })
-  pushHeadTag(starlightRoute.head, { tag: 'meta', attrs: { name: 'robots', content: DEFAULT_ROBOTS } })
+  pushHeadTag(starlightRoute.head, { tag: 'meta', attrs: { property: 'og:image', content: DEFAULT_OG_IMAGE_URL } });
+  pushHeadTag(starlightRoute.head, { tag: 'meta', attrs: { name: 'twitter:card', content: 'summary_large_image' } });
+  pushHeadTag(starlightRoute.head, { tag: 'meta', attrs: { name: 'twitter:title', content: title } });
+  pushHeadTag(starlightRoute.head, { tag: 'meta', attrs: { name: 'twitter:description', content: description } });
+  pushHeadTag(starlightRoute.head, { tag: 'meta', attrs: { name: 'twitter:image', content: DEFAULT_OG_IMAGE_URL } });
+  pushHeadTag(starlightRoute.head, { tag: 'meta', attrs: { name: 'robots', content: DEFAULT_ROBOTS } });
 
+  const isGuidePage = context.url.pathname.startsWith('/guides/');
   const structuredData = {
     '@context': 'https://schema.org',
     '@graph': [
@@ -76,14 +78,14 @@ export const onRequest = defineRouteMiddleware((context) => {
         title,
         description,
         url,
-        type: 'TechArticle',
+        type: isGuidePage ? 'TechArticle' : 'WebPage',
       }),
     ],
-  }
+  };
 
   pushHeadTag(starlightRoute.head, {
     tag: 'script',
     attrs: { type: 'application/ld+json', 'data-conloca-seo': 'starlight' },
     content: JSON.stringify(structuredData),
-  })
-})
+  });
+});

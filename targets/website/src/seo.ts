@@ -45,7 +45,7 @@ export function createWebPageSchema({
   return {
     '@type': type,
     name: title,
-    headline: title,
+    ...(type !== 'WebPage' && { headline: title }),
     description,
     url,
     isPartOf: {
