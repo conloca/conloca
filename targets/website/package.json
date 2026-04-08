@@ -14,7 +14,6 @@
   },
   "dependencies": {
     "@astrojs/react": "^4.4.2",
-    "@astrojs/internal-helpers": "^0.8.0",
     "@astrojs/starlight": "^0.38.0",
     "@astrojs/starlight-tailwind": "^4.0.0",
     "@conloca/astro-cms": "workspace:*",

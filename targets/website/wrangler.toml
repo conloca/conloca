@@ -16,4 +16,5 @@ run_worker_first = ["/api/*"]
 [[d1_databases]]
 binding = "DB"
 database_name = "conloca-website-db"
+# database_id injected at deploy time by .github/workflows/deploy-website.yml
 migrations_dir = "migrations"
