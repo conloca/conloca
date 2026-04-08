@@ -1,16 +1,14 @@
 import type { UpdateResult } from '@conloca/content-api-client';
 import { useEffect, useState } from 'react';
-import { ContentDiff } from '../editor/ContentDiff';
 
 interface ConflictDialogProps {
   conflict: UpdateResult;
   onReload: () => void;
   onForceSave: (newEtag: string) => void;
   onCancel: () => void;
-  showDiff?: boolean;
 }
 
-export function ConflictDialog({ conflict, onReload, onForceSave, onCancel, showDiff = false }: ConflictDialogProps) {
+export function ConflictDialog({ conflict, onReload, onForceSave, onCancel }: ConflictDialogProps) {
   const [showReloadConfirm, setShowReloadConfirm] = useState(false);
 
   useEffect(() => {
@@ -62,20 +60,6 @@ export function ConflictDialog({ conflict, onReload, onForceSave, onCancel, show
                   </div>
                 ))}
               </dl>
-            </div>
-          )}
-
-          {showDiff && conflictDetails?.localContent && conflictDetails?.currentContent && (
-            <div className="mt-4">
-              <ContentDiff
-                localContent={conflictDetails.localContent}
-                serverContent={conflictDetails.currentContent}
-                editable={true}
-                onResolve={(resolvedContent) => {
-                  // TODO: Handle resolved content - could update local state or pass to parent
-                  console.log('Resolved content:', resolvedContent);
-                }}
-              />
             </div>
           )}
         </div>

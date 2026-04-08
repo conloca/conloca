@@ -57,7 +57,6 @@ export function BlockEditor() {
       });
 
       if (result.success && result.etag) {
-        console.log('Block saved successfully');
         setCurrentEtag(result.etag); // Update etag for next save
         currentContentRef.current = newContent; // Update tracked content
       } else if (result.reason === 'stale_write') {

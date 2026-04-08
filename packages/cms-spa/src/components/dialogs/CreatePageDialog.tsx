@@ -24,12 +24,10 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
   const templates = config.templates || {};
   const templateEntries = Object.entries(templates);
 
-  // Direct fetch implementation for testing
   const [isPathnameAvailable, setIsPathnameAvailable] = useState(true);
   const [pathnameLoading, setPathnameLoading] = useState(false);
   const [showLoadingText, setShowLoadingText] = useState(false);
 
-  // Use direct fetch instead of React Query to debug the delay
   useEffect(() => {
     if (!path) {
       setIsPathnameAvailable(true);
@@ -40,8 +38,6 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
 
     // Add a small debounce to avoid rapid consecutive requests
     const timeoutId = setTimeout(async () => {
-      console.log('[CreatePageDialog] Starting pathname check for:', path);
-      const startTime = performance.now();
       setPathnameLoading(true);
 
       // Show loading text after 500ms delay
@@ -53,19 +49,10 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
         const config = getUIConfig();
         const baseUrl = config.apiBaseUrl || '/__cms/api';
         const url = `${baseUrl}/${site}/pathname-available?pathname=${encodeURIComponent(path)}&locale=${locale}`;
-        console.log('[CreatePageDialog] Fetching:', url);
         const response = await fetch(url);
-        console.log(
-          '[CreatePageDialog] Fetch completed in',
-          performance.now() - startTime,
-          'ms, status:',
-          response.status,
-        );
         const text = await response.text();
-        console.log('[CreatePageDialog] Response text:', text);
         try {
           const data = JSON.parse(text);
-          console.log('[CreatePageDialog] Parsed response:', data);
           setIsPathnameAvailable(data.available);
         } catch (parseError) {
           console.error('[CreatePageDialog] Failed to parse response:', parseError, 'Text was:', text);
@@ -78,16 +65,11 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
         clearTimeout(loadingTextTimeout);
         setPathnameLoading(false);
         setShowLoadingText(false);
-        console.log('[CreatePageDialog] Total check time:', performance.now() - startTime, 'ms');
       }
     }, 100); // 100ms debounce
 
     return () => clearTimeout(timeoutId);
   }, [path, site, locale]);
-
-  // Comment out React Query version for comparison
-  // const { data: pathnameData, isLoading: pathnameLoading } = usePathnameAvailability(site, path);
-  // const isPathnameAvailable = pathnameData?.available ?? true;
 
   // Auto-generate path from title, including template prefix if applicable
   useEffect(() => {
