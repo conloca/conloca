@@ -365,17 +365,17 @@ function RenderWithBlocks({ config, data, mdxComponents }: RenderWithBlocksProps
           return (
             <section className="pb-16 sm:pb-20">
               <div className={cn('mx-auto px-4 sm:px-6 lg:px-8', contentBlockWidthClasses[width])}>
+                {label ? (
+                  <p className="mb-4 text-sm font-medium uppercase tracking-[0.18em] text-brand-700 dark:text-brand-300">
+                    {label}
+                  </p>
+                ) : null}
                 {title && (
                   <h2 className="text-2xl sm:text-3xl font-bold text-surface-900 dark:text-white mb-4">{title}</h2>
                 )}
                 {subtitle && (
                   <p className="text-surface-500 dark:text-surface-400 text-sm leading-relaxed mb-6">{subtitle}</p>
                 )}
-                {label ? (
-                  <p className="mb-4 text-sm font-medium uppercase tracking-[0.18em] text-brand-700 dark:text-brand-300">
-                    {label}
-                  </p>
-                ) : null}
                 <div className={cn(contentBlockToneClasses[tone])}>
                   {SelectedBlockComponent && (
                     <div className="mdx-content conloca-prose max-w-none">
@@ -424,6 +424,8 @@ function RenderWithBlocks({ config, data, mdxComponents }: RenderWithBlocksProps
   // MergedRender doesn't support zones — fall back to standard render if zones have content
   const hasZoneContent = data.zones && Object.values(data.zones).some((zone) => zone.length > 0);
 
+  // Hydration and narrative section merging are mutually exclusive for now.
+  // When both are present, hydration takes priority (narrative grouping is skipped).
   if (needsHydration) {
     return <RenderWithHydration config={enhancedConfig} data={data} />;
   }
