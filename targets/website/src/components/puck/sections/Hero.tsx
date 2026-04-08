@@ -23,6 +23,7 @@ export const Hero: ComponentConfig<HeroProps> = {
     },
     title: {
       type: 'text',
+      contentEditable: true,
     },
     description: {
       type: 'text',
@@ -41,8 +42,7 @@ export const Hero: ComponentConfig<HeroProps> = {
     ],
   },
   render: ({ badgeText, title, description, buttons, puck }) => {
-    const isStringTitle = typeof title === 'string';
-    const lines = isStringTitle ? title.split('\n') : [];
+    const lines = title.split('\n');
     const hasButtons = buttons.length > 0;
 
     if (!hasButtons) {
@@ -54,14 +54,12 @@ export const Hero: ComponentConfig<HeroProps> = {
             </p>
           )}
           <h1 className="text-3xl sm:text-4xl font-bold text-surface-900 dark:text-white mb-4">
-            {isStringTitle
-              ? lines.map((line, idx) => (
-                  <span key={idx}>
-                    {idx === 0 ? line : <span className="text-brand-600 dark:text-brand-400">{line}</span>}
-                    {idx < lines.length - 1 && <br />}
-                  </span>
-                ))
-              : title}
+            {lines.map((line, idx) => (
+              <span key={idx}>
+                {idx === 0 ? line : <span className="text-brand-600 dark:text-brand-400">{line}</span>}
+                {idx < lines.length - 1 && <br />}
+              </span>
+            ))}
           </h1>
           <p className="text-surface-500 dark:text-surface-400 max-w-2xl mx-auto">{description}</p>
         </div>
@@ -106,14 +104,12 @@ export const Hero: ComponentConfig<HeroProps> = {
               puck.isEditing ? '' : 'opacity-0 animate-slide-up',
             )}
           >
-            {isStringTitle
-              ? lines.map((line, idx) => (
-                  <span key={idx}>
-                    {idx === 0 ? line : <span className="text-brand-600 dark:text-brand-400">{line}</span>}
-                    {idx < lines.length - 1 && <br />}
-                  </span>
-                ))
-              : title}
+            {lines.map((line, idx) => (
+              <span key={idx}>
+                {idx === 0 ? line : <span className="text-brand-600 dark:text-brand-400">{line}</span>}
+                {idx < lines.length - 1 && <br />}
+              </span>
+            ))}
           </h1>
 
           {/* Description */}

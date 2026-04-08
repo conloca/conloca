@@ -199,7 +199,7 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
                       </th>
                       {columns.map((col, i) => (
                         <th
-                          key={i}
+                          key={col}
                           className={cn(
                             'text-center text-sm font-medium px-4 py-4',
                             i === highlightColumnIndex
@@ -224,19 +224,21 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
                         <th className="text-left px-6 py-3.5 text-sm text-surface-600 dark:text-surface-300 font-medium">
                           {row.feature}
                         </th>
-                        {row.values.map((value, j) => (
-                          <td
-                            key={`${row.id}-${columns[j]}`}
-                            className={cn(
-                              'px-4 py-3.5 text-center text-sm',
-                              j === highlightColumnIndex && isPositiveValue(value)
-                                ? 'text-brand-600 dark:text-brand-400'
-                                : 'text-surface-500 dark:text-surface-400',
-                            )}
-                          >
-                            {value}
-                          </td>
-                        ))}
+                        {[...row.values, ...Array(Math.max(0, columns.length - row.values.length)).fill('')].map(
+                          (value, j) => (
+                            <td
+                              key={`${row.id}-${columns[j]}`}
+                              className={cn(
+                                'px-4 py-3.5 text-center text-sm',
+                                j === highlightColumnIndex && isPositiveValue(value)
+                                  ? 'text-brand-600 dark:text-brand-400'
+                                  : 'text-surface-500 dark:text-surface-400',
+                              )}
+                            >
+                              {value}
+                            </td>
+                          ),
+                        )}
                       </tr>
                     ))}
                   </tbody>

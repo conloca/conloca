@@ -164,6 +164,7 @@ export default defineConfig({
                       {renderLimitedRichText(
                         step.description,
                         'text-surface-500 dark:text-surface-400 text-sm mt-2 leading-relaxed [&_a]:text-brand-600 dark:[&_a]:text-brand-400 [&_a]:underline [&_a]:underline-offset-2 [&_code]:font-mono [&_code]:text-[0.95em] [&_code]:text-surface-700 dark:[&_code]:text-surface-300',
+                        puck.isEditing,
                       )}
                     </div>
                   </div>

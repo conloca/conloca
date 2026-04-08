@@ -34,11 +34,6 @@ export function ColorFieldRender({ value, onChange, readOnly }: ColorFieldProps)
     }
   };
 
-  const handlePickerChange = (hex: string) => {
-    setLocalValue(hex);
-    onChange(hex);
-  };
-
   return (
     <div
       style={{
@@ -52,7 +47,8 @@ export function ColorFieldRender({ value, onChange, readOnly }: ColorFieldProps)
         type="color"
         aria-label="Pick color"
         value={normalizeHex(localValue)}
-        onChange={(e) => handlePickerChange(e.target.value)}
+        onChange={(e) => setLocalValue(e.target.value)}
+        onBlur={() => onChange(localValue)}
         disabled={readOnly}
         style={{
           width: 32,

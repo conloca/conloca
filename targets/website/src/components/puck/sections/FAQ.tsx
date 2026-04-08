@@ -18,9 +18,12 @@ export type FAQProps = {
   ctaButtons: CTAButton[];
 };
 
-function FAQAccordionItem({ item }: { item: FAQItem }) {
+function FAQAccordionItem({ item, isEditing }: { item: FAQItem; isEditing: boolean }) {
   return (
-    <details className="group bg-surface-100/60 dark:bg-surface-900/40 border border-surface-200/80 dark:border-surface-800/50 rounded-xl overflow-hidden">
+    <details
+      open={isEditing || undefined}
+      className="group bg-surface-100/60 dark:bg-surface-900/40 border border-surface-200/80 dark:border-surface-800/50 rounded-xl overflow-hidden"
+    >
       <summary className="flex items-center justify-between cursor-pointer px-6 py-5 text-surface-900 dark:text-white font-medium text-sm hover:bg-surface-200/50 dark:hover:bg-surface-800/30 transition-colors">
         {item.question}
         <svg
@@ -40,6 +43,7 @@ function FAQAccordionItem({ item }: { item: FAQItem }) {
       {renderLimitedRichText(
         item.answer,
         'px-6 pb-5 text-sm text-surface-500 dark:text-surface-400 leading-relaxed border-t border-surface-200/30 dark:border-surface-800/30 pt-4 [&_a]:text-brand-600 dark:[&_a]:text-brand-400 [&_a]:hover:text-brand-500 dark:[&_a]:hover:text-brand-300 [&_a]:underline [&_a]:underline-offset-2 [&_code]:font-mono [&_code]:text-[0.95em] [&_code]:text-surface-700 dark:[&_code]:text-surface-300',
+        isEditing,
       )}
     </details>
   );
@@ -62,7 +66,7 @@ const FAQRender = ({
         {/* FAQ items */}
         <div className="space-y-4">
           {items.length > 0 ? (
-            items.map((item) => <FAQAccordionItem key={item.id} item={item} />)
+            items.map((item) => <FAQAccordionItem key={item.id} item={item} isEditing={puck.isEditing} />)
           ) : (
             <EmptySlotPlaceholder label="Add FAQ items using the sidebar panel" />
           )}
