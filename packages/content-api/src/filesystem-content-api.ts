@@ -284,7 +284,7 @@ export class FileSystemContentAPI implements ContentAPI {
     // Use optimized batch size based on benchmarks
     const OPTIMAL_BATCH_SIZE = 1000;
 
-    console.log(`Indexing ${files.length} content files...`);
+    console.debug(`Indexing ${files.length} content files...`);
 
     // Pre-allocate reusable buffers for the entire indexing operation
     // Only allocate as many as we need (up to batch size)

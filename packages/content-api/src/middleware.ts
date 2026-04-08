@@ -103,16 +103,16 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
     const missingLocales = c.req.query('missingLocales'); // comma-separated
 
     try {
-      const filters: any = {};
+      const filters: GlobalFilters = {};
 
       // Pass all filters to the API - let it handle the logic
-      if (kind) filters.kind = kind;
+      if (kind) filters.kind = kind as GlobalFilters['kind'];
       if (site) filters.site = site;
       if (collection) filters.collection = collection;
       if (locales) filters.locales = locales.split(',').map((l) => l.trim());
-      if (type) filters.type = type;
+      if (type) filters.type = type as GlobalFilters['type'];
       if (published !== undefined) filters.published = published === 'true';
-      if (localization) filters.localization = localization;
+      if (localization) filters.localization = localization as GlobalFilters['localization'];
       if (missingLocales) filters.missingLocales = missingLocales.split(',').map((l) => l.trim());
 
       const items = Array.from(api.listAllContent(filters));
@@ -820,7 +820,7 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
     const locale = c.req.query('locale');
 
     try {
-      const filters: any = { kind: 'block' };
+      const filters: GlobalFilters = { kind: 'block' };
       if (collection) filters.collection = collection;
       if (locale) filters.locales = [locale];
 
