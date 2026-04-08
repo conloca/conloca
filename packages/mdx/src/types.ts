@@ -1,13 +1,6 @@
 import type { ComponentType } from 'react';
 
-/**
- * MDX compilation types
- */
-
-export interface MDXCompileResult {
-  code: string;
-  metadata: Record<string, unknown>;
-}
+export type { MDXCompileResponse as MDXCompileResult } from '@conloca/content-api';
 
 export interface EvaluatedMDXBlock {
   ok: true;

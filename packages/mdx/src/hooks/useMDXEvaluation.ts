@@ -73,7 +73,11 @@ export interface UseMDXEvaluationResult {
 export function useMDXEvaluation({ compiledCode, cacheKey }: UseMDXEvaluationOptions): UseMDXEvaluationResult {
   const [Component, setComponent] = useState<React.ComponentType | null>(null);
   const [error, setError] = useState<Error | null>(null);
-  const [isLoading, setIsLoading] = useState(!!compiledCode);
+  const [isLoading, setIsLoading] = useState(() => {
+    if (!compiledCode) return false;
+    const key = cacheKey || `mdx-${hashString(compiledCode)}`;
+    return !compiledCache.has(key);
+  });
   const [retryCount, setRetryCount] = useState(0);
 
   const retry = () => {
