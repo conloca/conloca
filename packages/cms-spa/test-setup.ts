@@ -22,7 +22,9 @@ mock.module('@puckeditor/core', () => ({
       'div',
       { 'data-testid': 'mock-puck-editor' },
       headerTitle ? React.createElement('h1', undefined, headerTitle) : null,
-      overrides?.headerActions ? React.createElement('div', { 'data-testid': 'mock-puck-header-actions' }, overrides.headerActions()) : null,
+      overrides?.headerActions
+        ? React.createElement('div', { 'data-testid': 'mock-puck-header-actions' }, overrides.headerActions())
+        : null,
       React.createElement('pre', { 'data-testid': 'mock-puck-data' }, JSON.stringify(data ?? {})),
     ),
   resolveAllData: async (data: unknown) => data,
@@ -33,5 +35,6 @@ mock.module('@puckeditor/core', () => ({
       },
     },
     dispatch: () => {},
+    config: { components: {} },
   }),
 }));
