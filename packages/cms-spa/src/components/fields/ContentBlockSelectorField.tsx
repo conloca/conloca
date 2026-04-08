@@ -85,6 +85,7 @@ export function ContentBlockSelectorField({ value, onChange, options }: ContentB
   };
 
   const handleCreateStart = () => {
+    setIsOpen(false);
     setShowCreator(true);
     setCreationError(null);
   };
@@ -177,9 +178,8 @@ export function ContentBlockSelectorField({ value, onChange, options }: ContentB
         </label>
 
         {/* Searchable combobox */}
-        <div ref={dropdownRef} className="relative" role="combobox" aria-expanded={isOpen} aria-haspopup="listbox">
+        <div ref={dropdownRef} className="relative">
           <div
-            id="content-block-selector"
             className="flex w-full items-center rounded border border-grey-09 bg-white text-sm cursor-pointer"
             onClick={() => {
               setIsOpen(true);
@@ -189,6 +189,10 @@ export function ContentBlockSelectorField({ value, onChange, options }: ContentB
             {isOpen ? (
               <input
                 ref={inputRef}
+                id="content-block-selector"
+                role="combobox"
+                aria-expanded={isOpen}
+                aria-haspopup="listbox"
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}

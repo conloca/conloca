@@ -506,9 +506,16 @@ export function BlockList() {
 
       {/* Create Block Dialog */}
       {createDialog.isOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" role="dialog">
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="create-block-dialog-title"
+        >
           <div className="bg-white rounded-lg p-6 w-full max-w-md" data-testid="create-block-dialog">
-            <h2 className="text-xl font-semibold mb-4">Create New Block</h2>
+            <h2 id="create-block-dialog-title" className="text-xl font-semibold mb-4">
+              Create New Block
+            </h2>
             <div className="mb-4">
               <label htmlFor="block-title" className="block text-sm font-medium mb-2">
                 Block Title
@@ -584,6 +591,8 @@ export function BlockList() {
         <div
           className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
           role="dialog"
+          aria-modal="true"
+          aria-labelledby="rename-block-dialog-title"
           onKeyDown={(e) => {
             if (e.key === 'Escape') {
               closeRenameDialog();
@@ -592,7 +601,9 @@ export function BlockList() {
           }}
         >
           <div className="bg-white rounded-lg p-6 w-full max-w-md" data-testid="rename-block-dialog">
-            <h2 className="text-xl font-semibold mb-4">Rename Block</h2>
+            <h2 id="rename-block-dialog-title" className="text-xl font-semibold mb-4">
+              Rename Block
+            </h2>
             <div className="mb-4">
               <label htmlFor="block-name" className="block text-sm font-medium mb-2">
                 Block Name (filename)

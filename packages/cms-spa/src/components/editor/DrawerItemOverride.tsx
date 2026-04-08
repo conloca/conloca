@@ -43,6 +43,9 @@ export function DrawerItemOverride({ children, name }: DrawerItemOverrideProps) 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       handleDoubleClick();
+    } else if (e.key === ' ') {
+      e.preventDefault();
+      handleDoubleClick();
     }
   };
 
