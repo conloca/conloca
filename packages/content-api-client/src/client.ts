@@ -400,7 +400,7 @@ export class ContentAPIClient {
     }
   }
 
-  async uploadAsset(formData: FormData): Promise<{ success: true; asset: AssetEntry }> {
+  async uploadAsset(formData: FormData): Promise<AssetEntry> {
     const response = await this.fetch(`${this.baseUrl}/assets/upload`, {
       method: 'POST',
       body: formData,
@@ -417,11 +417,11 @@ export class ContentAPIClient {
       throw new Error(errorData?.error?.message || `Upload failed: ${response.status} ${response.statusText}`);
     }
 
-    return (await response.json()) as { success: true; asset: AssetEntry };
+    return (await response.json()) as AssetEntry;
   }
 
-  async importAssetUrl(url: string, alt?: string, folder?: string): Promise<{ success: true; asset: AssetEntry }> {
-    return this.fetchAPI<{ success: true; asset: AssetEntry }>(`${this.baseUrl}/assets/import-url`, {
+  async importAssetUrl(url: string, alt?: string, folder?: string): Promise<AssetEntry> {
+    return this.fetchAPI<AssetEntry>(`${this.baseUrl}/assets/import-url`, {
       method: 'POST',
       body: JSON.stringify({ url, alt, folder }),
     });
