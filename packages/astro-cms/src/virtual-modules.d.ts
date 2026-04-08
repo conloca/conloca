@@ -138,3 +138,19 @@ declare module 'virtual:conloca-puck-config' {
   const config: Config;
   export default config;
 }
+
+/**
+ * Virtual module: virtual:conloca-hydration-entry
+ *
+ * Client-side script that handles progressive hydration of interactive
+ * components. Loaded only when a page contains hydratable components.
+ */
+declare module 'virtual:conloca-hydration-entry' {}
+
+/**
+ * Virtual module: virtual:conloca-hydration-registry
+ *
+ * Maps component names to dynamic import functions for lazy-loading
+ * hydratable components on the client.
+ */
+declare module 'virtual:conloca-hydration-registry' {}

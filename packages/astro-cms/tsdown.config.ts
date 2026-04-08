@@ -8,6 +8,7 @@ export default defineConfig({
     hydration: 'src/hydration.ts',
     components: 'src/components.ts',
     'internal/cms-handler': 'src/cms-handler.ts',
+    collections: 'src/collections.ts',
     'lib/hydration-script': 'src/lib/hydration-script.ts',
   },
   format: ['esm'],

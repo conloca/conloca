@@ -18,7 +18,7 @@
       "virtual:conloca-config": ["./src/env.d.ts"]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.d.ts"],
+  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.d.ts", "node/**/*.ts"],
   "exclude": ["src/**/*.test.ts", "src/__tests__/**/*"],
   "references": [
     {

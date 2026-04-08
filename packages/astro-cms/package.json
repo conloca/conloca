@@ -30,10 +30,24 @@
       "import": "./dist/node/content.mjs",
       "default": "./dist/node/content.mjs"
     },
+    "./cms-handler": {
+      "types": "./dist/internal/cms-handler.d.mts",
+      "import": "./dist/internal/cms-handler.mjs",
+      "default": "./dist/internal/cms-handler.mjs"
+    },
+    "./collections": {
+      "types": "./dist/collections.d.mts",
+      "import": "./dist/collections.mjs",
+      "default": "./dist/collections.mjs"
+    },
     "./components": {
       "types": "./dist/components.d.mts",
       "import": "./dist/components.mjs",
       "default": "./dist/components.mjs"
+    },
+    "./page-handler": {
+      "import": "./dist/internal/page-handler.astro",
+      "default": "./dist/internal/page-handler.astro"
     },
     "./virtual-modules": {
       "types": "./src/virtual-modules.d.ts"
