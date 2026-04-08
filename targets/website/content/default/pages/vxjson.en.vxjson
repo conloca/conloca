@@ -1,204 +1,204 @@
 {
-	"created": "2026-03-30T00:00:00.000Z",
-	"id": "vx-vxjs0nex",
-	"meta": {
-		"description": "VxJSON stores CMS content as git-friendly JSON files with content-last field ordering for 4KB-optimized metadata indexing and deterministic ETags.",
-		"title": "VxJSON -- Content Storage Format"
-	},
-	"modified": "2026-04-05T10:45:00.158Z",
-	"type": "puck",
-	"content": {
-		"puckData": {
-			"content": [
-				{
-					"props": {
-						"badgeText": "STORAGE FORMAT",
-						"buttons": [],
-						"description": "Conloca's git-friendly content storage format. Standard JSON with content-last field ordering for fast metadata indexing and deterministic ETags.",
-						"id": "Hero-y5z6a7b8",
-						"title": "VxJSON"
-					},
-					"type": "Hero"
-				},
-				{
-					"props": {
-						"blockId": "vx-wh4t1svxj",
-						"id": "ContentBlockSection-c9d0e1f2",
-						"label": "",
-						"startsNewSection": "true",
-						"subtitle": "VxJSON is standard JSON with a .vxjson extension and two guarantees: the content field is always last, and field order is deterministic. That is it. No special parser needed -- any JSON reader can open a VXJSON file.",
-						"title": "What is VxJSON?",
-						"tone": "transparent",
-						"width": "default"
-					},
-					"type": "ContentBlockSection"
-				},
-				{
-					"props": {
-						"accentColor": "",
-						"code": "{\n  // Metadata -- fits in first 4KB\n  \"id\": \"abc123\",\n  \"type\": \"puck\",\n  \"created\": \"2026-01-15T10:00:00Z\",\n  \"modified\": \"2026-01-20T14:30:00Z\",\n  \"meta\": {\n    \"title\": \"About Us\",\n    \"description\": \"Learn about our team\"\n  },\n\n  // Content payload -- always last\n  \"content\": {\n    \"puckData\": { ... }\n  }\n}",
-						"filename": "home.vxjson",
-						"id": "CodeBlock-g3h4i5j6",
-						"legendItems": [
-							{
-								"color": "#06b6d4",
-								"id": "legend-1",
-								"label": "Metadata (first 4KB)"
-							},
-							{
-								"color": "#a855f7",
-								"id": "legend-2",
-								"label": "Content payload"
-							}
-						],
-						"spacing": "default"
-					},
-					"type": "CodeBlock"
-				},
-				{
-					"props": {
-						"blockId": "vx-whyc0nt3nt",
-						"id": "ContentBlockSection-k7l8m9n0",
-						"label": "",
-						"startsNewSection": "true",
-						"subtitle": "By placing the content field last, all metadata fits within the first 4KB of every file. This unlocks two performance advantages.",
-						"title": "Why Content-Last?",
-						"tone": "transparent",
-						"width": "default"
-					},
-					"type": "ContentBlockSection"
-				},
-				{
-					"props": {
-						"cards": [
-							{
-								"description": "The system can index thousands of pages by reading only the first 4KB of each file. Metadata like title, dates, and ETags are always there -- no need to parse the full content payload.",
-								"iconSvgPath": "",
-								"iconText": "4K",
-								"id": "card-4k",
-								"title": "4KB Index Reads"
-							},
-							{
-								"description": "The dual metaEtag.contentEtag format lets the system detect staleness for metadata and content independently -- critical for content inheritance across locales.",
-								"iconSvgPath": "M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5",
-								"id": "card-etag",
-								"title": "Independent ETags"
-							}
-						],
-						"columns": "2",
-						"id": "FeatureCards-o1p2q3r4",
-						"label": "",
-						"subtitle": "",
-						"title": ""
-					},
-					"type": "FeatureCards"
-				},
-				{
-					"props": {
-						"blockId": "vx-cr4shs4f3",
-						"id": "ContentBlockSection-s5t6u7v8",
-						"label": "",
-						"startsNewSection": "true",
-						"subtitle": "Every file write in Conloca uses an atomic write strategy. Content is written to a temporary file first, then atomically renamed to the target path. This is a Conloca runtime feature -- independent of the VxJSON format -- ensuring the original file is never corrupted if the process crashes mid-write.",
-						"title": "Crash-Safe Writes",
-						"tone": "transparent",
-						"width": "default"
-					},
-					"type": "ContentBlockSection"
-				},
-				{
-					"props": {
-						"id": "NumberedFlow-w9x0y1z2",
-						"items": [
-							{
-								"description": "Content is written to a temporary file with a unique name: `{path}.tmp.{pid}.{hrtime}`",
-								"id": "flow-1",
-								"number": "1",
-								"title": "Write to temp file"
-							},
-							{
-								"description": "`rename()` replaces the target file in a single operation. On POSIX systems, this is guaranteed atomic -- the file is either fully old or fully new.",
-								"id": "flow-2",
-								"number": "2",
-								"title": "Atomic rename"
-							},
-							{
-								"description": "If the process crashes during step 1, only the temp file is left behind -- the original is untouched. If it crashes during step 2, the rename either completed or it didn't. No half-written files, ever.",
-								"id": "flow-3",
-								"number": "3",
-								"title": "Crash recovery"
-							}
-						],
-						"subtitle": "",
-						"title": ""
-					},
-					"type": "NumberedFlow"
-				},
-				{
-					"props": {
-						"blockId": "vx-3t4gc0ncur",
-						"id": "ContentBlockSection-a3b4c5d6",
-						"label": "",
-						"startsNewSection": "true",
-						"subtitle": "Every VXJSON file carries a dual-format ETag that prevents stale overwrites when multiple editors work simultaneously. The format is:",
-						"title": "ETag Concurrency",
-						"tone": "transparent",
-						"width": "default"
-					},
-					"type": "ContentBlockSection"
-				},
-				{
-					"props": {
-						"accentColor": "",
-						"code": "metaEtag.contentEtag // e.g. a3f2c1.b7e4d9",
-						"filename": "",
-						"id": "CodeBlock-e7f8g9h0",
-						"legendItems": [],
-						"spacing": "compact"
-					},
-					"type": "CodeBlock"
-				},
-				{
-					"props": {
-						"blockId": "vx-st4l3wr1t3",
-						"id": "ContentBlockSection-i1j2k3l4",
-						"label": "",
-						"startsNewSection": "true",
-						"subtitle": "When an editor saves, the CMS sends the expected ETag. If the file was modified since it was loaded, the server rejects the write with a STALE_WRITE error and presents a conflict resolution dialog. No content is silently overwritten.",
-						"title": "",
-						"tone": "transparent",
-						"width": "default"
-					},
-					"type": "ContentBlockSection"
-				},
-				{
-					"props": {
-						"badgeText": "",
-						"buttons": [
-							{
-								"href": "/getting-started/",
-								"id": "btn-vx-1",
-								"label": "Get Started",
-								"variant": "primary"
-							},
-							{
-								"href": "/",
-								"id": "btn-vx-2",
-								"label": "Back to Home",
-								"variant": "secondary"
-							}
-						],
-						"id": "CTABanner-m5n6o7p8",
-						"subtitle": "Get started with Conloca and see how VxJSON keeps your content safe, versioned, and git-friendly.",
-						"title": "See it in action"
-					},
-					"type": "CTABanner"
-				}
-			],
-			"root": {
-				"props": {}
-			},
-			"zones": {}
-		}
-	}
+  "created": "2026-03-30T00:00:00.000Z",
+  "id": "vx-vxjs0nex",
+  "meta": {
+    "description": "VxJSON stores CMS content as git-friendly JSON files with content-last field ordering for 4KB-optimized metadata indexing and deterministic ETags.",
+    "title": "VxJSON — Content Storage Format"
+  },
+  "modified": "2026-04-05T10:45:00.158Z",
+  "type": "puck",
+  "content": {
+    "puckData": {
+      "content": [
+        {
+          "props": {
+            "badgeText": "STORAGE FORMAT",
+            "buttons": [],
+            "description": "Conloca's git-friendly content storage format. Standard JSON with content-last field ordering for fast metadata indexing and deterministic ETags.",
+            "id": "Hero-y5z6a7b8",
+            "title": "VxJSON"
+          },
+          "type": "Hero"
+        },
+        {
+          "props": {
+            "blockId": "vx-wh4t1svxj",
+            "id": "ContentBlockSection-c9d0e1f2",
+            "label": "",
+            "startsNewSection": "true",
+            "subtitle": "VxJSON is standard JSON with a .vxjson extension and two guarantees: the content field is always last, and field order is deterministic. That is it. No special parser needed -- any JSON reader can open a VXJSON file.",
+            "title": "What is VxJSON?",
+            "tone": "transparent",
+            "width": "default"
+          },
+          "type": "ContentBlockSection"
+        },
+        {
+          "props": {
+            "accentColor": "",
+            "code": "{\n  // Metadata -- fits in first 4KB\n  \"id\": \"abc123\",\n  \"type\": \"puck\",\n  \"created\": \"2026-01-15T10:00:00Z\",\n  \"modified\": \"2026-01-20T14:30:00Z\",\n  \"meta\": {\n    \"title\": \"About Us\",\n    \"description\": \"Learn about our team\"\n  },\n\n  // Content payload -- always last\n  \"content\": {\n    \"puckData\": { ... }\n  }\n}",
+            "filename": "home.vxjson",
+            "id": "CodeBlock-g3h4i5j6",
+            "legendItems": [
+              {
+                "color": "#06b6d4",
+                "id": "legend-1",
+                "label": "Metadata (first 4KB)"
+              },
+              {
+                "color": "#a855f7",
+                "id": "legend-2",
+                "label": "Content payload"
+              }
+            ],
+            "spacing": "default"
+          },
+          "type": "CodeBlock"
+        },
+        {
+          "props": {
+            "blockId": "vx-whyc0nt3nt",
+            "id": "ContentBlockSection-k7l8m9n0",
+            "label": "",
+            "startsNewSection": "true",
+            "subtitle": "By placing the content field last, all metadata fits within the first 4KB of every file. This unlocks two performance advantages.",
+            "title": "Why Content-Last?",
+            "tone": "transparent",
+            "width": "default"
+          },
+          "type": "ContentBlockSection"
+        },
+        {
+          "props": {
+            "cards": [
+              {
+                "description": "The system can index thousands of pages by reading only the first 4KB of each file. Metadata like title, dates, and ETags are always there -- no need to parse the full content payload.",
+                "iconSvgPath": "",
+                "iconText": "4K",
+                "id": "card-4k",
+                "title": "4KB Index Reads"
+              },
+              {
+                "description": "The dual metaEtag.contentEtag format lets the system detect staleness for metadata and content independently -- critical for content inheritance across locales.",
+                "iconSvgPath": "M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5",
+                "id": "card-etag",
+                "title": "Independent ETags"
+              }
+            ],
+            "columns": "2",
+            "id": "FeatureCards-o1p2q3r4",
+            "label": "",
+            "subtitle": "",
+            "title": ""
+          },
+          "type": "FeatureCards"
+        },
+        {
+          "props": {
+            "blockId": "vx-cr4shs4f3",
+            "id": "ContentBlockSection-s5t6u7v8",
+            "label": "",
+            "startsNewSection": "true",
+            "subtitle": "Every file write in Conloca uses an atomic write strategy. Content is written to a temporary file first, then atomically renamed to the target path. This is a Conloca runtime feature -- independent of the VxJSON format -- ensuring the original file is never corrupted if the process crashes mid-write.",
+            "title": "Crash-Safe Writes",
+            "tone": "transparent",
+            "width": "default"
+          },
+          "type": "ContentBlockSection"
+        },
+        {
+          "props": {
+            "id": "NumberedFlow-w9x0y1z2",
+            "items": [
+              {
+                "description": "Content is written to a temporary file with a unique name: `{path}.tmp.{pid}.{hrtime}`",
+                "id": "flow-1",
+                "number": "1",
+                "title": "Write to temp file"
+              },
+              {
+                "description": "`rename()` replaces the target file in a single operation. On POSIX systems, this is guaranteed atomic -- the file is either fully old or fully new.",
+                "id": "flow-2",
+                "number": "2",
+                "title": "Atomic rename"
+              },
+              {
+                "description": "If the process crashes during step 1, only the temp file is left behind -- the original is untouched. If it crashes during step 2, the rename either completed or it didn't. No half-written files, ever.",
+                "id": "flow-3",
+                "number": "3",
+                "title": "Crash recovery"
+              }
+            ],
+            "subtitle": "",
+            "title": ""
+          },
+          "type": "NumberedFlow"
+        },
+        {
+          "props": {
+            "blockId": "vx-3t4gc0ncur",
+            "id": "ContentBlockSection-a3b4c5d6",
+            "label": "",
+            "startsNewSection": "true",
+            "subtitle": "Every VXJSON file carries a dual-format ETag that prevents stale overwrites when multiple editors work simultaneously. The format is:",
+            "title": "ETag Concurrency",
+            "tone": "transparent",
+            "width": "default"
+          },
+          "type": "ContentBlockSection"
+        },
+        {
+          "props": {
+            "accentColor": "",
+            "code": "metaEtag.contentEtag // e.g. a3f2c1.b7e4d9",
+            "filename": "",
+            "id": "CodeBlock-e7f8g9h0",
+            "legendItems": [],
+            "spacing": "compact"
+          },
+          "type": "CodeBlock"
+        },
+        {
+          "props": {
+            "blockId": "vx-st4l3wr1t3",
+            "id": "ContentBlockSection-i1j2k3l4",
+            "label": "",
+            "startsNewSection": "true",
+            "subtitle": "When an editor saves, the CMS sends the expected ETag. If the file was modified since it was loaded, the server rejects the write with a STALE_WRITE error and presents a conflict resolution dialog. No content is silently overwritten.",
+            "title": "",
+            "tone": "transparent",
+            "width": "default"
+          },
+          "type": "ContentBlockSection"
+        },
+        {
+          "props": {
+            "badgeText": "",
+            "buttons": [
+              {
+                "href": "/getting-started/",
+                "id": "btn-vx-1",
+                "label": "Get Started",
+                "variant": "primary"
+              },
+              {
+                "href": "/",
+                "id": "btn-vx-2",
+                "label": "Back to Home",
+                "variant": "secondary"
+              }
+            ],
+            "id": "CTABanner-m5n6o7p8",
+            "subtitle": "Get started with Conloca and see how VxJSON keeps your content safe, versioned, and git-friendly.",
+            "title": "See it in action"
+          },
+          "type": "CTABanner"
+        }
+      ],
+      "root": {
+        "props": {}
+      },
+      "zones": {}
+    }
+  }
 }

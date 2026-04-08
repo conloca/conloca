@@ -266,7 +266,7 @@ export const HostedComparison: ComponentConfig<HostedComparisonProps> = {
   },
   defaultProps: {
     badgeText: 'Coming Soon',
-    title: 'Conloca Cloud -- visual editing without the setup',
+    title: 'Conloca Cloud — visual editing without the setup',
     subtitle: 'All the power of Conloca, fully managed. Your team edits visually while you keep full git ownership.',
     ossColumnHeader: 'Open Source',
     hostedColumnHeader: 'Hosted',
