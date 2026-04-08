@@ -1,8 +1,13 @@
 import type {
+  AssetEntry,
+  AssetUsage,
   ContentEntry,
   ContentListResult,
   ContentManifest,
   CreateContentInput,
+  DataContext,
+  FolderListing,
+  FolderTreeNode,
   GitCommitResult,
   GitPullResult,
   GitPushResult,
@@ -10,6 +15,7 @@ import type {
   GlobalFilters,
   LocalizedEntry,
   MDXCompileResponse,
+  SitesConfig,
   UpdateLocaleInput,
 } from '@conloca/content-api';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -87,7 +93,7 @@ const queryKeys = {
 export function useContent(id: string) {
   const client = getContentAPIClient();
 
-  return useQuery({
+  return useQuery<ContentEntry | null, Error>({
     queryKey: queryKeys.content(id),
     queryFn: () => client.getContent(id),
     enabled: !!id,
@@ -97,7 +103,7 @@ export function useContent(id: string) {
 export function useLocalizedContent(id: string, locale: string) {
   const client = getContentAPIClient();
 
-  return useQuery({
+  return useQuery<LocalizedEntry | null, Error>({
     queryKey: queryKeys.localized(id, locale),
     queryFn: () => client.getLocalized(id, locale),
     enabled: !!id && !!locale,
@@ -400,7 +406,7 @@ export function useDeleteLocalized() {
 export function useSitePages(site: string, locale?: string) {
   const client = getContentAPIClient();
 
-  return useQuery({
+  return useQuery<ContentListResult, Error>({
     queryKey: queryKeys.sitePages(site, locale),
     queryFn: () => client.getSitePages(site, locale),
   });
@@ -409,7 +415,7 @@ export function useSitePages(site: string, locale?: string) {
 export function usePageByPathname(site: string, pathname: string, locale?: string) {
   const client = getContentAPIClient();
 
-  return useQuery({
+  return useQuery<ContentManifest | null, Error>({
     queryKey: queryKeys.pageByPathname(site, pathname, locale),
     queryFn: () => client.getPageByPathname(site, pathname, locale),
     enabled: !!pathname,
@@ -462,7 +468,7 @@ export function useMovePage() {
 export function useBlocks(collection?: string, locale?: string) {
   const client = getContentAPIClient();
 
-  return useQuery({
+  return useQuery<ContentListResult, Error>({
     queryKey: queryKeys.blocks(collection, locale),
     queryFn: () => client.getBlocks(collection, locale),
   });
@@ -471,7 +477,7 @@ export function useBlocks(collection?: string, locale?: string) {
 export function useBlockByName(name: string, collection?: string, locale?: string) {
   const client = getContentAPIClient();
 
-  return useQuery({
+  return useQuery<ContentManifest | null, Error>({
     queryKey: queryKeys.blockByName(name, collection, locale),
     queryFn: () => client.getBlockByName(name, collection, locale),
     enabled: !!name,
@@ -483,7 +489,7 @@ export function useBlockByName(name: string, collection?: string, locale?: strin
 export function useData(collection?: string, locale?: string) {
   const client = getContentAPIClient();
 
-  return useQuery({
+  return useQuery<ContentListResult, Error>({
     queryKey: queryKeys.data(collection, locale),
     queryFn: () => client.getData(collection, locale),
   });
@@ -492,7 +498,7 @@ export function useData(collection?: string, locale?: string) {
 export function useDataByName(name: string, collection: string, locale?: string) {
   const client = getContentAPIClient();
 
-  return useQuery({
+  return useQuery<ContentManifest | null, Error>({
     queryKey: queryKeys.dataByName(name, collection, locale),
     queryFn: () => client.getDataByName(name, collection, locale),
     enabled: !!name && !!collection,
@@ -517,7 +523,7 @@ export function useDataNameAvailability(name: string, collection: string, exclud
 export function useDataCollections() {
   const client = getContentAPIClient();
 
-  return useQuery({
+  return useQuery<string[], Error>({
     queryKey: queryKeys.dataCollections(),
     queryFn: () => client.getDataCollections(),
   });
@@ -528,7 +534,7 @@ export function useDataCollections() {
 export function useDataContext(pageId?: string) {
   const client = getContentAPIClient();
 
-  return useQuery({
+  return useQuery<{ dataContext: DataContext }, Error>({
     queryKey: queryKeys.dataContext(pageId),
     queryFn: () => client.getDataContext(pageId!),
     enabled: !!pageId,
@@ -540,7 +546,7 @@ export function useDataContext(pageId?: string) {
 export function useAllContent(filters?: GlobalFilters) {
   const client = getContentAPIClient();
 
-  return useQuery({
+  return useQuery<ContentListResult, Error>({
     queryKey: queryKeys.allContent(filters),
     queryFn: () => client.listAllContent(filters),
   });
@@ -549,7 +555,7 @@ export function useAllContent(filters?: GlobalFilters) {
 export function useUntranslatedContent(targetLocale: string, excludeSites?: string[], includeUnpublished?: boolean) {
   const client = getContentAPIClient();
 
-  return useQuery({
+  return useQuery<ContentListResult, Error>({
     queryKey: queryKeys.untranslatedContent(targetLocale, excludeSites, includeUnpublished),
     queryFn: () => client.findUntranslatedContent(targetLocale, excludeSites, includeUnpublished),
   });
@@ -558,7 +564,7 @@ export function useUntranslatedContent(targetLocale: string, excludeSites?: stri
 export function useSitesConfig() {
   const client = getContentAPIClient();
 
-  return useQuery({
+  return useQuery<SitesConfig, Error>({
     queryKey: queryKeys.sitesConfig(),
     queryFn: () => client.getSitesConfig(),
   });
@@ -680,7 +686,7 @@ export function useBatchUpdate() {
 export function useGitStatus() {
   const client = getContentAPIClient();
 
-  return useQuery({
+  return useQuery<GitStatus, Error>({
     queryKey: queryKeys.gitStatus(),
     queryFn: () => client.getGitStatus(),
     refetchInterval: 10000,
@@ -729,7 +735,7 @@ export function usePullChanges() {
 export function useAssets() {
   const client = getContentAPIClient();
 
-  return useQuery({
+  return useQuery<{ assets: AssetEntry[] }, Error>({
     queryKey: queryKeys.assets(),
     queryFn: () => client.listAssets(),
   });
@@ -738,7 +744,7 @@ export function useAssets() {
 export function useAsset(filename: string) {
   const client = getContentAPIClient();
 
-  return useQuery({
+  return useQuery<AssetEntry | null, Error>({
     queryKey: queryKeys.asset(filename),
     queryFn: () => client.getAsset(filename),
     enabled: !!filename,
@@ -815,7 +821,7 @@ export function useBulkDeleteAssets() {
 export function useAssetFolders(path?: string) {
   const client = getContentAPIClient();
 
-  return useQuery({
+  return useQuery<FolderListing, Error>({
     queryKey: queryKeys.assetFolders(path),
     queryFn: () => client.listFolder(path),
   });
@@ -850,7 +856,7 @@ export function useUpdateAssetMetadata() {
 export function useAssetUsage(filename: string | null) {
   const client = getContentAPIClient();
 
-  return useQuery({
+  return useQuery<AssetUsage[], Error>({
     queryKey: queryKeys.assetUsage(filename),
     queryFn: () => client.getAssetUsage(filename!),
     enabled: !!filename,
@@ -861,7 +867,7 @@ export function useAssetUsage(filename: string | null) {
 export function useFolderTree() {
   const client = getContentAPIClient();
 
-  return useQuery({
+  return useQuery<{ tree: FolderTreeNode[] }, Error>({
     queryKey: queryKeys.folderTree(),
     queryFn: () => client.getFolderTree(),
     staleTime: 30_000, // Cache for 30 seconds

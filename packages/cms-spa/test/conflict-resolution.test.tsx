@@ -355,7 +355,6 @@ describe('Conflict Resolution', () => {
           onReload={mock(() => {})}
           onForceSave={mock(() => {})}
           onCancel={mock(() => {})}
-          showDiff={true}
         />,
       );
 
