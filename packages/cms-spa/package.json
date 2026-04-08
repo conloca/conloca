@@ -12,26 +12,26 @@
   "type": "module",
   "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",
-  "types": "./dist/index.d.ts",
+  "types": "./dist/index.d.mts",
   "exports": {
     "./package.json": "./package.json",
     ".": {
-      "types": "./dist/index.d.ts",
+      "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs",
       "default": "./dist/index.mjs"
     },
     "./data-schemas": {
-      "types": "./dist/data-schemas.d.ts",
+      "types": "./dist/data-schemas.d.mts",
       "import": "./dist/data-schemas.mjs",
       "default": "./dist/data-schemas.mjs"
     },
     "./page-schemas": {
-      "types": "./dist/page-schemas.d.ts",
+      "types": "./dist/page-schemas.d.mts",
       "import": "./dist/page-schemas.mjs",
       "default": "./dist/page-schemas.mjs"
     },
     "./puck-config": {
-      "types": "./dist/puck-config.d.ts",
+      "types": "./dist/puck-config.d.mts",
       "import": "./dist/puck-config.mjs",
       "default": "./dist/puck-config.mjs"
     },
