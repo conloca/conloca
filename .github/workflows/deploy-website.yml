@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'targets/website/**'
+      - 'packages/**'
       - 'bun.lock'
       - '.github/workflows/deploy-website.yml'
   workflow_dispatch:
@@ -43,6 +44,9 @@ jobs:
             echo 'Missing repository variable CLOUDFLARE_D1_DATABASE_ID.' >&2
             exit 1
           fi
+
+      - name: Build workspace packages
+        run: bunx nx run-many -t build --exclude=conloca-website
 
       - name: Build website
         working-directory: targets/website
