@@ -27,6 +27,7 @@ function setupForm(form: HTMLFormElement) {
 
     submitButton.disabled = true;
     submitButton.textContent = 'Sending...';
+    let succeeded = false;
 
     try {
       const res = await fetch(WORKER_URL, {
@@ -43,8 +44,8 @@ function setupForm(form: HTMLFormElement) {
           'mt-3 text-sm text-brand-600 dark:text-brand-400',
         );
         form.reset();
-        submitButton.disabled = true;
         submitButton.textContent = 'Done';
+        succeeded = true;
         return;
       }
 
@@ -62,7 +63,7 @@ function setupForm(form: HTMLFormElement) {
     } catch {
       setMessage(messageElement, 'Something went wrong. Please try again.', 'mt-3 text-sm text-red-400');
     } finally {
-      if (!submitButton.disabled) {
+      if (!succeeded) {
         submitButton.disabled = false;
         submitButton.textContent = intent === 'hosted' ? 'Join Waitlist' : 'Subscribe';
       }
@@ -70,4 +71,9 @@ function setupForm(form: HTMLFormElement) {
   });
 }
 
-document.querySelectorAll<HTMLFormElement>('[data-subscribe-form]').forEach(setupForm);
+function bindForms() {
+  document.querySelectorAll<HTMLFormElement>('[data-subscribe-form]').forEach(setupForm);
+}
+
+bindForms();
+document.addEventListener('astro:after-swap', bindForms);

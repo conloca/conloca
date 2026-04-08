@@ -105,17 +105,17 @@ async function handleSubscribe(request: Request, env: Env) {
   }
 
   // Reject oversized request bodies (1KB should be more than enough for email + intent)
-  const contentLength = Number.parseInt(request.headers.get('Content-Length') || '0', 10);
-  if (contentLength > 1024) {
+  const bodyText = await request.text();
+  if (bodyText.length > 1024) {
     return jsonResponse({ error: 'Request body too large' }, 413);
   }
 
   let payload: SubscribePayload;
 
   try {
-    payload = (await request.json()) as SubscribePayload;
+    payload = JSON.parse(bodyText) as SubscribePayload;
   } catch {
-    return jsonResponse({ error: 'Invalid JSON body' }, 400);
+    return jsonResponse({ error: 'Invalid JSON' }, 400);
   }
 
   const { email, intent } = payload;
