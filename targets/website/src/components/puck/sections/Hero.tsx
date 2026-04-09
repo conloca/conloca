@@ -23,7 +23,6 @@ export const Hero: ComponentConfig<HeroProps> = {
     },
     title: {
       type: 'text',
-      contentEditable: true,
     },
     description: {
       type: 'text',
@@ -42,7 +41,7 @@ export const Hero: ComponentConfig<HeroProps> = {
     ],
   },
   render: ({ badgeText, title, description, buttons, puck }) => {
-    const lines = title.split('\n');
+    const lines = typeof title === 'string' ? title.split('\n') : [];
     const hasButtons = buttons.length > 0;
 
     if (!hasButtons) {
