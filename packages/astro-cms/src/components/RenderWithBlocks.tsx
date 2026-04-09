@@ -2,7 +2,7 @@ import type { MDXBlockEvaluationResult } from '@conloca/mdx/node';
 import type { ComponentConfig, Config, Data } from '@puckeditor/core';
 import { Render } from '@puckeditor/core';
 import cn from 'clsx';
-import type { ComponentType, JSX } from 'react';
+import type { ComponentType } from 'react';
 import { hasHydratableComponents } from '../lib/hydration-utils.js';
 import { RenderWithHydration } from './RenderWithHydration.js';
 
@@ -29,8 +29,6 @@ interface ContentBlockSectionProps {
   blockId: string;
   width?: 'narrow' | 'default';
   tone?: 'transparent' | 'subtle';
-  /** String 'true'/'false' from radio field, or boolean from legacy saved data */
-  startsNewSection?: boolean | 'true' | 'false';
 }
 
 const contentBlockWidthClasses: Record<NonNullable<ContentBlockSectionProps['width']>, string> = {
@@ -74,236 +72,14 @@ function resolveRenderableBlocks(blocks: Array<MDXBlockEvaluationResult | MDXCom
   });
 }
 
-// ── Section Merging ──────────────────────────────────────────────────────────
-
-/** Component types that can be merged into a narrative section following a CBS */
-const MERGEABLE_VISUAL_TYPES = new Set(['CodeBlock', 'FeatureCards', 'NumberedFlow', 'Steps']);
-
-/**
- * Minimal puck context for static (non-editor) rendering via MergedRender path.
- * Note: metadata is empty — mergeable components must not read puck.metadata at render time.
- * If a future component needs metadata, thread dataContext through RenderWithBlocksProps.
- */
-const staticPuckContext = {
-  isEditing: false,
-  renderDropZone: () => {
-    console.warn(
-      '[Conloca] renderDropZone called in MergedRender path — nested zones are not supported here. Use the standard Puck Render path for components with DropZones.',
-    );
-    return null;
-  },
-  metadata: {},
-  dragRef: null,
-};
-
-interface ContentItem {
-  type: string;
-  props: Record<string, unknown> & { id?: string };
-}
-
-interface NarrativeGroup {
-  type: 'narrative';
-  id: string;
-  title: string;
-  subtitle: string;
-  label: string;
-  width: NonNullable<ContentBlockSectionProps['width']>;
-  tone: NonNullable<ContentBlockSectionProps['tone']>;
-  items: ContentItem[];
-}
-
-interface StandaloneGroup {
-  type: 'standalone';
-  item: ContentItem;
-}
-
-type RenderGroup = NarrativeGroup | StandaloneGroup;
-
-/**
- * Groups consecutive ContentBlockSection + visual components into narrative sections.
- *
- * A CBS with `startsNewSection: true` (or a title when startsNewSection is undefined,
- * for backward compatibility) starts a new narrative group.
- * Following mergeable visual components (CodeBlock, FeatureCards, NumberedFlow, Steps)
- * and continuation CBS entries join the current group.
- * Non-mergeable components (Hero, CTABanner, etc.) remain standalone.
- */
-function groupContentItems(content: ContentItem[]): RenderGroup[] {
-  const groups: RenderGroup[] = [];
-  let currentNarrative: NarrativeGroup | null = null;
-
-  for (const item of content) {
-    if (item.type === 'ContentBlockSection') {
-      const props = item.props as unknown as ContentBlockSectionProps;
-      // Backward compat: if startsNewSection is not set, fall back to title-presence
-      // Handle both boolean (legacy) and string (radio field output) for startsNewSection
-      const startsNew =
-        props.startsNewSection !== undefined
-          ? props.startsNewSection === true || props.startsNewSection === 'true'
-          : !!props.title;
-
-      if (startsNew) {
-        // Start a new narrative group
-        if (currentNarrative) {
-          groups.push(currentNarrative);
-        }
-        currentNarrative = {
-          type: 'narrative',
-          id: (item.props.id as string) || `narrative-${groups.length}`,
-          title: props.title || '',
-          subtitle: props.subtitle || '',
-          label: props.label || '',
-          width: props.width || 'default',
-          tone: props.tone || 'transparent',
-          items: [item],
-        };
-      } else if (currentNarrative) {
-        // Continues current narrative
-        currentNarrative.items.push(item);
-      } else {
-        // No active narrative → standalone
-        groups.push({ type: 'standalone', item });
-      }
-    } else if (currentNarrative && MERGEABLE_VISUAL_TYPES.has(item.type)) {
-      // Visual component following a CBS → add to current group
-      currentNarrative.items.push(item);
-    } else {
-      // Non-mergeable → flush current narrative, add standalone
-      if (currentNarrative) {
-        groups.push(currentNarrative);
-        currentNarrative = null;
-      }
-      groups.push({ type: 'standalone', item });
-    }
-  }
-
-  if (currentNarrative) {
-    groups.push(currentNarrative);
-  }
-
-  return groups;
-}
-
-function renderNarrativeSection(
-  group: NarrativeGroup,
-  config: Config,
-  blockComponentMap: Map<string, MDXComponent>,
-): JSX.Element {
-  const leadingCbs = group.items[0];
-  const leadingBlockId = (leadingCbs?.props as unknown as ContentBlockSectionProps)?.blockId;
-  const LeadingBlockComponent = leadingBlockId ? blockComponentMap.get(leadingBlockId)?.Component : null;
-
-  return (
-    <section
-      key={group.id}
-      className={cn('narrative-section mb-20 mx-auto px-4 sm:px-6 lg:px-8', contentBlockWidthClasses[group.width])}
-    >
-      {group.label && (
-        <p className="mb-4 text-sm font-medium uppercase tracking-[0.18em] text-brand-700 dark:text-brand-300">
-          {group.label}
-        </p>
-      )}
-      <h2 className="text-2xl sm:text-3xl font-bold text-surface-900 dark:text-white mb-4">{group.title}</h2>
-      {group.subtitle && (
-        <p className="text-surface-500 dark:text-surface-400 text-sm leading-relaxed mb-6">{group.subtitle}</p>
-      )}
-      <div className={cn(contentBlockToneClasses[group.tone])}>
-        {LeadingBlockComponent && (
-          <div className="mdx-content conloca-prose max-w-none mb-6">
-            <LeadingBlockComponent />
-          </div>
-        )}
-        {group.items.slice(1).map((item, i) => {
-          if (item.type === 'ContentBlockSection') {
-            const cbsProps = item.props as unknown as ContentBlockSectionProps;
-            const BlockComponent = cbsProps.blockId ? blockComponentMap.get(cbsProps.blockId)?.Component : null;
-            const hasContent = cbsProps.title || cbsProps.subtitle || BlockComponent;
-            if (!hasContent) return null;
-            return (
-              <div key={(item.props.id as string) || i}>
-                {cbsProps.title && (
-                  <h3 className="text-xl font-semibold text-surface-900 dark:text-white mt-8 mb-3">{cbsProps.title}</h3>
-                )}
-                {cbsProps.subtitle && (
-                  <p className="text-surface-500 dark:text-surface-400 text-sm leading-relaxed mb-4">
-                    {cbsProps.subtitle}
-                  </p>
-                )}
-                {BlockComponent && (
-                  <div className="mdx-content conloca-prose max-w-none mb-6">
-                    <BlockComponent />
-                  </div>
-                )}
-              </div>
-            );
-          }
-          const CompConfig = config.components[item.type] as ComponentConfig | undefined;
-          if (!CompConfig?.render) return null;
-          return (
-            <CompConfig.render
-              key={(item.props.id as string) || i}
-              {...item.props}
-              id={item.props.id ?? ''}
-              puck={staticPuckContext}
-            />
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
-function renderStandaloneItem(item: ContentItem, config: Config): JSX.Element | null {
-  const CompConfig = config.components[item.type] as ComponentConfig | undefined;
-  if (!CompConfig?.render) return null;
-  return (
-    <CompConfig.render
-      key={item.props.id as string}
-      {...item.props}
-      id={item.props.id ?? ''}
-      puck={staticPuckContext}
-    />
-  );
-}
-
-/**
- * Renders page content with narrative section merging.
- *
- * ContentBlockSections with a `title` prop are merged with following
- * visual components into single `<section class="mb-20">` elements,
- * matching the production page structure.
- */
-function MergedRender({
-  config,
-  data,
-  blockComponentMap,
-}: {
-  config: Config;
-  data: Data;
-  blockComponentMap: Map<string, MDXComponent>;
-}) {
-  const groups = groupContentItems(data.content as ContentItem[]);
-
-  return (
-    <div>
-      {groups.map((group) => {
-        if (group.type === 'narrative') {
-          return renderNarrativeSection(group, config, blockComponentMap);
-        }
-        return renderStandaloneItem(group.item, config);
-      })}
-    </div>
-  );
-}
-
 // ── Main Component ──────────────────────────────────────────────────────────
 
 /**
  * Internal component for rendering Puck pages with MDX blocks.
  *
- * Uses narrative section merging for static rendering: consecutive
- * ContentBlockSection + visual component pairs are grouped into single
- * sections matching the production layout structure.
+ * Enhances the Puck config by:
+ * 1. Registering each MDX block as a dynamic Puck component (`Block_{id}`)
+ * 2. Overriding ContentBlockSection's render to resolve blockId → actual MDX content
  *
  * MDX blocks are passed as React components (not HTML strings), which:
  * - Avoids dangerouslySetInnerHTML security risks
@@ -412,30 +188,10 @@ function RenderWithBlocks({ config, data, mdxComponents }: RenderWithBlocksProps
   // Check if page has hydratable components
   const needsHydration = hasHydratableComponents(data, enhancedConfig);
 
-  // Check if any CBS starts a narrative section
-  const hasNarrativeSections = (data.content as ContentItem[]).some((item) => {
-    if (item.type !== 'ContentBlockSection') return false;
-    const props = item.props as unknown as ContentBlockSectionProps;
-    return props.startsNewSection !== undefined
-      ? props.startsNewSection === true || props.startsNewSection === 'true'
-      : !!props.title;
-  });
-
-  // MergedRender doesn't support zones — fall back to standard render if zones have content
-  const hasZoneContent = data.zones && Object.values(data.zones).some((zone) => zone.length > 0);
-
-  // Hydration and narrative section merging are mutually exclusive for now.
-  // When both are present, hydration takes priority (narrative grouping is skipped).
   if (needsHydration) {
     return <RenderWithHydration config={enhancedConfig} data={data} />;
   }
 
-  // Use merged rendering when narrative sections are present and no zone content
-  if (hasNarrativeSections && !hasZoneContent) {
-    return <MergedRender config={enhancedConfig} data={data} blockComponentMap={blockComponentMap} />;
-  }
-
-  // Fallback: standard Puck render (no narrative sections)
   return <Render config={enhancedConfig} data={data} />;
 }
 
