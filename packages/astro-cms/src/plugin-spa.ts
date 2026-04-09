@@ -739,23 +739,19 @@ if (import.meta.hot) {
 
         const injectedPatterns = new Set(Object.values(resolvedRoutingConfig.routes).map((r) => r.pattern));
 
-        // Find file-based routes that may conflict with injected routes
+        // Find file-based project routes that conflict with injected routes.
+        // Integration routes (origin: 'external') sharing the same catch-all pattern
+        // is expected — Astro's prerender fallthrough handles coexistence automatically.
         const conflicts: { injected: string; fileBased: string }[] = [];
 
         for (const route of routes) {
-          // Skip routes from integrations (including our own)
-          if (route.origin === 'internal') continue;
+          if (route.origin !== 'project') continue;
 
-          // Skip our own injected page handler route
-          const entrypoint = route.entrypoint || '';
-          if (entrypoint.includes('page-handler.astro')) continue;
-
-          // Check if this file-based route pattern matches any injected pattern
           const pattern = route.pattern;
           if (injectedPatterns.has(pattern)) {
             conflicts.push({
               injected: pattern,
-              fileBased: entrypoint || pattern,
+              fileBased: route.entrypoint || pattern,
             });
           }
         }
