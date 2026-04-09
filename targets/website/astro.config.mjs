@@ -57,6 +57,13 @@ export default defineConfig({
       puckConfigPath: './src/puck.config.tsx',
       siteStyles: './src/styles/global.css',
       assetsPath: './public/assets',
+      templates: {
+        contentPage: {
+          label: 'Content Page',
+          component: 'ContentPageTemplate',
+          description: 'Legal, policy, and content-heavy pages',
+        },
+      },
       routing: {
         routes: {
           pages: {
@@ -66,7 +73,7 @@ export default defineConfig({
           },
         },
         fallback: 'passthrough',
-        onConflict: 'silent',
+        onConflict: 'warn',
         siteName: 'default',
         locale: 'en',
       },
