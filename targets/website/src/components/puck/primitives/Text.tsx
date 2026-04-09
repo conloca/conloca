@@ -4,10 +4,22 @@ import { withLayout } from '../../Layout';
 import { Section } from '../../Section';
 import { colors, typography } from '../shared/tokens';
 
+type TextSize = 'xs' | 's' | 'm' | 'l' | 'xl';
+type TextWeight = 'regular' | 'medium' | 'semibold';
+
+const sizeMap: Record<TextSize, { fontSize: string; lineHeight: string }> = {
+  xs: typography.text.xs,
+  s: typography.text.sm,
+  m: typography.text.md,
+  l: typography.text.lg,
+  xl: typography.text.xl,
+};
+
 export type TextProps = WithLayout<{
   align: 'left' | 'center' | 'right';
   text?: string;
-  size?: 's' | 'm';
+  size?: TextSize;
+  weight?: TextWeight;
   color: 'default' | 'muted';
   maxWidth?: string;
 }>;
@@ -23,8 +35,20 @@ const TextInner: ComponentConfig<TextProps> = {
       type: 'select',
       label: 'Size',
       options: [
+        { label: 'XS', value: 'xs' },
         { label: 'S', value: 's' },
         { label: 'M', value: 'm' },
+        { label: 'L', value: 'l' },
+        { label: 'XL', value: 'xl' },
+      ],
+    },
+    weight: {
+      type: 'radio',
+      label: 'Weight',
+      options: [
+        { label: 'Regular', value: 'regular' },
+        { label: 'Medium', value: 'medium' },
+        { label: 'Semibold', value: 'semibold' },
       ],
     },
     align: {
@@ -50,11 +74,11 @@ const TextInner: ComponentConfig<TextProps> = {
     align: 'left',
     text: 'Text',
     size: 'm',
+    weight: 'regular',
     color: 'default',
   },
-  render: ({ align, color, text, size, maxWidth }) => {
-    const fontSize = size === 's' ? typography.text.sm.fontSize : typography.text.md.fontSize;
-    const lineHeight = size === 's' ? typography.text.sm.lineHeight : typography.text.md.lineHeight;
+  render: ({ align, color, text, size = 'm', weight = 'regular', maxWidth }) => {
+    const { fontSize, lineHeight } = sizeMap[size];
     const textColor = color === 'muted' ? colors.text.secondary : colors.text.primary;
 
     return (
@@ -64,7 +88,7 @@ const TextInner: ComponentConfig<TextProps> = {
             fontFamily: typography.fonts.body,
             fontSize,
             lineHeight,
-            fontWeight: typography.weights.regular,
+            fontWeight: typography.weights[weight],
             color: textColor,
             textAlign: align,
             margin: 0,
