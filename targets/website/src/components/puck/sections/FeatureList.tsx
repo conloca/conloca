@@ -14,11 +14,14 @@ type FeatureItem = {
 type FeatureListWidth = 'narrow' | 'default';
 type FeatureListTone = 'transparent' | 'subtle';
 
+type FeatureListColumns = '1' | '2' | '3';
+
 export type FeatureListProps = {
   label: string;
   title: string;
   subtitle: string;
   showNumbers: 'true' | 'false';
+  columns: FeatureListColumns;
   items: FeatureItem[];
   width: FeatureListWidth;
   tone: FeatureListTone;
@@ -35,11 +38,21 @@ const toneClassNames: Record<FeatureListTone, string> = {
     'rounded-3xl border border-surface-200/80 bg-surface-100/70 p-6 sm:p-8 dark:border-surface-800/60 dark:bg-surface-900/50',
 };
 
+const gridColsClass: Record<FeatureListColumns, string> = {
+  '1': 'grid gap-6',
+  '2': 'grid sm:grid-cols-2 gap-6',
+  '3': 'grid sm:grid-cols-2 lg:grid-cols-3 gap-6',
+};
+
 const descClassNames =
   'text-surface-500 dark:text-surface-400 text-sm leading-relaxed [&_a]:text-brand-600 dark:[&_a]:text-brand-400 [&_a]:underline [&_a]:underline-offset-2 [&_code]:font-mono [&_code]:text-[0.95em] [&_code]:text-surface-600 dark:[&_code]:text-surface-300 [&_div]:contents [&_p]:contents [&_p]:m-0';
 
 export const FeatureList: ComponentConfig<FeatureListProps> = {
   label: 'Feature List',
+  resolveFields: (data, { fields }) => ({
+    ...fields,
+    columns: { ...fields.columns, visible: data.props.showNumbers !== 'true' },
+  }),
   resolveData: (data, { changed }) => {
     if (changed.items === false) return { props: {} };
     return {
@@ -61,6 +74,15 @@ export const FeatureList: ComponentConfig<FeatureListProps> = {
       options: [
         { label: 'Numbered (card badges)', value: 'true' },
         { label: 'Unnumbered (card grid)', value: 'false' },
+      ],
+    },
+    columns: {
+      type: 'select',
+      label: 'Columns',
+      options: [
+        { label: '1 Column', value: '1' },
+        { label: '2 Columns', value: '2' },
+        { label: '3 Columns', value: '3' },
       ],
     },
     items: {
@@ -117,6 +139,7 @@ export const FeatureList: ComponentConfig<FeatureListProps> = {
     title: 'Feature List',
     subtitle: '',
     showNumbers: 'false',
+    columns: '2',
     items: [
       { id: crypto.randomUUID(), number: '1', iconText: '', title: 'Feature one', description: 'Description.' },
       { id: crypto.randomUUID(), number: '2', iconText: '', title: 'Feature two', description: 'Description.' },
@@ -124,7 +147,7 @@ export const FeatureList: ComponentConfig<FeatureListProps> = {
     width: 'default',
     tone: 'transparent',
   },
-  render: ({ label, title, subtitle, showNumbers, items, width, tone, puck }) => {
+  render: ({ label, title, subtitle, showNumbers, columns, items, width, tone, puck }) => {
     const numbered = showNumbers === 'true';
 
     return (
@@ -160,7 +183,7 @@ export const FeatureList: ComponentConfig<FeatureListProps> = {
                 ))}
               </div>
             ) : (
-              <div className="grid sm:grid-cols-2 gap-6">
+              <div className={gridColsClass[columns] || gridColsClass['2']}>
                 {items.map((item) => (
                   <div
                     key={item.id}

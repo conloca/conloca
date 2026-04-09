@@ -1,5 +1,6 @@
 import type { ComponentConfig } from '@puckeditor/core';
 import cn from 'clsx';
+import { ColorFieldRender } from '../fields/ColorField';
 import { renderLimitedRichText } from '../shared/render-limited-rich-text';
 
 type ProseSectionWidth = 'narrow' | 'default';
@@ -11,6 +12,7 @@ export type ProseSectionProps = {
   subtitle: string;
   codeSnippet: string;
   codeFilename: string;
+  accentColor: string;
   body: string;
   width: ProseSectionWidth;
   tone: ProseSectionTone;
@@ -30,7 +32,7 @@ const toneClassNames: Record<ProseSectionTone, string> = {
 const bodyClassNames =
   'text-surface-500 dark:text-surface-400 text-sm leading-relaxed [&_a]:text-brand-600 dark:[&_a]:text-brand-400 [&_a]:underline [&_a]:underline-offset-2 [&_code]:font-mono [&_code]:text-surface-600 dark:[&_code]:text-surface-300';
 
-function CodeCard({ code, filename }: { code: string; filename: string }) {
+function CodeCard({ code, filename, accentColor }: { code: string; filename: string; accentColor: string }) {
   return (
     <div className="bg-surface-100/60 dark:bg-surface-900/40 border border-surface-200/80 dark:border-surface-800/50 rounded-xl overflow-hidden">
       {filename && (
@@ -40,7 +42,11 @@ function CodeCard({ code, filename }: { code: string; filename: string }) {
         </div>
       )}
       <div className="flex">
-        <div className="w-1 bg-brand-500/40 shrink-0" />
+        {accentColor ? (
+          <div className="w-1 shrink-0 opacity-40" style={{ backgroundColor: accentColor }} />
+        ) : (
+          <div className="w-1 bg-brand-500/40 shrink-0" />
+        )}
         <pre className="p-4 text-sm overflow-x-auto flex-1">
           <code className="font-mono text-surface-600 dark:text-surface-300">{code}</code>
         </pre>
@@ -57,6 +63,13 @@ export const ProseSection: ComponentConfig<ProseSectionProps> = {
     subtitle: { type: 'textarea', label: 'Section Subtitle', contentEditable: true },
     codeSnippet: { type: 'textarea', label: 'Code Snippet (optional)' },
     codeFilename: { type: 'text', label: 'Code Filename (optional)' },
+    accentColor: {
+      type: 'custom',
+      label: 'Accent Color',
+      render: ({ value, onChange, readOnly }) => (
+        <ColorFieldRender value={value} onChange={onChange} readOnly={readOnly} />
+      ),
+    },
     body: { type: 'textarea', label: 'Body (optional)' },
     width: {
       type: 'select',
@@ -81,11 +94,12 @@ export const ProseSection: ComponentConfig<ProseSectionProps> = {
     subtitle: '',
     codeSnippet: '',
     codeFilename: '',
+    accentColor: '',
     body: '',
     width: 'default',
     tone: 'transparent',
   },
-  render: ({ label, title, subtitle, codeSnippet, codeFilename, body, width, tone, puck }) => {
+  render: ({ label, title, subtitle, codeSnippet, codeFilename, accentColor, body, width, tone, puck }) => {
     return (
       <section className="mb-20">
         <div className={cn('mx-auto px-4 sm:px-6 lg:px-8', widthClassNames[width])}>
@@ -99,7 +113,7 @@ export const ProseSection: ComponentConfig<ProseSectionProps> = {
             <p className="text-surface-500 dark:text-surface-400 text-sm leading-relaxed mb-6">{subtitle}</p>
           )}
           <div className={cn(toneClassNames[tone])}>
-            {codeSnippet && <CodeCard code={codeSnippet} filename={codeFilename} />}
+            {codeSnippet && <CodeCard code={codeSnippet} filename={codeFilename} accentColor={accentColor} />}
             {body && renderLimitedRichText(body, cn(bodyClassNames, { 'mt-6': !!codeSnippet }), puck.isEditing)}
           </div>
         </div>
