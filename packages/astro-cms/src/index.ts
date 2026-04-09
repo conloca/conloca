@@ -17,7 +17,7 @@ export {
   hasHydratableComponents,
   isHydratable,
 } from './lib/hydration-utils.js';
-export { extractSlugFromPathname, pathnameFromSlug } from './lib/route-utils.js';
+export { extractSlugFromPathname, isPublished, pathnameFromSlug, toDate } from './lib/route-utils.js';
 export { serializeProps } from './lib/serialize-props.js';
 // New hydration API: withHydration wrapper and build-time scanner
 export { type HydrationMeta, type WithHydrationStrategy, withHydration } from './lib/withHydration.js';

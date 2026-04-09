@@ -16,7 +16,7 @@ import React from 'react'
 import type { ComponentType } from 'react'
 
 import { createPageRendererWithBlocks, RenderWithHydration } from '@conloca/astro-cms/components'
-import { hasHydratableComponents, extractSlugFromPathname } from '@conloca/astro-cms'
+import { hasHydratableComponents, extractSlugFromPathname, isPublished, toDate } from '@conloca/astro-cms'
 import type { DataCollectionEntry, DataContext, PageData, PageReference, ResolvedRoutingConfig } from '@conloca/astro-cms'
 import { ALL_BLOCKS_COLLECTION } from '@conloca/astro-cms/node/content'
 
@@ -24,7 +24,8 @@ import routingConfig from 'virtual:conloca-routing-config'
 import Layout from 'virtual:conloca-layout'
 import puckConfig from 'virtual:conloca-puck-config'
 
-export const prerender = true
+// prerender is controlled by injectRoute({ prerender }) in plugin-spa.ts
+// Do not hardcode here — it overrides the route-level config
 
 type AstroCollectionEntry = Awaited<ReturnType<typeof getCollection>>[number]
 
@@ -111,36 +112,6 @@ async function getCollectionEntries(collectionName: string) {
 
     throw error
   })
-}
-
-function toDate(value: string | Date | null | undefined) {
-  if (!value) {
-    return undefined
-  }
-
-  if (value instanceof Date) {
-    return value
-  }
-
-  const parsed = new Date(value)
-
-  return Number.isNaN(parsed.getTime()) ? undefined : parsed
-}
-
-function isPublished(data: BaseEntryData) {
-  const now = new Date()
-  const publishAt = toDate(data.publishAt)
-  const unpublishAt = toDate(data.unpublishAt)
-
-  if (publishAt && publishAt > now) {
-    return false
-  }
-
-  if (unpublishAt && unpublishAt <= now) {
-    return false
-  }
-
-  return true
 }
 
 async function loadCollectionEntries(collectionName: string) {
@@ -323,6 +294,17 @@ export const getStaticPaths: GetStaticPaths = async () => {
     }
   }
 
+  if (import.meta.env.DEV) {
+    if (paths.length === 0) {
+      console.warn(
+        '[Conloca] getStaticPaths returned 0 pages. '
+        + 'Check that content collections are populated and pages have locale/pathname fields.',
+      )
+    } else {
+      console.debug(`[Conloca] getStaticPaths: ${paths.length} page(s)`)
+    }
+  }
+
   return paths
 }
 
@@ -332,8 +314,28 @@ interface Props {
   pathname: string
 }
 
-const { routeName, collection, pathname } = Astro.props as Props
 const config = routingConfig as ResolvedRoutingConfig
+
+// In prerender mode, props come from getStaticPaths().
+// In SSR mode (prerender: false), derive from the request URL.
+const propsFromStaticPaths = Astro.props as Partial<Props>
+let routeName = propsFromStaticPaths.routeName
+let collection = propsFromStaticPaths.collection
+let pathname = propsFromStaticPaths.pathname
+
+if (!routeName || !collection || !pathname) {
+  // SSR fallback: match URL against configured routes
+  const requestPath = Astro.url.pathname
+  for (const [name, routeConfig] of Object.entries(config.routes)) {
+    const prefix = routeConfig.pattern.replace(/\[.*$/, '').replace(/\/$/, '')
+    if (requestPath === prefix || requestPath.startsWith(prefix + '/') || prefix === '') {
+      routeName = name
+      collection = routeConfig.collection
+      pathname = requestPath
+      break
+    }
+  }
+}
 
 let page: PageData | undefined
 let loadError: Error | undefined
