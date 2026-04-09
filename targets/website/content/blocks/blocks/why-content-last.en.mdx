@@ -8,7 +8,11 @@ type: mdx
 category: content
 ---
 
-## Why Content-Last?
-
 By placing the `content` field last, all metadata fits within the first 4KB of every file. This unlocks two performance
 advantages.
+
+**4KB Index Reads** — The system can index thousands of pages by reading only the first 4KB of each file. Metadata like
+title, dates, and ETags are always there -- no need to parse the full content payload.
+
+**Independent ETags** — The dual `metaEtag.contentEtag` format lets the system detect staleness for metadata and content
+independently -- critical for content inheritance across locales.

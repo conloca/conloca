@@ -8,8 +8,12 @@ type: mdx
 category: content
 ---
 
-## Crash-Safe Writes
-
 Every file write in Conloca uses an atomic write strategy. Content is written to a temporary file first, then atomically
 renamed to the target path. This is a Conloca runtime feature -- independent of the VxJSON format -- ensuring the
 original file is never corrupted if the process crashes mid-write.
+
+1. **Write to temp file** — Content is written to a temporary file with a unique name: `{path}.tmp.{pid}.{hrtime}`
+2. **Atomic rename** — `rename()` replaces the target file in a single operation. On POSIX systems, this is guaranteed
+   atomic -- the file is either fully old or fully new.
+3. **Crash recovery** — If the process crashes during step 1, only the temp file is left behind -- the original is
+   untouched. If it crashes during step 2, the rename either completed or it didn't. No half-written files, ever.

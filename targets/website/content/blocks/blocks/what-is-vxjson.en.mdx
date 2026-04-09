@@ -8,9 +8,26 @@ type: mdx
 category: content
 ---
 
-## What is VxJSON?
-
 VxJSON (Variant JSON) is standard JSON with a `.vxjson` extension and two guarantees: the `content` field is always
 last, and field order is deterministic.
 
 That is it. No special parser needed - any JSON reader can open a VxJSON file.
+
+```json
+{
+  // Metadata -- fits in first 4KB
+  "id": "abc123",
+  "type": "puck",
+  "created": "2026-01-15T10:00:00Z",
+  "modified": "2026-01-20T14:30:00Z",
+  "meta": {
+    "title": "About Us",
+    "description": "Learn about our team"
+  },
+
+  // Content payload -- always last
+  "content": {
+    "puckData": { ... }
+  }
+}
+```
