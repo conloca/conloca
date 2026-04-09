@@ -82,6 +82,14 @@ if (schemaType === 'faq') {
     padding-top: 0 !important;
     padding-bottom: 0 !important;
   }
+  /* Restore inter-section spacing via margin (padding was stripped above).
+     Matches live site's mb-20 (80px) on ContentBlockSection elements. */
+  .cms-subpage > div > section {
+    margin-bottom: 5rem;
+  }
+  .cms-subpage > div > section:last-child {
+    margin-bottom: 0;
+  }
   /* Strip inner component wrappers inside narrative sections */
   .narrative-section > section {
     margin: 0 !important;

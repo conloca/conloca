@@ -22,9 +22,11 @@ import type {
   CTABannerProps,
   FAQProps,
   FeatureCardsProps,
+  FeatureListProps,
   HeroProps,
   HostedComparisonProps,
   NumberedFlowProps,
+  ProseSectionProps,
   RichTextSectionProps,
   StepsProps,
 } from './components/puck/sections';
@@ -39,9 +41,11 @@ import {
   CTABanner,
   FAQ,
   FeatureCards,
+  FeatureList,
   Hero,
   HostedComparison,
   NumberedFlow,
+  ProseSection,
   RichTextSection,
   Steps,
 } from './components/puck/sections';
@@ -60,6 +64,7 @@ type Components = {
   Divider: DividerProps;
   FAQ: FAQProps;
   FeatureCards: FeatureCardsProps;
+  FeatureList: FeatureListProps;
   Flex: FlexProps;
   Grid: GridProps;
   Heading: HeadingProps;
@@ -67,6 +72,7 @@ type Components = {
   HostedComparison: HostedComparisonProps;
   Image: ImageProps;
   NumberedFlow: NumberedFlowProps;
+  ProseSection: ProseSectionProps;
   RichTextSection: RichTextSectionProps;
   Space: SpaceProps;
   Steps: StepsProps;
@@ -86,7 +92,7 @@ const puckConfig: Config<Components> = {
     },
     content: {
       title: 'Content',
-      components: ['ContentBlockSection', 'CodeBlock', 'FAQ', 'RichTextSection'],
+      components: ['ContentBlockSection', 'CodeBlock', 'FAQ', 'RichTextSection', 'ProseSection', 'FeatureList'],
     },
     showcase: {
       title: 'Showcase',
@@ -115,6 +121,7 @@ const puckConfig: Config<Components> = {
     Divider,
     FAQ,
     FeatureCards,
+    FeatureList,
     Flex: { ...Flex, label: 'Flex Container' },
     Grid: { ...Grid, label: 'Grid Container' },
     Heading,
@@ -122,6 +129,7 @@ const puckConfig: Config<Components> = {
     HostedComparison: { ...HostedComparison, label: 'Plan Comparison' },
     Image,
     NumberedFlow: { ...NumberedFlow, label: 'Numbered Steps' },
+    ProseSection,
     RichTextSection: { ...RichTextSection, label: 'Rich Text (Legacy)' },
     Space: { ...Space, label: 'Spacer' },
     Steps,

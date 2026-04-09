@@ -22,68 +22,91 @@
         },
         {
           "props": {
-            "blockId": "vx-wh4t1svxj",
-            "id": "ContentBlockSection-c9d0e1f2",
+            "id": "ProseSection-c9d0e1f2",
             "label": "",
-            "startsNewSection": "true",
-            "subtitle": "VxJSON is standard JSON with a .vxjson extension and two guarantees: the content field is always last, and field order is deterministic. That is it. No special parser needed -- any JSON reader can open a VXJSON file.",
             "title": "What is VxJSON?",
-            "tone": "transparent",
-            "width": "default"
+            "subtitle": "VxJSON is standard JSON with a .vxjson extension and two guarantees: the content field is always last, and field order is deterministic. That is it. No special parser needed -- any JSON reader can open a VXJSON file.",
+            "codeSnippet": "{\n  // Metadata -- fits in first 4KB\n  \"id\": \"abc123\",\n  \"type\": \"puck\",\n  \"created\": \"2026-01-15T10:00:00Z\",\n  \"modified\": \"2026-01-20T14:30:00Z\",\n  \"meta\": {\n    \"title\": \"About Us\",\n    \"description\": \"Learn about our team\"\n  },\n\n  // Content payload -- always last\n  \"content\": {\n    \"puckData\": { ... }\n  }\n}",
+            "codeFilename": "home.vxjson",
+            "body": "",
+            "width": "default",
+            "tone": "transparent"
           },
-          "type": "ContentBlockSection"
+          "type": "ProseSection"
         },
         {
           "props": {
-            "blockId": "vx-whyc0nt3nt",
-            "id": "ContentBlockSection-k7l8m9n0",
+            "id": "FeatureList-k7l8m9n0",
             "label": "",
-            "startsNewSection": "true",
-            "subtitle": "By placing the content field last, all metadata fits within the first 4KB of every file. This unlocks two performance advantages.",
             "title": "Why Content-Last?",
-            "tone": "transparent",
-            "width": "default"
+            "subtitle": "By placing the content field last, all metadata fits within the first 4KB of every file. This unlocks two performance advantages.",
+            "showNumbers": "false",
+            "items": [
+              {
+                "id": "fl-4kb-reads",
+                "number": "1",
+                "iconText": "4K",
+                "title": "4KB Index Reads",
+                "description": "The system can index thousands of pages by reading only the first 4KB of each file. Metadata like title, dates, and ETags are always there -- no need to parse the full content payload."
+              },
+              {
+                "id": "fl-independent-etags",
+                "number": "2",
+                "iconText": "→",
+                "title": "Independent ETags",
+                "description": "The dual <code>metaEtag.contentEtag</code> format lets the system detect staleness for metadata and content independently -- critical for content inheritance across locales."
+              }
+            ],
+            "width": "default",
+            "tone": "transparent"
           },
-          "type": "ContentBlockSection"
+          "type": "FeatureList"
         },
         {
           "props": {
-            "blockId": "vx-cr4shs4f3",
-            "id": "ContentBlockSection-s5t6u7v8",
+            "id": "FeatureList-s5t6u7v8",
             "label": "",
-            "startsNewSection": "true",
-            "subtitle": "Every file write in Conloca uses an atomic write strategy. Content is written to a temporary file first, then atomically renamed to the target path. This is a Conloca runtime feature -- independent of the VxJSON format -- ensuring the original file is never corrupted if the process crashes mid-write.",
             "title": "Crash-Safe Writes",
-            "tone": "transparent",
-            "width": "default"
+            "subtitle": "Every file write in Conloca uses an atomic write strategy. Content is written to a temporary file first, then atomically renamed to the target path. This is a Conloca runtime feature -- independent of the VxJSON format -- ensuring the original file is never corrupted if the process crashes mid-write.",
+            "showNumbers": "true",
+            "items": [
+              {
+                "id": "fl-write-temp",
+                "number": "1",
+                "title": "Write to temp file",
+                "description": "Content is written to a temporary file with a unique name: <code>{path}.tmp.{pid}.{hrtime}</code>"
+              },
+              {
+                "id": "fl-atomic-rename",
+                "number": "2",
+                "title": "Atomic rename",
+                "description": "<code>rename()</code> replaces the target file in a single operation. On POSIX systems, this is guaranteed atomic -- the file is either fully old or fully new."
+              },
+              {
+                "id": "fl-crash-recovery",
+                "number": "3",
+                "title": "Crash recovery",
+                "description": "If the process crashes during step 1, only the temp file is left behind -- the original is untouched. If it crashes during step 2, the rename either completed or it didn't. No half-written files, ever."
+              }
+            ],
+            "width": "default",
+            "tone": "transparent"
           },
-          "type": "ContentBlockSection"
+          "type": "FeatureList"
         },
         {
           "props": {
-            "blockId": "vx-3t4gc0ncur",
-            "id": "ContentBlockSection-a3b4c5d6",
+            "id": "ProseSection-a3b4c5d6",
             "label": "",
-            "startsNewSection": "true",
-            "subtitle": "Every VXJSON file carries a dual-format ETag that prevents stale overwrites when multiple editors work simultaneously. The format is:",
             "title": "ETag Concurrency",
-            "tone": "transparent",
-            "width": "default"
+            "subtitle": "Every VXJSON file carries a dual-format ETag that prevents stale overwrites when multiple editors work simultaneously. The format is:",
+            "codeSnippet": "metaEtag.contentEtag   // e.g. a3f2c1.b7e4d9",
+            "codeFilename": "",
+            "body": "When an editor saves, the CMS sends the expected ETag. If the file was modified since it was loaded, the server rejects the write with a <code>STALE_WRITE</code> error and presents a conflict resolution dialog. No content is silently overwritten.",
+            "width": "default",
+            "tone": "transparent"
           },
-          "type": "ContentBlockSection"
-        },
-        {
-          "props": {
-            "blockId": "vx-st4l3wr1t3",
-            "id": "ContentBlockSection-i1j2k3l4",
-            "label": "",
-            "startsNewSection": "true",
-            "subtitle": "When an editor saves, the CMS sends the expected ETag. If the file was modified since it was loaded, the server rejects the write with a STALE_WRITE error and presents a conflict resolution dialog. No content is silently overwritten.",
-            "title": "",
-            "tone": "transparent",
-            "width": "default"
-          },
-          "type": "ContentBlockSection"
+          "type": "ProseSection"
         },
         {
           "props": {
