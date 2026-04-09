@@ -1,9 +1,17 @@
+export type { BlockquoteProps } from './Blockquote';
+export { Blockquote } from './Blockquote';
+export type { CalloutProps } from './Callout';
+export { Callout } from './Callout';
 export type { CodeBlockProps } from './CodeBlock';
 export { CodeBlock } from './CodeBlock';
 export type { ComparisonTableProps } from './ComparisonTable';
 export { ComparisonTable } from './ComparisonTable';
 export type { ContentBlockSectionProps } from './ContentBlockSection';
 export { ContentBlockSection } from './ContentBlockSection';
+export type { ContentPageHeroProps } from './ContentPageHero';
+export { ContentPageHero } from './ContentPageHero';
+export type { ContentPageTemplateProps } from './ContentPageTemplate';
+export { ContentPageTemplate } from './ContentPageTemplate';
 export type { CTABannerProps } from './CTABanner';
 export { CTABanner } from './CTABanner';
 export type { FAQProps } from './FAQ';

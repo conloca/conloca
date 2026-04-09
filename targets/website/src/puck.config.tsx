@@ -12,9 +12,13 @@ import type {
 } from './components/puck/primitives';
 import { Badge, Button, Divider, Flex, Grid, Heading, Image, Space, Text } from './components/puck/primitives';
 import type {
+  BlockquoteProps,
+  CalloutProps,
   CodeBlockProps,
   ComparisonTableProps,
   ContentBlockSectionProps,
+  ContentPageHeroProps,
+  ContentPageTemplateProps,
   CTABannerProps,
   FAQProps,
   FeatureCardsProps,
@@ -25,9 +29,13 @@ import type {
   StepsProps,
 } from './components/puck/sections';
 import {
+  Blockquote,
+  Callout,
   CodeBlock,
   ComparisonTable,
   ContentBlockSection,
+  ContentPageHero,
+  ContentPageTemplate,
   CTABanner,
   FAQ,
   FeatureCards,
@@ -40,8 +48,12 @@ import {
 
 type Components = {
   Badge: BadgeProps;
+  Blockquote: BlockquoteProps;
   Button: ButtonProps;
+  Callout: CalloutProps;
   ContentBlockSection: ContentBlockSectionProps;
+  ContentPageHero: ContentPageHeroProps;
+  ContentPageTemplate: ContentPageTemplateProps;
   CTABanner: CTABannerProps;
   CodeBlock: CodeBlockProps;
   ComparisonTable: ComparisonTableProps;
@@ -68,6 +80,10 @@ const puckConfig: Config<Components> = {
       defaultExpanded: true,
       components: ['Hero', 'CTABanner'],
     },
+    contentPages: {
+      title: 'Content Pages',
+      components: ['ContentPageTemplate', 'ContentPageHero', 'Callout', 'Blockquote'],
+    },
     content: {
       title: 'Content',
       components: ['ContentBlockSection', 'CodeBlock', 'FAQ', 'RichTextSection'],
@@ -87,8 +103,12 @@ const puckConfig: Config<Components> = {
   },
   components: {
     Badge,
+    Blockquote,
     Button,
+    Callout,
     ContentBlockSection: { ...ContentBlockSection, label: 'Content Section' },
+    ContentPageHero,
+    ContentPageTemplate,
     CTABanner,
     CodeBlock,
     ComparisonTable,
