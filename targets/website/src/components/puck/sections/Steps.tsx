@@ -20,7 +20,7 @@ export type StepsProps = {
 };
 
 export const Steps: ComponentConfig<StepsProps> = {
-  label: 'Quick Start Steps',
+  label: 'Steps',
   // Auto-numbers steps by array index. Numbers are persisted in VXJSON at save time,
   // so production rendering doesn't need resolveAllData — saved values are already correct.
   resolveData: (data, { changed }) => {
