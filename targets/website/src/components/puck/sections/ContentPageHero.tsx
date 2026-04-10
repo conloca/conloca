@@ -21,7 +21,13 @@ const toneClasses: Record<ContentPageHeroTone, string> = {
   subtle: 'bg-surface-50 dark:bg-surface-900',
 };
 
-const ContentPageHeroRender = ({ title, subtitle, breadcrumbs, tone }: ContentPageHeroProps) => {
+const ContentPageHeroRender = ({
+  title,
+  subtitle,
+  breadcrumbs,
+  tone,
+  puck,
+}: ContentPageHeroProps & { puck: { isEditing: boolean } }) => {
   return (
     <header className={cn('pt-16 pb-12 sm:pt-20 sm:pb-16', toneClasses[tone])}>
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -48,7 +54,11 @@ const ContentPageHeroRender = ({ title, subtitle, breadcrumbs, tone }: ContentPa
                   {index === breadcrumbs.length - 1 ? (
                     <span className="text-surface-900 dark:text-white font-medium">{crumb.label}</span>
                   ) : (
-                    <a href={crumb.href} className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">
+                    <a
+                      href={crumb.href}
+                      className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors"
+                      onClick={puck.isEditing ? (e) => e.preventDefault() : undefined}
+                    >
                       {crumb.label}
                     </a>
                   )}
