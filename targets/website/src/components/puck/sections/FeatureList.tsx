@@ -167,10 +167,14 @@ export const FeatureList: ComponentConfig<FeatureListProps> = {
               <EmptySlotPlaceholder label="Add items using the sidebar panel" />
             ) : numbered ? (
               <div className="space-y-4">
-                {items.map((item) => (
+                {items.map((item, idx) => (
                   <div
                     key={item.id}
-                    className="bg-surface-100/60 dark:bg-surface-900/40 border border-surface-200/80 dark:border-surface-800/50 rounded-xl p-6 flex gap-4"
+                    className={cn(
+                      'bg-surface-100/60 dark:bg-surface-900/40 border border-surface-200/80 dark:border-surface-800/50 rounded-xl p-6 flex gap-4',
+                      { reveal: !puck.isEditing },
+                    )}
+                    style={puck.isEditing ? undefined : { animationDelay: `${idx * 0.08}s` }}
                   >
                     <div className="w-8 h-8 rounded-lg bg-brand-500 flex items-center justify-center shrink-0">
                       <span className="text-surface-950 font-bold text-sm">{item.number}</span>
@@ -184,10 +188,14 @@ export const FeatureList: ComponentConfig<FeatureListProps> = {
               </div>
             ) : (
               <div className={gridColsClass[columns] || gridColsClass['2']}>
-                {items.map((item) => (
+                {items.map((item, idx) => (
                   <div
                     key={item.id}
-                    className="bg-surface-100/60 dark:bg-surface-900/40 border border-surface-200/80 dark:border-surface-800/50 rounded-xl p-6"
+                    className={cn(
+                      'bg-surface-100/60 dark:bg-surface-900/40 border border-surface-200/80 dark:border-surface-800/50 rounded-xl p-6',
+                      { reveal: !puck.isEditing },
+                    )}
+                    style={puck.isEditing ? undefined : { animationDelay: `${idx * 0.08}s` }}
                   >
                     {item.iconText && (
                       <div className="w-10 h-10 rounded-lg bg-brand-500/10 border border-brand-500/20 flex items-center justify-center mb-4">
