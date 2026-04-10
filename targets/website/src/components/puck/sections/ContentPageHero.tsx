@@ -97,7 +97,7 @@ export const ContentPageHero: ComponentConfig<ContentPageHeroProps> = {
       type: 'array',
       label: 'Breadcrumbs',
       arrayFields: {
-        id: { type: 'text', label: 'ID' },
+        id: { type: 'text', visible: false },
         label: { type: 'text', label: 'Label' },
         href: { type: 'text', label: 'URL' },
       },
