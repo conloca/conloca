@@ -91,11 +91,11 @@ export const ContentPageHero: ComponentConfig<ContentPageHeroProps> = {
         label: { type: 'text', label: 'Label' },
         href: { type: 'text', label: 'URL' },
       },
-      defaultItemProps: {
-        id: `crumb-${Date.now()}`,
+      defaultItemProps: () => ({
+        id: crypto.randomUUID(),
         label: 'Page',
         href: '/',
-      },
+      }),
       getItemSummary: (item) => item.label || 'Breadcrumb',
     },
     tone: {
