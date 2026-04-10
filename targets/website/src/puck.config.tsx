@@ -27,7 +27,6 @@ import type {
   HostedComparisonProps,
   NumberedFlowProps,
   ProseSectionProps,
-  RichTextSectionProps,
   StepsProps,
 } from './components/puck/sections';
 import {
@@ -46,7 +45,6 @@ import {
   HostedComparison,
   NumberedFlow,
   ProseSection,
-  RichTextSection,
   Steps,
 } from './components/puck/sections';
 
@@ -73,7 +71,6 @@ type Components = {
   Image: ImageProps;
   NumberedFlow: NumberedFlowProps;
   ProseSection: ProseSectionProps;
-  RichTextSection: RichTextSectionProps;
   Space: SpaceProps;
   Steps: StepsProps;
   Text: TextProps;
@@ -92,7 +89,7 @@ const puckConfig: Config<Components> = {
     },
     content: {
       title: 'Content',
-      components: ['ContentBlockSection', 'CodeBlock', 'FAQ', 'RichTextSection', 'ProseSection', 'FeatureList'],
+      components: ['ContentBlockSection', 'CodeBlock', 'FAQ', 'ProseSection', 'FeatureList'],
     },
     showcase: {
       title: 'Showcase',
@@ -130,7 +127,6 @@ const puckConfig: Config<Components> = {
     Image,
     NumberedFlow: { ...NumberedFlow, label: 'Numbered Steps' },
     ProseSection,
-    RichTextSection: { ...RichTextSection, label: 'Rich Text (Legacy)' },
     Space: { ...Space, label: 'Spacer' },
     Steps,
     Text,
