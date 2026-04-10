@@ -28,7 +28,5 @@ export type { NumberedFlowProps } from './NumberedFlow';
 export { NumberedFlow } from './NumberedFlow';
 export type { ProseSectionProps } from './ProseSection';
 export { ProseSection } from './ProseSection';
-export type { RichTextSectionProps } from './RichTextSection';
-export { RichTextSection } from './RichTextSection';
 export type { StepsProps } from './Steps';
 export { Steps } from './Steps';
