@@ -39,7 +39,6 @@ const GridInternal: ComponentConfig<GridProps> = {
         'Hero',
         'HostedComparison',
         'NumberedFlow',
-        'RichTextSection',
         'Steps',
       ],
     },

@@ -60,7 +60,6 @@ const FlexInternal: ComponentConfig<FlexProps> = {
         'Hero',
         'HostedComparison',
         'NumberedFlow',
-        'RichTextSection',
         'Steps',
       ],
     },
