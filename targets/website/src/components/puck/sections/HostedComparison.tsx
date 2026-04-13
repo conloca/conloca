@@ -134,35 +134,34 @@ export const HostedComparisonRender = ({
           <p className="text-surface-500 dark:text-surface-400 max-w-2xl mx-auto">{subtitle}</p>
         </div>
 
-        {/* Image placeholders */}
-        <div className="grid md:grid-cols-2 gap-6 mb-16">
-          {['Screenshot: Visual editor', 'Screenshot: Git commit by marketer'].map((text) => (
-            <div
-              key={text}
-              className={cn(
-                'bg-surface-100/60 dark:bg-surface-900/60 border border-surface-200/80 dark:border-surface-800/50 border-dashed rounded-xl aspect-video flex items-center justify-center',
-                { reveal: !puck.isEditing },
-              )}
-            >
-              <div className="text-center">
-                <svg
-                  width="40"
-                  height="40"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  className="text-surface-400 mx-auto mb-3"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                <p className="text-surface-500 text-sm font-medium">{text}</p>
+        {/* Image placeholders — only visible in the Puck editor */}
+        {puck.isEditing && (
+          <div className="grid md:grid-cols-2 gap-6 mb-16">
+            {['Screenshot: Visual editor', 'Screenshot: Git commit by marketer'].map((text) => (
+              <div
+                key={text}
+                className="bg-surface-100/60 dark:bg-surface-900/60 border border-surface-200/80 dark:border-surface-800/50 border-dashed rounded-xl aspect-video flex items-center justify-center"
+              >
+                <div className="text-center">
+                  <svg
+                    width="40"
+                    height="40"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    className="text-surface-400 mx-auto mb-3"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <p className="text-surface-500 text-sm font-medium">{text}</p>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
         {/* Comparison table */}
         {rows.length === 0 ? (
