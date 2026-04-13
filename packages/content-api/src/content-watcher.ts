@@ -17,7 +17,7 @@ export interface ContentWatchEvent {
 
 interface ReindexResultLike {
   updated: unknown[];
-  deleted?: Array<{ id: string; locale: string; kind: 'page' | 'block' | 'data' }>;
+  deleted?: { id: string; locale: string; kind: 'page' | 'block' | 'data' }[];
 }
 
 interface ReindexableContentAPI {
