@@ -61,7 +61,10 @@ function setupForm(form: HTMLFormElement) {
         setMessage(messageElement, 'Something went wrong. Please try again.', 'mt-3 text-sm text-red-400');
       }
     } catch {
-      setMessage(messageElement, 'Something went wrong. Please try again.', 'mt-3 text-sm text-red-400');
+      const message = navigator.onLine
+        ? 'Unable to connect to the server. Please try again later.'
+        : 'You appear to be offline. Please check your internet connection.';
+      setMessage(messageElement, message, 'mt-3 text-sm text-red-400');
     } finally {
       if (!succeeded) {
         submitButton.disabled = false;
