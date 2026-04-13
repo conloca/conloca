@@ -54,7 +54,7 @@ function createFailedBlockComponent(block: Extract<MDXBlockEvaluationResult, { o
   };
 }
 
-function resolveRenderableBlocks(blocks: Array<MDXBlockEvaluationResult | MDXComponent>): MDXComponent[] {
+function resolveRenderableBlocks(blocks: (MDXBlockEvaluationResult | MDXComponent)[]): MDXComponent[] {
   return blocks.map((block) => {
     if (isRenderableBlock(block)) {
       return block;
@@ -210,7 +210,7 @@ function RenderWithBlocks({ config, data, mdxComponents }: RenderWithBlocksProps
 export function createPageRendererWithBlocks(
   config: Config,
   data: Data,
-  mdxComponents: Array<MDXBlockEvaluationResult | MDXComponent>,
+  mdxComponents: (MDXBlockEvaluationResult | MDXComponent)[],
 ): ComponentType {
   const renderableBlocks = resolveRenderableBlocks(mdxComponents);
 
