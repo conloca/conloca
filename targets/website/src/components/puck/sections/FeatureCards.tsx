@@ -167,7 +167,7 @@ export const FeatureCards: ComponentConfig<FeatureCardsProps> = {
                   {/* Icon wrapper */}
                   <div className="w-10 h-10 rounded-lg bg-brand-500/10 border border-brand-500/20 flex items-center justify-center mb-4 group-hover:bg-brand-500/20 transition-colors duration-300">
                     {card.iconText ? (
-                      <span className="font-mono text-[13px] font-bold text-brand-600 dark:text-brand-400 leading-none">
+                      <span className="font-mono text-xs font-bold text-brand-600 dark:text-brand-400 leading-none">
                         {card.iconText}
                       </span>
                     ) : (

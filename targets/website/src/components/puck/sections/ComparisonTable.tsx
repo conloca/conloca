@@ -178,7 +178,7 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <SectionHeader label={label} title={title} subtitle={subtitle} headingLevel="h2" />
           {extendedSubtitle && (
-            <p className="text-surface-500 dark:text-surface-400 text-sm max-w-2xl mx-auto mt-[-48px] mb-16 text-center">
+            <p className="text-surface-500 dark:text-surface-400 text-sm max-w-2xl mx-auto -mt-12 mb-16 text-center">
               {extendedSubtitle}
             </p>
           )}
