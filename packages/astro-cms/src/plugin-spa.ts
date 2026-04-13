@@ -199,7 +199,7 @@ export default schemas;
 const siteStylesLoader = (cssPaths: string[]) => {
   const imports = cssPaths
     .map((p) => {
-      const absolutePath = p.startsWith('.') ? `/${p.slice(2)}` : p;
+      const absolutePath = p.startsWith('./') ? `/${p.slice(2)}` : p;
       return `import '${absolutePath}';`;
     })
     .join('\n');
