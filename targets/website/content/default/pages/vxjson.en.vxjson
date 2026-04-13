@@ -16,7 +16,8 @@
             "buttons": [],
             "description": "Conloca's git-friendly content storage format. Standard JSON with content-last field ordering for fast metadata indexing and deterministic ETags.",
             "id": "Hero-y5z6a7b8",
-            "title": "VxJSON"
+            "title": "VxJSON",
+            "variant": "minimal"
           },
           "type": "Hero"
         },
