@@ -132,7 +132,34 @@ function MarketingHero({ badgeText, title, description, buttons, puck }: HeroPro
           )}
           style={puck.isEditing ? undefined : { animationDelay: '0.3s' }}
         >
-          <CTAButtonGroup buttons={buttons} isEditing={puck.isEditing} />
+          {buttons.map((button) => (
+            <a
+              key={button.id}
+              href={button.href}
+              className={cn(
+                button.variant === 'primary'
+                  ? 'inline-flex items-center gap-2 bg-brand-500 hover:bg-brand-400 text-surface-950 font-semibold px-6 py-3 rounded-lg transition-all duration-200 hover:shadow-lg hover:shadow-brand-500/20 text-sm'
+                  : 'inline-flex items-center gap-2 border border-surface-300 dark:border-surface-600 hover:border-surface-400 dark:hover:border-surface-500 text-surface-600 dark:text-surface-300 hover:text-surface-900 dark:hover:text-white font-medium px-6 py-3 rounded-lg transition-all duration-200 text-sm',
+              )}
+              onClick={puck.isEditing ? (e) => e.preventDefault() : undefined}
+            >
+              {button.label}
+              {button.variant === 'primary' && (
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              )}
+            </a>
+          ))}
         </div>
 
         <TerminalMockup isEditing={puck.isEditing} />
@@ -208,27 +235,30 @@ function ProductHero({
 }
 
 function MinimalHero({ badgeText, title, description, buttons, puck }: HeroProps & { puck: { isEditing: boolean } }) {
+  const lines = typeof title === 'string' ? title.split('\n') : [];
+
   return (
-    <section className="pt-24 sm:pt-32 pb-12 sm:pb-16">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-        <HeroBadge text={badgeText} isEditing={puck.isEditing} />
-
-        <h1 className="text-3xl sm:text-4xl font-bold text-surface-900 dark:text-white mb-4 tracking-tight">
-          {typeof title === 'string'
-            ? title.split('\n').map((line, idx, arr) => (
-                <span key={idx}>
-                  {idx === 0 ? line : <span className="text-brand-600 dark:text-brand-400">{line}</span>}
-                  {idx < arr.length - 1 && <br />}
-                </span>
-              ))
-            : title}
-        </h1>
-
-        <p className="text-surface-500 dark:text-surface-400 max-w-2xl mx-auto mb-8">{description}</p>
-
-        {buttons.length > 0 && <CTAButtonGroup buttons={buttons} isEditing={puck.isEditing} />}
-      </div>
-    </section>
+    <div className="text-center mb-16">
+      {badgeText && (
+        <p className="text-brand-600 dark:text-brand-400 text-sm font-medium tracking-wide uppercase mb-3">
+          {badgeText}
+        </p>
+      )}
+      <h1 className="text-3xl sm:text-4xl font-bold text-surface-900 dark:text-white mb-4">
+        {lines.map((line, idx) => (
+          <span key={idx}>
+            {idx === 0 ? line : <span className="text-brand-600 dark:text-brand-400">{line}</span>}
+            {idx < lines.length - 1 && <br />}
+          </span>
+        ))}
+      </h1>
+      <p className="text-surface-500 dark:text-surface-400 max-w-2xl mx-auto">{description}</p>
+      {buttons.length > 0 && (
+        <div className="mt-8">
+          <CTAButtonGroup buttons={buttons} isEditing={puck.isEditing} />
+        </div>
+      )}
+    </div>
   );
 }
 
