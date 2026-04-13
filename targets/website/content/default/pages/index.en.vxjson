@@ -29,7 +29,8 @@
             ],
             "description": "Visual editing for marketers, full git ownership for developers. Powered by Puck with drag-and-drop components.",
             "id": "Hero-a1b2c3d4",
-            "title": "The file-based CMS that lives in\nyour git repo"
+            "title": "The file-based CMS that lives in\nyour git repo",
+            "variant": "marketing"
           },
           "type": "Hero"
         },
