@@ -16,5 +16,28 @@ function observeRevealElements() {
   });
 }
 
+function initTypingAnimations() {
+  document.querySelectorAll<HTMLElement>('[data-typed-command]').forEach((el) => {
+    if (el.dataset.typed === 'true') return;
+    el.dataset.typed = 'true';
+
+    const command = el.dataset.typedCommand || '';
+    el.textContent = '';
+    let i = 0;
+
+    function type() {
+      if (i < command.length) {
+        el.textContent += command[i];
+        i++;
+        setTimeout(type, 60 + Math.random() * 40);
+      }
+    }
+
+    setTimeout(type, 1200);
+  });
+}
+
 observeRevealElements();
+initTypingAnimations();
 document.addEventListener('astro:after-swap', observeRevealElements);
+document.addEventListener('astro:after-swap', initTypingAnimations);

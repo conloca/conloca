@@ -10,6 +10,7 @@ export type HeroProps = {
   title: string;
   description: string;
   buttons: CTAButton[];
+  terminalCommand: string;
   imageUrl: string;
   imageAlt: string;
 };
@@ -49,7 +50,7 @@ function HeroTitle({ title, isEditing, large }: { title: string; isEditing: bool
   );
 }
 
-function TerminalMockup({ isEditing }: { isEditing: boolean }) {
+function TerminalMockup({ command, isEditing }: { command: string; isEditing: boolean }) {
   return (
     <div
       className={cn('max-w-lg mx-auto', isEditing ? '' : 'opacity-0 animate-slide-up')}
@@ -65,8 +66,10 @@ function TerminalMockup({ isEditing }: { isEditing: boolean }) {
         <div className="px-5 py-4 font-mono text-sm">
           <div className="flex items-center gap-2">
             <span className="text-brand-600 dark:text-brand-400">$</span>
-            <span id="typed-command" className="text-surface-800 dark:text-surface-200" />
-            <span id="cursor" className={cn('inline-block w-2 h-5 bg-brand-400', { 'animate-blink': !isEditing })} />
+            <span data-typed-command={command} className="text-surface-800 dark:text-surface-200">
+              {isEditing ? command : ''}
+            </span>
+            <span className={cn('inline-block w-2 h-5 bg-brand-400', { 'animate-blink': !isEditing })} />
           </div>
         </div>
       </div>
@@ -97,7 +100,14 @@ function ScrollArrow({ isEditing }: { isEditing: boolean }) {
   );
 }
 
-function MarketingHero({ badgeText, title, description, buttons, puck }: HeroProps & { puck: { isEditing: boolean } }) {
+function MarketingHero({
+  badgeText,
+  title,
+  description,
+  buttons,
+  terminalCommand,
+  puck,
+}: HeroProps & { puck: { isEditing: boolean } }) {
   return (
     <section
       itemScope
@@ -162,7 +172,7 @@ function MarketingHero({ badgeText, title, description, buttons, puck }: HeroPro
           ))}
         </div>
 
-        <TerminalMockup isEditing={puck.isEditing} />
+        <TerminalMockup command={terminalCommand} isEditing={puck.isEditing} />
       </div>
 
       <ScrollArrow isEditing={puck.isEditing} />
@@ -276,6 +286,7 @@ export const Hero: ComponentConfig<HeroProps> = {
   },
   resolveFields: (data, { fields }) => ({
     ...fields,
+    terminalCommand: { ...fields.terminalCommand, visible: data.props.variant === 'marketing' },
     imageUrl: { ...fields.imageUrl, visible: data.props.variant === 'product' },
     imageAlt: { ...fields.imageAlt, visible: data.props.variant === 'product' && !!data.props.imageUrl },
   }),
@@ -303,6 +314,10 @@ export const Hero: ComponentConfig<HeroProps> = {
       contentEditable: true,
     },
     buttons: ctaButtonArrayField(),
+    terminalCommand: {
+      type: 'text',
+      label: 'Terminal Command',
+    },
     imageUrl: {
       type: 'text',
       label: 'Image URL',
@@ -322,6 +337,7 @@ export const Hero: ComponentConfig<HeroProps> = {
       { id: crypto.randomUUID(), label: 'Get Started', href: '#quickstart', variant: 'primary' },
       { id: crypto.randomUUID(), label: 'Join Waitlist', href: '#waitlist', variant: 'secondary' },
     ],
+    terminalCommand: 'bun add @conloca/astro-cms',
     imageUrl: '',
     imageAlt: '',
   },
