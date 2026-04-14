@@ -31,15 +31,17 @@ function HeroBadge({ text, isEditing }: { text: string; isEditing: boolean }) {
 }
 
 function HeroTitle({ title, isEditing, large }: { title: string; isEditing: boolean; large: boolean }) {
-  const lines = typeof title === 'string' ? title.split('\n') : [];
+  const baseClass = cn(
+    'font-bold text-surface-900 dark:text-white leading-tight tracking-tight mb-6',
+    large ? 'text-4xl sm:text-5xl lg:text-6xl' : 'text-3xl sm:text-4xl lg:text-5xl',
+    isEditing ? '' : 'opacity-0 animate-slide-up',
+  );
+  if (typeof title !== 'string') {
+    return <h1 className={baseClass}>{title}</h1>;
+  }
+  const lines = title.split('\n');
   return (
-    <h1
-      className={cn(
-        'font-bold text-surface-900 dark:text-white leading-tight tracking-tight mb-6',
-        large ? 'text-4xl sm:text-5xl lg:text-6xl' : 'text-3xl sm:text-4xl lg:text-5xl',
-        isEditing ? '' : 'opacity-0 animate-slide-up',
-      )}
-    >
+    <h1 className={baseClass}>
       {lines.map((line, idx) => (
         <span key={idx}>
           {idx === 0 ? line : <span className="text-brand-600 dark:text-brand-400">{line}</span>}
@@ -255,12 +257,14 @@ function MinimalHero({ badgeText, title, description, buttons, puck }: HeroProps
         </p>
       )}
       <h1 className="text-3xl sm:text-4xl font-bold text-surface-900 dark:text-white mb-4">
-        {lines.map((line, idx) => (
-          <span key={idx}>
-            {idx === 0 ? line : <span className="text-brand-600 dark:text-brand-400">{line}</span>}
-            {idx < lines.length - 1 && <br />}
-          </span>
-        ))}
+        {typeof title !== 'string'
+          ? title
+          : lines.map((line, idx) => (
+              <span key={idx}>
+                {idx === 0 ? line : <span className="text-brand-600 dark:text-brand-400">{line}</span>}
+                {idx < lines.length - 1 && <br />}
+              </span>
+            ))}
       </h1>
       <p className="text-surface-500 dark:text-surface-400 max-w-2xl mx-auto">{description}</p>
       {buttons.length > 0 && (
