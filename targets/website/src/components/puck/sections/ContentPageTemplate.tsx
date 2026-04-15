@@ -36,7 +36,6 @@ const TEMPLATES: Record<TemplateType, { label: string; description: string; comp
         blockId: '',
         width: 'default',
         tone: 'transparent',
-        startsNewSection: 'true',
       }),
       createComponent('ContentBlockSection', {
         title: 'Details',
@@ -45,7 +44,6 @@ const TEMPLATES: Record<TemplateType, { label: string; description: string; comp
         blockId: '',
         width: 'default',
         tone: 'transparent',
-        startsNewSection: 'true',
       }),
       createComponent('CTABanner', {
         badgeText: '',
@@ -76,7 +74,6 @@ const TEMPLATES: Record<TemplateType, { label: string; description: string; comp
         blockId: '',
         width: 'narrow',
         tone: 'transparent',
-        startsNewSection: 'true',
       }),
       createComponent('ContentBlockSection', {
         title: 'Terms of Use',
@@ -85,7 +82,6 @@ const TEMPLATES: Record<TemplateType, { label: string; description: string; comp
         blockId: '',
         width: 'narrow',
         tone: 'transparent',
-        startsNewSection: 'true',
       }),
       createComponent('Callout', {
         type: 'note',
@@ -99,7 +95,6 @@ const TEMPLATES: Record<TemplateType, { label: string; description: string; comp
         blockId: '',
         width: 'narrow',
         tone: 'transparent',
-        startsNewSection: 'true',
       }),
       createComponent('CTABanner', {
         badgeText: '',

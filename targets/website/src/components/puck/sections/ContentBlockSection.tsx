@@ -11,8 +11,6 @@ export type ContentBlockSectionProps = {
   blockId: string;
   width: ContentBlockSectionWidth;
   tone: ContentBlockSectionTone;
-  /** String 'true'/'false' from radio field, or boolean from legacy saved data */
-  startsNewSection: boolean | 'true' | 'false';
 };
 
 const widthClassNames: Record<ContentBlockSectionWidth, string> = {
@@ -64,21 +62,9 @@ export const ContentBlockSection: ComponentConfig<ContentBlockSectionProps> = {
         { label: 'Subtle Card (border + fill)', value: 'subtle' },
       ],
     },
-    startsNewSection: {
-      type: 'radio',
-      label: 'Section Grouping',
-      options: [
-        { label: 'Starts new section', value: 'true' },
-        { label: 'Continues previous', value: 'false' },
-      ],
-    },
   },
   resolveFields: (data, { fields }) => {
     const hasBlock = !!data.props.blockId;
-    const hasTitle = !!data.props.title;
-    // Handle both boolean (legacy saved data) and string (radio field output)
-    const startsNew = data.props.startsNewSection === true || data.props.startsNewSection === 'true';
-
     return {
       ...fields,
       label: { ...fields.label, visible: hasBlock },
@@ -86,12 +72,6 @@ export const ContentBlockSection: ComponentConfig<ContentBlockSectionProps> = {
       subtitle: { ...fields.subtitle, visible: hasBlock },
       width: { ...fields.width, visible: hasBlock },
       tone: { ...fields.tone, visible: hasBlock },
-      startsNewSection: {
-        ...fields.startsNewSection,
-        visible: hasBlock,
-        label:
-          hasTitle && !startsNew ? 'Section Grouping (title set but section continues previous)' : 'Section Grouping',
-      },
     };
   },
   defaultProps: {
@@ -101,7 +81,6 @@ export const ContentBlockSection: ComponentConfig<ContentBlockSectionProps> = {
     blockId: '',
     width: 'default',
     tone: 'transparent',
-    startsNewSection: 'true',
   },
   render: ({ title, subtitle, label, blockId, width, tone }) => {
     return (
