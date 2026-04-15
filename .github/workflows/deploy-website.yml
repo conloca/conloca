@@ -6,7 +6,10 @@ on:
       - main
     paths:
       - 'targets/website/**'
-      - 'packages/**'
+      - 'packages/astro-cms/**'
+      - 'packages/cms-spa/**'
+      - 'packages/content-api/**'
+      - 'packages/mdx/**'
       - 'bun.lock'
       - '.github/workflows/deploy-website.yml'
   workflow_dispatch:
