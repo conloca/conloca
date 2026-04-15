@@ -62,7 +62,7 @@ export const PostGrid: ComponentConfig<PostGridProps> = {
         id: { type: 'text', visible: false },
         title: { type: 'text' },
         excerpt: { type: 'textarea' },
-        imageUrl: { type: 'text', label: 'Cover Image URL (optional)' },
+        imageUrl: { type: 'text', label: 'Cover Image URL (optional)', metadata: { fieldKind: 'image' } },
         href: { type: 'text', label: 'Post URL' },
         author: { type: 'text', label: 'Author (optional)' },
         date: { type: 'text', label: 'Date (optional)' },

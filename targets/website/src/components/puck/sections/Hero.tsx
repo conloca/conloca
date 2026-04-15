@@ -325,6 +325,7 @@ export const Hero: ComponentConfig<HeroProps> = {
     imageUrl: {
       type: 'text',
       label: 'Image URL',
+      metadata: { fieldKind: 'image' },
     },
     imageAlt: {
       type: 'text',

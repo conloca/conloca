@@ -44,7 +44,7 @@ export const LogoCloud: ComponentConfig<LogoCloudProps> = {
       arrayFields: {
         id: { type: 'text', visible: false },
         name: { type: 'text', label: 'Company Name' },
-        imageUrl: { type: 'text', label: 'Logo URL' },
+        imageUrl: { type: 'text', label: 'Logo URL', metadata: { fieldKind: 'image' } },
         href: { type: 'text', label: 'Link URL (optional)' },
       },
     },

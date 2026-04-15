@@ -97,7 +97,7 @@ export const TeamGrid: ComponentConfig<TeamGridProps> = {
         name: { type: 'text' },
         role: { type: 'text' },
         bio: { type: 'textarea', label: 'Short Bio (optional)' },
-        avatarUrl: { type: 'text', label: 'Avatar URL' },
+        avatarUrl: { type: 'text', label: 'Avatar URL', metadata: { fieldKind: 'image' } },
         linkedinUrl: { type: 'text', label: 'LinkedIn URL (optional)' },
         githubUrl: { type: 'text', label: 'GitHub URL (optional)' },
       },
