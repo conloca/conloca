@@ -165,7 +165,8 @@ async function handleSubscribe(request: Request, env: Env) {
       .run();
 
     return jsonResponse({ ok: true });
-  } catch {
+  } catch (err) {
+    console.error('subscriber insert failed:', err);
     return jsonResponse({ error: 'Internal server error' }, 500);
   }
 }
