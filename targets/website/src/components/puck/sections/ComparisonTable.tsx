@@ -44,14 +44,17 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
     const columnCount = Array.isArray(data.props.columns) ? data.props.columns.length : 0;
     const showCta = !!data.props.ctaTitle;
     const hasDifferentiators = (data.props.differentiators?.length ?? 0) > 0;
+
+    if (fields.rows.type !== 'array') return fields;
+
     return {
       ...fields,
       rows: {
         ...fields.rows,
         arrayFields: {
-          ...(fields.rows as any).arrayFields,
+          ...fields.rows.arrayFields,
           values: {
-            ...(fields.rows as any).arrayFields.values,
+            ...fields.rows.arrayFields.values,
             metadata: { columnCount },
           },
         },
@@ -60,7 +63,7 @@ export const ComparisonTable: ComponentConfig<ComparisonTableProps> = {
       differentiatorSubtitle: { ...fields.differentiatorSubtitle, visible: hasDifferentiators },
       ctaSubtitle: { ...fields.ctaSubtitle, visible: showCta },
       ctaButtons: { ...fields.ctaButtons, visible: showCta },
-    } as typeof fields;
+    };
   },
   fields: {
     label: { type: 'text', label: 'Section Label', contentEditable: true },
