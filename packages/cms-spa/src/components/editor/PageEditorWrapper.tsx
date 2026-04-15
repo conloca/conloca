@@ -65,7 +65,6 @@ interface ContentBlockSectionProps {
   blockId: string;
   width?: 'narrow' | 'default';
   tone?: 'transparent' | 'subtle';
-  startsNewSection?: boolean | 'true' | 'false';
 }
 
 const contentBlockWidthClasses: Record<NonNullable<ContentBlockSectionProps['width']>, string> = {
@@ -185,11 +184,9 @@ export function PageEditorWrapper({ puckConfig }: PageEditorWrapperProps) {
             subtitle,
             tone = 'transparent',
             width = 'default',
-            startsNewSection,
           }: ContentBlockSectionProps & {
             title?: string;
             subtitle?: string;
-            startsNewSection?: boolean | 'true' | 'false';
           }) => (
             <section className="pb-16 sm:pb-20">
               <div className={cn('mx-auto px-4 sm:px-6 lg:px-8', contentBlockWidthClasses[width])}>
