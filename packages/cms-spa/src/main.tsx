@@ -4,6 +4,7 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import App from './App';
+import { ThemeProvider } from './hooks/useTheme';
 import { getUIConfig } from './ui-config';
 
 // Get configuration
@@ -23,9 +24,11 @@ const queryClient = new QueryClient(config.queryClientOptions);
 const root = createRoot(document.getElementById('root')!);
 root.render(
   <QueryClientProvider client={queryClient}>
-    <BrowserRouter basename={config.basename}>
-      <App />
-    </BrowserRouter>
+    <ThemeProvider>
+      <BrowserRouter basename={config.basename}>
+        <App />
+      </BrowserRouter>
+    </ThemeProvider>
     {config.enableDevtools && <ReactQueryDevtools initialIsOpen={false} />}
   </QueryClientProvider>,
 );
