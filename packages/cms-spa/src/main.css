@@ -74,6 +74,11 @@
   --color-yellow-12: #fcfaf0;
 }
 
+/* Dark mode: selector strategy for manual toggle + system preference */
+@variant dark 
+(
+&:where(.dark, .dark *));
+
 html,
 body {
   margin: 0;
@@ -82,10 +87,9 @@ body {
   font-family: var(--puck-font-family);
 }
 
-#root {
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
+:root {
+  --puck-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, Roboto, 'Helvetica Neue', sans-serif;
+  --puck-font-family-monospaced: 'SF Mono', 'Cascadia Code', 'Fira Code', Consolas, 'DejaVu Sans Mono', monospace;
 }
 
 #root {
@@ -94,27 +98,54 @@ body {
   flex-direction: column;
 }
 
-/* Style Puck's header buttons */
+/* Puck dark mode overrides — invert grey scale so UI chrome adapts */
+.dark {
+  --puck-color-grey-01: #fafafa;
+  --puck-color-grey-02: #efefef;
+  --puck-color-grey-03: #dcdcdc;
+  --puck-color-grey-04: #c3c3c3;
+  --puck-color-grey-05: #ababab;
+  --puck-color-grey-06: #949494;
+  --puck-color-grey-07: #767676;
+  --puck-color-grey-08: #5a5a5a;
+  --puck-color-grey-09: #404040;
+  --puck-color-grey-10: #292929;
+  --puck-color-grey-11: #1e1e1e;
+  --puck-color-grey-12: #181818;
+  --puck-color-white: #181818;
+  --puck-color-black: #fafafa;
+
+  /* Azure adjustments for dark backgrounds */
+  --puck-color-azure-09: #1a2a4a;
+  --puck-color-azure-10: #0f1d3d;
+  --puck-color-azure-11: #0a1530;
+  --puck-color-azure-12: #060e22;
+
+  color-scheme: dark;
+  color: var(--color-grey-12);
+}
+
+/* Style Puck's header buttons — uses --puck-color-* vars so dark mode inverts automatically */
 [class*="PuckHeader"] button,
 [class*="IconButton"],
 [class*="PuckHeader-toggle"] button {
   transition: all 0.15s !important;
   cursor: pointer !important;
-  color: var(--color-grey-03) !important;
+  color: var(--puck-color-grey-03) !important;
   background: transparent !important;
 }
 
 [class*="PuckHeader"] button:hover,
 [class*="IconButton"]:hover,
 [class*="PuckHeader-toggle"] button:hover {
-  background: var(--color-grey-10) !important;
-  color: var(--color-grey-01) !important;
+  background: var(--puck-color-grey-10) !important;
+  color: var(--puck-color-grey-01) !important;
 }
 
 /* Active state for sidebar toggles */
 [class*="PuckHeader--leftSideBarVisible"] [class*="PuckHeader-leftSideBarToggle"] button,
 [class*="PuckHeader--rightSideBarVisible"] [class*="PuckHeader-rightSideBarToggle"] button {
-  color: var(--color-grey-01) !important;
+  color: var(--puck-color-grey-01) !important;
 }
 
 /* Menu button */
@@ -131,7 +162,7 @@ body {
   cursor: not-allowed !important;
   pointer-events: none !important;
   background: transparent !important;
-  color: var(--color-grey-04) !important;
+  color: var(--puck-color-grey-04) !important;
 }
 
 /* Style for enabled undo/redo buttons */
