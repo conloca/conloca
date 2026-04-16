@@ -52,10 +52,10 @@ export function ImagePicker({ isOpen, onSelect, onClose }: ImagePickerProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={handleBackdropClick}>
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl max-h-[85vh] mx-4 flex flex-col overflow-hidden">
+      <div className="bg-white dark:bg-grey-03 rounded-lg shadow-xl w-full max-w-5xl max-h-[85vh] mx-4 flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-grey-09 flex-shrink-0">
-          <h2 className="text-lg font-semibold text-grey-01">Select Image</h2>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-grey-09 dark:border-grey-04 flex-shrink-0">
+          <h2 className="text-lg font-semibold text-grey-01 dark:text-grey-12">Select Image</h2>
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -68,7 +68,7 @@ export function ImagePicker({ isOpen, onSelect, onClose }: ImagePickerProps) {
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 text-grey-04 hover:text-grey-01 transition-colors rounded hover:bg-grey-11"
+              className="p-1.5 text-grey-04 dark:text-grey-07 hover:text-grey-01 dark:hover:text-grey-12 transition-colors rounded hover:bg-grey-11 dark:hover:bg-grey-03"
               aria-label="Close"
             >
               <X className="w-5 h-5" />

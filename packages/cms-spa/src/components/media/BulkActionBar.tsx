@@ -11,15 +11,15 @@ export function BulkActionBar({ count, onDelete, onMove, onClear }: BulkActionBa
   if (count === 0) return null;
 
   return (
-    <div className="fixed top-24 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-3 bg-white border border-grey-09 rounded shadow-lg">
-      <span className="text-sm font-medium text-grey-02">{count} selected</span>
+    <div className="fixed top-24 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-3 bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-04 rounded shadow-lg">
+      <span className="text-sm font-medium text-grey-02 dark:text-grey-10">{count} selected</span>
 
-      <div className="w-px h-5 bg-grey-09" />
+      <div className="w-px h-5 bg-grey-09 dark:bg-grey-04" />
 
       <button
         type="button"
         onClick={onMove}
-        className="flex items-center gap-2 px-3 py-2 border border-grey-09 rounded text-sm bg-white hover:bg-grey-11 transition-colors"
+        className="flex items-center gap-2 px-3 py-2 border border-grey-09 dark:border-grey-04 rounded text-sm bg-white dark:bg-grey-03 hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
       >
         <FolderInput className="w-4 h-4" />
         Move
@@ -37,7 +37,7 @@ export function BulkActionBar({ count, onDelete, onMove, onClear }: BulkActionBa
       <button
         type="button"
         onClick={onClear}
-        className="p-1.5 rounded hover:bg-grey-11 text-grey-04 transition-colors"
+        className="p-1.5 rounded hover:bg-grey-11 dark:hover:bg-grey-03 text-grey-04 dark:text-grey-07 transition-colors"
         title="Clear selection"
       >
         <X className="w-4 h-4" />

@@ -118,16 +118,16 @@ export function AssetDetailSidebar({
   const dimensions = asset.width && asset.height ? `${asset.width} x ${asset.height}` : null;
 
   return (
-    <div className="w-80 border-l border-grey-09 bg-white flex flex-col h-full overflow-hidden">
+    <div className="w-80 border-l border-grey-09 dark:border-grey-04 bg-white dark:bg-grey-02 flex flex-col h-full overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-grey-09">
-        <h3 className="font-semibold text-grey-01 truncate" title={asset.originalName}>
+      <div className="flex items-center justify-between px-4 py-3 border-b border-grey-09 dark:border-grey-04">
+        <h3 className="font-semibold text-grey-01 dark:text-grey-12 truncate" title={asset.originalName}>
           {asset.originalName}
         </h3>
         <button
           type="button"
           onClick={onClose}
-          className="p-1 text-grey-04 hover:text-grey-01 transition-colors"
+          className="p-1 text-grey-04 dark:text-grey-07 hover:text-grey-01 dark:hover:text-grey-12 transition-colors"
           title="Close"
         >
           <X className="w-5 h-5" />
@@ -136,7 +136,7 @@ export function AssetDetailSidebar({
 
       <div className="flex-1 overflow-y-auto">
         {/* Thumbnail preview */}
-        <div className="aspect-square bg-grey-11 flex items-center justify-center overflow-hidden border-b border-grey-09">
+        <div className="aspect-square bg-grey-11 dark:bg-grey-03 flex items-center justify-center overflow-hidden border-b border-grey-09 dark:border-grey-04">
           <img
             src={buildAssetServeUrl(assetsBasePath, asset.folder, asset.filename)}
             alt={asset.alt || asset.originalName}
@@ -145,39 +145,42 @@ export function AssetDetailSidebar({
         </div>
 
         {/* File info (read-only) */}
-        <div className="p-4 space-y-3 border-b border-grey-09">
+        <div className="p-4 space-y-3 border-b border-grey-09 dark:border-grey-04">
           <div>
-            <dt className="text-xs text-grey-04 uppercase tracking-wide">Filename</dt>
-            <dd className="text-sm text-grey-01 break-all">{asset.filename}</dd>
+            <dt className="text-xs text-grey-04 dark:text-grey-07 uppercase tracking-wide">Filename</dt>
+            <dd className="text-sm text-grey-01 dark:text-grey-12 break-all">{asset.filename}</dd>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <dt className="text-xs text-grey-04 uppercase tracking-wide">Size</dt>
-              <dd className="text-sm text-grey-01">{formatFileSize(asset.size)}</dd>
+              <dt className="text-xs text-grey-04 dark:text-grey-07 uppercase tracking-wide">Size</dt>
+              <dd className="text-sm text-grey-01 dark:text-grey-12">{formatFileSize(asset.size)}</dd>
             </div>
             {dimensions && (
               <div>
-                <dt className="text-xs text-grey-04 uppercase tracking-wide">Dimensions</dt>
-                <dd className="text-sm text-grey-01">{dimensions}</dd>
+                <dt className="text-xs text-grey-04 dark:text-grey-07 uppercase tracking-wide">Dimensions</dt>
+                <dd className="text-sm text-grey-01 dark:text-grey-12">{dimensions}</dd>
               </div>
             )}
           </div>
           <div>
-            <dt className="text-xs text-grey-04 uppercase tracking-wide">Uploaded</dt>
-            <dd className="text-sm text-grey-01">{formatDate(asset.uploadedAt)}</dd>
+            <dt className="text-xs text-grey-04 dark:text-grey-07 uppercase tracking-wide">Uploaded</dt>
+            <dd className="text-sm text-grey-01 dark:text-grey-12">{formatDate(asset.uploadedAt)}</dd>
           </div>
           {asset.mimeType && (
             <div>
-              <dt className="text-xs text-grey-04 uppercase tracking-wide">Type</dt>
-              <dd className="text-sm text-grey-01">{asset.mimeType}</dd>
+              <dt className="text-xs text-grey-04 dark:text-grey-07 uppercase tracking-wide">Type</dt>
+              <dd className="text-sm text-grey-01 dark:text-grey-12">{asset.mimeType}</dd>
             </div>
           )}
         </div>
 
         {/* Editable fields */}
-        <div className="p-4 space-y-4 border-b border-grey-09">
+        <div className="p-4 space-y-4 border-b border-grey-09 dark:border-grey-04">
           <div>
-            <label htmlFor="alt-text" className="block text-xs text-grey-04 uppercase tracking-wide mb-1">
+            <label
+              htmlFor="alt-text"
+              className="block text-xs text-grey-04 dark:text-grey-07 uppercase tracking-wide mb-1"
+            >
               Alt Text
             </label>
             <input
@@ -187,11 +190,11 @@ export function AssetDetailSidebar({
               onChange={(e) => setAltText(e.target.value)}
               onBlur={handleAltBlur}
               placeholder="Describe this image for accessibility"
-              className="w-full px-3 py-2 border border-grey-09 rounded text-sm focus:outline-none focus:ring-2 focus:ring-azure-04"
+              className="w-full px-3 py-2 border border-grey-09 dark:border-grey-04 dark:bg-grey-03 dark:text-grey-12 rounded text-sm focus:outline-none focus:ring-2 focus:ring-azure-04"
             />
           </div>
           <div>
-            <label htmlFor="tags" className="block text-xs text-grey-04 uppercase tracking-wide mb-1">
+            <label htmlFor="tags" className="block text-xs text-grey-04 dark:text-grey-07 uppercase tracking-wide mb-1">
               Tags
             </label>
             <input
@@ -201,24 +204,24 @@ export function AssetDetailSidebar({
               onChange={(e) => setTagsInput(e.target.value)}
               onBlur={handleTagsBlur}
               placeholder="Comma-separated tags"
-              className="w-full px-3 py-2 border border-grey-09 rounded text-sm focus:outline-none focus:ring-2 focus:ring-azure-04"
+              className="w-full px-3 py-2 border border-grey-09 dark:border-grey-04 dark:bg-grey-03 dark:text-grey-12 rounded text-sm focus:outline-none focus:ring-2 focus:ring-azure-04"
             />
             <p className="mt-1 text-xs text-grey-07">Separate tags with commas</p>
           </div>
         </div>
 
         {/* Usage section */}
-        <div className="p-4 border-b border-grey-09">
-          <h4 className="text-xs text-grey-04 uppercase tracking-wide mb-2">Used In</h4>
+        <div className="p-4 border-b border-grey-09 dark:border-grey-04">
+          <h4 className="text-xs text-grey-04 dark:text-grey-07 uppercase tracking-wide mb-2">Used In</h4>
           {isLoadingUsage ? (
-            <div className="flex items-center gap-2 text-grey-04 text-sm">
+            <div className="flex items-center gap-2 text-grey-04 dark:text-grey-07 text-sm">
               <Loader2 className="w-4 h-4 animate-spin" />
               <span>Loading usage...</span>
             </div>
           ) : usageData && usageData.length > 0 ? (
             <ul className="space-y-1">
               {usageData.map((usage, index) => (
-                <li key={`${usage.page}-${usage.field}-${index}`} className="text-sm text-grey-01">
+                <li key={`${usage.page}-${usage.field}-${index}`} className="text-sm text-grey-01 dark:text-grey-12">
                   <span className="font-medium">{usage.page}</span>
                   <span className="text-grey-07"> - {usage.field}</span>
                 </li>
@@ -230,11 +233,11 @@ export function AssetDetailSidebar({
         </div>
 
         {/* Move section */}
-        <div className="p-4 border-b border-grey-09">
+        <div className="p-4 border-b border-grey-09 dark:border-grey-04">
           <button
             type="button"
             onClick={() => setShowMoveDialog(true)}
-            className="flex items-center gap-2 px-3 py-2 text-grey-04 hover:text-grey-01 text-sm transition-colors"
+            className="flex items-center gap-2 px-3 py-2 text-grey-04 dark:text-grey-07 hover:text-grey-01 dark:hover:text-grey-12 text-sm transition-colors"
           >
             <FolderInput className="w-4 h-4" />
             <span>Move to Folder</span>
@@ -258,7 +261,7 @@ export function AssetDetailSidebar({
                 <button
                   type="button"
                   onClick={() => setConfirmDelete(false)}
-                  className="flex-1 px-3 py-2 bg-white border border-grey-09 text-grey-04 text-sm rounded hover:bg-grey-11 transition-colors"
+                  className="flex-1 px-3 py-2 bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-04 text-grey-04 dark:text-grey-07 text-sm rounded hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
                 >
                   Cancel
                 </button>

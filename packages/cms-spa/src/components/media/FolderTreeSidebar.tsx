@@ -29,15 +29,15 @@ function FolderNode({ node, depth, currentFolder, dropTargetFolder, onFolderSele
         type="button"
         onClick={() => onFolderSelect(node.path)}
         className={cn('w-full flex items-center gap-2 py-1.5 px-3 rounded text-sm transition-colors text-left', {
-          'bg-azure-11 text-azure-01': isActive,
-          'hover:bg-grey-11': !isActive,
+          'bg-azure-11 dark:bg-azure-03 text-azure-01 dark:text-azure-11': isActive,
+          'hover:bg-grey-11 dark:hover:bg-grey-03': !isActive,
           'ring-2 ring-azure-04': isDropTarget,
         })}
         style={{ paddingLeft: `${depth * 16 + 12}px` }}
       >
         <Folder className="w-4 h-4 flex-shrink-0" />
         <span className="truncate flex-1">{node.name}</span>
-        <span className="text-grey-05 text-xs">({node.assetCount})</span>
+        <span className="text-grey-05 dark:text-grey-06 text-xs">({node.assetCount})</span>
       </button>
 
       {node.children.map((child) => (
@@ -80,24 +80,24 @@ export function FolderTreeSidebar({ currentFolder, onFolderSelect, dropTargetFol
       : tree.reduce((sum, node) => sum + node.assetCount, 0);
 
   return (
-    <div className="w-56 flex-shrink-0 border-r border-grey-09 bg-white">
+    <div className="w-56 flex-shrink-0 border-r border-grey-09 dark:border-grey-04 bg-white dark:bg-grey-02">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-grey-09">
-        <h3 className="font-semibold text-grey-01">Folders</h3>
+      <div className="flex items-center justify-between px-4 py-3 border-b border-grey-09 dark:border-grey-04">
+        <h3 className="font-semibold text-grey-01 dark:text-grey-12">Folders</h3>
         <button
           type="button"
           onClick={() => setShowCreateFolderDialog(true)}
-          className="p-1.5 rounded hover:bg-grey-11 transition-colors"
+          className="p-1.5 rounded hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
           title="New Folder"
         >
-          <FolderPlus className="w-4 h-4 text-grey-04" />
+          <FolderPlus className="w-4 h-4 text-grey-04 dark:text-grey-07" />
         </button>
       </div>
 
       {/* Folder tree */}
       <div className="p-2 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 200px)' }}>
         {isLoading ? (
-          <div className="text-sm text-grey-05 px-3 py-2">Loading...</div>
+          <div className="text-sm text-grey-05 dark:text-grey-06 px-3 py-2">Loading...</div>
         ) : (
           <>
             {/* Root folder option */}
@@ -105,14 +105,14 @@ export function FolderTreeSidebar({ currentFolder, onFolderSelect, dropTargetFol
               type="button"
               onClick={() => onFolderSelect('/')}
               className={cn('w-full flex items-center gap-2 py-1.5 px-3 rounded text-sm transition-colors text-left', {
-                'bg-azure-11 text-azure-01': currentFolder === '/',
-                'hover:bg-grey-11': currentFolder !== '/',
+                'bg-azure-11 dark:bg-azure-03 text-azure-01 dark:text-azure-11': currentFolder === '/',
+                'hover:bg-grey-11 dark:hover:bg-grey-03': currentFolder !== '/',
                 'ring-2 ring-azure-04': dropTargetFolder === '/',
               })}
             >
               <Folder className="w-4 h-4 flex-shrink-0" />
               <span className="truncate flex-1">Root</span>
-              <span className="text-grey-05 text-xs">({rootAssetCount})</span>
+              <span className="text-grey-05 dark:text-grey-06 text-xs">({rootAssetCount})</span>
             </button>
 
             {/* Folder tree nodes */}
@@ -128,7 +128,7 @@ export function FolderTreeSidebar({ currentFolder, onFolderSelect, dropTargetFol
                 />
               ))
             ) : (
-              <div className="text-sm text-grey-05 px-3 py-2">No folders yet</div>
+              <div className="text-sm text-grey-05 dark:text-grey-06 px-3 py-2">No folders yet</div>
             )}
           </>
         )}

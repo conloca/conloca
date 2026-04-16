@@ -36,13 +36,13 @@ export function MediaToolbar({
     <div className="flex items-center gap-3 flex-wrap">
       {/* Search input */}
       <div className="relative flex-1 min-w-[200px]">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-grey-04" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-grey-04 dark:text-grey-07" />
         <input
           type="text"
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder="Search files..."
-          className="w-full pl-9 pr-3 py-2 border border-grey-09 rounded text-sm focus:outline-none focus:ring-2 focus:ring-azure-04 focus:border-azure-04"
+          className="w-full pl-9 pr-3 py-2 border border-grey-09 dark:border-grey-04 dark:bg-grey-03 dark:text-grey-12 rounded text-sm focus:outline-none focus:ring-2 focus:ring-azure-04 focus:border-azure-04"
         />
       </div>
 
@@ -50,7 +50,7 @@ export function MediaToolbar({
       <select
         value={fileType}
         onChange={(e) => onFileTypeChange(e.target.value as FileTypeFilter)}
-        className="px-3 py-2 border border-grey-09 rounded text-sm bg-white hover:bg-grey-11 transition-colors"
+        className="px-3 py-2 border border-grey-09 dark:border-grey-04 rounded text-sm bg-white dark:bg-grey-03 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
       >
         <option value="all">All types</option>
         <option value="images">Images</option>
@@ -61,7 +61,7 @@ export function MediaToolbar({
       <select
         value={sort}
         onChange={(e) => onSortChange(e.target.value as SortOption)}
-        className="px-3 py-2 border border-grey-09 rounded text-sm bg-white hover:bg-grey-11 transition-colors"
+        className="px-3 py-2 border border-grey-09 dark:border-grey-04 rounded text-sm bg-white dark:bg-grey-03 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
       >
         <option value="date-newest">Date (newest)</option>
         <option value="date-oldest">Date (oldest)</option>
@@ -85,7 +85,7 @@ export function MediaToolbar({
           <button
             type="button"
             onClick={onEnterSelectMode}
-            className="px-3 py-2 border border-grey-09 rounded text-sm bg-white hover:bg-grey-11 transition-colors"
+            className="px-3 py-2 border border-grey-09 dark:border-grey-04 rounded text-sm bg-white dark:bg-grey-03 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
           >
             Select
           </button>
