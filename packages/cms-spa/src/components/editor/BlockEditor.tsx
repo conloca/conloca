@@ -147,10 +147,10 @@ export function BlockEditor() {
   if (isLoading) {
     return (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-6 shadow-lg">
+        <div className="bg-white dark:bg-grey-03 rounded-lg p-6 shadow-lg">
           <div className="flex items-center gap-3">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-azure-04" />
-            <span className="text-grey-04">Loading block...</span>
+            <span className="text-grey-04 dark:text-grey-07">Loading block...</span>
           </div>
         </div>
       </div>
@@ -161,8 +161,8 @@ export function BlockEditor() {
   if (error && !content && !currentContentRef.current) {
     return (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-6 shadow-lg max-w-md">
-          <div className="text-red-500 mb-4">Failed to load block: {error?.message || 'Not found'}</div>
+        <div className="bg-white dark:bg-grey-03 rounded-lg p-6 shadow-lg max-w-md">
+          <div className="text-red-04 mb-4">Failed to load block: {error?.message || 'Not found'}</div>
           <button
             onClick={() => navigate('/blocks')}
             className="px-4 py-2 bg-azure-04 text-white rounded hover:bg-azure-03 transition-colors"

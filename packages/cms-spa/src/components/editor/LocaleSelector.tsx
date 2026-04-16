@@ -17,7 +17,7 @@ export function LocaleSelector({
 }: LocaleSelectorProps) {
   return (
     <Select.Root value={currentLocale} onValueChange={onChange}>
-      <Select.Trigger className="flex items-center gap-1 px-4 py-2 rounded-md text-sm text-grey-01 hover:bg-grey-10 transition-colors cursor-pointer">
+      <Select.Trigger className="flex items-center gap-1 px-4 py-2 rounded-md text-sm text-grey-01 dark:text-grey-12 hover:bg-grey-10 transition-colors cursor-pointer">
         <Select.Value />
         <Select.Icon>
           <ChevronDown className="h-4 w-4" />
@@ -25,7 +25,10 @@ export function LocaleSelector({
       </Select.Trigger>
 
       <Select.Portal>
-        <Select.Content className="bg-white border border-grey-09 rounded shadow-md" style={{ zIndex: 100 }}>
+        <Select.Content
+          className="bg-white dark:bg-grey-03 border border-grey-09 dark:border-grey-04 rounded shadow-md"
+          style={{ zIndex: 100 }}
+        >
           <Select.Viewport className="p-1">
             {availableLocales.map((locale) => {
               const isCurrent = locale === currentLocale;
@@ -38,8 +41,8 @@ export function LocaleSelector({
                   className={cn(
                     'px-3 py-2 rounded cursor-pointer outline-none transition-colors',
                     isCurrent && 'bg-azure-04 text-white',
-                    !isCurrent && !isMissing && 'hover:bg-grey-11',
-                    isMissing && 'text-grey-04',
+                    !isCurrent && !isMissing && 'hover:bg-grey-11 dark:hover:bg-grey-03',
+                    isMissing && 'text-grey-04 dark:text-grey-07',
                   )}
                   data-testid={`locale-option-${locale}`}
                 >

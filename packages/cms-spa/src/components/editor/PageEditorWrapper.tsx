@@ -1,10 +1,10 @@
 import { useBlocks, useDataContext, useLocalizedContent, useUpdateLocalized } from '@conloca/content-api-client';
 import type { ComponentConfig, Config, Data } from '@puckeditor/core';
 import { resolveAllData } from '@puckeditor/core';
-import cn from 'clsx';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { PageMetadata } from '../../types';
+import { cn } from '../../utils/cn';
 import { PageMetadataDialog } from '../dialogs/PageMetadataDialog';
 import { type ContentBlockOption, ContentBlockSelectorField } from '../fields/ContentBlockSelectorField';
 import { BlockContentWrapper, BlockFieldWrapper } from './BlockWrappers';
@@ -313,7 +313,7 @@ export function PageEditorWrapper({ puckConfig }: PageEditorWrapperProps) {
   if (error || !content || !content.localized) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <div className="text-red-500">Failed to load page: {error?.message || 'Not found'}</div>
+        <div className="text-red-04">Failed to load page: {error?.message || 'Not found'}</div>
       </div>
     );
   }

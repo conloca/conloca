@@ -38,7 +38,7 @@ export function PageEditorHeaderActions({
           <button
             type="button"
             onClick={onPublish}
-            className="px-4 py-2 bg-grey-10 text-grey-01 rounded-md text-sm hover:bg-grey-09 transition-all duration-150 flex items-center gap-1 whitespace-nowrap font-medium cursor-pointer"
+            className="px-4 py-2 bg-grey-10 text-grey-01 dark:text-grey-12 rounded-md text-sm hover:bg-grey-09 transition-all duration-150 flex items-center gap-1 whitespace-nowrap font-medium cursor-pointer"
             aria-label="Publish"
           >
             Publish
@@ -47,7 +47,7 @@ export function PageEditorHeaderActions({
         <button
           type="button"
           onClick={onPreview}
-          className="px-4 py-2 rounded-md text-sm text-grey-01 hover:bg-grey-10 transition-all duration-150 flex items-center gap-1 cursor-pointer"
+          className="px-4 py-2 rounded-md text-sm text-grey-01 dark:text-grey-12 hover:bg-grey-10 transition-all duration-150 flex items-center gap-1 cursor-pointer"
           data-testid="preview-button"
         >
           <Eye className="h-3.5 w-3.5" />
@@ -77,7 +77,7 @@ export function PageEditorHeaderActions({
             (saveState === 'idle' || saveState === 'saving' || !saveState) &&
               (isDirty
                 ? 'bg-azure-10 text-azure-06 hover:bg-azure-09 cursor-pointer'
-                : 'bg-grey-10 text-grey-04 cursor-not-allowed opacity-60'),
+                : 'bg-grey-10 text-grey-04 dark:text-grey-07 cursor-not-allowed opacity-60'),
           )}
         >
           {saveState === 'saved' && (

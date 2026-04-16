@@ -33,7 +33,7 @@ export function ContentDiff({ localContent, serverContent, onResolve, editable =
     );
   }
 
-  return <div className="text-gray-500">No content to diff</div>;
+  return <div className="text-grey-05 dark:text-grey-06">No content to diff</div>;
 }
 
 interface MDXDiffProps {
@@ -59,7 +59,7 @@ function MDXDiff({ localMdx, serverMdx, onResolve }: MDXDiffProps) {
           {!isEditing && onResolve && (
             <button
               onClick={() => setEditableContent(conflictContent)}
-              className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
+              className="px-3 py-1 text-sm bg-azure-04 text-white rounded hover:bg-azure-03"
             >
               Edit to Resolve
             </button>
@@ -71,13 +71,13 @@ function MDXDiff({ localMdx, serverMdx, onResolve }: MDXDiffProps) {
                   onResolve?.(displayContent);
                   setEditableContent(null);
                 }}
-                className="px-3 py-1 text-sm bg-green-500 text-white rounded hover:bg-green-600"
+                className="px-3 py-1 text-sm bg-green-05 text-white rounded hover:bg-green-04"
               >
                 Accept Resolution
               </button>
               <button
                 onClick={() => setEditableContent(null)}
-                className="px-3 py-1 text-sm bg-gray-500 text-white rounded hover:bg-gray-600"
+                className="px-3 py-1 text-sm bg-grey-05 text-white rounded hover:bg-grey-04"
               >
                 Cancel
               </button>
@@ -90,16 +90,16 @@ function MDXDiff({ localMdx, serverMdx, onResolve }: MDXDiffProps) {
         <textarea
           value={displayContent}
           onChange={(e) => setEditableContent(e.target.value)}
-          className="w-full h-96 p-4 border rounded font-mono text-sm"
+          className="w-full h-96 p-4 border border-grey-09 dark:border-grey-04 rounded font-mono text-sm bg-white dark:bg-grey-03 text-grey-01 dark:text-grey-12"
           placeholder="Resolve the conflict by editing the content..."
         />
       ) : (
-        <pre className="p-4 bg-gray-50 rounded border overflow-x-auto text-sm font-mono whitespace-pre-wrap">
+        <pre className="p-4 bg-grey-12 dark:bg-grey-02 rounded border overflow-x-auto text-sm font-mono whitespace-pre-wrap">
           {displayContent}
         </pre>
       )}
 
-      <div className="text-sm text-gray-600">
+      <div className="text-sm text-grey-04 dark:text-grey-07">
         <p>
           <strong>Instructions:</strong> Resolve conflicts by:
         </p>
@@ -132,7 +132,7 @@ function PuckDiff({ localPuck, serverPuck, onResolve }: PuckDiffProps) {
         {onResolve && selectedVersion && (
           <button
             onClick={() => onResolve(selectedVersion === 'local' ? localPuck : serverPuck)}
-            className="px-3 py-1 text-sm bg-green-500 text-white rounded hover:bg-green-600"
+            className="px-3 py-1 text-sm bg-green-05 text-white rounded hover:bg-green-04"
           >
             Use {selectedVersion === 'local' ? 'Your' : 'Server'} Version
           </button>
@@ -143,8 +143,8 @@ function PuckDiff({ localPuck, serverPuck, onResolve }: PuckDiffProps) {
         <div
           className={`p-4 rounded border-2 cursor-pointer transition-colors ${
             selectedVersion === 'local'
-              ? 'border-green-500 bg-green-50'
-              : 'border-gray-200 bg-gray-50 hover:border-gray-300'
+              ? 'border-green-05 bg-green-11'
+              : 'border-grey-09 dark:border-grey-04 bg-grey-12 dark:bg-grey-02 hover:border-grey-08'
           }`}
           onClick={() => setSelectedVersion('local')}
         >
@@ -160,8 +160,8 @@ function PuckDiff({ localPuck, serverPuck, onResolve }: PuckDiffProps) {
         <div
           className={`p-4 rounded border-2 cursor-pointer transition-colors ${
             selectedVersion === 'server'
-              ? 'border-red-500 bg-red-50'
-              : 'border-gray-200 bg-gray-50 hover:border-gray-300'
+              ? 'border-red-04 bg-red-11'
+              : 'border-grey-09 dark:border-grey-04 bg-grey-12 dark:bg-grey-02 hover:border-grey-08'
           }`}
           onClick={() => setSelectedVersion('server')}
         >
@@ -175,7 +175,7 @@ function PuckDiff({ localPuck, serverPuck, onResolve }: PuckDiffProps) {
         </div>
       </div>
 
-      <div className="text-sm text-gray-600">
+      <div className="text-sm text-grey-04 dark:text-grey-07">
         <p>
           <strong>Instructions:</strong> Select the version you want to keep. For Puck content, you typically need to
           choose one complete version rather than merging.
@@ -188,7 +188,7 @@ function PuckDiff({ localPuck, serverPuck, onResolve }: PuckDiffProps) {
 // Helper component to show Puck component structure
 function ComponentStructure({ data }: { data: any }) {
   if (!data || !data.content) {
-    return <div className="text-gray-400">No content</div>;
+    return <div className="text-grey-06 dark:text-grey-05">No content</div>;
   }
 
   const componentCount = data.content?.length || 0;
@@ -215,7 +215,7 @@ function ComponentStructure({ data }: { data: any }) {
           <summary className="font-medium">Components</summary>
           <div className="mt-1 space-y-1">
             {data.content.map((component: any, i: number) => (
-              <div key={i} className="text-xs p-2 bg-white rounded">
+              <div key={i} className="text-xs p-2 bg-white dark:bg-grey-02 rounded">
                 <strong>{component.type || 'Unknown'}</strong>
                 {component.props?.title && ` - ${component.props.title}`}
               </div>

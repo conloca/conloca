@@ -203,7 +203,7 @@ export function PageEditor({
   }, [handleSave]);
 
   return (
-    <div className="h-screen flex flex-col bg-grey-11">
+    <div className="h-screen flex flex-col bg-grey-11 dark:bg-grey-03">
       {/* Puck Editor with custom header */}
       <div className="flex-1 overflow-auto min-h-0">
         <Puck
