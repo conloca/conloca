@@ -1,6 +1,6 @@
 import { useCreateContent, useLocalizedContent } from '@conloca/content-api-client';
-import cn from 'clsx';
 import { useEffect, useRef, useState } from 'react';
+import { cn } from '../../utils/cn';
 import { slugify } from '../../utils/slugify';
 import { CMSMDXEditorModal } from '../editor/CMSMDXEditor';
 import {
@@ -180,7 +180,7 @@ export function ContentBlockSelectorField({ value, onChange, options }: ContentB
         {/* Searchable combobox */}
         <div ref={dropdownRef} className="relative">
           <div
-            className="flex w-full items-center rounded border border-grey-09 bg-white text-sm cursor-pointer"
+            className="flex w-full items-center rounded border border-grey-09 dark:border-grey-04 bg-white dark:bg-grey-03 text-sm cursor-pointer"
             onClick={() => {
               setIsOpen(true);
               setTimeout(() => inputRef.current?.focus(), 0);
@@ -226,14 +226,14 @@ export function ContentBlockSelectorField({ value, onChange, options }: ContentB
           {isOpen && (
             <div
               role="listbox"
-              className="absolute left-0 right-0 top-full z-50 mt-1 max-h-64 overflow-y-auto rounded border border-grey-09 bg-white shadow-lg"
+              className="absolute left-0 right-0 top-full z-50 mt-1 max-h-64 overflow-y-auto rounded border border-grey-09 dark:border-grey-04 bg-white dark:bg-grey-03 shadow-lg"
             >
               {/* Clear selection */}
               {value && (
                 <button
                   type="button"
                   onClick={() => handleSelectBlock('')}
-                  className="w-full px-3 py-2 text-left text-xs text-grey-04 hover:bg-grey-11"
+                  className="w-full px-3 py-2 text-left text-xs text-grey-04 dark:text-grey-07 hover:bg-grey-11 dark:hover:bg-grey-03"
                 >
                   Clear selection
                 </button>
@@ -291,14 +291,14 @@ export function ContentBlockSelectorField({ value, onChange, options }: ContentB
         <button
           type="button"
           onClick={handleCreateStart}
-          className="rounded border border-grey-09 bg-white px-3 py-2 text-sm font-medium hover:bg-grey-11"
+          className="rounded border border-grey-09 dark:border-grey-04 bg-white dark:bg-grey-03 px-3 py-2 text-sm font-medium hover:bg-grey-11 dark:hover:bg-grey-03"
         >
           Create New Block
         </button>
       </div>
 
       {showCreator ? (
-        <div className="space-y-3 rounded border border-grey-09 bg-grey-11 p-3">
+        <div className="space-y-3 rounded border border-grey-09 dark:border-grey-04 bg-grey-11 dark:bg-grey-03 p-3">
           <div>
             <label
               htmlFor="new-content-block-title"
@@ -311,7 +311,7 @@ export function ContentBlockSelectorField({ value, onChange, options }: ContentB
               type="text"
               value={newBlockTitle}
               onChange={(event) => setNewBlockTitle(event.target.value)}
-              className="w-full rounded border border-grey-09 bg-white px-3 py-2 text-sm"
+              className="w-full rounded border border-grey-09 dark:border-grey-04 bg-white dark:bg-grey-03 dark:text-grey-12 px-3 py-2 text-sm"
               placeholder="Foundational narrative"
             />
           </div>
@@ -327,7 +327,7 @@ export function ContentBlockSelectorField({ value, onChange, options }: ContentB
               id="new-content-block-template"
               value={selectedTemplateId}
               onChange={(event) => setSelectedTemplateId(event.target.value)}
-              className="w-full rounded border border-grey-09 bg-white px-3 py-2 text-sm"
+              className="w-full rounded border border-grey-09 dark:border-grey-04 bg-white dark:bg-grey-03 dark:text-grey-12 px-3 py-2 text-sm"
             >
               {contentBlockTemplates.map((template) => (
                 <option key={template.id} value={template.id}>
@@ -340,7 +340,7 @@ export function ContentBlockSelectorField({ value, onChange, options }: ContentB
             </p>
           </div>
 
-          {creationError ? <p className="text-xs text-red-600">{creationError}</p> : null}
+          {creationError ? <p className="text-xs text-red-04">{creationError}</p> : null}
 
           <div className="flex gap-2">
             <button
@@ -353,7 +353,7 @@ export function ContentBlockSelectorField({ value, onChange, options }: ContentB
             <button
               type="button"
               onClick={resetCreator}
-              className="rounded border border-grey-09 bg-white px-3 py-2 text-sm font-medium hover:bg-grey-11"
+              className="rounded border border-grey-09 dark:border-grey-04 bg-white dark:bg-grey-03 px-3 py-2 text-sm font-medium hover:bg-grey-11 dark:hover:bg-grey-03"
             >
               Cancel
             </button>
@@ -390,7 +390,7 @@ function BlockOptionItem({
       role="option"
       aria-selected={isSelected}
       onClick={onClick}
-      className={cn('flex w-full flex-col items-start px-3 py-2 text-left hover:bg-grey-11', {
+      className={cn('flex w-full flex-col items-start px-3 py-2 text-left hover:bg-grey-11 dark:hover:bg-grey-03', {
         'bg-azure-10': isSelected,
       })}
     >

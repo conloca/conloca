@@ -31,7 +31,7 @@ export function SchemaForm({ schema, values, onChange, isLoading, className }: S
 
   if (!schema) {
     return (
-      <div className="text-center py-8 text-grey-04">
+      <div className="text-center py-8 text-grey-04 dark:text-grey-07">
         <p>No schema defined.</p>
       </div>
     );
@@ -74,15 +74,15 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
       <div>
         <label className="block text-sm font-medium mb-1">
           {label}
-          {required && <span className="text-red-500 ml-1">*</span>}
+          {required && <span className="text-red-04 ml-1">*</span>}
         </label>
         <input
           type="datetime-local"
           value={formatDateValue(value)}
           onChange={(e) => onChange(e.target.value || undefined)}
-          className="w-full px-3 py-2 border border-grey-09 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
+          className="w-full px-3 py-2 border border-grey-09 dark:border-grey-04 dark:bg-grey-03 dark:text-grey-12 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
         />
-        {description && <p className="mt-1 text-sm text-grey-04">{description}</p>}
+        {description && <p className="mt-1 text-sm text-grey-04 dark:text-grey-07">{description}</p>}
       </div>
     );
   }
@@ -93,15 +93,15 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
       <div>
         <label className="block text-sm font-medium mb-1">
           {label}
-          {required && <span className="text-red-500 ml-1">*</span>}
+          {required && <span className="text-red-04 ml-1">*</span>}
         </label>
         <input
           type="url"
           value={(value as string) || ''}
           onChange={(e) => onChange(e.target.value || undefined)}
-          className="w-full px-3 py-2 border border-grey-09 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
+          className="w-full px-3 py-2 border border-grey-09 dark:border-grey-04 dark:bg-grey-03 dark:text-grey-12 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
         />
-        {description && <p className="mt-1 text-sm text-grey-04">{description}</p>}
+        {description && <p className="mt-1 text-sm text-grey-04 dark:text-grey-07">{description}</p>}
       </div>
     );
   }
@@ -112,15 +112,15 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
       <div>
         <label className="block text-sm font-medium mb-1">
           {label}
-          {required && <span className="text-red-500 ml-1">*</span>}
+          {required && <span className="text-red-04 ml-1">*</span>}
         </label>
         <input
           type="email"
           value={(value as string) || ''}
           onChange={(e) => onChange(e.target.value || undefined)}
-          className="w-full px-3 py-2 border border-grey-09 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
+          className="w-full px-3 py-2 border border-grey-09 dark:border-grey-04 dark:bg-grey-03 dark:text-grey-12 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
         />
-        {description && <p className="mt-1 text-sm text-grey-04">{description}</p>}
+        {description && <p className="mt-1 text-sm text-grey-04 dark:text-grey-07">{description}</p>}
       </div>
     );
   }
@@ -132,12 +132,12 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
         <div>
           <label className="block text-sm font-medium mb-1">
             {label}
-            {required && <span className="text-red-500 ml-1">*</span>}
+            {required && <span className="text-red-04 ml-1">*</span>}
           </label>
           <select
             value={(value as string) || ''}
             onChange={(e) => onChange(e.target.value || undefined)}
-            className="w-full px-3 py-2 border border-grey-09 rounded focus:outline-none focus:ring-2 focus:ring-azure-04 bg-white"
+            className="w-full px-3 py-2 border border-grey-09 dark:border-grey-04 rounded focus:outline-none focus:ring-2 focus:ring-azure-04 bg-white dark:bg-grey-03 dark:text-grey-12"
           >
             {!required && <option value="">Select...</option>}
             {fieldInfo.enumValues?.map((enumValue) => (
@@ -146,7 +146,7 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
               </option>
             ))}
           </select>
-          {description && <p className="mt-1 text-sm text-grey-04">{description}</p>}
+          {description && <p className="mt-1 text-sm text-grey-04 dark:text-grey-07">{description}</p>}
         </div>
       );
 
@@ -155,15 +155,15 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
         <div>
           <label className="block text-sm font-medium mb-1">
             {label}
-            {required && <span className="text-red-500 ml-1">*</span>}
+            {required && <span className="text-red-04 ml-1">*</span>}
           </label>
           <input
             type="number"
             value={(value as number) ?? ''}
             onChange={(e) => onChange(e.target.value ? Number(e.target.value) : undefined)}
-            className="w-full px-3 py-2 border border-grey-09 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
+            className="w-full px-3 py-2 border border-grey-09 dark:border-grey-04 dark:bg-grey-03 dark:text-grey-12 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
           />
-          {description && <p className="mt-1 text-sm text-grey-04">{description}</p>}
+          {description && <p className="mt-1 text-sm text-grey-04 dark:text-grey-07">{description}</p>}
         </div>
       );
 
@@ -179,7 +179,7 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
             />
             <span className="text-sm font-medium">
               {label}
-              {required && <span className="text-red-500 ml-1">*</span>}
+              {required && <span className="text-red-04 ml-1">*</span>}
             </span>
           </label>
           {description && <p className="mt-1 text-sm text-grey-04 ml-6">{description}</p>}
@@ -191,14 +191,14 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
         <div>
           <label className="block text-sm font-medium mb-1">
             {label}
-            {required && <span className="text-red-500 ml-1">*</span>}
+            {required && <span className="text-red-04 ml-1">*</span>}
           </label>
           <ChipArrayField
             value={Array.isArray(value) ? (value as string[]) : []}
             onChange={(newValue) => onChange(newValue)}
             placeholder={description || 'Type and press Enter to add'}
           />
-          {description && <p className="mt-1 text-sm text-grey-04">{description}</p>}
+          {description && <p className="mt-1 text-sm text-grey-04 dark:text-grey-07">{description}</p>}
         </div>
       );
 
@@ -211,13 +211,13 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
           <div>
             <label className="block text-sm font-medium mb-1">
               {label}
-              {required && <span className="text-red-500 ml-1">*</span>}
+              {required && <span className="text-red-04 ml-1">*</span>}
             </label>
             <ImageFieldRender
               value={(value as string) || ''}
               onChange={(newValue) => onChange(newValue || undefined)}
             />
-            {description && <p className="mt-1 text-sm text-grey-04">{description}</p>}
+            {description && <p className="mt-1 text-sm text-grey-04 dark:text-grey-07">{description}</p>}
           </div>
         );
       }
@@ -233,15 +233,15 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
           <div>
             <label className="block text-sm font-medium mb-1">
               {label}
-              {required && <span className="text-red-500 ml-1">*</span>}
+              {required && <span className="text-red-04 ml-1">*</span>}
             </label>
             <textarea
               value={(value as string) || ''}
               onChange={(e) => onChange(e.target.value || undefined)}
               rows={3}
-              className="w-full px-3 py-2 border border-grey-09 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
+              className="w-full px-3 py-2 border border-grey-09 dark:border-grey-04 dark:bg-grey-03 dark:text-grey-12 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
             />
-            {description && <p className="mt-1 text-sm text-grey-04">{description}</p>}
+            {description && <p className="mt-1 text-sm text-grey-04 dark:text-grey-07">{description}</p>}
           </div>
         );
       }
@@ -251,17 +251,17 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
         <div>
           <label className="block text-sm font-medium mb-1">
             {label}
-            {required && <span className="text-red-500 ml-1">*</span>}
+            {required && <span className="text-red-04 ml-1">*</span>}
           </label>
           <input
             type="text"
             value={(value as string) || ''}
             onChange={(e) => onChange(e.target.value || undefined)}
-            className="w-full px-3 py-2 border border-grey-09 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
+            className="w-full px-3 py-2 border border-grey-09 dark:border-grey-04 dark:bg-grey-03 dark:text-grey-12 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
           />
-          {description && <p className="mt-1 text-sm text-grey-04">{description}</p>}
+          {description && <p className="mt-1 text-sm text-grey-04 dark:text-grey-07">{description}</p>}
           {fieldInfo.maxLength && (
-            <p className="mt-1 text-xs text-grey-06">
+            <p className="mt-1 text-xs text-grey-06 dark:text-grey-05">
               {((value as string) || '').length}/{fieldInfo.maxLength} characters
             </p>
           )}
