@@ -131,7 +131,7 @@ export function DataList({ dataSchemas }: DataListProps) {
       <div className="p-6 flex items-center justify-center min-h-[400px]">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin text-azure-04 mx-auto mb-4" />
-          <p className="text-grey-04">Loading data entries...</p>
+          <p className="text-grey-04 dark:text-grey-07">Loading data entries...</p>
         </div>
       </div>
     );
@@ -143,8 +143,8 @@ export function DataList({ dataSchemas }: DataListProps) {
       <div className="p-6 flex items-center justify-center min-h-[400px]">
         <div className="text-center max-w-md">
           <AlertCircle className="h-12 w-12 text-red-04 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold mb-2">Failed to load data entries</h2>
-          <p className="text-grey-04 mb-4">{error.message}</p>
+          <h2 className="text-xl font-semibold text-grey-01 dark:text-grey-12 mb-2">Failed to load data entries</h2>
+          <p className="text-grey-04 dark:text-grey-07 mb-4">{error.message}</p>
           <button
             onClick={() => window.location.reload()}
             className="px-4 py-2 bg-azure-04 text-white rounded hover:bg-azure-03 transition-colors"
@@ -296,12 +296,12 @@ export function DataList({ dataSchemas }: DataListProps) {
     <div className="p-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold text-grey-01">Data</h1>
+        <h1 className="text-2xl font-semibold text-grey-01 dark:text-grey-12">Data</h1>
         <div className="flex items-center gap-4">
           {schemasEditorLink && (
             <a
               href={schemasEditorLink}
-              className="px-3 py-2 border border-grey-09 rounded hover:bg-grey-11 transition-colors flex items-center gap-2 text-grey-04 hover:text-grey-01"
+              className="px-3 py-2 border border-grey-09 dark:border-grey-04 rounded hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors flex items-center gap-2 text-grey-04 dark:text-grey-07 hover:text-grey-01 dark:hover:text-grey-12"
               title="Open data schemas file in editor"
             >
               <Code className="h-4 w-4" />
@@ -312,7 +312,7 @@ export function DataList({ dataSchemas }: DataListProps) {
             <select
               value={selectedCollection}
               onChange={(e) => setSelectedCollection(e.target.value)}
-              className="px-3 py-2 border border-grey-09 rounded hover:bg-grey-11 transition-colors"
+              className="px-3 py-2 border border-grey-09 dark:border-grey-04 rounded hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
             >
               <option value="all">All Collections</option>
               {collections.map((col) => (
@@ -336,12 +336,12 @@ export function DataList({ dataSchemas }: DataListProps) {
 
       {/* Empty state */}
       {entries.length === 0 ? (
-        <div className="bg-white border border-grey-09 rounded p-12 text-center">
-          <Database className="h-12 w-12 text-grey-04 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold mb-2" data-testid="no-data-message">
+        <div className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-04 rounded p-12 text-center">
+          <Database className="h-12 w-12 text-grey-04 dark:text-grey-07 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-grey-01 dark:text-grey-12 mb-2" data-testid="no-data-message">
             No data entries yet
           </h2>
-          <p className="text-grey-04 mb-4">
+          <p className="text-grey-04 dark:text-grey-07 mb-4">
             {collections.length === 0
               ? 'Create a data collection folder first (e.g., content/data/authors/)'
               : 'Create data entries to store structured content'}
@@ -356,8 +356,8 @@ export function DataList({ dataSchemas }: DataListProps) {
           )}
         </div>
       ) : filteredEntries.length === 0 ? (
-        <div className="bg-white border border-grey-09 rounded p-12 text-center">
-          <p className="text-grey-04" data-testid="no-data-collection-message">
+        <div className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-04 rounded p-12 text-center">
+          <p className="text-grey-04 dark:text-grey-07" data-testid="no-data-collection-message">
             No entries found in collection "{selectedCollection}"
           </p>
         </div>
@@ -421,19 +421,19 @@ export function DataList({ dataSchemas }: DataListProps) {
           }}
         >
           <div
-            className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+            className="bg-white dark:bg-grey-03 rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto"
             data-testid="edit-data-dialog"
           >
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h2 className="text-xl font-semibold">{editDataDialog.entryTitle}</h2>
-                <p className="text-sm text-grey-04">
+                <h2 className="text-xl font-semibold text-grey-01 dark:text-grey-12">{editDataDialog.entryTitle}</h2>
+                <p className="text-sm text-grey-04 dark:text-grey-07">
                   {editDataDialog.collection} · {editDataDialog.locale}
                 </p>
               </div>
               <button
                 onClick={closeEditDataDialog}
-                className="p-2 hover:bg-grey-11 rounded transition-colors"
+                className="p-2 hover:bg-grey-11 dark:hover:bg-grey-03 rounded transition-colors"
                 aria-label="Close"
               >
                 ×

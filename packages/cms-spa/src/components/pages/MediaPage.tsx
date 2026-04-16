@@ -1,8 +1,8 @@
-import cn from 'clsx';
 import { Image } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { AssetEntry } from '../../hooks';
 import { useBulkDeleteAssets, useMoveAssets } from '../../hooks';
+import { cn } from '../../utils/cn';
 import { DeleteConfirmDialog, MoveFolderDialog } from '../dialogs';
 import {
   AssetDetailSidebar,
@@ -138,8 +138,8 @@ export function MediaPage() {
         {/* Header */}
         <div className="p-6 pb-0">
           <div className="flex items-center gap-3 mb-6">
-            <Image className="h-6 w-6 text-grey-04" />
-            <h1 className="text-2xl font-semibold text-grey-01">Media</h1>
+            <Image className="h-6 w-6 text-grey-04 dark:text-grey-07" />
+            <h1 className="text-2xl font-semibold text-grey-01 dark:text-grey-12">Media</h1>
           </div>
 
           {/* Toolbar with Select/Done toggle and Upload button */}
@@ -163,8 +163,8 @@ export function MediaPage() {
             className={cn(
               'mx-6 mt-2 px-4 py-2 rounded text-sm flex items-center justify-between',
               bulkDeleteResult.failed > 0
-                ? 'bg-amber-50 text-amber-800 border border-amber-200'
-                : 'bg-green-50 text-green-800 border border-green-200',
+                ? 'bg-yellow-11 text-yellow-02 border border-yellow-08'
+                : 'bg-green-11 text-green-02 border border-green-08',
             )}
           >
             <span>
