@@ -7,8 +7,20 @@ interface SeparatorProps {
 
 export function Separator({ className, orientation = 'vertical' }: SeparatorProps) {
   if (orientation === 'horizontal') {
-    return <div className={cn('w-full h-px bg-grey-09', className)} role="separator" aria-orientation="horizontal" />;
+    return (
+      <div
+        className={cn('w-full h-px bg-grey-09 dark:bg-grey-04', className)}
+        role="separator"
+        aria-orientation="horizontal"
+      />
+    );
   }
 
-  return <div className={cn('h-5 w-px bg-grey-09', className)} role="separator" aria-orientation="vertical" />;
+  return (
+    <div
+      className={cn('h-5 w-px bg-grey-09 dark:bg-grey-04', className)}
+      role="separator"
+      aria-orientation="vertical"
+    />
+  );
 }

@@ -29,13 +29,13 @@ class MDXContentErrorBoundary extends React.Component<
   override render() {
     if (this.state.hasError) {
       return (
-        <div className="p-4 bg-red-50 border border-red-200 rounded text-red-600">
+        <div className="p-4 bg-red-11 border border-red-08 rounded text-red-04">
           <p className="font-semibold mb-2">MDXContent Rendering Error</p>
           <p className="text-sm mb-2">{this.state.error?.message || 'Unknown error occurred'}</p>
-          <p className="text-xs text-red-500 mb-2">Block ID: {this.props.contentId}</p>
+          <p className="text-xs text-red-04 mb-2">Block ID: {this.props.contentId}</p>
           <details className="text-xs">
             <summary className="cursor-pointer font-medium">Stack Trace</summary>
-            <pre className="mt-2 p-2 bg-red-100 rounded overflow-auto whitespace-pre-wrap">
+            <pre className="mt-2 p-2 bg-red-08 rounded overflow-auto whitespace-pre-wrap">
               {this.state.error?.stack}
             </pre>
           </details>
@@ -106,16 +106,16 @@ function MDXContentInner({ entry }: MDXContentProps) {
     const error = compileError || evaluationError;
 
     return (
-      <div className="p-4 bg-red-50 border border-red-200 rounded text-red-600">
+      <div className="p-4 bg-red-11 border border-red-08 rounded text-red-04">
         <p className="font-semibold mb-2">Cannot Render Block Content</p>
         <p className="text-sm mb-2">{error?.message}</p>
-        <p className="text-xs text-red-500 mb-3">
+        <p className="text-xs text-red-04 mb-3">
           The block content contains invalid MDX syntax. Please edit the block to fix any syntax errors.
         </p>
         <button
           type="button"
           onClick={retry}
-          className="px-3 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+          className="px-3 py-1 text-sm bg-red-04 text-white rounded hover:bg-red-03 transition-colors"
         >
           Retry
         </button>
@@ -126,7 +126,7 @@ function MDXContentInner({ entry }: MDXContentProps) {
   // No content
   if (!actualMdxContent) {
     return (
-      <div className="p-4 bg-yellow-50 border border-yellow-200 rounded text-yellow-700">
+      <div className="p-4 bg-yellow-11 border border-yellow-08 rounded text-yellow-02">
         <p className="font-semibold mb-1">Empty Block Content</p>
         <p className="text-sm">
           This block ({entry.id}) doesn't have any content yet. Click to edit and add some MDX content.

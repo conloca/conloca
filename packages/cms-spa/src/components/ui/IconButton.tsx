@@ -22,8 +22,10 @@ export function IconButton({
 }: IconButtonProps) {
   const baseClasses = 'p-2 rounded-md transition-all duration-150 cursor-pointer';
   const variantClasses = {
-    default: 'text-grey-03 hover:bg-grey-10 hover:text-grey-01',
-    ghost: 'text-grey-04 hover:bg-grey-11 hover:text-grey-01',
+    default:
+      'text-grey-03 hover:bg-grey-10 hover:text-grey-01 dark:text-grey-09 dark:hover:bg-grey-03 dark:hover:text-grey-12',
+    ghost:
+      'text-grey-04 hover:bg-grey-11 hover:text-grey-01 dark:text-grey-07 dark:hover:bg-grey-03 dark:hover:text-grey-12',
   };
 
   return (
