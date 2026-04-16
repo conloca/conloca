@@ -29,8 +29,8 @@ export function CreateDataDialog({ collections, isPending, onClose, onCreate }: 
         if (e.key === 'Escape') onClose();
       }}
     >
-      <div className="bg-white rounded-lg p-6 w-full max-w-md" data-testid="create-data-dialog">
-        <h2 className="text-xl font-semibold mb-4">Create New Data Entry</h2>
+      <div className="bg-white dark:bg-grey-03 rounded-lg p-6 w-full max-w-md" data-testid="create-data-dialog">
+        <h2 className="text-xl font-semibold text-grey-01 dark:text-grey-12 mb-4">Create New Data Entry</h2>
         <div className="mb-4">
           <label htmlFor="data-collection" className="block text-sm font-medium mb-2">
             Collection
@@ -39,7 +39,7 @@ export function CreateDataDialog({ collections, isPending, onClose, onCreate }: 
             id="data-collection"
             value={selectedCollection}
             onChange={(e) => setSelectedCollection(e.target.value)}
-            className="w-full px-3 py-2 border border-grey-09 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
+            className="w-full px-3 py-2 border border-grey-09 dark:border-grey-04 dark:bg-grey-03 dark:text-grey-12 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
           >
             {collections.map((col) => (
               <option key={col} value={col}>
@@ -54,7 +54,7 @@ export function CreateDataDialog({ collections, isPending, onClose, onCreate }: 
         <div className="flex justify-end gap-3">
           <button
             onClick={onClose}
-            className="px-4 py-2 border border-grey-09 rounded hover:bg-grey-11 transition-colors"
+            className="px-4 py-2 border border-grey-09 dark:border-grey-04 rounded hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
           >
             Cancel
           </button>

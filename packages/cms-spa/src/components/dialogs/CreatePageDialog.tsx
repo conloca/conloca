@@ -112,12 +112,12 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-black/50" />
         <Dialog.Content
-          className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-lg p-6 w-full max-w-md"
+          className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-grey-03 rounded-lg shadow-lg p-6 w-full max-w-md"
           data-testid="create-page-dialog"
         >
           <div className="flex items-center justify-between mb-4">
             <Dialog.Title className="text-lg font-semibold">Create New Page</Dialog.Title>
-            <Dialog.Close className="p-1 hover:bg-grey-11 rounded">
+            <Dialog.Close className="p-1 hover:bg-grey-11 dark:hover:bg-grey-03 rounded">
               <X className="h-4 w-4" />
             </Dialog.Close>
           </div>
@@ -132,7 +132,7 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.currentTarget.value)}
-                className="w-full px-3 py-2 border border-grey-09 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
+                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-04 dark:bg-grey-03 dark:text-grey-12 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
                 required
                 data-testid="page-title-input"
               />
@@ -148,26 +148,24 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
                   type="text"
                   value={path}
                   onChange={(e) => setPath(e.target.value)}
-                  className={`w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 ${
+                  className={`w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 dark:bg-grey-03 dark:text-grey-12 ${
                     !isPathnameAvailable && path
-                      ? 'border-red-500 focus:ring-red-500'
-                      : 'border-grey-09 focus:ring-azure-04'
+                      ? 'border-red-04 focus:ring-red-04'
+                      : 'border-grey-09 dark:border-grey-04 focus:ring-azure-04'
                   }`}
                   required
                   data-testid="page-path-input"
                 />
                 {!isPathnameAvailable && path && (
                   <div className="absolute right-2 top-1/2 -translate-y-1/2">
-                    <AlertCircle className="h-5 w-5 text-red-500" />
+                    <AlertCircle className="h-5 w-5 text-red-04" />
                   </div>
                 )}
               </div>
               <div className="h-5 mt-1">
-                {!isPathnameAvailable && path && (
-                  <p className="text-sm text-red-500">This pathname is already in use</p>
-                )}
+                {!isPathnameAvailable && path && <p className="text-sm text-red-04">This pathname is already in use</p>}
                 {pathnameLoading && showLoadingText && path && (
-                  <p className="text-sm text-grey-04">Checking availability...</p>
+                  <p className="text-sm text-grey-04 dark:text-grey-07">Checking availability...</p>
                 )}
               </div>
             </div>
@@ -180,7 +178,7 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
                 id="template"
                 value={template}
                 onChange={(e) => handleTemplateChange(e.target.value)}
-                className="w-full px-3 py-2 border border-grey-09 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
+                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-04 dark:bg-grey-03 dark:text-grey-12 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
               >
                 <option value="blank">Blank</option>
                 {templateEntries.map(([key, templateConfig]) => (
@@ -200,7 +198,7 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
                 id="locale"
                 value={locale}
                 onChange={(e) => setLocale(e.target.value)}
-                className="w-full px-3 py-2 border border-grey-09 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
+                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-04 dark:bg-grey-03 dark:text-grey-12 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
               >
                 <option value="en">English</option>
                 <option value="nl">Dutch</option>
@@ -217,7 +215,7 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
               >
                 Create
               </button>
-              <Dialog.Close className="flex-1 px-4 py-2 border border-grey-09 rounded hover:bg-grey-11 transition-colors">
+              <Dialog.Close className="flex-1 px-4 py-2 border border-grey-09 dark:border-grey-04 rounded hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors">
                 Cancel
               </Dialog.Close>
             </div>

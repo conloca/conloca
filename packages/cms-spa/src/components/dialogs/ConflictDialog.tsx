@@ -1,5 +1,5 @@
 import type { UpdateResult } from '@conloca/content-api-client';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 interface ConflictDialogProps {
   conflict: UpdateResult;
@@ -15,6 +15,19 @@ export function ConflictDialog({ conflict, onReload, onForceSave, onCancel }: Co
     setShowReloadConfirm(false);
   }, [conflict]);
 
+  // Escape key handler
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCancel();
+    },
+    [onCancel],
+  );
+
+  useEffect(() => {
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [handleKeyDown]);
+
   if (conflict.success || conflict.reason !== 'stale_write') {
     return null;
   }
@@ -24,18 +37,25 @@ export function ConflictDialog({ conflict, onReload, onForceSave, onCancel }: Co
   const hasContentChanges = conflictDetails?.contentChanged ?? false;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
-        <h2 className="text-2xl font-bold mb-4">Conflict Detected</h2>
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="conflict-dialog-title"
+        className="bg-white dark:bg-grey-03 rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto"
+      >
+        <h2 id="conflict-dialog-title" className="text-2xl font-bold mb-4 text-grey-01 dark:text-grey-12">
+          Conflict Detected
+        </h2>
 
         <div className="mb-6">
-          <p className="text-gray-700 mb-2" data-testid="conflict-main-message">
+          <p className="text-grey-03 dark:text-grey-09 mb-2" data-testid="conflict-main-message">
             The content has been modified by another user or process since you started editing.
           </p>
 
           {conflictDetails && (
-            <div className="mt-4 p-4 bg-gray-50 rounded">
-              <h3 className="font-semibold mb-2">Changes detected:</h3>
+            <div className="mt-4 p-4 bg-grey-12 dark:bg-grey-03 rounded">
+              <h3 className="font-semibold mb-2 text-grey-01 dark:text-grey-12">Changes detected:</h3>
               {hasMetaChanges && hasContentChanges && (
                 <p data-testid="conflict-details">Both metadata and content have been modified.</p>
               )}
@@ -46,8 +66,8 @@ export function ConflictDialog({ conflict, onReload, onForceSave, onCancel }: Co
           )}
 
           {conflictDetails?.currentMeta && (
-            <div className="mt-4 p-4 bg-blue-50 rounded">
-              <h3 className="font-semibold mb-2">Current metadata:</h3>
+            <div className="mt-4 p-4 bg-azure-11 dark:bg-azure-02 rounded">
+              <h3 className="font-semibold mb-2 text-grey-01 dark:text-grey-12">Current metadata:</h3>
               <dl className="space-y-1">
                 {Object.entries(conflictDetails.currentMeta).map(([key, value]) => (
                   <div key={key} className="flex">
@@ -66,7 +86,7 @@ export function ConflictDialog({ conflict, onReload, onForceSave, onCancel }: Co
 
         {showReloadConfirm ? (
           <div className="space-y-4">
-            <p className="text-red-600 font-medium" data-testid="conflict-discard-warning">
+            <p className="text-red-04 font-medium" data-testid="conflict-discard-warning">
               Are you sure you want to reload? You will lose all unsaved changes.
             </p>
             <div className="flex gap-3">
@@ -75,13 +95,13 @@ export function ConflictDialog({ conflict, onReload, onForceSave, onCancel }: Co
                   onReload();
                   setShowReloadConfirm(false);
                 }}
-                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                className="px-4 py-2 bg-red-04 text-white rounded hover:bg-red-03"
               >
                 Yes, Reload
               </button>
               <button
                 onClick={() => setShowReloadConfirm(false)}
-                className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400"
+                className="px-4 py-2 bg-grey-08 dark:bg-grey-04 text-white rounded hover:bg-grey-07 dark:hover:bg-grey-05"
               >
                 Cancel
               </button>
@@ -91,17 +111,22 @@ export function ConflictDialog({ conflict, onReload, onForceSave, onCancel }: Co
           <div className="flex gap-3">
             <button
               onClick={() => setShowReloadConfirm(true)}
-              className="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700"
+              className="px-4 py-2 bg-yellow-05 text-white rounded hover:bg-yellow-04"
             >
               Reload and Lose Changes
             </button>
+            {conflict.currentEtag && (
+              <button
+                onClick={() => onForceSave(conflict.currentEtag!)}
+                className="px-4 py-2 bg-azure-04 text-white rounded hover:bg-azure-03"
+              >
+                Force Save
+              </button>
+            )}
             <button
-              onClick={() => onForceSave(conflict.currentEtag!)}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              onClick={onCancel}
+              className="px-4 py-2 bg-grey-08 dark:bg-grey-04 text-white rounded hover:bg-grey-07 dark:hover:bg-grey-05"
             >
-              Force Save
-            </button>
-            <button onClick={onCancel} className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">
               Cancel
             </button>
           </div>

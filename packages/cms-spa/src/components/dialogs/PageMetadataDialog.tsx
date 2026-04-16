@@ -103,10 +103,10 @@ export function PageMetadataDialog({ open, onOpenChange, page, onSave }: PageMet
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-black/50" />
-        <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-grey-03 rounded-lg shadow-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
           <div className="flex items-center justify-between mb-4">
             <Dialog.Title className="text-lg font-semibold">Page Metadata</Dialog.Title>
-            <Dialog.Close className="p-1 hover:bg-grey-11 rounded">
+            <Dialog.Close className="p-1 hover:bg-grey-11 dark:hover:bg-grey-03 rounded">
               <X className="h-4 w-4" />
             </Dialog.Close>
           </div>
@@ -132,7 +132,7 @@ export function PageMetadataDialog({ open, onOpenChange, page, onSave }: PageMet
               >
                 Save
               </button>
-              <Dialog.Close className="flex-1 px-4 py-2 border border-grey-09 rounded hover:bg-grey-11 transition-colors">
+              <Dialog.Close className="flex-1 px-4 py-2 border border-grey-09 dark:border-grey-04 rounded hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors">
                 Cancel
               </Dialog.Close>
             </div>

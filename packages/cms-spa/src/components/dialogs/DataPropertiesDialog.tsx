@@ -57,8 +57,8 @@ export function DataPropertiesDialog({ initialMeta, isPending, onClose, onSave }
       role="dialog"
       onKeyDown={handleKeyDown}
     >
-      <div className="bg-white rounded-lg p-6 w-full max-w-md" data-testid="properties-dialog">
-        <h2 className="text-xl font-semibold mb-4">Edit Data Properties</h2>
+      <div className="bg-white dark:bg-grey-03 rounded-lg p-6 w-full max-w-md" data-testid="properties-dialog">
+        <h2 className="text-xl font-semibold text-grey-01 dark:text-grey-12 mb-4">Edit Data Properties</h2>
 
         <div className="mb-4">
           <SchemaForm schema={dataEditableSchema} values={formValues} onChange={setFormValues} />
@@ -67,7 +67,7 @@ export function DataPropertiesDialog({ initialMeta, isPending, onClose, onSave }
         <div className="flex justify-end gap-3">
           <button
             onClick={onClose}
-            className="px-4 py-2 border border-grey-09 rounded hover:bg-grey-11 transition-colors"
+            className="px-4 py-2 border border-grey-09 dark:border-grey-04 rounded hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
             disabled={isPending}
           >
             Cancel

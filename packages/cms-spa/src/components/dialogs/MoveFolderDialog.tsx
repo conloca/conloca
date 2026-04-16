@@ -31,10 +31,10 @@ function FolderOption({ node, depth, selectedFolder, currentFolder, onSelect }: 
         onClick={() => !isDisabled && onSelect(node.path)}
         disabled={isDisabled}
         className={cn(
-          'w-full flex items-center gap-2 py-2 px-3 rounded text-sm transition-colors text-left text-grey-01',
+          'w-full flex items-center gap-2 py-2 px-3 rounded text-sm transition-colors text-left text-grey-01 dark:text-grey-12',
           {
-            'bg-azure-11 text-azure-01 ring-1 ring-azure-04': isSelected,
-            'hover:bg-grey-11': !isSelected && !isDisabled,
+            'bg-azure-11 dark:bg-azure-02 text-azure-01 dark:text-azure-11 ring-1 ring-azure-04': isSelected,
+            'hover:bg-grey-11 dark:hover:bg-grey-03': !isSelected && !isDisabled,
             'opacity-50 cursor-not-allowed': isDisabled,
           },
         )}
@@ -42,7 +42,7 @@ function FolderOption({ node, depth, selectedFolder, currentFolder, onSelect }: 
       >
         <Folder className="w-4 h-4 flex-shrink-0" />
         <span className="truncate flex-1">{node.name}</span>
-        {isDisabled && <span className="text-xs text-grey-05">(current)</span>}
+        {isDisabled && <span className="text-xs text-grey-05 dark:text-grey-06">(current)</span>}
       </button>
 
       {node.children.map((child) => (
@@ -103,26 +103,26 @@ export function MoveFolderDialog({
       role="dialog"
       onKeyDown={handleKeyDown}
     >
-      <div className="bg-white rounded-lg w-full max-w-md shadow-xl" data-testid="move-folder-dialog">
+      <div className="bg-white dark:bg-grey-03 rounded-lg w-full max-w-md shadow-xl" data-testid="move-folder-dialog">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-grey-09">
-          <h2 className="text-lg font-semibold text-grey-01">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-grey-09 dark:border-grey-04">
+          <h2 className="text-lg font-semibold text-grey-01 dark:text-grey-12">
             Move {assetCount} asset{assetCount !== 1 ? 's' : ''}
           </h2>
           <button
             type="button"
             onClick={onCancel}
-            className="p-1 rounded hover:bg-grey-11 transition-colors"
+            className="p-1 rounded hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
             disabled={isMoving}
           >
-            <X className="w-5 h-5 text-grey-04" />
+            <X className="w-5 h-5 text-grey-04 dark:text-grey-07" />
           </button>
         </div>
 
         {/* Folder list */}
         <div className="p-4 max-h-80 overflow-y-auto">
           {isLoading ? (
-            <div className="text-sm text-grey-05 text-center py-4">Loading folders...</div>
+            <div className="text-sm text-grey-05 dark:text-grey-06 text-center py-4">Loading folders...</div>
           ) : (
             <div className="space-y-0.5">
               {/* Root folder option */}
@@ -131,17 +131,18 @@ export function MoveFolderDialog({
                 onClick={() => currentFolder !== '/' && setSelectedFolder('/')}
                 disabled={currentFolder === '/'}
                 className={cn(
-                  'w-full flex items-center gap-2 py-2 px-3 rounded text-sm transition-colors text-left text-grey-01',
+                  'w-full flex items-center gap-2 py-2 px-3 rounded text-sm transition-colors text-left text-grey-01 dark:text-grey-12',
                   {
-                    'bg-azure-11 text-azure-01 ring-1 ring-azure-04': selectedFolder === '/',
-                    'hover:bg-grey-11': selectedFolder !== '/' && currentFolder !== '/',
+                    'bg-azure-11 dark:bg-azure-02 text-azure-01 dark:text-azure-11 ring-1 ring-azure-04':
+                      selectedFolder === '/',
+                    'hover:bg-grey-11 dark:hover:bg-grey-03': selectedFolder !== '/' && currentFolder !== '/',
                     'opacity-50 cursor-not-allowed': currentFolder === '/',
                   },
                 )}
               >
                 <Folder className="w-4 h-4 flex-shrink-0" />
                 <span className="truncate flex-1">Root</span>
-                {currentFolder === '/' && <span className="text-xs text-grey-05">(current)</span>}
+                {currentFolder === '/' && <span className="text-xs text-grey-05 dark:text-grey-06">(current)</span>}
               </button>
 
               {/* Folder tree */}
@@ -157,7 +158,7 @@ export function MoveFolderDialog({
               ))}
 
               {tree.length === 0 && (
-                <div className="text-sm text-grey-05 text-center py-4">
+                <div className="text-sm text-grey-05 dark:text-grey-06 text-center py-4">
                   No folders available. Create a folder first.
                 </div>
               )}
@@ -166,12 +167,12 @@ export function MoveFolderDialog({
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end gap-3 px-6 py-4 border-t border-grey-09">
+        <div className="flex justify-end gap-3 px-6 py-4 border-t border-grey-09 dark:border-grey-04">
           <button
             type="button"
             onClick={onCancel}
             disabled={isMoving}
-            className="px-4 py-2 border border-grey-09 rounded text-grey-01 hover:bg-grey-11 transition-colors disabled:opacity-50"
+            className="px-4 py-2 border border-grey-09 dark:border-grey-04 rounded text-grey-01 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors disabled:opacity-50"
           >
             Cancel
           </button>

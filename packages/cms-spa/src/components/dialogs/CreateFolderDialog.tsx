@@ -44,10 +44,10 @@ export function CreateFolderDialog({ open, isPending, onClose, onCreate }: Creat
       role="dialog"
       onKeyDown={handleKeyDown}
     >
-      <div className="bg-white rounded-lg p-6 w-full max-w-md" data-testid="create-folder-dialog">
-        <h2 className="text-xl font-semibold text-grey-01 mb-4">Create New Folder</h2>
+      <div className="bg-white dark:bg-grey-03 rounded-lg p-6 w-full max-w-md" data-testid="create-folder-dialog">
+        <h2 className="text-xl font-semibold text-grey-01 dark:text-grey-12 mb-4">Create New Folder</h2>
         <div className="mb-4">
-          <label htmlFor="folder-name" className="block text-sm font-medium text-grey-01 mb-2">
+          <label htmlFor="folder-name" className="block text-sm font-medium text-grey-01 dark:text-grey-12 mb-2">
             Folder Name
           </label>
           <input
@@ -57,7 +57,7 @@ export function CreateFolderDialog({ open, isPending, onClose, onCreate }: Creat
             value={folderName}
             onChange={(e) => setFolderName(e.target.value)}
             placeholder="Enter folder name"
-            className="w-full px-3 py-2 border border-grey-09 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
+            className="w-full px-3 py-2 border border-grey-09 dark:border-grey-04 dark:bg-grey-03 dark:text-grey-12 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
             data-testid="folder-name-input"
           />
         </div>
@@ -65,7 +65,7 @@ export function CreateFolderDialog({ open, isPending, onClose, onCreate }: Creat
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 border border-grey-09 rounded hover:bg-grey-11 transition-colors"
+            className="px-4 py-2 border border-grey-09 dark:border-grey-04 rounded hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
           >
             Cancel
           </button>
