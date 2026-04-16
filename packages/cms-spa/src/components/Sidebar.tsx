@@ -1,0 +1,91 @@
+import { Database, FileText, ImageIcon, LayoutDashboard, Monitor, Moon, Package, Sun } from 'lucide-react';
+import { NavLink } from 'react-router-dom';
+import { useTheme } from '../hooks/useTheme';
+import { cn } from '../utils/cn';
+import { ConlocaLogo } from './ConlocaLogo';
+import { GitStatusPanel } from './GitStatusPanel';
+import { UserAvatar } from './UserAvatar';
+
+interface NavItemProps {
+  to: string;
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  end?: boolean;
+}
+
+function NavItem({ to, icon: Icon, label, end }: NavItemProps) {
+  return (
+    <NavLink
+      to={to}
+      end={end}
+      className={({ isActive }) =>
+        cn(
+          'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors',
+          isActive
+            ? 'bg-azure-11 text-azure-01 dark:bg-azure-03 dark:text-azure-11'
+            : 'text-grey-04 hover:bg-grey-11 hover:text-grey-01 dark:text-grey-07 dark:hover:bg-grey-03 dark:hover:text-grey-12',
+        )
+      }
+    >
+      <Icon className="h-4 w-4 flex-shrink-0" />
+      <span>{label}</span>
+    </NavLink>
+  );
+}
+
+const themeOrder = ['system', 'light', 'dark'] as const;
+const themeIcons = { system: Monitor, light: Sun, dark: Moon } as const;
+const themeLabels = { system: 'System', light: 'Light', dark: 'Dark' } as const;
+
+function ThemeToggle() {
+  const { theme, setTheme } = useTheme();
+  const Icon = themeIcons[theme];
+
+  const cycleTheme = () => {
+    const idx = themeOrder.indexOf(theme);
+    setTheme(themeOrder[(idx + 1) % themeOrder.length]);
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={cycleTheme}
+      className="p-2 rounded-md text-grey-04 hover:bg-grey-11 hover:text-grey-01 dark:text-grey-07 dark:hover:bg-grey-03 dark:hover:text-grey-12 transition-colors"
+      title={`Theme: ${themeLabels[theme]}`}
+      aria-label={`Theme: ${themeLabels[theme]}`}
+    >
+      <Icon className="h-4 w-4" />
+    </button>
+  );
+}
+
+export function Sidebar() {
+  return (
+    <aside className="w-60 flex-shrink-0 h-screen flex flex-col border-r border-grey-09 bg-white dark:border-grey-04 dark:bg-grey-02">
+      {/* Logo */}
+      <div className="px-4 py-5 border-b border-grey-09 dark:border-grey-04">
+        <ConlocaLogo />
+      </div>
+
+      {/* Navigation */}
+      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        <NavItem to="/" icon={LayoutDashboard} label="Dashboard" end />
+        <NavItem to="/pages" icon={FileText} label="Pages" />
+        <NavItem to="/media" icon={ImageIcon} label="Media" />
+        <NavItem to="/blocks" icon={Package} label="Blocks" />
+        <NavItem to="/data" icon={Database} label="Data" />
+      </nav>
+
+      {/* Git Status */}
+      <div className="px-3 py-3 border-t border-grey-09 dark:border-grey-04">
+        <GitStatusPanel variant="sidebar" />
+      </div>
+
+      {/* User + Theme toggle */}
+      <div className="px-3 py-3 border-t border-grey-09 dark:border-grey-04 flex items-center justify-between">
+        <UserAvatar />
+        <ThemeToggle />
+      </div>
+    </aside>
+  );
+}
