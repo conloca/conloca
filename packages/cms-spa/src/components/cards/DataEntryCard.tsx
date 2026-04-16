@@ -47,19 +47,19 @@ export function DataEntryCard({
     config.projectRoot && name ? getEditorLink(config.projectRoot, collection, name, firstLocale) : null;
 
   return (
-    <div className="bg-white border border-grey-09 rounded p-4 hover:border-azure-04 transition-colors">
+    <div className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-04 rounded p-4 hover:border-azure-04 transition-colors">
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-2">
-          <Database className="h-4 w-4 text-grey-04" />
-          <h3 className="font-medium" data-testid={`data-title-${id}`}>
+          <Database className="h-4 w-4 text-grey-04 dark:text-grey-07" />
+          <h3 className="font-medium text-grey-01 dark:text-grey-12" data-testid={`data-title-${id}`}>
             {title}
           </h3>
         </div>
-        <span className="px-2 py-1 text-xs bg-grey-11 rounded">{collection}</span>
+        <span className="px-2 py-1 text-xs bg-grey-11 dark:bg-grey-03 rounded">{collection}</span>
       </div>
 
       {description && (
-        <p className="text-sm text-grey-04 mb-3 line-clamp-2" data-testid={`data-description-${id}`}>
+        <p className="text-sm text-grey-04 dark:text-grey-07 mb-3 line-clamp-2" data-testid={`data-description-${id}`}>
           {description}
         </p>
       )}
@@ -67,38 +67,46 @@ export function DataEntryCard({
       <div className="flex items-center justify-between">
         <div className="flex gap-1">
           {locales.map((locale) => (
-            <span key={locale} data-testid="locale-indicator" className="px-2 py-1 text-xs bg-grey-11 rounded">
+            <span
+              key={locale}
+              data-testid="locale-indicator"
+              className="px-2 py-1 text-xs bg-grey-11 dark:bg-grey-03 rounded"
+            >
               {locale}
             </span>
           ))}
         </div>
         <div className="flex gap-2 relative">
-          <button onClick={onEditData} className="p-1 hover:bg-grey-11 rounded transition-colors" title="Edit data">
+          <button
+            onClick={onEditData}
+            className="p-1 hover:bg-grey-11 dark:hover:bg-grey-03 rounded transition-colors"
+            title="Edit data"
+          >
             <Edit2 className="h-4 w-4 text-azure-04" />
           </button>
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="p-1 hover:bg-grey-11 rounded transition-colors"
+            className="p-1 hover:bg-grey-11 dark:hover:bg-grey-03 rounded transition-colors"
             title="More actions"
             aria-label="More actions"
           >
-            <MoreVertical className="h-4 w-4 text-grey-04" />
+            <MoreVertical className="h-4 w-4 text-grey-04 dark:text-grey-07" />
           </button>
 
           {/* Dropdown Menu */}
           {isMenuOpen && (
             <div
               ref={menuRef}
-              className="absolute right-0 top-8 w-48 bg-white border border-grey-09 rounded shadow-lg z-10"
+              className="absolute right-0 top-8 w-48 bg-white dark:bg-grey-03 border border-grey-09 dark:border-grey-04 rounded shadow-lg z-10"
             >
               <button
                 onClick={() => {
                   onEditData();
                   setIsMenuOpen(false);
                 }}
-                className="w-full px-4 py-2 text-left flex items-center gap-2 hover:bg-grey-11 transition-colors"
+                className="w-full px-4 py-2 text-left flex items-center gap-2 hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
               >
-                <FileJson className="h-4 w-4 text-grey-04" />
+                <FileJson className="h-4 w-4 text-grey-04 dark:text-grey-07" />
                 <span>Edit Data</span>
               </button>
               <button
@@ -106,22 +114,22 @@ export function DataEntryCard({
                   onEditProperties();
                   setIsMenuOpen(false);
                 }}
-                className="w-full px-4 py-2 text-left flex items-center gap-2 hover:bg-grey-11 transition-colors"
+                className="w-full px-4 py-2 text-left flex items-center gap-2 hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
               >
-                <Settings className="h-4 w-4 text-grey-04" />
+                <Settings className="h-4 w-4 text-grey-04 dark:text-grey-07" />
                 <span>Properties</span>
               </button>
               {editorLink && (
                 <a
                   href={editorLink}
                   onClick={() => setIsMenuOpen(false)}
-                  className="w-full px-4 py-2 text-left flex items-center gap-2 hover:bg-grey-11 transition-colors"
+                  className="w-full px-4 py-2 text-left flex items-center gap-2 hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
                 >
-                  <ExternalLink className="h-4 w-4 text-grey-04" />
+                  <ExternalLink className="h-4 w-4 text-grey-04 dark:text-grey-07" />
                   <span>Open in Editor</span>
                 </a>
               )}
-              <div className="border-t border-grey-09 my-1" />
+              <div className="border-t border-grey-09 dark:border-grey-04 my-1" />
               <button
                 onClick={() => {
                   onDelete();
