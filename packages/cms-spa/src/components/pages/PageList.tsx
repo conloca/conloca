@@ -1,5 +1,5 @@
 import { localesOf, useCreateContent, useDeleteContent, useSitePages } from '@conloca/content-api-client';
-import { AlertCircle, Clock, Edit, FileText, Loader2, Plus, Trash2 } from 'lucide-react';
+import { AlertCircle, Clock, Edit, FileText, Loader2, Plus, Search, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useErrorModal, useSiteBaseUrl } from '../../hooks';
@@ -17,6 +17,10 @@ interface PageListProps {
 
 export function PageList({ selectedSite, selectedLocale: initialLocale }: PageListProps = {}) {
   const [selectedLocale, setSelectedLocale] = useState<string | 'all'>(initialLocale || 'all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'published' | 'draft' | 'scheduled'>('all');
+  const [sortBy, setSortBy] = useState<'title' | 'modified' | 'path'>('modified');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [deleteDialog, setDeleteDialog] = useState<{
     isOpen: boolean;
@@ -123,11 +127,32 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
     return ['all', ...Array.from(locales).sort()];
   }, [pages]);
 
-  // Filter pages by selected locale
+  // Filter pages by locale, search, status, and sort
   const filteredPages = useMemo(() => {
-    if (selectedLocale === 'all') return pages;
-    return pages.filter((page) => page.locales.includes(selectedLocale));
-  }, [pages, selectedLocale]);
+    let result = selectedLocale === 'all' ? pages : pages.filter((page) => page.locales.includes(selectedLocale));
+
+    // Search filter
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter((page) => page.title.toLowerCase().includes(q) || page.path.toLowerCase().includes(q));
+    }
+
+    // Status filter
+    if (statusFilter !== 'all') {
+      result = result.filter((page) => page.status === statusFilter);
+    }
+
+    // Sort
+    result = [...result].sort((a, b) => {
+      let cmp = 0;
+      if (sortBy === 'title') cmp = a.title.localeCompare(b.title);
+      else if (sortBy === 'path') cmp = a.path.localeCompare(b.path);
+      else cmp = a.modified.getTime() - b.modified.getTime();
+      return sortOrder === 'asc' ? cmp : -cmp;
+    });
+
+    return result;
+  }, [pages, selectedLocale, searchQuery, statusFilter, sortBy, sortOrder]);
 
   // Loading state
   if (isLoading) {
@@ -135,7 +160,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
       <div className="p-6 flex items-center justify-center min-h-[400px]">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin text-azure-04 mx-auto mb-4" />
-          <p className="text-grey-04">Loading pages...</p>
+          <p className="text-grey-04 dark:text-grey-07">Loading pages...</p>
         </div>
       </div>
     );
@@ -147,8 +172,8 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
       <div className="p-6 flex items-center justify-center min-h-[400px]" data-testid="page-list-error">
         <div className="text-center max-w-md">
           <AlertCircle className="h-12 w-12 text-red-04 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold mb-2">Failed to load pages</h2>
-          <p className="text-grey-04 mb-4">{error.message}</p>
+          <h2 className="text-xl font-semibold text-grey-01 dark:text-grey-12 mb-2">Failed to load pages</h2>
+          <p className="text-grey-04 dark:text-grey-07 mb-4">{error.message}</p>
           <button
             onClick={() => window.location.reload()}
             className="px-4 py-2 bg-azure-04 text-white rounded hover:bg-azure-03 transition-colors"
@@ -298,12 +323,12 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
     <div className="p-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold text-grey-01">Pages</h1>
+        <h1 className="text-2xl font-semibold text-grey-01 dark:text-grey-12">Pages</h1>
         <div className="flex items-center gap-4">
           <select
             value={selectedLocale}
             onChange={(e) => setSelectedLocale(e.target.value)}
-            className="px-3 py-2 border border-grey-09 rounded hover:bg-grey-11 transition-colors"
+            className="px-3 py-2 border border-grey-09 dark:border-grey-04 rounded bg-white dark:bg-grey-03 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
             role="combobox"
             data-testid="locale-selector"
           >
@@ -324,14 +349,59 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
         </div>
       </div>
 
+      {/* Search & Filter Toolbar */}
+      <div className="flex items-center gap-3 mb-4">
+        {/* Search input */}
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-grey-05 dark:text-grey-06" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search pages..."
+            className="w-full pl-9 pr-3 py-2 border border-grey-09 dark:border-grey-04 rounded bg-white dark:bg-grey-03 dark:text-grey-12 text-sm focus:outline-none focus:ring-2 focus:ring-azure-04"
+          />
+        </div>
+
+        {/* Status filter */}
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as 'all' | 'published' | 'draft' | 'scheduled')}
+          className="px-3 py-2 border border-grey-09 dark:border-grey-04 rounded bg-white dark:bg-grey-03 dark:text-grey-12 text-sm hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
+        >
+          <option value="all">All Status</option>
+          <option value="published">Published</option>
+          <option value="draft">Draft</option>
+          <option value="scheduled">Scheduled</option>
+        </select>
+
+        {/* Sort */}
+        <select
+          value={`${sortBy}-${sortOrder}`}
+          onChange={(e) => {
+            const [field, order] = e.target.value.split('-') as [typeof sortBy, typeof sortOrder];
+            setSortBy(field);
+            setSortOrder(order);
+          }}
+          className="px-3 py-2 border border-grey-09 dark:border-grey-04 rounded bg-white dark:bg-grey-03 dark:text-grey-12 text-sm hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
+        >
+          <option value="modified-desc">Newest first</option>
+          <option value="modified-asc">Oldest first</option>
+          <option value="title-asc">Title A-Z</option>
+          <option value="title-desc">Title Z-A</option>
+          <option value="path-asc">Path A-Z</option>
+          <option value="path-desc">Path Z-A</option>
+        </select>
+      </div>
+
       {/* Empty state */}
       {pages.length === 0 ? (
-        <div className="bg-white border border-grey-09 rounded p-12 text-center">
-          <FileText className="h-12 w-12 text-grey-04 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold mb-2" data-testid="no-pages-message">
+        <div className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-04 rounded p-12 text-center">
+          <FileText className="h-12 w-12 text-grey-04 dark:text-grey-07 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-grey-01 dark:text-grey-12 mb-2" data-testid="no-pages-message">
             No pages yet
           </h2>
-          <p className="text-grey-04 mb-4">Create your first page to get started</p>
+          <p className="text-grey-04 dark:text-grey-07 mb-4">Create your first page to get started</p>
           <button
             onClick={handleNewPage}
             className="px-4 py-2 bg-azure-04 text-white rounded hover:bg-azure-03 transition-colors"
@@ -339,32 +409,39 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
             Create Page
           </button>
         </div>
+      ) : filteredPages.length === 0 && (searchQuery || statusFilter !== 'all') ? (
+        <div className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-04 rounded p-12 text-center">
+          <p className="text-grey-04 dark:text-grey-07">No pages match your search</p>
+        </div>
       ) : filteredPages.length === 0 ? (
-        <div className="bg-white border border-grey-09 rounded p-12 text-center">
-          <p className="text-grey-04" data-testid="no-pages-locale-message">
+        <div className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-04 rounded p-12 text-center">
+          <p className="text-grey-04 dark:text-grey-07" data-testid="no-pages-locale-message">
             No pages found for locale "{selectedLocale}"
           </p>
         </div>
       ) : (
         /* Table */
-        <div className="bg-white border border-grey-09 rounded overflow-hidden">
+        <div className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-04 rounded overflow-hidden">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-grey-09 bg-grey-11">
-                <th className="text-left p-4 font-medium text-grey-01">Title</th>
-                <th className="text-left p-4 font-medium text-grey-01">Path</th>
-                <th className="text-left p-4 font-medium text-grey-01">Status</th>
-                <th className="text-left p-4 font-medium text-grey-01">Modified</th>
-                <th className="text-left p-4 font-medium text-grey-01">Locales</th>
-                <th className="text-left p-4 font-medium text-grey-01">Actions</th>
+              <tr className="border-b border-grey-09 dark:border-grey-04 bg-grey-11 dark:bg-grey-03">
+                <th className="text-left p-4 font-medium text-grey-01 dark:text-grey-12">Title</th>
+                <th className="text-left p-4 font-medium text-grey-01 dark:text-grey-12">Path</th>
+                <th className="text-left p-4 font-medium text-grey-01 dark:text-grey-12">Status</th>
+                <th className="text-left p-4 font-medium text-grey-01 dark:text-grey-12">Modified</th>
+                <th className="text-left p-4 font-medium text-grey-01 dark:text-grey-12">Locales</th>
+                <th className="text-left p-4 font-medium text-grey-01 dark:text-grey-12">Actions</th>
               </tr>
             </thead>
             <tbody>
               {filteredPages.map((page) => (
-                <tr key={page.id} className="border-b border-grey-09 hover:bg-grey-11 transition-colors">
+                <tr
+                  key={page.id}
+                  className="border-b border-grey-09 dark:border-grey-04 hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
+                >
                   <td className="p-4">
                     <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-grey-04" />
+                      <FileText className="h-4 w-4 text-grey-04 dark:text-grey-07" />
                       <a
                         href={buildUrl(page.path)}
                         target="_blank"
@@ -385,7 +462,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
                       href={buildUrl(page.path)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-grey-04 hover:text-azure-03 hover:underline transition-colors"
+                      className="text-grey-04 dark:text-grey-07 hover:text-azure-03 hover:underline transition-colors font-mono text-xs"
                       onClick={(e) => {
                         e.preventDefault();
                         window.open(getPreviewUrl(page.path), '_blank');
@@ -397,7 +474,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
                   <td className="p-4">
                     <span className={`capitalize ${statusColors[page.status]}`}>{page.status}</span>
                   </td>
-                  <td className="p-4 text-grey-04">
+                  <td className="p-4 text-grey-04 dark:text-grey-07">
                     <div className="flex items-center gap-2">
                       <Clock className="h-4 w-4" />
                       {page.modified.toLocaleDateString()}
@@ -408,7 +485,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
                       {page.locales.map((locale) => (
                         <span
                           key={locale}
-                          className="px-2 py-1 text-xs bg-grey-11 rounded"
+                          className="px-2 py-1 text-xs bg-grey-11 dark:bg-grey-03 rounded"
                           data-testid="locale-indicator"
                         >
                           {locale}
@@ -423,11 +500,11 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
                           <button
                             key={locale}
                             onClick={() => handleEditPage(page.id, locale)}
-                            className="p-1 hover:bg-grey-11 rounded transition-colors"
+                            className="p-1 hover:bg-grey-11 dark:hover:bg-grey-03 rounded transition-colors"
                             title={`Edit ${locale} version`}
                             data-testid={`edit-${page.id}.${locale}`}
                           >
-                            <Edit className="h-4 w-4 text-grey-04" />
+                            <Edit className="h-4 w-4 text-grey-04 dark:text-grey-07" />
                           </button>
                         ) : null,
                       )}
@@ -436,7 +513,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
                           <Tooltip content="This will delete the entire page">
                             <button
                               onClick={() => handleDeletePage(page.id, selectedLocale)}
-                              className="p-1 hover:bg-grey-11 rounded transition-colors"
+                              className="p-1 hover:bg-grey-11 dark:hover:bg-grey-03 rounded transition-colors"
                               title="Delete entire page"
                               aria-label="Delete"
                               data-testid={`delete-${page.id}`}
@@ -447,7 +524,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
                         ) : (
                           <button
                             onClick={() => handleDeletePage(page.id, selectedLocale)}
-                            className="p-1 hover:bg-grey-11 rounded transition-colors"
+                            className="p-1 hover:bg-grey-11 dark:hover:bg-grey-03 rounded transition-colors"
                             title="Delete page"
                             aria-label="Delete"
                             data-testid={`delete-${page.id}.${selectedLocale}`}
@@ -462,7 +539,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
                             <Tooltip key={`delete-${locale}`} content="This will delete the entire page">
                               <button
                                 onClick={() => handleDeletePage(page.id, locale)}
-                                className="p-1 hover:bg-grey-11 rounded transition-colors"
+                                className="p-1 hover:bg-grey-11 dark:hover:bg-grey-03 rounded transition-colors"
                                 title="Delete entire page"
                                 aria-label="Delete"
                                 data-testid={`delete-${page.id}.${locale}`}
@@ -474,7 +551,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
                             <Tooltip key={`delete-${locale}`} content={`Delete only the ${locale} version`}>
                               <button
                                 onClick={() => handleDeletePage(page.id, locale)}
-                                className="p-1 hover:bg-grey-11 rounded transition-colors"
+                                className="p-1 hover:bg-grey-11 dark:hover:bg-grey-03 rounded transition-colors"
                                 title={`Delete ${locale} version`}
                                 aria-label="Delete"
                                 data-testid={`delete-${page.id}.${locale}`}
