@@ -7,6 +7,9 @@
   <link rel="stylesheet" href="./main.processed.css">
 </head>
 <body>
+  <script>
+    (()=> {var t=localStorage.getItem('conloca-theme');if(t==='dark'||(t!=='light'&&matchMedia('(prefers-color-scheme:dark)').matches))document.documentElement.classList.add('dark')})();
+  </script>
   <div id="root"></div>
   <script type="module" src="./dev-entry.tsx"></script>
 </body>
