@@ -82,8 +82,8 @@ export function GitStatusPanel({ variant = 'header' }: GitStatusPanelProps) {
         {status && status.behind > 0 ? <span className="text-yellow-05 flex-shrink-0">↓ {status.behind}</span> : null}
       </div>
 
-      {/* Compact horizontal toolbar — color only highlights state-relevant action */}
-      <div className={isSidebar ? 'flex gap-1' : 'flex gap-3'}>
+      {/* 2-row grid in sidebar: Pull/Commit on row 1, Push spans row 2 (matches git workflow) */}
+      <div className={isSidebar ? 'grid grid-cols-2 gap-1' : 'flex gap-3'}>
         {/* Pull button — color only when behind */}
         <button
           type="button"
@@ -133,7 +133,7 @@ export function GitStatusPanel({ variant = 'header' }: GitStatusPanelProps) {
           ) : null}
         </button>
 
-        {/* Push button — color only when there are commits to push */}
+        {/* Push button — color only when there are commits to push; spans both columns in sidebar */}
         <button
           type="button"
           onClick={handlePush}
@@ -142,6 +142,7 @@ export function GitStatusPanel({ variant = 'header' }: GitStatusPanelProps) {
           className={cn(
             btnBase,
             btnSize,
+            isSidebar && 'col-span-2',
             status && status.ahead > 0
               ? 'bg-green-05 text-white hover:bg-green-04'
               : 'bg-grey-11 dark:bg-grey-03 text-grey-06 dark:text-grey-05 cursor-not-allowed',
