@@ -21,7 +21,7 @@ export function CMSDashboard() {
   const mediaCount = countAllAssets(folderTree?.tree ?? []);
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-6">
       {/* Welcome Header + Quick Actions */}
       <div className="flex items-center justify-between mb-6">
         <div>

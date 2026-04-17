@@ -63,38 +63,41 @@ export function GitStatusPanel({ variant = 'header' }: GitStatusPanelProps) {
     );
   }
 
-  const btnBase = 'flex items-center gap-1.5 rounded text-sm font-medium transition-colors';
-  const btnSize = isSidebar ? 'px-3 py-2 w-full' : 'px-3 py-1.5';
+  const btnBase = 'flex items-center justify-center gap-1.5 rounded text-xs font-medium transition-colors';
+  const btnSize = isSidebar ? 'flex-1 px-2 py-1.5' : 'px-3 py-1.5';
+
+  // Subtle (ghost) styling for non-actionable states — keeps the toolbar from
+  // looking like 3 chunky colored bars. Color only when the action is meaningful.
+  const ghostClasses =
+    'bg-grey-11 dark:bg-grey-03 text-grey-05 dark:text-grey-06 hover:bg-grey-10 dark:hover:bg-grey-02';
 
   return (
     <div className={isSidebar ? 'space-y-2' : 'flex items-center gap-3'}>
       {/* Branch name */}
-      <div className="flex items-center gap-1.5 text-grey-05 dark:text-grey-06 text-sm min-w-0">
-        <GitBranch className="h-4 w-4 flex-shrink-0" />
-        <span className="truncate font-mono text-xs flex-1 min-w-0" title={status?.branch || 'unknown'}>
+      <div className="flex items-center gap-1.5 text-grey-05 dark:text-grey-06 text-xs min-w-0">
+        <GitBranch className="h-3.5 w-3.5 flex-shrink-0" />
+        <span className="truncate font-mono flex-1 min-w-0" title={status?.branch || 'unknown'}>
           {status?.branch || 'unknown'}
         </span>
-        {/* Behind remote warning (inline in sidebar) */}
-        {status && status.behind > 0 ? (
-          <span className="text-yellow-05 text-xs flex-shrink-0">↓ {status.behind}</span>
-        ) : null}
+        {status && status.behind > 0 ? <span className="text-yellow-05 flex-shrink-0">↓ {status.behind}</span> : null}
       </div>
 
-      {/* Action buttons — stack vertically in sidebar so each gets room for icon + label + badge */}
-      <div className={isSidebar ? 'flex flex-col gap-1.5' : 'flex gap-3'}>
-        {/* Pull button */}
+      {/* Compact horizontal toolbar — color only highlights state-relevant action */}
+      <div className={isSidebar ? 'flex gap-1' : 'flex gap-3'}>
+        {/* Pull button — color only when behind */}
         <button
           type="button"
           onClick={handlePull}
           disabled={!status?.isRepo || pullMutation.isPending}
+          title="Pull from remote"
           className={cn(
             btnBase,
             btnSize,
-            status?.isRepo
-              ? status.behind > 0
-                ? 'bg-yellow-05 text-white hover:bg-yellow-04'
-                : 'bg-azure-04 text-white hover:bg-azure-03'
-              : 'bg-grey-11 dark:bg-grey-03 text-grey-06 dark:text-grey-05 cursor-not-allowed',
+            status?.isRepo && status.behind > 0
+              ? 'bg-yellow-05 text-white hover:bg-yellow-04'
+              : status?.isRepo
+                ? ghostClasses
+                : 'bg-grey-11 dark:bg-grey-03 text-grey-06 dark:text-grey-05 cursor-not-allowed',
           )}
         >
           {pullMutation.isPending ? (
@@ -105,11 +108,12 @@ export function GitStatusPanel({ variant = 'header' }: GitStatusPanelProps) {
           <span>Pull</span>
         </button>
 
-        {/* Commit button */}
+        {/* Commit button — color only when there are changes */}
         <button
           type="button"
           onClick={handleCommit}
           disabled={!status?.hasChanges || commitMutation.isPending}
+          title="Commit local changes"
           className={cn(
             btnBase,
             btnSize,
@@ -125,15 +129,16 @@ export function GitStatusPanel({ variant = 'header' }: GitStatusPanelProps) {
           )}
           <span>Commit</span>
           {status?.changedFiles ? (
-            <span className="ml-auto px-1.5 bg-white/20 rounded text-xs tabular-nums">{status.changedFiles}</span>
+            <span className="px-1 bg-white/20 rounded text-xs tabular-nums">{status.changedFiles}</span>
           ) : null}
         </button>
 
-        {/* Push button */}
+        {/* Push button — color only when there are commits to push */}
         <button
           type="button"
           onClick={handlePush}
           disabled={!status || status.ahead === 0 || pushMutation.isPending}
+          title="Push to remote"
           className={cn(
             btnBase,
             btnSize,
@@ -149,7 +154,7 @@ export function GitStatusPanel({ variant = 'header' }: GitStatusPanelProps) {
           )}
           <span>Push</span>
           {status && status.ahead > 0 ? (
-            <span className="ml-auto px-1.5 bg-white/20 rounded text-xs tabular-nums">{status.ahead}</span>
+            <span className="px-1 bg-white/20 rounded text-xs tabular-nums">{status.ahead}</span>
           ) : null}
         </button>
       </div>
