@@ -12,7 +12,7 @@ export function CMSLayout() {
   }, [location.pathname]);
 
   return (
-    <div className="flex flex-col md:flex-row h-screen bg-grey-12 dark:bg-grey-01">
+    <div className="flex max-md:flex-col h-screen bg-grey-12 dark:bg-grey-01">
       <MobileTopBar onMenuClick={() => setDrawerOpen(true)} />
       <SidebarDrawer open={drawerOpen} onOpenChange={setDrawerOpen} />
       <Sidebar />

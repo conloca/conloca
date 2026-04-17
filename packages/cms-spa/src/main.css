@@ -74,10 +74,13 @@
   --color-yellow-12: #fcfaf0;
 }
 
-/* Dark mode: selector strategy for manual toggle + system preference */
+/* Dark mode: selector strategy for manual toggle + system preference.
+ * Uses :is() (not :where()) so dark variants beat the conloca.com
+ * website Tailwind that gets injected into /__cms — its plain .bg-white
+ * etc. has spec (0,1,0) and would override a :where()-wrapped variant. */
 @variant dark 
 (
-&:where(.dark, .dark *));
+&:is(.dark, .dark *));
 
 /* Drawer + overlay animations (used by Radix Dialog wrappers) */
 @keyframes drawer-fade-in {
