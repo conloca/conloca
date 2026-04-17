@@ -79,6 +79,38 @@
 (
 &:where(.dark, .dark *));
 
+/* Drawer + overlay animations (used by Radix Dialog wrappers) */
+@keyframes drawer-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes drawer-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes drawer-slide-in-left {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+@keyframes drawer-slide-out-left {
+  from { transform: translateX(0); }
+  to { transform: translateX(-100%); }
+}
+.animate-fade-in { animation: drawer-fade-in 0.2s ease-out; }
+.animate-fade-out { animation: drawer-fade-out 0.2s ease-out; }
+.animate-slide-in-left { animation: drawer-slide-in-left 0.2s ease-out; }
+.animate-slide-out-left { animation: drawer-slide-out-left 0.2s ease-out; }
+
+/* Global placeholder text colors — avoid touching every input site */
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-grey-06);
+}
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: var(--color-grey-05);
+}
+
 html,
 body {
   margin: 0;
