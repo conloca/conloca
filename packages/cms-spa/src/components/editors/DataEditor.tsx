@@ -180,13 +180,15 @@ export function DataEditor({
     return (
       <div className="text-center py-8">
         <Code2 className="h-12 w-12 text-grey-04 mx-auto mb-4" />
-        <h3 className="text-lg font-medium mb-2">No Schema Defined</h3>
-        <p className="text-grey-04 mb-4">The "{collection}" collection doesn't have a schema defined.</p>
-        <p className="text-xs text-grey-04">
+        <h3 className="text-lg font-medium text-grey-01 dark:text-grey-12 mb-2">No Schema Defined</h3>
+        <p className="text-grey-04 dark:text-grey-07 mb-4">
+          The "{collection}" collection doesn't have a schema defined.
+        </p>
+        <p className="text-xs text-grey-04 dark:text-grey-07">
           To enable form editing, add a schema for "{collection}" in your
           <br />
-          <code className="bg-grey-11 px-1 rounded">dataSchemas</code> config file and set{' '}
-          <code className="bg-grey-11 px-1 rounded">schemasPath</code> in astro.config.mjs
+          <code className="bg-grey-11 dark:bg-grey-03 px-1 rounded">dataSchemas</code> config file and set{' '}
+          <code className="bg-grey-11 dark:bg-grey-03 px-1 rounded">schemasPath</code> in astro.config.mjs
         </p>
       </div>
     );
@@ -197,8 +199,8 @@ export function DataEditor({
     <>
       <div className="space-y-6">
         {/* Locale selector header - only show existing locales */}
-        <div className="flex items-center gap-3 pb-4 border-b border-grey-09">
-          <span className="text-sm text-grey-04">Locale:</span>
+        <div className="flex items-center gap-3 pb-4 border-b border-grey-09 dark:border-grey-04">
+          <span className="text-sm text-grey-04 dark:text-grey-07">Locale:</span>
           <LocaleSelector
             currentLocale={currentLocale}
             availableLocales={existingLocales}
@@ -209,14 +211,14 @@ export function DataEditor({
         <SchemaForm schema={schema} values={values} onChange={handleChange} />
 
         {saveError && (
-          <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+          <div className="flex items-center gap-2 p-3 bg-red-11 border border-red-08 rounded text-red-04 text-sm">
             <AlertCircle className="h-4 w-4 flex-shrink-0" />
             <span>{saveError}</span>
           </div>
         )}
 
-        <div className="flex items-center justify-between pt-4 border-t border-grey-09">
-          <div className="text-sm text-grey-04">
+        <div className="flex items-center justify-between pt-4 border-t border-grey-09 dark:border-grey-04">
+          <div className="text-sm text-grey-04 dark:text-grey-07">
             {hasChanges ? <span className="text-orange-04">Unsaved changes</span> : <span>No changes</span>}
           </div>
 
@@ -225,7 +227,7 @@ export function DataEditor({
               <button
                 onClick={onCancel}
                 disabled={updateLocalized.isPending}
-                className="px-4 py-2 border border-grey-09 rounded hover:bg-grey-11 transition-colors disabled:opacity-50"
+                className="px-4 py-2 border border-grey-09 dark:border-grey-04 rounded hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>
