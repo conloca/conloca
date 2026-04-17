@@ -72,7 +72,7 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
   if (fieldInfo.type === 'date' || fieldInfo.format === 'date-time') {
     return (
       <div>
-        <label className="block text-sm font-medium mb-1">
+        <label className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
           {label}
           {required && <span className="text-red-04 ml-1">*</span>}
         </label>
@@ -91,7 +91,7 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
   if (fieldInfo.format === 'url') {
     return (
       <div>
-        <label className="block text-sm font-medium mb-1">
+        <label className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
           {label}
           {required && <span className="text-red-04 ml-1">*</span>}
         </label>
@@ -110,7 +110,7 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
   if (fieldInfo.format === 'email') {
     return (
       <div>
-        <label className="block text-sm font-medium mb-1">
+        <label className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
           {label}
           {required && <span className="text-red-04 ml-1">*</span>}
         </label>
@@ -130,7 +130,7 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
     case 'enum':
       return (
         <div>
-          <label className="block text-sm font-medium mb-1">
+          <label className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
             {label}
             {required && <span className="text-red-04 ml-1">*</span>}
           </label>
@@ -153,7 +153,7 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
     case 'number':
       return (
         <div>
-          <label className="block text-sm font-medium mb-1">
+          <label className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
             {label}
             {required && <span className="text-red-04 ml-1">*</span>}
           </label>
@@ -177,19 +177,19 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
               onChange={(e) => onChange(e.target.checked)}
               className="w-4 h-4 rounded border-grey-09 text-azure-04 focus:ring-azure-04"
             />
-            <span className="text-sm font-medium">
+            <span className="text-sm font-medium text-grey-01 dark:text-grey-12">
               {label}
               {required && <span className="text-red-04 ml-1">*</span>}
             </span>
           </label>
-          {description && <p className="mt-1 text-sm text-grey-04 ml-6">{description}</p>}
+          {description && <p className="mt-1 text-sm text-grey-04 dark:text-grey-07 ml-6">{description}</p>}
         </div>
       );
 
     case 'array':
       return (
         <div>
-          <label className="block text-sm font-medium mb-1">
+          <label className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
             {label}
             {required && <span className="text-red-04 ml-1">*</span>}
           </label>
@@ -209,7 +209,7 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
       if (isImageField) {
         return (
           <div>
-            <label className="block text-sm font-medium mb-1">
+            <label className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
               {label}
               {required && <span className="text-red-04 ml-1">*</span>}
             </label>
@@ -231,7 +231,7 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
       if (isTextarea) {
         return (
           <div>
-            <label className="block text-sm font-medium mb-1">
+            <label className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
               {label}
               {required && <span className="text-red-04 ml-1">*</span>}
             </label>
@@ -249,7 +249,7 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
       // Default text input
       return (
         <div>
-          <label className="block text-sm font-medium mb-1">
+          <label className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
             {label}
             {required && <span className="text-red-04 ml-1">*</span>}
           </label>

@@ -69,7 +69,7 @@ function CMSMDXHeaderTools({
       <select
         value={selectedSnippetId}
         onChange={(event) => setSelectedSnippetId(event.target.value)}
-        className="rounded border border-grey-09 bg-white px-3 py-2 text-sm"
+        className="rounded border border-grey-09 dark:border-grey-04 bg-white dark:bg-grey-03 dark:text-grey-12 px-3 py-2 text-sm"
       >
         {contentBlockSnippets.map((snippet) => (
           <option key={snippet.id} value={snippet.id}>

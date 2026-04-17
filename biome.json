@@ -45,8 +45,6 @@
     "parser": {
       "tailwindDirectives": true
     },
-    "formatter": {
-      "formatWithErrors": true
-    }
+    "formatter": {}
   }
 }

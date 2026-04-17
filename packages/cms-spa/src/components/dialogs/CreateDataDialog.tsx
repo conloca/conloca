@@ -32,7 +32,7 @@ export function CreateDataDialog({ collections, isPending, onClose, onCreate }: 
       <div className="bg-white dark:bg-grey-03 rounded-lg p-6 w-full max-w-md" data-testid="create-data-dialog">
         <h2 className="text-xl font-semibold text-grey-01 dark:text-grey-12 mb-4">Create New Data Entry</h2>
         <div className="mb-4">
-          <label htmlFor="data-collection" className="block text-sm font-medium mb-2">
+          <label htmlFor="data-collection" className="block text-sm font-medium mb-2 text-grey-01 dark:text-grey-12">
             Collection
           </label>
           <select

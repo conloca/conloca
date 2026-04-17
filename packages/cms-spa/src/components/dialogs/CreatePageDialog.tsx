@@ -124,7 +124,7 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label htmlFor="title" className="block text-sm font-medium mb-1">
+              <label htmlFor="title" className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
                 Title
               </label>
               <input
@@ -139,7 +139,7 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
             </div>
 
             <div>
-              <label htmlFor="path" className="block text-sm font-medium mb-1">
+              <label htmlFor="path" className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
                 URL Path
               </label>
               <div className="relative">
@@ -171,7 +171,7 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
             </div>
 
             <div>
-              <label htmlFor="template" className="block text-sm font-medium mb-1">
+              <label htmlFor="template" className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
                 Template
               </label>
               <select
@@ -191,7 +191,7 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
             </div>
 
             <div>
-              <label htmlFor="locale" className="block text-sm font-medium mb-1">
+              <label htmlFor="locale" className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
                 Primary Locale
               </label>
               <select
