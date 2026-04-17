@@ -131,7 +131,6 @@ export function setupTestAPI(baseUrl = '/__cms/api', sitesConfig?: SitesConfig) 
   }
   setContentAPIClient(client);
 
-  // @ts-expect-error - we're mocking fetch for tests
   global.fetch = testFetch;
 
   // Also configure the UI config to use the correct API base URL
