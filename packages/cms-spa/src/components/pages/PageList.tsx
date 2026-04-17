@@ -1,6 +1,5 @@
 import { localesOf, useCreateContent, useDeleteContent, useSitePages } from '@conloca/content-api-client';
-import * as Select from '@radix-ui/react-select';
-import { AlertCircle, ChevronDown, Clock, Edit, FileText, Loader2, Plus, Search, Trash2 } from 'lucide-react';
+import { AlertCircle, Clock, Edit, FileText, Loader2, Plus, Search, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useErrorModal, useSiteBaseUrl } from '../../hooks';
@@ -10,55 +9,6 @@ import { CreatePageDialog } from '../dialogs/CreatePageDialog';
 import { DeleteConfirmDialog } from '../dialogs/DeleteConfirmDialog';
 import { ErrorModal } from '../dialogs/ErrorModal';
 import { Tooltip } from '../ui/Tooltip';
-
-interface FilterSelectOption<V extends string> {
-  value: V;
-  label: string;
-}
-
-interface FilterSelectProps<V extends string> {
-  value: V;
-  options: FilterSelectOption<V>[];
-  onChange: (value: V) => void;
-  ariaLabel?: string;
-  testId?: string;
-}
-
-function FilterSelect<V extends string>({ value, options, onChange, ariaLabel, testId }: FilterSelectProps<V>) {
-  return (
-    <Select.Root value={value} onValueChange={(v) => onChange(v as V)}>
-      <Select.Trigger
-        className="flex items-center justify-between gap-2 px-3 py-2 border border-grey-09 dark:border-grey-04 rounded bg-white dark:bg-grey-03 text-grey-01 dark:text-grey-12 text-sm hover:bg-grey-11 dark:hover:bg-grey-02 transition-colors min-w-[140px]"
-        aria-label={ariaLabel}
-        data-testid={testId}
-      >
-        <Select.Value />
-        <Select.Icon>
-          <ChevronDown className="h-4 w-4 text-grey-04 dark:text-grey-07" />
-        </Select.Icon>
-      </Select.Trigger>
-      <Select.Portal>
-        <Select.Content
-          position="popper"
-          sideOffset={4}
-          className="bg-white dark:bg-grey-03 border border-grey-09 dark:border-grey-04 rounded shadow-md z-50 min-w-[var(--radix-select-trigger-width)]"
-        >
-          <Select.Viewport className="p-1">
-            {options.map((opt) => (
-              <Select.Item
-                key={opt.value}
-                value={opt.value}
-                className="px-3 py-2 rounded cursor-pointer outline-none transition-colors text-sm text-grey-01 dark:text-grey-12 data-[highlighted]:bg-grey-11 dark:data-[highlighted]:bg-grey-02 data-[state=checked]:bg-azure-11 dark:data-[state=checked]:bg-azure-03 data-[state=checked]:text-azure-01 dark:data-[state=checked]:text-azure-11"
-              >
-                <Select.ItemText>{opt.label}</Select.ItemText>
-              </Select.Item>
-            ))}
-          </Select.Viewport>
-        </Select.Content>
-      </Select.Portal>
-    </Select.Root>
-  );
-}
 
 interface PageListProps {
   selectedSite?: string;
@@ -375,16 +325,19 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-semibold text-grey-01 dark:text-grey-12">Pages</h1>
         <div className="flex items-center gap-4">
-          <FilterSelect
+          <select
             value={selectedLocale}
-            onChange={setSelectedLocale}
-            options={availableLocales.map((locale) => ({
-              value: locale,
-              label: locale === 'all' ? 'All Locales' : locale,
-            }))}
-            ariaLabel="Filter by locale"
-            testId="locale-selector"
-          />
+            onChange={(e) => setSelectedLocale(e.target.value)}
+            className="px-3 py-2 border border-grey-09 dark:border-grey-04 rounded bg-white dark:bg-grey-03 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
+            role="combobox"
+            data-testid="locale-selector"
+          >
+            {availableLocales.map((locale) => (
+              <option key={locale} value={locale}>
+                {locale === 'all' ? 'All Locales' : locale}
+              </option>
+            ))}
+          </select>
           <button
             onClick={handleNewPage}
             className="px-4 py-2 bg-azure-04 text-white rounded hover:bg-azure-03 transition-colors flex items-center gap-2"
@@ -411,36 +364,34 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
         </div>
 
         {/* Status filter */}
-        <FilterSelect
+        <select
           value={statusFilter}
-          onChange={setStatusFilter}
-          options={[
-            { value: 'all', label: 'All Status' },
-            { value: 'published', label: 'Published' },
-            { value: 'draft', label: 'Draft' },
-            { value: 'scheduled', label: 'Scheduled' },
-          ]}
-          ariaLabel="Filter by status"
-        />
+          onChange={(e) => setStatusFilter(e.target.value as 'all' | 'published' | 'draft' | 'scheduled')}
+          className="px-3 py-2 border border-grey-09 dark:border-grey-04 rounded bg-white dark:bg-grey-03 dark:text-grey-12 text-sm hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
+        >
+          <option value="all">All Status</option>
+          <option value="published">Published</option>
+          <option value="draft">Draft</option>
+          <option value="scheduled">Scheduled</option>
+        </select>
 
         {/* Sort */}
-        <FilterSelect
+        <select
           value={`${sortBy}-${sortOrder}`}
-          onChange={(combined) => {
-            const [field, order] = combined.split('-') as [typeof sortBy, typeof sortOrder];
+          onChange={(e) => {
+            const [field, order] = e.target.value.split('-') as [typeof sortBy, typeof sortOrder];
             setSortBy(field);
             setSortOrder(order);
           }}
-          options={[
-            { value: 'modified-desc', label: 'Newest first' },
-            { value: 'modified-asc', label: 'Oldest first' },
-            { value: 'title-asc', label: 'Title A-Z' },
-            { value: 'title-desc', label: 'Title Z-A' },
-            { value: 'path-asc', label: 'Path A-Z' },
-            { value: 'path-desc', label: 'Path Z-A' },
-          ]}
-          ariaLabel="Sort pages"
-        />
+          className="px-3 py-2 border border-grey-09 dark:border-grey-04 rounded bg-white dark:bg-grey-03 dark:text-grey-12 text-sm hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
+        >
+          <option value="modified-desc">Newest first</option>
+          <option value="modified-asc">Oldest first</option>
+          <option value="title-asc">Title A-Z</option>
+          <option value="title-desc">Title Z-A</option>
+          <option value="path-asc">Path A-Z</option>
+          <option value="path-desc">Path Z-A</option>
+        </select>
       </div>
 
       {/* Empty state */}

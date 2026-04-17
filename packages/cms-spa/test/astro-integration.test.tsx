@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import App from '../src/App';
+import { ThemeProvider } from '../src/hooks/useTheme';
 import { setupTestAPI, testApi } from './test-utils';
 
 // Cleanup after each test
@@ -86,9 +87,11 @@ describe('Astro CMS Integration', () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
-          <App />
-        </MemoryRouter>
+        <ThemeProvider>
+          <MemoryRouter>
+            <App />
+          </MemoryRouter>
+        </ThemeProvider>
       </QueryClientProvider>,
     );
 
@@ -146,9 +149,11 @@ describe('Astro CMS Integration', () => {
     // Render with the route already set
     render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={[`/pages/${actualPageId}`]}>
-          <App />
-        </MemoryRouter>
+        <ThemeProvider>
+          <MemoryRouter initialEntries={[`/pages/${actualPageId}`]}>
+            <App />
+          </MemoryRouter>
+        </ThemeProvider>
       </QueryClientProvider>,
     );
 
@@ -171,9 +176,11 @@ describe('Astro CMS Integration', () => {
     // Render with the pages route
     render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={['/pages']}>
-          <App />
-        </MemoryRouter>
+        <ThemeProvider>
+          <MemoryRouter initialEntries={['/pages']}>
+            <App />
+          </MemoryRouter>
+        </ThemeProvider>
       </QueryClientProvider>,
     );
 

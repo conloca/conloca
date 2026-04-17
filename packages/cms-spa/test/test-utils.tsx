@@ -11,6 +11,7 @@ import { type RenderOptions, render } from '@testing-library/react';
 import { Hono } from 'hono';
 import type { ReactElement, ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
+import { ThemeProvider } from '../src/hooks/useTheme';
 
 export * from '@testing-library/react';
 
@@ -130,7 +131,7 @@ export function setupTestAPI(baseUrl = '/__cms/api', sitesConfig?: SitesConfig) 
   }
   setContentAPIClient(client);
 
-  // @ts-ignore - we're mocking fetch for tests
+  // @ts-expect-error - we're mocking fetch for tests
   global.fetch = testFetch;
 
   // Also configure the UI config to use the correct API base URL
@@ -193,7 +194,9 @@ export function renderWithProviders(ui: ReactElement, options?: Omit<RenderOptio
   function Wrapper({ children }: { children: ReactNode }) {
     return (
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={['/']}>{children}</MemoryRouter>
+        <ThemeProvider>
+          <MemoryRouter initialEntries={['/']}>{children}</MemoryRouter>
+        </ThemeProvider>
       </QueryClientProvider>
     );
   }
