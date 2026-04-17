@@ -312,7 +312,7 @@ export function DataList({ dataSchemas }: DataListProps) {
             <select
               value={selectedCollection}
               onChange={(e) => setSelectedCollection(e.target.value)}
-              className="px-3 py-2 border border-grey-09 dark:border-grey-04 rounded hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
+              className="px-3 py-2 border border-grey-09 dark:border-grey-04 rounded bg-white dark:bg-grey-03 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-04 transition-colors"
             >
               <option value="all">All Collections</option>
               {collections.map((col) => (

@@ -369,7 +369,7 @@ export function BlockList() {
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
-              className="px-3 py-2 border border-grey-09 dark:border-grey-04 rounded hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
+              className="px-3 py-2 border border-grey-09 dark:border-grey-04 rounded bg-white dark:bg-grey-03 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-04 transition-colors"
             >
               {categories.map((cat) => (
                 <option key={cat} value={cat}>
@@ -497,7 +497,7 @@ export function BlockList() {
                           handleDeleteBlock(block.id);
                           setOpenMenuId(null);
                         }}
-                        className="w-full px-4 py-2 text-left flex items-center gap-2 hover:bg-red-50 transition-colors text-red-04"
+                        className="w-full px-4 py-2 text-left flex items-center gap-2 hover:bg-red-11 dark:hover:bg-red-02 transition-colors text-red-04"
                       >
                         <Trash2 className="h-4 w-4" />
                         <span>Delete</span>
@@ -524,7 +524,7 @@ export function BlockList() {
               Create New Block
             </h2>
             <div className="mb-4">
-              <label htmlFor="block-title" className="block text-sm font-medium mb-2">
+              <label htmlFor="block-title" className="block text-sm font-medium mb-2 text-grey-01 dark:text-grey-12">
                 Block Title
               </label>
               <input
@@ -539,7 +539,7 @@ export function BlockList() {
                   }
                 }}
                 placeholder="Enter block title..."
-                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-04 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
+                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-04 dark:bg-grey-03 dark:text-grey-12 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
                 autoFocus
                 data-testid="block-title-input"
               />
@@ -548,14 +548,14 @@ export function BlockList() {
               </p>
             </div>
             <div className="mb-4">
-              <label htmlFor="block-template" className="block text-sm font-medium mb-2">
+              <label htmlFor="block-template" className="block text-sm font-medium mb-2 text-grey-01 dark:text-grey-12">
                 Starter Template
               </label>
               <select
                 id="block-template"
                 value={selectedTemplateId}
                 onChange={(e) => setSelectedTemplateId(e.target.value)}
-                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-04 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
+                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-04 bg-white dark:bg-grey-03 dark:text-grey-12 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
               >
                 {contentBlockTemplates.map((template) => (
                   <option key={template.id} value={template.id}>
@@ -616,7 +616,7 @@ export function BlockList() {
               Rename Block
             </h2>
             <div className="mb-4">
-              <label htmlFor="block-name" className="block text-sm font-medium mb-2">
+              <label htmlFor="block-name" className="block text-sm font-medium mb-2 text-grey-01 dark:text-grey-12">
                 Block Name (filename)
               </label>
               <input
@@ -631,7 +631,7 @@ export function BlockList() {
                   }
                 }}
                 placeholder="Enter new block name..."
-                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-04 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
+                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-04 dark:bg-grey-03 dark:text-grey-12 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
                 autoFocus
                 data-testid="block-name-input"
               />

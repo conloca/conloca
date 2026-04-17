@@ -135,7 +135,7 @@ export function DataEntryCard({
                   onDelete();
                   setIsMenuOpen(false);
                 }}
-                className="w-full px-4 py-2 text-left flex items-center gap-2 hover:bg-red-50 transition-colors text-red-04"
+                className="w-full px-4 py-2 text-left flex items-center gap-2 hover:bg-red-11 dark:hover:bg-red-02 transition-colors text-red-04"
               >
                 <Trash2 className="h-4 w-4" />
                 <span>Delete</span>
