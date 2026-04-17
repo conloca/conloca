@@ -64,22 +64,24 @@ export function GitStatusPanel({ variant = 'header' }: GitStatusPanelProps) {
   }
 
   const btnBase = 'flex items-center gap-1.5 rounded text-sm font-medium transition-colors';
-  const btnSize = isSidebar ? 'px-2 py-1.5 flex-1 justify-center' : 'px-3 py-1.5';
+  const btnSize = isSidebar ? 'px-3 py-2 w-full' : 'px-3 py-1.5';
 
   return (
     <div className={isSidebar ? 'space-y-2' : 'flex items-center gap-3'}>
       {/* Branch name */}
-      <div className="flex items-center gap-1.5 text-grey-05 dark:text-grey-06 text-sm">
+      <div className="flex items-center gap-1.5 text-grey-05 dark:text-grey-06 text-sm min-w-0">
         <GitBranch className="h-4 w-4 flex-shrink-0" />
-        <span className="truncate font-mono text-xs">{status?.branch || 'unknown'}</span>
+        <span className="truncate font-mono text-xs flex-1 min-w-0" title={status?.branch || 'unknown'}>
+          {status?.branch || 'unknown'}
+        </span>
         {/* Behind remote warning (inline in sidebar) */}
         {status && status.behind > 0 ? (
-          <span className="text-yellow-05 text-xs ml-auto">{status.behind} behind</span>
+          <span className="text-yellow-05 text-xs flex-shrink-0">↓ {status.behind}</span>
         ) : null}
       </div>
 
-      {/* Action buttons */}
-      <div className={isSidebar ? 'flex gap-1.5' : 'flex gap-3'}>
+      {/* Action buttons — stack vertically in sidebar so each gets room for icon + label + badge */}
+      <div className={isSidebar ? 'flex flex-col gap-1.5' : 'flex gap-3'}>
         {/* Pull button */}
         <button
           type="button"
@@ -123,7 +125,7 @@ export function GitStatusPanel({ variant = 'header' }: GitStatusPanelProps) {
           )}
           <span>Commit</span>
           {status?.changedFiles ? (
-            <span className="px-1 bg-white/20 rounded text-xs">{status.changedFiles}</span>
+            <span className="ml-auto px-1.5 bg-white/20 rounded text-xs tabular-nums">{status.changedFiles}</span>
           ) : null}
         </button>
 
@@ -146,7 +148,9 @@ export function GitStatusPanel({ variant = 'header' }: GitStatusPanelProps) {
             <Upload className="h-3.5 w-3.5" />
           )}
           <span>Push</span>
-          {status && status.ahead > 0 ? <span className="px-1 bg-white/20 rounded text-xs">{status.ahead}</span> : null}
+          {status && status.ahead > 0 ? (
+            <span className="ml-auto px-1.5 bg-white/20 rounded text-xs tabular-nums">{status.ahead}</span>
+          ) : null}
         </button>
       </div>
 
