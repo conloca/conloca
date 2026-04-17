@@ -143,8 +143,8 @@ function PuckDiff({ localPuck, serverPuck, onResolve }: PuckDiffProps) {
         <div
           className={`p-4 rounded border-2 cursor-pointer transition-colors ${
             selectedVersion === 'local'
-              ? 'border-green-05 bg-green-11'
-              : 'border-grey-09 dark:border-grey-04 bg-grey-12 dark:bg-grey-02 hover:border-grey-08'
+              ? 'border-green-05 bg-green-11 dark:bg-green-02'
+              : 'border-grey-09 dark:border-grey-04 bg-grey-12 dark:bg-grey-02 hover:border-grey-08 dark:hover:border-grey-06'
           }`}
           onClick={() => setSelectedVersion('local')}
         >
@@ -160,8 +160,8 @@ function PuckDiff({ localPuck, serverPuck, onResolve }: PuckDiffProps) {
         <div
           className={`p-4 rounded border-2 cursor-pointer transition-colors ${
             selectedVersion === 'server'
-              ? 'border-red-04 bg-red-11'
-              : 'border-grey-09 dark:border-grey-04 bg-grey-12 dark:bg-grey-02 hover:border-grey-08'
+              ? 'border-red-04 bg-red-11 dark:bg-red-02'
+              : 'border-grey-09 dark:border-grey-04 bg-grey-12 dark:bg-grey-02 hover:border-grey-08 dark:hover:border-grey-06'
           }`}
           onClick={() => setSelectedVersion('server')}
         >

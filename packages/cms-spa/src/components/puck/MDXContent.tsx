@@ -29,13 +29,13 @@ class MDXContentErrorBoundary extends React.Component<
   override render() {
     if (this.state.hasError) {
       return (
-        <div className="p-4 bg-red-11 border border-red-08 rounded text-red-04">
+        <div className="p-4 bg-red-11 dark:bg-red-02 border border-red-08 dark:border-red-03 rounded text-red-04 dark:text-red-08">
           <p className="font-semibold mb-2">MDXContent Rendering Error</p>
           <p className="text-sm mb-2">{this.state.error?.message || 'Unknown error occurred'}</p>
-          <p className="text-xs text-red-04 mb-2">Block ID: {this.props.contentId}</p>
+          <p className="text-xs text-red-04 dark:text-red-08 mb-2">Block ID: {this.props.contentId}</p>
           <details className="text-xs">
             <summary className="cursor-pointer font-medium">Stack Trace</summary>
-            <pre className="mt-2 p-2 bg-red-08 rounded overflow-auto whitespace-pre-wrap">
+            <pre className="mt-2 p-2 bg-red-08 dark:bg-red-03 rounded text-red-01 dark:text-red-11 overflow-auto whitespace-pre-wrap">
               {this.state.error?.stack}
             </pre>
           </details>
@@ -94,7 +94,7 @@ function MDXContentInner({ entry }: MDXContentProps) {
   // Loading state
   if (isCompiling || isEvaluating) {
     return (
-      <div className="flex items-center justify-center p-8 text-grey-04">
+      <div className="flex items-center justify-center p-8 text-grey-04 dark:text-grey-07">
         <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-azure-04 mr-3" />
         Loading content...
       </div>
@@ -106,10 +106,10 @@ function MDXContentInner({ entry }: MDXContentProps) {
     const error = compileError || evaluationError;
 
     return (
-      <div className="p-4 bg-red-11 border border-red-08 rounded text-red-04">
+      <div className="p-4 bg-red-11 dark:bg-red-02 border border-red-08 dark:border-red-03 rounded text-red-04 dark:text-red-08">
         <p className="font-semibold mb-2">Cannot Render Block Content</p>
         <p className="text-sm mb-2">{error?.message}</p>
-        <p className="text-xs text-red-04 mb-3">
+        <p className="text-xs text-red-04 dark:text-red-08 mb-3">
           The block content contains invalid MDX syntax. Please edit the block to fix any syntax errors.
         </p>
         <button
@@ -126,7 +126,7 @@ function MDXContentInner({ entry }: MDXContentProps) {
   // No content
   if (!actualMdxContent) {
     return (
-      <div className="p-4 bg-yellow-11 border border-yellow-08 rounded text-yellow-02">
+      <div className="p-4 bg-yellow-11 dark:bg-yellow-02 border border-yellow-08 dark:border-yellow-03 rounded text-yellow-02 dark:text-yellow-09">
         <p className="font-semibold mb-1">Empty Block Content</p>
         <p className="text-sm">
           This block ({entry.id}) doesn't have any content yet. Click to edit and add some MDX content.
@@ -138,7 +138,7 @@ function MDXContentInner({ entry }: MDXContentProps) {
   // Render evaluated component
   if (!Component) {
     return (
-      <div className="flex items-center justify-center p-8 text-grey-04">
+      <div className="flex items-center justify-center p-8 text-grey-04 dark:text-grey-07">
         <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-azure-04 mr-3" />
         Loading MDX...
       </div>

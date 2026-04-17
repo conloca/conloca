@@ -179,7 +179,7 @@ export function DataEditor({
   if (!schema) {
     return (
       <div className="text-center py-8">
-        <Code2 className="h-12 w-12 text-grey-04 mx-auto mb-4" />
+        <Code2 className="h-12 w-12 text-grey-04 dark:text-grey-07 mx-auto mb-4" />
         <h3 className="text-lg font-medium text-grey-01 dark:text-grey-12 mb-2">No Schema Defined</h3>
         <p className="text-grey-04 dark:text-grey-07 mb-4">
           The "{collection}" collection doesn't have a schema defined.
@@ -211,7 +211,7 @@ export function DataEditor({
         <SchemaForm schema={schema} values={values} onChange={handleChange} />
 
         {saveError && (
-          <div className="flex items-center gap-2 p-3 bg-red-11 border border-red-08 rounded text-red-04 text-sm">
+          <div className="flex items-center gap-2 p-3 bg-red-11 dark:bg-red-02 border border-red-08 dark:border-red-03 rounded text-red-04 dark:text-red-08 text-sm">
             <AlertCircle className="h-4 w-4 flex-shrink-0" />
             <span>{saveError}</span>
           </div>
@@ -219,7 +219,11 @@ export function DataEditor({
 
         <div className="flex items-center justify-between pt-4 border-t border-grey-09 dark:border-grey-04">
           <div className="text-sm text-grey-04 dark:text-grey-07">
-            {hasChanges ? <span className="text-orange-04">Unsaved changes</span> : <span>No changes</span>}
+            {hasChanges ? (
+              <span className="text-yellow-05 dark:text-yellow-07">Unsaved changes</span>
+            ) : (
+              <span>No changes</span>
+            )}
           </div>
 
           <div className="flex gap-3">

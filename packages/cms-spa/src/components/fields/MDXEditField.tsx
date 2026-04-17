@@ -52,7 +52,7 @@ export function MDXEditField({ entry }: MDXEditFieldProps) {
   return (
     <div className="space-y-2">
       {/* Shared content warning */}
-      <div className="flex items-start gap-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+      <div className="flex items-start gap-2 rounded border border-yellow-08 dark:border-yellow-03 bg-yellow-11 dark:bg-yellow-02 px-3 py-2 text-xs text-yellow-02 dark:text-yellow-09">
         <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
         <span>This is a shared block. Editing it will update every page that uses it.</span>
       </div>
