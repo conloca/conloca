@@ -37,7 +37,7 @@ export function ConflictDialog({ conflict, onReload, onForceSave, onCancel }: Co
   const hasContentChanges = conflictDetails?.contentChanged ?? false;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
       <div
         role="dialog"
         aria-modal="true"
@@ -71,8 +71,8 @@ export function ConflictDialog({ conflict, onReload, onForceSave, onCancel }: Co
               <dl className="space-y-1">
                 {Object.entries(conflictDetails.currentMeta).map(([key, value]) => (
                   <div key={key} className="flex">
-                    <dt className="font-medium capitalize mr-2">{key}:</dt>
-                    <dd>
+                    <dt className="font-medium capitalize mr-2 text-grey-01 dark:text-grey-12">{key}:</dt>
+                    <dd className="text-grey-03 dark:text-grey-09">
                       {key === 'publishAt' && typeof value === 'string'
                         ? `Publish on ${new Date(value).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`
                         : String(value)}
@@ -101,7 +101,7 @@ export function ConflictDialog({ conflict, onReload, onForceSave, onCancel }: Co
               </button>
               <button
                 onClick={() => setShowReloadConfirm(false)}
-                className="px-4 py-2 bg-grey-08 dark:bg-grey-04 text-white rounded hover:bg-grey-07 dark:hover:bg-grey-05"
+                className="px-4 py-2 bg-grey-05 dark:bg-grey-04 text-white rounded hover:bg-grey-04 dark:hover:bg-grey-05"
               >
                 Cancel
               </button>
@@ -125,7 +125,7 @@ export function ConflictDialog({ conflict, onReload, onForceSave, onCancel }: Co
             )}
             <button
               onClick={onCancel}
-              className="px-4 py-2 bg-grey-08 dark:bg-grey-04 text-white rounded hover:bg-grey-07 dark:hover:bg-grey-05"
+              className="px-4 py-2 bg-grey-05 dark:bg-grey-04 text-white rounded hover:bg-grey-04 dark:hover:bg-grey-05"
             >
               Cancel
             </button>
