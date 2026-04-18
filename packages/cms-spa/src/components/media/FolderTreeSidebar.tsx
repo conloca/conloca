@@ -80,9 +80,9 @@ export function FolderTreeSidebar({ currentFolder, onFolderSelect, dropTargetFol
       : tree.reduce((sum, node) => sum + node.assetCount, 0);
 
   return (
-    <div className="w-56 flex-shrink-0 border-r border-grey-09 dark:border-grey-04 bg-white dark:bg-grey-02">
+    <div className="w-56 flex-shrink-0 border-r border-grey-09 dark:border-grey-03 bg-white dark:bg-grey-02">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-grey-09 dark:border-grey-04">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-grey-09 dark:border-grey-03">
         <h3 className="font-semibold text-grey-01 dark:text-grey-12">Folders</h3>
         <button
           type="button"

@@ -105,7 +105,7 @@ export function MoveFolderDialog({
     >
       <div className="bg-white dark:bg-grey-03 rounded-lg w-full max-w-md shadow-xl" data-testid="move-folder-dialog">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-grey-09 dark:border-grey-04">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-grey-09 dark:border-grey-03">
           <h2 className="text-lg font-semibold text-grey-01 dark:text-grey-12">
             Move {assetCount} asset{assetCount !== 1 ? 's' : ''}
           </h2>
@@ -167,12 +167,12 @@ export function MoveFolderDialog({
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end gap-3 px-6 py-4 border-t border-grey-09 dark:border-grey-04">
+        <div className="flex justify-end gap-3 px-6 py-4 border-t border-grey-09 dark:border-grey-03">
           <button
             type="button"
             onClick={onCancel}
             disabled={isMoving}
-            className="px-4 py-2 border border-grey-09 dark:border-grey-04 rounded text-grey-01 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors disabled:opacity-50"
+            className="px-4 py-2 border border-grey-09 dark:border-grey-03 rounded text-grey-01 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors disabled:opacity-50"
           >
             Cancel
           </button>

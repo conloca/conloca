@@ -40,7 +40,7 @@ export function CMSDashboard() {
           </Link>
           <Link
             to="/media"
-            className="flex items-center gap-2 px-3 py-2 border border-grey-09 dark:border-grey-04 rounded-md text-sm font-medium text-grey-01 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
+            className="flex items-center gap-2 px-3 py-2 border border-grey-09 dark:border-grey-03 rounded-md text-sm font-medium text-grey-01 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
           >
             <Upload className="h-4 w-4" />
             Upload
@@ -105,8 +105,8 @@ export function CMSDashboard() {
       </div>
 
       {/* Recent Activity */}
-      <div className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-04 rounded-lg">
-        <div className="px-4 py-3 border-b border-grey-09 dark:border-grey-04">
+      <div className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 rounded-lg">
+        <div className="px-4 py-3 border-b border-grey-09 dark:border-grey-03">
           <h2 className="text-sm font-medium text-grey-01 dark:text-grey-12">Recent Activity</h2>
         </div>
         <RecentActivity />

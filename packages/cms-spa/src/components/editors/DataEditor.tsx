@@ -199,7 +199,7 @@ export function DataEditor({
     <>
       <div className="space-y-6">
         {/* Locale selector header - only show existing locales */}
-        <div className="flex items-center gap-3 pb-4 border-b border-grey-09 dark:border-grey-04">
+        <div className="flex items-center gap-3 pb-4 border-b border-grey-09 dark:border-grey-03">
           <span className="text-sm text-grey-04 dark:text-grey-07">Locale:</span>
           <LocaleSelector
             currentLocale={currentLocale}
@@ -217,7 +217,7 @@ export function DataEditor({
           </div>
         )}
 
-        <div className="flex items-center justify-between pt-4 border-t border-grey-09 dark:border-grey-04">
+        <div className="flex items-center justify-between pt-4 border-t border-grey-09 dark:border-grey-03">
           <div className="text-sm text-grey-04 dark:text-grey-07">
             {hasChanges ? (
               <span className="text-yellow-05 dark:text-yellow-07">Unsaved changes</span>
@@ -231,7 +231,7 @@ export function DataEditor({
               <button
                 onClick={onCancel}
                 disabled={updateLocalized.isPending}
-                className="px-4 py-2 border border-grey-09 dark:border-grey-04 rounded hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors disabled:opacity-50"
+                className="px-4 py-2 border border-grey-09 dark:border-grey-03 rounded hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>

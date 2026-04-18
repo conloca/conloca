@@ -125,9 +125,9 @@ export function AssetDetailSidebar({
         onClick={onClose}
         className="md:hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-30"
       />
-      <div className="fixed inset-y-0 right-0 z-40 w-full max-w-sm shadow-2xl md:static md:max-w-none md:w-80 md:z-auto md:shadow-none border-l border-grey-09 dark:border-grey-04 bg-white dark:bg-grey-02 flex flex-col h-full overflow-hidden">
+      <div className="fixed inset-y-0 right-0 z-40 w-full max-w-sm shadow-2xl md:static md:max-w-none md:w-80 md:z-auto md:shadow-none border-l border-grey-09 dark:border-grey-03 bg-white dark:bg-grey-02 flex flex-col h-full overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-grey-09 dark:border-grey-04">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-grey-09 dark:border-grey-03">
           <h3 className="font-semibold text-grey-01 dark:text-grey-12 truncate" title={asset.originalName}>
             {asset.originalName}
           </h3>
@@ -143,7 +143,7 @@ export function AssetDetailSidebar({
 
         <div className="flex-1 overflow-y-auto">
           {/* Thumbnail preview */}
-          <div className="aspect-square bg-grey-11 dark:bg-grey-03 flex items-center justify-center overflow-hidden border-b border-grey-09 dark:border-grey-04">
+          <div className="aspect-square bg-grey-11 dark:bg-grey-03 flex items-center justify-center overflow-hidden border-b border-grey-09 dark:border-grey-03">
             <img
               src={buildAssetServeUrl(assetsBasePath, asset.folder, asset.filename)}
               alt={asset.alt || asset.originalName}
@@ -152,7 +152,7 @@ export function AssetDetailSidebar({
           </div>
 
           {/* File info (read-only) */}
-          <div className="p-4 space-y-3 border-b border-grey-09 dark:border-grey-04">
+          <div className="p-4 space-y-3 border-b border-grey-09 dark:border-grey-03">
             <div>
               <dt className="text-xs text-grey-04 dark:text-grey-07 uppercase tracking-wide">Filename</dt>
               <dd className="text-sm text-grey-01 dark:text-grey-12 break-all">{asset.filename}</dd>
@@ -182,7 +182,7 @@ export function AssetDetailSidebar({
           </div>
 
           {/* Editable fields */}
-          <div className="p-4 space-y-4 border-b border-grey-09 dark:border-grey-04">
+          <div className="p-4 space-y-4 border-b border-grey-09 dark:border-grey-03">
             <div>
               <label
                 htmlFor="alt-text"
@@ -197,7 +197,7 @@ export function AssetDetailSidebar({
                 onChange={(e) => setAltText(e.target.value)}
                 onBlur={handleAltBlur}
                 placeholder="Describe this image for accessibility"
-                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-04 dark:bg-grey-03 dark:text-grey-12 rounded text-sm focus:outline-none focus:ring-2 focus:ring-azure-04"
+                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded text-sm focus:outline-none focus:ring-2 focus:ring-azure-04"
               />
             </div>
             <div>
@@ -214,14 +214,14 @@ export function AssetDetailSidebar({
                 onChange={(e) => setTagsInput(e.target.value)}
                 onBlur={handleTagsBlur}
                 placeholder="Comma-separated tags"
-                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-04 dark:bg-grey-03 dark:text-grey-12 rounded text-sm focus:outline-none focus:ring-2 focus:ring-azure-04"
+                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded text-sm focus:outline-none focus:ring-2 focus:ring-azure-04"
               />
               <p className="mt-1 text-xs text-grey-07">Separate tags with commas</p>
             </div>
           </div>
 
           {/* Usage section */}
-          <div className="p-4 border-b border-grey-09 dark:border-grey-04">
+          <div className="p-4 border-b border-grey-09 dark:border-grey-03">
             <h4 className="text-xs text-grey-04 dark:text-grey-07 uppercase tracking-wide mb-2">Used In</h4>
             {isLoadingUsage ? (
               <div className="flex items-center gap-2 text-grey-04 dark:text-grey-07 text-sm">
@@ -243,7 +243,7 @@ export function AssetDetailSidebar({
           </div>
 
           {/* Move section */}
-          <div className="p-4 border-b border-grey-09 dark:border-grey-04">
+          <div className="p-4 border-b border-grey-09 dark:border-grey-03">
             <button
               type="button"
               onClick={() => setShowMoveDialog(true)}
@@ -271,7 +271,7 @@ export function AssetDetailSidebar({
                   <button
                     type="button"
                     onClick={() => setConfirmDelete(false)}
-                    className="flex-1 px-3 py-2 bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-04 text-grey-04 dark:text-grey-07 text-sm rounded hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
+                    className="flex-1 px-3 py-2 bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 text-grey-04 dark:text-grey-07 text-sm rounded hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
                   >
                     Cancel
                   </button>

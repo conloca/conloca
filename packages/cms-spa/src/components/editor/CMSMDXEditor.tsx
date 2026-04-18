@@ -69,7 +69,7 @@ function CMSMDXHeaderTools({
       <select
         value={selectedSnippetId}
         onChange={(event) => setSelectedSnippetId(event.target.value)}
-        className="rounded border border-grey-09 dark:border-grey-04 bg-white dark:bg-grey-03 dark:text-grey-12 px-3 py-2 text-sm"
+        className="rounded border border-grey-09 dark:border-grey-03 bg-white dark:bg-grey-03 dark:text-grey-12 px-3 py-2 text-sm"
       >
         {contentBlockSnippets.map((snippet) => (
           <option key={snippet.id} value={snippet.id}>
@@ -92,7 +92,7 @@ function CMSMDXHeaderTools({
             setContent(newContent);
             editorRef.current?.setMarkdown(newContent);
           }}
-          className="rounded border border-grey-09 dark:border-grey-04 bg-white dark:bg-grey-03 px-3 py-2 text-sm font-medium text-grey-01 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-02"
+          className="rounded border border-grey-09 dark:border-grey-03 bg-white dark:bg-grey-03 px-3 py-2 text-sm font-medium text-grey-01 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-02"
         >
           Reset Template
         </button>

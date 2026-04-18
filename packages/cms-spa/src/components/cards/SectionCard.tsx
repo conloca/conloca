@@ -32,7 +32,7 @@ export function SectionCard({
         to={to}
         data-testid={testId}
         className={cn(
-          'group flex items-center gap-4 bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-04 rounded-lg px-4 py-3',
+          'group flex items-center gap-4 bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 rounded-lg px-4 py-3',
           'hover:border-azure-05 hover:shadow-sm transition-all',
         )}
       >
@@ -65,7 +65,7 @@ export function SectionCard({
       to={to}
       data-testid={testId}
       className={cn(
-        'group flex flex-col bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-04 rounded-lg p-6',
+        'group flex flex-col bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 rounded-lg p-6',
         'hover:border-azure-05 hover:shadow-sm transition-all',
       )}
     >

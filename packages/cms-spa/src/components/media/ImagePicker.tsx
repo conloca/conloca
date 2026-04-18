@@ -57,7 +57,7 @@ export function ImagePicker({ isOpen, onSelect, onClose }: ImagePickerProps) {
     >
       <div className="bg-white dark:bg-grey-03 rounded-lg shadow-xl w-full max-w-5xl max-h-[85vh] mx-4 flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-grey-09 dark:border-grey-04 flex-shrink-0">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-grey-09 dark:border-grey-03 flex-shrink-0">
           <h2 className="text-lg font-semibold text-grey-01 dark:text-grey-12">Select Image</h2>
           <div className="flex items-center gap-2">
             <button

@@ -328,7 +328,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
           <select
             value={selectedLocale}
             onChange={(e) => setSelectedLocale(e.target.value)}
-            className="px-3 py-2 border border-grey-09 dark:border-grey-04 rounded bg-white dark:bg-grey-03 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
+            className="px-3 py-2 border border-grey-09 dark:border-grey-03 rounded bg-white dark:bg-grey-03 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
             role="combobox"
             data-testid="locale-selector"
           >
@@ -359,7 +359,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search pages..."
-            className="w-full pl-9 pr-3 py-2 border border-grey-09 dark:border-grey-04 rounded bg-white dark:bg-grey-03 dark:text-grey-12 text-sm focus:outline-none focus:ring-2 focus:ring-azure-04"
+            className="w-full pl-9 pr-3 py-2 border border-grey-09 dark:border-grey-03 rounded bg-white dark:bg-grey-03 dark:text-grey-12 text-sm focus:outline-none focus:ring-2 focus:ring-azure-04"
           />
         </div>
 
@@ -367,7 +367,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value as 'all' | 'published' | 'draft' | 'scheduled')}
-          className="px-3 py-2 border border-grey-09 dark:border-grey-04 rounded bg-white dark:bg-grey-03 dark:text-grey-12 text-sm hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
+          className="px-3 py-2 border border-grey-09 dark:border-grey-03 rounded bg-white dark:bg-grey-03 dark:text-grey-12 text-sm hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
         >
           <option value="all">All Status</option>
           <option value="published">Published</option>
@@ -383,7 +383,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
             setSortBy(field);
             setSortOrder(order);
           }}
-          className="px-3 py-2 border border-grey-09 dark:border-grey-04 rounded bg-white dark:bg-grey-03 dark:text-grey-12 text-sm hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
+          className="px-3 py-2 border border-grey-09 dark:border-grey-03 rounded bg-white dark:bg-grey-03 dark:text-grey-12 text-sm hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
         >
           <option value="modified-desc">Newest first</option>
           <option value="modified-asc">Oldest first</option>
@@ -396,7 +396,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
 
       {/* Empty state */}
       {pages.length === 0 ? (
-        <div className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-04 rounded p-12 text-center">
+        <div className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 rounded p-12 text-center">
           <FileText className="h-12 w-12 text-grey-04 dark:text-grey-07 mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-grey-01 dark:text-grey-12 mb-2" data-testid="no-pages-message">
             No pages yet
@@ -410,21 +410,21 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
           </button>
         </div>
       ) : filteredPages.length === 0 && (searchQuery || statusFilter !== 'all') ? (
-        <div className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-04 rounded p-12 text-center">
+        <div className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 rounded p-12 text-center">
           <p className="text-grey-04 dark:text-grey-07">No pages match your search</p>
         </div>
       ) : filteredPages.length === 0 ? (
-        <div className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-04 rounded p-12 text-center">
+        <div className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 rounded p-12 text-center">
           <p className="text-grey-04 dark:text-grey-07" data-testid="no-pages-locale-message">
             No pages found for locale "{selectedLocale}"
           </p>
         </div>
       ) : (
         /* Table */
-        <div className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-04 rounded overflow-x-auto">
+        <div className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 rounded overflow-x-auto">
           <table className="w-full min-w-[720px]">
             <thead>
-              <tr className="border-b border-grey-09 dark:border-grey-04 bg-grey-11 dark:bg-grey-03">
+              <tr className="border-b border-grey-09 dark:border-grey-03 bg-grey-11 dark:bg-grey-03">
                 <th className="text-left p-4 font-medium text-grey-01 dark:text-grey-12">Title</th>
                 <th className="text-left p-4 font-medium text-grey-01 dark:text-grey-12">Path</th>
                 <th className="text-left p-4 font-medium text-grey-01 dark:text-grey-12">Status</th>
@@ -437,7 +437,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
               {filteredPages.map((page) => (
                 <tr
                   key={page.id}
-                  className="border-b border-grey-09 dark:border-grey-04 hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
+                  className="border-b border-grey-09 dark:border-grey-03 hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
                 >
                   <td className="p-4">
                     <div className="flex items-center gap-2">

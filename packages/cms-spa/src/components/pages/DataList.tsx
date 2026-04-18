@@ -301,7 +301,7 @@ export function DataList({ dataSchemas }: DataListProps) {
           {schemasEditorLink && (
             <a
               href={schemasEditorLink}
-              className="px-3 py-2 border border-grey-09 dark:border-grey-04 rounded hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors flex items-center gap-2 text-grey-04 dark:text-grey-07 hover:text-grey-01 dark:hover:text-grey-12"
+              className="px-3 py-2 border border-grey-09 dark:border-grey-03 rounded hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors flex items-center gap-2 text-grey-04 dark:text-grey-07 hover:text-grey-01 dark:hover:text-grey-12"
               title="Open data schemas file in editor"
             >
               <Code className="h-4 w-4" />
@@ -312,7 +312,7 @@ export function DataList({ dataSchemas }: DataListProps) {
             <select
               value={selectedCollection}
               onChange={(e) => setSelectedCollection(e.target.value)}
-              className="px-3 py-2 border border-grey-09 dark:border-grey-04 rounded bg-white dark:bg-grey-03 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-04 transition-colors"
+              className="px-3 py-2 border border-grey-09 dark:border-grey-03 rounded bg-white dark:bg-grey-03 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-04 transition-colors"
             >
               <option value="all">All Collections</option>
               {collections.map((col) => (
@@ -336,7 +336,7 @@ export function DataList({ dataSchemas }: DataListProps) {
 
       {/* Empty state */}
       {entries.length === 0 ? (
-        <div className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-04 rounded p-12 text-center">
+        <div className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 rounded p-12 text-center">
           <Database className="h-12 w-12 text-grey-04 dark:text-grey-07 mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-grey-01 dark:text-grey-12 mb-2" data-testid="no-data-message">
             No data entries yet
@@ -356,7 +356,7 @@ export function DataList({ dataSchemas }: DataListProps) {
           )}
         </div>
       ) : filteredEntries.length === 0 ? (
-        <div className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-04 rounded p-12 text-center">
+        <div className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 rounded p-12 text-center">
           <p className="text-grey-04 dark:text-grey-07" data-testid="no-data-collection-message">
             No entries found in collection "{selectedCollection}"
           </p>

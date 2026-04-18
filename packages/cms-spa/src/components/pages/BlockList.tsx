@@ -369,7 +369,7 @@ export function BlockList() {
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
-              className="px-3 py-2 border border-grey-09 dark:border-grey-04 rounded bg-white dark:bg-grey-03 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-04 transition-colors"
+              className="px-3 py-2 border border-grey-09 dark:border-grey-03 rounded bg-white dark:bg-grey-03 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-04 transition-colors"
             >
               {categories.map((cat) => (
                 <option key={cat} value={cat}>
@@ -391,7 +391,7 @@ export function BlockList() {
 
       {/* Empty state */}
       {blocks.length === 0 ? (
-        <div className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-04 rounded p-12 text-center">
+        <div className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 rounded p-12 text-center">
           <Package className="h-12 w-12 text-grey-04 dark:text-grey-07 mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-grey-01 dark:text-grey-12 mb-2" data-testid="no-blocks-message">
             No blocks yet
@@ -405,7 +405,7 @@ export function BlockList() {
           </button>
         </div>
       ) : filteredBlocks.length === 0 ? (
-        <div className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-04 rounded p-12 text-center">
+        <div className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 rounded p-12 text-center">
           <p className="text-grey-04 dark:text-grey-07" data-testid="no-blocks-category-message">
             No blocks found in category "{selectedCategory}"
           </p>
@@ -416,7 +416,7 @@ export function BlockList() {
           {filteredBlocks.map((block) => (
             <div
               key={block.id}
-              className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-04 rounded p-4 hover:border-azure-04 transition-colors"
+              className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 rounded p-4 hover:border-azure-04 transition-colors"
             >
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-2">
@@ -469,7 +469,7 @@ export function BlockList() {
                   {openMenuId === block.id && (
                     <div
                       ref={menuRef}
-                      className="absolute right-0 top-8 w-48 bg-white dark:bg-grey-03 border border-grey-09 dark:border-grey-04 rounded shadow-lg z-10"
+                      className="absolute right-0 top-8 w-48 bg-white dark:bg-grey-03 border border-grey-09 dark:border-grey-03 rounded shadow-lg z-10"
                     >
                       <button
                         onClick={() => {
@@ -491,7 +491,7 @@ export function BlockList() {
                         <FileEdit className="h-4 w-4 text-grey-04 dark:text-grey-07" />
                         <span>Rename</span>
                       </button>
-                      <div className="border-t border-grey-09 dark:border-grey-04 my-1" />
+                      <div className="border-t border-grey-09 dark:border-grey-03 my-1" />
                       <button
                         onClick={() => {
                           handleDeleteBlock(block.id);
@@ -539,7 +539,7 @@ export function BlockList() {
                   }
                 }}
                 placeholder="Enter block title..."
-                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-04 dark:bg-grey-03 dark:text-grey-12 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
+                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
                 autoFocus
                 data-testid="block-title-input"
               />
@@ -555,7 +555,7 @@ export function BlockList() {
                 id="block-template"
                 value={selectedTemplateId}
                 onChange={(e) => setSelectedTemplateId(e.target.value)}
-                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-04 bg-white dark:bg-grey-03 dark:text-grey-12 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
+                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 bg-white dark:bg-grey-03 dark:text-grey-12 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
               >
                 {contentBlockTemplates.map((template) => (
                   <option key={template.id} value={template.id}>
@@ -570,7 +570,7 @@ export function BlockList() {
             <div className="flex justify-end gap-3">
               <button
                 onClick={closeCreateDialog}
-                className="px-4 py-2 border border-grey-09 dark:border-grey-04 rounded hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
+                className="px-4 py-2 border border-grey-09 dark:border-grey-03 rounded hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
               >
                 Cancel
               </button>
@@ -631,7 +631,7 @@ export function BlockList() {
                   }
                 }}
                 placeholder="Enter new block name..."
-                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-04 dark:bg-grey-03 dark:text-grey-12 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
+                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
                 autoFocus
                 data-testid="block-name-input"
               />
@@ -645,7 +645,7 @@ export function BlockList() {
                   closeRenameDialog();
                   setNewName('');
                 }}
-                className="px-4 py-2 border border-grey-09 dark:border-grey-04 rounded hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
+                className="px-4 py-2 border border-grey-09 dark:border-grey-03 rounded hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
                 disabled={updateLocalized.isPending}
               >
                 Cancel

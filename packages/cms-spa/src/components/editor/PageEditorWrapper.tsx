@@ -74,7 +74,7 @@ const contentBlockWidthClasses: Record<NonNullable<ContentBlockSectionProps['wid
 
 const contentBlockToneClasses: Record<NonNullable<ContentBlockSectionProps['tone']>, string> = {
   transparent: '',
-  subtle: 'rounded-3xl border border-grey-09/80 bg-grey-11/70 p-6 sm:p-8 dark:border-grey-04/60 dark:bg-grey-02/50',
+  subtle: 'rounded-3xl border border-grey-09/80 bg-grey-11/70 p-6 sm:p-8 dark:border-grey-03/60 dark:bg-grey-02/50',
 };
 
 /**
@@ -204,7 +204,7 @@ export function PageEditorWrapper({ puckConfig }: PageEditorWrapperProps) {
                   {blockId ? (
                     <BlockContentWrapper contentId={blockId} />
                   ) : (
-                    <div className="rounded border border-dashed border-grey-09 dark:border-grey-04 px-5 py-6 text-sm text-grey-04 dark:text-grey-07">
+                    <div className="rounded border border-dashed border-grey-09 dark:border-grey-03 px-5 py-6 text-sm text-grey-04 dark:text-grey-07">
                       Select an MDX content block to render here.
                     </div>
                   )}

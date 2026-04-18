@@ -11,7 +11,7 @@ export function UnsavedChangesDialog({ onSave, onDiscard, onCancel }: UnsavedCha
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
       <div className="bg-white dark:bg-grey-03 rounded-lg shadow-xl w-full max-w-md mx-4">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-grey-09 dark:border-grey-04">
+        <div className="flex items-center justify-between p-4 border-b border-grey-09 dark:border-grey-03">
           <div className="flex items-center gap-3">
             <AlertTriangle className="h-5 w-5 text-yellow-05" />
             <h2 className="text-lg font-semibold text-grey-01 dark:text-grey-12">Unsaved Changes</h2>
@@ -31,10 +31,10 @@ export function UnsavedChangesDialog({ onSave, onDiscard, onCancel }: UnsavedCha
         </div>
 
         {/* Actions */}
-        <div className="flex justify-end gap-2 p-4 border-t border-grey-09 dark:border-grey-04">
+        <div className="flex justify-end gap-2 p-4 border-t border-grey-09 dark:border-grey-03">
           <button
             onClick={onCancel}
-            className="px-3 py-1.5 text-sm rounded transition-colors border border-grey-09 dark:border-grey-04 hover:bg-grey-11 dark:hover:bg-grey-03"
+            className="px-3 py-1.5 text-sm rounded transition-colors border border-grey-09 dark:border-grey-03 hover:bg-grey-11 dark:hover:bg-grey-03"
           >
             Cancel
           </button>

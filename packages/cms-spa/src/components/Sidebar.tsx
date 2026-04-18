@@ -64,7 +64,7 @@ function ThemeToggle() {
 function SidebarContent() {
   return (
     <>
-      <div className="px-4 py-5 border-b border-grey-09 dark:border-grey-04">
+      <div className="px-4 py-5 border-b border-grey-09 dark:border-grey-03">
         <ConlocaLogo />
       </div>
 
@@ -76,11 +76,11 @@ function SidebarContent() {
         <NavItem to="/data" icon={Database} label="Data" />
       </nav>
 
-      <div className="px-3 py-3 border-t border-grey-09 dark:border-grey-04">
+      <div className="px-3 py-3 border-t border-grey-09 dark:border-grey-03">
         <GitStatusPanel variant="sidebar" />
       </div>
 
-      <div className="px-3 py-3 border-t border-grey-09 dark:border-grey-04 flex items-center justify-between">
+      <div className="px-3 py-3 border-t border-grey-09 dark:border-grey-03 flex items-center justify-between">
         <UserAvatar />
         <ThemeToggle />
       </div>
@@ -90,7 +90,7 @@ function SidebarContent() {
 
 export function Sidebar() {
   return (
-    <aside className="hidden md:flex w-60 flex-shrink-0 h-screen flex-col border-r border-grey-09 bg-white dark:border-grey-04 dark:bg-grey-02">
+    <aside className="hidden md:flex w-60 flex-shrink-0 h-screen flex-col border-r border-grey-09 bg-white dark:border-grey-03 dark:bg-grey-02">
       <SidebarContent />
     </aside>
   );
@@ -108,7 +108,7 @@ export function SidebarDrawer({ open, onOpenChange }: SidebarDrawerProps) {
         <Dialog.Overlay className="md:hidden fixed inset-0 z-40 bg-black/50 backdrop-blur-sm data-[state=open]:animate-fade-in data-[state=closed]:animate-fade-out" />
         <Dialog.Content
           aria-describedby={undefined}
-          className="md:hidden fixed inset-y-0 left-0 z-50 w-72 max-w-[80vw] flex flex-col border-r border-grey-09 dark:border-grey-04 bg-white dark:bg-grey-02 shadow-2xl data-[state=open]:animate-slide-in-left data-[state=closed]:animate-slide-out-left"
+          className="md:hidden fixed inset-y-0 left-0 z-50 w-72 max-w-[80vw] flex flex-col border-r border-grey-09 dark:border-grey-03 bg-white dark:bg-grey-02 shadow-2xl data-[state=open]:animate-slide-in-left data-[state=closed]:animate-slide-out-left"
         >
           <Dialog.Title className="sr-only">Navigation</Dialog.Title>
           <Dialog.Close

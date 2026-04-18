@@ -7,7 +7,7 @@ interface MobileTopBarProps {
 
 export function MobileTopBar({ onMenuClick }: MobileTopBarProps) {
   return (
-    <header className="md:hidden flex items-center gap-3 px-3 py-2 border-b border-grey-09 dark:border-grey-04 bg-white dark:bg-grey-02">
+    <header className="md:hidden flex items-center gap-3 px-3 py-2 border-b border-grey-09 dark:border-grey-03 bg-white dark:bg-grey-02">
       <button
         type="button"
         onClick={onMenuClick}

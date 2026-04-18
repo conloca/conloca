@@ -26,7 +26,7 @@ export function LocaleSelector({
 
       <Select.Portal>
         <Select.Content
-          className="bg-white dark:bg-grey-03 border border-grey-09 dark:border-grey-04 rounded shadow-md"
+          className="bg-white dark:bg-grey-03 border border-grey-09 dark:border-grey-03 rounded shadow-md"
           style={{ zIndex: 100 }}
         >
           <Select.Viewport className="p-1">

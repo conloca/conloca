@@ -132,7 +132,7 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.currentTarget.value)}
-                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-04 dark:bg-grey-03 dark:text-grey-12 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
+                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
                 required
                 data-testid="page-title-input"
               />
@@ -151,7 +151,7 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
                   className={`w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 dark:bg-grey-03 dark:text-grey-12 ${
                     !isPathnameAvailable && path
                       ? 'border-red-04 focus:ring-red-04'
-                      : 'border-grey-09 dark:border-grey-04 focus:ring-azure-04'
+                      : 'border-grey-09 dark:border-grey-03 focus:ring-azure-04'
                   }`}
                   required
                   data-testid="page-path-input"
@@ -178,7 +178,7 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
                 id="template"
                 value={template}
                 onChange={(e) => handleTemplateChange(e.target.value)}
-                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-04 dark:bg-grey-03 dark:text-grey-12 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
+                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
               >
                 <option value="blank">Blank</option>
                 {templateEntries.map(([key, templateConfig]) => (
@@ -198,7 +198,7 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
                 id="locale"
                 value={locale}
                 onChange={(e) => setLocale(e.target.value)}
-                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-04 dark:bg-grey-03 dark:text-grey-12 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
+                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
               >
                 <option value="en">English</option>
                 <option value="nl">Dutch</option>
@@ -215,7 +215,7 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
               >
                 Create
               </button>
-              <Dialog.Close className="flex-1 px-4 py-2 border border-grey-09 dark:border-grey-04 rounded hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors">
+              <Dialog.Close className="flex-1 px-4 py-2 border border-grey-09 dark:border-grey-03 rounded hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors">
                 Cancel
               </Dialog.Close>
             </div>

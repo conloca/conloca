@@ -67,7 +67,7 @@ export function DataPropertiesDialog({ initialMeta, isPending, onClose, onSave }
         <div className="flex justify-end gap-3">
           <button
             onClick={onClose}
-            className="px-4 py-2 border border-grey-09 dark:border-grey-04 rounded hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
+            className="px-4 py-2 border border-grey-09 dark:border-grey-03 rounded hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
             disabled={isPending}
           >
             Cancel

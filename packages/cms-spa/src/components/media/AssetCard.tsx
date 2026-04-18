@@ -43,7 +43,7 @@ export function AssetCard({
       className={cn(
         'group relative rounded overflow-hidden cursor-pointer transition-colors',
         'bg-white dark:bg-grey-02 hover:border-azure-04',
-        isSelected ? 'border-2 border-azure-04' : 'border border-grey-09 dark:border-grey-04',
+        isSelected ? 'border-2 border-azure-04' : 'border border-grey-09 dark:border-grey-03',
       )}
     >
       {/* Thumbnail */}

@@ -132,7 +132,7 @@ export function PageMetadataDialog({ open, onOpenChange, page, onSave }: PageMet
               >
                 Save
               </button>
-              <Dialog.Close className="flex-1 px-4 py-2 border border-grey-09 dark:border-grey-04 rounded hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors">
+              <Dialog.Close className="flex-1 px-4 py-2 border border-grey-09 dark:border-grey-03 rounded hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors">
                 Cancel
               </Dialog.Close>
             </div>

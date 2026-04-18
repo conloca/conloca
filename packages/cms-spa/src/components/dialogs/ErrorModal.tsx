@@ -48,7 +48,7 @@ export function ErrorModal({ isOpen, onClose, title = 'Error', message, error, a
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
       <div className="bg-white dark:bg-grey-03 rounded-lg shadow-xl w-full max-w-md mx-4">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-grey-09 dark:border-grey-04">
+        <div className="flex items-center justify-between p-4 border-b border-grey-09 dark:border-grey-03">
           <div className="flex items-center gap-3">
             <AlertTriangle className="h-5 w-5 text-red-04" />
             <h2 className="text-lg font-semibold text-grey-01 dark:text-grey-12">{title}</h2>
@@ -79,13 +79,13 @@ export function ErrorModal({ isOpen, onClose, title = 'Error', message, error, a
         </div>
 
         {/* Actions */}
-        <div className="flex justify-end gap-3 p-4 border-t border-grey-09 dark:border-grey-04">
+        <div className="flex justify-end gap-3 p-4 border-t border-grey-09 dark:border-grey-03">
           {actions.length > 0 ? (
             actions.map((action, index) => {
               const baseClasses = 'px-4 py-2 rounded font-medium transition-colors';
               const variantClasses = {
                 primary: 'bg-azure-04 text-white hover:bg-azure-03',
-                secondary: 'border border-grey-09 dark:border-grey-04 hover:bg-grey-11 dark:hover:bg-grey-03',
+                secondary: 'border border-grey-09 dark:border-grey-03 hover:bg-grey-11 dark:hover:bg-grey-03',
                 danger: 'bg-red-04 text-white hover:bg-red-03',
               };
 
