@@ -29,3 +29,6 @@ unset \
   depsTargetTarget depsTargetTargetPropagated doCheck doInstallCheck dontAddDisableDepTrack \
   name nativeBuildInputs out outputs patches propagatedBuildInputs propagatedNativeBuildInputs shell shellHook \
   stdenv strictDeps system __structuredAttrs cmakeFlags mesonFlags
+
+# Local overrides (not version controlled)
+[[ -f "$OLDPWD/.envrc-local" ]] && source_env "$OLDPWD/.envrc-local"
