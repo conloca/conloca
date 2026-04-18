@@ -185,10 +185,10 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
     );
   }
 
-  const statusColors = {
-    draft: 'text-grey-04',
-    scheduled: 'text-yellow-06',
-    published: 'text-green-06',
+  const statusPill = {
+    draft: 'bg-grey-11 text-grey-02 dark:bg-grey-03 dark:text-grey-09',
+    scheduled: 'bg-yellow-11 text-yellow-02 dark:bg-yellow-02 dark:text-yellow-09',
+    published: 'bg-green-11 text-green-02 dark:bg-green-02 dark:text-green-09',
   };
 
   const handleNewPage = () => {
@@ -472,7 +472,11 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
                     </a>
                   </td>
                   <td className="p-4">
-                    <span className={`capitalize ${statusColors[page.status]}`}>{page.status}</span>
+                    <span
+                      className={`inline-flex h-5 px-2 items-center rounded-full text-[11px] font-medium capitalize ${statusPill[page.status]}`}
+                    >
+                      {page.status}
+                    </span>
                   </td>
                   <td className="p-4 text-grey-04 dark:text-grey-07">
                     <div className="flex items-center gap-2">
