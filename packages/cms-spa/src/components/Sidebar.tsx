@@ -51,12 +51,11 @@ function ThemeToggle() {
     <button
       type="button"
       onClick={cycleTheme}
-      className="flex items-center gap-2 px-2 py-2 rounded-md text-sm text-grey-04 hover:bg-grey-11 hover:text-grey-01 dark:text-grey-07 dark:hover:bg-grey-03 dark:hover:text-grey-12 transition-colors"
+      className="flex items-center justify-center p-2 rounded-md text-grey-04 hover:bg-grey-11 hover:text-grey-01 dark:text-grey-07 dark:hover:bg-grey-03 dark:hover:text-grey-12 transition-colors"
       title={`Theme: ${themeLabels[theme]} (click to cycle)`}
       aria-label={`Theme: ${themeLabels[theme]}`}
     >
       <Icon className="h-4 w-4" />
-      <span>{themeLabels[theme]}</span>
     </button>
   );
 }
