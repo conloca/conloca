@@ -380,7 +380,7 @@ export function BlockList() {
           )}
           <button
             onClick={handleNewBlock}
-            className="px-4 py-2 bg-azure-04 text-white rounded hover:bg-azure-03 transition-colors flex items-center gap-2"
+            className="px-4 py-2 rounded bg-grey-01 text-grey-12 hover:bg-azure-04 hover:text-white dark:bg-grey-12 dark:text-grey-01 dark:hover:bg-azure-06 dark:hover:text-white transition-colors flex items-center gap-2"
             data-testid="new-block-button"
           >
             <Plus className="h-4 w-4" />
@@ -399,7 +399,7 @@ export function BlockList() {
           <p className="text-grey-04 dark:text-grey-07 mb-4">Create reusable content blocks for your pages</p>
           <button
             onClick={handleNewBlock}
-            className="px-4 py-2 bg-azure-04 text-white rounded hover:bg-azure-03 transition-colors"
+            className="px-4 py-2 rounded bg-grey-01 text-grey-12 hover:bg-azure-04 hover:text-white dark:bg-grey-12 dark:text-grey-01 dark:hover:bg-azure-06 dark:hover:text-white transition-colors"
           >
             Create Block
           </button>
