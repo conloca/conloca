@@ -107,7 +107,9 @@ export function CMSDashboard() {
       {/* Recent Activity */}
       <div className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 rounded-lg">
         <div className="px-4 py-3 border-b border-grey-09 dark:border-grey-03">
-          <h2 className="text-sm font-medium text-grey-01 dark:text-grey-12">Recent Activity</h2>
+          <h2 className="text-xs font-medium uppercase tracking-wider text-grey-05 dark:text-grey-06">
+            Recent Activity
+          </h2>
         </div>
         <RecentActivity />
       </div>
