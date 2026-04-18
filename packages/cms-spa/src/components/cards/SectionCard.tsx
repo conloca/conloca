@@ -48,7 +48,7 @@ export function SectionCard({
             />
           ) : (
             <p
-              className="text-xl font-semibold text-grey-01 dark:text-grey-12"
+              className="text-3xl font-semibold tabular-nums text-grey-01 dark:text-grey-12 leading-tight"
               data-testid={testId ? `${testId}-count` : undefined}
             >
               {count ?? 0} <span className="text-sm font-normal text-grey-05 dark:text-grey-06">{countLabel}</span>
