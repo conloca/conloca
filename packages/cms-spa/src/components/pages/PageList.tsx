@@ -437,7 +437,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
               {filteredPages.map((page) => (
                 <tr
                   key={page.id}
-                  className="border-b border-grey-09 dark:border-grey-03 hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
+                  className="border-b border-grey-10 dark:border-grey-03 hover:bg-grey-11 dark:hover:bg-grey-04/40 transition-colors"
                 >
                   <td className="p-4">
                     <div className="flex items-center gap-2">
