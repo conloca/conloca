@@ -197,7 +197,7 @@ export function AssetDetailSidebar({
                 onChange={(e) => setAltText(e.target.value)}
                 onBlur={handleAltBlur}
                 placeholder="Describe this image for accessibility"
-                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded text-sm focus:outline-none focus:ring-2 focus:ring-azure-04"
+                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-azure-04"
               />
             </div>
             <div>
@@ -214,7 +214,7 @@ export function AssetDetailSidebar({
                 onChange={(e) => setTagsInput(e.target.value)}
                 onBlur={handleTagsBlur}
                 placeholder="Comma-separated tags"
-                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded text-sm focus:outline-none focus:ring-2 focus:ring-azure-04"
+                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-azure-04"
               />
               <p className="mt-1 text-xs text-grey-07">Separate tags with commas</p>
             </div>
@@ -264,14 +264,14 @@ export function AssetDetailSidebar({
                     type="button"
                     onClick={handleDelete}
                     disabled={deleteAsset.isPending}
-                    className="flex-1 px-3 py-2 bg-red-04 text-white text-sm rounded hover:bg-red-03 disabled:opacity-50 transition-colors"
+                    className="flex-1 px-3 py-2 bg-red-04 text-white text-sm rounded-md hover:bg-red-03 disabled:opacity-50 transition-colors"
                   >
                     {deleteAsset.isPending ? 'Deleting...' : 'Yes, Delete'}
                   </button>
                   <button
                     type="button"
                     onClick={() => setConfirmDelete(false)}
-                    className="flex-1 px-3 py-2 bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 text-grey-04 dark:text-grey-07 text-sm rounded hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
+                    className="flex-1 px-3 py-2 bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 text-grey-04 dark:text-grey-07 text-sm rounded-md hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
                   >
                     Cancel
                   </button>

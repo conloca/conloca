@@ -31,7 +31,7 @@ function FolderOption({ node, depth, selectedFolder, currentFolder, onSelect }: 
         onClick={() => !isDisabled && onSelect(node.path)}
         disabled={isDisabled}
         className={cn(
-          'w-full flex items-center gap-2 py-2 px-3 rounded text-sm transition-colors text-left text-grey-01 dark:text-grey-12',
+          'w-full flex items-center gap-2 py-2 px-3 rounded-md text-sm transition-colors text-left text-grey-01 dark:text-grey-12',
           {
             'bg-azure-11 dark:bg-azure-02 text-azure-01 dark:text-azure-11 ring-1 ring-azure-04': isSelected,
             'hover:bg-grey-11 dark:hover:bg-grey-03': !isSelected && !isDisabled,
@@ -112,7 +112,7 @@ export function MoveFolderDialog({
           <button
             type="button"
             onClick={onCancel}
-            className="p-1 rounded hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
+            className="p-1 rounded-md hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
             disabled={isMoving}
           >
             <X className="w-5 h-5 text-grey-04 dark:text-grey-07" />
@@ -131,7 +131,7 @@ export function MoveFolderDialog({
                 onClick={() => currentFolder !== '/' && setSelectedFolder('/')}
                 disabled={currentFolder === '/'}
                 className={cn(
-                  'w-full flex items-center gap-2 py-2 px-3 rounded text-sm transition-colors text-left text-grey-01 dark:text-grey-12',
+                  'w-full flex items-center gap-2 py-2 px-3 rounded-md text-sm transition-colors text-left text-grey-01 dark:text-grey-12',
                   {
                     'bg-azure-11 dark:bg-azure-02 text-azure-01 dark:text-azure-11 ring-1 ring-azure-04':
                       selectedFolder === '/',
@@ -172,7 +172,7 @@ export function MoveFolderDialog({
             type="button"
             onClick={onCancel}
             disabled={isMoving}
-            className="px-4 py-2 border border-grey-09 dark:border-grey-03 rounded text-grey-01 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors disabled:opacity-50"
+            className="px-4 py-2 border border-grey-09 dark:border-grey-03 rounded-md text-grey-01 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors disabled:opacity-50"
           >
             Cancel
           </button>
@@ -181,7 +181,7 @@ export function MoveFolderDialog({
             onClick={handleMove}
             disabled={!canMove || isMoving}
             className={cn(
-              'px-4 py-2 rounded transition-colors',
+              'px-4 py-2 rounded-md transition-colors',
               'bg-azure-04 text-white hover:bg-azure-03',
               'disabled:opacity-50 disabled:cursor-not-allowed',
             )}

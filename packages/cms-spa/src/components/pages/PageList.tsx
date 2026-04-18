@@ -176,7 +176,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
           <p className="text-grey-04 dark:text-grey-07 mb-4">{error.message}</p>
           <button
             onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-azure-04 text-white rounded hover:bg-azure-03 transition-colors"
+            className="px-4 py-2 bg-azure-04 text-white rounded-md hover:bg-azure-03 transition-colors"
           >
             Retry
           </button>
@@ -328,7 +328,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
           <select
             value={selectedLocale}
             onChange={(e) => setSelectedLocale(e.target.value)}
-            className="px-3 py-2 border border-grey-09 dark:border-grey-03 rounded bg-white dark:bg-grey-03 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
+            className="px-3 py-2 border border-grey-09 dark:border-grey-03 rounded-md bg-white dark:bg-grey-03 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
             role="combobox"
             data-testid="locale-selector"
           >
@@ -340,7 +340,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
           </select>
           <button
             onClick={handleNewPage}
-            className="px-4 py-2 rounded bg-grey-01 text-grey-12 hover:bg-azure-04 hover:text-white dark:bg-grey-12 dark:text-grey-01 dark:hover:bg-azure-06 dark:hover:text-white transition-colors flex items-center gap-2"
+            className="px-4 py-2 rounded-md bg-grey-01 text-grey-12 hover:bg-azure-04 hover:text-white dark:bg-grey-12 dark:text-grey-01 dark:hover:bg-azure-06 dark:hover:text-white transition-colors flex items-center gap-2"
             data-testid="new-page-button"
           >
             <Plus className="h-4 w-4" />
@@ -359,7 +359,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search pages..."
-            className="w-full pl-9 pr-3 py-2 border border-grey-09 dark:border-grey-03 rounded bg-white dark:bg-grey-03 dark:text-grey-12 text-sm focus:outline-none focus:ring-2 focus:ring-azure-04"
+            className="w-full pl-9 pr-3 py-2 border border-grey-09 dark:border-grey-03 rounded-md bg-white dark:bg-grey-03 dark:text-grey-12 text-sm focus:outline-none focus:ring-2 focus:ring-azure-04"
           />
         </div>
 
@@ -367,7 +367,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value as 'all' | 'published' | 'draft' | 'scheduled')}
-          className="px-3 py-2 border border-grey-09 dark:border-grey-03 rounded bg-white dark:bg-grey-03 dark:text-grey-12 text-sm hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
+          className="px-3 py-2 border border-grey-09 dark:border-grey-03 rounded-md bg-white dark:bg-grey-03 dark:text-grey-12 text-sm hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
         >
           <option value="all">All Status</option>
           <option value="published">Published</option>
@@ -383,7 +383,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
             setSortBy(field);
             setSortOrder(order);
           }}
-          className="px-3 py-2 border border-grey-09 dark:border-grey-03 rounded bg-white dark:bg-grey-03 dark:text-grey-12 text-sm hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
+          className="px-3 py-2 border border-grey-09 dark:border-grey-03 rounded-md bg-white dark:bg-grey-03 dark:text-grey-12 text-sm hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
         >
           <option value="modified-desc">Newest first</option>
           <option value="modified-asc">Oldest first</option>
@@ -404,7 +404,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
           <p className="text-grey-04 dark:text-grey-07 mb-4">Create your first page to get started</p>
           <button
             onClick={handleNewPage}
-            className="px-4 py-2 rounded bg-grey-01 text-grey-12 hover:bg-azure-04 hover:text-white dark:bg-grey-12 dark:text-grey-01 dark:hover:bg-azure-06 dark:hover:text-white transition-colors"
+            className="px-4 py-2 rounded-md bg-grey-01 text-grey-12 hover:bg-azure-04 hover:text-white dark:bg-grey-12 dark:text-grey-01 dark:hover:bg-azure-06 dark:hover:text-white transition-colors"
           >
             Create Page
           </button>
@@ -421,7 +421,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
         </div>
       ) : (
         /* Table */
-        <div className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 rounded overflow-x-auto">
+        <div className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 rounded-md overflow-x-auto">
           <table className="w-full min-w-[720px]">
             <thead>
               <tr className="border-b border-grey-09 dark:border-grey-03 bg-grey-11 dark:bg-grey-03">
@@ -489,7 +489,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
                       {page.locales.map((locale) => (
                         <span
                           key={locale}
-                          className="px-2 py-1 text-xs bg-grey-11 dark:bg-grey-03 rounded"
+                          className="px-2 py-1 text-xs bg-grey-11 dark:bg-grey-03 rounded-md"
                           data-testid="locale-indicator"
                         >
                           {locale}
@@ -504,7 +504,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
                           <button
                             key={locale}
                             onClick={() => handleEditPage(page.id, locale)}
-                            className="p-1 hover:bg-grey-11 dark:hover:bg-grey-03 rounded transition-colors"
+                            className="p-1 hover:bg-grey-11 dark:hover:bg-grey-03 rounded-md transition-colors"
                             title={`Edit ${locale} version`}
                             data-testid={`edit-${page.id}.${locale}`}
                           >
@@ -517,7 +517,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
                           <Tooltip content="This will delete the entire page">
                             <button
                               onClick={() => handleDeletePage(page.id, selectedLocale)}
-                              className="p-1 hover:bg-grey-11 dark:hover:bg-grey-03 rounded transition-colors"
+                              className="p-1 hover:bg-grey-11 dark:hover:bg-grey-03 rounded-md transition-colors"
                               title="Delete entire page"
                               aria-label="Delete"
                               data-testid={`delete-${page.id}`}
@@ -528,7 +528,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
                         ) : (
                           <button
                             onClick={() => handleDeletePage(page.id, selectedLocale)}
-                            className="p-1 hover:bg-grey-11 dark:hover:bg-grey-03 rounded transition-colors"
+                            className="p-1 hover:bg-grey-11 dark:hover:bg-grey-03 rounded-md transition-colors"
                             title="Delete page"
                             aria-label="Delete"
                             data-testid={`delete-${page.id}.${selectedLocale}`}
@@ -543,7 +543,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
                             <Tooltip key={`delete-${locale}`} content="This will delete the entire page">
                               <button
                                 onClick={() => handleDeletePage(page.id, locale)}
-                                className="p-1 hover:bg-grey-11 dark:hover:bg-grey-03 rounded transition-colors"
+                                className="p-1 hover:bg-grey-11 dark:hover:bg-grey-03 rounded-md transition-colors"
                                 title="Delete entire page"
                                 aria-label="Delete"
                                 data-testid={`delete-${page.id}.${locale}`}
@@ -555,7 +555,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
                             <Tooltip key={`delete-${locale}`} content={`Delete only the ${locale} version`}>
                               <button
                                 onClick={() => handleDeletePage(page.id, locale)}
-                                className="p-1 hover:bg-grey-11 dark:hover:bg-grey-03 rounded transition-colors"
+                                className="p-1 hover:bg-grey-11 dark:hover:bg-grey-03 rounded-md transition-colors"
                                 title={`Delete ${locale} version`}
                                 aria-label="Delete"
                                 data-testid={`delete-${page.id}.${locale}`}

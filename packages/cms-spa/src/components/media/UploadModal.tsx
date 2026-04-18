@@ -74,7 +74,7 @@ export function UploadModal({ isOpen, onClose, folder, onUploadComplete }: Uploa
           <button
             type="button"
             onClick={onClose}
-            className="p-1 text-grey-04 dark:text-grey-07 hover:text-grey-01 dark:hover:text-grey-12 transition-colors rounded hover:bg-grey-11 dark:hover:bg-grey-03"
+            className="p-1 text-grey-04 dark:text-grey-07 hover:text-grey-01 dark:hover:text-grey-12 transition-colors rounded-md hover:bg-grey-11 dark:hover:bg-grey-03"
           >
             <X className="w-5 h-5" />
           </button>
@@ -88,7 +88,7 @@ export function UploadModal({ isOpen, onClose, folder, onUploadComplete }: Uploa
               type="button"
               onClick={() => setActiveTab('file')}
               className={cn(
-                'px-3 py-1.5 text-sm rounded transition-colors',
+                'px-3 py-1.5 text-sm rounded-md transition-colors',
                 activeTab === 'file'
                   ? 'bg-azure-04 text-white'
                   : 'bg-white dark:bg-grey-03 border border-grey-09 dark:border-grey-03 text-grey-04 dark:text-grey-07 hover:bg-grey-11 dark:hover:bg-grey-03',
@@ -100,7 +100,7 @@ export function UploadModal({ isOpen, onClose, folder, onUploadComplete }: Uploa
               type="button"
               onClick={() => setActiveTab('url')}
               className={cn(
-                'px-3 py-1.5 text-sm rounded transition-colors',
+                'px-3 py-1.5 text-sm rounded-md transition-colors',
                 activeTab === 'url'
                   ? 'bg-azure-04 text-white'
                   : 'bg-white dark:bg-grey-03 border border-grey-09 dark:border-grey-03 text-grey-04 dark:text-grey-07 hover:bg-grey-11 dark:hover:bg-grey-03',
@@ -114,7 +114,7 @@ export function UploadModal({ isOpen, onClose, folder, onUploadComplete }: Uploa
             <>
               {/* Multi-file upload progress */}
               {uploadProgress && (
-                <div className="mb-4 p-3 bg-grey-11 dark:bg-grey-03 rounded border border-grey-09 dark:border-grey-03">
+                <div className="mb-4 p-3 bg-grey-11 dark:bg-grey-03 rounded-md border border-grey-09 dark:border-grey-03">
                   <p className="text-sm font-medium text-grey-01 dark:text-grey-12">
                     {uploadProgress.inProgress
                       ? `Uploading ${uploadProgress.total} files...`
@@ -123,7 +123,7 @@ export function UploadModal({ isOpen, onClose, folder, onUploadComplete }: Uploa
                   {uploadProgress.failed > 0 && (
                     <p className="text-sm text-red-04 mt-1">{uploadProgress.failed} file(s) failed to upload</p>
                   )}
-                  <div className="mt-2 h-2 bg-grey-09 rounded overflow-hidden">
+                  <div className="mt-2 h-2 bg-grey-09 rounded-md overflow-hidden">
                     <div
                       className={cn(
                         'h-full transition-all',
@@ -141,7 +141,7 @@ export function UploadModal({ isOpen, onClose, folder, onUploadComplete }: Uploa
                 <div className="space-y-4">
                   {/* File preview */}
                   <div className="flex items-center gap-3">
-                    <div className="w-16 h-16 bg-grey-09 rounded overflow-hidden flex-shrink-0">
+                    <div className="w-16 h-16 bg-grey-09 rounded-md overflow-hidden flex-shrink-0">
                       <img src={previewUrl!} alt="Preview" className="w-full h-full object-contain" />
                     </div>
                     <div className="flex-1 min-w-0">
@@ -166,7 +166,7 @@ export function UploadModal({ isOpen, onClose, folder, onUploadComplete }: Uploa
                       value={altText}
                       onChange={(e) => setAltText(e.target.value)}
                       placeholder="Describe the image for accessibility"
-                      className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded text-sm focus:outline-none focus:ring-2 focus:ring-azure-04 focus:border-azure-04"
+                      className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-azure-04 focus:border-azure-04"
                     />
                   </div>
                 </div>
@@ -226,7 +226,7 @@ export function UploadModal({ isOpen, onClose, folder, onUploadComplete }: Uploa
                   value={importUrl}
                   onChange={(e) => setImportUrl(e.target.value)}
                   placeholder="https://example.com/image.jpg"
-                  className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded text-sm focus:outline-none focus:ring-2 focus:ring-azure-04 focus:border-azure-04"
+                  className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-azure-04 focus:border-azure-04"
                 />
               </div>
               <div>
@@ -242,7 +242,7 @@ export function UploadModal({ isOpen, onClose, folder, onUploadComplete }: Uploa
                   value={altText}
                   onChange={(e) => setAltText(e.target.value)}
                   placeholder="Describe the image for accessibility"
-                  className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded text-sm focus:outline-none focus:ring-2 focus:ring-azure-04 focus:border-azure-04"
+                  className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-azure-04 focus:border-azure-04"
                 />
               </div>
             </div>
@@ -259,7 +259,7 @@ export function UploadModal({ isOpen, onClose, folder, onUploadComplete }: Uploa
             type="button"
             onClick={pendingFile ? handleCancel : onClose}
             disabled={isUploading}
-            className="px-4 py-2 bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 text-grey-04 dark:text-grey-07 text-sm rounded hover:bg-grey-11 dark:hover:bg-grey-03 disabled:opacity-50 transition-colors"
+            className="px-4 py-2 bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 text-grey-04 dark:text-grey-07 text-sm rounded-md hover:bg-grey-11 dark:hover:bg-grey-03 disabled:opacity-50 transition-colors"
           >
             {pendingFile ? 'Clear' : 'Cancel'}
           </button>
@@ -268,7 +268,7 @@ export function UploadModal({ isOpen, onClose, folder, onUploadComplete }: Uploa
               type="button"
               onClick={handleUpload}
               disabled={isUploading || !pendingFile}
-              className="flex items-center gap-2 px-4 py-2 bg-azure-04 text-white text-sm rounded hover:bg-azure-03 disabled:opacity-50 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-azure-04 text-white text-sm rounded-md hover:bg-azure-03 disabled:opacity-50 transition-colors"
             >
               <Upload className="w-4 h-4" />
               {uploadMutationIsPending ? 'Uploading...' : 'Upload'}
@@ -278,7 +278,7 @@ export function UploadModal({ isOpen, onClose, folder, onUploadComplete }: Uploa
               type="button"
               onClick={handleImportUrl}
               disabled={isUploading || !importUrl.trim()}
-              className="flex items-center gap-2 px-4 py-2 bg-azure-04 text-white text-sm rounded hover:bg-azure-03 disabled:opacity-50 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-azure-04 text-white text-sm rounded-md hover:bg-azure-03 disabled:opacity-50 transition-colors"
             >
               <Upload className="w-4 h-4" />
               {importMutationIsPending ? 'Importing...' : 'Import'}

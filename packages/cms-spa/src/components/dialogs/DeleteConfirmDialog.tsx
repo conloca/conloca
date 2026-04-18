@@ -43,7 +43,7 @@ export function DeleteConfirmDialog({
             type="button"
             onClick={onCancel}
             disabled={isDeleting}
-            className="px-4 py-2 border border-grey-09 dark:border-grey-03 rounded text-grey-01 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors disabled:opacity-50"
+            className="px-4 py-2 border border-grey-09 dark:border-grey-03 rounded-md text-grey-01 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors disabled:opacity-50"
           >
             Cancel
           </button>
@@ -51,7 +51,7 @@ export function DeleteConfirmDialog({
             type="button"
             onClick={onConfirm}
             disabled={isDeleting}
-            className="px-4 py-2 bg-red-04 text-white rounded hover:bg-red-03 transition-colors disabled:opacity-50 flex items-center gap-2"
+            className="px-4 py-2 bg-red-04 text-white rounded-md hover:bg-red-03 transition-colors disabled:opacity-50 flex items-center gap-2"
           >
             {isDeleting ? (
               <>

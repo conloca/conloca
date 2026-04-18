@@ -161,7 +161,7 @@ export function MediaPage() {
         {bulkDeleteResult && (
           <div
             className={cn(
-              'mx-6 mt-2 px-4 py-2 rounded text-sm flex items-center justify-between',
+              'mx-6 mt-2 px-4 py-2 rounded-md text-sm flex items-center justify-between',
               bulkDeleteResult.failed > 0
                 ? 'bg-yellow-11 text-yellow-02 border border-yellow-08'
                 : 'bg-green-11 text-green-02 border border-green-08',

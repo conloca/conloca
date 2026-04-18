@@ -41,7 +41,7 @@ export function UploadZone({ folder = '/', onUploadComplete }: UploadZoneProps) 
           type="button"
           onClick={() => setActiveTab('file')}
           className={cn(
-            'px-3 py-1 text-sm rounded transition-colors',
+            'px-3 py-1 text-sm rounded-md transition-colors',
             activeTab === 'file'
               ? 'bg-azure-04 text-white'
               : 'bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 text-grey-04 dark:text-grey-07 hover:bg-grey-11 dark:hover:bg-grey-03',
@@ -53,7 +53,7 @@ export function UploadZone({ folder = '/', onUploadComplete }: UploadZoneProps) 
           type="button"
           onClick={() => setActiveTab('url')}
           className={cn(
-            'px-3 py-1 text-sm rounded transition-colors',
+            'px-3 py-1 text-sm rounded-md transition-colors',
             activeTab === 'url'
               ? 'bg-azure-04 text-white'
               : 'bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 text-grey-04 dark:text-grey-07 hover:bg-grey-11 dark:hover:bg-grey-03',
@@ -67,7 +67,7 @@ export function UploadZone({ folder = '/', onUploadComplete }: UploadZoneProps) 
         <>
           {/* Multi-file upload progress */}
           {uploadProgress && (
-            <div className="mb-4 p-3 bg-white dark:bg-grey-02 rounded border border-grey-09 dark:border-grey-03">
+            <div className="mb-4 p-3 bg-white dark:bg-grey-02 rounded-md border border-grey-09 dark:border-grey-03">
               <p className="text-sm font-medium text-grey-01 dark:text-grey-12">
                 {uploadProgress.inProgress
                   ? `Uploading ${uploadProgress.total} files...`
@@ -76,7 +76,7 @@ export function UploadZone({ folder = '/', onUploadComplete }: UploadZoneProps) 
               {uploadProgress.failed > 0 && (
                 <p className="text-sm text-red-04 mt-1">{uploadProgress.failed} file(s) failed to upload</p>
               )}
-              <div className="mt-2 h-2 bg-grey-09 rounded overflow-hidden">
+              <div className="mt-2 h-2 bg-grey-09 rounded-md overflow-hidden">
                 <div
                   className={cn('h-full transition-all', uploadProgress.failed > 0 ? 'bg-yellow-06' : 'bg-azure-04')}
                   style={{
@@ -90,7 +90,7 @@ export function UploadZone({ folder = '/', onUploadComplete }: UploadZoneProps) 
           {pendingFile ? (
             <div className="space-y-3">
               <div className="flex items-center gap-3">
-                <div className="w-16 h-16 bg-grey-09 rounded overflow-hidden flex-shrink-0">
+                <div className="w-16 h-16 bg-grey-09 rounded-md overflow-hidden flex-shrink-0">
                   <img src={previewUrl!} alt="Preview" className="w-full h-full object-contain" />
                 </div>
                 <div className="flex-1 min-w-0">
@@ -104,7 +104,7 @@ export function UploadZone({ folder = '/', onUploadComplete }: UploadZoneProps) 
                 value={altText}
                 onChange={(e) => setAltText(e.target.value)}
                 placeholder="Alt text (recommended for accessibility)"
-                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded text-sm focus:outline-none focus:ring-2 focus:ring-azure-04"
+                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-azure-04"
               />
 
               <div className="flex gap-2">
@@ -112,7 +112,7 @@ export function UploadZone({ folder = '/', onUploadComplete }: UploadZoneProps) 
                   type="button"
                   onClick={handleUpload}
                   disabled={isUploading}
-                  className="px-4 py-2 bg-azure-04 text-white text-sm rounded hover:bg-azure-03 disabled:opacity-50 transition-colors"
+                  className="px-4 py-2 bg-azure-04 text-white text-sm rounded-md hover:bg-azure-03 disabled:opacity-50 transition-colors"
                 >
                   {uploadMutationIsPending ? 'Uploading...' : 'Upload'}
                 </button>
@@ -120,7 +120,7 @@ export function UploadZone({ folder = '/', onUploadComplete }: UploadZoneProps) 
                   type="button"
                   onClick={handleCancel}
                   disabled={isUploading}
-                  className="px-4 py-2 bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 text-grey-04 dark:text-grey-07 text-sm rounded hover:bg-grey-11 dark:hover:bg-grey-03 disabled:opacity-50 transition-colors"
+                  className="px-4 py-2 bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 text-grey-04 dark:text-grey-07 text-sm rounded-md hover:bg-grey-11 dark:hover:bg-grey-03 disabled:opacity-50 transition-colors"
                 >
                   Cancel
                 </button>
@@ -185,20 +185,20 @@ export function UploadZone({ folder = '/', onUploadComplete }: UploadZoneProps) 
             value={importUrl}
             onChange={(e) => setImportUrl(e.target.value)}
             placeholder="https://example.com/image.jpg"
-            className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded text-sm focus:outline-none focus:ring-2 focus:ring-azure-04"
+            className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-azure-04"
           />
           <input
             type="text"
             value={altText}
             onChange={(e) => setAltText(e.target.value)}
             placeholder="Alt text (recommended for accessibility)"
-            className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded text-sm focus:outline-none focus:ring-2 focus:ring-azure-04"
+            className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-azure-04"
           />
           <button
             type="button"
             onClick={handleImportUrl}
             disabled={isUploading || !importUrl.trim()}
-            className="px-4 py-2 bg-azure-04 text-white text-sm rounded hover:bg-azure-03 disabled:opacity-50 transition-colors"
+            className="px-4 py-2 bg-azure-04 text-white text-sm rounded-md hover:bg-azure-03 disabled:opacity-50 transition-colors"
           >
             {importMutationIsPending ? 'Importing...' : 'Import'}
           </button>

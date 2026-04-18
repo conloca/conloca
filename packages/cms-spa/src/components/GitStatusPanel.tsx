@@ -63,7 +63,7 @@ export function GitStatusPanel({ variant = 'header' }: GitStatusPanelProps) {
     );
   }
 
-  const btnBase = 'flex items-center justify-center gap-1.5 rounded text-xs font-medium transition-colors';
+  const btnBase = 'flex items-center justify-center gap-1.5 rounded-md text-xs font-medium transition-colors';
   const btnSize = isSidebar ? 'flex-1 px-2 py-1.5' : 'px-3 py-1.5';
 
   // Subtle (ghost) styling for non-actionable states — keeps the toolbar from
@@ -129,7 +129,7 @@ export function GitStatusPanel({ variant = 'header' }: GitStatusPanelProps) {
           )}
           <span>Commit</span>
           {status?.changedFiles ? (
-            <span className="px-1 bg-white/20 rounded text-xs tabular-nums">{status.changedFiles}</span>
+            <span className="px-1 bg-white/20 rounded-md text-xs tabular-nums">{status.changedFiles}</span>
           ) : null}
         </button>
 
@@ -155,7 +155,7 @@ export function GitStatusPanel({ variant = 'header' }: GitStatusPanelProps) {
           )}
           <span>Push</span>
           {status && status.ahead > 0 ? (
-            <span className="px-1 bg-white/20 rounded text-xs tabular-nums">{status.ahead}</span>
+            <span className="px-1 bg-white/20 rounded-md text-xs tabular-nums">{status.ahead}</span>
           ) : null}
         </button>
       </div>

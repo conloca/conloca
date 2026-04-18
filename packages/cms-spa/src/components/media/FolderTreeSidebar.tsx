@@ -28,7 +28,7 @@ function FolderNode({ node, depth, currentFolder, dropTargetFolder, onFolderSele
       <button
         type="button"
         onClick={() => onFolderSelect(node.path)}
-        className={cn('w-full flex items-center gap-2 py-1.5 px-3 rounded text-sm transition-colors text-left', {
+        className={cn('w-full flex items-center gap-2 py-1.5 px-3 rounded-md text-sm transition-colors text-left', {
           'bg-azure-11 dark:bg-azure-03 text-azure-01 dark:text-azure-11': isActive,
           'hover:bg-grey-11 dark:hover:bg-grey-03': !isActive,
           'ring-2 ring-azure-04': isDropTarget,
@@ -87,7 +87,7 @@ export function FolderTreeSidebar({ currentFolder, onFolderSelect, dropTargetFol
         <button
           type="button"
           onClick={() => setShowCreateFolderDialog(true)}
-          className="p-1.5 rounded hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
+          className="p-1.5 rounded-md hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
           title="New Folder"
         >
           <FolderPlus className="w-4 h-4 text-grey-04 dark:text-grey-07" />
@@ -104,11 +104,14 @@ export function FolderTreeSidebar({ currentFolder, onFolderSelect, dropTargetFol
             <button
               type="button"
               onClick={() => onFolderSelect('/')}
-              className={cn('w-full flex items-center gap-2 py-1.5 px-3 rounded text-sm transition-colors text-left', {
-                'bg-azure-11 dark:bg-azure-03 text-azure-01 dark:text-azure-11': currentFolder === '/',
-                'hover:bg-grey-11 dark:hover:bg-grey-03': currentFolder !== '/',
-                'ring-2 ring-azure-04': dropTargetFolder === '/',
-              })}
+              className={cn(
+                'w-full flex items-center gap-2 py-1.5 px-3 rounded-md text-sm transition-colors text-left',
+                {
+                  'bg-azure-11 dark:bg-azure-03 text-azure-01 dark:text-azure-11': currentFolder === '/',
+                  'hover:bg-grey-11 dark:hover:bg-grey-03': currentFolder !== '/',
+                  'ring-2 ring-azure-04': dropTargetFolder === '/',
+                },
+              )}
             >
               <Folder className="w-4 h-4 flex-shrink-0" />
               <span className="truncate flex-1">Root</span>

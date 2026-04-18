@@ -147,7 +147,7 @@ export function DataList({ dataSchemas }: DataListProps) {
           <p className="text-grey-04 dark:text-grey-07 mb-4">{error.message}</p>
           <button
             onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-azure-04 text-white rounded hover:bg-azure-03 transition-colors"
+            className="px-4 py-2 bg-azure-04 text-white rounded-md hover:bg-azure-03 transition-colors"
           >
             Retry
           </button>
@@ -301,7 +301,7 @@ export function DataList({ dataSchemas }: DataListProps) {
           {schemasEditorLink && (
             <a
               href={schemasEditorLink}
-              className="px-3 py-2 border border-grey-09 dark:border-grey-03 rounded hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors flex items-center gap-2 text-grey-04 dark:text-grey-07 hover:text-grey-01 dark:hover:text-grey-12"
+              className="px-3 py-2 border border-grey-09 dark:border-grey-03 rounded-md hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors flex items-center gap-2 text-grey-04 dark:text-grey-07 hover:text-grey-01 dark:hover:text-grey-12"
               title="Open data schemas file in editor"
             >
               <Code className="h-4 w-4" />
@@ -312,7 +312,7 @@ export function DataList({ dataSchemas }: DataListProps) {
             <select
               value={selectedCollection}
               onChange={(e) => setSelectedCollection(e.target.value)}
-              className="px-3 py-2 border border-grey-09 dark:border-grey-03 rounded bg-white dark:bg-grey-03 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-04 transition-colors"
+              className="px-3 py-2 border border-grey-09 dark:border-grey-03 rounded-md bg-white dark:bg-grey-03 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-04 transition-colors"
             >
               <option value="all">All Collections</option>
               {collections.map((col) => (
@@ -325,7 +325,7 @@ export function DataList({ dataSchemas }: DataListProps) {
           <button
             onClick={() => openCreateDialog({})}
             disabled={collections.length === 0}
-            className="px-4 py-2 rounded bg-grey-01 text-grey-12 hover:bg-azure-04 hover:text-white dark:bg-grey-12 dark:text-grey-01 dark:hover:bg-azure-06 dark:hover:text-white transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2 rounded-md bg-grey-01 text-grey-12 hover:bg-azure-04 hover:text-white dark:bg-grey-12 dark:text-grey-01 dark:hover:bg-azure-06 dark:hover:text-white transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             data-testid="new-data-button"
           >
             <Plus className="h-4 w-4" />
@@ -349,7 +349,7 @@ export function DataList({ dataSchemas }: DataListProps) {
           {collections.length > 0 && (
             <button
               onClick={() => openCreateDialog({})}
-              className="px-4 py-2 rounded bg-grey-01 text-grey-12 hover:bg-azure-04 hover:text-white dark:bg-grey-12 dark:text-grey-01 dark:hover:bg-azure-06 dark:hover:text-white transition-colors"
+              className="px-4 py-2 rounded-md bg-grey-01 text-grey-12 hover:bg-azure-04 hover:text-white dark:bg-grey-12 dark:text-grey-01 dark:hover:bg-azure-06 dark:hover:text-white transition-colors"
             >
               Create Entry
             </button>
@@ -433,7 +433,7 @@ export function DataList({ dataSchemas }: DataListProps) {
               </div>
               <button
                 onClick={closeEditDataDialog}
-                className="p-2 hover:bg-grey-11 dark:hover:bg-grey-03 rounded transition-colors"
+                className="p-2 hover:bg-grey-11 dark:hover:bg-grey-03 rounded-md transition-colors"
                 aria-label="Close"
               >
                 ×

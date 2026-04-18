@@ -180,7 +180,7 @@ export function ContentBlockSelectorField({ value, onChange, options }: ContentB
         {/* Searchable combobox */}
         <div ref={dropdownRef} className="relative">
           <div
-            className="flex w-full items-center rounded border border-grey-09 dark:border-grey-03 bg-white dark:bg-grey-03 text-sm cursor-pointer"
+            className="flex w-full items-center rounded-md border border-grey-09 dark:border-grey-03 bg-white dark:bg-grey-03 text-sm cursor-pointer"
             onClick={() => {
               setIsOpen(true);
               setTimeout(() => inputRef.current?.focus(), 0);
@@ -203,7 +203,7 @@ export function ContentBlockSelectorField({ value, onChange, options }: ContentB
                   }
                 }}
                 placeholder="Search blocks..."
-                className="w-full rounded bg-transparent px-3 py-2 text-sm outline-none"
+                className="w-full rounded-md bg-transparent px-3 py-2 text-sm outline-none"
               />
             ) : (
               <span className={cn('block w-full px-3 py-2', { 'text-grey-04': !value })}>
@@ -226,7 +226,7 @@ export function ContentBlockSelectorField({ value, onChange, options }: ContentB
           {isOpen && (
             <div
               role="listbox"
-              className="absolute left-0 right-0 top-full z-50 mt-1 max-h-64 overflow-y-auto rounded border border-grey-09 dark:border-grey-03 bg-white dark:bg-grey-03 shadow-lg"
+              className="absolute left-0 right-0 top-full z-50 mt-1 max-h-64 overflow-y-auto rounded-md border border-grey-09 dark:border-grey-03 bg-white dark:bg-grey-03 shadow-lg"
             >
               {/* Clear selection */}
               {value && (
@@ -291,14 +291,14 @@ export function ContentBlockSelectorField({ value, onChange, options }: ContentB
         <button
           type="button"
           onClick={handleCreateStart}
-          className="rounded border border-grey-09 dark:border-grey-03 bg-white dark:bg-grey-03 px-3 py-2 text-sm font-medium hover:bg-grey-11 dark:hover:bg-grey-03"
+          className="rounded-md border border-grey-09 dark:border-grey-03 bg-white dark:bg-grey-03 px-3 py-2 text-sm font-medium hover:bg-grey-11 dark:hover:bg-grey-03"
         >
           Create New Block
         </button>
       </div>
 
       {showCreator ? (
-        <div className="space-y-3 rounded border border-grey-09 dark:border-grey-03 bg-grey-11 dark:bg-grey-03 p-3">
+        <div className="space-y-3 rounded-md border border-grey-09 dark:border-grey-03 bg-grey-11 dark:bg-grey-03 p-3">
           <div>
             <label
               htmlFor="new-content-block-title"
@@ -311,7 +311,7 @@ export function ContentBlockSelectorField({ value, onChange, options }: ContentB
               type="text"
               value={newBlockTitle}
               onChange={(event) => setNewBlockTitle(event.target.value)}
-              className="w-full rounded border border-grey-09 dark:border-grey-03 bg-white dark:bg-grey-03 dark:text-grey-12 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-grey-09 dark:border-grey-03 bg-white dark:bg-grey-03 dark:text-grey-12 px-3 py-2 text-sm"
               placeholder="Foundational narrative"
             />
           </div>
@@ -327,7 +327,7 @@ export function ContentBlockSelectorField({ value, onChange, options }: ContentB
               id="new-content-block-template"
               value={selectedTemplateId}
               onChange={(event) => setSelectedTemplateId(event.target.value)}
-              className="w-full rounded border border-grey-09 dark:border-grey-03 bg-white dark:bg-grey-03 dark:text-grey-12 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-grey-09 dark:border-grey-03 bg-white dark:bg-grey-03 dark:text-grey-12 px-3 py-2 text-sm"
             >
               {contentBlockTemplates.map((template) => (
                 <option key={template.id} value={template.id}>
@@ -346,14 +346,14 @@ export function ContentBlockSelectorField({ value, onChange, options }: ContentB
             <button
               type="button"
               onClick={handleContinueToEditor}
-              className="rounded bg-azure-04 px-3 py-2 text-sm font-medium text-white hover:bg-azure-03"
+              className="rounded-md bg-azure-04 px-3 py-2 text-sm font-medium text-white hover:bg-azure-03"
             >
               Open Editor
             </button>
             <button
               type="button"
               onClick={resetCreator}
-              className="rounded border border-grey-09 dark:border-grey-03 bg-white dark:bg-grey-03 px-3 py-2 text-sm font-medium hover:bg-grey-11 dark:hover:bg-grey-03"
+              className="rounded-md border border-grey-09 dark:border-grey-03 bg-white dark:bg-grey-03 px-3 py-2 text-sm font-medium hover:bg-grey-11 dark:hover:bg-grey-03"
             >
               Cancel
             </button>

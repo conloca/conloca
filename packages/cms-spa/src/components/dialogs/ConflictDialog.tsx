@@ -54,7 +54,7 @@ export function ConflictDialog({ conflict, onReload, onForceSave, onCancel }: Co
           </p>
 
           {conflictDetails && (
-            <div className="mt-4 p-4 bg-grey-12 dark:bg-grey-03 rounded">
+            <div className="mt-4 p-4 bg-grey-12 dark:bg-grey-03 rounded-md">
               <h3 className="font-semibold mb-2 text-grey-01 dark:text-grey-12">Changes detected:</h3>
               {hasMetaChanges && hasContentChanges && (
                 <p data-testid="conflict-details">Both metadata and content have been modified.</p>
@@ -66,7 +66,7 @@ export function ConflictDialog({ conflict, onReload, onForceSave, onCancel }: Co
           )}
 
           {conflictDetails?.currentMeta && (
-            <div className="mt-4 p-4 bg-azure-11 dark:bg-azure-02 rounded">
+            <div className="mt-4 p-4 bg-azure-11 dark:bg-azure-02 rounded-md">
               <h3 className="font-semibold mb-2 text-grey-01 dark:text-grey-12">Current metadata:</h3>
               <dl className="space-y-1">
                 {Object.entries(conflictDetails.currentMeta).map(([key, value]) => (
@@ -95,13 +95,13 @@ export function ConflictDialog({ conflict, onReload, onForceSave, onCancel }: Co
                   onReload();
                   setShowReloadConfirm(false);
                 }}
-                className="px-4 py-2 bg-red-04 text-white rounded hover:bg-red-03"
+                className="px-4 py-2 bg-red-04 text-white rounded-md hover:bg-red-03"
               >
                 Yes, Reload
               </button>
               <button
                 onClick={() => setShowReloadConfirm(false)}
-                className="px-4 py-2 bg-grey-05 dark:bg-grey-04 text-white rounded hover:bg-grey-04 dark:hover:bg-grey-05"
+                className="px-4 py-2 bg-grey-05 dark:bg-grey-04 text-white rounded-md hover:bg-grey-04 dark:hover:bg-grey-05"
               >
                 Cancel
               </button>
@@ -111,21 +111,21 @@ export function ConflictDialog({ conflict, onReload, onForceSave, onCancel }: Co
           <div className="flex gap-3">
             <button
               onClick={() => setShowReloadConfirm(true)}
-              className="px-4 py-2 bg-yellow-05 text-white rounded hover:bg-yellow-04"
+              className="px-4 py-2 bg-yellow-05 text-white rounded-md hover:bg-yellow-04"
             >
               Reload and Lose Changes
             </button>
             {conflict.currentEtag && (
               <button
                 onClick={() => onForceSave(conflict.currentEtag!)}
-                className="px-4 py-2 bg-azure-04 text-white rounded hover:bg-azure-03"
+                className="px-4 py-2 bg-azure-04 text-white rounded-md hover:bg-azure-03"
               >
                 Force Save
               </button>
             )}
             <button
               onClick={onCancel}
-              className="px-4 py-2 bg-grey-05 dark:bg-grey-04 text-white rounded hover:bg-grey-04 dark:hover:bg-grey-05"
+              className="px-4 py-2 bg-grey-05 dark:bg-grey-04 text-white rounded-md hover:bg-grey-04 dark:hover:bg-grey-05"
             >
               Cancel
             </button>

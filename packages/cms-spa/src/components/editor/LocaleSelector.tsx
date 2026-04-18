@@ -26,7 +26,7 @@ export function LocaleSelector({
 
       <Select.Portal>
         <Select.Content
-          className="bg-white dark:bg-grey-03 border border-grey-09 dark:border-grey-03 rounded shadow-md"
+          className="bg-white dark:bg-grey-03 border border-grey-09 dark:border-grey-03 rounded-md shadow-md"
           style={{ zIndex: 100 }}
         >
           <Select.Viewport className="p-1">
@@ -39,7 +39,7 @@ export function LocaleSelector({
                   key={locale}
                   value={locale}
                   className={cn(
-                    'px-3 py-2 rounded cursor-pointer outline-none transition-colors',
+                    'px-3 py-2 rounded-md cursor-pointer outline-none transition-colors',
                     isCurrent && 'bg-azure-04 text-white',
                     !isCurrent && !isMissing && 'hover:bg-grey-11 dark:hover:bg-grey-03',
                     isMissing && 'text-grey-04 dark:text-grey-07',

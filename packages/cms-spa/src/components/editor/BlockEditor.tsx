@@ -165,7 +165,7 @@ export function BlockEditor() {
           <div className="text-red-04 mb-4">Failed to load block: {error?.message || 'Not found'}</div>
           <button
             onClick={() => navigate('/blocks')}
-            className="px-4 py-2 bg-azure-04 text-white rounded hover:bg-azure-03 transition-colors"
+            className="px-4 py-2 bg-azure-04 text-white rounded-md hover:bg-azure-03 transition-colors"
           >
             Back to Blocks
           </button>

@@ -80,7 +80,7 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
           type="datetime-local"
           value={formatDateValue(value)}
           onChange={(e) => onChange(e.target.value || undefined)}
-          className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
+          className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded-md focus:outline-none focus:ring-2 focus:ring-azure-04"
         />
         {description && <p className="mt-1 text-sm text-grey-04 dark:text-grey-07">{description}</p>}
       </div>
@@ -99,7 +99,7 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
           type="url"
           value={(value as string) || ''}
           onChange={(e) => onChange(e.target.value || undefined)}
-          className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
+          className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded-md focus:outline-none focus:ring-2 focus:ring-azure-04"
         />
         {description && <p className="mt-1 text-sm text-grey-04 dark:text-grey-07">{description}</p>}
       </div>
@@ -118,7 +118,7 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
           type="email"
           value={(value as string) || ''}
           onChange={(e) => onChange(e.target.value || undefined)}
-          className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
+          className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded-md focus:outline-none focus:ring-2 focus:ring-azure-04"
         />
         {description && <p className="mt-1 text-sm text-grey-04 dark:text-grey-07">{description}</p>}
       </div>
@@ -137,7 +137,7 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
           <select
             value={(value as string) || ''}
             onChange={(e) => onChange(e.target.value || undefined)}
-            className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 rounded focus:outline-none focus:ring-2 focus:ring-azure-04 bg-white dark:bg-grey-03 dark:text-grey-12"
+            className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 rounded-md focus:outline-none focus:ring-2 focus:ring-azure-04 bg-white dark:bg-grey-03 dark:text-grey-12"
           >
             {!required && <option value="">Select...</option>}
             {fieldInfo.enumValues?.map((enumValue) => (
@@ -161,7 +161,7 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
             type="number"
             value={(value as number) ?? ''}
             onChange={(e) => onChange(e.target.value ? Number(e.target.value) : undefined)}
-            className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
+            className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded-md focus:outline-none focus:ring-2 focus:ring-azure-04"
           />
           {description && <p className="mt-1 text-sm text-grey-04 dark:text-grey-07">{description}</p>}
         </div>
@@ -175,7 +175,7 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
               type="checkbox"
               checked={(value as boolean) || false}
               onChange={(e) => onChange(e.target.checked)}
-              className="w-4 h-4 rounded border-grey-09 text-azure-04 focus:ring-azure-04"
+              className="w-4 h-4 rounded-md border-grey-09 text-azure-04 focus:ring-azure-04"
             />
             <span className="text-sm font-medium text-grey-01 dark:text-grey-12">
               {label}
@@ -239,7 +239,7 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
               value={(value as string) || ''}
               onChange={(e) => onChange(e.target.value || undefined)}
               rows={3}
-              className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
+              className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded-md focus:outline-none focus:ring-2 focus:ring-azure-04"
             />
             {description && <p className="mt-1 text-sm text-grey-04 dark:text-grey-07">{description}</p>}
           </div>
@@ -257,7 +257,7 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
             type="text"
             value={(value as string) || ''}
             onChange={(e) => onChange(e.target.value || undefined)}
-            className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
+            className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded-md focus:outline-none focus:ring-2 focus:ring-azure-04"
           />
           {description && <p className="mt-1 text-sm text-grey-04 dark:text-grey-07">{description}</p>}
           {fieldInfo.maxLength && (

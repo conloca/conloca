@@ -187,8 +187,8 @@ export function DataEditor({
         <p className="text-xs text-grey-04 dark:text-grey-07">
           To enable form editing, add a schema for "{collection}" in your
           <br />
-          <code className="bg-grey-11 dark:bg-grey-03 px-1 rounded">dataSchemas</code> config file and set{' '}
-          <code className="bg-grey-11 dark:bg-grey-03 px-1 rounded">schemasPath</code> in astro.config.mjs
+          <code className="bg-grey-11 dark:bg-grey-03 px-1 rounded-md">dataSchemas</code> config file and set{' '}
+          <code className="bg-grey-11 dark:bg-grey-03 px-1 rounded-md">schemasPath</code> in astro.config.mjs
         </p>
       </div>
     );
@@ -211,7 +211,7 @@ export function DataEditor({
         <SchemaForm schema={schema} values={values} onChange={handleChange} />
 
         {saveError && (
-          <div className="flex items-center gap-2 p-3 bg-red-11 dark:bg-red-02 border border-red-08 dark:border-red-03 rounded text-red-04 dark:text-red-08 text-sm">
+          <div className="flex items-center gap-2 p-3 bg-red-11 dark:bg-red-02 border border-red-08 dark:border-red-03 rounded-md text-red-04 dark:text-red-08 text-sm">
             <AlertCircle className="h-4 w-4 flex-shrink-0" />
             <span>{saveError}</span>
           </div>
@@ -231,7 +231,7 @@ export function DataEditor({
               <button
                 onClick={onCancel}
                 disabled={updateLocalized.isPending}
-                className="px-4 py-2 border border-grey-09 dark:border-grey-03 rounded hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors disabled:opacity-50"
+                className="px-4 py-2 border border-grey-09 dark:border-grey-03 rounded-md hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -239,7 +239,7 @@ export function DataEditor({
             <button
               onClick={handleSave}
               disabled={!hasChanges || updateLocalized.isPending}
-              className="px-4 py-2 bg-azure-04 text-white rounded hover:bg-azure-03 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
+              className="px-4 py-2 bg-azure-04 text-white rounded-md hover:bg-azure-03 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
             >
               {updateLocalized.isPending ? (
                 <>

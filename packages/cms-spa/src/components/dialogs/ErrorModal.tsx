@@ -55,7 +55,7 @@ export function ErrorModal({ isOpen, onClose, title = 'Error', message, error, a
           </div>
           <button
             onClick={onClose}
-            className="p-1 hover:bg-grey-11 dark:hover:bg-grey-03 rounded transition-colors"
+            className="p-1 hover:bg-grey-11 dark:hover:bg-grey-03 rounded-md transition-colors"
             aria-label="Close error dialog"
           >
             <X className="h-5 w-5 text-grey-04 dark:text-grey-07" />
@@ -71,7 +71,7 @@ export function ErrorModal({ isOpen, onClose, title = 'Error', message, error, a
               <summary className="text-sm text-grey-04 dark:text-grey-07 cursor-pointer hover:text-grey-02 transition-colors">
                 Show technical details
               </summary>
-              <pre className="mt-2 p-3 bg-grey-11 dark:bg-grey-03 rounded text-xs text-grey-03 dark:text-grey-09 overflow-x-auto max-h-40 overflow-y-auto">
+              <pre className="mt-2 p-3 bg-grey-11 dark:bg-grey-03 rounded-md text-xs text-grey-03 dark:text-grey-09 overflow-x-auto max-h-40 overflow-y-auto">
                 {errorDetails}
               </pre>
             </details>
@@ -82,7 +82,7 @@ export function ErrorModal({ isOpen, onClose, title = 'Error', message, error, a
         <div className="flex justify-end gap-3 p-4 border-t border-grey-09 dark:border-grey-03">
           {actions.length > 0 ? (
             actions.map((action, index) => {
-              const baseClasses = 'px-4 py-2 rounded font-medium transition-colors';
+              const baseClasses = 'px-4 py-2 rounded-md font-medium transition-colors';
               const variantClasses = {
                 primary: 'bg-azure-04 text-white hover:bg-azure-03',
                 secondary: 'border border-grey-09 dark:border-grey-03 hover:bg-grey-11 dark:hover:bg-grey-03',
@@ -105,7 +105,7 @@ export function ErrorModal({ isOpen, onClose, title = 'Error', message, error, a
           ) : (
             <button
               onClick={onClose}
-              className="px-4 py-2 bg-azure-04 text-white rounded hover:bg-azure-03 transition-colors"
+              className="px-4 py-2 bg-azure-04 text-white rounded-md hover:bg-azure-03 transition-colors"
             >
               Dismiss
             </button>

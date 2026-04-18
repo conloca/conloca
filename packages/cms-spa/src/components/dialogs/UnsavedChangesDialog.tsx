@@ -18,7 +18,7 @@ export function UnsavedChangesDialog({ onSave, onDiscard, onCancel }: UnsavedCha
           </div>
           <button
             onClick={onCancel}
-            className="p-1 hover:bg-grey-11 dark:hover:bg-grey-03 rounded transition-colors"
+            className="p-1 hover:bg-grey-11 dark:hover:bg-grey-03 rounded-md transition-colors"
             aria-label="Close dialog"
           >
             <X className="h-5 w-5 text-grey-04 dark:text-grey-07" />
@@ -34,19 +34,19 @@ export function UnsavedChangesDialog({ onSave, onDiscard, onCancel }: UnsavedCha
         <div className="flex justify-end gap-2 p-4 border-t border-grey-09 dark:border-grey-03">
           <button
             onClick={onCancel}
-            className="px-3 py-1.5 text-sm rounded transition-colors border border-grey-09 dark:border-grey-03 hover:bg-grey-11 dark:hover:bg-grey-03"
+            className="px-3 py-1.5 text-sm rounded-md transition-colors border border-grey-09 dark:border-grey-03 hover:bg-grey-11 dark:hover:bg-grey-03"
           >
             Cancel
           </button>
           <button
             onClick={onDiscard}
-            className="px-3 py-1.5 text-sm rounded transition-colors bg-red-04 text-white hover:bg-red-03"
+            className="px-3 py-1.5 text-sm rounded-md transition-colors bg-red-04 text-white hover:bg-red-03"
           >
             Discard Changes
           </button>
           <button
             onClick={onSave}
-            className="px-3 py-1.5 text-sm rounded transition-colors bg-azure-04 text-white hover:bg-azure-03"
+            className="px-3 py-1.5 text-sm rounded-md transition-colors bg-azure-04 text-white hover:bg-azure-03"
           >
             Save & Continue
           </button>

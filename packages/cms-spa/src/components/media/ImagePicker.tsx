@@ -63,7 +63,7 @@ export function ImagePicker({ isOpen, onSelect, onClose }: ImagePickerProps) {
             <button
               type="button"
               onClick={() => setShowUpload(true)}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm bg-azure-04 text-white rounded hover:bg-azure-03 transition-colors"
+              className="flex items-center gap-2 px-3 py-1.5 text-sm bg-azure-04 text-white rounded-md hover:bg-azure-03 transition-colors"
             >
               <Upload className="w-4 h-4" />
               Upload
@@ -71,7 +71,7 @@ export function ImagePicker({ isOpen, onSelect, onClose }: ImagePickerProps) {
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 text-grey-04 dark:text-grey-07 hover:text-grey-01 dark:hover:text-grey-12 transition-colors rounded hover:bg-grey-11 dark:hover:bg-grey-03"
+              className="p-1.5 text-grey-04 dark:text-grey-07 hover:text-grey-01 dark:hover:text-grey-12 transition-colors rounded-md hover:bg-grey-11 dark:hover:bg-grey-03"
               aria-label="Close"
             >
               <X className="w-5 h-5" />

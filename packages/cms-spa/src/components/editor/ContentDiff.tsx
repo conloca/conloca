@@ -59,7 +59,7 @@ function MDXDiff({ localMdx, serverMdx, onResolve }: MDXDiffProps) {
           {!isEditing && onResolve && (
             <button
               onClick={() => setEditableContent(conflictContent)}
-              className="px-3 py-1 text-sm bg-azure-04 text-white rounded hover:bg-azure-03"
+              className="px-3 py-1 text-sm bg-azure-04 text-white rounded-md hover:bg-azure-03"
             >
               Edit to Resolve
             </button>
@@ -71,13 +71,13 @@ function MDXDiff({ localMdx, serverMdx, onResolve }: MDXDiffProps) {
                   onResolve?.(displayContent);
                   setEditableContent(null);
                 }}
-                className="px-3 py-1 text-sm bg-green-05 text-white rounded hover:bg-green-04"
+                className="px-3 py-1 text-sm bg-green-05 text-white rounded-md hover:bg-green-04"
               >
                 Accept Resolution
               </button>
               <button
                 onClick={() => setEditableContent(null)}
-                className="px-3 py-1 text-sm bg-grey-05 text-white rounded hover:bg-grey-04"
+                className="px-3 py-1 text-sm bg-grey-05 text-white rounded-md hover:bg-grey-04"
               >
                 Cancel
               </button>
@@ -90,11 +90,11 @@ function MDXDiff({ localMdx, serverMdx, onResolve }: MDXDiffProps) {
         <textarea
           value={displayContent}
           onChange={(e) => setEditableContent(e.target.value)}
-          className="w-full h-96 p-4 border border-grey-09 dark:border-grey-03 rounded font-mono text-sm bg-white dark:bg-grey-03 text-grey-01 dark:text-grey-12"
+          className="w-full h-96 p-4 border border-grey-09 dark:border-grey-03 rounded-md font-mono text-sm bg-white dark:bg-grey-03 text-grey-01 dark:text-grey-12"
           placeholder="Resolve the conflict by editing the content..."
         />
       ) : (
-        <pre className="p-4 bg-grey-12 dark:bg-grey-02 rounded border overflow-x-auto text-sm font-mono whitespace-pre-wrap">
+        <pre className="p-4 bg-grey-12 dark:bg-grey-02 rounded-md border overflow-x-auto text-sm font-mono whitespace-pre-wrap">
           {displayContent}
         </pre>
       )}
@@ -132,7 +132,7 @@ function PuckDiff({ localPuck, serverPuck, onResolve }: PuckDiffProps) {
         {onResolve && selectedVersion && (
           <button
             onClick={() => onResolve(selectedVersion === 'local' ? localPuck : serverPuck)}
-            className="px-3 py-1 text-sm bg-green-05 text-white rounded hover:bg-green-04"
+            className="px-3 py-1 text-sm bg-green-05 text-white rounded-md hover:bg-green-04"
           >
             Use {selectedVersion === 'local' ? 'Your' : 'Server'} Version
           </button>
@@ -141,7 +141,7 @@ function PuckDiff({ localPuck, serverPuck, onResolve }: PuckDiffProps) {
 
       <div className="grid grid-cols-2 gap-4">
         <div
-          className={`p-4 rounded border-2 cursor-pointer transition-colors ${
+          className={`p-4 rounded-md border-2 cursor-pointer transition-colors ${
             selectedVersion === 'local'
               ? 'border-green-05 bg-green-11 dark:bg-green-02'
               : 'border-grey-09 dark:border-grey-03 bg-grey-12 dark:bg-grey-02 hover:border-grey-08 dark:hover:border-grey-06'
@@ -158,7 +158,7 @@ function PuckDiff({ localPuck, serverPuck, onResolve }: PuckDiffProps) {
         </div>
 
         <div
-          className={`p-4 rounded border-2 cursor-pointer transition-colors ${
+          className={`p-4 rounded-md border-2 cursor-pointer transition-colors ${
             selectedVersion === 'server'
               ? 'border-red-04 bg-red-11 dark:bg-red-02'
               : 'border-grey-09 dark:border-grey-03 bg-grey-12 dark:bg-grey-02 hover:border-grey-08 dark:hover:border-grey-06'
@@ -215,7 +215,7 @@ function ComponentStructure({ data }: { data: any }) {
           <summary className="font-medium">Components</summary>
           <div className="mt-1 space-y-1">
             {data.content.map((component: any, i: number) => (
-              <div key={i} className="text-xs p-2 bg-white dark:bg-grey-02 rounded">
+              <div key={i} className="text-xs p-2 bg-white dark:bg-grey-02 rounded-md">
                 <strong>{component.type || 'Unknown'}</strong>
                 {component.props?.title && ` - ${component.props.title}`}
               </div>

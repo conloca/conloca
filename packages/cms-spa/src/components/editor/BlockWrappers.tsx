@@ -11,7 +11,7 @@ export function BlockFieldWrapper({ contentId }: { contentId: string }) {
 
   if (!entry) {
     return (
-      <div className="p-2 bg-grey-11 dark:bg-grey-03 border border-grey-09 dark:border-grey-03 rounded text-sm text-grey-01 dark:text-grey-12">
+      <div className="p-2 bg-grey-11 dark:bg-grey-03 border border-grey-09 dark:border-grey-03 rounded-md text-sm text-grey-01 dark:text-grey-12">
         <span className="text-grey-04 dark:text-grey-07">ID:</span> {contentId}
       </div>
     );
@@ -19,7 +19,7 @@ export function BlockFieldWrapper({ contentId }: { contentId: string }) {
 
   return (
     <div className="space-y-2">
-      <div className="p-2 bg-grey-11 dark:bg-grey-03 border border-grey-09 dark:border-grey-03 rounded text-sm text-grey-01 dark:text-grey-12">
+      <div className="p-2 bg-grey-11 dark:bg-grey-03 border border-grey-09 dark:border-grey-03 rounded-md text-sm text-grey-01 dark:text-grey-12">
         <span className="text-grey-04 dark:text-grey-07">ID:</span> {contentId}
       </div>
       <MDXEditField entry={entry} />
@@ -36,7 +36,7 @@ export function BlockContentWrapper({ contentId }: { contentId: string }) {
 
   if (!contentId) {
     return (
-      <div className="p-4 bg-yellow-11 dark:bg-yellow-02 border border-yellow-08 dark:border-yellow-03 rounded">
+      <div className="p-4 bg-yellow-11 dark:bg-yellow-02 border border-yellow-08 dark:border-yellow-03 rounded-md">
         <p className="text-sm text-yellow-02 dark:text-yellow-09">Invalid block: missing content ID</p>
       </div>
     );

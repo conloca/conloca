@@ -156,7 +156,7 @@ export function BlockList() {
           <p className="text-grey-04 dark:text-grey-07 mb-4">{error.message}</p>
           <button
             onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-azure-04 text-white rounded hover:bg-azure-03 transition-colors"
+            className="px-4 py-2 bg-azure-04 text-white rounded-md hover:bg-azure-03 transition-colors"
           >
             Retry
           </button>
@@ -369,7 +369,7 @@ export function BlockList() {
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
-              className="px-3 py-2 border border-grey-09 dark:border-grey-03 rounded bg-white dark:bg-grey-03 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-04 transition-colors"
+              className="px-3 py-2 border border-grey-09 dark:border-grey-03 rounded-md bg-white dark:bg-grey-03 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-04 transition-colors"
             >
               {categories.map((cat) => (
                 <option key={cat} value={cat}>
@@ -380,7 +380,7 @@ export function BlockList() {
           )}
           <button
             onClick={handleNewBlock}
-            className="px-4 py-2 rounded bg-grey-01 text-grey-12 hover:bg-azure-04 hover:text-white dark:bg-grey-12 dark:text-grey-01 dark:hover:bg-azure-06 dark:hover:text-white transition-colors flex items-center gap-2"
+            className="px-4 py-2 rounded-md bg-grey-01 text-grey-12 hover:bg-azure-04 hover:text-white dark:bg-grey-12 dark:text-grey-01 dark:hover:bg-azure-06 dark:hover:text-white transition-colors flex items-center gap-2"
             data-testid="new-block-button"
           >
             <Plus className="h-4 w-4" />
@@ -399,7 +399,7 @@ export function BlockList() {
           <p className="text-grey-04 dark:text-grey-07 mb-4">Create reusable content blocks for your pages</p>
           <button
             onClick={handleNewBlock}
-            className="px-4 py-2 rounded bg-grey-01 text-grey-12 hover:bg-azure-04 hover:text-white dark:bg-grey-12 dark:text-grey-01 dark:hover:bg-azure-06 dark:hover:text-white transition-colors"
+            className="px-4 py-2 rounded-md bg-grey-01 text-grey-12 hover:bg-azure-04 hover:text-white dark:bg-grey-12 dark:text-grey-01 dark:hover:bg-azure-06 dark:hover:text-white transition-colors"
           >
             Create Block
           </button>
@@ -416,7 +416,7 @@ export function BlockList() {
           {filteredBlocks.map((block) => (
             <div
               key={block.id}
-              className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 rounded p-4 hover:border-azure-04 transition-colors"
+              className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 rounded-md p-4 hover:border-azure-04 transition-colors"
             >
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-2">
@@ -425,7 +425,7 @@ export function BlockList() {
                     {block.title}
                   </h3>
                 </div>
-                <span className="px-2 py-1 text-xs bg-grey-11 dark:bg-grey-03 rounded">{block.category}</span>
+                <span className="px-2 py-1 text-xs bg-grey-11 dark:bg-grey-03 rounded-md">{block.category}</span>
               </div>
 
               <p
@@ -441,7 +441,7 @@ export function BlockList() {
                     <span
                       key={locale}
                       data-testid="locale-indicator"
-                      className="px-2 py-1 text-xs bg-grey-11 dark:bg-grey-03 rounded"
+                      className="px-2 py-1 text-xs bg-grey-11 dark:bg-grey-03 rounded-md"
                     >
                       {locale}
                     </span>
@@ -451,14 +451,14 @@ export function BlockList() {
                 <div className="flex gap-2 relative">
                   <button
                     onClick={() => handleEditBlock(block.id)}
-                    className="p-1 hover:bg-grey-11 dark:hover:bg-grey-03 rounded transition-colors"
+                    className="p-1 hover:bg-grey-11 dark:hover:bg-grey-03 rounded-md transition-colors"
                     title="Edit block content"
                   >
                     <Edit2 className="h-4 w-4 text-azure-04" />
                   </button>
                   <button
                     onClick={() => setOpenMenuId(openMenuId === block.id ? null : block.id)}
-                    className="p-1 hover:bg-grey-11 dark:hover:bg-grey-03 rounded transition-colors"
+                    className="p-1 hover:bg-grey-11 dark:hover:bg-grey-03 rounded-md transition-colors"
                     title="More actions"
                     aria-label="More actions"
                   >
@@ -469,7 +469,7 @@ export function BlockList() {
                   {openMenuId === block.id && (
                     <div
                       ref={menuRef}
-                      className="absolute right-0 top-8 w-48 bg-white dark:bg-grey-03 border border-grey-09 dark:border-grey-03 rounded shadow-lg z-10"
+                      className="absolute right-0 top-8 w-48 bg-white dark:bg-grey-03 border border-grey-09 dark:border-grey-03 rounded-md shadow-lg z-10"
                     >
                       <button
                         onClick={() => {
@@ -539,7 +539,7 @@ export function BlockList() {
                   }
                 }}
                 placeholder="Enter block title..."
-                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
+                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded-md focus:outline-none focus:ring-2 focus:ring-azure-04"
                 autoFocus
                 data-testid="block-title-input"
               />
@@ -555,7 +555,7 @@ export function BlockList() {
                 id="block-template"
                 value={selectedTemplateId}
                 onChange={(e) => setSelectedTemplateId(e.target.value)}
-                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 bg-white dark:bg-grey-03 dark:text-grey-12 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
+                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 bg-white dark:bg-grey-03 dark:text-grey-12 rounded-md focus:outline-none focus:ring-2 focus:ring-azure-04"
               >
                 {contentBlockTemplates.map((template) => (
                   <option key={template.id} value={template.id}>
@@ -570,14 +570,14 @@ export function BlockList() {
             <div className="flex justify-end gap-3">
               <button
                 onClick={closeCreateDialog}
-                className="px-4 py-2 border border-grey-09 dark:border-grey-03 rounded hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
+                className="px-4 py-2 border border-grey-09 dark:border-grey-03 rounded-md hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleCreateBlock}
                 disabled={!titleInput.trim()}
-                className="px-4 py-2 bg-azure-04 text-white rounded hover:bg-azure-03 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 bg-azure-04 text-white rounded-md hover:bg-azure-03 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 data-testid="create-block-submit"
               >
                 Continue
@@ -631,7 +631,7 @@ export function BlockList() {
                   }
                 }}
                 placeholder="Enter new block name..."
-                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
+                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded-md focus:outline-none focus:ring-2 focus:ring-azure-04"
                 autoFocus
                 data-testid="block-name-input"
               />
@@ -645,7 +645,7 @@ export function BlockList() {
                   closeRenameDialog();
                   setNewName('');
                 }}
-                className="px-4 py-2 border border-grey-09 dark:border-grey-03 rounded hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
+                className="px-4 py-2 border border-grey-09 dark:border-grey-03 rounded-md hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
                 disabled={updateLocalized.isPending}
               >
                 Cancel
@@ -653,7 +653,7 @@ export function BlockList() {
               <button
                 onClick={handleConfirmRename}
                 disabled={!newName || newName === renameDialog.currentName || updateLocalized.isPending}
-                className="px-4 py-2 bg-azure-04 text-white rounded hover:bg-azure-03 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 bg-azure-04 text-white rounded-md hover:bg-azure-03 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 data-testid="rename-block-submit"
               >
                 {updateLocalized.isPending ? 'Renaming...' : 'Rename'}

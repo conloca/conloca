@@ -47,7 +47,7 @@ export function DataEntryCard({
     config.projectRoot && name ? getEditorLink(config.projectRoot, collection, name, firstLocale) : null;
 
   return (
-    <div className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 rounded p-4 hover:border-azure-04 transition-colors">
+    <div className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 rounded-md p-4 hover:border-azure-04 transition-colors">
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-2">
           <Database className="h-4 w-4 text-grey-04 dark:text-grey-07" />
@@ -55,7 +55,7 @@ export function DataEntryCard({
             {title}
           </h3>
         </div>
-        <span className="px-2 py-1 text-xs bg-grey-11 dark:bg-grey-03 rounded">{collection}</span>
+        <span className="px-2 py-1 text-xs bg-grey-11 dark:bg-grey-03 rounded-md">{collection}</span>
       </div>
 
       {description && (
@@ -70,7 +70,7 @@ export function DataEntryCard({
             <span
               key={locale}
               data-testid="locale-indicator"
-              className="px-2 py-1 text-xs bg-grey-11 dark:bg-grey-03 rounded"
+              className="px-2 py-1 text-xs bg-grey-11 dark:bg-grey-03 rounded-md"
             >
               {locale}
             </span>
@@ -79,14 +79,14 @@ export function DataEntryCard({
         <div className="flex gap-2 relative">
           <button
             onClick={onEditData}
-            className="p-1 hover:bg-grey-11 dark:hover:bg-grey-03 rounded transition-colors"
+            className="p-1 hover:bg-grey-11 dark:hover:bg-grey-03 rounded-md transition-colors"
             title="Edit data"
           >
             <Edit2 className="h-4 w-4 text-azure-04" />
           </button>
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="p-1 hover:bg-grey-11 dark:hover:bg-grey-03 rounded transition-colors"
+            className="p-1 hover:bg-grey-11 dark:hover:bg-grey-03 rounded-md transition-colors"
             title="More actions"
             aria-label="More actions"
           >
@@ -97,7 +97,7 @@ export function DataEntryCard({
           {isMenuOpen && (
             <div
               ref={menuRef}
-              className="absolute right-0 top-8 w-48 bg-white dark:bg-grey-03 border border-grey-09 dark:border-grey-03 rounded shadow-lg z-10"
+              className="absolute right-0 top-8 w-48 bg-white dark:bg-grey-03 border border-grey-09 dark:border-grey-03 rounded-md shadow-lg z-10"
             >
               <button
                 onClick={() => {

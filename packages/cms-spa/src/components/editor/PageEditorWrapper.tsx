@@ -204,7 +204,7 @@ export function PageEditorWrapper({ puckConfig }: PageEditorWrapperProps) {
                   {blockId ? (
                     <BlockContentWrapper contentId={blockId} />
                   ) : (
-                    <div className="rounded border border-dashed border-grey-09 dark:border-grey-03 px-5 py-6 text-sm text-grey-04 dark:text-grey-07">
+                    <div className="rounded-md border border-dashed border-grey-09 dark:border-grey-03 px-5 py-6 text-sm text-grey-04 dark:text-grey-07">
                       Select an MDX content block to render here.
                     </div>
                   )}

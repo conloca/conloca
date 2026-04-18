@@ -117,7 +117,7 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
         >
           <div className="flex items-center justify-between mb-4">
             <Dialog.Title className="text-lg font-semibold">Create New Page</Dialog.Title>
-            <Dialog.Close className="p-1 hover:bg-grey-11 dark:hover:bg-grey-03 rounded">
+            <Dialog.Close className="p-1 hover:bg-grey-11 dark:hover:bg-grey-03 rounded-md">
               <X className="h-4 w-4" />
             </Dialog.Close>
           </div>
@@ -132,7 +132,7 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.currentTarget.value)}
-                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
+                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded-md focus:outline-none focus:ring-2 focus:ring-azure-04"
                 required
                 data-testid="page-title-input"
               />
@@ -148,7 +148,7 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
                   type="text"
                   value={path}
                   onChange={(e) => setPath(e.target.value)}
-                  className={`w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 dark:bg-grey-03 dark:text-grey-12 ${
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 dark:bg-grey-03 dark:text-grey-12 ${
                     !isPathnameAvailable && path
                       ? 'border-red-04 focus:ring-red-04'
                       : 'border-grey-09 dark:border-grey-03 focus:ring-azure-04'
@@ -178,7 +178,7 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
                 id="template"
                 value={template}
                 onChange={(e) => handleTemplateChange(e.target.value)}
-                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
+                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded-md focus:outline-none focus:ring-2 focus:ring-azure-04"
               >
                 <option value="blank">Blank</option>
                 {templateEntries.map(([key, templateConfig]) => (
@@ -198,7 +198,7 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
                 id="locale"
                 value={locale}
                 onChange={(e) => setLocale(e.target.value)}
-                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded focus:outline-none focus:ring-2 focus:ring-azure-04"
+                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded-md focus:outline-none focus:ring-2 focus:ring-azure-04"
               >
                 <option value="en">English</option>
                 <option value="nl">Dutch</option>
@@ -210,12 +210,12 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
               <button
                 type="submit"
                 disabled={!isPathnameAvailable || pathnameLoading || !title || !path}
-                className="flex-1 px-4 py-2 bg-azure-04 text-white rounded hover:bg-azure-03 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 px-4 py-2 bg-azure-04 text-white rounded-md hover:bg-azure-03 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 data-testid="create-page-submit"
               >
                 Create
               </button>
-              <Dialog.Close className="flex-1 px-4 py-2 border border-grey-09 dark:border-grey-03 rounded hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors">
+              <Dialog.Close className="flex-1 px-4 py-2 border border-grey-09 dark:border-grey-03 rounded-md hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors">
                 Cancel
               </Dialog.Close>
             </div>
