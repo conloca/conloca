@@ -396,8 +396,8 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
 
       {/* Empty state */}
       {pages.length === 0 ? (
-        <div className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 rounded p-12 text-center">
-          <FileText className="h-12 w-12 text-grey-04 dark:text-grey-07 mx-auto mb-4" />
+        <div className="flex flex-col items-center justify-center min-h-[50vh] text-center">
+          <FileText className="h-12 w-12 text-grey-06 dark:text-grey-05 mb-4" />
           <h2 className="text-xl font-semibold text-grey-01 dark:text-grey-12 mb-2" data-testid="no-pages-message">
             No pages yet
           </h2>
@@ -410,11 +410,11 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
           </button>
         </div>
       ) : filteredPages.length === 0 && (searchQuery || statusFilter !== 'all') ? (
-        <div className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 rounded p-12 text-center">
+        <div className="flex items-center justify-center min-h-[40vh] text-center">
           <p className="text-grey-04 dark:text-grey-07">No pages match your search</p>
         </div>
       ) : filteredPages.length === 0 ? (
-        <div className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 rounded p-12 text-center">
+        <div className="flex items-center justify-center min-h-[40vh] text-center">
           <p className="text-grey-04 dark:text-grey-07" data-testid="no-pages-locale-message">
             No pages found for locale "{selectedLocale}"
           </p>
