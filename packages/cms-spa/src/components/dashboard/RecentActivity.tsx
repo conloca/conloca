@@ -104,18 +104,16 @@ export function RecentActivity() {
           to={`/pages/${page.id}`}
           className="flex items-center gap-3 px-3 py-2.5 rounded-md hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors group"
         >
+          <span
+            className={cn('h-2 w-2 rounded-full flex-shrink-0', statusDot[page.status])}
+            title={page.status}
+            aria-label={page.status}
+          />
           <FileText className="h-4 w-4 text-grey-06 dark:text-grey-05 flex-shrink-0" />
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="text-[15px] font-medium text-grey-01 dark:text-grey-12 truncate group-hover:text-azure-04 dark:group-hover:text-azure-06 transition-colors">
-                {page.title}
-              </span>
-              <span
-                className={cn('h-1.5 w-1.5 rounded-full flex-shrink-0', statusDot[page.status])}
-                title={page.status}
-                aria-label={page.status}
-              />
-            </div>
+            <span className="block text-[15px] font-medium text-grey-01 dark:text-grey-12 truncate group-hover:text-azure-04 dark:group-hover:text-azure-06 transition-colors">
+              {page.title}
+            </span>
             <span className="text-xs text-grey-05 dark:text-grey-07 truncate block font-mono">{page.path}</span>
           </div>
           <div className="flex items-center gap-1 text-xs text-grey-05 dark:text-grey-06 flex-shrink-0">
