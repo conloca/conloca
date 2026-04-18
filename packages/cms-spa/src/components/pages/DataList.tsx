@@ -325,7 +325,7 @@ export function DataList({ dataSchemas }: DataListProps) {
           <button
             onClick={() => openCreateDialog({})}
             disabled={collections.length === 0}
-            className="px-4 py-2 bg-azure-04 text-white rounded hover:bg-azure-03 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2 rounded bg-grey-01 text-grey-12 hover:bg-azure-04 hover:text-white dark:bg-grey-12 dark:text-grey-01 dark:hover:bg-azure-06 dark:hover:text-white transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             data-testid="new-data-button"
           >
             <Plus className="h-4 w-4" />
@@ -349,7 +349,7 @@ export function DataList({ dataSchemas }: DataListProps) {
           {collections.length > 0 && (
             <button
               onClick={() => openCreateDialog({})}
-              className="px-4 py-2 bg-azure-04 text-white rounded hover:bg-azure-03 transition-colors"
+              className="px-4 py-2 rounded bg-grey-01 text-grey-12 hover:bg-azure-04 hover:text-white dark:bg-grey-12 dark:text-grey-01 dark:hover:bg-azure-06 dark:hover:text-white transition-colors"
             >
               Create Entry
             </button>
