@@ -446,7 +446,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
                         href={buildUrl(page.path)}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="font-medium text-azure-04 hover:text-azure-03 hover:underline transition-colors"
+                        className="font-medium text-grey-01 dark:text-grey-12 hover:text-azure-04 dark:hover:text-azure-06 hover:underline transition-colors"
                         data-testid={`page-title-${page.id}`}
                         onClick={(e) => {
                           e.preventDefault();
