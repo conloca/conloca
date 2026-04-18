@@ -33,7 +33,7 @@ export function CMSDashboard() {
         <div className="flex items-center gap-2">
           <Link
             to="/pages"
-            className="flex items-center gap-2 px-3 py-2 bg-azure-04 text-white rounded-md text-sm font-medium hover:bg-azure-03 transition-colors"
+            className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-grey-01 text-grey-12 hover:bg-azure-04 hover:text-white dark:bg-grey-12 dark:text-grey-01 dark:hover:bg-azure-06 dark:hover:text-white transition-colors"
           >
             <Plus className="h-4 w-4" />
             New Page
