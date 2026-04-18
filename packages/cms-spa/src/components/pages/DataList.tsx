@@ -336,8 +336,8 @@ export function DataList({ dataSchemas }: DataListProps) {
 
       {/* Empty state */}
       {entries.length === 0 ? (
-        <div className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 rounded p-12 text-center">
-          <Database className="h-12 w-12 text-grey-04 dark:text-grey-07 mx-auto mb-4" />
+        <div className="flex flex-col items-center justify-center min-h-[50vh] text-center">
+          <Database className="h-12 w-12 text-grey-06 dark:text-grey-05 mb-4" />
           <h2 className="text-xl font-semibold text-grey-01 dark:text-grey-12 mb-2" data-testid="no-data-message">
             No data entries yet
           </h2>
@@ -356,7 +356,7 @@ export function DataList({ dataSchemas }: DataListProps) {
           )}
         </div>
       ) : filteredEntries.length === 0 ? (
-        <div className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 rounded p-12 text-center">
+        <div className="flex items-center justify-center min-h-[40vh] text-center">
           <p className="text-grey-04 dark:text-grey-07" data-testid="no-data-collection-message">
             No entries found in collection "{selectedCollection}"
           </p>
