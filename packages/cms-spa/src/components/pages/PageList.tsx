@@ -462,7 +462,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
                       href={buildUrl(page.path)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-grey-04 dark:text-grey-07 hover:text-azure-03 hover:underline transition-colors font-mono text-xs"
+                      className="text-grey-04 dark:text-grey-07 hover:text-azure-04 dark:hover:text-azure-06 hover:underline transition-colors font-mono text-xs"
                       onClick={(e) => {
                         e.preventDefault();
                         window.open(getPreviewUrl(page.path), '_blank');
