@@ -116,7 +116,7 @@ export function RecentActivity() {
                 aria-label={page.status}
               />
             </div>
-            <span className="text-xs text-grey-05 dark:text-grey-06 truncate block font-mono">{page.path}</span>
+            <span className="text-xs text-grey-05 dark:text-grey-07 truncate block font-mono">{page.path}</span>
           </div>
           <div className="flex items-center gap-1 text-xs text-grey-05 dark:text-grey-06 flex-shrink-0">
             <Clock className="h-3 w-3" />
