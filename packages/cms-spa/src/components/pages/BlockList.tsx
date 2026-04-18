@@ -391,8 +391,8 @@ export function BlockList() {
 
       {/* Empty state */}
       {blocks.length === 0 ? (
-        <div className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 rounded p-12 text-center">
-          <Package className="h-12 w-12 text-grey-04 dark:text-grey-07 mx-auto mb-4" />
+        <div className="flex flex-col items-center justify-center min-h-[50vh] text-center">
+          <Package className="h-12 w-12 text-grey-06 dark:text-grey-05 mb-4" />
           <h2 className="text-xl font-semibold text-grey-01 dark:text-grey-12 mb-2" data-testid="no-blocks-message">
             No blocks yet
           </h2>
@@ -405,7 +405,7 @@ export function BlockList() {
           </button>
         </div>
       ) : filteredBlocks.length === 0 ? (
-        <div className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 rounded p-12 text-center">
+        <div className="flex items-center justify-center min-h-[40vh] text-center">
           <p className="text-grey-04 dark:text-grey-07" data-testid="no-blocks-category-message">
             No blocks found in category "{selectedCategory}"
           </p>
