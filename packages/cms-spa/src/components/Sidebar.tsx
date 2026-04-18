@@ -21,10 +21,10 @@ function NavItem({ to, icon: Icon, label, end }: NavItemProps) {
       end={end}
       className={({ isActive }) =>
         cn(
-          'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors',
+          'relative flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors',
           isActive
-            ? 'bg-azure-11 text-azure-01 dark:bg-azure-03 dark:text-azure-11'
-            : 'text-grey-04 hover:bg-grey-11 hover:text-grey-01 dark:text-grey-07 dark:hover:bg-grey-03 dark:hover:text-grey-12',
+            ? 'text-grey-01 dark:text-grey-12 font-medium bg-grey-11 dark:bg-grey-03 before:absolute before:left-0 before:top-2 before:bottom-2 before:w-[3px] before:bg-azure-04 before:dark:bg-azure-06 before:rounded-r-full'
+            : 'font-medium text-grey-04 hover:bg-grey-11 hover:text-grey-01 dark:text-grey-07 dark:hover:bg-grey-03 dark:hover:text-grey-12',
         )
       }
     >
