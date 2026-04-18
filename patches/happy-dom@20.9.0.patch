@@ -1,0 +1,19 @@
+diff --git a/lib/query-selector/SelectorParser.js b/lib/query-selector/SelectorParser.js
+index fa159902cc6e842fd85f5707bd7cf7edff55dd1b..79ab57d78cfb4300230c5f589fd33478dfb3b379 100644
+--- a/lib/query-selector/SelectorParser.js
++++ b/lib/query-selector/SelectorParser.js
+@@ -124,7 +124,13 @@ export default class SelectorParser {
+             singleApostrophe: 0
+         };
+         const name = this.scope.nodeType === NodeTypeEnum.documentNode ? 'Document' : 'Element';
+-        const error = new this.window.SyntaxError(`Failed to execute 'querySelectorAll' on '${name}': '${selector}' is not a valid selector.`);
++        // Patched: fall back to globalThis.SyntaxError when the happy-dom window
++        // instance does not expose it (e.g. BrowserWindow base class lacks the
++        // class field that GlobalWindow defines, so node[PropertySymbol.window]
++        // can reference an instance where this.window.SyntaxError is undefined).
++        // See patches/happy-dom@20.9.0.patch and upstream issue capricorn86/happy-dom#2088.
++        const SyntaxErrorCtor = this.window.SyntaxError || globalThis.SyntaxError;
++        const error = new SyntaxErrorCtor(`Failed to execute 'querySelectorAll' on '${name}': '${selector}' is not a valid selector.`);
+         let match = null;
+         let lastIndex = 0;
+         let selectorItem = null;

@@ -85,6 +85,7 @@
     }
   },
   "patchedDependencies": {
-    "acorn@8.15.0": "patches/acorn@8.15.0.patch"
+    "acorn@8.15.0": "patches/acorn@8.15.0.patch",
+    "happy-dom@20.9.0": "patches/happy-dom@20.9.0.patch"
   }
 }

@@ -100,17 +100,24 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nx-
 
+      # Steps 12-14 use nx-smart:
+      #  - push to main  -> nx run-many (full coverage; narrow CI-only commits
+      #                      cannot silently mask regressions in untouched
+      #                      projects whose results are cache-green).
+      #  - pull_request  -> nx affected over the full PR range (base..HEAD),
+      #                      as set by nrwl/nx-set-shas above.
+
       # Step 12
       - name: 🔨 Build
-        run: ./github-ci.sh nx-affected build "Build" 12
+        run: ./github-ci.sh nx-smart build "Build" 12
 
       # Step 13
       - name: 🔍 Lint
-        run: ./github-ci.sh nx-affected lint "Lint" 13
+        run: ./github-ci.sh nx-smart lint "Lint" 13
 
       # Step 14
       - name: 🧪 Unit Tests
-        run: ./github-ci.sh nx-affected test "Unit Tests" 14
+        run: ./github-ci.sh nx-smart test "Unit Tests" 14
 
       # --- Cleanup ------------------------------------------------------------
 

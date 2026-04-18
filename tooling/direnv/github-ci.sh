@@ -185,6 +185,49 @@ run_nx_affected() {
     fi
 }
 
+# Function to run nx with smart target selection:
+#  - On push to main: run-many (full coverage, cache-honored). Prevents
+#    narrow "CI-only" commits (release bumps, devenv tweaks) from silently
+#    masking pre-existing breakage in untouched projects.
+#  - Otherwise (PRs, other branches): affected. nrwl/nx-set-shas sets
+#    NX_BASE/NX_HEAD to the full PR range (base-branch..PR-HEAD), so every
+#    project touched by any commit in the PR is included.
+run_nx_smart() {
+    local nx_task="${1:-}"
+    local check_name="${2:-$nx_task}"
+    local step_number="${3:-}"
+
+    if [ -z "$nx_task" ]; then
+        echo "Error: No task specified"
+        echo "Usage: $0 nx-smart <task> [check-name] [step-number]"
+        return 1
+    fi
+
+    create_status "$check_name" "$step_number"
+
+    local mode="affected"
+    if [ "${GITHUB_EVENT_NAME:-}" = "push" ] && [ "${GITHUB_REF_NAME:-}" = "main" ]; then
+        mode="run-many"
+    fi
+
+    echo "nx-smart: event=${GITHUB_EVENT_NAME:-<none>} ref=${GITHUB_REF_NAME:-<none>} mode=$mode task=$nx_task"
+
+    local exit_code=0
+    if [ "$mode" = "run-many" ]; then
+        devenv shell -- nx run-many -t "$nx_task" --parallel=5 || exit_code=$?
+    else
+        devenv shell -- nx affected -t "$nx_task" --parallel=5 || exit_code=$?
+    fi
+
+    if [ $exit_code -eq 0 ]; then
+        update_status "$check_name" "success" "$step_number"
+        return 0
+    else
+        update_status "$check_name" "failure" "$step_number"
+        return $exit_code
+    fi
+}
+
 # Function to run multiple nx affected tasks in parallel
 run_nx_affected_parallel() {
     local tasks="${1:-}"
@@ -299,6 +342,9 @@ case "${1:-}" in
     "nx-affected")
         run_nx_affected "$2" "$3" "$4"
         ;;
+    "nx-smart")
+        run_nx_smart "$2" "$3" "$4"
+        ;;
     "nx-affected-parallel")
         run_nx_affected_parallel "$2" "$3" "$4"
         ;;
@@ -309,8 +355,9 @@ case "${1:-}" in
         export_nix_store
         ;;
     *)
-        echo "Usage: $0 {restore-store|install-devenv|build-shell|nx-affected|nx-affected-parallel|nix-gc|export-store}"
+        echo "Usage: $0 {restore-store|install-devenv|build-shell|nx-affected|nx-smart|nx-affected-parallel|nix-gc|export-store}"
         echo "  nx-affected <task> [check-name] [step-number]"
+        echo "  nx-smart <task> [check-name] [step-number]"
         echo "  nx-affected-parallel '<task1> <task2> <task3>' [check-name] [step-number]"
         exit 1
         ;;
