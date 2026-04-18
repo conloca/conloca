@@ -107,7 +107,7 @@ export function RecentActivity() {
           <FileText className="h-4 w-4 text-grey-06 dark:text-grey-05 flex-shrink-0" />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-grey-01 dark:text-grey-12 truncate group-hover:text-azure-04 transition-colors">
+              <span className="text-[15px] font-medium text-grey-01 dark:text-grey-12 truncate group-hover:text-azure-04 dark:group-hover:text-azure-06 transition-colors">
                 {page.title}
               </span>
               <span
