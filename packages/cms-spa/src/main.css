@@ -291,3 +291,47 @@ body {
   --baseText: var(--color-grey-07);
   --baseTextContrast: var(--color-grey-12);
 }
+
+/* Right panel (SidebarSection) breadcrumbs: prevent the parent-link label
+ * from overlapping the selected component's heading on narrow sidebars.
+ * Puck renders the right-panel header as:
+ *   <div .SidebarSection-title>
+ *     <div .SidebarSection-breadcrumbs>   -- display: flex; gap: 4px (nowrap)
+ *       <div .SidebarSection-breadcrumb>
+ *         <button .SidebarSection-breadcrumbLabel>Parent</button>  -- flex-shrink: 0
+ *         <ChevronRight />
+ *       </div>
+ *       <div .SidebarSection-heading><h2>Selected</h2></div>
+ *     </div>
+ *   </div>
+ * Root cause: breadcrumbLabel has flex-shrink: 0 (index.css:2130) so it keeps
+ * its full width when the panel is narrow, and the heading flex-shrinks and
+ * wraps behind it — the blue parent link visually overlaps the bold component
+ * heading. Allow the label to shrink with ellipsis and give the heading
+ * min-width: 0 so flex can distribute space cleanly. Class-prefix selectors
+ * survive Puck's hash rotation (same pattern as the MenuBar override above). */
+[class*="SidebarSection-breadcrumbs"] {
+  min-width: 0;
+  flex-wrap: wrap;
+}
+[class*="SidebarSection-breadcrumb"] {
+  min-width: 0;
+  flex-shrink: 1;
+}
+[class*="SidebarSection-breadcrumbLabel"] {
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[class*="SidebarSection-heading"] {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+[class*="SidebarSection-heading"] > [class*="Heading"] {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
