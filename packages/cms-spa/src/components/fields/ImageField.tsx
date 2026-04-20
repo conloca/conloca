@@ -2,6 +2,7 @@ import { FolderOpen } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { AssetEntry } from '../../hooks';
 import { ImagePicker } from '../media/ImagePicker';
+import { Input } from '../ui';
 
 interface ImageFieldRenderProps {
   value: string;
@@ -48,18 +49,19 @@ export function ImageFieldRender({ value, onChange }: ImageFieldRenderProps) {
   return (
     <div>
       <div className="flex">
-        <input
+        <Input
+          size="sm"
           type="text"
           value={localValue}
           onChange={(e) => setLocalValue(e.target.value)}
           onBlur={handleBlur}
           placeholder="Image URL or path"
-          className="flex-1 px-3 py-2 text-sm border border-r-0 border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded-l focus:outline-none focus:ring-2 focus:ring-azure-04 focus:border-azure-04"
+          className="flex-1 rounded-r-none border-r-0"
         />
         <button
           type="button"
           onClick={() => setModalOpen(true)}
-          className="px-2.5 border border-grey-09 dark:border-grey-03 bg-grey-11 dark:bg-grey-03 text-grey-04 dark:text-grey-07 rounded-r hover:bg-grey-09 hover:text-grey-01 dark:hover:text-grey-12 transition-colors"
+          className="px-2.5 border border-line bg-subtle text-grey-04 dark:text-grey-07 rounded-r-md hover:bg-hover hover:text-grey-01 dark:hover:text-grey-12 transition-colors"
           title="Browse Media Library"
           aria-label="Browse images"
         >

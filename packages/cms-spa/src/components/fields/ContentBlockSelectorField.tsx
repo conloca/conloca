@@ -8,6 +8,7 @@ import {
   getContentBlockTemplate,
   renderContentBlockTemplate,
 } from '../editor/content-block-templates';
+import { Button, Input, Select } from '../ui';
 import { MDXEditField } from './MDXEditField';
 
 export interface ContentBlockOption {
@@ -180,7 +181,7 @@ export function ContentBlockSelectorField({ value, onChange, options }: ContentB
         {/* Searchable combobox */}
         <div ref={dropdownRef} className="relative">
           <div
-            className="flex w-full items-center rounded-md border border-grey-09 dark:border-grey-03 bg-white dark:bg-grey-03 text-sm cursor-pointer"
+            className="flex w-full items-center rounded-md border border-line bg-panel text-sm cursor-pointer"
             onClick={() => {
               setIsOpen(true);
               setTimeout(() => inputRef.current?.focus(), 0);
@@ -226,14 +227,14 @@ export function ContentBlockSelectorField({ value, onChange, options }: ContentB
           {isOpen && (
             <div
               role="listbox"
-              className="absolute left-0 right-0 top-full z-50 mt-1 max-h-64 overflow-y-auto rounded-md border border-grey-09 dark:border-grey-03 bg-white dark:bg-grey-03 shadow-lg"
+              className="absolute left-0 right-0 top-full z-50 mt-1 max-h-64 overflow-y-auto rounded-md border border-line bg-overlay shadow-lg"
             >
               {/* Clear selection */}
               {value && (
                 <button
                   type="button"
                   onClick={() => handleSelectBlock('')}
-                  className="w-full px-3 py-2 text-left text-xs text-grey-04 dark:text-grey-07 hover:bg-grey-11 dark:hover:bg-grey-03"
+                  className="w-full px-3 py-2 text-left text-xs text-grey-04 dark:text-grey-07 hover:bg-hover"
                 >
                   Clear selection
                 </button>
@@ -288,17 +289,13 @@ export function ContentBlockSelectorField({ value, onChange, options }: ContentB
       ) : null}
 
       <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={handleCreateStart}
-          className="rounded-md border border-grey-09 dark:border-grey-03 bg-white dark:bg-grey-03 px-3 py-2 text-sm font-medium hover:bg-grey-11 dark:hover:bg-grey-03"
-        >
+        <Button variant="outline" size="sm" onClick={handleCreateStart}>
           Create New Block
-        </button>
+        </Button>
       </div>
 
       {showCreator ? (
-        <div className="space-y-3 rounded-md border border-grey-09 dark:border-grey-03 bg-grey-11 dark:bg-grey-03 p-3">
+        <div className="space-y-3 rounded-md border border-line bg-subtle p-3">
           <div>
             <label
               htmlFor="new-content-block-title"
@@ -306,12 +303,12 @@ export function ContentBlockSelectorField({ value, onChange, options }: ContentB
             >
               Block Title
             </label>
-            <input
+            <Input
+              size="sm"
               id="new-content-block-title"
               type="text"
               value={newBlockTitle}
               onChange={(event) => setNewBlockTitle(event.target.value)}
-              className="w-full rounded-md border border-grey-09 dark:border-grey-03 bg-white dark:bg-grey-03 dark:text-grey-12 px-3 py-2 text-sm"
               placeholder="Foundational narrative"
             />
           </div>
@@ -323,18 +320,18 @@ export function ContentBlockSelectorField({ value, onChange, options }: ContentB
             >
               Starter Template
             </label>
-            <select
+            <Select
+              size="sm"
               id="new-content-block-template"
               value={selectedTemplateId}
               onChange={(event) => setSelectedTemplateId(event.target.value)}
-              className="w-full rounded-md border border-grey-09 dark:border-grey-03 bg-white dark:bg-grey-03 dark:text-grey-12 px-3 py-2 text-sm"
             >
               {contentBlockTemplates.map((template) => (
                 <option key={template.id} value={template.id}>
                   {template.label}
                 </option>
               ))}
-            </select>
+            </Select>
             <p className="mt-2 text-xs leading-relaxed text-grey-04">
               {getContentBlockTemplate(selectedTemplateId)?.description}
             </p>
@@ -343,20 +340,12 @@ export function ContentBlockSelectorField({ value, onChange, options }: ContentB
           {creationError ? <p className="text-xs text-red-04">{creationError}</p> : null}
 
           <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={handleContinueToEditor}
-              className="rounded-md bg-azure-04 px-3 py-2 text-sm font-medium text-white hover:bg-azure-03"
-            >
+            <Button variant="primary" size="sm" onClick={handleContinueToEditor}>
               Open Editor
-            </button>
-            <button
-              type="button"
-              onClick={resetCreator}
-              className="rounded-md border border-grey-09 dark:border-grey-03 bg-white dark:bg-grey-03 px-3 py-2 text-sm font-medium hover:bg-grey-11 dark:hover:bg-grey-03"
-            >
+            </Button>
+            <Button variant="outline" size="sm" onClick={resetCreator}>
               Cancel
-            </button>
+            </Button>
           </div>
         </div>
       ) : null}
@@ -390,7 +379,7 @@ function BlockOptionItem({
       role="option"
       aria-selected={isSelected}
       onClick={onClick}
-      className={cn('flex w-full flex-col items-start px-3 py-2 text-left hover:bg-grey-11 dark:hover:bg-grey-03', {
+      className={cn('flex w-full flex-col items-start px-3 py-2 text-left hover:bg-hover', {
         'bg-azure-10': isSelected,
       })}
     >

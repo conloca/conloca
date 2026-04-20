@@ -1,6 +1,7 @@
 import { Upload, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { AssetEntry } from '../../hooks';
+import { Button, IconButton } from '../ui';
 import { FolderTreeSidebar } from './FolderTreeSidebar';
 import { MediaLibrary } from './MediaLibrary';
 import { UploadModal } from './UploadModal';
@@ -55,27 +56,16 @@ export function ImagePicker({ isOpen, onSelect, onClose }: ImagePickerProps) {
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
       onClick={handleBackdropClick}
     >
-      <div className="bg-white dark:bg-grey-03 rounded-lg shadow-xl w-full max-w-5xl max-h-[85vh] mx-4 flex flex-col overflow-hidden">
+      <div className="bg-overlay rounded-lg shadow-xl w-full max-w-5xl max-h-[85vh] mx-4 flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-grey-09 dark:border-grey-03 flex-shrink-0">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-line flex-shrink-0">
           <h2 className="text-lg font-semibold text-grey-01 dark:text-grey-12">Select Image</h2>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setShowUpload(true)}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm bg-azure-04 text-white rounded-md hover:bg-azure-03 transition-colors"
-            >
+            <Button variant="primary" size="sm" onClick={() => setShowUpload(true)} className="flex items-center gap-2">
               <Upload className="w-4 h-4" />
               Upload
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-1.5 text-grey-04 dark:text-grey-07 hover:text-grey-01 dark:hover:text-grey-12 transition-colors rounded-md hover:bg-grey-11 dark:hover:bg-grey-03"
-              aria-label="Close"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            </Button>
+            <IconButton icon={X} ariaLabel="Close" onClick={onClose} variant="ghost" />
           </div>
         </div>
 

@@ -2,6 +2,7 @@ import { Upload, X } from 'lucide-react';
 import { useEffect } from 'react';
 import { ACCEPTED_TYPES, useUploadFlow } from '../../hooks';
 import { cn } from '../../utils/cn';
+import { Button, IconButton, Input } from '../ui';
 
 interface UploadModalProps {
   isOpen: boolean;
@@ -67,54 +68,34 @@ export function UploadModal({ isOpen, onClose, folder, onUploadComplete }: Uploa
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="bg-white dark:bg-grey-03 rounded-lg w-full max-w-md mx-4 shadow-xl">
+      <div className="bg-overlay rounded-lg w-full max-w-md mx-4 shadow-xl">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-grey-09 dark:border-grey-03">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-line">
           <h2 className="text-lg font-semibold text-grey-01 dark:text-grey-12">Upload Assets</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1 text-grey-04 dark:text-grey-07 hover:text-grey-01 dark:hover:text-grey-12 transition-colors rounded-md hover:bg-grey-11 dark:hover:bg-grey-03"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <IconButton icon={X} ariaLabel="Close" onClick={onClose} variant="ghost" />
         </div>
 
         {/* Body */}
         <div className="p-6">
           {/* Tabs */}
           <div className="flex gap-2 mb-4">
-            <button
-              type="button"
+            <Button
+              variant={activeTab === 'file' ? 'primary' : 'outline'}
+              size="sm"
               onClick={() => setActiveTab('file')}
-              className={cn(
-                'px-3 py-1.5 text-sm rounded-md transition-colors',
-                activeTab === 'file'
-                  ? 'bg-azure-04 text-white'
-                  : 'bg-white dark:bg-grey-03 border border-grey-09 dark:border-grey-03 text-grey-04 dark:text-grey-07 hover:bg-grey-11 dark:hover:bg-grey-03',
-              )}
             >
               Upload File
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('url')}
-              className={cn(
-                'px-3 py-1.5 text-sm rounded-md transition-colors',
-                activeTab === 'url'
-                  ? 'bg-azure-04 text-white'
-                  : 'bg-white dark:bg-grey-03 border border-grey-09 dark:border-grey-03 text-grey-04 dark:text-grey-07 hover:bg-grey-11 dark:hover:bg-grey-03',
-              )}
-            >
+            </Button>
+            <Button variant={activeTab === 'url' ? 'primary' : 'outline'} size="sm" onClick={() => setActiveTab('url')}>
               Import URL
-            </button>
+            </Button>
           </div>
 
           {activeTab === 'file' && (
             <>
               {/* Multi-file upload progress */}
               {uploadProgress && (
-                <div className="mb-4 p-3 bg-grey-11 dark:bg-grey-03 rounded-md border border-grey-09 dark:border-grey-03">
+                <div className="mb-4 p-3 bg-subtle rounded-md border border-line">
                   <p className="text-sm font-medium text-grey-01 dark:text-grey-12">
                     {uploadProgress.inProgress
                       ? `Uploading ${uploadProgress.total} files...`
@@ -160,13 +141,13 @@ export function UploadModal({ isOpen, onClose, folder, onUploadComplete }: Uploa
                     >
                       Alt Text
                     </label>
-                    <input
+                    <Input
+                      size="sm"
                       id="alt-text"
                       type="text"
                       value={altText}
                       onChange={(e) => setAltText(e.target.value)}
                       placeholder="Describe the image for accessibility"
-                      className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-azure-04 focus:border-azure-04"
                     />
                   </div>
                 </div>
@@ -176,10 +157,8 @@ export function UploadModal({ isOpen, onClose, folder, onUploadComplete }: Uploa
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
                   className={cn(
-                    'border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors bg-grey-11 dark:bg-grey-03',
-                    isDragOver
-                      ? 'border-azure-04 bg-azure-11 dark:bg-azure-02'
-                      : 'border-grey-09 dark:border-grey-03 hover:border-grey-07',
+                    'border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors bg-subtle',
+                    isDragOver ? 'border-azure-04 bg-azure-11 dark:bg-azure-02' : 'border-line hover:border-grey-07',
                   )}
                   onClick={() => fileInputRef.current?.click()}
                   onKeyDown={(e) => {
@@ -220,13 +199,13 @@ export function UploadModal({ isOpen, onClose, folder, onUploadComplete }: Uploa
                 >
                   Image URL
                 </label>
-                <input
+                <Input
+                  size="sm"
                   id="import-url"
                   type="url"
                   value={importUrl}
                   onChange={(e) => setImportUrl(e.target.value)}
                   placeholder="https://example.com/image.jpg"
-                  className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-azure-04 focus:border-azure-04"
                 />
               </div>
               <div>
@@ -236,13 +215,13 @@ export function UploadModal({ isOpen, onClose, folder, onUploadComplete }: Uploa
                 >
                   Alt Text
                 </label>
-                <input
+                <Input
+                  size="sm"
                   id="url-alt-text"
                   type="text"
                   value={altText}
                   onChange={(e) => setAltText(e.target.value)}
                   placeholder="Describe the image for accessibility"
-                  className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-azure-04 focus:border-azure-04"
                 />
               </div>
             </div>
@@ -254,35 +233,32 @@ export function UploadModal({ isOpen, onClose, folder, onUploadComplete }: Uploa
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-grey-09 dark:border-grey-03 bg-grey-11 dark:bg-grey-03 rounded-b-lg">
-          <button
-            type="button"
-            onClick={pendingFile ? handleCancel : onClose}
-            disabled={isUploading}
-            className="px-4 py-2 bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 text-grey-04 dark:text-grey-07 text-sm rounded-md hover:bg-grey-11 dark:hover:bg-grey-03 disabled:opacity-50 transition-colors"
-          >
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-line bg-subtle rounded-b-lg">
+          <Button variant="outline" size="sm" onClick={pendingFile ? handleCancel : onClose} disabled={isUploading}>
             {pendingFile ? 'Clear' : 'Cancel'}
-          </button>
+          </Button>
           {activeTab === 'file' ? (
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              size="sm"
               onClick={handleUpload}
               disabled={isUploading || !pendingFile}
-              className="flex items-center gap-2 px-4 py-2 bg-azure-04 text-white text-sm rounded-md hover:bg-azure-03 disabled:opacity-50 transition-colors"
+              className="flex items-center gap-2"
             >
               <Upload className="w-4 h-4" />
               {uploadMutationIsPending ? 'Uploading...' : 'Upload'}
-            </button>
+            </Button>
           ) : (
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              size="sm"
               onClick={handleImportUrl}
               disabled={isUploading || !importUrl.trim()}
-              className="flex items-center gap-2 px-4 py-2 bg-azure-04 text-white text-sm rounded-md hover:bg-azure-03 disabled:opacity-50 transition-colors"
+              className="flex items-center gap-2"
             >
               <Upload className="w-4 h-4" />
               {importMutationIsPending ? 'Importing...' : 'Import'}
-            </button>
+            </Button>
           )}
         </div>
       </div>

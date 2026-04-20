@@ -45,7 +45,7 @@ export function ChipArrayField({ value, onChange, placeholder = 'Type and press 
     <div
       onClick={handleContainerClick}
       className={cn(
-        'flex flex-wrap gap-1.5 p-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 rounded-md',
+        'flex flex-wrap gap-1.5 p-2 border border-line bg-panel rounded-md',
         'focus-within:ring-2 focus-within:ring-azure-04',
         'min-h-[38px] items-center cursor-text',
       )}

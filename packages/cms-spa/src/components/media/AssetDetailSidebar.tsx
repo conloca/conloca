@@ -5,6 +5,7 @@ import type { AssetEntry } from '../../hooks';
 import { useAssetUsage, useDeleteAsset, useMoveAssets, useUpdateAssetMetadata } from '../../hooks';
 import { buildAssetServeUrl } from '../../utils/asset-url';
 import { MoveFolderDialog } from '../dialogs';
+import { Button, IconButton, Input } from '../ui';
 
 function formatDate(dateString: string): string {
   const date = new Date(dateString);
@@ -125,25 +126,18 @@ export function AssetDetailSidebar({
         onClick={onClose}
         className="md:hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-30"
       />
-      <div className="fixed inset-y-0 right-0 z-40 w-full max-w-sm shadow-2xl md:static md:max-w-none md:w-80 md:z-auto md:shadow-none border-l border-grey-09 dark:border-grey-03 bg-white dark:bg-grey-02 flex flex-col h-full overflow-hidden">
+      <div className="fixed inset-y-0 right-0 z-40 w-full max-w-sm shadow-2xl md:static md:max-w-none md:w-80 md:z-auto md:shadow-none border-l border-line bg-white dark:bg-grey-02 flex flex-col h-full overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-grey-09 dark:border-grey-03">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-line">
           <h3 className="font-semibold text-grey-01 dark:text-grey-12 truncate" title={asset.originalName}>
             {asset.originalName}
           </h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1 text-grey-04 dark:text-grey-07 hover:text-grey-01 dark:hover:text-grey-12 transition-colors"
-            title="Close"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <IconButton icon={X} ariaLabel="Close" title="Close" onClick={onClose} variant="ghost" />
         </div>
 
         <div className="flex-1 overflow-y-auto">
           {/* Thumbnail preview */}
-          <div className="aspect-square bg-grey-11 dark:bg-grey-03 flex items-center justify-center overflow-hidden border-b border-grey-09 dark:border-grey-03">
+          <div className="aspect-square bg-subtle flex items-center justify-center overflow-hidden border-b border-line">
             <img
               src={buildAssetServeUrl(assetsBasePath, asset.folder, asset.filename)}
               alt={asset.alt || asset.originalName}
@@ -152,7 +146,7 @@ export function AssetDetailSidebar({
           </div>
 
           {/* File info (read-only) */}
-          <div className="p-4 space-y-3 border-b border-grey-09 dark:border-grey-03">
+          <div className="p-4 space-y-3 border-b border-line">
             <div>
               <dt className="text-xs text-grey-04 dark:text-grey-07 uppercase tracking-wide">Filename</dt>
               <dd className="text-sm text-grey-01 dark:text-grey-12 break-all">{asset.filename}</dd>
@@ -182,7 +176,7 @@ export function AssetDetailSidebar({
           </div>
 
           {/* Editable fields */}
-          <div className="p-4 space-y-4 border-b border-grey-09 dark:border-grey-03">
+          <div className="p-4 space-y-4 border-b border-line">
             <div>
               <label
                 htmlFor="alt-text"
@@ -190,14 +184,14 @@ export function AssetDetailSidebar({
               >
                 Alt Text
               </label>
-              <input
+              <Input
+                size="sm"
                 id="alt-text"
                 type="text"
                 value={altText}
                 onChange={(e) => setAltText(e.target.value)}
                 onBlur={handleAltBlur}
                 placeholder="Describe this image for accessibility"
-                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-azure-04"
               />
             </div>
             <div>
@@ -207,21 +201,21 @@ export function AssetDetailSidebar({
               >
                 Tags
               </label>
-              <input
+              <Input
+                size="sm"
                 id="tags"
                 type="text"
                 value={tagsInput}
                 onChange={(e) => setTagsInput(e.target.value)}
                 onBlur={handleTagsBlur}
                 placeholder="Comma-separated tags"
-                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-azure-04"
               />
               <p className="mt-1 text-xs text-grey-07">Separate tags with commas</p>
             </div>
           </div>
 
           {/* Usage section */}
-          <div className="p-4 border-b border-grey-09 dark:border-grey-03">
+          <div className="p-4 border-b border-line">
             <h4 className="text-xs text-grey-04 dark:text-grey-07 uppercase tracking-wide mb-2">Used In</h4>
             {isLoadingUsage ? (
               <div className="flex items-center gap-2 text-grey-04 dark:text-grey-07 text-sm">
@@ -243,7 +237,7 @@ export function AssetDetailSidebar({
           </div>
 
           {/* Move section */}
-          <div className="p-4 border-b border-grey-09 dark:border-grey-03">
+          <div className="p-4 border-b border-line">
             <button
               type="button"
               onClick={() => setShowMoveDialog(true)}
@@ -260,21 +254,18 @@ export function AssetDetailSidebar({
               <div className="space-y-2">
                 <p className="text-sm text-red-04">Delete this asset permanently?</p>
                 <div className="flex gap-2">
-                  <button
-                    type="button"
+                  <Button
+                    variant="destructive"
+                    size="sm"
                     onClick={handleDelete}
                     disabled={deleteAsset.isPending}
-                    className="flex-1 px-3 py-2 bg-red-04 text-white text-sm rounded-md hover:bg-red-03 disabled:opacity-50 transition-colors"
+                    className="flex-1"
                   >
                     {deleteAsset.isPending ? 'Deleting...' : 'Yes, Delete'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setConfirmDelete(false)}
-                    className="flex-1 px-3 py-2 bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 text-grey-04 dark:text-grey-07 text-sm rounded-md hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
-                  >
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setConfirmDelete(false)} className="flex-1">
                     Cancel
-                  </button>
+                  </Button>
                 </div>
               </div>
             ) : (
