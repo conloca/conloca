@@ -21,6 +21,7 @@ import { DataPropertiesDialog } from '../dialogs/DataPropertiesDialog';
 import { DeleteConfirmDialog } from '../dialogs/DeleteConfirmDialog';
 import { ErrorModal } from '../dialogs/ErrorModal';
 import { DataEditor } from '../editors/DataEditor';
+import { Select } from '../ui';
 
 /**
  * Generates a VSCode URI to open the schemas file.
@@ -301,7 +302,7 @@ export function DataList({ dataSchemas }: DataListProps) {
           {schemasEditorLink && (
             <a
               href={schemasEditorLink}
-              className="px-3 py-2 border border-grey-09 dark:border-grey-03 rounded-md hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors flex items-center gap-2 text-grey-04 dark:text-grey-07 hover:text-grey-01 dark:hover:text-grey-12"
+              className="px-3 py-2 border border-line rounded-md hover:bg-hover transition-colors flex items-center gap-2 text-grey-04 dark:text-grey-07 hover:text-grey-01 dark:hover:text-grey-12"
               title="Open data schemas file in editor"
             >
               <Code className="h-4 w-4" />
@@ -309,10 +310,10 @@ export function DataList({ dataSchemas }: DataListProps) {
             </a>
           )}
           {collections.length > 0 && (
-            <select
+            <Select
               value={selectedCollection}
               onChange={(e) => setSelectedCollection(e.target.value)}
-              className="px-3 py-2 border border-grey-09 dark:border-grey-03 rounded-md bg-white dark:bg-grey-03 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-04 transition-colors"
+              className="w-auto"
             >
               <option value="all">All Collections</option>
               {collections.map((col) => (
@@ -320,7 +321,7 @@ export function DataList({ dataSchemas }: DataListProps) {
                   {col}
                 </option>
               ))}
-            </select>
+            </Select>
           )}
           <button
             onClick={() => openCreateDialog({})}
@@ -421,7 +422,7 @@ export function DataList({ dataSchemas }: DataListProps) {
           }}
         >
           <div
-            className="bg-white dark:bg-grey-03 rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+            className="bg-overlay rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto"
             data-testid="edit-data-dialog"
           >
             <div className="flex items-center justify-between mb-6">
@@ -433,7 +434,7 @@ export function DataList({ dataSchemas }: DataListProps) {
               </div>
               <button
                 onClick={closeEditDataDialog}
-                className="p-2 hover:bg-grey-11 dark:hover:bg-grey-03 rounded-md transition-colors"
+                className="p-2 hover:bg-hover rounded-md transition-colors"
                 aria-label="Close"
               >
                 ×

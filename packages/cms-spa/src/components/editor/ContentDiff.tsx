@@ -1,5 +1,6 @@
 import type { ContentData } from '@conloca/content-api-client';
 import { useState } from 'react';
+import { Textarea } from '../ui';
 
 interface ContentDiffProps {
   localContent: ContentData;
@@ -87,10 +88,10 @@ function MDXDiff({ localMdx, serverMdx, onResolve }: MDXDiffProps) {
       </div>
 
       {isEditing ? (
-        <textarea
+        <Textarea
           value={displayContent}
           onChange={(e) => setEditableContent(e.target.value)}
-          className="w-full h-96 p-4 border border-grey-09 dark:border-grey-03 rounded-md font-mono text-sm bg-white dark:bg-grey-03 text-grey-01 dark:text-grey-12"
+          className="h-96 p-4 font-mono text-sm"
           placeholder="Resolve the conflict by editing the content..."
         />
       ) : (
@@ -144,7 +145,7 @@ function PuckDiff({ localPuck, serverPuck, onResolve }: PuckDiffProps) {
           className={`p-4 rounded-md border-2 cursor-pointer transition-colors ${
             selectedVersion === 'local'
               ? 'border-green-05 bg-green-11 dark:bg-green-02'
-              : 'border-grey-09 dark:border-grey-03 bg-grey-12 dark:bg-grey-02 hover:border-grey-08 dark:hover:border-grey-06'
+              : 'border-line bg-grey-12 dark:bg-grey-02 hover:border-grey-08 dark:hover:border-grey-06'
           }`}
           onClick={() => setSelectedVersion('local')}
         >
@@ -161,7 +162,7 @@ function PuckDiff({ localPuck, serverPuck, onResolve }: PuckDiffProps) {
           className={`p-4 rounded-md border-2 cursor-pointer transition-colors ${
             selectedVersion === 'server'
               ? 'border-red-04 bg-red-11 dark:bg-red-02'
-              : 'border-grey-09 dark:border-grey-03 bg-grey-12 dark:bg-grey-02 hover:border-grey-08 dark:hover:border-grey-06'
+              : 'border-line bg-grey-12 dark:bg-grey-02 hover:border-grey-08 dark:hover:border-grey-06'
           }`}
           onClick={() => setSelectedVersion('server')}
         >

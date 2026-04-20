@@ -2,6 +2,7 @@ import { BaseMDXEditor, BaseMDXEditorModal, type BaseMDXEditorModalProps, type B
 import type { MDXEditorMethods } from '@mdxeditor/editor';
 import type React from 'react';
 import { forwardRef, useMemo, useRef, useState } from 'react';
+import { Button, Select } from '../ui';
 import { contentBlockSnippets, getContentBlockTemplate, renderContentBlockTemplate } from './content-block-templates';
 import { ImagePickerDialog } from './ImagePickerDialog';
 
@@ -66,36 +67,33 @@ function CMSMDXHeaderTools({
   return (
     <>
       <span className="hidden text-xs text-grey-04 xl:inline">Cmd/Ctrl+S to save</span>
-      <select
+      <Select
+        size="sm"
         value={selectedSnippetId}
         onChange={(event) => setSelectedSnippetId(event.target.value)}
-        className="rounded-md border border-grey-09 dark:border-grey-03 bg-white dark:bg-grey-03 dark:text-grey-12 px-3 py-2 text-sm"
+        className="w-auto"
       >
         {contentBlockSnippets.map((snippet) => (
           <option key={snippet.id} value={snippet.id}>
             {snippet.label}
           </option>
         ))}
-      </select>
-      <button
-        type="button"
-        onClick={handleInsertSnippet}
-        className="rounded-md border border-grey-09 bg-white px-3 py-2 text-sm font-medium hover:bg-grey-11"
-      >
+      </Select>
+      <Button variant="outline" size="sm" onClick={handleInsertSnippet}>
         Insert Pattern
-      </button>
+      </Button>
       {selectedTemplate ? (
-        <button
-          type="button"
+        <Button
+          variant="outline"
+          size="sm"
           onClick={() => {
             const newContent = renderContentBlockTemplate(initialTemplateId, filePath || 'Untitled Block');
             setContent(newContent);
             editorRef.current?.setMarkdown(newContent);
           }}
-          className="rounded-md border border-grey-09 dark:border-grey-03 bg-white dark:bg-grey-03 px-3 py-2 text-sm font-medium text-grey-01 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-02"
         >
           Reset Template
-        </button>
+        </Button>
       ) : null}
     </>
   );
