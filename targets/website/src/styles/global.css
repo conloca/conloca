@@ -1,14 +1,29 @@
 @layer base, starlight, theme, components, utilities;
 
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
+@import "@astrojs/starlight-tailwind";
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
 /* Remove underline from all links */
 @layer base {
   a {
     text-decoration: none;
   }
+  /* Body defaults. The Astro Layout also applies the Tailwind utilities
+     `bg-bg-primary text-text-primary font-sans antialiased` — those resolve
+     to the same values. Declaring them here as well means the site's theme
+     survives contexts where the Layout isn't wrapping the content (e.g. the
+     Conloca page editor's Puck preview iframe, which only renders the Puck
+     content tree without the outer Layout). */
+  body {
+    background-color: var(--color-bg-primary);
+    color: var(--color-text-primary);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 }
-@import "@astrojs/starlight-tailwind";
-@import "tailwindcss/theme.css" layer(theme);
-@import "tailwindcss/utilities.css" layer(utilities);
 
 @theme {
   /* Brand colors (cyan) */
