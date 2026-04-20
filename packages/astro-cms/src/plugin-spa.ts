@@ -606,7 +606,24 @@ initHydration(componentRegistry)
                           ? fileURLToPath(cmsSpaPackageJsonPath)
                           : cmsSpaPackageJsonPath,
                       );
-                      const srcMainPath = join(cmsSpaDir, 'src', 'main.tsx');
+                      const realSrcMainPath = join(cmsSpaDir, 'src', 'main.tsx');
+                      // Prefer the consumer-side symlink path when @conloca/cms-spa is
+                      // linked in from another workspace (e.g. cross-repo `bun link`).
+                      // Importing via the symlink path keeps `react`/`react-dom`
+                      // resolving through the consumer's node_modules walk under
+                      // `preserveSymlinks: true`, which prevents duplicate React
+                      // instances inside the CMS SPA. Same-workspace installs either
+                      // don't expose this path or point at the same underlying file,
+                      // so behavior and HMR are preserved.
+                      const linkedSrcMainPath = join(
+                        astroRoot,
+                        'node_modules',
+                        '@conloca',
+                        'cms-spa',
+                        'src',
+                        'main.tsx',
+                      );
+                      const srcMainPath = existsSync(linkedSrcMainPath) ? linkedSrcMainPath : realSrcMainPath;
 
                       if (existsSync(srcMainPath)) {
                         // Workspace mode: import source for HMR
