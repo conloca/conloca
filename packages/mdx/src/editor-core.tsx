@@ -42,6 +42,13 @@ export interface BaseMDXEditorProps {
   onImageShortcut?: () => void;
   imageButtonRef?: React.Ref<HTMLButtonElement>;
   jsxComponentDescriptors?: JsxComponentDescriptor[];
+  /**
+   * Class applied to the MDXEditor root element (library forwards it to the
+   * toolbar and portaled popups too). Pass `"dark-theme"` to activate the
+   * library's built-in Radix dark palette.
+   * See https://mdxeditor.dev/editor/docs/theming
+   */
+  className?: string;
 }
 
 export interface BaseMDXEditorModalProps {
@@ -58,6 +65,11 @@ export interface BaseMDXEditorModalProps {
   }) => React.ReactNode;
   onBeforeClose?: () => boolean;
   EditorComponent: React.ForwardRefExoticComponent<BaseMDXEditorProps & React.RefAttributes<MDXEditorMethods>>;
+  /**
+   * Forwarded to the MDXEditor root. Typically `"dark-theme"` when the host
+   * app is in dark mode — see BaseMDXEditorProps.className.
+   */
+  editorClassName?: string;
 }
 
 const codeBlockLanguages = {
@@ -134,6 +146,7 @@ export const BaseMDXEditor = React.forwardRef<MDXEditorMethods, BaseMDXEditorPro
       onImageShortcut,
       imageButtonRef,
       jsxComponentDescriptors,
+      className,
     },
     ref,
   ) => {
@@ -164,6 +177,7 @@ export const BaseMDXEditor = React.forwardRef<MDXEditorMethods, BaseMDXEditorPro
         markdown={value}
         onChange={onChange}
         readOnly={readOnly}
+        className={className}
         contentEditableClassName="conloca-prose conloca-prose--editor max-w-none"
         plugins={[
           headingsPlugin(),
@@ -260,7 +274,7 @@ function Dialog({ open, onOpenChange, children }: DialogProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div role="presentation" className="fixed inset-0 bg-black/50" onClick={() => onOpenChange(false)} />
-      <div className="relative z-50 bg-white rounded-lg shadow-lg max-w-[90vw] max-h-[90vh] overflow-hidden">
+      <div className="relative z-50 bg-white dark:bg-grey-03 rounded-lg shadow-lg max-w-[90vw] max-h-[90vh] overflow-hidden">
         {children}
       </div>
     </div>
@@ -276,7 +290,7 @@ function DialogHeader({ children }: { children: React.ReactNode }) {
 }
 
 function DialogTitle({ children }: { children: React.ReactNode }) {
-  return <h2 className="text-xl font-semibold">{children}</h2>;
+  return <h2 className="text-xl font-semibold text-grey-01 dark:text-grey-12">{children}</h2>;
 }
 
 export function BaseMDXEditorModal({
@@ -289,6 +303,7 @@ export function BaseMDXEditorModal({
   headerTools,
   onBeforeClose,
   EditorComponent,
+  editorClassName,
 }: BaseMDXEditorModalProps) {
   const editorRef = React.useRef<MDXEditorMethods>(null);
   const [content, setContent] = useState(initialContent);
@@ -349,7 +364,12 @@ export function BaseMDXEditorModal({
                 {headerTools?.({ content, setContent, editorRef })}
               </div>
             )}
-            <button type="button" onClick={handleClose} className="p-2 hover:bg-gray-100 rounded" aria-label="Close">
+            <button
+              type="button"
+              onClick={handleClose}
+              className="p-2 rounded text-grey-04 dark:text-grey-07 hover:bg-gray-100 dark:hover:bg-grey-04 hover:text-grey-01 dark:hover:text-grey-12"
+              aria-label="Close"
+            >
               ✕
             </button>
           </div>
@@ -363,11 +383,12 @@ export function BaseMDXEditorModal({
                 value={content}
                 onChange={setContent}
                 onSave={handleSave}
+                className={editorClassName}
               />
             </MDXEditorErrorBoundary>
           ) : (
             <div className="flex items-center justify-center h-full">
-              <div className="text-gray-500" data-testid="modal-editor-loading">
+              <div className="text-gray-500 dark:text-grey-07" data-testid="modal-editor-loading">
                 Loading editor...
               </div>
             </div>
@@ -377,7 +398,7 @@ export function BaseMDXEditorModal({
           <button
             type="button"
             onClick={handleClose}
-            className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50"
+            className="px-4 py-2 border border-gray-300 dark:border-grey-04 rounded text-grey-01 dark:text-grey-12 hover:bg-gray-50 dark:hover:bg-grey-04"
             disabled={isSaving}
           >
             Cancel

@@ -272,24 +272,22 @@ body {
   max-height: var(--radix-select-content-available-height, 300px) !important;
 }
 
-/* MDXEditor dark-mode overrides.
- * The library sets `--basePageBg: white` on its `_editorRoot_*` element (hardcoded),
- * so the toolbar dropdowns and source-mode surface stay white even when .dark is set.
- * Remap the library's base tokens to our grey scale so content, toolbar, and popovers
- * match the surrounding modal chrome. Higher specificity (.dark .mdxeditor) wins over
- * the library's own _editorRoot declarations. */
-.dark .mdxeditor {
+/* MDXEditor dark mode.
+ * The library's Radix color palette (slate-*, blue-*, accent-*) flips automatically
+ * because our root .dark class matches Radix's `.dark, .dark-theme` selectors, so
+ * --baseBg, --baseText, --baseBorder, etc. all re-resolve to their dark values.
+ * The only token the library explicitly documents as needing a manual override is
+ * --basePageBg — see https://mdxeditor.dev/editor/docs/theming ("--basePageBg: black
+ * must be set explicitly; it is not automatic").
+ *
+ * The popup-container and select-content selectors cover portaled popovers (link
+ * dialog, image picker, block-type dropdown) which attach to document.body —
+ * siblings of .mdxeditor, not descendants, so a single .mdxeditor selector would
+ * miss them. See node_modules/@mdxeditor/editor/dist/MDXEditor.js:75-93. */
+.dark .mdxeditor,
+.dark .mdxeditor-popup-container,
+.dark .mdxeditor-select-content {
   --basePageBg: var(--color-grey-02);
-  --baseBase: var(--color-grey-02);
-  --baseBgSubtle: var(--color-grey-02);
-  --baseBg: var(--color-grey-03);
-  --baseBgHover: var(--color-grey-04);
-  --baseBgActive: var(--color-grey-04);
-  --baseLine: var(--color-grey-04);
-  --baseBorder: var(--color-grey-04);
-  --baseBorderHover: var(--color-grey-05);
-  --baseText: var(--color-grey-07);
-  --baseTextContrast: var(--color-grey-12);
 }
 
 /* Right panel (SidebarSection) breadcrumbs: prevent the parent-link label

@@ -2,6 +2,7 @@ import { BaseMDXEditor, BaseMDXEditorModal, type BaseMDXEditorModalProps, type B
 import type { MDXEditorMethods } from '@mdxeditor/editor';
 import type React from 'react';
 import { forwardRef, useMemo, useRef, useState } from 'react';
+import { useTheme } from '../../hooks/useTheme';
 import { Button, Select } from '../ui';
 import { contentBlockSnippets, getContentBlockTemplate, renderContentBlockTemplate } from './content-block-templates';
 import { ImagePickerDialog } from './ImagePickerDialog';
@@ -106,10 +107,19 @@ export interface CMSMDXEditorModalProps extends Omit<BaseMDXEditorModalProps, 'E
 export function CMSMDXEditorModal(props: CMSMDXEditorModalProps) {
   const { initialTemplateId, ...modalProps } = props;
 
+  // Apply the MDXEditor library's documented `dark-theme` class when our app is
+  // in dark mode. The library ships a Radix-backed color palette that only
+  // flips inside a `.dark, .dark-theme` scope on the editor element itself —
+  // setting `.dark` on <html> alone doesn't propagate because a separate
+  // CSS-Modules `:root` rule in the library CSS re-sets slate-* to light after
+  // the `.dark` rule in source order. See https://mdxeditor.dev/editor/docs/theming.
+  const { resolvedTheme } = useTheme();
+
   return (
     <BaseMDXEditorModal
       {...modalProps}
       EditorComponent={CMSMDXEditor}
+      editorClassName={resolvedTheme === 'dark' ? 'dark-theme' : undefined}
       headerTools={({ setContent, editorRef }) => (
         <CMSMDXHeaderTools
           setContent={setContent}
