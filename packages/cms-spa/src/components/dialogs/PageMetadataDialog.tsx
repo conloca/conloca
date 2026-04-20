@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { type PageSchemas, usePageSchemas } from '../../page-schemas';
 import type { PageMetadata } from '../../types';
 import { SchemaForm } from '../forms/SchemaForm';
+import { Button, IconButton } from '../ui';
 
 const pageInfoSchema = z.object({
   title: z.string().describe('Page title for SEO and browser tab'),
@@ -103,11 +104,11 @@ export function PageMetadataDialog({ open, onOpenChange, page, onSave }: PageMet
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-black/50 backdrop-blur-sm" />
-        <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-grey-03 rounded-lg shadow-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-overlay rounded-lg shadow-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
           <div className="flex items-center justify-between mb-4">
             <Dialog.Title className="text-lg font-semibold">Page Metadata</Dialog.Title>
-            <Dialog.Close className="p-1 hover:bg-grey-11 dark:hover:bg-grey-03 rounded-md">
-              <X className="h-4 w-4" />
+            <Dialog.Close asChild>
+              <IconButton icon={X} ariaLabel="Close" variant="ghost" />
             </Dialog.Close>
           </div>
 
@@ -126,14 +127,13 @@ export function PageMetadataDialog({ open, onOpenChange, page, onSave }: PageMet
             <SchemaForm className="mt-6" schema={seoPublishingSchema} values={formValues} onChange={setFormValues} />
 
             <div className="flex gap-2 pt-6">
-              <button
-                type="submit"
-                className="flex-1 px-4 py-2 bg-azure-04 text-white rounded-md hover:bg-azure-03 transition-colors"
-              >
+              <Button type="submit" variant="primary" className="flex-1">
                 Save
-              </button>
-              <Dialog.Close className="flex-1 px-4 py-2 border border-grey-09 dark:border-grey-03 rounded-md hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors">
-                Cancel
+              </Button>
+              <Dialog.Close asChild>
+                <Button variant="outline" className="flex-1">
+                  Cancel
+                </Button>
               </Dialog.Close>
             </div>
           </form>

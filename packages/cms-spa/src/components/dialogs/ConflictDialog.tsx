@@ -42,7 +42,7 @@ export function ConflictDialog({ conflict, onReload, onForceSave, onCancel }: Co
         role="dialog"
         aria-modal="true"
         aria-labelledby="conflict-dialog-title"
-        className="bg-white dark:bg-grey-03 rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto"
+        className="bg-overlay rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto"
       >
         <h2 id="conflict-dialog-title" className="text-2xl font-bold mb-4 text-grey-01 dark:text-grey-12">
           Conflict Detected
@@ -54,7 +54,7 @@ export function ConflictDialog({ conflict, onReload, onForceSave, onCancel }: Co
           </p>
 
           {conflictDetails && (
-            <div className="mt-4 p-4 bg-grey-12 dark:bg-grey-03 rounded-md">
+            <div className="mt-4 p-4 bg-subtle rounded-md">
               <h3 className="font-semibold mb-2 text-grey-01 dark:text-grey-12">Changes detected:</h3>
               {hasMetaChanges && hasContentChanges && (
                 <p data-testid="conflict-details">Both metadata and content have been modified.</p>

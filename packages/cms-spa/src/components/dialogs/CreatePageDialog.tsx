@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import type { CreatePageData } from '../../types';
 import { getUIConfig } from '../../ui-config';
 import { slugify } from '../../utils/slugify';
+import { Button, IconButton, Input, Select } from '../ui';
 
 interface CreatePageDialogProps {
   open: boolean;
@@ -107,18 +108,20 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
     onOpenChange?.(false);
   };
 
+  const pathError = Boolean(!isPathnameAvailable && path);
+
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-black/50 backdrop-blur-sm" />
         <Dialog.Content
-          className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-grey-03 rounded-lg shadow-lg p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto"
+          className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-overlay rounded-lg shadow-lg p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto"
           data-testid="create-page-dialog"
         >
           <div className="flex items-center justify-between mb-4">
             <Dialog.Title className="text-lg font-semibold">Create New Page</Dialog.Title>
-            <Dialog.Close className="p-1 hover:bg-grey-11 dark:hover:bg-grey-03 rounded-md">
-              <X className="h-4 w-4" />
+            <Dialog.Close asChild>
+              <IconButton icon={X} ariaLabel="Close" variant="ghost" />
             </Dialog.Close>
           </div>
 
@@ -127,12 +130,11 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
               <label htmlFor="title" className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
                 Title
               </label>
-              <input
+              <Input
                 id="title"
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.currentTarget.value)}
-                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded-md focus:outline-none focus:ring-2 focus:ring-azure-04"
                 required
                 data-testid="page-title-input"
               />
@@ -143,27 +145,23 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
                 URL Path
               </label>
               <div className="relative">
-                <input
+                <Input
                   id="path"
                   type="text"
                   value={path}
                   onChange={(e) => setPath(e.target.value)}
-                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 dark:bg-grey-03 dark:text-grey-12 ${
-                    !isPathnameAvailable && path
-                      ? 'border-red-04 focus:ring-red-04'
-                      : 'border-grey-09 dark:border-grey-03 focus:ring-azure-04'
-                  }`}
+                  error={pathError}
                   required
                   data-testid="page-path-input"
                 />
-                {!isPathnameAvailable && path && (
+                {pathError && (
                   <div className="absolute right-2 top-1/2 -translate-y-1/2">
                     <AlertCircle className="h-5 w-5 text-red-04" />
                   </div>
                 )}
               </div>
               <div className="h-5 mt-1">
-                {!isPathnameAvailable && path && <p className="text-sm text-red-04">This pathname is already in use</p>}
+                {pathError && <p className="text-sm text-red-04">This pathname is already in use</p>}
                 {pathnameLoading && showLoadingText && path && (
                   <p className="text-sm text-grey-04 dark:text-grey-07">Checking availability...</p>
                 )}
@@ -174,12 +172,7 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
               <label htmlFor="template" className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
                 Template
               </label>
-              <select
-                id="template"
-                value={template}
-                onChange={(e) => handleTemplateChange(e.target.value)}
-                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded-md focus:outline-none focus:ring-2 focus:ring-azure-04"
-              >
+              <Select id="template" value={template} onChange={(e) => handleTemplateChange(e.target.value)}>
                 <option value="blank">Blank</option>
                 {templateEntries.map(([key, templateConfig]) => (
                   <option key={key} value={key}>
@@ -187,36 +180,34 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
                     {templateConfig.description ? ` - ${templateConfig.description}` : ''}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
 
             <div>
               <label htmlFor="locale" className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
                 Primary Locale
               </label>
-              <select
-                id="locale"
-                value={locale}
-                onChange={(e) => setLocale(e.target.value)}
-                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded-md focus:outline-none focus:ring-2 focus:ring-azure-04"
-              >
+              <Select id="locale" value={locale} onChange={(e) => setLocale(e.target.value)}>
                 <option value="en">English</option>
                 <option value="nl">Dutch</option>
                 <option value="fr">French</option>
-              </select>
+              </Select>
             </div>
 
             <div className="flex gap-2 pt-4">
-              <button
+              <Button
                 type="submit"
+                variant="primary"
                 disabled={!isPathnameAvailable || pathnameLoading || !title || !path}
-                className="flex-1 px-4 py-2 bg-azure-04 text-white rounded-md hover:bg-azure-03 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1"
                 data-testid="create-page-submit"
               >
                 Create
-              </button>
-              <Dialog.Close className="flex-1 px-4 py-2 border border-grey-09 dark:border-grey-03 rounded-md hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors">
-                Cancel
+              </Button>
+              <Dialog.Close asChild>
+                <Button variant="outline" className="flex-1">
+                  Cancel
+                </Button>
               </Dialog.Close>
             </div>
           </form>

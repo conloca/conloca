@@ -2,6 +2,7 @@ import { Folder, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { type FolderTreeNode, useFolderTree } from '../../hooks';
 import { cn } from '../../utils/cn';
+import { Button, IconButton } from '../ui';
 
 interface MoveFolderDialogProps {
   isOpen: boolean;
@@ -34,7 +35,7 @@ function FolderOption({ node, depth, selectedFolder, currentFolder, onSelect }: 
           'w-full flex items-center gap-2 py-2 px-3 rounded-md text-sm transition-colors text-left text-grey-01 dark:text-grey-12',
           {
             'bg-azure-11 dark:bg-azure-02 text-azure-01 dark:text-azure-11 ring-1 ring-azure-04': isSelected,
-            'hover:bg-grey-11 dark:hover:bg-grey-03': !isSelected && !isDisabled,
+            'hover:bg-hover': !isSelected && !isDisabled,
             'opacity-50 cursor-not-allowed': isDisabled,
           },
         )}
@@ -103,20 +104,13 @@ export function MoveFolderDialog({
       role="dialog"
       onKeyDown={handleKeyDown}
     >
-      <div className="bg-white dark:bg-grey-03 rounded-lg w-full max-w-md shadow-xl" data-testid="move-folder-dialog">
+      <div className="bg-overlay rounded-lg w-full max-w-md shadow-xl" data-testid="move-folder-dialog">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-grey-09 dark:border-grey-03">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-line">
           <h2 className="text-lg font-semibold text-grey-01 dark:text-grey-12">
             Move {assetCount} asset{assetCount !== 1 ? 's' : ''}
           </h2>
-          <button
-            type="button"
-            onClick={onCancel}
-            className="p-1 rounded-md hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
-            disabled={isMoving}
-          >
-            <X className="w-5 h-5 text-grey-04 dark:text-grey-07" />
-          </button>
+          <IconButton icon={X} ariaLabel="Cancel" onClick={onCancel} variant="ghost" />
         </div>
 
         {/* Folder list */}
@@ -135,7 +129,7 @@ export function MoveFolderDialog({
                   {
                     'bg-azure-11 dark:bg-azure-02 text-azure-01 dark:text-azure-11 ring-1 ring-azure-04':
                       selectedFolder === '/',
-                    'hover:bg-grey-11 dark:hover:bg-grey-03': selectedFolder !== '/' && currentFolder !== '/',
+                    'hover:bg-hover': selectedFolder !== '/' && currentFolder !== '/',
                     'opacity-50 cursor-not-allowed': currentFolder === '/',
                   },
                 )}
@@ -167,27 +161,13 @@ export function MoveFolderDialog({
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end gap-3 px-6 py-4 border-t border-grey-09 dark:border-grey-03">
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={isMoving}
-            className="px-4 py-2 border border-grey-09 dark:border-grey-03 rounded-md text-grey-01 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors disabled:opacity-50"
-          >
+        <div className="flex justify-end gap-3 px-6 py-4 border-t border-line">
+          <Button variant="outline" onClick={onCancel} disabled={isMoving}>
             Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleMove}
-            disabled={!canMove || isMoving}
-            className={cn(
-              'px-4 py-2 rounded-md transition-colors',
-              'bg-azure-04 text-white hover:bg-azure-03',
-              'disabled:opacity-50 disabled:cursor-not-allowed',
-            )}
-          >
+          </Button>
+          <Button variant="primary" onClick={handleMove} disabled={!canMove || isMoving}>
             {isMoving ? 'Moving...' : 'Move'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

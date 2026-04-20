@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Button, Input } from '../ui';
 
 interface CreateFolderDialogProps {
   open: boolean;
@@ -44,40 +45,34 @@ export function CreateFolderDialog({ open, isPending, onClose, onCreate }: Creat
       role="dialog"
       onKeyDown={handleKeyDown}
     >
-      <div className="bg-white dark:bg-grey-03 rounded-lg p-6 w-full max-w-md" data-testid="create-folder-dialog">
+      <div className="bg-overlay rounded-lg p-6 w-full max-w-md" data-testid="create-folder-dialog">
         <h2 className="text-xl font-semibold text-grey-01 dark:text-grey-12 mb-4">Create New Folder</h2>
         <div className="mb-4">
           <label htmlFor="folder-name" className="block text-sm font-medium text-grey-01 dark:text-grey-12 mb-2">
             Folder Name
           </label>
-          <input
+          <Input
             ref={inputRef}
             id="folder-name"
             type="text"
             value={folderName}
             onChange={(e) => setFolderName(e.target.value)}
             placeholder="Enter folder name"
-            className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded-md focus:outline-none focus:ring-2 focus:ring-azure-04"
             data-testid="folder-name-input"
           />
         </div>
         <div className="flex justify-end gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 border border-grey-09 dark:border-grey-03 rounded-md hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
-          >
+          <Button variant="outline" onClick={onClose}>
             Cancel
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="primary"
             onClick={handleCreate}
             disabled={!isValid || isPending}
-            className="px-4 py-2 bg-azure-04 text-white rounded-md hover:bg-azure-03 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             data-testid="create-folder-submit"
           >
             {isPending ? 'Creating...' : 'Create'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

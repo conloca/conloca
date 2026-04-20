@@ -1,6 +1,7 @@
 import { type DataEditable, dataEditableSchema } from '@conloca/content-api-client';
 import { useEffect, useMemo, useState } from 'react';
 import { SchemaForm } from '../forms/SchemaForm';
+import { Button } from '../ui';
 
 interface DataPropertiesDialogProps {
   initialMeta: DataEditable;
@@ -57,7 +58,7 @@ export function DataPropertiesDialog({ initialMeta, isPending, onClose, onSave }
       role="dialog"
       onKeyDown={handleKeyDown}
     >
-      <div className="bg-white dark:bg-grey-03 rounded-lg p-6 w-full max-w-md" data-testid="properties-dialog">
+      <div className="bg-overlay rounded-lg p-6 w-full max-w-md" data-testid="properties-dialog">
         <h2 className="text-xl font-semibold text-grey-01 dark:text-grey-12 mb-4">Edit Data Properties</h2>
 
         <div className="mb-4">
@@ -65,21 +66,17 @@ export function DataPropertiesDialog({ initialMeta, isPending, onClose, onSave }
         </div>
 
         <div className="flex justify-end gap-3">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 border border-grey-09 dark:border-grey-03 rounded-md hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
-            disabled={isPending}
-          >
+          <Button variant="outline" onClick={onClose} disabled={isPending}>
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="primary"
             onClick={handleSave}
             disabled={!canSave || isPending}
-            className="px-4 py-2 bg-azure-04 text-white rounded-md hover:bg-azure-03 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             data-testid="save-properties-submit"
           >
             {isPending ? 'Saving...' : 'Save'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

@@ -1,3 +1,5 @@
+import { Button } from '../ui';
+
 interface DeleteConfirmDialogProps {
   isOpen: boolean;
   onConfirm: () => void;
@@ -21,7 +23,7 @@ export function DeleteConfirmDialog({
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-grey-03 rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+      <div className="bg-overlay rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
         <h2 className="text-xl font-bold mb-4 text-grey-01 dark:text-grey-12">{title}</h2>
 
         <div className="mb-6">
@@ -39,20 +41,10 @@ export function DeleteConfirmDialog({
         </div>
 
         <div className="flex gap-3 justify-end">
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={isDeleting}
-            className="px-4 py-2 border border-grey-09 dark:border-grey-03 rounded-md text-grey-01 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors disabled:opacity-50"
-          >
+          <Button variant="outline" onClick={onCancel} disabled={isDeleting}>
             Cancel
-          </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            disabled={isDeleting}
-            className="px-4 py-2 bg-red-04 text-white rounded-md hover:bg-red-03 transition-colors disabled:opacity-50 flex items-center gap-2"
-          >
+          </Button>
+          <Button variant="destructive" onClick={onConfirm} disabled={isDeleting} className="flex items-center gap-2">
             {isDeleting ? (
               <>
                 <span className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
@@ -61,7 +53,7 @@ export function DeleteConfirmDialog({
             ) : (
               'Confirm Delete'
             )}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
