@@ -22,6 +22,7 @@ import {
   getContentBlockTemplate,
   renderContentBlockTemplate,
 } from '../editor/content-block-templates';
+import { Button, Input, Select } from '../ui';
 
 export function BlockList() {
   const [selectedCategory, setSelectedCategory] = useState<string | 'all'>('all');
@@ -366,17 +367,13 @@ export function BlockList() {
         <h1 className="text-2xl font-semibold text-grey-01 dark:text-grey-12">Blocks</h1>
         <div className="flex items-center gap-4">
           {categories.length > 2 && (
-            <select
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              className="px-3 py-2 border border-grey-09 dark:border-grey-03 rounded-md bg-white dark:bg-grey-03 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-04 transition-colors"
-            >
+            <Select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} className="w-auto">
               {categories.map((cat) => (
                 <option key={cat} value={cat}>
                   {cat === 'all' ? 'All Categories' : cat}
                 </option>
               ))}
-            </select>
+            </Select>
           )}
           <button
             onClick={handleNewBlock}
@@ -416,7 +413,7 @@ export function BlockList() {
           {filteredBlocks.map((block) => (
             <div
               key={block.id}
-              className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 rounded-md p-4 hover:border-azure-04 transition-colors"
+              className="bg-white dark:bg-grey-02 border border-line rounded-md p-4 hover:border-azure-04 transition-colors"
             >
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-2">
@@ -451,14 +448,14 @@ export function BlockList() {
                 <div className="flex gap-2 relative">
                   <button
                     onClick={() => handleEditBlock(block.id)}
-                    className="p-1 hover:bg-grey-11 dark:hover:bg-grey-03 rounded-md transition-colors"
+                    className="p-1 hover:bg-hover rounded-md transition-colors"
                     title="Edit block content"
                   >
                     <Edit2 className="h-4 w-4 text-azure-04" />
                   </button>
                   <button
                     onClick={() => setOpenMenuId(openMenuId === block.id ? null : block.id)}
-                    className="p-1 hover:bg-grey-11 dark:hover:bg-grey-03 rounded-md transition-colors"
+                    className="p-1 hover:bg-hover rounded-md transition-colors"
                     title="More actions"
                     aria-label="More actions"
                   >
@@ -469,14 +466,14 @@ export function BlockList() {
                   {openMenuId === block.id && (
                     <div
                       ref={menuRef}
-                      className="absolute right-0 top-8 w-48 bg-white dark:bg-grey-03 border border-grey-09 dark:border-grey-03 rounded-md shadow-lg z-10"
+                      className="absolute right-0 top-8 w-48 bg-overlay border border-line rounded-md shadow-lg z-10"
                     >
                       <button
                         onClick={() => {
                           handleEditProperties(block.id);
                           setOpenMenuId(null);
                         }}
-                        className="w-full px-4 py-2 text-left flex items-center gap-2 hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
+                        className="w-full px-4 py-2 text-left flex items-center gap-2 hover:bg-hover transition-colors"
                       >
                         <Settings className="h-4 w-4 text-grey-04 dark:text-grey-07" />
                         <span>Properties</span>
@@ -486,12 +483,12 @@ export function BlockList() {
                           handleRenameBlock(block.id);
                           setOpenMenuId(null);
                         }}
-                        className="w-full px-4 py-2 text-left flex items-center gap-2 hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
+                        className="w-full px-4 py-2 text-left flex items-center gap-2 hover:bg-hover transition-colors"
                       >
                         <FileEdit className="h-4 w-4 text-grey-04 dark:text-grey-07" />
                         <span>Rename</span>
                       </button>
-                      <div className="border-t border-grey-09 dark:border-grey-03 my-1" />
+                      <div className="border-t border-line my-1" />
                       <button
                         onClick={() => {
                           handleDeleteBlock(block.id);
@@ -519,7 +516,7 @@ export function BlockList() {
           aria-modal="true"
           aria-labelledby="create-block-dialog-title"
         >
-          <div className="bg-white dark:bg-grey-03 rounded-lg p-6 w-full max-w-md" data-testid="create-block-dialog">
+          <div className="bg-overlay rounded-lg p-6 w-full max-w-md" data-testid="create-block-dialog">
             <h2 id="create-block-dialog-title" className="text-xl font-semibold text-grey-01 dark:text-grey-12 mb-4">
               Create New Block
             </h2>
@@ -527,7 +524,7 @@ export function BlockList() {
               <label htmlFor="block-title" className="block text-sm font-medium mb-2 text-grey-01 dark:text-grey-12">
                 Block Title
               </label>
-              <input
+              <Input
                 id="block-title"
                 type="text"
                 value={titleInput}
@@ -539,7 +536,6 @@ export function BlockList() {
                   }
                 }}
                 placeholder="Enter block title..."
-                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded-md focus:outline-none focus:ring-2 focus:ring-azure-04"
                 autoFocus
                 data-testid="block-title-input"
               />
@@ -551,37 +547,33 @@ export function BlockList() {
               <label htmlFor="block-template" className="block text-sm font-medium mb-2 text-grey-01 dark:text-grey-12">
                 Starter Template
               </label>
-              <select
+              <Select
                 id="block-template"
                 value={selectedTemplateId}
                 onChange={(e) => setSelectedTemplateId(e.target.value)}
-                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 bg-white dark:bg-grey-03 dark:text-grey-12 rounded-md focus:outline-none focus:ring-2 focus:ring-azure-04"
               >
                 {contentBlockTemplates.map((template) => (
                   <option key={template.id} value={template.id}>
                     {template.label}
                   </option>
                 ))}
-              </select>
+              </Select>
               <p className="mt-2 text-sm text-grey-04 dark:text-grey-07">
                 {getContentBlockTemplate(selectedTemplateId)?.description}
               </p>
             </div>
             <div className="flex justify-end gap-3">
-              <button
-                onClick={closeCreateDialog}
-                className="px-4 py-2 border border-grey-09 dark:border-grey-03 rounded-md hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
-              >
+              <Button variant="outline" onClick={closeCreateDialog}>
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="primary"
                 onClick={handleCreateBlock}
                 disabled={!titleInput.trim()}
-                className="px-4 py-2 bg-azure-04 text-white rounded-md hover:bg-azure-03 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 data-testid="create-block-submit"
               >
                 Continue
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -611,7 +603,7 @@ export function BlockList() {
             }
           }}
         >
-          <div className="bg-white dark:bg-grey-03 rounded-lg p-6 w-full max-w-md" data-testid="rename-block-dialog">
+          <div className="bg-overlay rounded-lg p-6 w-full max-w-md" data-testid="rename-block-dialog">
             <h2 id="rename-block-dialog-title" className="text-xl font-semibold text-grey-01 dark:text-grey-12 mb-4">
               Rename Block
             </h2>
@@ -619,7 +611,7 @@ export function BlockList() {
               <label htmlFor="block-name" className="block text-sm font-medium mb-2 text-grey-01 dark:text-grey-12">
                 Block Name (filename)
               </label>
-              <input
+              <Input
                 id="block-name"
                 type="text"
                 value={newName}
@@ -631,7 +623,6 @@ export function BlockList() {
                   }
                 }}
                 placeholder="Enter new block name..."
-                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded-md focus:outline-none focus:ring-2 focus:ring-azure-04"
                 autoFocus
                 data-testid="block-name-input"
               />
@@ -640,24 +631,24 @@ export function BlockList() {
               </p>
             </div>
             <div className="flex justify-end gap-3">
-              <button
+              <Button
+                variant="outline"
                 onClick={() => {
                   closeRenameDialog();
                   setNewName('');
                 }}
-                className="px-4 py-2 border border-grey-09 dark:border-grey-03 rounded-md hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
                 disabled={updateLocalized.isPending}
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="primary"
                 onClick={handleConfirmRename}
                 disabled={!newName || newName === renameDialog.currentName || updateLocalized.isPending}
-                className="px-4 py-2 bg-azure-04 text-white rounded-md hover:bg-azure-03 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 data-testid="rename-block-submit"
               >
                 {updateLocalized.isPending ? 'Renaming...' : 'Rename'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

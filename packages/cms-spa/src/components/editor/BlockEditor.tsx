@@ -147,7 +147,7 @@ export function BlockEditor() {
   if (isLoading) {
     return (
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-        <div className="bg-white dark:bg-grey-03 rounded-lg p-6 shadow-lg">
+        <div className="bg-overlay rounded-lg p-6 shadow-lg">
           <div className="flex items-center gap-3">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-azure-04" />
             <span className="text-grey-04 dark:text-grey-07">Loading block...</span>
@@ -161,7 +161,7 @@ export function BlockEditor() {
   if (error && !content && !currentContentRef.current) {
     return (
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-        <div className="bg-white dark:bg-grey-03 rounded-lg p-6 shadow-lg max-w-md">
+        <div className="bg-overlay rounded-lg p-6 shadow-lg max-w-md">
           <div className="text-red-04 mb-4">Failed to load block: {error?.message || 'Not found'}</div>
           <button
             onClick={() => navigate('/blocks')}

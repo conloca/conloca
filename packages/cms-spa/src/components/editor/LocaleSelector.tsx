@@ -25,10 +25,7 @@ export function LocaleSelector({
       </Select.Trigger>
 
       <Select.Portal>
-        <Select.Content
-          className="bg-white dark:bg-grey-03 border border-grey-09 dark:border-grey-03 rounded-md shadow-md"
-          style={{ zIndex: 100 }}
-        >
+        <Select.Content className="bg-overlay border border-line rounded-md shadow-md" style={{ zIndex: 100 }}>
           <Select.Viewport className="p-1">
             {availableLocales.map((locale) => {
               const isCurrent = locale === currentLocale;
@@ -41,7 +38,7 @@ export function LocaleSelector({
                   className={cn(
                     'px-3 py-2 rounded-md cursor-pointer outline-none transition-colors',
                     isCurrent && 'bg-azure-04 text-white',
-                    !isCurrent && !isMissing && 'hover:bg-grey-11 dark:hover:bg-grey-03',
+                    !isCurrent && !isMissing && 'hover:bg-hover',
                     isMissing && 'text-grey-04 dark:text-grey-07',
                   )}
                   data-testid={`locale-option-${locale}`}

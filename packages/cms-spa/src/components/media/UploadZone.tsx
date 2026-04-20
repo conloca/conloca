@@ -34,7 +34,7 @@ export function UploadZone({ folder = '/', onUploadComplete }: UploadZoneProps) 
   } = useUploadFlow({ folder, onUploadComplete });
 
   return (
-    <div className="border border-grey-09 dark:border-grey-03 rounded-lg bg-grey-11 dark:bg-grey-03 p-4">
+    <div className="border border-line rounded-lg bg-grey-11 dark:bg-grey-03 p-4">
       {/* Tabs */}
       <div className="flex gap-2 mb-3">
         <button
@@ -44,7 +44,7 @@ export function UploadZone({ folder = '/', onUploadComplete }: UploadZoneProps) 
             'px-3 py-1 text-sm rounded-md transition-colors',
             activeTab === 'file'
               ? 'bg-azure-04 text-white'
-              : 'bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 text-grey-04 dark:text-grey-07 hover:bg-grey-11 dark:hover:bg-grey-03',
+              : 'bg-white dark:bg-grey-02 border border-line text-grey-04 dark:text-grey-07 hover:bg-hover',
           )}
         >
           Upload File
@@ -56,7 +56,7 @@ export function UploadZone({ folder = '/', onUploadComplete }: UploadZoneProps) 
             'px-3 py-1 text-sm rounded-md transition-colors',
             activeTab === 'url'
               ? 'bg-azure-04 text-white'
-              : 'bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 text-grey-04 dark:text-grey-07 hover:bg-grey-11 dark:hover:bg-grey-03',
+              : 'bg-white dark:bg-grey-02 border border-line text-grey-04 dark:text-grey-07 hover:bg-hover',
           )}
         >
           Import URL
@@ -67,7 +67,7 @@ export function UploadZone({ folder = '/', onUploadComplete }: UploadZoneProps) 
         <>
           {/* Multi-file upload progress */}
           {uploadProgress && (
-            <div className="mb-4 p-3 bg-white dark:bg-grey-02 rounded-md border border-grey-09 dark:border-grey-03">
+            <div className="mb-4 p-3 bg-white dark:bg-grey-02 rounded-md border border-line">
               <p className="text-sm font-medium text-grey-01 dark:text-grey-12">
                 {uploadProgress.inProgress
                   ? `Uploading ${uploadProgress.total} files...`
@@ -104,7 +104,7 @@ export function UploadZone({ folder = '/', onUploadComplete }: UploadZoneProps) 
                 value={altText}
                 onChange={(e) => setAltText(e.target.value)}
                 placeholder="Alt text (recommended for accessibility)"
-                className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-azure-04"
+                className="w-full px-3 py-2 border border-line bg-panel dark:text-grey-12 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-azure-04"
               />
 
               <div className="flex gap-2">
@@ -120,7 +120,7 @@ export function UploadZone({ folder = '/', onUploadComplete }: UploadZoneProps) 
                   type="button"
                   onClick={handleCancel}
                   disabled={isUploading}
-                  className="px-4 py-2 bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 text-grey-04 dark:text-grey-07 text-sm rounded-md hover:bg-grey-11 dark:hover:bg-grey-03 disabled:opacity-50 transition-colors"
+                  className="px-4 py-2 bg-white dark:bg-grey-02 border border-line text-grey-04 dark:text-grey-07 text-sm rounded-md hover:bg-hover disabled:opacity-50 transition-colors"
                 >
                   Cancel
                 </button>
@@ -185,14 +185,14 @@ export function UploadZone({ folder = '/', onUploadComplete }: UploadZoneProps) 
             value={importUrl}
             onChange={(e) => setImportUrl(e.target.value)}
             placeholder="https://example.com/image.jpg"
-            className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-azure-04"
+            className="w-full px-3 py-2 border border-line bg-panel dark:text-grey-12 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-azure-04"
           />
           <input
             type="text"
             value={altText}
             onChange={(e) => setAltText(e.target.value)}
             placeholder="Alt text (recommended for accessibility)"
-            className="w-full px-3 py-2 border border-grey-09 dark:border-grey-03 dark:bg-grey-03 dark:text-grey-12 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-azure-04"
+            className="w-full px-3 py-2 border border-line bg-panel dark:text-grey-12 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-azure-04"
           />
           <button
             type="button"
