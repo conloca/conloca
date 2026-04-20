@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [private]
   pull_request:
 
 permissions:
@@ -92,16 +92,7 @@ jobs:
       - uses: nrwl/nx-set-shas@15514ee4353489ef5a1644bcdae44f0ae2ea45f3 # v4.4.0
         with:
           main-branch-name: private
-
-      - name: Normalize Nx SHAs
-        run: |
-          if [ -z "${NX_BASE:-}" ]; then
-            echo 'NX_BASE=origin/private' >> "$GITHUB_ENV"
-          fi
-
-          if [ -z "${NX_HEAD:-}" ]; then
-            echo "NX_HEAD=${GITHUB_SHA}" >> "$GITHUB_ENV"
-          fi
+          fallback-sha: ${{ github.event.pull_request.base.sha || github.event.before }}
 
       # Step 11
       - name: Cache Nx
@@ -113,7 +104,7 @@ jobs:
             ${{ runner.os }}-nx-
 
       # Steps 12-14 use nx-smart:
-      #  - push to main  -> nx run-many (full coverage; narrow CI-only commits
+      #  - push to private -> nx run-many (full coverage; narrow CI-only commits
       #                      cannot silently mask regressions in untouched
       #                      projects whose results are cache-green).
       #  - pull_request  -> nx affected over the full PR range (base..HEAD),

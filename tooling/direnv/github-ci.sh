@@ -186,7 +186,7 @@ run_nx_affected() {
 }
 
 # Function to run nx with smart target selection:
-#  - On push to main: run-many (full coverage, cache-honored). Prevents
+#  - On push to private: run-many (full coverage, cache-honored). Prevents
 #    narrow "CI-only" commits (release bumps, devenv tweaks) from silently
 #    masking pre-existing breakage in untouched projects.
 #  - Otherwise (PRs, other branches): affected. nrwl/nx-set-shas sets
@@ -206,7 +206,7 @@ run_nx_smart() {
     create_status "$check_name" "$step_number"
 
     local mode="affected"
-    if [ "${GITHUB_EVENT_NAME:-}" = "push" ] && [ "${GITHUB_REF_NAME:-}" = "main" ]; then
+    if [ "${GITHUB_EVENT_NAME:-}" = "push" ] && [ "${GITHUB_REF_NAME:-}" = "private" ]; then
         mode="run-many"
     fi
 
