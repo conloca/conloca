@@ -63,8 +63,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   return <ThemeContext.Provider value={{ theme, resolvedTheme, setTheme }}>{children}</ThemeContext.Provider>;
 }
 
+const NOOP_THEME: ThemeContextValue = {
+  theme: 'system',
+  resolvedTheme: 'light',
+  setTheme: () => {},
+};
+
 export function useTheme(): ThemeContextValue {
-  const ctx = useContext(ThemeContext);
-  if (!ctx) throw new Error('useTheme must be used within ThemeProvider');
-  return ctx;
+  return useContext(ThemeContext) ?? NOOP_THEME;
 }
