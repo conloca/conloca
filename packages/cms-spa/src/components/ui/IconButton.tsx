@@ -3,7 +3,7 @@ import { cn } from '../../utils/cn';
 
 interface IconButtonProps {
   icon: LucideIcon;
-  onClick: () => void;
+  onClick?: () => void;
   ariaLabel: string;
   title?: string;
   className?: string;
@@ -22,10 +22,8 @@ export function IconButton({
 }: IconButtonProps) {
   const baseClasses = 'p-2 rounded-md transition-all duration-150 cursor-pointer';
   const variantClasses = {
-    default:
-      'text-grey-03 hover:bg-grey-10 hover:text-grey-01 dark:text-grey-09 dark:hover:bg-grey-03 dark:hover:text-grey-12',
-    ghost:
-      'text-grey-04 hover:bg-grey-11 hover:text-grey-01 dark:text-grey-07 dark:hover:bg-grey-03 dark:hover:text-grey-12',
+    default: 'text-grey-03 dark:text-grey-09 hover:bg-hover hover:text-grey-01 dark:hover:text-grey-12',
+    ghost: 'text-grey-04 dark:text-grey-07 hover:bg-hover hover:text-grey-01 dark:hover:text-grey-12',
   };
 
   return (

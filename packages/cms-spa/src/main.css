@@ -74,6 +74,37 @@
   --color-yellow-12: #fcfaf0;
 }
 
+/* Semantic surface tokens — flip in .dark block below.
+ * These are the only colors components should reach for when building
+ * dialogs, panels, inputs, borders, and hover states. Raw grey-* palette
+ * usage in new components creates dark-mode contrast bugs. */
+:root {
+  --color-overlay: #ffffff; /* dialog/modal surface */
+  --color-panel: #ffffff; /* input bg, outline-button bg, side panels */
+  --color-subtle: #f5f5f5; /* recessed footer wash, info callouts */
+  --color-line: #dcdcdc; /* borders and dividers */
+  --color-hover: #f5f5f5; /* hover bg for ghost buttons, menu items */
+}
+
+/* Semantic utilities — defined explicitly so they're guaranteed in the
+ * generated CSS regardless of JIT scan state. Light/dark flip via the
+ * :root vs .dark override of the tokens above. */
+@utility bg-overlay {
+  background-color: var(--color-overlay);
+}
+@utility bg-panel {
+  background-color: var(--color-panel);
+}
+@utility bg-subtle {
+  background-color: var(--color-subtle);
+}
+@utility bg-hover {
+  background-color: var(--color-hover);
+}
+@utility border-line {
+  border-color: var(--color-line);
+}
+
 /* Dark mode: selector strategy for manual toggle + system preference.
  * Uses :is() (not :where()) so dark variants beat the conloca.com
  * website Tailwind that gets injected into /__cms — its plain .bg-white
@@ -155,6 +186,14 @@ body {
   --puck-color-azure-10: #0f1d3d;
   --puck-color-azure-11: #0a1530;
   --puck-color-azure-12: #060e22;
+
+  /* Semantic surface tokens — dark-mode values.
+   * Keep in sync with the light-mode values inside @theme above. */
+  --color-overlay: var(--color-grey-03); /* #404040 */
+  --color-panel: var(--color-grey-02);   /* #292929 */
+  --color-subtle: var(--color-grey-02);  /* #292929 */
+  --color-line: var(--color-grey-04);    /* #5a5a5a */
+  --color-hover: var(--color-grey-04);   /* #5a5a5a */
 
   color-scheme: dark;
   color: var(--color-grey-12);
