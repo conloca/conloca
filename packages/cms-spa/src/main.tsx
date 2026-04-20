@@ -4,6 +4,7 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import App from './App';
+import { CanvasThemeProvider } from './hooks/useCanvasTheme';
 import { ThemeProvider } from './hooks/useTheme';
 import { getUIConfig } from './ui-config';
 
@@ -25,9 +26,11 @@ const root = createRoot(document.getElementById('root')!);
 root.render(
   <QueryClientProvider client={queryClient}>
     <ThemeProvider>
-      <BrowserRouter basename={config.basename}>
-        <App />
-      </BrowserRouter>
+      <CanvasThemeProvider>
+        <BrowserRouter basename={config.basename}>
+          <App />
+        </BrowserRouter>
+      </CanvasThemeProvider>
     </ThemeProvider>
     {config.enableDevtools && <ReactQueryDevtools initialIsOpen={false} />}
   </QueryClientProvider>,

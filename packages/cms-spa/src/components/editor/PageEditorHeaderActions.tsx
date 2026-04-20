@@ -1,9 +1,24 @@
-import { AlertTriangle, Check, Eye, Save, Settings, X } from 'lucide-react';
+import { AlertTriangle, Check, Eye, Moon, Save, Settings, Sun, X } from 'lucide-react';
+import { useCanvasTheme } from '../../hooks/useCanvasTheme';
 import type { SaveState } from '../../types';
 import { cn } from '../../utils/cn';
 import { IconButton } from '../ui/IconButton';
 import { Separator } from '../ui/Separator';
 import { LocaleSelector } from './LocaleSelector';
+
+function CanvasThemeToggle() {
+  const { canvasTheme, toggleCanvasTheme } = useCanvasTheme();
+  const Icon = canvasTheme === 'dark' ? Moon : Sun;
+  const next = canvasTheme === 'dark' ? 'light' : 'dark';
+  return (
+    <IconButton
+      icon={Icon}
+      onClick={toggleCanvasTheme}
+      ariaLabel={`Canvas theme: ${canvasTheme} (click for ${next})`}
+      title={`Switch canvas to ${next} theme`}
+    />
+  );
+}
 
 interface PageEditorHeaderActionsProps {
   onPublish?: () => void;
@@ -53,6 +68,7 @@ export function PageEditorHeaderActions({
           <Eye className="h-3.5 w-3.5" />
           Preview
         </button>
+        <CanvasThemeToggle />
       </div>
 
       {/* Separator */}

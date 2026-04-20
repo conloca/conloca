@@ -7,6 +7,7 @@ export default defineConfig({
     'puck-config': 'src/puck-config.ts',
     'page-schemas': 'src/page-schemas.ts',
     'data-schemas': 'src/data-schemas.ts',
+    'site-styles': 'src/site-styles.ts',
   },
   format: ['esm'],
   dts: true,

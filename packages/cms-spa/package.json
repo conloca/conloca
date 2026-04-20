@@ -35,6 +35,11 @@
       "import": "./dist/puck-config.mjs",
       "default": "./dist/puck-config.mjs"
     },
+    "./site-styles": {
+      "types": "./dist/site-styles.d.ts",
+      "import": "./dist/site-styles.mjs",
+      "default": "./dist/site-styles.mjs"
+    },
     "./main": {
       "import": "./dist/main.mjs",
       "default": "./dist/main.mjs"
