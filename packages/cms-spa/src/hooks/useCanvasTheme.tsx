@@ -41,8 +41,12 @@ export function CanvasThemeProvider({ children }: { children: React.ReactNode })
   );
 }
 
+const NOOP_CANVAS_THEME: CanvasThemeContextValue = {
+  canvasTheme: 'light',
+  setCanvasTheme: () => {},
+  toggleCanvasTheme: () => {},
+};
+
 export function useCanvasTheme(): CanvasThemeContextValue {
-  const ctx = useContext(CanvasThemeContext);
-  if (!ctx) throw new Error('useCanvasTheme must be used within CanvasThemeProvider');
-  return ctx;
+  return useContext(CanvasThemeContext) ?? NOOP_CANVAS_THEME;
 }
