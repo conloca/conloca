@@ -1,11 +1,15 @@
 import {
   getContentAPIClient,
+  type UpdateResult,
   useLocalizedContent,
   useSitesConfig,
   useUpdateLocalized,
 } from '@conloca/content-api-client';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useErrorModal } from '../../hooks/useErrorModal';
+import { ConflictDialog } from '../dialogs/ConflictDialog';
+import { ErrorModal } from '../dialogs/ErrorModal';
 import { UnsavedChangesDialog } from '../dialogs/UnsavedChangesDialog';
 import { CMSMDXEditorModal } from './CMSMDXEditor';
 import { LocaleSelector } from './LocaleSelector';
@@ -23,6 +27,12 @@ export function BlockEditor() {
   const [currentEtag, setCurrentEtag] = useState<string>('');
   const [pendingLocaleSwitch, setPendingLocaleSwitch] = useState<string | null>(null);
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
+
+  // Save-error feedback — mirror PageEditor.tsx:82-105 (ConflictDialog on stale
+  // writes, ErrorModal on other save failures). Without these the user gets no
+  // signal that a save failed beyond the MDX modal silently staying open.
+  const [conflict, setConflict] = useState<UpdateResult | null>(null);
+  const { showError, errorModalProps } = useErrorModal();
 
   // Track current content to check if dirty
   const currentContentRef = useRef<string>('');
@@ -43,7 +53,7 @@ export function BlockEditor() {
     }
   }, [content]);
 
-  const handleSave = async (newContent: string) => {
+  const handleSave = async (newContent: string, forceEtag?: string) => {
     if (!id) return;
 
     try {
@@ -53,21 +63,30 @@ export function BlockEditor() {
         data: {
           content: { mdx: newContent },
         },
-        etag: currentEtag,
+        etag: forceEtag ?? currentEtag,
       });
 
       if (result.success && result.etag) {
         setCurrentEtag(result.etag); // Update etag for next save
         currentContentRef.current = newContent; // Update tracked content
-      } else if (result.reason === 'stale_write') {
-        // TODO: Show conflict resolution UI
-        throw new Error('Content was modified by another user. Please reload and try again.');
-      } else {
-        throw new Error(`Save failed: ${result.reason}`);
+        return;
       }
+
+      if (result.reason === 'stale_write') {
+        // Open the conflict dialog and keep the MDX modal open by throwing.
+        // The MDX modal's own handleSave only calls handleClose() on success;
+        // a thrown error leaves the editor open so the user can resolve.
+        setConflict(result);
+        throw new Error('Save rejected: stale write (conflict dialog opened)');
+      }
+
+      throw new Error(`Save failed: ${result.reason}`);
     } catch (error) {
-      console.error('Failed to save block:', error);
-      // TODO: Show error notification
+      // Don't surface an error modal if we already handed off to ConflictDialog.
+      if (!(error instanceof Error && error.message.startsWith('Save rejected: stale write'))) {
+        console.error('Failed to save block:', error);
+        showError('Failed to save block', error);
+      }
       throw error;
     }
   };
@@ -202,6 +221,28 @@ export function BlockEditor() {
           onCancel={handleUnsavedDialogCancel}
         />
       )}
+      {conflict && conflict.reason === 'stale_write' && (
+        <ConflictDialog
+          conflict={conflict}
+          onReload={() => {
+            setConflict(null);
+            // Simplest recovery: full reload drops local MDX edits. The dialog
+            // explicitly warns the user before triggering this branch.
+            window.location.reload();
+          }}
+          onForceSave={async (newEtag) => {
+            setConflict(null);
+            setCurrentEtag(newEtag);
+            try {
+              await handleSave(currentContentRef.current, newEtag);
+            } catch {
+              // Errors already surfaced via showError inside handleSave.
+            }
+          }}
+          onCancel={() => setConflict(null)}
+        />
+      )}
+      <ErrorModal {...errorModalProps} title="Save Failed" />
     </>
   );
 }
