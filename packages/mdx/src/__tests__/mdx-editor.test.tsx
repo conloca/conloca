@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
+import { GenericJsxEditor, type JsxComponentDescriptor } from '@mdxeditor/editor';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { MDXEditor, MDXEditorModal } from '../index';
@@ -216,6 +217,14 @@ describe('MDXEditor', () => {
   });
 
   describe('MDX editor plugins', () => {
+    const buttonDescriptor: JsxComponentDescriptor = {
+      name: 'Button',
+      kind: 'text',
+      hasChildren: true,
+      props: [{ name: 'variant', type: 'string' }],
+      Editor: GenericJsxEditor,
+    };
+
     test('includes essential markdown plugins', async () => {
       const { container } = render(<MDXEditor value="# Test" onChange={() => {}} />);
 
@@ -247,7 +256,7 @@ describe('MDXEditor', () => {
 
 Some regular markdown.`;
 
-      render(<MDXEditor value={mdxContent} onChange={() => {}} />);
+      render(<MDXEditor value={mdxContent} onChange={() => {}} jsxComponentDescriptors={[buttonDescriptor]} />);
 
       // The editor should render JSX components without errors
       expect(await screen.findByText('Hello')).toBeDefined();

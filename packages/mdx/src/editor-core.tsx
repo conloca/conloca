@@ -13,6 +13,7 @@ import {
   InsertTable,
   InsertThematicBreak,
   imagePlugin,
+  type JsxComponentDescriptor,
   jsxPlugin,
   ListsToggle,
   linkDialogPlugin,
@@ -40,6 +41,7 @@ export interface BaseMDXEditorProps {
   disableImageSettingsButton?: boolean;
   onImageShortcut?: () => void;
   imageButtonRef?: React.Ref<HTMLButtonElement>;
+  jsxComponentDescriptors?: JsxComponentDescriptor[];
 }
 
 export interface BaseMDXEditorModalProps {
@@ -131,6 +133,7 @@ export const BaseMDXEditor = React.forwardRef<MDXEditorMethods, BaseMDXEditorPro
       disableImageSettingsButton = false,
       onImageShortcut,
       imageButtonRef,
+      jsxComponentDescriptors,
     },
     ref,
   ) => {
@@ -175,7 +178,7 @@ export const BaseMDXEditor = React.forwardRef<MDXEditorMethods, BaseMDXEditorPro
           codeMirrorPlugin({ codeBlockLanguages }),
           diffSourcePlugin({ viewMode: 'rich-text' }),
           markdownShortcutPlugin(),
-          jsxPlugin(),
+          jsxPlugin({ jsxComponentDescriptors: jsxComponentDescriptors ?? [] }),
           imagePlugin(
             imageDialog
               ? {
