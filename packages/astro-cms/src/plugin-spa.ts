@@ -106,8 +106,10 @@ export interface ConlocaCMSOptions extends Omit<UIConfig, 'basename'> {
   /**
    * CSS files to load in the CMS editor for component preview styling.
    *
-   * Processed by Vite (Tailwind, PostCSS, etc.) and mirrored into the Puck
-   * editor iframe by its built-in CopyHostStyles mechanism.
+   * Each file is processed by Vite (Tailwind, PostCSS, etc.) and injected
+   * directly into Puck's preview iframe `<head>`. Site CSS never enters the
+   * CMS admin's parent document, so host-site styles cannot bleed into the
+   * CMS chrome (drawer, sidebar, etc.).
    *
    * @example './src/styles/global.css'
    * @example ['./src/styles/global.css', './src/styles/theme.css']
@@ -195,20 +197,29 @@ export default schemas;
 `;
 };
 
-// Template for the site styles loader virtual module
+// Template for the site styles loader virtual module.
+//
+// Each CSS file is imported with Vite's `?inline` query so the full CSS
+// pipeline (Tailwind, PostCSS, etc.) runs and returns the processed stylesheet
+// as a string — no `<style>` tag is injected into the CMS admin's parent
+// `<head>`. The strings are handed to `@conloca/cms-spa`'s site-styles
+// registry; the editor's iframe bridge then injects them directly into
+// Puck's preview iframe `<head>`. This keeps host-site CSS out of the CMS
+// chrome and confines it to the intended consumer (the preview).
 const siteStylesLoader = (cssPaths: string[]) => {
   const imports = cssPaths
-    .map((p) => {
+    .map((p, i) => {
       const absolutePath = p.startsWith('./') ? `/${p.slice(2)}` : p;
-      return `import '${absolutePath}';`;
+      return `import css${i} from '${absolutePath}?inline';`;
     })
     .join('\n');
+  const vars = cssPaths.map((_, i) => `css${i}`).join(', ');
 
   return `
-// Site styles for Puck editor preview.
-// CSS imports are processed by Vite and injected as <style> tags in <head>.
-// Puck's CopyHostStyles mirrors them into the editor iframe automatically.
 ${imports}
+import { setSiteStyles } from '@conloca/cms-spa/site-styles';
+
+setSiteStyles([${vars}]);
 
 if (import.meta.hot) {
   import.meta.hot.accept();
