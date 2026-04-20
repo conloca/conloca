@@ -129,7 +129,9 @@ export function GitStatusPanel({ variant = 'header' }: GitStatusPanelProps) {
           )}
           <span>Commit</span>
           {status?.changedFiles ? (
-            <span className="px-1 bg-white/20 rounded-md text-xs tabular-nums">{status.changedFiles}</span>
+            <span className="px-1 bg-black/10 dark:bg-white/20 rounded-md text-xs tabular-nums">
+              {status.changedFiles}
+            </span>
           ) : null}
         </button>
 
@@ -155,7 +157,7 @@ export function GitStatusPanel({ variant = 'header' }: GitStatusPanelProps) {
           )}
           <span>Push</span>
           {status && status.ahead > 0 ? (
-            <span className="px-1 bg-white/20 rounded-md text-xs tabular-nums">{status.ahead}</span>
+            <span className="px-1 bg-black/10 dark:bg-white/20 rounded-md text-xs tabular-nums">{status.ahead}</span>
           ) : null}
         </button>
       </div>
