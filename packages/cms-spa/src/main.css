@@ -1,8 +1,18 @@
-@import "@puckeditor/core/puck.css";
-@import "tailwindcss";
+/* Cascade layer ordering.
+ * `cms-admin` is declared LAST so all CMS SPA styles win over any
+ * stylesheet injected into /__cms/* via `siteStyles` (notably the
+ * host site's Tailwind global.css, which Puck's CopyHostStyles
+ * mirrors into the editor iframe but which also lands in our <head>).
+ * Without this, the website's base utilities (.fixed, .w-full, etc.)
+ * clobber our responsive variants (.md:static, .md:w-80, etc.) because
+ * they load later in source order. Layers override source order. */
+@layer base, starlight, theme, components, utilities, cms-admin;
+
+@import "@puckeditor/core/puck.css" layer(cms-admin);
+@import "tailwindcss" layer(cms-admin);
 @plugin "@tailwindcss/typography";
 @source ".";
-@source "../../mdx-editor/src";
+@source "../../mdx/src";
 
 @theme {
   /* Puck's azure colors */
@@ -260,4 +270,24 @@ body {
 .mdxeditor-select-content {
   z-index: 100 !important;
   max-height: var(--radix-select-content-available-height, 300px) !important;
+}
+
+/* MDXEditor dark-mode overrides.
+ * The library sets `--basePageBg: white` on its `_editorRoot_*` element (hardcoded),
+ * so the toolbar dropdowns and source-mode surface stay white even when .dark is set.
+ * Remap the library's base tokens to our grey scale so content, toolbar, and popovers
+ * match the surrounding modal chrome. Higher specificity (.dark .mdxeditor) wins over
+ * the library's own _editorRoot declarations. */
+.dark .mdxeditor {
+  --basePageBg: var(--color-grey-02);
+  --baseBase: var(--color-grey-02);
+  --baseBgSubtle: var(--color-grey-02);
+  --baseBg: var(--color-grey-03);
+  --baseBgHover: var(--color-grey-04);
+  --baseBgActive: var(--color-grey-04);
+  --baseLine: var(--color-grey-04);
+  --baseBorder: var(--color-grey-04);
+  --baseBorderHover: var(--color-grey-05);
+  --baseText: var(--color-grey-07);
+  --baseTextContrast: var(--color-grey-12);
 }
