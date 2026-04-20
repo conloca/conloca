@@ -90,6 +90,18 @@ jobs:
       # Step 10
       # Sets the base and head SHAs required for the nx affected commands
       - uses: nrwl/nx-set-shas@15514ee4353489ef5a1644bcdae44f0ae2ea45f3 # v4.4.0
+        with:
+          main-branch-name: private
+
+      - name: Normalize Nx SHAs
+        run: |
+          if [ -z "${NX_BASE:-}" ]; then
+            echo 'NX_BASE=origin/private' >> "$GITHUB_ENV"
+          fi
+
+          if [ -z "${NX_HEAD:-}" ]; then
+            echo "NX_HEAD=${GITHUB_SHA}" >> "$GITHUB_ENV"
+          fi
 
       # Step 11
       - name: Cache Nx
