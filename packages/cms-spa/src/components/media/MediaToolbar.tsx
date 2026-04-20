@@ -36,7 +36,7 @@ export function MediaToolbar({
   return (
     <div className="flex items-center gap-3 flex-wrap">
       {/* Search input */}
-      <div className="relative flex-1 min-w-[200px]">
+      <div className="relative flex-1 min-w-[150px]">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-grey-04 dark:text-grey-07 z-10" />
         <Input
           size="sm"
@@ -49,14 +49,24 @@ export function MediaToolbar({
       </div>
 
       {/* File type filter */}
-      <Select size="sm" value={fileType} onChange={(e) => onFileTypeChange(e.target.value as FileTypeFilter)}>
+      <Select
+        size="sm"
+        value={fileType}
+        onChange={(e) => onFileTypeChange(e.target.value as FileTypeFilter)}
+        className="w-auto shrink-0"
+      >
         <option value="all">All types</option>
         <option value="images">Images</option>
         <option value="svg">SVG</option>
       </Select>
 
       {/* Sort dropdown */}
-      <Select size="sm" value={sort} onChange={(e) => onSortChange(e.target.value as SortOption)}>
+      <Select
+        size="sm"
+        value={sort}
+        onChange={(e) => onSortChange(e.target.value as SortOption)}
+        className="w-auto shrink-0"
+      >
         <option value="date-newest">Date (newest)</option>
         <option value="date-oldest">Date (oldest)</option>
         <option value="name-asc">Name (A-Z)</option>
