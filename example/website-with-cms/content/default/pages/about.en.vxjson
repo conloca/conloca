@@ -1,0 +1,40 @@
+{
+  "created": "2026-04-20T00:00:00.000Z",
+  "id": "vx-about-demo-cms",
+  "meta": {
+    "description": "A CMS-managed page rendered by Conloca. Edit at /__cms.",
+    "title": "About — CMS Example"
+  },
+  "modified": "2026-04-20T00:00:00.000Z",
+  "type": "puck",
+  "content": {
+    "puckData": {
+      "content": [
+        {
+          "props": {
+            "align": "center",
+            "buttons": [
+              {
+                "href": "/__cms",
+                "label": "Open CMS",
+                "variant": "primary"
+              },
+              {
+                "href": "/",
+                "label": "Back home",
+                "variant": "secondary"
+              }
+            ],
+            "description": "This page lives in content/default/pages/about.en.vxjson and is rendered by Conloca. Every edit is a git diff.",
+            "id": "Hero-about-demo",
+            "padding": "128px",
+            "title": "CMS-managed page"
+          },
+          "type": "Hero"
+        }
+      ],
+      "root": {},
+      "zones": {}
+    }
+  }
+}

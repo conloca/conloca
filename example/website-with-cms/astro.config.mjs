@@ -16,7 +16,18 @@ export default defineConfig({
       puckConfigPath: './src/puck.config.tsx',
       schemasPath: './src/schemas/data.ts',
       assetsPath: './public/assets',
-      routing: true, // That's it - Conloca handles all routing
+      routing: {
+        routes: {
+          pages: {
+            pattern: '/[...slug]',
+            collection: 'pages',
+            layout: './src/layouts/Layout.astro',
+          },
+        },
+        fallback: '404',
+        siteName: 'default',
+        locale: 'en',
+      },
     }),
   ],
   // Vite config for monorepo development (not needed for published packages)
