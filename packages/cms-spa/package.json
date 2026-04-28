@@ -45,10 +45,16 @@
       "import": "./dist/site-styles.mjs",
       "default": "./dist/site-styles.mjs"
     },
+    "./mock-puck-config": {
+      "types": "./dist/mock-puck-config.d.ts",
+      "import": "./dist/mock-puck-config.mjs",
+      "default": "./dist/mock-puck-config.mjs"
+    },
     "./main": {
       "import": "./dist/main.mjs",
       "default": "./dist/main.mjs"
     },
+    "./styles.css": "./dist/spa/main.css",
     "./dist/spa/*": "./dist/spa/*"
   },
   "files": [

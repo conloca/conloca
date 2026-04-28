@@ -34,6 +34,14 @@ export interface UIConfig {
    * field entirely.
    */
   locales?: { list: string[]; defaultLocale: string };
+  /**
+   * When true, cms-spa is rendering inside a hosted shell that already
+   * owns workspace identity, account, and workspace-state UI. The sidebar
+   * suppresses widgets that would compete with the host (UserAvatar,
+   * GitStatusPanel) and lets the host's chrome show through. Default
+   * false: cms-spa runs as the whole page (astro-cms, dev-entry).
+   */
+  hosted?: boolean;
 }
 
 const defaultConfig: UIConfig = {

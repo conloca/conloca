@@ -9,6 +9,7 @@ export default defineConfig({
     'data-schemas': 'src/data-schemas.ts',
     'site-styles': 'src/site-styles.ts',
     'mdx-components': 'src/mdx-components.ts',
+    'mock-puck-config': 'src/mock-puck-config.tsx',
   },
   format: ['esm'],
   dts: true,

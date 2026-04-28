@@ -1,5 +1,10 @@
 // Re-export useful types from dependencies
 export type { QueryClientConfig } from '@tanstack/react-query';
+// Export hosted-mode mount component (for embedding cms-spa inside another React shell)
+export { CmsSpaApp } from './CmsSpaApp';
+export type { CMSMDXEditorModalProps } from './components/editor/CMSMDXEditor';
+// Export CMS MDX editor with integrated image picker
+export { CMSMDXEditorModal } from './components/editor/CMSMDXEditor';
 export { FolderTreeSidebar } from './components/media/FolderTreeSidebar';
 // Export media components for MDX editor image picker
 export { MediaLibrary } from './components/media/MediaLibrary';

@@ -2,6 +2,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { Database, FileText, ImageIcon, LayoutDashboard, Monitor, Moon, Package, Sun, X } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { useTheme } from '../hooks/useTheme';
+import { getUIConfig } from '../ui-config';
 import { cn } from '../utils/cn';
 import { ConlocaLogo } from './ConlocaLogo';
 import { GitStatusPanel } from './GitStatusPanel';
@@ -61,6 +62,10 @@ function ThemeToggle() {
 }
 
 function SidebarContent() {
+  // In hosted mode the host shell owns workspace identity/account/state UI,
+  // so cms-spa hides its standalone widgets to avoid duplication. Branding
+  // and theme remain because cms-spa is the only chrome in hosted mode too.
+  const hosted = getUIConfig().hosted === true;
   return (
     <>
       <div className="px-4 py-5 border-b border-grey-09 dark:border-grey-03">
@@ -75,12 +80,14 @@ function SidebarContent() {
         <NavItem to="/data" icon={Database} label="Data" />
       </nav>
 
-      <div className="px-3 py-3 border-t border-grey-09 dark:border-grey-03">
-        <GitStatusPanel variant="sidebar" />
-      </div>
+      {!hosted && (
+        <div className="px-3 py-3 border-t border-grey-09 dark:border-grey-03">
+          <GitStatusPanel variant="sidebar" />
+        </div>
+      )}
 
       <div className="px-3 py-3 border-t border-grey-09 dark:border-grey-03 flex items-center justify-between">
-        <UserAvatar />
+        {hosted ? <span /> : <UserAvatar />}
         <ThemeToggle />
       </div>
     </>
