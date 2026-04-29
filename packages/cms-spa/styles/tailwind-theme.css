@@ -114,3 +114,12 @@
 @variant dark 
 (
 &:is(.dark, .dark *));
+
+/* Public UI primitive surface. Consumers that import this theme contract
+ * get cms-spa's exported UI primitive utility classes generated
+ * automatically. Keep these globs tight: cms-spa src has far more than
+ * primitives, and scanning everything would bloat consumer CSS with
+ * classes only used inside the editor proper. Add @source entries here
+ * as new primitive surfaces are exported. */
+@source "../src/components/ui/**/*.{ts,tsx}";
+@source "../src/components/dialog.tsx";

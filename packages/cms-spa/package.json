@@ -50,6 +50,16 @@
       "import": "./dist/mock-puck-config.mjs",
       "default": "./dist/mock-puck-config.mjs"
     },
+    "./ui": {
+      "types": "./dist/ui.d.ts",
+      "import": "./dist/ui.mjs",
+      "default": "./dist/ui.mjs"
+    },
+    "./dialog": {
+      "types": "./dist/dialog.d.ts",
+      "import": "./dist/dialog.mjs",
+      "default": "./dist/dialog.mjs"
+    },
     "./main": {
       "import": "./dist/main.mjs",
       "default": "./dist/main.mjs"

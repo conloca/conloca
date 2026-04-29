@@ -10,6 +10,8 @@ export default defineConfig({
     'site-styles': 'src/site-styles.ts',
     'mdx-components': 'src/mdx-components.ts',
     'mock-puck-config': 'src/mock-puck-config.tsx',
+    ui: 'src/components/ui/index.ts',
+    dialog: 'src/components/dialog.tsx',
   },
   format: ['esm'],
   dts: true,
