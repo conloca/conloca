@@ -1,4 +1,5 @@
 export { Button } from './Button';
+export { FieldError } from './FieldError';
 export { IconButton } from './IconButton';
 export { Input } from './Input';
 export { SaveIndicator } from './SaveIndicator';
