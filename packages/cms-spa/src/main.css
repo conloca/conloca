@@ -64,6 +64,7 @@
 
 @import "@puckeditor/core/puck.css" layer(cms-admin);
 @import "tailwindcss" layer(cms-admin);
+@import "../styles/tailwind-theme.css";
 @plugin "@tailwindcss/typography";
 @source ".";
 @source "../../mdx/src";
@@ -212,25 +213,49 @@
 
 /* Drawer + overlay animations (used by Radix Dialog wrappers) */
 @keyframes drawer-fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 @keyframes drawer-fade-out {
-  from { opacity: 1; }
-  to { opacity: 0; }
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
 }
 @keyframes drawer-slide-in-left {
-  from { transform: translateX(-100%); }
-  to { transform: translateX(0); }
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
 }
 @keyframes drawer-slide-out-left {
-  from { transform: translateX(0); }
-  to { transform: translateX(-100%); }
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-100%);
+  }
 }
-.animate-fade-in { animation: drawer-fade-in 0.2s ease-out; }
-.animate-fade-out { animation: drawer-fade-out 0.2s ease-out; }
-.animate-slide-in-left { animation: drawer-slide-in-left 0.2s ease-out; }
-.animate-slide-out-left { animation: drawer-slide-out-left 0.2s ease-out; }
+.animate-fade-in {
+  animation: drawer-fade-in 0.2s ease-out;
+}
+.animate-fade-out {
+  animation: drawer-fade-out 0.2s ease-out;
+}
+.animate-slide-in-left {
+  animation: drawer-slide-in-left 0.2s ease-out;
+}
+.animate-slide-out-left {
+  animation: drawer-slide-out-left 0.2s ease-out;
+}
 
 /* Global placeholder text colors — avoid touching every input site */
 input::placeholder,
@@ -251,8 +276,8 @@ body {
 }
 
 :root {
-  --puck-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, Roboto, 'Helvetica Neue', sans-serif;
-  --puck-font-family-monospaced: 'SF Mono', 'Cascadia Code', 'Fira Code', Consolas, 'DejaVu Sans Mono', monospace;
+  --puck-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, "Helvetica Neue", sans-serif;
+  --puck-font-family-monospaced: "SF Mono", "Cascadia Code", "Fira Code", Consolas, "DejaVu Sans Mono", monospace;
 }
 
 #root {

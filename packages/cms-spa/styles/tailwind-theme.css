@@ -1,0 +1,116 @@
+@theme {
+  /* Puck's azure colors */
+  --color-azure-01: #00175d;
+  --color-azure-02: #002c77;
+  --color-azure-03: #014292;
+  --color-azure-04: #0158ad;
+  --color-azure-05: #3479be;
+  --color-azure-06: #6499cf;
+  --color-azure-07: #88b0da;
+  --color-azure-08: #abc7e5;
+  --color-azure-09: #cfdff0;
+  --color-azure-10: #e7eef7;
+  --color-azure-11: #f3f6fb;
+  --color-azure-12: #f7faff;
+
+  /* Puck's grey colors */
+  --color-grey-01: #181818;
+  --color-grey-02: #292929;
+  --color-grey-03: #404040;
+  --color-grey-04: #5a5a5a;
+  --color-grey-05: #767676;
+  --color-grey-06: #949494;
+  --color-grey-07: #ababab;
+  --color-grey-08: #c3c3c3;
+  --color-grey-09: #dcdcdc;
+  --color-grey-10: #efefef;
+  --color-grey-11: #f5f5f5;
+  --color-grey-12: #fafafa;
+
+  /* Also add other Puck colors for consistency */
+  --color-green-01: #002000;
+  --color-green-02: #043604;
+  --color-green-03: #084e08;
+  --color-green-04: #0c680c;
+  --color-green-05: #1d882f;
+  --color-green-06: #2faa53;
+  --color-green-07: #56c16f;
+  --color-green-08: #7dd78b;
+  --color-green-09: #b8e8bf;
+  --color-green-10: #ddf3e0;
+  --color-green-11: #eff8f0;
+  --color-green-12: #f3fcf4;
+
+  --color-red-01: #4c0000;
+  --color-red-02: #6a0a10;
+  --color-red-03: #8a1422;
+  --color-red-04: #ac1f35;
+  --color-red-05: #bf5366;
+  --color-red-06: #ce7e8e;
+  --color-red-07: #d99ca8;
+  --color-red-08: #e4b9c2;
+  --color-red-09: #efd7db;
+  --color-red-10: #f6eaec;
+  --color-red-11: #faf4f5;
+  --color-red-12: #fff9fa;
+
+  --color-yellow-01: #211000;
+  --color-yellow-02: #362700;
+  --color-yellow-03: #4c4000;
+  --color-yellow-04: #645a00;
+  --color-yellow-05: #877614;
+  --color-yellow-06: #ab9429;
+  --color-yellow-07: #bfac4e;
+  --color-yellow-08: #d4c474;
+  --color-yellow-09: #e6deb1;
+  --color-yellow-10: #f3efd9;
+  --color-yellow-11: #f9f7ed;
+  --color-yellow-12: #fcfaf0;
+}
+
+/* Semantic surface tokens — flip in the .dark override below.
+ * These are the only colors components should reach for when building
+ * dialogs, panels, inputs, borders, and hover states. Raw grey-* palette
+ * usage in new components creates dark-mode contrast bugs. */
+:root {
+  --color-overlay: #ffffff; /* dialog/modal surface */
+  --color-panel: #ffffff; /* input bg, outline-button bg, side panels */
+  --color-subtle: #f5f5f5; /* recessed footer wash, info callouts */
+  --color-line: #dcdcdc; /* borders and dividers */
+  --color-hover: #f5f5f5; /* hover bg for ghost buttons, menu items */
+}
+
+.dark {
+  --color-overlay: var(--color-grey-03); /* #404040 */
+  --color-panel: var(--color-grey-02); /* #292929 */
+  --color-subtle: var(--color-grey-02); /* #292929 */
+  --color-line: var(--color-grey-04); /* #5a5a5a */
+  --color-hover: var(--color-grey-04); /* #5a5a5a */
+}
+
+/* Semantic utilities — defined explicitly so they're guaranteed in the
+ * generated CSS regardless of JIT scan state. Light/dark flip via the
+ * :root vs .dark override of the tokens above. */
+@utility bg-overlay {
+  background-color: var(--color-overlay);
+}
+@utility bg-panel {
+  background-color: var(--color-panel);
+}
+@utility bg-subtle {
+  background-color: var(--color-subtle);
+}
+@utility bg-hover {
+  background-color: var(--color-hover);
+}
+@utility border-line {
+  border-color: var(--color-line);
+}
+
+/* Dark mode: selector strategy for manual toggle + system preference.
+ * Uses :is() (not :where()) so dark variants beat the conloca.com
+ * website Tailwind that gets injected into /__cms — its plain .bg-white
+ * etc. has spec (0,1,0) and would override a :where()-wrapped variant. */
+@variant dark 
+(
+&:is(.dark, .dark *));

@@ -54,11 +54,13 @@
       "import": "./dist/main.mjs",
       "default": "./dist/main.mjs"
     },
+    "./tailwind-theme.css": "./styles/tailwind-theme.css",
     "./styles.css": "./dist/spa/main.css",
     "./dist/spa/*": "./dist/spa/*"
   },
   "files": [
     "dist",
+    "styles",
     "!**/*.tsbuildinfo"
   ],
   "scripts": {
