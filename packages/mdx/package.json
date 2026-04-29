@@ -7,15 +7,15 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/conloca/conloca.git",
-    "directory": "mdx"
+    "directory": "packages/mdx"
   },
   "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",
   "dependencies": {
-    "@conloca/content-api": "workspace:^",
+    "@conloca/content-api": "workspace:*",
     "@mdx-js/mdx": "^3.1.1",
     "@mdx-js/react": "^3.1.1",
-    "@mdxeditor/editor": "^3.52.3",
+    "@mdxeditor/editor": "^3.55.0",
     "lucide-react": "^0.564.0",
     "remark-frontmatter": "^5.0.0",
     "remark-gfm": "^4.0.0",
@@ -23,14 +23,14 @@
     "tslib": "^2.8.1"
   },
   "peerDependencies": {
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5"
   },
   "devDependencies": {
+    "@happy-dom/global-registrator": "20.6.1",
     "@testing-library/react": "^16.3.2",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
-    "@happy-dom/global-registrator": "20.6.1",
     "happy-dom": "20.6.1",
     "react": "19.2.4",
     "react-dom": "19.2.4"
@@ -38,12 +38,12 @@
   "exports": {
     "./package.json": "./package.json",
     ".": {
-      "types": "./dist/index.d.ts",
+      "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs",
       "default": "./dist/index.mjs"
     },
     "./node": {
-      "types": "./dist/node.d.ts",
+      "types": "./dist/node.d.mts",
       "import": "./dist/node.mjs",
       "default": "./dist/node.mjs"
     }
@@ -53,19 +53,52 @@
     "!**/*.tsbuildinfo"
   ],
   "scripts": {
-    "build": "tsdown",
-    "test": "tsc-bun-test",
-    "test:watch": "bun test --watch"
+    "test": "nx run mdx:test --tui=false --outputStyle=stream"
   },
   "nx": {
     "targets": {
       "test": {
         "dependsOn": [
+          "typecheck-tests",
           "^build"
-        ]
+        ],
+        "executor": "@smoothbricks/nx-plugin:bounded-exec",
+        "options": {
+          "command": "bun test",
+          "cwd": "{projectRoot}",
+          "timeoutMs": 120000,
+          "killAfterMs": 10000
+        }
+      },
+      "lint": {},
+      "tsdown-js": {
+        "executor": "nx:run-commands",
+        "cache": true,
+        "dependsOn": [
+          "^build"
+        ],
+        "inputs": [
+          "{projectRoot}/src/**/*",
+          "{projectRoot}/tsdown.config.ts",
+          "{projectRoot}/tsconfig.lib.json",
+          "{projectRoot}/package.json"
+        ],
+        "outputs": [
+          "{projectRoot}/dist/**/*.mjs",
+          "{projectRoot}/dist/**/*.js"
+        ],
+        "options": {
+          "command": "tsdown",
+          "cwd": "{projectRoot}"
+        }
       }
-    }
+    },
+    "tags": [
+      "npm:public"
+    ],
+    "name": "mdx"
   },
   "type": "module",
-  "types": "./dist/index.d.ts"
+  "types": "./dist/index.d.mts",
+  "license": "FSL-1.1-Apache-2.0"
 }

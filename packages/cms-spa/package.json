@@ -7,36 +7,36 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/conloca/conloca.git",
-    "directory": "cms-spa"
+    "directory": "packages/cms-spa"
   },
   "type": "module",
   "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",
-  "types": "./dist/index.d.ts",
+  "types": "./dist/index.d.mts",
   "exports": {
     "./package.json": "./package.json",
     ".": {
-      "types": "./dist/index.d.ts",
+      "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs",
       "default": "./dist/index.mjs"
     },
     "./data-schemas": {
-      "types": "./dist/data-schemas.d.ts",
+      "types": "./dist/data-schemas.d.mts",
       "import": "./dist/data-schemas.mjs",
       "default": "./dist/data-schemas.mjs"
     },
     "./page-schemas": {
-      "types": "./dist/page-schemas.d.ts",
+      "types": "./dist/page-schemas.d.mts",
       "import": "./dist/page-schemas.mjs",
       "default": "./dist/page-schemas.mjs"
     },
     "./puck-config": {
-      "types": "./dist/puck-config.d.ts",
+      "types": "./dist/puck-config.d.mts",
       "import": "./dist/puck-config.mjs",
       "default": "./dist/puck-config.mjs"
     },
     "./site-styles": {
-      "types": "./dist/site-styles.d.ts",
+      "types": "./dist/site-styles.d.mts",
       "import": "./dist/site-styles.mjs",
       "default": "./dist/site-styles.mjs"
     },
@@ -51,65 +51,118 @@
     "!**/*.tsbuildinfo"
   ],
   "scripts": {
-    "build": "bun build-spa.ts",
     "build:dev": "NODE_ENV=development bun build-spa.ts",
-    "dev": "bun --bun --hot dev-server.tsx",
-    "test": "tsc-bun-test",
-    "test:watch": "bun test --watch"
+    "dev": "nx run cms-spa:dev --tui=false --outputStyle=stream",
+    "test": "nx run cms-spa:test --tui=false --outputStyle=stream"
   },
   "dependencies": {
-    "@conloca/content-api-client": "workspace:^",
-    "@conloca/mdx": "workspace:^",
-    "@mdxeditor/editor": "^3.52.3",
-    "@puckeditor/core": "^0.21.1",
+    "@conloca/content-api-client": "workspace:*",
+    "@conloca/mdx": "workspace:*",
+    "@mdxeditor/editor": "^3.55.0",
+    "@puckeditor/core": "^0.21.2",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-dropdown-menu": "^2.1.16",
     "@radix-ui/react-select": "^2.2.6",
-    "@tanstack/react-query": "^5.90.21",
-    "@tanstack/react-query-devtools": "^5.91.3",
+    "@tanstack/react-query": "^5.100.6",
+    "@tanstack/react-query-devtools": "^5.100.6",
     "clsx": "^2.1.1",
     "lucide-react": "^0.564.0",
-    "react-router-dom": "^7.13.0",
-    "tailwind-merge": "^3.4.0",
+    "react-router-dom": "^7.14.2",
+    "tailwind-merge": "^3.5.0",
     "tslib": "^2.8.1",
-    "zod": "^4.3.6"
+    "zod": "^4.4.1"
   },
   "peerDependencies": {
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5"
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "20.6.1",
-    "hono": "^4.11.9",
-    "@tailwindcss/cli": "4.1.18",
+    "@tailwindcss/cli": "4.2.4",
     "@tailwindcss/typography": "^0.5.19",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "bun-tailwindcss": "^0.0.9",
+    "hono": "^4.12.16",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "react-refresh-typescript": "^2.0.11",
+    "react-refresh-typescript": "^2.0.12",
     "tailwindcss": "^4.1.16",
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.3"
   },
   "nx": {
     "targets": {
-      "build": {
-        "dependsOn": [
-          "^build"
-        ]
-      },
-      "build:dev": {
-        "dependsOn": [
-          "^build"
-        ]
-      },
       "dev": {
+        "executor": "nx:run-commands",
         "dependsOn": [
           "^build"
         ],
-        "continuous": true
+        "continuous": true,
+        "options": {
+          "command": "bun --bun --hot dev-server.tsx",
+          "cwd": "{projectRoot}"
+        }
+      },
+      "lint": {},
+      "tsdown-js": {
+        "executor": "nx:run-commands",
+        "cache": true,
+        "dependsOn": [
+          "^build"
+        ],
+        "inputs": [
+          "{projectRoot}/src/**/*",
+          "{projectRoot}/tsdown.config.ts",
+          "{projectRoot}/tsconfig.lib.json",
+          "{projectRoot}/package.json"
+        ],
+        "outputs": [
+          "{projectRoot}/dist/**/*.mjs",
+          "{projectRoot}/dist/**/*.js"
+        ],
+        "options": {
+          "command": "tsdown",
+          "cwd": "{projectRoot}"
+        }
+      },
+      "bun-web": {
+        "executor": "nx:run-commands",
+        "cache": true,
+        "dependsOn": [
+          "^build"
+        ],
+        "inputs": [
+          "{projectRoot}/src/**/*",
+          "{projectRoot}/build-spa.ts",
+          "{projectRoot}/tailwind-config.ts",
+          "{projectRoot}/package.json"
+        ],
+        "outputs": [
+          "{projectRoot}/dist/spa/**"
+        ],
+        "options": {
+          "command": "bun build-spa.ts",
+          "cwd": "{projectRoot}"
+        }
+      },
+      "test": {
+        "executor": "@smoothbricks/nx-plugin:bounded-exec",
+        "dependsOn": [
+          "typecheck-tests",
+          "^build"
+        ],
+        "options": {
+          "command": "bun test",
+          "cwd": "{projectRoot}",
+          "timeoutMs": 120000,
+          "killAfterMs": 10000
+        }
       }
-    }
-  }
+    },
+    "tags": [
+      "npm:public"
+    ],
+    "name": "cms-spa"
+  },
+  "license": "FSL-1.1-Apache-2.0"
 }

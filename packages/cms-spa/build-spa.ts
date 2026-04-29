@@ -4,8 +4,8 @@ import { processTailwindCSS, TAILWIND_CONFIG } from './tailwind-config';
 const isDev = process.env.NODE_ENV !== 'production';
 console.log(`Building CMS SPA (${isDev ? 'dev' : 'production'})...`);
 
-// Step 1: Clean dist directory
-await $`rm -rf ./dist`;
+// Step 1: Clean only SPA assets; tsc-js owns declarations in dist.
+await $`rm -rf ./dist/spa`;
 await $`mkdir -p ./dist/spa`;
 
 // Step 2: Process CSS with Tailwind
@@ -15,16 +15,12 @@ await processTailwindCSS({
   minify: !isDev,
 });
 
-// Step 2.5: Build library exports with tsdown (needed for both dev and prod)
-console.log('Building library exports with tsdown...');
-await $`bunx tsdown`;
-
-// Dev mode: CSS + library only - Vite loads source directly via virtual module
+// Dev mode: CSS only - Vite loads source directly via virtual module
 if (isDev) {
   // Copy CSS to dist/spa for serving
   await $`cp ${TAILWIND_CONFIG.outputCompiled} ./dist/spa/main.css`;
   await $`rm -f ${TAILWIND_CONFIG.outputCompiled}`;
-  console.log('Dev build complete (CSS + library exports)');
+  console.log('Dev build complete (CSS assets)');
   process.exit(0);
 }
 

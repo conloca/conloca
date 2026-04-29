@@ -1,0 +1,34 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "emitDeclarationOnly": false,
+    "noEmit": true,
+    "types": ["bun"]
+  },
+  "include": [
+    "src/**/*.test.ts",
+    "src/**/*.spec.ts",
+    "src/**/__tests__/**/*.ts",
+    "src/**/__tests__/**/*.tsx",
+    "src/test-suite-tracer.ts"
+  ],
+  "references": [
+    {
+      "path": "./tsconfig.lib.json"
+    },
+    {
+      "path": "../content-api-client/tsconfig.lib.json"
+    },
+    {
+      "path": "../mdx/tsconfig.lib.json"
+    }
+  ]
+}

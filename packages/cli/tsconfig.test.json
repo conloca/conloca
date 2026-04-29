@@ -1,0 +1,23 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "emitDeclarationOnly": false,
+    "noEmit": true,
+    "types": ["bun"]
+  },
+  "include": [
+    "src/**/*.test.ts",
+    "src/**/*.spec.ts",
+    "src/**/__tests__/**/*.ts",
+    "src/**/__tests__/**/*.tsx",
+    "src/test-suite-tracer.ts"
+  ],
+  "references": [
+    {
+      "path": "../content-api/tsconfig.lib.json"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+name: Restore Nx cache
+description: Restore cached Nx task outputs without publishing new cache entries.
+
+outputs:
+  cache-hit:
+    description: Whether an exact Nx cache key was restored.
+    value: ${{ steps.restore.outputs.cache-hit }}
+
+runs:
+  using: composite
+  steps:
+    - name: Restore Nx cache
+      id: restore
+      uses: actions/cache/restore@v5.0.5
+      with:
+        path: |
+          .nx/cache
+          .nx/workspace-data/*.db*
+        key: ${{ runner.os }}-nx-db-v1-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-nx-db-v1-

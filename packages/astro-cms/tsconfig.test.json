@@ -2,23 +2,36 @@
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "rootDir": ".",
-    "outDir": "dist",
-    "tsBuildInfoFile": "dist/tsconfig.lib.tsbuildinfo",
     "module": "esnext",
     "moduleResolution": "bundler",
-    "forceConsistentCasingInFileNames": true,
     "jsx": "react-jsx",
-    "types": ["node"],
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "paths": {
       "virtual:conloca-page-api": ["./src/virtual-modules.d.ts"],
       "virtual:conloca-routing-config": ["./src/virtual-modules.d.ts"],
       "virtual:conloca-config": ["./src/env.d.ts"]
-    }
+    },
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "emitDeclarationOnly": false,
+    "noEmit": true,
+    "types": ["bun"]
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.d.ts", "node/**/*.ts"],
-  "exclude": ["src/**/*.test.ts", "src/__tests__/**/*"],
+  "include": [
+    "src/**/*.test.ts",
+    "src/**/*.spec.ts",
+    "src/**/__tests__/**/*.ts",
+    "src/**/__tests__/**/*.tsx",
+    "test/**/*.ts",
+    "test/**/*.tsx",
+    "test-setup.ts",
+    "src/test-suite-tracer.ts"
+  ],
   "references": [
+    {
+      "path": "./tsconfig.lib.json"
+    },
     {
       "path": "../mdx/tsconfig.lib.json"
     },

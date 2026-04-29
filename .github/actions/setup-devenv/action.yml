@@ -1,0 +1,57 @@
+name: Setup Nix/devenv
+description: Restore caches and build the SmoothBricks devenv shell after checkout.
+
+outputs:
+  nix-cache-hit:
+    description: Whether the Nix profile/store cache restored from the exact primary key.
+    value: ${{ steps.nix-cache.outputs.cache-hit }}
+  devenv-cache-hit:
+    description: Whether the devenv/direnv cache restored from the exact primary key.
+    value: ${{ steps.devenv-cache.outputs.cache-hit }}
+
+runs:
+  using: composite
+  steps:
+    # This action is intentionally post-checkout only. Repo-local actions do not
+    # exist before actions/checkout has populated the working tree.
+    - name: ❄️ Install Nix
+      uses: DeterminateSystems/determinate-nix-action@v3
+
+    - name: 🧊 Cache Nix profiles and store NAR
+      id: nix-cache
+      uses: ./.github/actions/cache-nix-devenv
+      with:
+        segment: nix
+
+    - name: ♻️ Restore Nix store from NAR
+      shell: bash
+      working-directory: tooling/direnv
+      run: ./github-actions-bootstrap.sh restore-store
+
+    # Restore direnv state only when the Nix cache key is exact. Partial Nix
+    # restores can contain a NAR for a different shell closure, and .direnv
+    # points directly at derivations inside that closure.
+    - name: 🧊 Cache devenv and direnv
+      id: devenv-cache
+      if: ${{ steps.nix-cache.outputs.cache-hit == 'true' }}
+      uses: ./.github/actions/cache-nix-devenv
+      with:
+        segment: devenv
+
+    - name: ⚡ Enable Cachix
+      uses: cachix/cachix-action@v17
+      with:
+        name: devenv
+
+    - name: 🧰 Install devenv
+      shell: bash
+      working-directory: tooling/direnv
+      run: ./github-actions-bootstrap.sh install-devenv
+
+    - name: 📦 Cache node_modules
+      uses: ./.github/actions/cache-node-modules
+
+    - name: 🐚 Build devenv shell
+      shell: bash
+      working-directory: tooling/direnv
+      run: ./github-actions-bootstrap.sh build-shell

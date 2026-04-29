@@ -3,5 +3,5 @@
  * Escapes < to prevent XSS when JSON is parsed in browser.
  */
 export function serializeProps(props: Record<string, unknown>): string {
-  return JSON.stringify(props).replace(/</g, '\\u003c')
+  return JSON.stringify(props).replace(/</g, '\\u003c');
 }

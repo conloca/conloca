@@ -1,8 +1,14 @@
 {
-  "name": "@corpos/tooling",
+  "name": "@conloca/tooling",
   "version": "0.0.1",
   "private": true,
-  "bin": {
-    "tsc-bun-test": "./tsc-bun-test.sh"
+  "dependencies": {
+    "@smoothbricks/cli": "^0.3.1"
+  },
+  "nx": {
+    "targets": {
+      "lint": {}
+    },
+    "name": "tooling"
   }
 }

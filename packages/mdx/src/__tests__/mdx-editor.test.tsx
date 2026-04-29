@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { GenericJsxEditor, type JsxComponentDescriptor } from '@mdxeditor/editor';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import React from 'react';
 import { MDXEditor, MDXEditorModal } from '../index';
 
 describe('MDXEditor', () => {

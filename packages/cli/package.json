@@ -7,18 +7,18 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/conloca/conloca.git",
-    "directory": "cli"
+    "directory": "packages/cli"
   },
   "dependencies": {
-    "@conloca/content-api": "workspace:^",
+    "@conloca/content-api": "workspace:*",
     "@node-rs/xxhash": "^1.7.6"
   },
   "bin": {
     "conloca": "./dist/conloca.js"
   },
   "scripts": {
-    "build": "bun run build.ts",
-    "test": "bun test"
+    "build": "nx run cli:build",
+    "test": "nx run cli:test --tui=false --outputStyle=stream"
   },
   "type": "module",
   "files": [
@@ -26,6 +26,39 @@
     "!**/*.tsbuildinfo"
   ],
   "devDependencies": {
-    "@types/bun": "^1.3.9"
-  }
+    "@types/bun": "1.3.13"
+  },
+  "nx": {
+    "targets": {
+      "lint": {},
+      "build": {
+        "executor": "nx:run-commands",
+        "dependsOn": [
+          "^build"
+        ],
+        "options": {
+          "command": "bun run build.ts",
+          "cwd": "{projectRoot}"
+        }
+      },
+      "test": {
+        "executor": "@smoothbricks/nx-plugin:bounded-exec",
+        "dependsOn": [
+          "typecheck-tests",
+          "^build"
+        ],
+        "options": {
+          "command": "bun test",
+          "cwd": "{projectRoot}",
+          "timeoutMs": 120000,
+          "killAfterMs": 10000
+        }
+      }
+    },
+    "tags": [
+      "npm:public"
+    ],
+    "name": "cli"
+  },
+  "license": "FSL-1.1-Apache-2.0"
 }

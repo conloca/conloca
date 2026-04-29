@@ -16,8 +16,11 @@ in {
 
   # https://devenv.sh/packages/
   packages = with pkgs; [
-    # Pin Node.js version to match AWS Lambda runtime
-    nodejs_22
+    gnutar # Tarball inspection for package validation
+    coreutils # Provides fmt for commit message wrapping
+    git # Git hooks and repository inspection
+    # Latest Node.js includes the npm CLI needed for npm trusted publishing.
+    nodejs_latest
     # Bun.sh for javascript dependencies
     bun
     # Git hooks and formatters
@@ -46,10 +49,10 @@ in {
   # Set up PATH first so setup script can find tools
   enterShell = ''
     cd "$DEVENV_ROOT/../.."
-    export PATH="$PWD/tooling:$PWD/node_modules/.bin:$PATH"
+    export PATH="$PWD/tooling:$PWD/node_modules/.bin:$PWD/tooling/node_modules/.bin:$PATH"
     # Add libstdc++ for native Node.js modules (@parcel/watcher, etc.)
     export LD_LIBRARY_PATH="${pkgs.stdenv.cc.cc.lib}/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-    bun ${./setup-environment.ts}
+    bun "$DEVENV_ROOT/setup-environment.ts"
 
     if [ -n "$DEVENV_SHELL_PWD" ]; then
       cd "$DEVENV_SHELL_PWD"

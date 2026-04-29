@@ -8,7 +8,7 @@ export default defineConfig({
   format: ['esm'],
   dts: true,
   tsconfig: 'tsconfig.lib.json',
-  clean: true,
+  clean: false,
   external: [
     '@conloca/content-api',
     '@mdx-js/mdx',

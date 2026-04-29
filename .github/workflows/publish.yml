@@ -1,0 +1,130 @@
+name: Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        type: choice
+        description:
+          Use auto for conventional commits, or force a semver bump. Prerelease publishes to next; all others publish to
+          latest.
+        options: [auto, patch, minor, major, prerelease]
+        default: auto
+      dry_run:
+        type: boolean
+        description: Run release commands without writing versions, tags, publishes, or GitHub Releases.
+        default: false
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: tooling/direnv
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      NIX_STORE_NAR: ${{ github.workspace }}/nix-store.nar
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      # --- Setup --------------------------------------------------------------
+
+      # Step 1: GitHub adds "Set up job" automatically
+      # Step 2
+      - name: 📥 Checkout
+        uses: actions/checkout@v6.0.2
+        with:
+          filter: blob:none
+          fetch-depth: 0
+
+      # Step 3. Composite action internals do not affect top-level job step
+      # anchors; update these comments if top-level steps move.
+      - name: 🧱 Setup Nix/devenv
+        id: setup
+        uses: ./.github/actions/setup-devenv
+
+      # Step 4
+      - name: 🤖 Configure release author
+        run:
+          git config user.name "github-actions[bot]" && git config user.email
+          "41898282+github-actions[bot]@users.noreply.github.com"
+
+      # Step 5
+      - name: 🧯 Repair pending releases
+        run: smoo release repair-pending --dry-run "${{ inputs.dry_run }}"
+
+      # Step 6
+      - name: 🏷️ Version release
+        id: version
+        run:
+          smoo release version --bump "${{ inputs.bump }}" --dry-run "${{ inputs.dry_run }}" --github-output
+          "$GITHUB_OUTPUT"
+
+      # --- Validation ---------------------------------------------------------
+
+      # Release validation intentionally does not restore persisted Nx task
+      # cache. Nx may reuse tasks produced earlier in this same job, but publish
+      # never relies on task outputs restored from CI cache. version runs before
+      # validation so the commit completed below is the commit that was checked.
+
+      # Step 7
+      - name: ✅ Check managed monorepo files (${{ steps.version.outputs.mode }})
+        if: ${{ steps.version.outputs.mode != 'none' }}
+        run: smoo monorepo check
+
+      # Step 8
+      - name: 🔨 Build (${{ steps.version.outputs.mode }})
+        if: ${{ steps.version.outputs.mode != 'none' }}
+        run: smoo github-ci nx-run-many --targets build --projects "${{ steps.version.outputs.projects }}"
+
+      # Step 9
+      - name: 🔍 Lint (${{ steps.version.outputs.mode }})
+        if: ${{ steps.version.outputs.mode != 'none' }}
+        run: smoo github-ci nx-run-many --targets lint --projects "${{ steps.version.outputs.projects }}"
+
+      # Step 10
+      - name: 🧪 Unit Tests (${{ steps.version.outputs.mode }})
+        if: ${{ steps.version.outputs.mode != 'none' }}
+        run: smoo github-ci nx-run-many --targets test --projects "${{ steps.version.outputs.projects }}"
+
+      # Step 11
+      - name: 📎 Upload trace DBs
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: trace-results-${{ github.run_id }}
+          path: packages/*/.trace-results.db
+          if-no-files-found: ignore
+          retention-days: 14
+          include-hidden-files: true
+
+      # Step 12
+      - name: ✅ Validate monorepo config (${{ steps.version.outputs.mode }})
+        if: ${{ steps.version.outputs.mode != 'none' }}
+        run: smoo monorepo validate
+
+      # --- Release ------------------------------------------------------------
+
+      # Step 13
+      - name: 📦 Publish release (${{ steps.version.outputs.mode }})
+        # smoo packs with Bun, then publishes tarballs with npm. Existing
+        # packages must already exist on npm and use trusted publishing/OIDC.
+        # Missing package names are bootstrapped locally before trust setup.
+        run: smoo release publish --bump "${{ inputs.bump }}" --dry-run "${{ inputs.dry_run }}"
+
+      # --- Cleanup ------------------------------------------------------------
+
+      # Step 14
+      - name: 🧹 Cleanup and cache Nix/devenv
+        if: ${{ always() }}
+        uses: ./.github/actions/save-nix-devenv
+        with:
+          nix-cache-hit: ${{ steps.setup.outputs.nix-cache-hit }}
+          devenv-cache-hit: ${{ steps.setup.outputs.devenv-cache-hit }}

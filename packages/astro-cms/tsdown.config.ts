@@ -14,7 +14,7 @@ export default defineConfig({
   format: ['esm'],
   dts: true,
   tsconfig: 'tsconfig.lib.json',
-  clean: true,
+  clean: false,
   external: [
     // Virtual modules not in package.json — must be explicitly externalized
     'astro:content',

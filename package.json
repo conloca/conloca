@@ -1,72 +1,87 @@
 {
-  "name": "@conloca/public",
+  "name": "@conloca/source",
   "version": "0.0.0",
+  "license": "FSL-1.1-Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/conloca/conloca.git"
+  },
   "scripts": {
     "build:all": "nx run-many -t build",
     "clean:node_modules": "find e* t* p* -type d -name node_modules -print0 |xargs -0 rm -rvf",
-    "dev:conloca": "nx run website-with-cms:dev",
+    "dev:conloca": "nx run @conloca/source:dev-conloca --tui=false --outputStyle=stream",
+    "format:changed": "git-format-staged --config tooling/git-hooks/git-format-staged.yml --also-unstaged",
+    "format:staged": "git-format-staged --config tooling/git-hooks/git-format-staged.yml",
+    "lint": "nx run-many -t lint",
+    "lint:fix": "git-format-staged --config tooling/git-hooks/git-format-staged.yml --unstaged",
     "list:nx-build-targets": "nx show projects | xargs -n1 nx show project --json | jq -r  '.name as $name | .targets | to_entries[] | \"\\($name):\\(.key)\"'",
-    "reload:direnv": "rm -rf tooling/direnv/.{direnv,devenv}; direnv reload",
-    "reload:node_modules": "tooling/rm_node_modules; bun install",
-    "serve:conloca": "nx run website-with-cms:dev --outputStyle=stream",
-    "show:tree": "tree --gitignore -d",
-    "syncpack:fix": "bunx syncpack fix-mismatches",
-    "update:devenv": "cd tooling/direnv; devenv update",
-    "update:npm:interactive": "bun update --interactive --recursive",
-    "update:nixpkgs-overlay": "cd tooling/direnv/nixpkgs-overlay && nix shell nixpkgs#nvfetcher -c nvfetcher",
-    "release:projects:list": "nx show projects | grep '^@conloca/'",
+    "pack:all": "bun tooling/sync-lockfile-versions.ts && for p in $(nx show projects | grep '^@conloca/'); do echo \"Packing $p\"; (cd $(nx show project $p --json | jq -r .root) && bun pm pack); done",
     "release:build": "nx run-many -t build --projects=@conloca/astro-cms,@conloca/cms-spa,@conloca/content-api,@conloca/content-api-client,@conloca/cli,@conloca/mdx",
     "release:changelog": "nx release changelog --projects=@conloca/astro-cms,@conloca/cms-spa,@conloca/content-api,@conloca/content-api-client,@conloca/cli,@conloca/mdx",
-    "release:publish": "nx release publish --projects=@conloca/astro-cms,@conloca/cms-spa,@conloca/content-api,@conloca/content-api-client,@conloca/cli,@conloca/mdx",
-    "release:publish:dry": "nx release publish --projects=@conloca/astro-cms,@conloca/cms-spa,@conloca/content-api,@conloca/content-api-client,@conloca/cli,@conloca/mdx --dryRun",
-    "pack:all": "for p in $(nx show projects | grep '^@conloca/'); do echo \"Packing $p\"; (cd $(nx show project $p --json | jq -r .root) && npm pack); done"
+    "release:projects:list": "nx show projects | grep '^@conloca/'",
+    "release:publish": "bun tooling/sync-lockfile-versions.ts && nx release publish --projects=@conloca/astro-cms,@conloca/cms-spa,@conloca/content-api,@conloca/content-api-client,@conloca/cli,@conloca/mdx",
+    "release:publish:dry": "bun tooling/sync-lockfile-versions.ts && nx release publish --projects=@conloca/astro-cms,@conloca/cms-spa,@conloca/content-api,@conloca/content-api-client,@conloca/cli,@conloca/mdx --dryRun",
+    "release:sync-lockfile": "bun tooling/sync-lockfile-versions.ts",
+    "reload:direnv": "rm -rf tooling/direnv/.{direnv,devenv}; direnv reload",
+    "reload:node_modules": "tooling/rm_node_modules; bun install",
+    "serve:conloca": "nx run @conloca/source:serve-conloca --tui=false --outputStyle=stream",
+    "show:tree": "tree --gitignore -d",
+    "subtree:pull": "git subtree pull --prefix=packages conloca-public main --squash",
+    "subtree:split": "git subtree split --prefix=packages",
+    "sync:public": "gh workflow run \"Sync with Public Repository\" --ref \"$(git branch --show-current)\"",
+    "syncpack:fix": "bunx syncpack fix-mismatches",
+    "update:devenv": "cd tooling/direnv; devenv update",
+    "update:nixpkgs-overlay": "cd tooling/direnv/nixpkgs-overlay && nix shell nixpkgs#nvfetcher -c nvfetcher",
+    "update:npm:interactive": "bun update --interactive --recursive"
   },
   "private": true,
   "packageManager": "bun@1.3.13",
   "engines": {
-    "node": ">=22.0.0"
-  },
-  "dependencies": {
-    "@conloca/content-api": "workspace:*",
-    "react": "19.2.4",
-    "react-dom": "19.2.4",
-    "react-router-dom": "^7.13.0"
+    "node": ">=25.0.0"
   },
   "devDependencies": {
-    "@types/bun": "^1.3.13",
     "@babel/core": "^7.28.5",
     "@babel/preset-react": "^7.28.5",
-    "@biomejs/biome": "^2.3.15",
-    "@corpos/tooling": "workspace:*",
-    "@nx/js": "22.5.0",
-    "@nx/react": "22.5.0",
-    "@nx/web": "22.5.0",
-    "@nx/workspace": "22.5.0",
+    "@biomejs/biome": "^2.4.13",
+    "@conloca/content-api": "workspace:*",
+    "@conloca/tooling": "workspace:*",
+    "@nx/js": "22.7.1",
+    "@nx/react": "22.7.1",
+    "@nx/web": "22.7.1",
+    "@nx/workspace": "22.7.1",
+    "@smoothbricks/nx-plugin": "^0.2.1",
     "@swc-node/register": "~1.11.1",
-    "@swc/core": "~1.15.11",
-    "@swc/helpers": "~0.5.18",
+    "@swc/core": "~1.15.32",
+    "@swc/helpers": "~0.5.21",
     "@testing-library/dom": "10.4.1",
     "@testing-library/react": "^16.3.2",
-    "@types/node": "~22.0.0",
+    "@types/bun": "1.3.13",
+    "@types/node": "~25.0.0",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
-    "@vitejs/plugin-react": "^5.1.4",
-    "@vitest/coverage-v8": "^4.0.18",
-    "@vitest/ui": "^4.0.18",
-    "ajv": "^8.17.1",
+    "@vitejs/plugin-react": "^5.2.0",
+    "@vitest/coverage-v8": "^4.1.5",
+    "@vitest/ui": "^4.1.5",
+    "ajv": "^8.20.0",
+    "eslint": "^9.39.4",
+    "eslint-stdout": "^1.1.2",
     "jiti": "2.6.1",
-    "jsdom": "^28.0.0",
-    "nx": "22.5.0",
-    "prettier": "^3.8.1",
-    "tsdown": "^0.20.3",
+    "jsdom": "^28.1.0",
+    "nx": "22.7.1",
+    "prettier": "^3.8.3",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "react-router-dom": "^7.14.2",
+    "tsdown": "^0.21.10",
     "tslib": "^2.8.1",
-    "typescript": "^5.9.3",
-    "verdaccio": "^6.2.5",
+    "typescript": "^6.0.3",
+    "verdaccio": "6.5.2",
     "vite": "^7.3.1",
-    "vitest": "^4.0.18"
+    "vitest": "^4.1.5"
   },
   "workspaces": [
     "packages/*",
+    "privpkgs/*",
     "example/*",
     "targets/*",
     "tooling"
@@ -74,6 +89,17 @@
   "nx": {
     "includedScripts": [],
     "targets": {
+      "dev-conloca": {
+        "continuous": true,
+        "dependsOn": [
+          "^build"
+        ],
+        "executor": "nx:run-commands",
+        "options": {
+          "command": "nx run website-with-cms:dev",
+          "cwd": "{projectRoot}"
+        }
+      },
       "local-registry": {
         "executor": "@nx/js:verdaccio",
         "options": {
@@ -81,8 +107,20 @@
           "config": ".verdaccio/config.yml",
           "storage": "tmp/local-registry/storage"
         }
+      },
+      "serve-conloca": {
+        "continuous": true,
+        "dependsOn": [
+          "^build"
+        ],
+        "executor": "nx:run-commands",
+        "options": {
+          "command": "nx run website-with-cms:dev --outputStyle=stream",
+          "cwd": "{projectRoot}"
+        }
       }
-    }
+    },
+    "name": "@conloca/source"
   },
   "patchedDependencies": {
     "acorn@8.15.0": "patches/acorn@8.15.0.patch",

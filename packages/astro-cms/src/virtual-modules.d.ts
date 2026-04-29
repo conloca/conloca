@@ -6,9 +6,8 @@
  * and Puck config to page handlers.
  */
 
+import type { LayoutProps, PageData, PageReference, ResolvedRoutingConfig } from '@conloca/astro-cms';
 import type { Config } from '@puckeditor/core';
-
-import type { LayoutProps, PageData, PageReference, ResolvedRoutingConfig } from './types.js';
 
 /**
  * Virtual module: virtual:conloca-routing-config
@@ -96,7 +95,7 @@ declare module 'virtual:conloca-page-api' {
   export function getDataCollection(
     collection: string,
     locale?: string,
-  ): Promise<import('./types').DataCollectionEntry[]>;
+  ): Promise<import('@conloca/astro-cms').DataCollectionEntry[]>;
 
   /**
    * Get pages matching a path prefix.

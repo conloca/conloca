@@ -4,9 +4,9 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "dev": "astro dev",
-    "build": "astro build",
-    "preview": "astro preview",
+    "dev": "nx run conloca-website:dev --tui=false --outputStyle=stream",
+    "build": "nx run conloca-website:build",
+    "preview": "nx run conloca-website:preview --tui=false --outputStyle=stream",
     "astro": "astro",
     "deploy": "bunx wrangler@4.73.0 deploy",
     "deploy:dry": "bunx wrangler@4.73.0 deploy --dry-run",
@@ -19,28 +19,51 @@
     "@astrojs/starlight-tailwind": "^4.0.0",
     "@conloca/astro-cms": "workspace:*",
     "@node-rs/xxhash": "^1.7.6",
-    "@puckeditor/core": "^0.21.1",
+    "@puckeditor/core": "^0.21.2",
     "@tailwindcss/vite": "^4.1.0",
-    "astro": "^6.0.0",
+    "astro": "^6.2.1",
     "clsx": "^2.1.1",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "sharp": "^0.33.0",
-    "tailwindcss": "^4.1.0",
-    "zod": "^4.3.6"
+    "tailwindcss": "^4.1.16",
+    "zod": "^4.4.1"
   },
   "nx": {
     "targets": {
       "build": {
         "dependsOn": [
           "^build"
-        ]
+        ],
+        "executor": "nx:run-commands",
+        "options": {
+          "command": "astro build",
+          "cwd": "{projectRoot}"
+        }
       },
       "dev": {
         "dependsOn": [
           "^build"
-        ]
+        ],
+        "executor": "nx:run-commands",
+        "continuous": true,
+        "options": {
+          "command": "astro dev",
+          "cwd": "{projectRoot}"
+        }
+      },
+      "preview": {
+        "executor": "nx:run-commands",
+        "dependsOn": [
+          "build"
+        ],
+        "continuous": true,
+        "options": {
+          "command": "astro preview",
+          "cwd": "{projectRoot}"
+        }
       }
-    }
+    },
+    "name": "conloca-website"
   }
 }

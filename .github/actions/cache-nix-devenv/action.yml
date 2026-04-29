@@ -1,0 +1,79 @@
+name: Cache Nix profiles, devenv and direnv
+description: Restore cached Nix/devenv state for SmoothBricks GitHub Actions jobs.
+
+inputs:
+  segment:
+    description: 'Cache segment to operate on: nix or devenv.'
+    required: false
+    default: nix
+  mode:
+    description: Restore or save the Nix/devenv cache.
+    required: false
+    default: restore
+
+outputs:
+  cache-hit:
+    description: Whether the restore step found an exact primary-key match.
+    value: ${{ steps.restore-nix.outputs.cache-hit == 'true' || steps.restore-devenv.outputs.cache-hit == 'true' }}
+
+runs:
+  using: composite
+  steps:
+    # The large cache is the Nix profile plus exported store NAR. Its key tracks
+    # the expensive shell closure inputs only; tiny direnv/setup script changes
+    # should not invalidate a 1GB+ store cache.
+    - name: Restore Nix profiles, devenv and direnv
+      id: restore-nix
+      if: ${{ inputs.segment == 'nix' && inputs.mode == 'restore' }}
+      uses: actions/cache/restore@v5.0.5
+      with:
+        path: |
+          ${{ env.NIX_STORE_NAR }}
+          ~/.nix-profile
+          ~/.local/state/nix/profiles
+          ~/.cache/nix
+        key:
+          ${{ runner.os }}-nix-v3-${{ hashFiles('tooling/direnv/devenv.yaml', 'tooling/direnv/devenv.nix',
+          'tooling/direnv/devenv.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-nix-v3-
+
+    - name: Save Nix profiles and store NAR
+      if: ${{ inputs.segment == 'nix' && inputs.mode == 'save' }}
+      uses: actions/cache/save@v5.0.5
+      with:
+        path: |
+          ${{ env.NIX_STORE_NAR }}
+          ~/.nix-profile
+          ~/.local/state/nix/profiles
+          ~/.cache/nix
+        key:
+          ${{ runner.os }}-nix-v3-${{ hashFiles('tooling/direnv/devenv.yaml', 'tooling/direnv/devenv.nix',
+          'tooling/direnv/devenv.lock') }}
+
+    # .devenv/.direnv are small, but they contain absolute /nix/store pointers.
+    # Workflows restore this segment only after an exact Nix cache hit.
+    - name: Restore devenv and direnv state
+      id: restore-devenv
+      if: ${{ inputs.segment == 'devenv' && inputs.mode == 'restore' }}
+      uses: actions/cache/restore@v5.0.5
+      with:
+        path: |
+          ${{ github.workspace }}/tooling/direnv/.devenv
+          ${{ github.workspace }}/tooling/direnv/.direnv
+        key:
+          ${{ runner.os }}-devenv-v3-${{ hashFiles('tooling/direnv/devenv.yaml', 'tooling/direnv/devenv.nix',
+          'tooling/direnv/devenv.lock', 'tooling/direnv/envrc.sh', 'tooling/direnv/setup-environment.ts') }}
+        restore-keys: |
+          ${{ runner.os }}-devenv-v3-
+
+    - name: Save devenv and direnv state
+      if: ${{ inputs.segment == 'devenv' && inputs.mode == 'save' }}
+      uses: actions/cache/save@v5.0.5
+      with:
+        path: |
+          ${{ github.workspace }}/tooling/direnv/.devenv
+          ${{ github.workspace }}/tooling/direnv/.direnv
+        key:
+          ${{ runner.os }}-devenv-v3-${{ hashFiles('tooling/direnv/devenv.yaml', 'tooling/direnv/devenv.nix',
+          'tooling/direnv/devenv.lock', 'tooling/direnv/envrc.sh', 'tooling/direnv/setup-environment.ts') }}

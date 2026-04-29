@@ -1,0 +1,39 @@
+name: Save Nix/devenv caches
+description: Cleanup the Nix store and explicitly save Nix/devenv cache segments.
+
+inputs:
+  nix-cache-hit:
+    description: Exact-hit output from setup-devenv's Nix cache restore.
+    required: false
+    default: 'false'
+  devenv-cache-hit:
+    description: Exact-hit output from setup-devenv's devenv cache restore.
+    required: false
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    - name: 🧹 Cleanup and cache Nix store
+      id: cleanup-cache
+      shell: bash
+      working-directory: tooling/direnv
+      # build-shell normally adds repo paths to GITHUB_PATH, but this cleanup
+      # must still run when build-shell fails before that happens.
+      run:
+        PATH="$PWD/.devenv/profile/bin:$PWD/../../node_modules/.bin:$PWD/../../tooling:$PATH" ../../tooling/smoo
+        github-ci cleanup-cache
+
+    - name: 🧊 Save Nix profiles and store NAR
+      if: ${{ steps.cleanup-cache.outputs.cache-ready == 'true' && inputs.nix-cache-hit != 'true' }}
+      uses: ./.github/actions/cache-nix-devenv
+      with:
+        segment: nix
+        mode: save
+
+    - name: 🧊 Save devenv and direnv
+      if: ${{ steps.cleanup-cache.outputs.cache-ready == 'true' && inputs.devenv-cache-hit != 'true' }}
+      uses: ./.github/actions/cache-nix-devenv
+      with:
+        segment: devenv
+        mode: save

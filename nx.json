@@ -1,5 +1,8 @@
 {
   "$schema": "./node_modules/nx/schemas/nx-schema.json",
+  "sync": {
+    "applyChanges": true
+  },
   "workspaceLayout": {
     "appsDir": "packages",
     "libsDir": "packages"
@@ -7,28 +10,15 @@
   "namedInputs": {
     "default": ["{projectRoot}/**/*", "sharedGlobals"],
     "production": [
-      "default",
-      "!{projectRoot}/**/?(*.)+(spec|test).[jt]s?(x)?(.snap)",
-      "!{projectRoot}/tsconfig.spec.json",
-      "!{projectRoot}/src/test-setup.[jt]s"
+      "{projectRoot}/src/**/*",
+      "{projectRoot}/package.json",
+      "!{projectRoot}/**/__tests__/**",
+      "!{projectRoot}/**/*.test.*",
+      "!{projectRoot}/**/*.spec.*"
     ],
-    "sharedGlobals": []
+    "sharedGlobals": ["{workspaceRoot}/.github/workflows/ci.yml"]
   },
   "plugins": [
-    {
-      "plugin": "@nx/js/typescript",
-      "options": {
-        "typecheck": {
-          "targetName": "typecheck"
-        },
-        "build": {
-          "targetName": "build",
-          "configName": "tsconfig.lib.json",
-          "buildDepsName": "build-deps",
-          "watchDepsName": "watch-deps"
-        }
-      }
-    },
     {
       "plugin": "@nx/react/router-plugin",
       "options": {
@@ -41,8 +31,20 @@
       }
     },
     {
-      "plugin": "nx/plugins/package-json"
-    }
+      "plugin": "@nx/js/typescript",
+      "options": {
+        "typecheck": {
+          "targetName": "typecheck"
+        },
+        "build": {
+          "targetName": "tsc-js",
+          "configName": "tsconfig.lib.json",
+          "buildDepsName": "build-deps",
+          "watchDepsName": "watch-deps"
+        }
+      }
+    },
+    "@smoothbricks/nx-plugin"
   ],
   "tasksRunnerOptions": {
     "default": {
@@ -52,6 +54,21 @@
         "parallel": 3,
         "useDaemonProcess": true
       }
+    }
+  },
+  "targetDefaults": {
+    "lint": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["{projectRoot}/**/*", "{workspaceRoot}/biome.json"],
+      "options": {
+        "command": "biome format --files-ignore-unknown=true {projectRoot}",
+        "cwd": "{workspaceRoot}"
+      }
+    },
+    "build": {
+      "cache": true,
+      "outputs": ["{projectRoot}/dist"]
     }
   },
   "generators": {
@@ -82,7 +99,26 @@
       "@conloca/mdx"
     ],
     "version": {
-      "preVersionCommand": "bunx nx run-many -t build"
+      "specifierSource": "conventional-commits",
+      "currentVersionResolver": "git-tag",
+      "fallbackCurrentVersionResolver": "disk",
+      "versionActions": "@smoothbricks/nx-plugin/version-actions"
+    },
+    "projectsRelationship": "independent",
+    "releaseTag": {
+      "pattern": "{projectName}@{version}"
+    },
+    "changelog": {
+      "workspaceChangelog": false,
+      "projectChangelogs": {
+        "createRelease": false,
+        "file": false,
+        "renderOptions": {
+          "authors": true,
+          "applyUsernameToAuthors": true
+        }
+      }
     }
-  }
+  },
+  "analytics": false
 }

@@ -13,6 +13,7 @@ export default defineConfig({
       description:
         'Visual editing for marketers, full git ownership for developers. File-based CMS powered by Puck with drag-and-drop components.',
       customCss: ['./src/styles/global.css', './src/styles/custom.css'],
+      social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/conloca/conloca' }],
       expressiveCode: { themes: ['starlight-dark', 'starlight-light'] },
       routeMiddleware: './src/route-data.ts',
       components: {

@@ -12,7 +12,7 @@ export default defineConfig({
   format: ['esm'],
   dts: true,
   tsconfig: 'tsconfig.lib.json',
-  clean: false, // CRITICAL: Don't delete dist/spa/main.css from SPA build
+  clean: false,
   external: [
     'react',
     'react-dom',

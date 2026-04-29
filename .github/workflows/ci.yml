@@ -2,7 +2,8 @@ name: CI
 
 on:
   push:
-    branches: [private]
+    branches:
+      - '**'
   pull_request:
 
 permissions:
@@ -16,133 +17,86 @@ defaults:
 
 jobs:
   main:
+    name: Validate
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     env:
       NIX_STORE_NAR: ${{ github.workspace }}/nix-store.nar
       GH_TOKEN: ${{ github.token }}
     steps:
       # Step 1: GitHub adds "Set up job" automatically
       # Step 2
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: 📥 Checkout
+        uses: actions/checkout@v6.0.2
         with:
-          filter: tree:0
+          filter: blob:none
           fetch-depth: 0
 
-      # --- Nix ----------------------------------------------------------------
-
-      # Step 3
-      - uses: DeterminateSystems/nix-installer-action@e50d5f73bfe71c2dd0aa4218de8f4afa59f8f81d # v16
-        with:
-          extra-conf: |
-            keep-outputs = true
-            keep-derivations = true
-            gc-keep-derivations = true
-            gc-keep-outputs = true
-
-      # Step 4
-      # Cache Nix profiles, devenv and direnv
-      - name: Cache Nix profiles, devenv and direnv
-        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
-        with:
-          path: |
-            ${{ env.NIX_STORE_NAR }}
-            ~/.nix-profile
-            ~/.local/state/nix/profiles
-            ~/.cache/nix
-            ${{ github.workspace }}/tooling/direnv/.devenv
-            ${{ github.workspace }}/tooling/direnv/.direnv
-          key:
-            ${{ runner.os }}-nar-${{ hashFiles('tooling/direnv/devenv.yaml', 'tooling/direnv/devenv.nix',
-            'tooling/direnv/devenv.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-nar-
-
-      # Step 5
-      - name: Restore Nix store from NAR
-        run: ./github-ci.sh restore-store
-
-      # --- devenv shell -------------------------------------------------------
-
-      # Step 6
-      - uses: cachix/cachix-action@ad2ddac53f961de1989924296a1f236fcfbaa4fc # v15
-        with:
-          name: devenv
-
-      # Step 7
-      - name: Install devenv
-        run: ./github-ci.sh install-devenv
-
-      # Step 8
-      - name: Cache node_modules
-        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
-        with:
-          path: node_modules
-          key: ${{ runner.os }}-node-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
-
-      # Step 9
-      - name: Build devenv shell
-        run: ./github-ci.sh build-shell
+      # Step 3. Composite action internals do not affect top-level job step
+      # anchors; update the nx-smart --step values below if top-level steps move.
+      - name: 🧱 Setup Nix/devenv
+        id: setup
+        uses: ./.github/actions/setup-devenv
 
       # --- Nx -----------------------------------------------------------------
 
-      # Step 10
+      # Step 4
       # Sets the base and head SHAs required for the nx affected commands
-      - uses: nrwl/nx-set-shas@15514ee4353489ef5a1644bcdae44f0ae2ea45f3 # v4.4.0
-        if: ${{ github.event_name != 'pull_request' }}
+      - name: 🧭 Set Nx SHAs
+        uses: nrwl/nx-set-shas@v5.0.1
         with:
-          main-branch-name: private
-          fallback-sha: ${{ github.event.pull_request.base.sha || github.event.before }}
+          workflow-id: ci.yml
 
-      - name: Set Nx SHAs for pull requests
-        if: ${{ github.event_name == 'pull_request' }}
-        run: |
-          echo "NX_BASE=${{ github.event.pull_request.base.sha }}" >> "$GITHUB_ENV"
-          echo "NX_HEAD=${GITHUB_SHA}" >> "$GITHUB_ENV"
+      # Step 5
+      - name: 🧠 Restore Nx cache
+        id: nx-cache
+        uses: ./.github/actions/cache-nx
 
-      - name: Normalize Nx SHAs
-        if: ${{ github.event_name != 'pull_request' }}
-        run: |
-          if [ -z "${NX_BASE:-}" ]; then
-            echo "NX_BASE=${{ github.event.before }}" >> "$GITHUB_ENV"
-          fi
-
-          if [ -z "${NX_HEAD:-}" ]; then
-            echo "NX_HEAD=${GITHUB_SHA}" >> "$GITHUB_ENV"
-          fi
-
-      # Step 11
-      - name: Cache Nx
-        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
-        with:
-          path: .nx/cache
-          key: ${{ runner.os }}-nx-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-nx-
-
-      # Steps 12-14 use nx-smart:
-      #  - push to private -> nx run-many (full coverage; narrow CI-only commits
-      #                      cannot silently mask regressions in untouched
-      #                      projects whose results are cache-green).
-      #  - pull_request  -> nx affected over the full PR range (base..HEAD),
-      #                      as set by nrwl/nx-set-shas above.
-
-      # Step 12
+      # Step 6
       - name: 🔨 Build
-        run: ./github-ci.sh nx-smart build "Build" 12
+        run: smoo github-ci nx-smart --target build --name "Build" --step 6
 
-      # Step 13
+      # Step 7
       - name: 🔍 Lint
-        run: ./github-ci.sh nx-smart lint "Lint" 13
+        run: smoo github-ci nx-smart --target lint --name "Lint" --step 7
 
-      # Step 14
+      # Step 8
       - name: 🧪 Unit Tests
-        run: ./github-ci.sh nx-smart test "Unit Tests" 14
+        run: smoo github-ci nx-smart --target test --name "Unit Tests" --step 8
+
+      # Step 9
+      # Nx's database cache needs artifact files and .nx/workspace-data DB
+      # metadata restored together; GitHub Actions cache is only the archive
+      # transport. Save runs only after build/lint/test succeed on the default
+      # branch, so PRs may restore shared cache but cannot publish it.
+      - name: 💾 Save Nx cache
+        if:
+          ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}',
+          github.event.repository.default_branch) && steps.nx-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v5.0.5
+        with:
+          path: |
+            .nx/cache
+            .nx/workspace-data/*.db*
+          key: ${{ runner.os }}-nx-db-v1-${{ github.sha }}
+
+      # Step 10
+      - name: 📎 Upload trace DBs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: trace-results-${{ github.run_id }}
+          path: packages/*/.trace-results.db
+          if-no-files-found: ignore
+          retention-days: 14
+          include-hidden-files: true
 
       # --- Cleanup ------------------------------------------------------------
 
-      - name: Cleanup and cache Nix store
-        run: |
-          ./github-ci.sh nix-gc
-          ./github-ci.sh export-store
+      # Step 11
+      - name: 🧹 Cleanup and cache Nix/devenv
+        if: ${{ always() }}
+        uses: ./.github/actions/save-nix-devenv
+        with:
+          nix-cache-hit: ${{ steps.setup.outputs.nix-cache-hit }}
+          devenv-cache-hit: ${{ steps.setup.outputs.devenv-cache-hit }}

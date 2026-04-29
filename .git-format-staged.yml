@@ -1,47 +1,53 @@
-# git-format-staged configuration for the SmoothBricks monorepo
-# This configuration replaces the multiple git-format-staged commands in pre-commit.sh
+# git-format-staged configuration for SmoothBricks-style monorepos
 
 formatters:
+  # ESLint for Astro files (run first as it only handles .astro files)
+  eslint:
+    command: "eslint-stdout '{}'"
+    patterns:
+      - '*.astro'
+      - '!.*' # Exclude hidden files
+
   # Biome for JS/TS/JSX/TSX/JSON/HTML/CSS/GraphQL files
   biome:
-    command: biome check --files-ignore-unknown=true --use-editorconfig=true --format-with-errors=true '--stdin-file-path={}' --fix
+    command: "biome check --files-ignore-unknown=true --use-editorconfig=true '--stdin-file-path={}' --fix"
     patterns:
-      - *.js
-      - *.ts
-      - *.jsx
-      - *.tsx
-      - *.json
-      - *.jsonc
-      - *.html
-      - *.css
-      - *.graphql
+      - '*.js'
+      - '*.ts'
+      - '*.jsx'
+      - '*.tsx'
+      - '*.json'
+      - '*.jsonc'
+      - '*.html'
+      - '*.css'
+      - '*.graphql'
 
   # Prettier for all other files (mainly Markdown)
   prettier:
-    command: prettier --ignore-unknown --stdin-filepath '{}'
+    command: "prettier --ignore-unknown --stdin-filepath '{}'"
     patterns:
       # Match all files
-      - *
-      # Exclude hidden files
-      - !.*
+      - '*'
       # Exclude files handled by Biome
-      - !*.js
-      - !*.ts
-      - !*.jsx
-      - !*.tsx
-      - !*.json
-      - !*.jsonc
-      - !*.html
-      - !*.css
-      - !*.graphql
+      - '!*.js'
+      - '!*.ts'
+      - '!*.jsx'
+      - '!*.tsx'
+      - '!*.json'
+      - '!*.jsonc'
+      - '!*.html'
+      - '!*.css'
+      - '!*.graphql'
       # Exclude files handled by Alejandra
-      - !*.nix
+      - '!*.nix'
+      # Bun lockfiles are generated and should not be rewritten by Prettier
+      - '!bun.lock'
 
   # Alejandra for Nix files
   alejandra:
-    command: alejandra
+    command: 'alejandra'
     patterns:
-      - *.nix
+      - '*.nix'
 
 settings:
   update_working_tree: true

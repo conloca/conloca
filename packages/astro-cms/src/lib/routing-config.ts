@@ -11,7 +11,7 @@ import type { RouteConfig, RoutingConfig, RoutingConfigInput } from '../types.js
  */
 export function normalizeRoutingConfig(
   input: RoutingConfigInput | undefined,
-  topLevelLayout?: string
+  topLevelLayout?: string,
 ): RoutingConfig | undefined {
   // If no routing config but layout provided, enable with defaults
   if (input === undefined && topLevelLayout) {

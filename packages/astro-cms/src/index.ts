@@ -24,4 +24,12 @@ export { type HydrationMeta, type WithHydrationStrategy, withHydration } from '.
 // Hydration support for interactive components
 // NOTE: The root entry point is intentionally static-safe.
 // Node/Astro integration APIs live under '@conloca/astro-cms/node'.
-export type { HydrationStrategy, TemplateConfig } from './types.js';
+export type {
+  DataCollectionEntry,
+  HydrationStrategy,
+  LayoutProps,
+  PageData,
+  PageReference,
+  ResolvedRoutingConfig,
+  TemplateConfig,
+} from './types.js';
