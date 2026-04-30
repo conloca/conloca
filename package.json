@@ -9,7 +9,8 @@
   "scripts": {
     "build:all": "nx run-many -t build",
     "clean:node_modules": "find e* t* p* -type d -name node_modules -print0 |xargs -0 rm -rvf",
-    "dev:conloca": "nx run @conloca/source:dev-conloca --outputStyle=stream",
+    "dev:conloca": "nx run website-with-cms:dev --outputStyle=dynamic-legacy",
+    "dev:website": "nx run conloca-website:dev --outputStyle=dynamic-legacy",
     "format:changed": "git-format-staged --config tooling/git-hooks/git-format-staged.yml --also-unstaged",
     "format:staged": "git-format-staged --config tooling/git-hooks/git-format-staged.yml",
     "lint": "nx run-many -t lint",
@@ -24,7 +25,6 @@
     "release:sync-lockfile": "bun tooling/sync-lockfile-versions.ts",
     "reload:direnv": "rm -rf tooling/direnv/.{direnv,devenv}; direnv reload",
     "reload:node_modules": "tooling/rm_node_modules; bun install",
-    "serve:conloca": "nx run @conloca/source:serve-conloca --outputStyle=stream",
     "show:tree": "tree --gitignore -d",
     "subtree:pull": "git subtree pull --prefix=packages conloca-public main --squash",
     "subtree:split": "git subtree split --prefix=packages",
@@ -89,34 +89,12 @@
   "nx": {
     "includedScripts": [],
     "targets": {
-      "dev-conloca": {
-        "continuous": true,
-        "dependsOn": [
-          "^build"
-        ],
-        "executor": "nx:run-commands",
-        "options": {
-          "command": "nx run website-with-cms:dev",
-          "cwd": "{projectRoot}"
-        }
-      },
       "local-registry": {
         "executor": "@nx/js:verdaccio",
         "options": {
           "port": 4873,
           "config": ".verdaccio/config.yml",
           "storage": "tmp/local-registry/storage"
-        }
-      },
-      "serve-conloca": {
-        "continuous": true,
-        "dependsOn": [
-          "^build"
-        ],
-        "executor": "nx:run-commands",
-        "options": {
-          "command": "nx run website-with-cms:dev --outputStyle=stream",
-          "cwd": "{projectRoot}"
         }
       }
     },
