@@ -32,7 +32,7 @@
     "!dist/test"
   ],
   "scripts": {
-    "test": "nx run content-api-client:test --tui=false --outputStyle=stream"
+    "test": "nx run content-api-client:test --outputStyle=stream"
   },
   "dependencies": {
     "@conloca/content-api": "workspace:*",

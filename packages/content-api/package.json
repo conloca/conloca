@@ -53,7 +53,7 @@
     }
   },
   "scripts": {
-    "test": "nx run content-api:test --tui=false --outputStyle=stream"
+    "test": "nx run content-api:test --outputStyle=stream"
   },
   "type": "module",
   "types": "./dist/index.d.mts",

@@ -4,9 +4,9 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "dev": "nx run website-with-cms:dev --tui=false --outputStyle=stream",
+    "dev": "nx run website-with-cms:dev --outputStyle=stream",
     "build": "nx run website-with-cms:build",
-    "preview": "nx run website-with-cms:preview --tui=false --outputStyle=stream",
+    "preview": "nx run website-with-cms:preview --outputStyle=stream",
     "astro": "astro"
   },
   "dependencies": {

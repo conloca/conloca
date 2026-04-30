@@ -52,8 +52,8 @@
   ],
   "scripts": {
     "build:dev": "NODE_ENV=development bun build-spa.ts",
-    "dev": "nx run cms-spa:dev --tui=false --outputStyle=stream",
-    "test": "nx run cms-spa:test --tui=false --outputStyle=stream"
+    "dev": "nx run cms-spa:dev --outputStyle=stream",
+    "test": "nx run cms-spa:test --outputStyle=stream"
   },
   "dependencies": {
     "@conloca/content-api-client": "workspace:*",

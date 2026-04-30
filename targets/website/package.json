@@ -4,9 +4,9 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "dev": "nx run conloca-website:dev --tui=false --outputStyle=stream",
+    "dev": "nx run conloca-website:dev --outputStyle=stream",
     "build": "nx run conloca-website:build",
-    "preview": "nx run conloca-website:preview --tui=false --outputStyle=stream",
+    "preview": "nx run conloca-website:preview --outputStyle=stream",
     "astro": "astro",
     "deploy": "bunx wrangler@4.73.0 deploy",
     "deploy:dry": "bunx wrangler@4.73.0 deploy --dry-run",

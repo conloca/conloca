@@ -53,7 +53,7 @@
     "!**/*.tsbuildinfo"
   ],
   "scripts": {
-    "test": "nx run mdx:test --tui=false --outputStyle=stream"
+    "test": "nx run mdx:test --outputStyle=stream"
   },
   "nx": {
     "targets": {

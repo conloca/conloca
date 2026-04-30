@@ -9,7 +9,7 @@
   "scripts": {
     "build:all": "nx run-many -t build",
     "clean:node_modules": "find e* t* p* -type d -name node_modules -print0 |xargs -0 rm -rvf",
-    "dev:conloca": "nx run @conloca/source:dev-conloca --tui=false --outputStyle=stream",
+    "dev:conloca": "nx run @conloca/source:dev-conloca --outputStyle=stream",
     "format:changed": "git-format-staged --config tooling/git-hooks/git-format-staged.yml --also-unstaged",
     "format:staged": "git-format-staged --config tooling/git-hooks/git-format-staged.yml",
     "lint": "nx run-many -t lint",
@@ -24,7 +24,7 @@
     "release:sync-lockfile": "bun tooling/sync-lockfile-versions.ts",
     "reload:direnv": "rm -rf tooling/direnv/.{direnv,devenv}; direnv reload",
     "reload:node_modules": "tooling/rm_node_modules; bun install",
-    "serve:conloca": "nx run @conloca/source:serve-conloca --tui=false --outputStyle=stream",
+    "serve:conloca": "nx run @conloca/source:serve-conloca --outputStyle=stream",
     "show:tree": "tree --gitignore -d",
     "subtree:pull": "git subtree pull --prefix=packages conloca-public main --squash",
     "subtree:split": "git subtree split --prefix=packages",

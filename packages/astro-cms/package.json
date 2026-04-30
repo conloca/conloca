@@ -60,7 +60,7 @@
     }
   },
   "scripts": {
-    "test": "nx run astro-cms:test --tui=false --outputStyle=stream"
+    "test": "nx run astro-cms:test --outputStyle=stream"
   },
   "files": [
     "dist",

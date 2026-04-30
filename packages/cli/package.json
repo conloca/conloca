@@ -18,7 +18,7 @@
   },
   "scripts": {
     "build": "nx run cli:build",
-    "test": "nx run cli:test --tui=false --outputStyle=stream"
+    "test": "nx run cli:test --outputStyle=stream"
   },
   "type": "module",
   "files": [
