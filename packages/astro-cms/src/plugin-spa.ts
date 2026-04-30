@@ -137,15 +137,16 @@ export default {};
 };
 
 // Template for the puck config loader virtual module
-const puckConfigLoader = (absolutePuckPath: string) => {
+const puckConfigLoader = (absolutePuckPath: string, cmsSpaDistDir?: string) => {
   // We need to ensure the preamble executes before ANY module evaluation
   // So we'll use a dynamic import after the preamble is set up
+  const puckConfigImport = cmsSpaDistDir ? `${cmsSpaDistDir}/puck-config.mjs` : '@conloca/cms-spa/puck-config';
   return `
 // Import and execute React refresh preamble first (from @vitejs/plugin-react)
 ${reactRefreshPreamble}
 
 // Import the setPuckConfig function from cms-spa
-import { setPuckConfig } from '@conloca/cms-spa/puck-config';
+import { setPuckConfig } from '${puckConfigImport}';
 
 // Now dynamically import the config after preamble is ready
 const puckConfigPromise = import('${absolutePuckPath}');
@@ -176,9 +177,10 @@ export default puckConfigPromise.then(m => m.default);
 };
 
 // Template for the schemas loader virtual module
-const schemasLoader = (absoluteSchemasPath: string) => {
+const schemasLoader = (absoluteSchemasPath: string, cmsSpaDistDir?: string) => {
+  const pageSchemasImport = cmsSpaDistDir ? `${cmsSpaDistDir}/page-schemas.mjs` : '@conloca/cms-spa/page-schemas';
   return `
-import { setPageSchemas } from '@conloca/cms-spa/page-schemas';
+import { setPageSchemas } from '${pageSchemasImport}';
 import * as schemas from '${absoluteSchemasPath}';
 
 if (schemas.pageSchemas) {
@@ -206,7 +208,7 @@ export default schemas;
 // registry; the editor's iframe bridge then injects them directly into
 // Puck's preview iframe `<head>`. This keeps host-site CSS out of the CMS
 // chrome and confines it to the intended consumer (the preview).
-const siteStylesLoader = (cssPaths: string[]) => {
+const siteStylesLoader = (cssPaths: string[], cmsSpaDistDir?: string) => {
   const imports = cssPaths
     .map((p, i) => {
       const absolutePath = p.startsWith('./') ? `/${p.slice(2)}` : p;
@@ -214,10 +216,11 @@ const siteStylesLoader = (cssPaths: string[]) => {
     })
     .join('\n');
   const vars = cssPaths.map((_, i) => `css${i}`).join(', ');
+  const siteStylesImport = cmsSpaDistDir ? `${cmsSpaDistDir}/site-styles.mjs` : '@conloca/cms-spa/site-styles';
 
   return `
 ${imports}
-import { setSiteStyles } from '@conloca/cms-spa/site-styles';
+import { setSiteStyles } from '${siteStylesImport}';
 
 setSiteStyles([${vars}]);
 
@@ -231,6 +234,20 @@ export default {};
 
 export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
   const cmsRoute = options.route || '/__cms';
+
+  // Resolve @conloca/cms-spa package directory for absolute imports in virtual
+  // module templates. Bare specifiers like '@conloca/cms-spa/puck-config'
+  // resolve from the Vite project root, which works when deps are hoisted
+  // (npm consumers) but fails with isolated linkers (e.g. bun). Using the
+  // resolved absolute path bypasses the project-root lookup entirely.
+  let cmsSpaDir: string | undefined;
+  try {
+    const pkgUrl = import.meta.resolve('@conloca/cms-spa/package.json');
+    cmsSpaDir = dirname(pkgUrl.startsWith('file://') ? fileURLToPath(pkgUrl) : pkgUrl);
+  } catch {
+    // Package not resolvable — virtual modules will fall back to bare specifiers
+  }
+  const cmsSpaDistDir = cmsSpaDir ? join(cmsSpaDir, 'dist') : undefined;
 
   // Normalize routing config and resolve defaults
   // Pass top-level layout to enable routing when layout provided without explicit routing config
@@ -454,17 +471,13 @@ initHydration(componentRegistry)
               'import.meta.env.CONLOCA_ASSETS_PATH': JSON.stringify(options.assetsPath || ''),
             },
             resolve: {
-              // Dedupe React and React Query to avoid multiple instances when using symlinked packages.
-              // Without this, bun link causes esbuild to find nested copies in the symlink target's
-              // node_modules, creating separate React.createContext() calls = broken context sharing.
-              dedupe: [
-                'react',
-                'react-dom',
-                'react/jsx-runtime',
-                'react/jsx-dev-runtime',
-                '@puckeditor/core',
-                '@tanstack/react-query',
-              ],
+              // Dedupe React to avoid multiple instances when CMS SPA source is
+              // loaded from a workspace sibling package. Only list packages the
+              // consumer project declares directly — with bun's isolated linker,
+              // transitive deps (e.g. @tanstack/react-query) live in the owning
+              // package's node_modules and must NOT be forced to resolve from the
+              // consumer root (which would fail).
+              dedupe: ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
             },
             optimizeDeps: {
               // Exclude the puck config from optimization to avoid the outdated dep error
@@ -562,7 +575,7 @@ initHydration(componentRegistry)
                       ? `/${options.puckConfigPath.slice(2)}`
                       : options.puckConfigPath;
 
-                    return puckConfigLoader(absolutePuckPath);
+                    return puckConfigLoader(absolutePuckPath, cmsSpaDistDir);
                   }
                   if (id === `${cmsRoute}/content-listener.js`) {
                     return contentChangeListener();
@@ -572,14 +585,14 @@ initHydration(componentRegistry)
                       const absoluteSchemasPath = options.schemasPath.startsWith('.')
                         ? `/${options.schemasPath.slice(2)}`
                         : options.schemasPath;
-                      return schemasLoader(absoluteSchemasPath);
+                      return schemasLoader(absoluteSchemasPath, cmsSpaDistDir);
                     }
                     return 'export default {};';
                   }
                   if (id === `${cmsRoute}/site-styles.js`) {
                     if (options.siteStyles) {
                       const paths = Array.isArray(options.siteStyles) ? options.siteStyles : [options.siteStyles];
-                      return siteStylesLoader(paths);
+                      return siteStylesLoader(paths, cmsSpaDistDir);
                     }
                     return 'export default {};';
                   }
@@ -593,24 +606,19 @@ initHydration(componentRegistry)
                   }
                   if (id === RESOLVED_CMS_SPA_ENTRY) {
                     // Detect whether cms-spa source is available (workspace mode)
-                    // vs only dist/ (npm install)
+                    // vs only dist/ (npm install).  Reuses `cmsSpaDir` resolved
+                    // at plugin setup time.
                     let cmsSpaImport: string;
-                    try {
-                      const cmsSpaPackageJsonPath = import.meta.resolve('@conloca/cms-spa/package.json');
-                      const cmsSpaDir = dirname(
-                        cmsSpaPackageJsonPath.startsWith('file://')
-                          ? fileURLToPath(cmsSpaPackageJsonPath)
-                          : cmsSpaPackageJsonPath,
-                      );
+                    if (cmsSpaDir) {
                       const realSrcMainPath = join(cmsSpaDir, 'src', 'main.tsx');
                       // Prefer the consumer-side symlink path when @conloca/cms-spa is
                       // linked in from another workspace (e.g. cross-repo `bun link`).
                       // Importing via the symlink path keeps `react`/`react-dom`
-                      // resolving through the consumer's node_modules walk under
-                      // `preserveSymlinks: true`, which prevents duplicate React
-                      // instances inside the CMS SPA. Same-workspace installs either
-                      // don't expose this path or point at the same underlying file,
-                      // so behavior and HMR are preserved.
+                      // resolving through the consumer's node_modules walk, which
+                      // prevents duplicate React instances inside the CMS SPA.
+                      // Same-workspace installs either don't expose this path or
+                      // point at the same underlying file, so behavior and HMR
+                      // are preserved.
                       const linkedSrcMainPath = join(
                         astroRoot,
                         'node_modules',
@@ -628,7 +636,7 @@ initHydration(componentRegistry)
                         // npm mode: import pre-built SPA mounting entry
                         cmsSpaImport = "import '@conloca/cms-spa/main';";
                       }
-                    } catch {
+                    } else {
                       // Fallback: use package import
                       cmsSpaImport = "import '@conloca/cms-spa/main';";
                     }
