@@ -60,6 +60,11 @@
       "import": "./dist/dialog.mjs",
       "default": "./dist/dialog.mjs"
     },
+    "./toast": {
+      "types": "./dist/toast.d.ts",
+      "import": "./dist/toast.mjs",
+      "default": "./dist/toast.mjs"
+    },
     "./main": {
       "import": "./dist/main.mjs",
       "default": "./dist/main.mjs"

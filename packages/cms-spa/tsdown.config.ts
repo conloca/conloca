@@ -12,6 +12,7 @@ export default defineConfig({
     'mock-puck-config': 'src/mock-puck-config.tsx',
     ui: 'src/components/ui/index.ts',
     dialog: 'src/components/dialog.tsx',
+    toast: 'src/components/toast.tsx',
   },
   format: ['esm'],
   dts: true,
@@ -35,6 +36,8 @@ export default defineConfig({
     'lucide-react',
     'clsx',
     'tailwind-merge',
+    'sonner',
+    'sonner/dist/styles.css',
     'zod',
   ],
 });

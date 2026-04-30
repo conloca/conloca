@@ -123,3 +123,4 @@
  * as new primitive surfaces are exported. */
 @source "../src/components/ui/**/*.{ts,tsx}";
 @source "../src/components/dialog.tsx";
+@source "../src/components/toast.tsx";
