@@ -465,10 +465,6 @@ initHydration(componentRegistry)
                 '@puckeditor/core',
                 '@tanstack/react-query',
               ],
-              // Prevent symlinked packages (via bun link) from resolving dependencies
-              // from their real path. Ensures @conloca packages find React from the
-              // consumer project's node_modules, not from their source repo.
-              preserveSymlinks: true,
             },
             optimizeDeps: {
               // Exclude the puck config from optimization to avoid the outdated dep error
