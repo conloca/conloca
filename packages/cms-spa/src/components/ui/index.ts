@@ -1,3 +1,9 @@
+// Conloca brand mark — used by hosted shells that own pre-auth
+// surfaces (GL-192's LoginScreen). Lives in the `/ui` subpath so
+// consumers can import it without pulling the heavy main barrel
+// (which imports the MDX editor + sandpack-react). GL-191
+// precedent for thin per-piece imports.
+export { ConlocaLogo } from '../ConlocaLogo';
 export { Button } from './Button';
 export { FieldError } from './FieldError';
 export { IconButton } from './IconButton';
