@@ -61,7 +61,7 @@
       "default": "./dist/dialog.mjs"
     },
     "./toast": {
-      "types": "./dist/toast.d.ts",
+      "types": "./dist/toast.d.mts",
       "import": "./dist/toast.mjs",
       "default": "./dist/toast.mjs"
     },
