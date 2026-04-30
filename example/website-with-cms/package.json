@@ -54,7 +54,7 @@
         "cache": true,
         "options": {
           "commands": [
-            "biome format --files-ignore-unknown=true .",
+            "biome lint --files-ignore-unknown=true .",
             "eslint ."
           ],
           "cwd": "{projectRoot}",

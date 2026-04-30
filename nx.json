@@ -62,7 +62,7 @@
       "cache": true,
       "inputs": ["{projectRoot}/**/*", "{workspaceRoot}/biome.json"],
       "options": {
-        "command": "biome format --files-ignore-unknown=true {projectRoot}",
+        "command": "biome lint --files-ignore-unknown=true {projectRoot}",
         "cwd": "{workspaceRoot}"
       }
     },

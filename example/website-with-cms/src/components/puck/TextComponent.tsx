@@ -1,5 +1,3 @@
-import React from 'react';
-
 export type TextComponentProps = {
   text: string;
   size?: 's' | 'm';

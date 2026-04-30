@@ -1,5 +1,4 @@
 import type { ComponentConfig } from '@puckeditor/core';
-import React from 'react';
 import { ButtonComponent } from './ButtonComponent';
 
 export type ButtonProps = {

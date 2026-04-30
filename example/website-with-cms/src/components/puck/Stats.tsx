@@ -1,5 +1,4 @@
 import type { ComponentConfig } from '@puckeditor/core';
-import React from 'react';
 import { Section } from '../Section';
 import { HeadingComponent } from './HeadingComponent';
 import { TextComponent } from './TextComponent';
@@ -51,9 +50,9 @@ export const Stats: ComponentConfig<StatsProps> = {
             padding: '48px 0',
           }}
         >
-          {items.map((item, i) => (
+          {items.map((item) => (
             <div
-              key={i}
+              key={`${item.title}:${item.description}`}
               style={{
                 textAlign: 'center',
               }}

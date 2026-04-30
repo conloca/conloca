@@ -98,9 +98,9 @@ const HeroComponent = (props: HeroProps & { puck: { isEditing: boolean } }) => {
               justifyContent: isCenter ? 'center' : 'flex-start',
             }}
           >
-            {buttons.map((button, i) => (
+            {buttons.map((button) => (
               <ButtonComponent
-                key={i}
+                key={`${button.label}:${button.href ?? ''}:${button.variant ?? 'primary'}`}
                 label={button.label}
                 href={button.href || '#'}
                 variant={button.variant || 'primary'}
