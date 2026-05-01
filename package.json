@@ -49,7 +49,7 @@
     "@nx/react": "22.7.1",
     "@nx/web": "22.7.1",
     "@nx/workspace": "22.7.1",
-    "@smoothbricks/nx-plugin": "^0.2.1",
+    "@smoothbricks/nx-plugin": "^0.2.2",
     "@swc-node/register": "~1.11.1",
     "@swc/core": "~1.15.32",
     "@swc/helpers": "~0.5.21",
