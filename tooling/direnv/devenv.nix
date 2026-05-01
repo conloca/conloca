@@ -46,10 +46,9 @@ in {
   # - When using the devenv wrapper from tooling/, restore the original working directory
   #   (The wrapper runs devenv from tooling/direnv but we want the shell to start where the user was)
 
-  # Set up PATH first so setup script can find tools
   enterShell = ''
     cd "$DEVENV_ROOT/../.."
-    export PATH="$PWD/tooling:$PWD/node_modules/.bin:$PWD/tooling/node_modules/.bin:$PATH"
+    export PATH="$("$PWD/tooling/direnv/repo-path")"
     # Add libstdc++ for native Node.js modules (@parcel/watcher, etc.)
     export LD_LIBRARY_PATH="${pkgs.stdenv.cc.cc.lib}/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
     bun "$DEVENV_ROOT/setup-environment.ts"

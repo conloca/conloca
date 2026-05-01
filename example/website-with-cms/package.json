@@ -4,7 +4,7 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "dev": "nx run website-with-cms:dev --outputStyle=stream",
+    "dev": "nx run website-with-cms:dev --outputStyle=dynamic-legacy",
     "build": "nx run website-with-cms:build",
     "preview": "nx run website-with-cms:preview --outputStyle=stream",
     "astro": "astro"

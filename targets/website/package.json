@@ -4,7 +4,7 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "dev": "nx run conloca-website:dev --outputStyle=stream",
+    "dev": "nx run conloca-website:dev --outputStyle=dynamic-legacy",
     "build": "nx run conloca-website:build",
     "preview": "nx run conloca-website:preview --outputStyle=stream",
     "astro": "astro",
@@ -23,8 +23,8 @@
     "@tailwindcss/vite": "^4.1.0",
     "acorn": "^8.15.0",
     "astro": "^6.2.1",
-    "cookie": "^1.1.1",
     "clsx": "^2.1.1",
+    "cookie": "^1.1.1",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "sharp": "^0.33.0",

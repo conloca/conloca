@@ -14,11 +14,7 @@ clear_devenv_cache_state() {
 }
 
 add_repo_paths() {
-  {
-    echo "$repo_root/tooling/direnv/.devenv/profile/bin"
-    echo "$repo_root/node_modules/.bin"
-    echo "$repo_root/tooling"
-  } >> "$GITHUB_PATH"
+  "$repo_root/tooling/direnv/repo-path" --github-path
 }
 
 restore_nix_store() {

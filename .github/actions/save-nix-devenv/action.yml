@@ -20,9 +20,9 @@ runs:
       working-directory: tooling/direnv
       # build-shell normally adds repo paths to GITHUB_PATH, but this cleanup
       # must still run when build-shell fails before that happens.
-      run:
-        PATH="$PWD/.devenv/profile/bin:$PWD/../../node_modules/.bin:$PWD/../../tooling:$PATH" ../../tooling/smoo
-        github-ci cleanup-cache
+      run: |
+        export PATH="$(../../tooling/direnv/repo-path)"
+        smoo github-ci cleanup-cache
 
     - name: 🧊 Save Nix profiles and store NAR
       if: ${{ steps.cleanup-cache.outputs.cache-ready == 'true' && inputs.nix-cache-hit != 'true' }}
