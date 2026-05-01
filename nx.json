@@ -90,14 +90,7 @@
     }
   },
   "release": {
-    "projects": [
-      "@conloca/astro-cms",
-      "@conloca/cms-spa",
-      "@conloca/content-api",
-      "@conloca/content-api-client",
-      "@conloca/cli",
-      "@conloca/mdx"
-    ],
+    "projects": ["tag:npm:public"],
     "version": {
       "specifierSource": "conventional-commits",
       "currentVersionResolver": "git-tag",
