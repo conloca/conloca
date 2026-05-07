@@ -78,6 +78,17 @@ export default defineConfig({
         siteName: 'default',
         locale: 'en',
       },
+      // Surface Starlight's MDX docs in the CMS Pages list as type:'mdx'
+      // pages. Files stay in place at src/content/docs and are still rendered
+      // by Starlight's stock docsLoader() in content.config.ts — the CMS just
+      // edits them in-place.
+      mdxPages: {
+        root: './src/content/docs',
+        locales: 'directory',
+        defaultLocale: 'en',
+        site: 'default',
+        renderer: 'external',
+      },
     }),
   ],
   vite: {
