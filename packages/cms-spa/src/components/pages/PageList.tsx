@@ -1,5 +1,5 @@
 import { localesOf, useCreateContent, useDeleteContent, useSitePages } from '@conloca/content-api-client';
-import { AlertCircle, Clock, Edit, FileText, Loader2, Plus, Search, Trash2 } from 'lucide-react';
+import { AlertCircle, Clock, Edit, FileCode, FileText, Loader2, Plus, Search, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useErrorModal, useSiteBaseUrl } from '../../hooks';
@@ -73,6 +73,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
           id: entry.id,
           title: firstLocale.meta.title || entry.id,
           path: firstLocale.pathname || '/',
+          type: entry.type === 'mdx' ? 'mdx' : 'puck',
           status: 'published', // We'll determine this from publishAt dates
           modified: new Date(firstLocale.modified),
           locales: Array.from(localesOf(entry)).map((v) => v.locale),
@@ -441,7 +442,11 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
                 >
                   <td className="p-4">
                     <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-grey-04 dark:text-grey-07" />
+                      {page.type === 'mdx' ? (
+                        <FileCode className="h-4 w-4 text-azure-04 dark:text-azure-06" aria-label="MDX page" />
+                      ) : (
+                        <FileText className="h-4 w-4 text-grey-04 dark:text-grey-07" aria-label="Puck page" />
+                      )}
                       <a
                         href={buildUrl(page.path)}
                         target="_blank"
@@ -455,6 +460,14 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
                       >
                         {page.title}
                       </a>
+                      {page.type === 'mdx' && (
+                        <span
+                          className="px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider bg-azure-11 text-azure-02 dark:bg-azure-02/40 dark:text-azure-09 rounded"
+                          aria-hidden
+                        >
+                          MDX
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td className="p-4">

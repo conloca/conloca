@@ -8,6 +8,7 @@ import { cn } from '../../utils/cn';
 import { PageMetadataDialog } from '../dialogs/PageMetadataDialog';
 import { type ContentBlockOption, ContentBlockSelectorField } from '../fields/ContentBlockSelectorField';
 import { BlockContentWrapper, BlockFieldWrapper } from './BlockWrappers';
+import { MdxPageEditor } from './MdxPageEditor';
 import { PageEditor } from './PageEditor';
 
 /**
@@ -86,7 +87,32 @@ const contentBlockToneClasses: Record<NonNullable<ContentBlockSectionProps['tone
  * BEFORE passing data to Puck. This matches the production renderer behavior
  * in page-handler.astro.
  */
+/**
+ * Top-level page editor entry. Loads the page manifest just enough to dispatch
+ * to the right inner editor based on `type`:
+ *  - 'mdx'  → MdxPageEditor (MDX modal flow, mirrors BlockEditor)
+ *  - 'puck' → PuckPageEditorInner (the existing Puck flow, unchanged below)
+ *
+ * Splitting like this keeps the heavier Puck-only hooks (useBlocks,
+ * useDataContext, resolveAllData) out of the mdx-page render path so
+ * Rules of Hooks aren't violated by an early return.
+ */
 export function PageEditorWrapper({ puckConfig }: PageEditorWrapperProps) {
+  const { id } = useParams();
+  const { data: content, isLoading } = useLocalizedContent(id || '', 'en');
+
+  if (isLoading || !content) {
+    return <div className="flex items-center justify-center h-screen">Loading...</div>;
+  }
+
+  if (content.type === 'mdx') {
+    return <MdxPageEditor />;
+  }
+
+  return <PuckPageEditorInner puckConfig={puckConfig} />;
+}
+
+function PuckPageEditorInner({ puckConfig }: PageEditorWrapperProps) {
   const { id } = useParams();
   const navigate = useNavigate();
   const updateContent = useUpdateLocalized();

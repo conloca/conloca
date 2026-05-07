@@ -4,6 +4,8 @@ export interface Page {
   id: string;
   title: string;
   path: string;
+  /** Underlying content format. 'puck' = Puck visual editor, 'mdx' = MDX source editor. */
+  type: 'puck' | 'mdx';
   status: 'draft' | 'scheduled' | 'published';
   modified: Date;
   locales: string[];
