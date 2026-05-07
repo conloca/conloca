@@ -1,10 +1,8 @@
 import { normalize, resolve } from 'node:path';
 import { FileSystemContentAPI } from './filesystem-content-api';
+import type { ContentAPIOptions } from './types';
 
-export interface ContentWatcherOptions {
-  contentRoot: string;
-  canvasDir?: string;
-}
+export type ContentWatcherOptions = ContentAPIOptions;
 
 export interface WebSocketSender {
   send(payload: { type: string; event: string; data: any }): void;
@@ -29,7 +27,7 @@ interface ReindexableContentAPI {
  */
 export async function createContentAPI(options: ContentWatcherOptions): Promise<FileSystemContentAPI> {
   return await FileSystemContentAPI.create({
-    contentRoot: options.contentRoot,
+    ...options,
     canvasDir: options.canvasDir || './canvas',
   });
 }

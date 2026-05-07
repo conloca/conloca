@@ -1,7 +1,6 @@
-export interface ContentReaderOptions {
-  contentRoot: string;
-  canvasDir?: string;
-}
+import type { ContentAPIOptions } from './types';
+
+export type ContentReaderOptions = ContentAPIOptions;
 
 /**
  * Creates a read-oriented content API instance for build-time consumers.
@@ -13,7 +12,7 @@ export async function createContentAPI(options: ContentReaderOptions) {
   const { FileSystemContentAPI: ReaderAPI } = await import('./filesystem-content-api');
 
   return ReaderAPI.create({
-    contentRoot: options.contentRoot,
+    ...options,
     canvasDir: options.canvasDir || './canvas',
   });
 }

@@ -167,6 +167,14 @@ export class FileSystemContentAPI implements ContentAPI {
   readonly data: Data;
   private readonly sites: Record<string, Site>;
 
+  // mdx-page support: optional second filesystem root for kind:'page'+type:'mdx'.
+  // See ContentAPIOptions.mdxPagesRoot for the design rationale.
+  private absoluteMdxPagesRoot?: string;
+  private mdxPagesLocaleStrategy: 'directory' | 'suffix' = 'directory';
+  private mdxPagesDefaultLocale = 'en';
+  private mdxPagesSite = 'default';
+  private mdxPagesCollection = 'pages';
+
   // Getter for testing purposes
   get normalizedContentRoot(): string {
     return this.contentRoot;
@@ -177,6 +185,12 @@ export class FileSystemContentAPI implements ContentAPI {
     canvasDir: string | undefined,
     sitesConfig: SitesConfig,
     contentIndex: ContentIndex,
+    mdxPagesOptions?: {
+      root?: string;
+      localeStrategy?: 'directory' | 'suffix';
+      defaultLocale?: string;
+      site?: string;
+    },
   ) {
     // Normalize contentRoot: remove ./ prefix for relative paths, keep absolute paths as-is
     if (contentRoot.startsWith('./')) {
@@ -195,6 +209,25 @@ export class FileSystemContentAPI implements ContentAPI {
     // TODO: Use canvasDir for canvas/unlinked components
     this.sitesConfig = sitesConfig;
     this.contentIndex = contentIndex;
+
+    // Resolve mdx-pages options. When `root` is omitted, mdx-page support
+    // is dormant and getFilePath/parseFilePath/scan never look at a second root.
+    if (mdxPagesOptions?.root) {
+      const normalizedMdxRoot = mdxPagesOptions.root.startsWith('./')
+        ? mdxPagesOptions.root.slice(2)
+        : mdxPagesOptions.root;
+      this.absoluteMdxPagesRoot = resolve(normalizedMdxRoot);
+    }
+    if (mdxPagesOptions?.localeStrategy) {
+      this.mdxPagesLocaleStrategy = mdxPagesOptions.localeStrategy;
+    }
+    // Default site: explicit option > first configured site > 'default'
+    const firstSiteName = Object.keys(sitesConfig.sites)[0];
+    this.mdxPagesSite = mdxPagesOptions?.site ?? firstSiteName ?? 'default';
+    // Default locale: explicit option > resolved-site's defaultLocale > first global locale > 'en'
+    const siteConfig = sitesConfig.sites[this.mdxPagesSite];
+    this.mdxPagesDefaultLocale =
+      mdxPagesOptions?.defaultLocale ?? siteConfig?.defaultLocale ?? sitesConfig.globalLocales[0] ?? 'en';
 
     // Initialize blocks
     this.blocks = new Blocks(this, this.contentIndex.getBlockIndex());
@@ -256,7 +289,12 @@ export class FileSystemContentAPI implements ContentAPI {
     const contentIndex = await ContentIndex.getCachedOrCreate(normalizedContentRoot, sitesConfig);
 
     // Create instance (not cached)
-    const api = new FileSystemContentAPI(contentRoot, canvasDir, sitesConfig, contentIndex);
+    const api = new FileSystemContentAPI(contentRoot, canvasDir, sitesConfig, contentIndex, {
+      root: options.mdxPagesRoot,
+      localeStrategy: options.mdxPagesLocaleStrategy,
+      defaultLocale: options.mdxPagesDefaultLocale,
+      site: options.mdxPagesSite,
+    });
 
     // Index all content files (only if index is empty)
     if (contentIndex.entryCount === 0) {
@@ -368,7 +406,61 @@ export class FileSystemContentAPI implements ContentAPI {
       let parsedData: ParsedMetadata = {};
       let kind: 'block' | 'page' | 'data';
 
-      if (parts[0] === 'blocks') {
+      // Files under the optional mdxPagesRoot are kind:'page' + type:'mdx',
+      // independent of the directory tree rooted at absoluteContentRoot. The
+      // leading prefix is stripped here and locale/pathname are derived from
+      // the configured locale strategy ('directory' = Starlight, 'suffix' =
+      // Conloca's default).
+      if (this.absoluteMdxPagesRoot && filePath.startsWith(this.absoluteMdxPagesRoot + '/')) {
+        kind = 'page';
+        site = this.mdxPagesSite;
+        collection = this.mdxPagesCollection;
+        const mdxRelativePath = filePath.replace(this.absoluteMdxPagesRoot + '/', '');
+        const mdxParts = mdxRelativePath.split('/');
+        const mdxFilename = mdxParts[mdxParts.length - 1];
+
+        if (this.mdxPagesLocaleStrategy === 'suffix') {
+          // {slug}.{locale}.mdx — Conloca convention
+          const suffixMatch = mdxFilename.match(/^(.+)\.([a-z]{2}(?:-[A-Z]{2})?)\.mdx$/);
+          if (suffixMatch) {
+            mdxParts[mdxParts.length - 1] = suffixMatch[1];
+            locale = suffixMatch[2];
+          } else {
+            const noLocaleMatch = mdxFilename.match(/^(.+)\.mdx$/);
+            if (!noLocaleMatch) return null;
+            mdxParts[mdxParts.length - 1] = noLocaleMatch[1];
+            locale = this.mdxPagesDefaultLocale;
+          }
+          pathname =
+            mdxParts[mdxParts.length - 1] === 'index'
+              ? '/' + mdxParts.slice(0, -1).join('/') || '/'
+              : '/' + mdxParts.join('/');
+        } else {
+          // 'directory' strategy — Starlight convention. {locale}/{slug}.mdx
+          // for non-default locales, {slug}.mdx at the root for the default.
+          const noLocaleMatch = mdxFilename.match(/^(.+)\.mdx$/);
+          if (!noLocaleMatch) return null;
+          mdxParts[mdxParts.length - 1] = noLocaleMatch[1];
+
+          // Detect a leading locale-shaped directory segment
+          if (mdxParts.length > 1 && /^[a-z]{2}(?:-[A-Z]{2})?$/.test(mdxParts[0])) {
+            locale = mdxParts[0];
+            const slugParts = mdxParts.slice(1);
+            pathname =
+              slugParts[slugParts.length - 1] === 'index'
+                ? '/' + slugParts.slice(0, -1).join('/') || '/'
+                : '/' + slugParts.join('/');
+          } else {
+            locale = this.mdxPagesDefaultLocale;
+            pathname =
+              mdxParts[mdxParts.length - 1] === 'index'
+                ? '/' + mdxParts.slice(0, -1).join('/') || '/'
+                : '/' + mdxParts.join('/');
+          }
+        }
+
+        parsedData = parse4KBMDX(buffer, bytesRead);
+      } else if (parts[0] === 'blocks') {
         kind = 'block';
 
         // Check if block is directly in blocks/ directory (no collection subdirectory)
@@ -812,6 +904,29 @@ export class FileSystemContentAPI implements ContentAPI {
     }
 
     await scan(this.absoluteContentRoot);
+
+    // Also scan mdxPagesRoot for .mdx files when the second root is configured.
+    // This supports projects that store mdx-type pages outside the main content
+    // tree (e.g. Starlight projects keep them at src/content/docs/).
+    if (this.absoluteMdxPagesRoot && this.absoluteMdxPagesRoot !== this.absoluteContentRoot) {
+      async function scanMdxPages(dir: string) {
+        try {
+          const entries = await readdir(dir, { withFileTypes: true });
+          for (const entry of entries) {
+            const fullPath = join(dir, entry.name);
+            if (entry.isDirectory()) {
+              await scanMdxPages(fullPath);
+            } else if (entry.isFile() && entry.name.endsWith('.mdx')) {
+              files.push(fullPath);
+            }
+          }
+        } catch (error) {
+          // Directory doesn't exist yet
+        }
+      }
+      await scanMdxPages(this.absoluteMdxPagesRoot);
+    }
+
     return files;
   }
 
@@ -823,10 +938,26 @@ export class FileSystemContentAPI implements ContentAPI {
     if (manifest.kind === 'data') {
       return join(this.absoluteContentRoot, 'data', manifest.collection, `${name}.${locale}.json`);
     }
-    if (manifest.kind === 'page' && pathname && manifest.site) {
+    if (manifest.kind === 'page' && pathname) {
       // For pages, derive path from pathname
       const basePath = pathname.replace(/^\//, '').replace(/\/$/, '') || 'index';
-      return join(this.absoluteContentRoot, manifest.site, manifest.collection, `${basePath}.${locale}.vxjson`);
+
+      // mdx-type pages live under absoluteMdxPagesRoot when configured.
+      // The locale strategy decides whether the locale appears as a
+      // directory segment or as a filename suffix.
+      if (manifest.type === 'mdx' && this.absoluteMdxPagesRoot) {
+        if (this.mdxPagesLocaleStrategy === 'directory') {
+          return locale === this.mdxPagesDefaultLocale
+            ? join(this.absoluteMdxPagesRoot, `${basePath}.mdx`)
+            : join(this.absoluteMdxPagesRoot, locale, `${basePath}.mdx`);
+        }
+        return join(this.absoluteMdxPagesRoot, `${basePath}.${locale}.mdx`);
+      }
+
+      // Existing behavior: type:'puck' pages live under contentRoot/{site}/{collection}.
+      if (manifest.site) {
+        return join(this.absoluteContentRoot, manifest.site, manifest.collection, `${basePath}.${locale}.vxjson`);
+      }
     }
     throw new Error(`Invalid manifest: ${JSON.stringify(manifest, null, 2)}`);
   }
@@ -843,6 +974,62 @@ export class FileSystemContentAPI implements ContentAPI {
     name?: string;
     locale: string;
   } | null {
+    // Files under mdxPagesRoot are kind:'page' + type:'mdx' regardless of
+    // their position relative to absoluteContentRoot. Mirror the parsing
+    // performed in parseFileHeaderWithRepair so both code paths agree on
+    // the derived (pathname, locale) tuple.
+    if (this.absoluteMdxPagesRoot && filePath.startsWith(this.absoluteMdxPagesRoot + '/')) {
+      const mdxRelativePath = filePath.replace(this.absoluteMdxPagesRoot + '/', '');
+      const mdxParts = mdxRelativePath.split('/');
+      const mdxFilename = mdxParts[mdxParts.length - 1];
+      let locale: string;
+      let pathname: string;
+
+      if (this.mdxPagesLocaleStrategy === 'suffix') {
+        const suffixMatch = mdxFilename.match(/^(.+)\.([a-z]{2}(?:-[A-Z]{2})?)\.mdx$/);
+        if (suffixMatch) {
+          mdxParts[mdxParts.length - 1] = suffixMatch[1];
+          locale = suffixMatch[2];
+        } else {
+          const noLocaleMatch = mdxFilename.match(/^(.+)\.mdx$/);
+          if (!noLocaleMatch) return null;
+          mdxParts[mdxParts.length - 1] = noLocaleMatch[1];
+          locale = this.mdxPagesDefaultLocale;
+        }
+        pathname =
+          mdxParts[mdxParts.length - 1] === 'index'
+            ? '/' + mdxParts.slice(0, -1).join('/') || '/'
+            : '/' + mdxParts.join('/');
+      } else {
+        const noLocaleMatch = mdxFilename.match(/^(.+)\.mdx$/);
+        if (!noLocaleMatch) return null;
+        mdxParts[mdxParts.length - 1] = noLocaleMatch[1];
+
+        if (mdxParts.length > 1 && /^[a-z]{2}(?:-[A-Z]{2})?$/.test(mdxParts[0])) {
+          locale = mdxParts[0];
+          const slugParts = mdxParts.slice(1);
+          pathname =
+            slugParts[slugParts.length - 1] === 'index'
+              ? '/' + slugParts.slice(0, -1).join('/') || '/'
+              : '/' + slugParts.join('/');
+        } else {
+          locale = this.mdxPagesDefaultLocale;
+          pathname =
+            mdxParts[mdxParts.length - 1] === 'index'
+              ? '/' + mdxParts.slice(0, -1).join('/') || '/'
+              : '/' + mdxParts.join('/');
+        }
+      }
+
+      return {
+        kind: 'page',
+        site: this.mdxPagesSite,
+        collection: this.mdxPagesCollection,
+        pathname,
+        locale,
+      };
+    }
+
     // Remove contentRoot prefix
     const relativePath = filePath.replace(this.absoluteContentRoot + '/', '');
     const parts = relativePath.split('/');

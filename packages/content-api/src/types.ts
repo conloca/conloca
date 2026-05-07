@@ -1,6 +1,53 @@
 export interface ContentAPIOptions {
   contentRoot: string;
   canvasDir?: string;
+
+  /**
+   * Optional second filesystem root for mdx-type pages (kind: 'page', type: 'mdx').
+   *
+   * This decouples the storage location of mdx pages from Conloca's main
+   * content tree so projects can host them where their renderer expects
+   * them — e.g. a Starlight project points this at `./src/content/docs`
+   * so Starlight's stock `docsLoader()` reads them natively.
+   *
+   * Renderer-neutral: no Starlight code path is taken when this is set;
+   * the rendering wiring is the project's own choice (see
+   * `mdxPagesRenderer` in @conloca/astro-cms options).
+   *
+   * When omitted, mdx-page support is dormant.
+   */
+  mdxPagesRoot?: string;
+
+  /**
+   * How locales are encoded in mdx-page filenames under `mdxPagesRoot`.
+   *
+   * - `'directory'` (default): `{root}/{locale}/{slug}.mdx`, with the
+   *   default locale at the root: `{root}/{slug}.mdx`. Matches Starlight's
+   *   convention.
+   * - `'suffix'`: `{root}/{slug}.{locale}.mdx`. Matches Conloca's
+   *   convention for blocks.
+   */
+  mdxPagesLocaleStrategy?: 'directory' | 'suffix';
+
+  /**
+   * Default locale for the `'directory'` strategy. The default locale's
+   * files live at `{mdxPagesRoot}/{slug}.mdx` (no locale prefix); other
+   * locales live at `{mdxPagesRoot}/{locale}/{slug}.mdx`.
+   *
+   * If omitted, falls back to the first site's `defaultLocale`, or `'en'`.
+   * Ignored under the `'suffix'` strategy.
+   */
+  mdxPagesDefaultLocale?: string;
+
+  /**
+   * Site name to associate mdx pages with for pathname collision checking.
+   * mdx pages share the URL space with that site's puck pages, so two
+   * pages — regardless of type — cannot share a pathname.
+   *
+   * If omitted, falls back to the first site name in sites.json (or
+   * `'default'` when no sites are configured).
+   */
+  mdxPagesSite?: string;
 }
 
 // Error response format for all API errors
