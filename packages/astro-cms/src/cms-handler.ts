@@ -19,6 +19,32 @@ import type { DataCollectionEntry, DataContext, PageReference, ResolvedRoutingCo
 
 export { SPA_MIME_TYPES } from './mime-types.js';
 
+/**
+ * Read mdxPages-related options from build-time env vars. Empty/missing
+ * values yield no field at all (so the spread is a no-op when mdxPages is
+ * not configured), which keeps mdx-page support dormant.
+ */
+function mdxPagesOptionsFromEnv(): {
+  mdxPagesRoot?: string;
+  mdxPagesLocaleStrategy?: 'directory' | 'suffix';
+  mdxPagesDefaultLocale?: string;
+  mdxPagesSite?: string;
+} {
+  const root = import.meta.env.CONLOCA_MDX_PAGES_ROOT;
+  if (!root) return {};
+  const localeStrategy = import.meta.env.CONLOCA_MDX_PAGES_LOCALE_STRATEGY;
+  const defaultLocale = import.meta.env.CONLOCA_MDX_PAGES_DEFAULT_LOCALE;
+  const site = import.meta.env.CONLOCA_MDX_PAGES_SITE;
+  return {
+    mdxPagesRoot: root,
+    ...(localeStrategy === 'directory' || localeStrategy === 'suffix'
+      ? { mdxPagesLocaleStrategy: localeStrategy }
+      : {}),
+    ...(defaultLocale ? { mdxPagesDefaultLocale: defaultLocale } : {}),
+    ...(site ? { mdxPagesSite: site } : {}),
+  };
+}
+
 // Get the path to the cms-spa package by resolving its package.json
 const require = createRequire(import.meta.url);
 const cmsSpaPath = dirname(require.resolve('@conloca/cms-spa/package.json'));
@@ -218,6 +244,7 @@ async function handleDataContext(request: Request): Promise<Response> {
     const contentApi = await createContentAPI({
       contentRoot: contentOptions.contentRoot,
       canvasDir: contentOptions.canvasDir,
+      ...mdxPagesOptionsFromEnv(),
     });
 
     const locale = contentOptions.locale;
@@ -305,7 +332,11 @@ async function handleContentApi(request: Request, cfResult: CFAccessResult): Pro
   const canvasDir = import.meta.env.CONLOCA_CANVAS_DIR || './canvas';
 
   // FileSystemContentAPI.create() handles caching internally
-  const contentApi = await FileSystemContentAPI.create({ contentRoot, canvasDir });
+  const contentApi = await FileSystemContentAPI.create({
+    contentRoot,
+    canvasDir,
+    ...mdxPagesOptionsFromEnv(),
+  });
 
   // Create the Hono router with assets and content root for git operations
   const assetsPath = import.meta.env.CONLOCA_ASSETS_PATH || '';

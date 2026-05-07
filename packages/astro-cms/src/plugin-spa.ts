@@ -115,6 +115,58 @@ export interface ConlocaCMSOptions extends Omit<UIConfig, 'basename'> {
    * @example ['./src/styles/global.css', './src/styles/theme.css']
    */
   siteStyles?: string | string[];
+
+  /**
+   * Optional configuration enabling `type: 'mdx'` page support.
+   *
+   * When set, Conloca's CMS surfaces `.mdx` files at `mdxPages.root` as
+   * pages alongside puck (`.vxjson`) pages in the same Pages list. The
+   * MDX editor is used to edit them; rendering is decided by `renderer`.
+   *
+   * Renderer-neutral by design — the integration is one wiring pattern
+   * (most commonly Astro Starlight reading `mdxPages.root` via its stock
+   * `docsLoader()`), and Conloca's core has no hard dependency on
+   * Starlight or any other framework.
+   *
+   * Omit to keep mdx-page support dormant.
+   */
+  mdxPages?: {
+    /** Filesystem root for mdx-type pages (e.g. './src/content/docs'). */
+    root: string;
+
+    /**
+     * Locale storage convention.
+     * - `'directory'` (default): `{root}/{locale}/{slug}.mdx` for non-default
+     *   locales, `{root}/{slug}.mdx` at the root for the default locale —
+     *   matches Starlight's i18n directory convention.
+     * - `'suffix'`: `{root}/{slug}.{locale}.mdx` — matches Conloca's default
+     *   convention for blocks.
+     */
+    locales?: 'directory' | 'suffix';
+
+    /**
+     * Default locale name (used by `'directory'` strategy to decide which
+     * locale's files live without a locale prefix). Defaults to the first
+     * configured site's `defaultLocale`, or `'en'`.
+     */
+    defaultLocale?: string;
+
+    /**
+     * Site name to associate mdx pages with for pathname collision checking.
+     * Defaults to the first configured site, or `'default'`.
+     */
+    site?: string;
+
+    /**
+     * Who renders mdx pages.
+     * - `'external'` (default): Conloca's Astro loader does NOT emit them
+     *   to the `pages` collection — the project's own setup (e.g. Starlight's
+     *   `docsLoader()`) renders them.
+     * - `'conloca'`: Conloca's page-handler renders them via the runtime MDX
+     *   evaluator already used for blocks.
+     */
+    renderer?: 'external' | 'conloca';
+  };
 }
 
 // Template for content change listener virtual module
@@ -469,6 +521,13 @@ initHydration(componentRegistry)
               'import.meta.env.CONLOCA_CANVAS_DIR': JSON.stringify(options.canvasDir || './canvas'),
               'import.meta.env.CONLOCA_PUCK_CONFIG_PATH': JSON.stringify(options.puckConfigPath),
               'import.meta.env.CONLOCA_ASSETS_PATH': JSON.stringify(options.assetsPath || ''),
+              'import.meta.env.CONLOCA_MDX_PAGES_ROOT': JSON.stringify(options.mdxPages?.root || ''),
+              'import.meta.env.CONLOCA_MDX_PAGES_LOCALE_STRATEGY': JSON.stringify(
+                options.mdxPages?.locales || 'directory',
+              ),
+              'import.meta.env.CONLOCA_MDX_PAGES_DEFAULT_LOCALE': JSON.stringify(options.mdxPages?.defaultLocale || ''),
+              'import.meta.env.CONLOCA_MDX_PAGES_SITE': JSON.stringify(options.mdxPages?.site || ''),
+              'import.meta.env.CONLOCA_MDX_PAGES_RENDERER': JSON.stringify(options.mdxPages?.renderer || 'external'),
             },
             resolve: {
               // Dedupe React to avoid multiple instances when CMS SPA source is
@@ -667,6 +726,12 @@ if (import.meta.hot) {
                   const contentApi = await createContentAPI({
                     contentRoot: options.contentRoot,
                     canvasDir: options.canvasDir || './canvas',
+                    ...(options.mdxPages?.root && {
+                      mdxPagesRoot: options.mdxPages.root,
+                      mdxPagesLocaleStrategy: options.mdxPages.locales,
+                      mdxPagesDefaultLocale: options.mdxPages.defaultLocale,
+                      mdxPagesSite: options.mdxPages.site,
+                    }),
                   });
 
                   // Only add explicit watchers if content is outside the Astro project
