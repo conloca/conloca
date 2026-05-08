@@ -1,6 +1,8 @@
 import {
   BlockTypeSelect,
   BoldItalicUnderlineToggles,
+  ChangeCodeMirrorLanguage,
+  ConditionalContents,
   CreateLink,
   codeBlockPlugin,
   codeMirrorPlugin,
@@ -8,8 +10,10 @@ import {
   diffSourcePlugin,
   frontmatterPlugin,
   GenericJsxEditor,
+  HighlightToggle,
   headingsPlugin,
   InsertCodeBlock,
+  InsertFrontmatter,
   InsertImage,
   InsertTable,
   InsertThematicBreak,
@@ -25,17 +29,25 @@ import {
   markdownShortcutPlugin,
   quotePlugin,
   Separator,
+  StrikeThroughSupSubToggles,
   tablePlugin,
   thematicBreakPlugin,
   toolbarPlugin,
   UndoRedo,
 } from '@mdxeditor/editor';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import '@mdxeditor/editor/style.css';
 
 export interface BaseMDXEditorProps {
   value: string;
-  onChange: (value: string) => void;
+  /**
+   * Called whenever the editor content changes. The second argument is `true`
+   * the first time the library normalizes the parsed markdown back to its
+   * canonical form (bullet style, trailing newline, etc.) — consumers tracking
+   * dirty state should treat that call as a re-baseline rather than a user
+   * edit, otherwise the editor looks dirty the moment the page loads.
+   */
+  onChange: (value: string, initialMarkdownNormalize?: boolean) => void;
   onSave?: (value: string) => void;
   readOnly?: boolean;
   imageDialog?: React.FC | null;
@@ -50,6 +62,10 @@ export interface BaseMDXEditorProps {
    * See https://mdxeditor.dev/editor/docs/theming
    */
   className?: string;
+  /** Placeholder shown when the editor is empty. Forwarded to MDXEditorLib. */
+  placeholder?: React.ReactNode;
+  /** Auto-focus the editor on mount. Forwarded to MDXEditorLib. */
+  autoFocus?: boolean | { defaultSelection?: 'rootStart' | 'rootEnd'; preventScroll?: boolean };
 }
 
 export interface BaseMDXEditorModalProps {
@@ -80,7 +96,13 @@ export interface BaseMDXEditorModalProps {
   jsxComponentDescriptors?: JsxComponentDescriptor[];
 }
 
-const codeBlockLanguages = {
+// The empty-string entry is the documented escape hatch for code blocks
+// authored without a language hint. Without it, fences like ```\nfoo\n``` (which
+// the parser tags as language `null` / meta `'N/A'`) trip a hard error in
+// older versions and emit a noisy warning even on v3.55+. See mdx-editor/editor
+// issues #370, #423, #463, #885, #886, #901.
+const codeBlockLanguages: Record<string, string> = {
+  '': 'Plain text',
   text: 'Plain Text',
   js: 'JavaScript',
   jsx: 'JavaScript (React)',
@@ -169,6 +191,8 @@ export const BaseMDXEditor = React.forwardRef<MDXEditorMethods, BaseMDXEditorPro
       imageButtonRef,
       jsxComponentDescriptors,
       className,
+      placeholder,
+      autoFocus,
     },
     ref,
   ) => {
@@ -198,8 +222,17 @@ export const BaseMDXEditor = React.forwardRef<MDXEditorMethods, BaseMDXEditorPro
         ref={ref}
         markdown={value}
         onChange={onChange}
+        onError={({ error, source }) => {
+          // Library invokes this synchronously inside a gurx signal, so don't
+          // setState here — that triggers a render-phase warning (#872).
+          // Logging only is enough; the React error boundary still catches
+          // anything that escapes from rendering.
+          console.error('[MDXEditor] parse error:', error, '\nsource:', source);
+        }}
         readOnly={readOnly}
         className={className}
+        placeholder={placeholder}
+        autoFocus={autoFocus}
         contentEditableClassName="conloca-prose conloca-prose--editor max-w-none"
         plugins={[
           headingsPlugin(),
@@ -226,22 +259,46 @@ export const BaseMDXEditor = React.forwardRef<MDXEditorMethods, BaseMDXEditorPro
               : undefined,
           ),
           toolbarPlugin({
+            // flex-wrap so the toolbar reflows on narrow viewports instead of
+            // overflowing horizontally — workaround documented in
+            // mdx-editor/editor#908.
+            toolbarClassName: 'mdxeditor-toolbar-wrap',
             toolbarContents: () => (
               <DiffSourceToggleWrapper>
-                <UndoRedo />
-                <Separator />
-                <BoldItalicUnderlineToggles />
-                <Separator />
-                <ListsToggle />
-                <Separator />
-                <BlockTypeSelect />
-                <Separator />
-                <CreateLink />
-                {renderInsertImageButton(imageButtonRef)}
-                <InsertTable />
-                <InsertThematicBreak />
-                <Separator />
-                <InsertCodeBlock />
+                <ConditionalContents
+                  options={[
+                    {
+                      // When the user clicks into a code block, swap most of
+                      // the rich-text toolbar for the language picker — those
+                      // controls are no-ops inside CodeMirror anyway.
+                      when: (editor) => editor?.editorType === 'codeblock',
+                      contents: () => <ChangeCodeMirrorLanguage />,
+                    },
+                    {
+                      fallback: () => (
+                        <>
+                          <UndoRedo />
+                          <Separator />
+                          <BoldItalicUnderlineToggles />
+                          <StrikeThroughSupSubToggles />
+                          <HighlightToggle />
+                          <Separator />
+                          <ListsToggle />
+                          <Separator />
+                          <BlockTypeSelect />
+                          <Separator />
+                          <CreateLink />
+                          {renderInsertImageButton(imageButtonRef)}
+                          <InsertTable />
+                          <InsertThematicBreak />
+                          <Separator />
+                          <InsertCodeBlock />
+                          <InsertFrontmatter />
+                        </>
+                      ),
+                    },
+                  ]}
+                />
               </DiffSourceToggleWrapper>
             ),
           }),
@@ -261,24 +318,6 @@ function DeferredMDXEditor({
   EditorComponent: React.ForwardRefExoticComponent<BaseMDXEditorProps & React.RefAttributes<MDXEditorMethods>>;
   editorRef: React.RefObject<MDXEditorMethods | null>;
 }) {
-  const [isReady, setIsReady] = useState(false);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsReady(true);
-    }, 10);
-
-    return () => clearTimeout(timer);
-  }, []);
-
-  if (!isReady) {
-    return (
-      <div className="flex items-center justify-center h-full text-gray-500" data-testid="deferred-editor-loading">
-        Initializing editor...
-      </div>
-    );
-  }
-
   return (
     <div data-testid="deferred-editor-ready">
       <EditorComponent ref={editorRef} {...props} />
@@ -331,9 +370,8 @@ export function BaseMDXEditorModal({
   jsxComponentDescriptors,
 }: BaseMDXEditorModalProps) {
   const editorRef = React.useRef<MDXEditorMethods>(null);
-  const [content, setContent] = useState(initialContent);
-  const [isEditorReady, setIsEditorReady] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+  const [content, setContent] = React.useState(initialContent);
+  const [isSaving, setIsSaving] = React.useState(false);
 
   useEffect(() => {
     setContent(initialContent);
@@ -346,19 +384,6 @@ export function BaseMDXEditorModal({
 
     onClose();
   };
-
-  useEffect(() => {
-    if (isOpen) {
-      const timer = setTimeout(() => {
-        setIsEditorReady(true);
-      }, 0);
-
-      return () => clearTimeout(timer);
-    }
-
-    setIsEditorReady(false);
-    return undefined;
-  }, [isOpen]);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -400,25 +425,17 @@ export function BaseMDXEditorModal({
           </div>
         </DialogHeader>
         <div className="flex-1 overflow-hidden">
-          {isEditorReady ? (
-            <MDXEditorErrorBoundary logPrefix="[MDXEditor]">
-              <DeferredMDXEditor
-                EditorComponent={EditorComponent}
-                editorRef={editorRef}
-                value={content}
-                onChange={setContent}
-                onSave={handleSave}
-                className={editorClassName}
-                jsxComponentDescriptors={jsxComponentDescriptors}
-              />
-            </MDXEditorErrorBoundary>
-          ) : (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-gray-500 dark:text-grey-07" data-testid="modal-editor-loading">
-                Loading editor...
-              </div>
-            </div>
-          )}
+          <MDXEditorErrorBoundary logPrefix="[MDXEditor]">
+            <DeferredMDXEditor
+              EditorComponent={EditorComponent}
+              editorRef={editorRef}
+              value={content}
+              onChange={setContent}
+              onSave={handleSave}
+              className={editorClassName}
+              jsxComponentDescriptors={jsxComponentDescriptors}
+            />
+          </MDXEditorErrorBoundary>
         </div>
         <div className="flex justify-end gap-2 mt-4">
           <button

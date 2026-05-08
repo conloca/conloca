@@ -100,13 +100,12 @@ describe('MDXEditor', () => {
 
       expect(screen.getByText('Edit: test.mdx')).toBeDefined();
 
-      // Initially shows modal loading
-      expect(screen.getByTestId('modal-editor-loading')).toBeDefined();
-
-      // Wait for the DeferredMDXEditor to initialize
+      // Editor mounts synchronously now (the previous 0ms/10ms settling
+      // timeouts were modal-render hacks; removed when we dropped the
+      // intermediate loading state).
       await findByTestId('deferred-editor-ready');
 
-      // Loading indicators should be gone
+      // No transient loading sentinels remain in the tree.
       expect(queryByTestId('modal-editor-loading')).toBeNull();
       expect(queryByTestId('deferred-editor-loading')).toBeNull();
 
