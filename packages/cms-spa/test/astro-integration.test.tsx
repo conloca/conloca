@@ -4,7 +4,7 @@ import { ContentAPIClient, setContentAPIClient } from '@conloca/content-api-clie
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import App from '../src/App';
+import { AppRoutes } from '../src/App';
 import { ThemeProvider } from '../src/hooks/useTheme';
 import { setupTestAPI, testApi } from './test-utils';
 
@@ -89,7 +89,7 @@ describe('Astro CMS Integration', () => {
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
           <MemoryRouter>
-            <App />
+            <AppRoutes />
           </MemoryRouter>
         </ThemeProvider>
       </QueryClientProvider>,
@@ -151,7 +151,7 @@ describe('Astro CMS Integration', () => {
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
           <MemoryRouter initialEntries={[`/pages/${actualPageId}`]}>
-            <App />
+            <AppRoutes />
           </MemoryRouter>
         </ThemeProvider>
       </QueryClientProvider>,
@@ -178,7 +178,7 @@ describe('Astro CMS Integration', () => {
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
           <MemoryRouter initialEntries={['/pages']}>
-            <App />
+            <AppRoutes />
           </MemoryRouter>
         </ThemeProvider>
       </QueryClientProvider>,

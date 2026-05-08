@@ -5,108 +5,134 @@ import {
   useSitesConfig,
   useUpdateLocalized,
 } from '@conloca/content-api-client';
+import type { MDXEditorMethods } from '@mdxeditor/editor';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useErrorModal } from '../../hooks/useErrorModal';
+import { useTheme } from '../../hooks/useTheme';
+import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard';
 import { ConflictDialog } from '../dialogs/ConflictDialog';
 import { ErrorModal } from '../dialogs/ErrorModal';
 import { UnsavedChangesDialog } from '../dialogs/UnsavedChangesDialog';
-import { CMSMDXEditorModal } from './CMSMDXEditor';
+import { CMSMDXEditor, CMSMDXHeaderTools } from './CMSMDXEditor';
 import { LocaleSelector } from './LocaleSelector';
 
+type SaveState = 'idle' | 'saving' | 'saved' | 'error' | 'conflict';
+
 /**
- * Block editor component
+ * MDX block editor (kind:'block').
+ *
+ * Inline page layout (mirrors MdxPageEditor). Routed via /blocks/:id which
+ * lives outside CMSLayout in App.tsx so the editor occupies the full viewport.
  */
 export function BlockEditor() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const updateContent = useUpdateLocalized();
+  const { resolvedTheme } = useTheme();
 
-  // Locale state
   const [currentLocale, setCurrentLocale] = useState<string>('en');
   const [currentEtag, setCurrentEtag] = useState<string>('');
   const [pendingLocaleSwitch, setPendingLocaleSwitch] = useState<string | null>(null);
-  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
+  const [showLocaleUnsavedDialog, setShowLocaleUnsavedDialog] = useState(false);
 
-  // Save-error feedback — mirror PageEditor.tsx:82-105 (ConflictDialog on stale
-  // writes, ErrorModal on other save failures). Without these the user gets no
-  // signal that a save failed beyond the MDX modal silently staying open.
   const [conflict, setConflict] = useState<UpdateResult | null>(null);
   const { showError, errorModalProps } = useErrorModal();
 
-  // Track current content to check if dirty
-  const currentContentRef = useRef<string>('');
+  const [content, setContent] = useState<string>('');
+  // MDXEditorLib only reads `markdown` once on mount, so defer rendering the
+  // editor until the loaded value has been written into state.
+  const [isContentLoaded, setIsContentLoaded] = useState(false);
+  const savedContentRef = useRef<string>('');
+  const editorRef = useRef<MDXEditorMethods>(null);
 
-  // Load sites config to get available locales
+  const [saveState, setSaveState] = useState<SaveState>('idle');
+
   const { data: sitesConfig } = useSitesConfig();
   const availableLocales = sitesConfig?.globalLocales || ['en'];
 
-  // Load the block content with the current locale
-  const { data: content, isLoading, error } = useLocalizedContent(id || '', currentLocale);
+  const { data: loadedContent, isLoading, error } = useLocalizedContent(id || '', currentLocale);
 
-  // Update etag and track content when it loads
   useEffect(() => {
-    if (content?.localized?.etag) {
-      setCurrentEtag(content.localized.etag);
-      const contentData = content.localized.content as any;
-      currentContentRef.current = contentData?.mdx || '';
+    if (loadedContent?.localized?.etag) {
+      setCurrentEtag(loadedContent.localized.etag);
+      const data = loadedContent.localized.content as { mdx?: string } | undefined;
+      const mdx = data?.mdx || '';
+      savedContentRef.current = mdx;
+      setContent(mdx);
+      setIsContentLoaded(true);
     }
-  }, [content]);
+  }, [loadedContent]);
 
-  const handleSave = async (newContent: string, forceEtag?: string) => {
+  const isDirty = isContentLoaded && content !== savedContentRef.current;
+  const blocker = useUnsavedChangesGuard(isDirty);
+
+  const editorClassName = resolvedTheme === 'dark' ? 'dark-theme' : undefined;
+  const blockName = loadedContent?.localized?.name || id || 'block';
+  const filePath = `blocks/${blockName}`;
+
+  useEffect(() => {
+    const prev = document.title;
+    document.title = `Edit: ${filePath} · Conloca CMS`;
+    return () => {
+      document.title = prev;
+    };
+  }, [filePath]);
+
+  useEffect(() => {
+    if (saveState !== 'saved') return;
+    const timer = setTimeout(() => setSaveState('idle'), 2000);
+    return () => clearTimeout(timer);
+  }, [saveState]);
+
+  const persist = async (newContent: string, forceEtag?: string) => {
     if (!id) return;
+    setSaveState('saving');
 
     try {
       const result = await updateContent.mutateAsync({
         id,
         locale: currentLocale,
-        data: {
-          content: { mdx: newContent },
-        },
+        data: { content: { mdx: newContent } },
         etag: forceEtag ?? currentEtag,
       });
 
       if (result.success && result.etag) {
-        setCurrentEtag(result.etag); // Update etag for next save
-        currentContentRef.current = newContent; // Update tracked content
+        setCurrentEtag(result.etag);
+        savedContentRef.current = newContent;
+        setSaveState('saved');
         return;
       }
 
       if (result.reason === 'stale_write') {
-        // Open the conflict dialog and keep the MDX modal open by throwing.
-        // The MDX modal's own handleSave only calls handleClose() on success;
-        // a thrown error leaves the editor open so the user can resolve.
         setConflict(result);
-        throw new Error('Save rejected: stale write (conflict dialog opened)');
+        setSaveState('conflict');
+        return;
       }
 
       throw new Error(`Save failed: ${result.reason}`);
-    } catch (error) {
-      // Don't surface an error modal if we already handed off to ConflictDialog.
-      if (!(error instanceof Error && error.message.startsWith('Save rejected: stale write'))) {
-        console.error('Failed to save block:', error);
-        showError('Failed to save block', error);
-      }
-      throw error;
+    } catch (err) {
+      console.error('Failed to save block:', err);
+      showError('Failed to save block', err);
+      setSaveState('error');
     }
+  };
+
+  const handleSaveClick = () => {
+    void persist(content);
+  };
+
+  const handleCancel = () => {
+    navigate('/blocks');
   };
 
   const handleLocaleChange = async (newLocale: string) => {
     if (newLocale === currentLocale) return;
-
-    // Check if current content is different from saved content
-    const contentData = content?.localized?.content as any;
-    const savedContent = contentData?.mdx || '';
-    const isDirty = currentContentRef.current !== savedContent;
-
     if (isDirty) {
-      // Show unsaved changes dialog
       setPendingLocaleSwitch(newLocale);
-      setShowUnsavedDialog(true);
+      setShowLocaleUnsavedDialog(true);
       return;
     }
-
-    // Switch immediately if no unsaved changes
     await switchLocale(newLocale);
   };
 
@@ -114,136 +140,191 @@ export function BlockEditor() {
     if (!id) return;
 
     try {
-      // Fetch the new locale content
       const client = getContentAPIClient();
       const newLocaleContent = await client.getLocalized(id, newLocale);
 
       if (!newLocaleContent) {
-        // Missing locale → clear the ref so the next dirty-check doesn't
-        // misfire against stale OLD-locale content and the unsaved-changes
-        // dialog's "Save" path can't write OLD content under the NEW locale.
         setCurrentEtag('');
-        currentContentRef.current = '';
+        savedContentRef.current = '';
+        setContent('');
       } else {
         setCurrentEtag(newLocaleContent.localized.etag);
-        const newContentData = newLocaleContent.localized.content as any;
-        currentContentRef.current = newContentData?.mdx || '';
+        const newData = newLocaleContent.localized.content as { mdx?: string } | undefined;
+        const mdx = newData?.mdx || '';
+        savedContentRef.current = mdx;
+        setContent(mdx);
       }
 
       setCurrentLocale(newLocale);
       setPendingLocaleSwitch(null);
-    } catch (error) {
-      console.error('Failed to switch locale:', error);
-      // Keep current locale on error
+    } catch (err) {
+      console.error('Failed to switch locale:', err);
     }
   };
 
-  const handleUnsavedDialogSave = async () => {
+  const handleLocaleUnsavedSave = async () => {
     if (!pendingLocaleSwitch) return;
-
-    // Save current content first
-    try {
-      await handleSave(currentContentRef.current);
-      setShowUnsavedDialog(false);
+    await persist(content);
+    if (savedContentRef.current === content) {
+      setShowLocaleUnsavedDialog(false);
       await switchLocale(pendingLocaleSwitch);
-    } catch (error) {
-      // Don't switch if save failed
-      console.error('Failed to save before locale switch:', error);
     }
   };
 
-  const handleUnsavedDialogDiscard = async () => {
+  const handleLocaleUnsavedDiscard = async () => {
     if (!pendingLocaleSwitch) return;
-
-    setShowUnsavedDialog(false);
+    setShowLocaleUnsavedDialog(false);
     await switchLocale(pendingLocaleSwitch);
   };
 
-  const handleUnsavedDialogCancel = () => {
-    setShowUnsavedDialog(false);
+  const handleLocaleUnsavedCancel = () => {
+    setShowLocaleUnsavedDialog(false);
     setPendingLocaleSwitch(null);
   };
 
-  if (isLoading) {
+  // Render the loading splash until we have the initial markdown — MDXEditorLib
+  // only reads `markdown` once on mount, so we can't safely render the editor
+  // with a placeholder empty string and update it later.
+  if (isLoading || !isContentLoaded) {
     return (
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-        <div className="bg-overlay rounded-lg p-6 shadow-lg">
-          <div className="flex items-center gap-3">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-azure-04" />
-            <span className="text-grey-04 dark:text-grey-07">Loading block...</span>
-          </div>
+      <div className="flex items-center justify-center h-screen bg-grey-12 dark:bg-grey-01">
+        <div className="flex items-center gap-3 text-grey-04 dark:text-grey-07">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-azure-04" />
+          <span>Loading block…</span>
         </div>
       </div>
     );
   }
 
-  // Only show error if we don't have any content at all (not even from another locale)
-  if (error && !content && !currentContentRef.current) {
+  if (error && !loadedContent && !savedContentRef.current) {
     return (
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-        <div className="bg-overlay rounded-lg p-6 shadow-lg max-w-md">
-          <div className="text-red-04 mb-4">Failed to load block: {error?.message || 'Not found'}</div>
-          <button
-            onClick={() => navigate('/blocks')}
-            className="px-4 py-2 bg-azure-04 text-white rounded-md hover:bg-azure-03 transition-colors"
-          >
-            Back to Blocks
-          </button>
-        </div>
+      <div className="flex flex-col items-center justify-center h-screen bg-grey-12 dark:bg-grey-01 gap-4">
+        <div className="text-red-04">Failed to load block: {error?.message || 'Not found'}</div>
+        <button
+          type="button"
+          onClick={() => navigate('/blocks')}
+          className="px-4 py-2 bg-azure-04 text-white rounded-md hover:bg-azure-03 transition-colors"
+        >
+          Back to Blocks
+        </button>
       </div>
     );
   }
 
-  // If locale doesn't exist but we have content from another locale, use that
-  const contentData = content?.localized?.content as any;
-  const blockName = content?.localized?.name || id || 'block';
-  const initialContent = contentData?.mdx || currentContentRef.current || '# New Block\n\n';
+  const saveButtonLabel =
+    saveState === 'saving'
+      ? 'Saving…'
+      : saveState === 'saved'
+        ? '✓ Saved'
+        : saveState === 'error'
+          ? 'Retry save'
+          : saveState === 'conflict'
+            ? 'Conflict'
+            : 'Save';
 
   return (
-    <>
-      <CMSMDXEditorModal
-        isOpen={true}
-        onClose={() => navigate('/blocks')}
-        filePath={`blocks/${blockName}`}
-        initialContent={initialContent}
-        onSave={handleSave}
-        headerExtra={
+    <div className="h-screen flex flex-col bg-grey-12 dark:bg-grey-01">
+      <header className="flex items-center justify-between gap-4 px-4 py-2 border-b border-grey-09 dark:border-grey-04 bg-white dark:bg-grey-03 shrink-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <button
+            type="button"
+            onClick={handleCancel}
+            aria-label="Back to blocks"
+            className="p-2 rounded text-grey-04 dark:text-grey-07 hover:bg-grey-11 dark:hover:bg-grey-04"
+          >
+            ←
+          </button>
+          <h1 className="text-base font-medium text-grey-01 dark:text-grey-12 truncate">Edit: {filePath}</h1>
+        </div>
+        <div className="flex items-center gap-2">
+          <CMSMDXHeaderTools setContent={setContent} editorRef={editorRef} filePath={filePath} />
           <LocaleSelector
             currentLocale={currentLocale}
             availableLocales={availableLocales}
             onChange={handleLocaleChange}
           />
-        }
-      />
-      {showUnsavedDialog && (
+          <button
+            type="button"
+            onClick={handleCancel}
+            disabled={saveState === 'saving'}
+            className="px-3 py-1.5 text-sm border border-grey-09 dark:border-grey-04 rounded text-grey-01 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-04 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSaveClick}
+            disabled={saveState === 'saving' || (!isDirty && saveState === 'idle')}
+            className="px-3 py-1.5 text-sm bg-azure-04 text-white rounded hover:bg-azure-03 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {saveButtonLabel}
+          </button>
+        </div>
+      </header>
+      <div className="flex-1 overflow-hidden">
+        <CMSMDXEditor
+          // Re-mount on locale switch so the editor re-initializes with the
+          // new locale's markdown — `markdown` prop changes are otherwise
+          // ignored after first mount.
+          key={`${id}-${currentLocale}`}
+          ref={editorRef}
+          value={content}
+          onChange={(next, initialNormalize) => {
+            setContent(next);
+            // See MdxPageEditor: the library's first onChange call after
+            // parse round-trip-rewrites the markdown; rebaseline rather
+            // than flag dirty.
+            if (initialNormalize) {
+              savedContentRef.current = next;
+            }
+          }}
+          onSave={persist}
+          className={editorClassName}
+          autoFocus
+          placeholder="Start writing your block…"
+        />
+      </div>
+
+      {blocker.state === 'blocked' && (
         <UnsavedChangesDialog
-          onSave={handleUnsavedDialogSave}
-          onDiscard={handleUnsavedDialogDiscard}
-          onCancel={handleUnsavedDialogCancel}
+          onSave={async () => {
+            await persist(content);
+            if (savedContentRef.current === content) {
+              blocker.proceed?.();
+            }
+          }}
+          onDiscard={() => blocker.proceed?.()}
+          onCancel={() => blocker.reset?.()}
         />
       )}
+
+      {showLocaleUnsavedDialog && (
+        <UnsavedChangesDialog
+          onSave={handleLocaleUnsavedSave}
+          onDiscard={handleLocaleUnsavedDiscard}
+          onCancel={handleLocaleUnsavedCancel}
+        />
+      )}
+
       {conflict && conflict.reason === 'stale_write' && (
         <ConflictDialog
           conflict={conflict}
           onReload={() => {
             setConflict(null);
-            // Simplest recovery: full reload drops local MDX edits. The dialog
-            // explicitly warns the user before triggering this branch.
             window.location.reload();
           }}
           onForceSave={async (newEtag) => {
             setConflict(null);
             setCurrentEtag(newEtag);
-            try {
-              await handleSave(currentContentRef.current, newEtag);
-            } catch {
-              // Errors already surfaced via showError inside handleSave.
-            }
+            await persist(content, newEtag);
           }}
-          onCancel={() => setConflict(null)}
+          onCancel={() => {
+            setConflict(null);
+            setSaveState('idle');
+          }}
         />
       )}
       <ErrorModal {...errorModalProps} title="Save Failed" />
-    </>
+    </div>
   );
 }

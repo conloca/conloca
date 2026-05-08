@@ -37,7 +37,7 @@ export const CMSMDXEditor = forwardRef<MDXEditorMethods, CMSMDXEditorProps>((pro
 
 CMSMDXEditor.displayName = 'CMSMDXEditor';
 
-function CMSMDXHeaderTools({
+export function CMSMDXHeaderTools({
   setContent,
   editorRef,
   filePath,
@@ -57,6 +57,16 @@ function CMSMDXHeaderTools({
       return;
     }
 
+    // insertMarkdown preserves cursor position (vs setMarkdown which resets it
+    // to document start — a documented MDXEditor limitation). The library will
+    // splice the snippet at the current selection and emit onChange, which
+    // updates our content state via the editor's existing wiring.
+    if (editorRef.current?.insertMarkdown) {
+      editorRef.current.insertMarkdown(`\n\n${snippet.content}\n`);
+      return;
+    }
+
+    // Fallback (no insertMarkdown method) — append to end via setMarkdown.
     setContent((current) => {
       const trimmed = current.trimEnd();
       const newContent = trimmed ? `${trimmed}\n\n${snippet.content}` : snippet.content;

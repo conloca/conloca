@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { ErrorCodes } from '@conloca/content-api-client';
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
-import App from '../src/App';
+import { AppRoutes } from '../src/App';
 import { API_ROUTES, mockAPIError, renderWithProviders, setupTestAPI, testApi } from './test-utils';
 
 // Set test timeout
@@ -23,7 +23,7 @@ afterEach(() => {
 function renderApp() {
   console.log('[Integration Test] Rendering app');
 
-  return renderWithProviders(<App />, {}, false);
+  return renderWithProviders(<AppRoutes />, {}, false);
 }
 
 describe('CMS Integration Tests', () => {

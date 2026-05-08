@@ -2,7 +2,6 @@ import { ContentAPIClient, setContentAPIClient } from '@conloca/content-api-clie
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import { CanvasThemeProvider } from './hooks/useCanvasTheme';
 import { ThemeProvider } from './hooks/useTheme';
@@ -22,14 +21,13 @@ const queryClient = new QueryClient(config.queryClientOptions);
 
 // Expose query client globally for content change listener
 (window as any).__QUERY_CLIENT__ = queryClient;
+
 const root = createRoot(document.getElementById('root')!);
 root.render(
   <QueryClientProvider client={queryClient}>
     <ThemeProvider>
       <CanvasThemeProvider>
-        <BrowserRouter basename={config.basename}>
-          <App />
-        </BrowserRouter>
+        <App basename={config.basename} />
       </CanvasThemeProvider>
     </ThemeProvider>
     {config.enableDevtools && <ReactQueryDevtools initialIsOpen={false} />}

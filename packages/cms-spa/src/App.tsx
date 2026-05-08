@@ -1,4 +1,6 @@
-import { Route, Routes } from 'react-router-dom';
+import type { Config } from '@puckeditor/core';
+import { useMemo } from 'react';
+import { createBrowserRouter, createRoutesFromElements, Route, RouterProvider, Routes } from 'react-router-dom';
 import { CMSDashboard } from './components/CMSDashboard';
 import { CMSLayout } from './components/CMSLayout';
 import { BlockEditor } from './components/editor/BlockEditor';
@@ -7,26 +9,65 @@ import { BlockList } from './components/pages/BlockList';
 import { DataList } from './components/pages/DataList';
 import { MediaPage } from './components/pages/MediaPage';
 import { PageList } from './components/pages/PageList';
-import { useDataSchemas } from './data-schemas';
+import { type DataSchemas, useDataSchemas } from './data-schemas';
 import { usePuckConfig } from './puck-config';
 
-export default function App() {
-  const puckConfig = usePuckConfig();
-  const dataSchemas = useDataSchemas();
+interface RouteDeps {
+  puckConfig: Config;
+  dataSchemas: DataSchemas;
+}
 
+/**
+ * Single source of truth for the SPA's route shape. Used by both the
+ * production Data Router (default export) and tests rendering through
+ * `<AppRoutes>` inside a legacy `<MemoryRouter>`.
+ *
+ * `/pages/:id` and `/blocks/:id` sit OUTSIDE the CMSLayout shell so the
+ * editors occupy the full viewport — the page-route equivalent of "modal
+ * takes over the screen".
+ */
+function routeElements({ puckConfig, dataSchemas }: RouteDeps) {
   return (
-    <Routes>
+    <>
       <Route path="/" element={<CMSLayout />}>
         <Route index element={<CMSDashboard />} />
         <Route path="pages" element={<PageList />} />
-        <Route path="blocks">
-          <Route index element={<BlockList />} />
-          <Route path=":id" element={<BlockEditor />} />
-        </Route>
+        <Route path="blocks" element={<BlockList />} />
         <Route path="data" element={<DataList dataSchemas={dataSchemas} />} />
         <Route path="media" element={<MediaPage />} />
       </Route>
       <Route path="/pages/:id" element={<PageEditorWrapper puckConfig={puckConfig} />} />
-    </Routes>
+      <Route path="/blocks/:id" element={<BlockEditor />} />
+    </>
   );
+}
+
+/**
+ * Element-form router tree. Compatible with the legacy `<MemoryRouter>` test
+ * harness. Hooks like `useBlocker` won't work under this; tests that need
+ * `useBlocker` must build their own `createMemoryRouter` + `<RouterProvider>`.
+ */
+export function AppRoutes() {
+  const puckConfig = usePuckConfig();
+  const dataSchemas = useDataSchemas();
+  return <Routes>{routeElements({ puckConfig, dataSchemas })}</Routes>;
+}
+
+/**
+ * Production app entry. Uses the Data Router API so v7's `useBlocker` works
+ * for the unsaved-changes navigation guard in MdxPageEditor / BlockEditor.
+ */
+export default function App({ basename }: { basename?: string } = {}) {
+  const puckConfig = usePuckConfig();
+  const dataSchemas = useDataSchemas();
+
+  const router = useMemo(
+    () =>
+      createBrowserRouter(createRoutesFromElements(routeElements({ puckConfig, dataSchemas })), {
+        basename,
+      }),
+    [puckConfig, dataSchemas, basename],
+  );
+
+  return <RouterProvider router={router} />;
 }
