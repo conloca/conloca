@@ -774,6 +774,7 @@ if (import.meta.hot) {
                     {
                       contentRoot: options.contentRoot,
                       canvasDir: options.canvasDir || './canvas',
+                      ...(options.mdxPages?.root && { mdxPagesRoot: options.mdxPages.root }),
                     },
                     server.ws,
                     async () => {
