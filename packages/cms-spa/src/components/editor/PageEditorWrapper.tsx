@@ -1,4 +1,10 @@
-import { useBlocks, useDataContext, useLocalizedContent, useUpdateLocalized } from '@conloca/content-api-client';
+import {
+  useBlocks,
+  useContent,
+  useDataContext,
+  useLocalizedContent,
+  useUpdateLocalized,
+} from '@conloca/content-api-client';
 import type { ComponentConfig, Config, Data } from '@puckeditor/core';
 import { resolveAllData } from '@puckeditor/core';
 import { useEffect, useMemo, useState } from 'react';
@@ -99,7 +105,11 @@ const contentBlockToneClasses: Record<NonNullable<ContentBlockSectionProps['tone
  */
 export function PageEditorWrapper({ puckConfig }: PageEditorWrapperProps) {
   const { id } = useParams();
-  const { data: content, isLoading } = useLocalizedContent(id || '', 'en');
+  // Use the kind-level hook so dispatch works regardless of which locales
+  // exist for the page (a previous `useLocalizedContent(id, 'en')` would
+  // stall on the loading branch for any page that exists only in non-en
+  // locales — the headline use case for `mdxPagesDefaultLocale`).
+  const { data: content, isLoading } = useContent(id || '');
 
   if (isLoading || !content) {
     return <div className="flex items-center justify-center h-screen">Loading...</div>;
