@@ -409,8 +409,8 @@ export class FileSystemContentAPI implements ContentAPI {
       // Files under the optional mdxPagesRoot are kind:'page' + type:'mdx',
       // independent of the directory tree rooted at absoluteContentRoot. The
       // leading prefix is stripped here and locale/pathname are derived from
-      // the configured locale strategy ('directory' = Starlight, 'suffix' =
-      // Conloca's default).
+      // the configured locale strategy ('directory' = locale-prefixed dirs,
+      // 'suffix' = Conloca's existing block convention).
       if (this.absoluteMdxPagesRoot && filePath.startsWith(this.absoluteMdxPagesRoot + '/')) {
         kind = 'page';
         site = this.mdxPagesSite;
@@ -436,8 +436,8 @@ export class FileSystemContentAPI implements ContentAPI {
               ? '/' + mdxParts.slice(0, -1).join('/') || '/'
               : '/' + mdxParts.join('/');
         } else {
-          // 'directory' strategy — Starlight convention. {locale}/{slug}.mdx
-          // for non-default locales, {slug}.mdx at the root for the default.
+          // 'directory' strategy. {locale}/{slug}.mdx for non-default locales,
+          // {slug}.mdx at the root for the default locale.
           const noLocaleMatch = mdxFilename.match(/^(.+)\.mdx$/);
           if (!noLocaleMatch) return null;
           mdxParts[mdxParts.length - 1] = noLocaleMatch[1];
@@ -906,8 +906,8 @@ export class FileSystemContentAPI implements ContentAPI {
     await scan(this.absoluteContentRoot);
 
     // Also scan mdxPagesRoot for .mdx files when the second root is configured.
-    // This supports projects that store mdx-type pages outside the main content
-    // tree (e.g. Starlight projects keep them at src/content/docs/).
+    // Supports projects that store mdx-type pages outside the main content
+    // tree (the rendering pipeline that consumes them is the project's choice).
     if (this.absoluteMdxPagesRoot && this.absoluteMdxPagesRoot !== this.absoluteContentRoot) {
       async function scanMdxPages(dir: string) {
         try {
