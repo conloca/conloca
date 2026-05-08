@@ -52,9 +52,18 @@ export function createContentWatchHandlers(
     // Normalize paths for consistent comparison
     const normalizedFile = normalize(resolve(file));
     const normalizedRoot = normalize(resolve(options.contentRoot));
+    const normalizedMdxRoot = options.mdxPagesRoot ? normalize(resolve(options.mdxPagesRoot)) : null;
 
-    if (normalizedFile.startsWith(normalizedRoot)) {
-      const relativePath = normalizedFile.replace(normalizedRoot + '/', '');
+    // Trailing-slash guard avoids prefix collisions
+    // (e.g. `/foo/content-extra/...` matching root `/foo/content`).
+    const inContentRoot = normalizedFile === normalizedRoot || normalizedFile.startsWith(normalizedRoot + '/');
+    const inMdxRoot =
+      !!normalizedMdxRoot &&
+      (normalizedFile === normalizedMdxRoot || normalizedFile.startsWith(normalizedMdxRoot + '/'));
+
+    if (inContentRoot || inMdxRoot) {
+      const matchedRoot = inContentRoot ? normalizedRoot : (normalizedMdxRoot as string);
+      const relativePath = normalizedFile.replace(matchedRoot + '/', '');
       console.log(`[Content] ${action}: ${relativePath}`);
 
       try {
