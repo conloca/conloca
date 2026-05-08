@@ -118,12 +118,13 @@ export function BlockEditor() {
       const client = getContentAPIClient();
       const newLocaleContent = await client.getLocalized(id, newLocale);
 
-      // If locale doesn't exist, copy from current locale
       if (!newLocaleContent) {
-        // Keep current content (will be saved to new locale)
-        setCurrentEtag(''); // No etag yet for new locale
+        // Missing locale → clear the ref so the next dirty-check doesn't
+        // misfire against stale OLD-locale content and the unsaved-changes
+        // dialog's "Save" path can't write OLD content under the NEW locale.
+        setCurrentEtag('');
+        currentContentRef.current = '';
       } else {
-        // Update etag for the new locale
         setCurrentEtag(newLocaleContent.localized.etag);
         const newContentData = newLocaleContent.localized.content as any;
         currentContentRef.current = newContentData?.mdx || '';

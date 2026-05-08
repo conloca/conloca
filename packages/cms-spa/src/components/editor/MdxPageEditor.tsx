@@ -107,7 +107,11 @@ export function MdxPageEditor() {
       const newLocaleContent = await client.getLocalized(id, newLocale);
 
       if (!newLocaleContent) {
+        // Missing locale → clear the ref so the next dirty-check doesn't
+        // misfire against stale OLD-locale content and the unsaved-changes
+        // dialog's "Save" path can't write OLD content under the NEW locale.
         setCurrentEtag('');
+        currentContentRef.current = '';
       } else {
         setCurrentEtag(newLocaleContent.localized.etag);
         const newContentData = newLocaleContent.localized.content as { mdx?: string } | undefined;
