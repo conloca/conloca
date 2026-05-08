@@ -261,5 +261,22 @@ Some regular markdown.`;
       expect(await screen.findByText('Hello')).toBeDefined();
       expect(await screen.findByText('Click me')).toBeDefined();
     });
+
+    test('wildcard fallback accepts unknown JSX without descriptors', async () => {
+      const mdxContent = `# Doc
+
+<Aside type="note">Heads up</Aside>
+
+Trailing paragraph.`;
+
+      const { container } = render(<MDXEditor value={mdxContent} onChange={() => {}} />);
+
+      // No descriptors passed → wildcard fallback should accept the unknown
+      // <Aside> tag instead of crashing the importer with the
+      // "Parsing of the following markdown structure failed" error.
+      expect(await screen.findByText('Doc')).toBeDefined();
+      expect(await screen.findByText('Trailing paragraph.')).toBeDefined();
+      expect(container.textContent || '').not.toContain('Parsing of the following markdown structure failed');
+    });
   });
 });

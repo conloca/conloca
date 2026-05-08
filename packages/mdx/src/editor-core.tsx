@@ -7,6 +7,7 @@ import {
   DiffSourceToggleWrapper,
   diffSourcePlugin,
   frontmatterPlugin,
+  GenericJsxEditor,
   headingsPlugin,
   InsertCodeBlock,
   InsertImage,
@@ -70,6 +71,13 @@ export interface BaseMDXEditorModalProps {
    * app is in dark mode — see BaseMDXEditorProps.className.
    */
   editorClassName?: string;
+  /**
+   * Optional typed descriptors merged ahead of the wildcard fallback. Pass
+   * project-specific component shapes (e.g. Starlight's `<Aside type=...>`,
+   * `<Tabs>`, `<TabItem label=...>`) for richer rich-text editing; tags not
+   * declared here are still accepted through the wildcard.
+   */
+  jsxComponentDescriptors?: JsxComponentDescriptor[];
 }
 
 const codeBlockLanguages = {
@@ -86,6 +94,20 @@ const codeBlockLanguages = {
   bash: 'Bash',
   python: 'Python',
 };
+
+/**
+ * Wildcard fallback so any unknown JSX tag round-trips through GenericJsxEditor
+ * instead of crashing the importer with "Parsing of the following markdown
+ * structure failed". Two entries because the upstream visitor dispatches by
+ * `kind` (block vs inline JSX) — without the inline one, an inline `<Badge>`
+ * mid-paragraph would be matched by the flow wildcard and lifted out of its
+ * paragraph in Lexical. Consumers passing typed descriptors win via the
+ * exact-name match in the visitor; the wildcard only handles the leftovers.
+ */
+const wildcardJsxDescriptors: JsxComponentDescriptor[] = [
+  { name: '*', kind: 'flow', props: [], hasChildren: true, Editor: GenericJsxEditor },
+  { name: '*', kind: 'text', props: [], hasChildren: true, Editor: GenericJsxEditor },
+];
 
 function renderInsertImageButton(imageButtonRef?: React.Ref<HTMLButtonElement>) {
   if (!imageButtonRef) {
@@ -192,7 +214,9 @@ export const BaseMDXEditor = React.forwardRef<MDXEditorMethods, BaseMDXEditorPro
           codeMirrorPlugin({ codeBlockLanguages }),
           diffSourcePlugin({ viewMode: 'rich-text' }),
           markdownShortcutPlugin(),
-          jsxPlugin({ jsxComponentDescriptors: jsxComponentDescriptors ?? [] }),
+          jsxPlugin({
+            jsxComponentDescriptors: [...(jsxComponentDescriptors ?? []), ...wildcardJsxDescriptors],
+          }),
           imagePlugin(
             imageDialog
               ? {
@@ -304,6 +328,7 @@ export function BaseMDXEditorModal({
   onBeforeClose,
   EditorComponent,
   editorClassName,
+  jsxComponentDescriptors,
 }: BaseMDXEditorModalProps) {
   const editorRef = React.useRef<MDXEditorMethods>(null);
   const [content, setContent] = useState(initialContent);
@@ -384,6 +409,7 @@ export function BaseMDXEditorModal({
                 onChange={setContent}
                 onSave={handleSave}
                 className={editorClassName}
+                jsxComponentDescriptors={jsxComponentDescriptors}
               />
             </MDXEditorErrorBoundary>
           ) : (
