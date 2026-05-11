@@ -292,22 +292,7 @@ export function MdxPageEditor() {
           >
             ←
           </button>
-          <h1 className="text-base font-medium text-grey-01 dark:text-grey-12 truncate">
-            Edit:{' '}
-            {publishedPathname ? (
-              <a
-                href={publishedPathname}
-                target="_blank"
-                rel="noopener noreferrer"
-                title="Open published page in a new tab"
-                className="underline decoration-grey-08 dark:decoration-grey-05 underline-offset-2 hover:decoration-azure-04"
-              >
-                {pagePathname}
-              </a>
-            ) : (
-              pagePathname
-            )}
-          </h1>
+          <h1 className="text-base font-medium text-grey-01 dark:text-grey-12 truncate">Edit: {pagePathname}</h1>
         </div>
         <div className="flex items-center gap-2">
           <CMSMDXHeaderTools setContent={setContent} editorRef={editorRef} filePath={pagePathname} />
