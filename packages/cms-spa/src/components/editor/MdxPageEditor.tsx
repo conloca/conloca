@@ -6,6 +6,7 @@ import {
   useUpdateLocalized,
 } from '@conloca/content-api-client';
 import type { MDXEditorMethods } from '@mdxeditor/editor';
+import { ExternalLink } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAutoSave } from '../../hooks/useAutoSave';
@@ -315,6 +316,18 @@ export function MdxPageEditor() {
             availableLocales={availableLocales}
             onChange={handleLocaleChange}
           />
+          {publishedPathname && (
+            <a
+              href={publishedPathname}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Open published page in a new tab"
+              title="Open published page"
+              className="p-2 rounded text-grey-04 dark:text-grey-07 hover:bg-grey-11 dark:hover:bg-grey-04"
+            >
+              <ExternalLink size={16} aria-hidden />
+            </a>
+          )}
           <EditorChromeToggles
             autoSaveEnabled={autoSaveEnabled}
             onToggleAutoSave={() => setAutoSaveEnabled(!autoSaveEnabled)}
