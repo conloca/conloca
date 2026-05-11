@@ -1,0 +1,15 @@
+/* Conloca prose typography for the editor contenteditable. Same rules
+   that style the published site, so authoring and publishing match.
+   Inlined via tsdown's CSS pipeline into `dist/style.css`, then pulled
+   into the CMS SPA bundle via the side-effect `import './style.css'`
+   at the top of `dist/index.mjs`. */
+@import "./prose.css";
+
+/* Workaround for mdx-editor/editor#908: the toolbar root is flex-row by
+   default and overflows horizontally on narrow viewports. Wrapping is the
+   library author's recommended workaround until the upstream offers a
+   responsive primitive — applied via `toolbarClassName` in editor-core.tsx. */
+.mdxeditor-toolbar-wrap {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}

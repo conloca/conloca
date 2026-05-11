@@ -1,6 +1,8 @@
 import {
+  AdmonitionDirectiveDescriptor,
   BlockTypeSelect,
   BoldItalicUnderlineToggles,
+  ButtonWithTooltip,
   ChangeCodeMirrorLanguage,
   ConditionalContents,
   CreateLink,
@@ -8,12 +10,12 @@ import {
   codeMirrorPlugin,
   DiffSourceToggleWrapper,
   diffSourcePlugin,
-  frontmatterPlugin,
+  directivesPlugin,
   GenericJsxEditor,
   HighlightToggle,
   headingsPlugin,
+  InsertAdmonition,
   InsertCodeBlock,
-  InsertFrontmatter,
   InsertImage,
   InsertTable,
   InsertThematicBreak,
@@ -35,8 +37,61 @@ import {
   toolbarPlugin,
   UndoRedo,
 } from '@mdxeditor/editor';
-import React, { useEffect } from 'react';
+import { Maximize2, Minimize2 } from 'lucide-react';
+import React, { useCallback, useEffect, useSyncExternalStore } from 'react';
 import '@mdxeditor/editor/style.css';
+import './editor-styles.css';
+
+const FOCUS_MODE_STORAGE_KEY = 'conloca.mdxeditor.focusMode';
+const FOCUS_MODE_BODY_CLASS = 'mdxeditor-focus-mode';
+
+/**
+ * Toggle focus-mode by writing the class on `document.body`. Direct DOM
+ * mutation (vs. piping a boolean through React state into the editor's
+ * `className` prop) avoids re-rendering Lexical on every toggle — the
+ * editor's prop is the only entry point and changing it forces a parse
+ * round-trip. Persisted in localStorage so the preference survives reloads.
+ */
+function readFocusMode(): boolean {
+  if (typeof document === 'undefined') return false;
+  return document.body.classList.contains(FOCUS_MODE_BODY_CLASS);
+}
+
+function subscribeFocusMode(callback: () => void): () => void {
+  if (typeof window === 'undefined') return () => {};
+  const handler = () => callback();
+  window.addEventListener('conloca:focusModeChange', handler);
+  return () => window.removeEventListener('conloca:focusModeChange', handler);
+}
+
+function setFocusMode(next: boolean): void {
+  if (typeof document === 'undefined') return;
+  document.body.classList.toggle(FOCUS_MODE_BODY_CLASS, next);
+  try {
+    if (next) {
+      window.localStorage.setItem(FOCUS_MODE_STORAGE_KEY, '1');
+    } else {
+      window.localStorage.removeItem(FOCUS_MODE_STORAGE_KEY);
+    }
+  } catch {
+    // localStorage may be unavailable (private mode, SSR) — ignore.
+  }
+  window.dispatchEvent(new Event('conloca:focusModeChange'));
+}
+
+function FocusModeToggle() {
+  const focusMode = useSyncExternalStore(subscribeFocusMode, readFocusMode, () => false);
+  const onClick = useCallback(() => setFocusMode(!focusMode), [focusMode]);
+  const Icon = focusMode ? Minimize2 : Maximize2;
+  return (
+    <ButtonWithTooltip
+      title={focusMode ? 'Exit focus mode (wider column)' : 'Enter focus mode (narrow column)'}
+      onClick={onClick}
+    >
+      <Icon size={16} aria-hidden />
+    </ButtonWithTooltip>
+  );
+}
 
 export interface BaseMDXEditorProps {
   value: string;
@@ -54,6 +109,13 @@ export interface BaseMDXEditorProps {
   disableImageSettingsButton?: boolean;
   onImageShortcut?: () => void;
   imageButtonRef?: React.Ref<HTMLButtonElement>;
+  /**
+   * Upload handler for images pasted or dropped directly into the editor. When
+   * provided, the underlying imagePlugin will route those events through this
+   * function and insert the returned URL as the image src. Independent of the
+   * library/picker `imageDialog` flow — both can be active simultaneously.
+   */
+  imageUploadHandler?: (file: File) => Promise<string>;
   jsxComponentDescriptors?: JsxComponentDescriptor[];
   /**
    * Class applied to the MDXEditor root element (library forwards it to the
@@ -66,34 +128,6 @@ export interface BaseMDXEditorProps {
   placeholder?: React.ReactNode;
   /** Auto-focus the editor on mount. Forwarded to MDXEditorLib. */
   autoFocus?: boolean | { defaultSelection?: 'rootStart' | 'rootEnd'; preventScroll?: boolean };
-}
-
-export interface BaseMDXEditorModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  filePath?: string;
-  initialContent: string;
-  onSave: (content: string) => void | Promise<void>;
-  headerExtra?: React.ReactNode;
-  headerTools?: (tools: {
-    content: string;
-    setContent: React.Dispatch<React.SetStateAction<string>>;
-    editorRef: React.RefObject<MDXEditorMethods | null>;
-  }) => React.ReactNode;
-  onBeforeClose?: () => boolean;
-  EditorComponent: React.ForwardRefExoticComponent<BaseMDXEditorProps & React.RefAttributes<MDXEditorMethods>>;
-  /**
-   * Forwarded to the MDXEditor root. Typically `"dark-theme"` when the host
-   * app is in dark mode — see BaseMDXEditorProps.className.
-   */
-  editorClassName?: string;
-  /**
-   * Optional typed descriptors merged ahead of the wildcard fallback. Pass
-   * project-specific component shapes (e.g. Starlight's `<Aside type=...>`,
-   * `<Tabs>`, `<TabItem label=...>`) for richer rich-text editing; tags not
-   * declared here are still accepted through the wildcard.
-   */
-  jsxComponentDescriptors?: JsxComponentDescriptor[];
 }
 
 // The empty-string entry is the documented escape hatch for code blocks
@@ -141,40 +175,18 @@ function renderInsertImageButton(imageButtonRef?: React.Ref<HTMLButtonElement>) 
   });
 }
 
-class MDXEditorErrorBoundary extends React.Component<
-  { children: React.ReactNode; logPrefix: string },
-  { hasError: boolean; error?: Error }
-> {
-  constructor(props: { children: React.ReactNode; logPrefix: string }) {
-    super(props);
-    this.state = { hasError: false };
-  }
-
-  static getDerivedStateFromError(error: Error) {
-    return { hasError: true, error };
-  }
-
-  override componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error(`${this.props.logPrefix} Error boundary caught:`, error, errorInfo);
-  }
-
-  override render() {
-    if (this.state.hasError) {
-      return (
-        <div className="p-4 bg-red-50 border border-red-200 rounded text-red-600">
-          <p className="font-semibold mb-2">MDXEditor Error</p>
-          <p className="text-sm mb-2">{this.state.error?.message || 'Unknown error occurred'}</p>
-          <details className="text-xs">
-            <summary className="cursor-pointer font-medium">Stack Trace</summary>
-            <pre className="mt-2 p-2 bg-red-100 rounded overflow-auto whitespace-pre-wrap">
-              {this.state.error?.stack}
-            </pre>
-          </details>
-        </div>
-      );
+/**
+ * Restore the persisted focus-mode preference on first import. Runs once at
+ * module load so the class is in place before any editor mounts — avoids a
+ * flash of wide column when the user previously selected focus mode.
+ */
+if (typeof window !== 'undefined') {
+  try {
+    if (window.localStorage.getItem(FOCUS_MODE_STORAGE_KEY) === '1') {
+      document.body.classList.add(FOCUS_MODE_BODY_CLASS);
     }
-
-    return this.props.children;
+  } catch {
+    // ignore
   }
 }
 
@@ -189,6 +201,7 @@ export const BaseMDXEditor = React.forwardRef<MDXEditorMethods, BaseMDXEditorPro
       disableImageSettingsButton = false,
       onImageShortcut,
       imageButtonRef,
+      imageUploadHandler,
       jsxComponentDescriptors,
       className,
       placeholder,
@@ -242,22 +255,34 @@ export const BaseMDXEditor = React.forwardRef<MDXEditorMethods, BaseMDXEditorPro
           linkDialogPlugin(),
           tablePlugin(),
           thematicBreakPlugin(),
-          frontmatterPlugin(),
+          // frontmatterPlugin intentionally omitted: metadata (title,
+          // description, id, created, modified) is server-owned and stripped
+          // from `content.mdx` on load. Re-introducing the plugin would let
+          // the editor round-trip a YAML block as body text, corrupting the
+          // file when content is inserted above it.
           codeBlockPlugin({ defaultCodeBlockLanguage: 'ts' }),
           codeMirrorPlugin({ codeBlockLanguages }),
           diffSourcePlugin({ viewMode: 'rich-text' }),
           markdownShortcutPlugin(),
+          // Admonition / callout directives — :::note ... ::: etc. The
+          // descriptor handles in-editor rendering; the runtime side adds
+          // remark-directive in @conloca/mdx/node so the published preview
+          // resolves them too. See `mdx/src/mdx/evaluate.ts`.
+          // `escapeUnknownTextDirectives: true` keeps stray inline colons
+          // (e.g. `:path` inside prose, `key:value` glossary entries) as
+          // plain text — without it, remark-directive would parse every
+          // `:word` as a textDirective and crash for lack of a descriptor.
+          directivesPlugin({
+            directiveDescriptors: [AdmonitionDirectiveDescriptor],
+            escapeUnknownTextDirectives: true,
+          }),
           jsxPlugin({
             jsxComponentDescriptors: [...(jsxComponentDescriptors ?? []), ...wildcardJsxDescriptors],
           }),
-          imagePlugin(
-            imageDialog
-              ? {
-                  ImageDialog: imageDialog,
-                  disableImageSettingsButton,
-                }
-              : undefined,
-          ),
+          imagePlugin({
+            ...(imageDialog ? { ImageDialog: imageDialog, disableImageSettingsButton } : {}),
+            ...(imageUploadHandler ? { imageUploadHandler } : {}),
+          }),
           toolbarPlugin({
             // flex-wrap so the toolbar reflows on narrow viewports instead of
             // overflowing horizontally — workaround documented in
@@ -293,7 +318,9 @@ export const BaseMDXEditor = React.forwardRef<MDXEditorMethods, BaseMDXEditorPro
                           <InsertThematicBreak />
                           <Separator />
                           <InsertCodeBlock />
-                          <InsertFrontmatter />
+                          <InsertAdmonition />
+                          <Separator />
+                          <FocusModeToggle />
                         </>
                       ),
                     },
@@ -309,153 +336,3 @@ export const BaseMDXEditor = React.forwardRef<MDXEditorMethods, BaseMDXEditorPro
 );
 
 BaseMDXEditor.displayName = 'BaseMDXEditor';
-
-function DeferredMDXEditor({
-  EditorComponent,
-  editorRef,
-  ...props
-}: BaseMDXEditorProps & {
-  EditorComponent: React.ForwardRefExoticComponent<BaseMDXEditorProps & React.RefAttributes<MDXEditorMethods>>;
-  editorRef: React.RefObject<MDXEditorMethods | null>;
-}) {
-  return (
-    <div data-testid="deferred-editor-ready">
-      <EditorComponent ref={editorRef} {...props} />
-    </div>
-  );
-}
-
-interface DialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  children: React.ReactNode;
-}
-
-function Dialog({ open, onOpenChange, children }: DialogProps) {
-  if (!open) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div role="presentation" className="fixed inset-0 bg-black/50" onClick={() => onOpenChange(false)} />
-      <div className="relative z-50 bg-white dark:bg-grey-03 rounded-lg shadow-lg max-w-[90vw] max-h-[90vh] overflow-hidden">
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function DialogContent({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return <div className={`p-6 ${className}`}>{children}</div>;
-}
-
-function DialogHeader({ children }: { children: React.ReactNode }) {
-  return <div className="mb-4">{children}</div>;
-}
-
-function DialogTitle({ children }: { children: React.ReactNode }) {
-  return <h2 className="text-xl font-semibold text-grey-01 dark:text-grey-12">{children}</h2>;
-}
-
-export function BaseMDXEditorModal({
-  isOpen,
-  onClose,
-  filePath,
-  initialContent,
-  onSave,
-  headerExtra,
-  headerTools,
-  onBeforeClose,
-  EditorComponent,
-  editorClassName,
-  jsxComponentDescriptors,
-}: BaseMDXEditorModalProps) {
-  const editorRef = React.useRef<MDXEditorMethods>(null);
-  const [content, setContent] = React.useState(initialContent);
-  const [isSaving, setIsSaving] = React.useState(false);
-
-  useEffect(() => {
-    setContent(initialContent);
-  }, [initialContent]);
-
-  const handleClose = () => {
-    if (onBeforeClose && !onBeforeClose()) {
-      return;
-    }
-
-    onClose();
-  };
-
-  const handleSave = async () => {
-    setIsSaving(true);
-
-    try {
-      await onSave(content);
-      handleClose();
-    } catch (error) {
-      console.error('Save failed:', error);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  if (!isOpen) {
-    return null;
-  }
-
-  return (
-    <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="w-[90vw] h-[90vh] flex flex-col" data-testid="mdx-editor-modal">
-        <DialogHeader>
-          <div className="flex items-center justify-between gap-4">
-            <DialogTitle>{filePath ? `Edit: ${filePath}` : 'New MDX File'}</DialogTitle>
-            {(headerExtra || headerTools) && (
-              <div className="flex items-center gap-2">
-                {headerExtra}
-                {headerTools?.({ content, setContent, editorRef })}
-              </div>
-            )}
-            <button
-              type="button"
-              onClick={handleClose}
-              className="p-2 rounded text-grey-04 dark:text-grey-07 hover:bg-gray-100 dark:hover:bg-grey-04 hover:text-grey-01 dark:hover:text-grey-12"
-              aria-label="Close"
-            >
-              ✕
-            </button>
-          </div>
-        </DialogHeader>
-        <div className="flex-1 overflow-hidden">
-          <MDXEditorErrorBoundary logPrefix="[MDXEditor]">
-            <DeferredMDXEditor
-              EditorComponent={EditorComponent}
-              editorRef={editorRef}
-              value={content}
-              onChange={setContent}
-              onSave={handleSave}
-              className={editorClassName}
-              jsxComponentDescriptors={jsxComponentDescriptors}
-            />
-          </MDXEditorErrorBoundary>
-        </div>
-        <div className="flex justify-end gap-2 mt-4">
-          <button
-            type="button"
-            onClick={handleClose}
-            className="px-4 py-2 border border-gray-300 dark:border-grey-04 rounded text-grey-01 dark:text-grey-12 hover:bg-gray-50 dark:hover:bg-grey-04"
-            disabled={isSaving}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={isSaving}
-          >
-            {isSaving ? 'Saving...' : 'Save'}
-          </button>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}

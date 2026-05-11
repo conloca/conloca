@@ -1174,7 +1174,7 @@ export class FileSystemContentAPI implements ContentAPI {
       const content = textDecoder.decode(buffer);
 
       if (filePath.endsWith('.mdx')) {
-        const { data: frontmatter } = matter(content);
+        const { data: frontmatter, content: body } = matter(content);
 
         // Calculate etags from the file buffer
         const contentPos = findMdxContentStartPosition(buffer);
@@ -1185,13 +1185,18 @@ export class FileSystemContentAPI implements ContentAPI {
         // Extract special fields from frontmatter, everything else is metadata
         const { id, created, modified, publishAt, unpublishAt, name, ...metaFields } = frontmatter;
 
+        // Body-only — frontmatter is server-owned and surfaced separately
+        // via `meta` / `created` / `modified`. Returning the full file here
+        // would let the editor round-trip the YAML block as body text, which
+        // duplicates the frontmatter on disk when content is inserted above
+        // it (proven on assets.mdx, 2026-05-11).
         const result: LocaleFileData = {
           locale,
           etag,
           created: created,
           modified: modified,
-          meta: metaFields as ContentMeta, // All non-special fields are metadata
-          content: { mdx: content }, // Return the ENTIRE file content including frontmatter
+          meta: metaFields as ContentMeta,
+          content: { mdx: body },
         };
 
         // Only add publish dates if they exist
@@ -1705,6 +1710,18 @@ export class FileSystemContentAPI implements ContentAPI {
           // Remove frontmatter if it exists
           const { content: contentOnly } = matter(mdxContentPart);
           mdxContentPart = contentOnly;
+        }
+
+        // Defensive guard: warn when a frontmatter-shaped block appears
+        // mid-body. The load path strips frontmatter before it reaches the
+        // editor, so this should never occur — if it does, surface it for
+        // investigation instead of silently writing a file with stacked
+        // frontmatter blocks.
+        if (/\n---\r?\n[\s\S]*?\r?\n---(\r?\n|$)/.test(mdxContentPart)) {
+          console.warn(
+            `[content-api] Embedded frontmatter-shaped block detected in body for ${targetFilePath}. ` +
+              'This indicates a load-path regression or client-side leak.',
+          );
         }
 
         const mdxContent = serializeMdxWithFrontmatter(frontmatterData, mdxContentPart);

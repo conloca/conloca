@@ -4,6 +4,10 @@
 @import "@astrojs/starlight-tailwind";
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
+/* Conloca prose typography — shared with the CMS editor surface via the
+   `@conloca/mdx` package, so authoring (`.conloca-prose--editor`) and
+   publishing (`.conloca-prose`) use the same type scale. */
+@import "@conloca/mdx/prose.css" layer(components);
 
 /* Remove underline from all links */
 @layer base {
@@ -185,139 +189,41 @@
   transform: rotate(180deg);
 }
 
-.conloca-prose {
-  color: var(--color-text-secondary);
-  font-family: var(--font-sans);
-  font-size: 1rem;
-  line-height: 1.75;
-}
+/* `.conloca-prose` and `.conloca-prose--editor` typography moved to
+ * `@conloca/mdx/prose.css` and imported at the top of this file so the CMS
+ * editor surface and the published site share one source of truth. */
 
-.conloca-prose > :first-child {
-  margin-top: 0;
-}
-
-.conloca-prose > :last-child {
-  margin-bottom: 0;
-}
-
-.conloca-prose :where(h1, h2, h3, h4, h5, h6) {
-  color: var(--color-text-heading);
-  font-weight: 700;
-  line-height: 1.2;
-  margin-top: 0;
-  margin-bottom: 1rem;
-}
-
-.conloca-prose :where(h1) {
-  font-size: clamp(2rem, 4vw, 2.75rem);
-  margin-bottom: 1.25rem;
-}
-
-.conloca-prose :where(h2) {
-  font-size: clamp(1.5rem, 3vw, 2rem);
-  margin-top: 2.75rem;
-}
-
-.conloca-prose :where(h3) {
-  font-size: 1.25rem;
-  margin-top: 2rem;
-}
-
-.conloca-prose :where(h4, h5, h6) {
-  font-size: 1rem;
-  margin-top: 1.5rem;
-}
-
-.conloca-prose :where(p, ul, ol, blockquote, pre, table) {
-  margin-top: 0;
-  margin-bottom: 1.25rem;
-}
-
-.conloca-prose :where(ul, ol) {
-  padding-left: 1.5rem;
-}
-
-.conloca-prose :where(ul) {
-  list-style: disc;
-}
-
-.conloca-prose :where(ol) {
-  list-style: decimal;
-}
-
-.conloca-prose :where(li + li) {
-  margin-top: 0.35rem;
-}
-
-.conloca-prose :where(li > p) {
-  margin-bottom: 0.5rem;
-}
-
-.conloca-prose :where(a) {
-  color: var(--color-brand-700);
-  text-decoration: underline;
-  text-decoration-color: color-mix(in srgb, var(--color-brand-500) 40%, transparent);
-  text-underline-offset: 0.2em;
-}
-
-.conloca-prose :where(strong) {
-  color: var(--color-text-heading);
-  font-weight: 600;
-}
-
-.conloca-prose :where(code) {
-  background: var(--color-bg-code);
-  border: 1px solid var(--color-border);
-  border-radius: 0.4rem;
-  color: var(--color-text-code);
-  font-family: var(--font-mono);
-  font-size: 0.9em;
-  padding: 0.15rem 0.4rem;
-}
-
-.conloca-prose :where(pre) {
-  background: var(--color-bg-code);
-  border: 1px solid var(--color-border);
-  border-radius: 1rem;
-  overflow-x: auto;
+/* Callout / admonition styles for MDX directives (`:::note ... :::`) lowered
+ * to `.conloca-aside` divs by `remarkDirectivesToAside`. Four variants
+ * mirror Starlight's Aside types so authors get the same mental model. */
+.conloca-aside {
+  border-left: 4px solid var(--color-brand-500);
+  background: color-mix(in srgb, var(--color-brand-500) 8%, transparent);
+  border-radius: 0.5rem;
+  margin: 1.5rem 0;
   padding: 1rem 1.25rem;
 }
-
-.conloca-prose :where(pre code) {
-  background: transparent;
-  border: 0;
-  padding: 0;
+.conloca-aside-note {
+  border-left-color: #0158ad;
+  background: color-mix(in srgb, #0158ad 8%, transparent);
 }
-
-.conloca-prose :where(blockquote) {
-  border-left: 3px solid var(--color-brand-400);
-  color: var(--color-text-primary);
-  padding-left: 1rem;
+.conloca-aside-tip {
+  border-left-color: #2faa53;
+  background: color-mix(in srgb, #2faa53 8%, transparent);
 }
-
-.conloca-prose :where(hr) {
-  border: 0;
-  border-top: 1px solid var(--color-border);
-  margin: 2rem 0;
+.conloca-aside-caution {
+  border-left-color: #ab9429;
+  background: color-mix(in srgb, #ab9429 10%, transparent);
 }
-
-.conloca-prose :where(table) {
-  border-collapse: collapse;
-  width: 100%;
+.conloca-aside-danger {
+  border-left-color: #ac1f35;
+  background: color-mix(in srgb, #ac1f35 10%, transparent);
 }
-
-.conloca-prose :where(th, td) {
-  border: 1px solid var(--color-border);
-  padding: 0.75rem 0.9rem;
-  text-align: left;
-  vertical-align: top;
-}
-
-.conloca-prose :where(th) {
-  color: var(--color-text-heading);
+.conloca-aside-title {
   font-weight: 600;
+  margin-top: 0;
+  margin-bottom: 0.5rem;
 }
-
-.conloca-prose--editor {
-  min-height: 100%;
+.conloca-aside > :last-child {
+  margin-bottom: 0;
 }

@@ -1,0 +1,162 @@
+/* Conloca prose typography — shared by the CMS editor's contenteditable
+ * and the published Conloca-rendered pages so authors see the same
+ * type scale during editing and after publishing.
+ *
+ * Token references default to brand values; environments that define
+ * the same custom properties (e.g. the website's `global.css`) win and
+ * the fallbacks remain dormant. Fallbacks exist for the CMS SPA
+ * surface, which has its own Puck/Tailwind theme and doesn't redeclare
+ * brand colors.
+ *
+ * `:where()` is used throughout so utility classes (Tailwind's
+ * `max-w-none`, MDXEditor's chrome) outrank these zero-specificity
+ * descendant selectors. */
+
+.conloca-prose {
+  color: var(--color-text-secondary, #475569);
+  font-family: var(--font-sans, "Inter", system-ui, -apple-system, sans-serif);
+  font-size: 1rem;
+  line-height: 1.75;
+}
+
+.conloca-prose > :first-child {
+  margin-top: 0;
+}
+
+.conloca-prose > :last-child {
+  margin-bottom: 0;
+}
+
+.conloca-prose :where(h1, h2, h3, h4, h5, h6) {
+  color: var(--color-text-heading, #0f172a);
+  font-weight: 700;
+  line-height: 1.2;
+  margin-top: 0;
+  margin-bottom: 1rem;
+}
+
+.conloca-prose :where(h1) {
+  font-size: clamp(2rem, 4vw, 2.75rem);
+  margin-bottom: 1.25rem;
+}
+
+.conloca-prose :where(h2) {
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  margin-top: 2.75rem;
+}
+
+.conloca-prose :where(h3) {
+  font-size: 1.25rem;
+  margin-top: 2rem;
+}
+
+.conloca-prose :where(h4, h5, h6) {
+  font-size: 1rem;
+  margin-top: 1.5rem;
+}
+
+.conloca-prose :where(p, ul, ol, blockquote, pre, table) {
+  margin-top: 0;
+  margin-bottom: 1.25rem;
+}
+
+.conloca-prose :where(ul, ol) {
+  padding-left: 1.5rem;
+}
+
+.conloca-prose :where(ul) {
+  list-style: disc;
+}
+
+.conloca-prose :where(ol) {
+  list-style: decimal;
+}
+
+.conloca-prose :where(li + li) {
+  margin-top: 0.35rem;
+}
+
+.conloca-prose :where(li > p) {
+  margin-bottom: 0.5rem;
+}
+
+.conloca-prose :where(a) {
+  color: var(--color-brand-700, #0e7490);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--color-brand-500, #06b6d4) 40%, transparent);
+  text-underline-offset: 0.2em;
+}
+
+.conloca-prose :where(strong) {
+  color: var(--color-text-heading, #0f172a);
+  font-weight: 600;
+}
+
+.conloca-prose :where(code) {
+  background: var(--color-bg-code, #f1f5f9);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 0.4rem;
+  color: var(--color-text-code, #334155);
+  font-family: var(--font-mono, "JetBrains Mono", "Fira Code", monospace);
+  font-size: 0.9em;
+  padding: 0.15rem 0.4rem;
+}
+
+.conloca-prose :where(pre) {
+  background: var(--color-bg-code, #f1f5f9);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 1rem;
+  overflow-x: auto;
+  padding: 1rem 1.25rem;
+}
+
+.conloca-prose :where(pre code) {
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+
+.conloca-prose :where(blockquote) {
+  border-left: 3px solid var(--color-brand-400, #22d3ee);
+  color: var(--color-text-primary, #0f172a);
+  padding-left: 1rem;
+}
+
+.conloca-prose :where(hr) {
+  border: 0;
+  border-top: 1px solid var(--color-border, #e2e8f0);
+  margin: 2rem 0;
+}
+
+.conloca-prose :where(table) {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.conloca-prose :where(th, td) {
+  border: 1px solid var(--color-border, #e2e8f0);
+  padding: 0.75rem 0.9rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.conloca-prose :where(th) {
+  color: var(--color-text-heading, #0f172a);
+  font-weight: 600;
+}
+
+.conloca-prose--editor {
+  min-height: 100%;
+}
+
+/* Editor-only specificity bump: MDXEditor's contenteditable carries a
+ * library-generated class (`._contentEditable_*`) that sets `color` on
+ * the same element with (0,1,0) specificity. tsdown hoists this
+ * package's `style.css` import above `@mdxeditor/editor/style.css` in
+ * the consumer bundle, so the library wins on source order. Doubling
+ * the class on the prose selector lifts our specificity to (0,2,0)
+ * and restores the brand color. Only applied in the editor — the
+ * published site has no competing rule. */
+.conloca-prose--editor.conloca-prose {
+  color: var(--color-text-secondary, #475569);
+}

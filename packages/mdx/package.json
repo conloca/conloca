@@ -17,6 +17,7 @@
     "@mdx-js/react": "^3.1.1",
     "@mdxeditor/editor": "^3.55.0",
     "lucide-react": "^0.564.0",
+    "remark-directive": "^3.0.1",
     "remark-frontmatter": "^5.0.0",
     "remark-gfm": "^4.0.0",
     "remark-mdx-frontmatter": "^5.2.0",
@@ -29,6 +30,7 @@
   "devDependencies": {
     "@happy-dom/global-registrator": "20.6.1",
     "@testing-library/react": "^16.3.2",
+    "@tsdown/css": "^0.22.0",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "happy-dom": "20.6.1",
@@ -46,10 +48,12 @@
       "types": "./dist/node.d.mts",
       "import": "./dist/node.mjs",
       "default": "./dist/node.mjs"
-    }
+    },
+    "./prose.css": "./src/prose.css"
   },
   "files": [
     "dist",
+    "src/prose.css",
     "!**/*.tsbuildinfo"
   ],
   "scripts": {

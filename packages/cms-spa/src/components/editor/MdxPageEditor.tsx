@@ -8,6 +8,8 @@ import {
 import type { MDXEditorMethods } from '@mdxeditor/editor';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useAutoSave } from '../../hooks/useAutoSave';
+import { useEditorPref } from '../../hooks/useEditorPref';
 import { useErrorModal } from '../../hooks/useErrorModal';
 import { useTheme } from '../../hooks/useTheme';
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard';
@@ -15,17 +17,19 @@ import { ConflictDialog } from '../dialogs/ConflictDialog';
 import { ErrorModal } from '../dialogs/ErrorModal';
 import { UnsavedChangesDialog } from '../dialogs/UnsavedChangesDialog';
 import { CMSMDXEditor, CMSMDXHeaderTools } from './CMSMDXEditor';
+import { EditorChromeToggles } from './EditorChromeToggles';
 import { LocaleSelector } from './LocaleSelector';
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error' | 'conflict';
+type PersistStatus = 'saved' | 'conflict' | 'error';
 
 /**
  * Page editor for kind:'page' + type:'mdx' entries.
  *
- * Inline page layout (not a fullscreen modal). Routed via /pages/:id which
- * lives outside CMSLayout, so the editor occupies the full viewport. The
- * sister flow for blocks lives in BlockEditor.tsx — same shape, different
- * back target and filePath label.
+ * Inline page layout. Routed via /pages/:id which lives outside CMSLayout,
+ * so the editor occupies the full viewport. The sister flow for blocks
+ * lives in BlockEditor.tsx — same shape, different back target and
+ * filePath label.
  */
 export function MdxPageEditor() {
   const { id } = useParams<{ id: string }>();
@@ -56,6 +60,11 @@ export function MdxPageEditor() {
   const editorRef = useRef<MDXEditorMethods>(null);
 
   const [saveState, setSaveState] = useState<SaveState>('idle');
+  // Live preview is intentionally omitted for pages: Starlight docs import
+  // components like `<Aside>` that the in-browser MDX compiler can't resolve.
+  // Block-level editing keeps its preview. See ../MDXLivePreview.tsx and
+  // BlockEditor.tsx.
+  const [autoSaveEnabled, setAutoSaveEnabled] = useEditorPref('conloca.mdxeditor.autoSave');
 
   const { data: sitesConfig } = useSitesConfig();
   const availableLocales = sitesConfig?.globalLocales || ['en'];
@@ -63,7 +72,13 @@ export function MdxPageEditor() {
   const { data: loadedContent, isLoading, error } = useLocalizedContent(id || '', currentLocale);
 
   useEffect(() => {
-    if (loadedContent?.localized?.etag) {
+    // First-load gate: never re-seed from background refetches. TanStack
+    // Query emits a new `loadedContent` ref on window-focus refetch, on
+    // `useUpdateLocalized.onSuccess` (which calls `setQueryData`), and on
+    // any cache invalidation — without this gate, the effect would call
+    // `setContent(serverMdx)` and silently overwrite the user's typing.
+    // Manual remote-reload remains available via the conflict dialog.
+    if (!isContentLoaded && loadedContent?.localized?.etag) {
       setCurrentEtag(loadedContent.localized.etag);
       const data = loadedContent.localized.content as { mdx?: string } | undefined;
       const mdx = data?.mdx || '';
@@ -71,14 +86,15 @@ export function MdxPageEditor() {
       setContent(mdx);
       setIsContentLoaded(true);
     }
-  }, [loadedContent]);
+  }, [loadedContent, isContentLoaded]);
 
   const isDirty = isContentLoaded && content !== savedContentRef.current;
 
   const blocker = useUnsavedChangesGuard(isDirty);
 
   const editorClassName = resolvedTheme === 'dark' ? 'dark-theme' : undefined;
-  const pagePathname = loadedContent?.localized?.pathname || id || 'page';
+  const publishedPathname = loadedContent?.localized?.pathname;
+  const pagePathname = publishedPathname || id || 'page';
 
   useEffect(() => {
     const prev = document.title;
@@ -95,8 +111,8 @@ export function MdxPageEditor() {
     return () => clearTimeout(timer);
   }, [saveState]);
 
-  const persist = async (newContent: string, forceEtag?: string) => {
-    if (!id) return;
+  const persist = async (newContent: string, forceEtag?: string): Promise<PersistStatus> => {
+    if (!id) return 'error';
     setSaveState('saving');
 
     try {
@@ -111,7 +127,7 @@ export function MdxPageEditor() {
         setCurrentEtag(result.etag);
         savedContentRef.current = newContent;
         setSaveState('saved');
-        return;
+        return 'saved';
       }
 
       if (result.reason === 'stale_write') {
@@ -120,7 +136,7 @@ export function MdxPageEditor() {
         // Don't throw here — the conflict dialog handles recovery and the
         // editor stays mounted on the same route. Throwing would also flip
         // saveState to 'error' which fights the conflict pill.
-        return;
+        return 'conflict';
       }
 
       throw new Error(`Save failed: ${result.reason}`);
@@ -128,12 +144,24 @@ export function MdxPageEditor() {
       console.error('Failed to save mdx page:', err);
       showError('Failed to save page', err);
       setSaveState('error');
+      return 'error';
     }
   };
 
   const handleSaveClick = () => {
     void persist(content);
   };
+
+  // Debounced auto-save. Driven by the editor's existing `persist` function
+  // so the save-state machine, conflict dialog, and "✓ Saved" pill all
+  // light up exactly as they do for a manual Cmd+S press.
+  useAutoSave({
+    enabled: autoSaveEnabled,
+    content,
+    isDirty,
+    isSaving: saveState === 'saving',
+    persist: (value) => persist(value),
+  });
 
   const handleCancel = () => {
     if (isDirty) {
@@ -187,10 +215,16 @@ export function MdxPageEditor() {
 
   const handleLocaleUnsavedSave = async () => {
     if (!pendingLocaleSwitch) return;
-    await persist(content);
-    if (savedContentRef.current === content) {
+    const status = await persist(content);
+    if (status === 'saved') {
       setShowLocaleUnsavedDialog(false);
       await switchLocale(pendingLocaleSwitch);
+    } else if (status === 'conflict') {
+      // Conflict dialog has opened; back out of the locale-switch flow so
+      // the two dialogs don't stack. User resolves the conflict first,
+      // then can re-attempt the locale switch.
+      setShowLocaleUnsavedDialog(false);
+      setPendingLocaleSwitch(null);
     }
   };
 
@@ -257,7 +291,22 @@ export function MdxPageEditor() {
           >
             ←
           </button>
-          <h1 className="text-base font-medium text-grey-01 dark:text-grey-12 truncate">Edit: {pagePathname}</h1>
+          <h1 className="text-base font-medium text-grey-01 dark:text-grey-12 truncate">
+            Edit:{' '}
+            {publishedPathname ? (
+              <a
+                href={publishedPathname}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Open published page in a new tab"
+                className="underline decoration-grey-08 dark:decoration-grey-05 underline-offset-2 hover:decoration-azure-04"
+              >
+                {pagePathname}
+              </a>
+            ) : (
+              pagePathname
+            )}
+          </h1>
         </div>
         <div className="flex items-center gap-2">
           <CMSMDXHeaderTools setContent={setContent} editorRef={editorRef} filePath={pagePathname} />
@@ -265,6 +314,10 @@ export function MdxPageEditor() {
             currentLocale={currentLocale}
             availableLocales={availableLocales}
             onChange={handleLocaleChange}
+          />
+          <EditorChromeToggles
+            autoSaveEnabled={autoSaveEnabled}
+            onToggleAutoSave={() => setAutoSaveEnabled(!autoSaveEnabled)}
           />
           <button
             type="button"
@@ -284,30 +337,35 @@ export function MdxPageEditor() {
           </button>
         </div>
       </header>
-      <div className="flex-1 overflow-hidden">
-        <CMSMDXEditor
-          // Re-mount on locale switch so the editor re-initializes with the
-          // new locale's markdown — `markdown` prop changes are otherwise
-          // ignored after first mount.
-          key={`${id}-${currentLocale}`}
-          ref={editorRef}
-          value={content}
-          onChange={(next, initialNormalize) => {
-            setContent(next);
-            // First parse pass round-trips the on-disk markdown through the
-            // library's mdast→lexical→markdown pipeline (e.g. bullet style
-            // and trailing-newline normalization). Treat that as the new
-            // saved baseline rather than a user edit, otherwise isDirty
-            // flips true the moment the editor mounts.
-            if (initialNormalize) {
-              savedContentRef.current = next;
-            }
-          }}
-          onSave={persist}
-          className={editorClassName}
-          autoFocus
-          placeholder="Start writing your page…"
-        />
+      {/* `min-h-0` is required on flex children that themselves overflow —
+          without it the editor pane can't shrink past its content height
+          and the page-level scrollbar takes over instead of the editor's. */}
+      <div className="flex-1 overflow-hidden flex flex-row min-h-0">
+        <div className="flex-1 min-w-0 overflow-hidden">
+          <CMSMDXEditor
+            // Re-mount on locale switch so the editor re-initializes with the
+            // new locale's markdown — `markdown` prop changes are otherwise
+            // ignored after first mount.
+            key={`${id}-${currentLocale}`}
+            ref={editorRef}
+            value={content}
+            onChange={(next, initialNormalize) => {
+              setContent(next);
+              // First parse pass round-trips the on-disk markdown through the
+              // library's mdast→lexical→markdown pipeline (e.g. bullet style
+              // and trailing-newline normalization). Treat that as the new
+              // saved baseline rather than a user edit, otherwise isDirty
+              // flips true the moment the editor mounts.
+              if (initialNormalize) {
+                savedContentRef.current = next;
+              }
+            }}
+            onSave={persist}
+            className={editorClassName}
+            autoFocus
+            placeholder="Start writing your page…"
+          />
+        </div>
       </div>
 
       {/* In-app navigation guard (sidebar click, back button, programmatic
@@ -315,9 +373,13 @@ export function MdxPageEditor() {
       {blocker.state === 'blocked' && (
         <UnsavedChangesDialog
           onSave={async () => {
-            await persist(content);
-            if (savedContentRef.current === content) {
+            const status = await persist(content);
+            if (status === 'saved') {
               blocker.proceed?.();
+            } else if (status === 'conflict') {
+              // Conflict dialog took over; release the blocker so it
+              // doesn't sit underneath the conflict modal.
+              blocker.reset?.();
             }
           }}
           onDiscard={() => blocker.proceed?.()}
