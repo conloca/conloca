@@ -160,3 +160,43 @@
 .conloca-prose--editor.conloca-prose {
   color: var(--color-text-secondary, #475569);
 }
+
+/* Dark-mode fallback palette.
+ *
+ * Light-mode fallbacks above (slate-600 body, slate-900 headings) are
+ * invisible against a dark surface. Consumers that define their own
+ * `--color-text-*` tokens for dark mode (e.g. the website's `:root.dark`
+ * block in `targets/website/src/styles/global.css`) win automatically —
+ * the `var(...)` reference resolves their value before our fallback
+ * triggers. Consumers that haven't defined the tokens (the CMS SPA, in
+ * particular) fall through to these readable-on-dark values. */
+.dark .conloca-prose,
+.dark .conloca-prose--editor.conloca-prose {
+  color: var(--color-text-secondary, #cbd5e1);
+}
+
+.dark .conloca-prose :where(h1, h2, h3, h4, h5, h6),
+.dark .conloca-prose :where(strong),
+.dark .conloca-prose :where(th) {
+  color: var(--color-text-heading, #f1f5f9);
+}
+
+.dark .conloca-prose :where(blockquote) {
+  color: var(--color-text-primary, #e2e8f0);
+}
+
+.dark .conloca-prose :where(code) {
+  background: var(--color-bg-code, #1e293b);
+  border-color: var(--color-border, #334155);
+  color: var(--color-text-code, #e2e8f0);
+}
+
+.dark .conloca-prose :where(pre) {
+  background: var(--color-bg-code, #1e293b);
+  border-color: var(--color-border, #334155);
+}
+
+.dark .conloca-prose :where(hr),
+.dark .conloca-prose :where(th, td) {
+  border-color: var(--color-border, #334155);
+}

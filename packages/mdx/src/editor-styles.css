@@ -12,4 +12,29 @@
 .mdxeditor-toolbar-wrap {
   flex-wrap: wrap;
   row-gap: 4px;
+  /* Pin to top inside the flex-column layout below; the content area
+     absorbs the remaining height. Without this the toolbar can shrink
+     when the editor is mounted in a constrained-height column. */
+  flex-shrink: 0;
+}
+
+/* Editor layout for page-route mounts (CMS `/pages/:id`, `/blocks/:id`).
+   MDXEditor's root defaults to `display: block`, so when the consumer
+   parks it in a fixed-height column, the toolbar floats on top and the
+   tall content has no scroll container. Turn the root into a flex
+   column so the toolbar pins to the top and the rich-text body scrolls
+   inside its allotted slice. */
+.mdxeditor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.mdxeditor-diff-source-wrapper {
+  flex: 1;
+  /* `min-height: 0` lets this flex child shrink past its content height
+     so overflow-y has something to actually scroll past. */
+  min-height: 0;
+  overflow-y: auto;
 }
