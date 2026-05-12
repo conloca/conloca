@@ -167,16 +167,46 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
       const result = await api.createContent(data);
 
       if (!result.success) {
+        // Map structured CreateResult failures onto the standard error
+        // envelope so the client can decode `error.code` / `error.message`
+        // and surface them in the UI. Without the envelope the client falls
+        // back to a generic "API error: 500" string and inline error copy
+        // like "already exists" never reaches the user.
+        const errMessage = (result.error instanceof Error ? result.error.message : undefined) ?? '';
         if (result.reason === 'already_exists') {
-          return c.json(result, 409);
+          return c.json(
+            { ...result, ...errorResponse(ErrorCodes.ALREADY_EXISTS, errMessage || 'Content already exists') },
+            409,
+          );
+        }
+        if (result.reason === 'name_taken') {
+          return c.json(
+            {
+              ...result,
+              ...errorResponse(ErrorCodes.NAME_TAKEN, errMessage || 'A block with that name already exists'),
+            },
+            409,
+          );
         }
         if (result.reason === 'pathname_taken') {
-          return c.json(result, 409);
+          return c.json(
+            { ...result, ...errorResponse(ErrorCodes.PATHNAME_TAKEN, errMessage || 'Pathname already taken') },
+            409,
+          );
+        }
+        if (result.reason === 'invalid_name') {
+          return c.json({ ...result, ...errorResponse(ErrorCodes.INVALID_REQUEST, errMessage || 'Invalid name') }, 400);
         }
         if (result.reason === 'metadata_too_large') {
-          return c.json(result, 400);
+          return c.json(
+            { ...result, ...errorResponse(ErrorCodes.METADATA_TOO_LARGE, errMessage || 'Metadata too large') },
+            400,
+          );
         }
-        return c.json(result, 500);
+        return c.json(
+          { ...result, ...errorResponse(ErrorCodes.WRITE_ERROR, errMessage || 'Failed to create content') },
+          500,
+        );
       }
 
       return c.json(result, 201);
@@ -186,7 +216,7 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
         {
           success: false,
           reason: 'write_error',
-          error: error instanceof Error ? error.message : 'Unknown error',
+          ...errorResponse(ErrorCodes.WRITE_ERROR, errorMessage(error, 'Failed to create content')),
         },
         500,
       );
