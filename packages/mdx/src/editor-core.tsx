@@ -41,6 +41,7 @@ import { Maximize2, Minimize2 } from 'lucide-react';
 import React, { useCallback, useEffect, useSyncExternalStore } from 'react';
 import '@mdxeditor/editor/style.css';
 import './editor-styles.css';
+import { TO_MARKDOWN_OPTIONS } from './markdown-options';
 
 const FOCUS_MODE_STORAGE_KEY = 'conloca.mdxeditor.focusMode';
 const FOCUS_MODE_BODY_CLASS = 'mdxeditor-focus-mode';
@@ -234,6 +235,7 @@ export const BaseMDXEditor = React.forwardRef<MDXEditorMethods, BaseMDXEditorPro
       <MDXEditorLib
         ref={ref}
         markdown={value}
+        toMarkdownOptions={TO_MARKDOWN_OPTIONS}
         onChange={onChange}
         onError={({ error, source }) => {
           // Library invokes this synchronously inside a gurx signal, so don't
