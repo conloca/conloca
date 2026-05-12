@@ -14,16 +14,40 @@ interface CreatePageDialogProps {
   site?: string; // Site identifier for pathname validation
 }
 
-export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'default' }: CreatePageDialogProps) {
-  const [title, setTitle] = useState('');
-  const [path, setPath] = useState('');
-  const [template, setTemplate] = useState<string>('blank');
-  const [locale, setLocale] = useState('en');
+/**
+ * Turn a BCP-47 code like 'en' into a human label like 'English' using
+ * the browser's built-in language registry. Falls back to the raw code
+ * on platforms where Intl.DisplayNames is unavailable or doesn't
+ * recognize the code.
+ */
+function formatLocaleLabel(code: string): string {
+  try {
+    return new Intl.DisplayNames(['en'], { type: 'language' }).of(code) || code;
+  } catch {
+    return code;
+  }
+}
 
-  // Get templates from config
+export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'default' }: CreatePageDialogProps) {
+  // Get config once so format/locale defaults can read from it
   const config = getUIConfig();
   const templates = config.templates || {};
   const templateEntries = Object.entries(templates);
+  const mdxEnabled = Boolean(config.mdxPagesEnabled);
+  const configuredLocales = config.locales?.list ?? ['en'];
+  const defaultLocale = config.locales?.defaultLocale ?? configuredLocales[0] ?? 'en';
+
+  const [title, setTitle] = useState('');
+  const [path, setPath] = useState('');
+  const [template, setTemplate] = useState<string>('blank');
+  const [locale, setLocale] = useState(defaultLocale);
+  // Format: 'puck' (visual editor) or 'mdx' (document page). Default to
+  // 'puck' to match prior behavior; the MDX option only renders when
+  // the integration was configured with `mdxPages.root`.
+  const [format, setFormat] = useState<'puck' | 'mdx'>('puck');
+  // Only collected/shown for MDX pages. Starlight recommends a
+  // description; leaving it empty is still valid.
+  const [description, setDescription] = useState('');
 
   const [isPathnameAvailable, setIsPathnameAvailable] = useState(true);
   const [pathnameLoading, setPathnameLoading] = useState(false);
@@ -104,6 +128,10 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
       path,
       template,
       locale,
+      format,
+      // Only forward description when MDX is chosen — Puck pages don't
+      // use it today and we want the payload to stay clean.
+      ...(format === 'mdx' && description ? { description } : {}),
     });
     onOpenChange?.(false);
   };
@@ -126,6 +154,54 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            {mdxEnabled && (
+              <div>
+                <span className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12" id="format-label">
+                  Format
+                </span>
+                <div
+                  className="inline-flex rounded-md border border-grey-09 dark:border-grey-05 overflow-hidden"
+                  role="radiogroup"
+                  aria-labelledby="format-label"
+                  data-testid="page-format-radiogroup"
+                >
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={format === 'puck'}
+                    onClick={() => setFormat('puck')}
+                    className={`px-3 py-1.5 text-sm transition-colors ${
+                      format === 'puck'
+                        ? 'bg-azure-04 text-white dark:bg-azure-06'
+                        : 'bg-transparent text-grey-01 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-04/40'
+                    }`}
+                    data-testid="page-format-puck"
+                  >
+                    Visual page
+                  </button>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={format === 'mdx'}
+                    onClick={() => setFormat('mdx')}
+                    className={`px-3 py-1.5 text-sm transition-colors border-l border-grey-09 dark:border-grey-05 ${
+                      format === 'mdx'
+                        ? 'bg-azure-04 text-white dark:bg-azure-06'
+                        : 'bg-transparent text-grey-01 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-04/40'
+                    }`}
+                    data-testid="page-format-mdx"
+                  >
+                    Document page (MDX)
+                  </button>
+                </div>
+                <p className="text-xs text-grey-04 dark:text-grey-07 mt-1">
+                  {format === 'puck'
+                    ? 'Drag-and-drop blocks on a canvas.'
+                    : 'Markdown-based docs page rendered by Starlight.'}
+                </p>
+              </div>
+            )}
+
             <div>
               <label htmlFor="title" className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
                 Title
@@ -139,6 +215,24 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
                 data-testid="page-title-input"
               />
             </div>
+
+            {format === 'mdx' && (
+              <div>
+                <label htmlFor="description" className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
+                  Description <span className="text-grey-04 dark:text-grey-07 font-normal">(optional)</span>
+                </label>
+                <Input
+                  id="description"
+                  type="text"
+                  value={description}
+                  onChange={(e) => setDescription(e.currentTarget.value)}
+                  data-testid="page-description-input"
+                />
+                <p className="text-xs text-grey-04 dark:text-grey-07 mt-1">
+                  Shown in search results and at the top of the page. You can edit it later in the frontmatter.
+                </p>
+              </div>
+            )}
 
             <div>
               <label htmlFor="path" className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
@@ -168,31 +262,37 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
               </div>
             </div>
 
-            <div>
-              <label htmlFor="template" className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
-                Template
-              </label>
-              <Select id="template" value={template} onChange={(e) => handleTemplateChange(e.target.value)}>
-                <option value="blank">Blank</option>
-                {templateEntries.map(([key, templateConfig]) => (
-                  <option key={key} value={key}>
-                    {templateConfig.label}
-                    {templateConfig.description ? ` - ${templateConfig.description}` : ''}
-                  </option>
-                ))}
-              </Select>
-            </div>
+            {format === 'puck' && (
+              <div>
+                <label htmlFor="template" className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
+                  Template
+                </label>
+                <Select id="template" value={template} onChange={(e) => handleTemplateChange(e.target.value)}>
+                  <option value="blank">Blank</option>
+                  {templateEntries.map(([key, templateConfig]) => (
+                    <option key={key} value={key}>
+                      {templateConfig.label}
+                      {templateConfig.description ? ` - ${templateConfig.description}` : ''}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            )}
 
-            <div>
-              <label htmlFor="locale" className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
-                Primary Locale
-              </label>
-              <Select id="locale" value={locale} onChange={(e) => setLocale(e.target.value)}>
-                <option value="en">English</option>
-                <option value="nl">Dutch</option>
-                <option value="fr">French</option>
-              </Select>
-            </div>
+            {configuredLocales.length > 1 && (
+              <div>
+                <label htmlFor="locale" className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
+                  Primary Locale
+                </label>
+                <Select id="locale" value={locale} onChange={(e) => setLocale(e.target.value)}>
+                  {configuredLocales.map((code) => (
+                    <option key={code} value={code}>
+                      {formatLocaleLabel(code)}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            )}
 
             <div className="flex gap-2 pt-4">
               <Button

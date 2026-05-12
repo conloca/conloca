@@ -17,10 +17,10 @@ export function LocaleSelector({
 }: LocaleSelectorProps) {
   return (
     <Select.Root value={currentLocale} onValueChange={onChange}>
-      <Select.Trigger className="flex items-center gap-1 px-4 py-2 rounded-md text-sm text-grey-01 dark:text-grey-12 hover:bg-grey-10 transition-colors cursor-pointer">
+      <Select.Trigger className="flex items-center gap-1.5 px-3 py-1.5 rounded text-sm border border-grey-09 dark:border-grey-04 text-grey-01 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-04 transition-colors cursor-pointer">
         <Select.Value />
         <Select.Icon>
-          <ChevronDown className="h-4 w-4" />
+          <ChevronDown className="h-4 w-4 opacity-60" />
         </Select.Icon>
       </Select.Trigger>
 

@@ -51,4 +51,8 @@ export interface CreatePageData {
   path: string;
   template: string;
   locale: string;
+  /** Content format. Defaults to 'puck' (the visual editor). */
+  format: 'puck' | 'mdx';
+  /** Optional description, currently only used for MDX pages where Starlight recommends one. */
+  description?: string;
 }

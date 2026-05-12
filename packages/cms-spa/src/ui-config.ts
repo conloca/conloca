@@ -19,6 +19,21 @@ export interface UIConfig {
   schemasPath?: string;
   /** Page creation templates */
   templates?: Record<string, TemplateConfig>;
+  /**
+   * True when the integration was configured with `mdxPages.root`.
+   * Drives whether the create-page dialog exposes the "Document page"
+   * (MDX) option. When absent or false, the dialog only creates Puck
+   * pages — the historical behavior.
+   */
+  mdxPagesEnabled?: boolean;
+  /**
+   * The site's supported locales. Comes from the top-level `locales`
+   * option on `conlocaCMS({...})` (which can be derived from
+   * `localesFromAstroI18n` / `localesFromStarlight`). When absent the
+   * dialog falls back to a single English locale and hides the locale
+   * field entirely.
+   */
+  locales?: { list: string[]; defaultLocale: string };
 }
 
 const defaultConfig: UIConfig = {

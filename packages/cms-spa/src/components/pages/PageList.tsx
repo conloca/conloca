@@ -210,9 +210,10 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
       const config = getUIConfig();
       const templateConfig = config.templates?.[data.template];
 
-      // Apply path prefix if template has one
+      // Apply path prefix if template has one. Only meaningful for Puck
+      // pages — MDX pages don't carry a template.
       let finalPath = data.path;
-      if (templateConfig?.pathPrefix && !data.path.startsWith(templateConfig.pathPrefix)) {
+      if (data.format !== 'mdx' && templateConfig?.pathPrefix && !data.path.startsWith(templateConfig.pathPrefix)) {
         // Ensure proper path joining (avoid double slashes)
         const prefix = templateConfig.pathPrefix.endsWith('/')
           ? templateConfig.pathPrefix.slice(0, -1)
@@ -220,37 +221,67 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
         finalPath = `${prefix}${data.path.startsWith('/') ? data.path : '/' + data.path}`;
       }
 
-      // Generate template content if template has a component
-      const templateContent = templateConfig?.component ? createTemplateContent(templateConfig.component) : [];
+      // Shared metadata. Description is only added when MDX picked it
+      // up — Puck pages don't render it today, so the manifest stays
+      // clean for them.
+      const meta: { title: string; description?: string } = { title: data.title };
+      if (data.format === 'mdx' && data.description) {
+        meta.description = data.description;
+      }
 
-      // Create page using the new API
-      const result = await createContent.mutateAsync({
-        kind: 'page',
-        site: currentSite,
-        collection: 'pages',
-        type: 'puck',
-        meta: {
-          title: data.title,
-        },
-        locales: {
-          [data.locale]: {
-            meta: {
-              title: data.title,
+      // Build a type-specific content payload. MDX pages send an empty
+      // body — the editor opens to a blank canvas. Puck pages keep the
+      // existing template-driven payload.
+      let result;
+      if (data.format === 'mdx') {
+        result = await createContent.mutateAsync({
+          kind: 'page',
+          site: currentSite,
+          collection: 'pages',
+          type: 'mdx',
+          meta,
+          locales: {
+            [data.locale]: {
+              meta,
+              pathname: finalPath,
+              // Empty body — backend stamps id/created/modified into
+              // frontmatter automatically (see
+              // filesystem-content-api.ts createContent, type === 'mdx'
+              // branch).
+              content: { mdx: '' },
             },
-            pathname: finalPath,
-            content: {
-              puckData: {
-                root: {},
-                content: templateContent,
-                zones: {},
+          },
+        });
+      } else {
+        // Generate template content if template has a component
+        const templateContent = templateConfig?.component ? createTemplateContent(templateConfig.component) : [];
+
+        result = await createContent.mutateAsync({
+          kind: 'page',
+          site: currentSite,
+          collection: 'pages',
+          type: 'puck',
+          meta,
+          locales: {
+            [data.locale]: {
+              meta,
+              pathname: finalPath,
+              content: {
+                puckData: {
+                  root: {},
+                  content: templateContent,
+                  zones: {},
+                },
               },
             },
           },
-        },
-      });
+        });
+      }
 
       if (result.success && result.id) {
-        // Navigate to the new page editor with the actual ID
+        // Navigate to the new page editor with the actual ID.
+        // PageEditorWrapper dispatches by content.type so MDX pages
+        // land on MdxPageEditor and Puck pages on the Puck canvas.
         navigate(`/pages/${result.id}`);
       } else {
         throw new Error(`Failed to create page: ${result.reason}`);
