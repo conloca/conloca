@@ -6,11 +6,17 @@ Universal MDX package for both browser and Node.js environments.
 
 ### Browser-safe exports (`@conloca/mdx`)
 
-- **MDXEditorModal** - Full MDX editor component with UI (for admin/CMS use)
+- **MDXEditor** - Embeddable MDX editor component (the page-route editor in the CMS SPA uses this directly)
+- **BaseMDXEditor** - Lower-level editor primitive that accepts the image-dialog hook used by the CMS SPA's
+  media-library integration
 - **useMDXEvaluation** - Hook for running pre-compiled MDX code in the browser
 
-If you are building inside `@conloca/cms-spa`, prefer `CMSMDXEditorModal` there for the integrated media-library image
+If you are building inside `@conloca/cms-spa`, prefer `CMSMDXEditor` there for the integrated media-library image
 picker.
+
+> **Note:** The legacy `MDXEditorModal` / `BaseMDXEditorModal` exports were removed when the CMS SPA standardized on the
+> page-route editor (`/blocks/:id`, `/pages/:id`). Mount `MDXEditor` directly inside your own layout instead of nesting
+> it in a fullscreen modal.
 
 ### Node.js-only exports (`@conloca/mdx/node`)
 
@@ -24,7 +30,7 @@ picker.
 
 ```typescript
 // In admin/CMS interface
-import { MDXEditorModal } from '@conloca/mdx';
+import { MDXEditor } from '@conloca/mdx';
 
 // For rendering MDX content
 import { useMDXEvaluation } from '@conloca/mdx';
@@ -61,9 +67,13 @@ This package was renamed from `@conloca/mdx-client` to `@conloca/mdx` and consol
 // Before
 import { MDXEditorModal } from '@conloca/mdx-client';
 
-// After
-import { MDXEditorModal } from '@conloca/mdx';
+// After — mount the editor inline (the fullscreen-modal variant was removed
+// when the CMS standardized on page-route editing at `/blocks/:id` / `/pages/:id`).
+import { MDXEditor } from '@conloca/mdx';
 ```
+
+The new `MDXEditor` is a component, not a modal — host it inside your own page layout (header, toolbar, save button) and
+pass `value` / `onChange` directly. See the **Browser: MDX Editor** usage example above for the shape.
 
 **Server-side functions moved here:**
 

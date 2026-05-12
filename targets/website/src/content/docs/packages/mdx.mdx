@@ -32,14 +32,21 @@ bun add @conloca/mdx
 Components and hooks for the CMS editor interface.
 
 ```typescript
-import { MDXEditorModal, useMDXEvaluation } from '@conloca/mdx';
+import { MDXEditor, useMDXEvaluation } from '@conloca/mdx';
 ```
 
 | Export             | Kind      | Purpose                                                                |
 | ------------------ | --------- | ---------------------------------------------------------------------- |
-| `MDXEditorModal`   | component | Full MDX editor with toolbar, preview, and modal UI                    |
+| `MDXEditor`        | component | Full MDX editor with toolbar, ready to mount inside a page layout      |
+| `BaseMDXEditor`    | component | Lower-level primitive that accepts an image-dialog hook                |
 | `useMDXEvaluation` | hook      | Run pre-compiled MDX code into a React component at runtime            |
 | `MDXEditorMethods` | type      | Ref methods for programmatic editor control (from `@mdxeditor/editor`) |
+
+<Aside type="caution">
+  The legacy `MDXEditorModal` / `BaseMDXEditorModal` exports were removed in favor of the dedicated page-route editor in
+  the CMS SPA (`/blocks/:id` and `/pages/:id`). Mount `MDXEditor` directly inside your own layout instead of nesting it
+  in a fullscreen modal.
+</Aside>
 
 ### `@conloca/mdx/node` (Node.js only)
 
@@ -59,38 +66,38 @@ import { compileMDX, evaluateMDXToComponent, evaluateMDXBlocks } from '@conloca/
 
 ### Browser: MDX Editor
 
-The `MDXEditorModal` component provides a rich MDX editing experience inside the CMS:
+The `MDXEditor` component provides a rich MDX editing experience and is designed to be mounted inline inside your own
+page layout. The CMS SPA uses it directly at `/blocks/:id` and `/pages/:id` (page-route editor pattern).
 
 ```tsx
-import { MDXEditorModal } from '@conloca/mdx';
+import { MDXEditor } from '@conloca/mdx';
+import { useState } from 'react';
 
 function BlockEditor({ initialContent, onSave }) {
-  const [isOpen, setIsOpen] = useState(true);
+  const [content, setContent] = useState(initialContent);
 
   return (
-    <MDXEditorModal
-      isOpen={isOpen}
-      onClose={() => setIsOpen(false)}
-      initialContent={initialContent}
-      onSave={async (content) => {
-        onSave(content);
-      }}
-    />
+    <div className="h-screen flex flex-col">
+      <header>{/* your toolbar / save button */}</header>
+      <div className="flex-1 overflow-hidden">
+        <MDXEditor value={content} onChange={setContent} onSave={onSave} autoFocus />
+      </div>
+    </div>
   );
 }
 ```
 
-**MDXEditorModal Props:**
+**MDXEditor Props:**
 
-| Prop             | Type                                   | Required | Description                                 |
-| ---------------- | -------------------------------------- | -------- | ------------------------------------------- |
-| `isOpen`         | `boolean`                              | Yes      | Controls modal visibility                   |
-| `onClose`        | `() => void`                           | Yes      | Called when modal closes                    |
-| `initialContent` | `string`                               | Yes      | Initial MDX content for the editor          |
-| `onSave`         | `(content: string) => void \| Promise` | Yes      | Called with edited content on save          |
-| `filePath`       | `string`                               | No       | File path shown in the modal title          |
-| `headerExtra`    | `ReactNode`                            | No       | Extra elements rendered in the modal header |
-| `onBeforeClose`  | `() => boolean`                        | No       | Return `false` to prevent closing the modal |
+| Prop          | Type                                                  | Required | Description                                                                         |
+| ------------- | ----------------------------------------------------- | -------- | ----------------------------------------------------------------------------------- |
+| `value`       | `string`                                              | Yes      | Initial MDX content for the editor                                                  |
+| `onChange`    | `(value: string, initialNormalize?: boolean) => void` | Yes      | Called whenever the editor content changes                                          |
+| `onSave`      | `(value: string) => void`                             | No       | Cmd/Ctrl+S handler                                                                  |
+| `readOnly`    | `boolean`                                             | No       | Disable editing                                                                     |
+| `className`   | `string`                                              | No       | Forwarded to the MDXEditor root; pass `"dark-theme"` for the library's dark palette |
+| `placeholder` | `ReactNode`                                           | No       | Empty-state placeholder                                                             |
+| `autoFocus`   | `boolean`                                             | No       | Focus the editor on mount                                                           |
 
 ### Browser: MDX Rendering
 

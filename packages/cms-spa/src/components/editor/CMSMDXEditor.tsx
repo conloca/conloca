@@ -1,20 +1,43 @@
-import { BaseMDXEditor, BaseMDXEditorModal, type BaseMDXEditorModalProps, type BaseMDXEditorProps } from '@conloca/mdx';
+import { useUploadAsset } from '@conloca/content-api-client';
+import { BaseMDXEditor, type BaseMDXEditorProps } from '@conloca/mdx';
 import type { MDXEditorMethods } from '@mdxeditor/editor';
 import type React from 'react';
-import { forwardRef, useMemo, useRef, useState } from 'react';
-import { useTheme } from '../../hooks/useTheme';
+import { forwardRef, useCallback, useMemo, useRef, useState } from 'react';
+import { buildUploadFormData } from '../../hooks/useUpload';
 import { Button, Select } from '../ui';
 import { contentBlockSnippets, getContentBlockTemplate, renderContentBlockTemplate } from './content-block-templates';
 import { ImagePickerDialog } from './ImagePickerDialog';
+import { cmsJsxDescriptors } from './jsx-descriptors';
 
 export interface CMSMDXEditorProps
   extends Omit<
     BaseMDXEditorProps,
-    'disableImageSettingsButton' | 'imageButtonRef' | 'imageDialog' | 'onImageShortcut'
+    | 'disableImageSettingsButton'
+    | 'imageButtonRef'
+    | 'imageDialog'
+    | 'imageUploadHandler'
+    | 'jsxComponentDescriptors'
+    | 'onImageShortcut'
   > {}
 
 export const CMSMDXEditor = forwardRef<MDXEditorMethods, CMSMDXEditorProps>((props, ref) => {
   const insertImageRef = useRef<HTMLButtonElement>(null);
+  const uploadAsset = useUploadAsset();
+
+  // Wire paste/drop image uploads to the same backend mutation that powers
+  // the asset library's UploadModal. The library expects a Promise<string>
+  // resolving to the image src; we hand back the canonical
+  // `/assets/{folder}/{filename}` path so it round-trips identically to a
+  // path picked from the asset browser.
+  const imageUploadHandler = useCallback(
+    async (file: File) => {
+      const formData = await buildUploadFormData(file, undefined, '/');
+      const asset = await uploadAsset.mutateAsync(formData);
+      const folder = asset.folder && asset.folder !== '/' ? asset.folder : '';
+      return `/assets${folder}/${asset.filename}`;
+    },
+    [uploadAsset],
+  );
 
   return (
     <BaseMDXEditor
@@ -23,6 +46,8 @@ export const CMSMDXEditor = forwardRef<MDXEditorMethods, CMSMDXEditorProps>((pro
       imageDialog={ImagePickerDialog}
       disableImageSettingsButton={true}
       imageButtonRef={insertImageRef}
+      imageUploadHandler={imageUploadHandler}
+      jsxComponentDescriptors={cmsJsxDescriptors}
       onImageShortcut={() => {
         if (insertImageRef.current) {
           insertImageRef.current.click();
@@ -57,27 +82,38 @@ export function CMSMDXHeaderTools({
       return;
     }
 
-    // insertMarkdown preserves cursor position (vs setMarkdown which resets it
-    // to document start — a documented MDXEditor limitation). The library will
-    // splice the snippet at the current selection and emit onChange, which
-    // updates our content state via the editor's existing wiring.
-    if (editorRef.current?.insertMarkdown) {
-      editorRef.current.insertMarkdown(`\n\n${snippet.content}\n`);
-      return;
-    }
+    // Always append snippets to the end of the body, after any leading YAML
+    // frontmatter. Earlier this used `insertMarkdown` to preserve cursor
+    // position, but that has a sharp edge: when the user clicks "Insert
+    // Pattern" without first clicking into the editor, the cursor is at
+    // offset 0 — which on a freshly-loaded block can land *above* the
+    // frontmatter. The frontmatter's `---` markers then stop being parsed
+    // as YAML and re-render as thematic breaks + a setext H2, silently
+    // destroying the frontmatter on the next save. Splicing in
+    // userland here (read + rewrite via setMarkdown) is the simplest way
+    // to guarantee snippets always land in the body content.
+    //
+    // Trade-off: setMarkdown resets the cursor to document start. That's
+    // acceptable for a deliberate "insert pattern" action — the user
+    // expects content to appear, not to keep typing exactly where they
+    // were.
+    const ref = editorRef.current;
+    if (!ref?.getMarkdown || !ref?.setMarkdown) return;
 
-    // Fallback (no insertMarkdown method) — append to end via setMarkdown.
-    setContent((current) => {
-      const trimmed = current.trimEnd();
-      const newContent = trimmed ? `${trimmed}\n\n${snippet.content}` : snippet.content;
-      editorRef.current?.setMarkdown(newContent);
-      return newContent;
-    });
+    const current = ref.getMarkdown();
+    const frontmatterMatch = current.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/);
+    const head = frontmatterMatch ? frontmatterMatch[0] : '';
+    const body = current.slice(head.length).replace(/\s+$/, '');
+    const headWithGap = head && !head.endsWith('\n\n') ? `${head.replace(/\n*$/, '')}\n\n` : head;
+    const bodySep = body.length > 0 ? '\n\n' : '';
+    const newContent = `${headWithGap}${body}${bodySep}${snippet.content}\n`;
+
+    ref.setMarkdown(newContent);
+    setContent(newContent);
   };
 
   return (
     <>
-      <span className="hidden text-xs text-grey-04 xl:inline">Cmd/Ctrl+S to save</span>
       <Select
         size="sm"
         value={selectedSnippetId}
@@ -107,37 +143,5 @@ export function CMSMDXHeaderTools({
         </Button>
       ) : null}
     </>
-  );
-}
-
-export interface CMSMDXEditorModalProps extends Omit<BaseMDXEditorModalProps, 'EditorComponent'> {
-  initialTemplateId?: string;
-}
-
-export function CMSMDXEditorModal(props: CMSMDXEditorModalProps) {
-  const { initialTemplateId, ...modalProps } = props;
-
-  // Apply the MDXEditor library's documented `dark-theme` class when our app is
-  // in dark mode. The library ships a Radix-backed color palette that only
-  // flips inside a `.dark, .dark-theme` scope on the editor element itself —
-  // setting `.dark` on <html> alone doesn't propagate because a separate
-  // CSS-Modules `:root` rule in the library CSS re-sets slate-* to light after
-  // the `.dark` rule in source order. See https://mdxeditor.dev/editor/docs/theming.
-  const { resolvedTheme } = useTheme();
-
-  return (
-    <BaseMDXEditorModal
-      {...modalProps}
-      EditorComponent={CMSMDXEditor}
-      editorClassName={resolvedTheme === 'dark' ? 'dark-theme' : undefined}
-      headerTools={({ setContent, editorRef }) => (
-        <CMSMDXHeaderTools
-          setContent={setContent}
-          editorRef={editorRef}
-          filePath={modalProps.filePath}
-          initialTemplateId={initialTemplateId}
-        />
-      )}
-    />
   );
 }

@@ -1,8 +1,5 @@
 // Re-export useful types from dependencies
 export type { QueryClientConfig } from '@tanstack/react-query';
-export type { CMSMDXEditorModalProps } from './components/editor/CMSMDXEditor';
-// Export CMS MDX editor with integrated image picker
-export { CMSMDXEditorModal } from './components/editor/CMSMDXEditor';
 export { FolderTreeSidebar } from './components/media/FolderTreeSidebar';
 // Export media components for MDX editor image picker
 export { MediaLibrary } from './components/media/MediaLibrary';
