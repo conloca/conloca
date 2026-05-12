@@ -61,8 +61,9 @@ export function MdxPageEditor() {
   const editorRef = useRef<MDXEditorMethods>(null);
 
   const [saveState, setSaveState] = useState<SaveState>('idle');
-  // Live preview is intentionally omitted for pages: Starlight docs import
-  // components like `<Aside>` that the in-browser MDX compiler can't resolve.
+  // Live preview is intentionally omitted for pages: page-level MDX often
+  // imports JSX components scoped by the host site's MDX provider, which
+  // the in-browser compiler used by the preview pane can't resolve.
   // Block-level editing keeps its preview. See ../MDXLivePreview.tsx and
   // BlockEditor.tsx.
   const [autoSaveEnabled, setAutoSaveEnabled] = useEditorPref('conloca.mdxeditor.autoSave');

@@ -2,8 +2,8 @@ import { Eye, EyeOff, Save, SaveOff } from 'lucide-react';
 
 interface EditorChromeTogglesProps {
   /** Omit (or pass `false`) on surfaces where live preview isn't supported,
-   *  e.g. the page editor whose Starlight imports the in-browser MDX
-   *  compiler can't resolve. */
+   *  e.g. the page editor whose `import`-ed JSX components the in-browser
+   *  MDX compiler can't resolve. */
   previewOpen?: boolean;
   onTogglePreview?: () => void;
   autoSaveEnabled: boolean;

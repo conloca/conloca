@@ -96,7 +96,7 @@ const contentBlockToneClasses: Record<NonNullable<ContentBlockSectionProps['tone
 /**
  * Top-level page editor entry. Loads the page manifest just enough to dispatch
  * to the right inner editor based on `type`:
- *  - 'mdx'  → MdxPageEditor (MDX modal flow, mirrors BlockEditor)
+ *  - 'mdx'  → MdxPageEditor (page-route MDX editor, mirrors BlockEditor)
  *  - 'puck' → PuckPageEditorInner (the existing Puck flow, unchanged below)
  *
  * Splitting like this keeps the heavier Puck-only hooks (useBlocks,

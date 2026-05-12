@@ -5,9 +5,11 @@ import { Monitor, Smartphone, Tablet } from 'lucide-react';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useSiteBaseUrl } from '../../hooks';
 import { useCanvasTheme } from '../../hooks/useCanvasTheme';
+import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard';
 import { useSiteStyles } from '../../site-styles';
 import type { SaveState } from '../../types';
 import { ConflictDialog } from '../dialogs/ConflictDialog';
+import { UnsavedChangesDialog } from '../dialogs/UnsavedChangesDialog';
 import { ImageFieldRender } from '../fields/ImageField';
 import { DrawerItemOverride } from './DrawerItemOverride';
 import { PageEditorHeaderActions } from './PageEditorHeaderActions';
@@ -218,9 +220,16 @@ export function PageEditor({
 
   const isSavingRef = useRef(false);
 
+  // Returns a status so the unsaved-changes blocker can decide whether to
+  // proceed (only on 'saved') or hand off to the conflict dialog without
+  // sitting underneath it. Mirrors the PersistStatus pattern in BlockEditor /
+  // MdxPageEditor. Existing callers that ignore the return value are
+  // unaffected.
+  type PersistStatus = 'saved' | 'conflict' | 'error' | 'noop';
+
   const handleSave = useCallback(
-    async (forceEtag?: string) => {
-      if (isSavingRef.current) return;
+    async (forceEtag?: string): Promise<PersistStatus> => {
+      if (isSavingRef.current) return 'noop';
       isSavingRef.current = true;
       setSaveState('saving');
       try {
@@ -229,15 +238,19 @@ export function PageEditor({
           setSaveState('saved');
           setIsDirty(false);
           setConflict(null);
-        } else if (result.reason === 'stale_write') {
+          return 'saved';
+        }
+        if (result.reason === 'stale_write') {
           setSaveState('conflict');
           setConflict(result);
-        } else {
-          setSaveState('error');
+          return 'conflict';
         }
+        setSaveState('error');
+        return 'error';
       } catch (error: unknown) {
         console.error('[PageEditor] Save failed:', error);
         setSaveState('error');
+        return 'error';
       } finally {
         isSavingRef.current = false;
       }
@@ -250,6 +263,13 @@ export function PageEditor({
     setIsDirty(true);
     setSaveState('idle');
   }, []);
+
+  // Block in-app navigations (sidebar click, "Open block editor" from
+  // MDXEditField, programmatic navigate) and warn on browser-level
+  // unloads when the page has unsaved Puck edits. Same hook used by
+  // BlockEditor / MdxPageEditor — keeps unsaved-protection consistent
+  // across the editor surface.
+  const blocker = useUnsavedChangesGuard(isDirty);
 
   const { buildUrl } = useSiteBaseUrl();
 
@@ -346,6 +366,27 @@ export function PageEditor({
           overrides={overrides}
         />
       </div>
+
+      {/* In-app navigation guard. beforeunload handles reload / tab close
+          inside useUnsavedChangesGuard. */}
+      {blocker.state === 'blocked' && (
+        <UnsavedChangesDialog
+          onSave={async () => {
+            const status = await handleSave();
+            if (status === 'saved') {
+              blocker.proceed?.();
+            } else if (status === 'conflict') {
+              // Conflict dialog took over; release the blocker so it
+              // doesn't sit underneath the conflict modal.
+              blocker.reset?.();
+            }
+            // 'error' / 'noop' → keep the blocker so the user can retry or
+            // cancel; matches BlockEditor's behavior.
+          }}
+          onDiscard={() => blocker.proceed?.()}
+          onCancel={() => blocker.reset?.()}
+        />
+      )}
 
       {/* Conflict Dialog */}
       {conflict && conflict.reason === 'stale_write' && (

@@ -6,8 +6,11 @@ import {
   useUpdateLocalized,
 } from '@conloca/content-api-client';
 import type { MDXEditorMethods } from '@mdxeditor/editor';
+import { AlertTriangle } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useAutoSave } from '../../hooks/useAutoSave';
+import { useEditorPref } from '../../hooks/useEditorPref';
 import { useErrorModal } from '../../hooks/useErrorModal';
 import { useTheme } from '../../hooks/useTheme';
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard';
@@ -15,9 +18,12 @@ import { ConflictDialog } from '../dialogs/ConflictDialog';
 import { ErrorModal } from '../dialogs/ErrorModal';
 import { UnsavedChangesDialog } from '../dialogs/UnsavedChangesDialog';
 import { CMSMDXEditor, CMSMDXHeaderTools } from './CMSMDXEditor';
+import { EditorChromeToggles } from './EditorChromeToggles';
 import { LocaleSelector } from './LocaleSelector';
+import { MDXLivePreview } from './MDXLivePreview';
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error' | 'conflict';
+type PersistStatus = 'saved' | 'conflict' | 'error';
 
 /**
  * MDX block editor (kind:'block').
@@ -27,9 +33,17 @@ type SaveState = 'idle' | 'saving' | 'saved' | 'error' | 'conflict';
  */
 export function BlockEditor() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const updateContent = useUpdateLocalized();
   const { resolvedTheme } = useTheme();
+
+  // When the editor is opened from inside the Puck page editor (via the
+  // "Open block editor" button on the page's right-hand panel), `?from=page`
+  // signals we should surface a shared-content warning and offer an explicit
+  // "Done" path back to the originating page rather than back to /blocks.
+  const fromPage = searchParams.get('from') === 'page';
+  const returnPageId = searchParams.get('pageId') || '';
 
   const [currentLocale, setCurrentLocale] = useState<string>('en');
   const [currentEtag, setCurrentEtag] = useState<string>('');
@@ -47,6 +61,8 @@ export function BlockEditor() {
   const editorRef = useRef<MDXEditorMethods>(null);
 
   const [saveState, setSaveState] = useState<SaveState>('idle');
+  const [previewOpen, setPreviewOpen] = useEditorPref('conloca.mdxeditor.previewOpen');
+  const [autoSaveEnabled, setAutoSaveEnabled] = useEditorPref('conloca.mdxeditor.autoSave');
 
   const { data: sitesConfig } = useSitesConfig();
   const availableLocales = sitesConfig?.globalLocales || ['en'];
@@ -54,7 +70,13 @@ export function BlockEditor() {
   const { data: loadedContent, isLoading, error } = useLocalizedContent(id || '', currentLocale);
 
   useEffect(() => {
-    if (loadedContent?.localized?.etag) {
+    // First-load gate: never re-seed from background refetches. TanStack
+    // Query emits a new `loadedContent` ref on window-focus refetch, on
+    // `useUpdateLocalized.onSuccess` (which calls `setQueryData`), and on
+    // any cache invalidation — without this gate, the effect would call
+    // `setContent(serverMdx)` and silently overwrite the user's typing.
+    // Manual remote-reload remains available via the conflict dialog.
+    if (!isContentLoaded && loadedContent?.localized?.etag) {
       setCurrentEtag(loadedContent.localized.etag);
       const data = loadedContent.localized.content as { mdx?: string } | undefined;
       const mdx = data?.mdx || '';
@@ -62,7 +84,7 @@ export function BlockEditor() {
       setContent(mdx);
       setIsContentLoaded(true);
     }
-  }, [loadedContent]);
+  }, [loadedContent, isContentLoaded]);
 
   const isDirty = isContentLoaded && content !== savedContentRef.current;
   const blocker = useUnsavedChangesGuard(isDirty);
@@ -85,8 +107,8 @@ export function BlockEditor() {
     return () => clearTimeout(timer);
   }, [saveState]);
 
-  const persist = async (newContent: string, forceEtag?: string) => {
-    if (!id) return;
+  const persist = async (newContent: string, forceEtag?: string): Promise<PersistStatus> => {
+    if (!id) return 'error';
     setSaveState('saving');
 
     try {
@@ -101,13 +123,13 @@ export function BlockEditor() {
         setCurrentEtag(result.etag);
         savedContentRef.current = newContent;
         setSaveState('saved');
-        return;
+        return 'saved';
       }
 
       if (result.reason === 'stale_write') {
         setConflict(result);
         setSaveState('conflict');
-        return;
+        return 'conflict';
       }
 
       throw new Error(`Save failed: ${result.reason}`);
@@ -115,6 +137,7 @@ export function BlockEditor() {
       console.error('Failed to save block:', err);
       showError('Failed to save block', err);
       setSaveState('error');
+      return 'error';
     }
   };
 
@@ -122,8 +145,29 @@ export function BlockEditor() {
     void persist(content);
   };
 
+  useAutoSave({
+    enabled: autoSaveEnabled,
+    content,
+    isDirty,
+    isSaving: saveState === 'saving',
+    persist: (value) => persist(value),
+  });
+
+  // Back-arrow + Cancel target. When entered via the Puck page panel,
+  // returning to /pages/:pageId reopens the page editor; otherwise we go
+  // back to the blocks list.
+  const backTarget = fromPage && returnPageId ? `/pages/${returnPageId}` : '/blocks';
+
   const handleCancel = () => {
-    navigate('/blocks');
+    navigate(backTarget);
+  };
+
+  // "Done" — present only when from=page. The unsaved-changes guard
+  // (`useUnsavedChangesGuard`) automatically intercepts the navigation and
+  // opens the dialog if the user has unsaved edits, so we don't need to
+  // duplicate the check here.
+  const handleDone = () => {
+    navigate(backTarget);
   };
 
   const handleLocaleChange = async (newLocale: string) => {
@@ -164,10 +208,16 @@ export function BlockEditor() {
 
   const handleLocaleUnsavedSave = async () => {
     if (!pendingLocaleSwitch) return;
-    await persist(content);
-    if (savedContentRef.current === content) {
+    const status = await persist(content);
+    if (status === 'saved') {
       setShowLocaleUnsavedDialog(false);
       await switchLocale(pendingLocaleSwitch);
+    } else if (status === 'conflict') {
+      // Conflict dialog has opened; back out of the locale-switch flow so
+      // the two dialogs don't stack. User resolves the conflict first,
+      // then can re-attempt the locale switch.
+      setShowLocaleUnsavedDialog(false);
+      setPendingLocaleSwitch(null);
     }
   };
 
@@ -229,7 +279,7 @@ export function BlockEditor() {
           <button
             type="button"
             onClick={handleCancel}
-            aria-label="Back to blocks"
+            aria-label={fromPage ? 'Back to page' : 'Back to blocks'}
             className="p-2 rounded text-grey-04 dark:text-grey-07 hover:bg-grey-11 dark:hover:bg-grey-04"
           >
             ←
@@ -242,6 +292,12 @@ export function BlockEditor() {
             currentLocale={currentLocale}
             availableLocales={availableLocales}
             onChange={handleLocaleChange}
+          />
+          <EditorChromeToggles
+            previewOpen={previewOpen}
+            onTogglePreview={() => setPreviewOpen(!previewOpen)}
+            autoSaveEnabled={autoSaveEnabled}
+            onToggleAutoSave={() => setAutoSaveEnabled(!autoSaveEnabled)}
           />
           <button
             type="button"
@@ -259,38 +315,70 @@ export function BlockEditor() {
           >
             {saveButtonLabel}
           </button>
+          {fromPage && (
+            <button
+              type="button"
+              onClick={handleDone}
+              disabled={saveState === 'saving'}
+              className="px-3 py-1.5 text-sm border border-grey-09 dark:border-grey-04 rounded text-grey-01 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-04 disabled:opacity-50"
+              data-testid="block-editor-done"
+            >
+              Done
+            </button>
+          )}
         </div>
       </header>
-      <div className="flex-1 overflow-hidden">
-        <CMSMDXEditor
-          // Re-mount on locale switch so the editor re-initializes with the
-          // new locale's markdown — `markdown` prop changes are otherwise
-          // ignored after first mount.
-          key={`${id}-${currentLocale}`}
-          ref={editorRef}
-          value={content}
-          onChange={(next, initialNormalize) => {
-            setContent(next);
-            // See MdxPageEditor: the library's first onChange call after
-            // parse round-trip-rewrites the markdown; rebaseline rather
-            // than flag dirty.
-            if (initialNormalize) {
-              savedContentRef.current = next;
-            }
-          }}
-          onSave={persist}
-          className={editorClassName}
-          autoFocus
-          placeholder="Start writing your block…"
-        />
+      {fromPage && (
+        <div
+          className="flex items-start gap-2 px-4 py-2 border-b border-yellow-08 dark:border-yellow-03 bg-yellow-11 dark:bg-yellow-02 text-sm text-yellow-02 dark:text-yellow-09 shrink-0"
+          role="status"
+          data-testid="shared-block-banner"
+        >
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>This is a shared block. Saving updates every page that uses it.</span>
+        </div>
+      )}
+      <div className="flex-1 overflow-hidden flex flex-row min-h-0">
+        <div className="flex-1 min-w-0 overflow-hidden">
+          <CMSMDXEditor
+            // Re-mount on locale switch so the editor re-initializes with the
+            // new locale's markdown — `markdown` prop changes are otherwise
+            // ignored after first mount.
+            key={`${id}-${currentLocale}`}
+            ref={editorRef}
+            value={content}
+            onChange={(next, initialNormalize) => {
+              setContent(next);
+              // See MdxPageEditor: the library's first onChange call after
+              // parse round-trip-rewrites the markdown; rebaseline rather
+              // than flag dirty.
+              if (initialNormalize) {
+                savedContentRef.current = next;
+              }
+            }}
+            onSave={persist}
+            className={editorClassName}
+            autoFocus
+            placeholder="Start writing your block…"
+          />
+        </div>
+        {previewOpen && (
+          <div className="w-1/2 min-w-0 overflow-auto border-l border-grey-09 dark:border-grey-04 bg-white dark:bg-grey-02">
+            <MDXLivePreview markdown={content} />
+          </div>
+        )}
       </div>
 
       {blocker.state === 'blocked' && (
         <UnsavedChangesDialog
           onSave={async () => {
-            await persist(content);
-            if (savedContentRef.current === content) {
+            const status = await persist(content);
+            if (status === 'saved') {
               blocker.proceed?.();
+            } else if (status === 'conflict') {
+              // Conflict dialog took over; release the blocker so it
+              // doesn't sit underneath the conflict modal.
+              blocker.reset?.();
             }
           }}
           onDiscard={() => blocker.proceed?.()}

@@ -84,10 +84,11 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
  * "missing options.baseUrl" error, we short-circuit with a friendly message
  * — the editor itself still works fine.
  *
- * Page-level content (Starlight docs that `import { Aside } from '...'`) no
- * longer reaches this component — the page editor renders without a preview
- * pane. The guard remains for blocks, where a user might paste in a stray
- * import while drafting; the message below is block-appropriate.
+ * Page-level content (which may `import` JSX components scoped by the host
+ * site's MDX provider) no longer reaches this component — the page editor
+ * renders without a preview pane. The guard remains for blocks, where a
+ * user might paste in a stray import while drafting; the message below is
+ * block-appropriate.
  */
 function hasTopLevelImportsOrExports(source: string): boolean {
   return /^[ \t]*(?:import|export)\s/m.test(source);
