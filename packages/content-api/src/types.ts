@@ -88,6 +88,7 @@ export const ErrorCodes = {
   STALE_WRITE: 'STALE_WRITE',
   ALREADY_EXISTS: 'ALREADY_EXISTS',
   PATHNAME_TAKEN: 'PATHNAME_TAKEN',
+  INVALID_PATHNAME: 'INVALID_PATHNAME',
   NAME_TAKEN: 'NAME_TAKEN',
   METADATA_TOO_LARGE: 'METADATA_TOO_LARGE',
   WRITE_ERROR: 'WRITE_ERROR',
@@ -441,6 +442,7 @@ export interface CreateResult {
     | 'already_exists'
     | 'write_error'
     | 'invalid_name'
+    | 'invalid_pathname'
     | 'name_taken'
     | 'pathname_taken'
     | 'pathname_in_redirects'

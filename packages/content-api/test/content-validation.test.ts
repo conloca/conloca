@@ -148,5 +148,87 @@ describe('Content validation', () => {
       expect(result.success).toBe(false);
       expect(result.error?.message).toContain('Pathname is required for pages (locale: fr)');
     });
+
+    test('rejects malformed pathname with invalid_pathname reason', async () => {
+      const result = await api.createContent({
+        kind: 'page',
+        site: 'testsite',
+        collection: 'pages',
+        type: 'puck',
+        locales: {
+          en: {
+            pathname: '/foo bar',
+            meta: { title: 'Test Page' },
+            content: { puckData: { root: {} } },
+          },
+        },
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.reason).toBe('invalid_pathname');
+      expect(result.error?.message).toContain('Path cannot contain spaces');
+    });
+
+    test('rejects uppercase pathname', async () => {
+      const result = await api.createContent({
+        kind: 'page',
+        site: 'testsite',
+        collection: 'pages',
+        type: 'puck',
+        locales: {
+          en: {
+            pathname: '/About-Us',
+            meta: { title: 'Test Page' },
+            content: { puckData: { root: {} } },
+          },
+        },
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.reason).toBe('invalid_pathname');
+      expect(result.error?.message).toContain('lowercase');
+    });
+
+    test('rejects traversal segments', async () => {
+      const result = await api.createContent({
+        kind: 'page',
+        site: 'testsite',
+        collection: 'pages',
+        type: 'puck',
+        locales: {
+          en: {
+            pathname: '/foo/../bar',
+            meta: { title: 'Test Page' },
+            content: { puckData: { root: {} } },
+          },
+        },
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.reason).toBe('invalid_pathname');
+      expect(result.error?.message).toContain('`.` or `..` segments');
+    });
+
+    test('silently normalizes missing leading slash, doubled slashes, and trailing slash', async () => {
+      const result = await api.createContent({
+        kind: 'page',
+        site: 'testsite',
+        collection: 'pages',
+        type: 'puck',
+        locales: {
+          en: {
+            pathname: 'foo//bar/',
+            meta: { title: 'Test Page' },
+            content: { puckData: { root: {} } },
+          },
+        },
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.id).toBeDefined();
+      // The page is reachable at the normalized path.
+      const fetched = await api.getLocalized(result.id!, 'en');
+      expect(fetched?.localized.pathname).toBe('/foo/bar');
+    });
   });
 });

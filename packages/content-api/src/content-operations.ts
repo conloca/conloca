@@ -1,6 +1,6 @@
 import sortKeys from 'sort-keys';
 import type { Blocks } from './blocks';
-import { generateContentId, isContentPublished } from './content-utils';
+import { generateContentId, isContentPublished, normalizeAndValidatePathname } from './content-utils';
 import type { Site } from './site';
 import type { ContentMeta, CreateContentInput, LocaleUpdateData, LocaleVersion } from './types';
 
@@ -20,7 +20,13 @@ export interface ValidationResult {
 export interface CreateValidationResult {
   valid: boolean;
   error?: string;
-  reason?: 'metadata_too_large' | 'pathname_taken' | 'pathname_in_redirects' | 'invalid_name' | 'name_taken';
+  reason?:
+    | 'metadata_too_large'
+    | 'pathname_taken'
+    | 'pathname_in_redirects'
+    | 'invalid_pathname'
+    | 'invalid_name'
+    | 'name_taken';
   existingId?: string;
 }
 
@@ -196,22 +202,36 @@ export function validateCreateContent(
         };
       }
 
+      // Validate and normalize pathname shape. The normalized value is
+      // written back to localeData so the rest of the create flow (file
+      // writes, indexing) sees the cleaned form.
+      const validation = normalizeAndValidatePathname(pathname);
+      if (!validation.valid) {
+        return {
+          valid: false,
+          error: `Invalid pathname for locale ${locale}: ${validation.message}`,
+          reason: 'invalid_pathname',
+        };
+      }
+      localeData.pathname = validation.value;
+      const normalized = validation.value;
+
       // Check if pathname is already taken
-      const existingId = site.getPathnameConflict(pathname, locale);
+      const existingId = site.getPathnameConflict(normalized, locale);
       if (existingId) {
         return {
           valid: false,
-          error: `Pathname ${pathname} already exists`,
+          error: `Pathname ${normalized} already exists`,
           reason: 'pathname_taken',
           existingId,
         };
       }
 
       // Check if pathname is in redirects
-      if (site.isPathnameInRedirects(pathname, locale)) {
+      if (site.isPathnameInRedirects(normalized, locale)) {
         return {
           valid: false,
-          error: `Pathname ${pathname} is already in use as a redirect`,
+          error: `Pathname ${normalized} is already in use as a redirect`,
           reason: 'pathname_in_redirects',
         };
       }
@@ -286,12 +306,10 @@ export function validateCreateContent(
 /**
  * Generate a new content ID
  */
-export { generateContentId };
-
 /**
  * Check if content is published
  */
-export { isContentPublished };
+export { generateContentId, isContentPublished };
 
 /**
  * Update scope bit flags

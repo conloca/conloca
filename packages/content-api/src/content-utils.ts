@@ -146,6 +146,105 @@ export function normalizePathname(pathname: string): string {
 }
 
 /**
+ * Reasons a pathname can be rejected. Each maps to a specific user-facing
+ * error message so the UI can highlight the exact problem.
+ */
+export type PathnameValidationReason =
+  | 'empty'
+  | 'whitespace'
+  | 'forbidden_char'
+  | 'control_char'
+  | 'uppercase'
+  | 'non_ascii'
+  | 'traversal_segment'
+  | 'disallowed_char';
+
+export interface PathnameValidationResult {
+  /** When valid: the normalized pathname. When invalid: the raw (trimmed) input. */
+  value: string;
+  valid: boolean;
+  reason?: PathnameValidationReason;
+  message?: string;
+}
+
+/**
+ * Validate the shape of a CMS pathname and normalize it for storage.
+ *
+ * Silently fixes harmless slips (missing leading slash, doubled slashes,
+ * trailing slash) and rejects malformed inputs with a specific reason so
+ * the UI can show a helpful error message.
+ *
+ * Accepted chars: a–z, 0–9, `-`, `_`, `/`. Mixed case, accents, spaces,
+ * `?`, `#`, `\`, and traversal segments (`.`, `..`) are rejected.
+ */
+export function normalizeAndValidatePathname(input: string | undefined | null): PathnameValidationResult {
+  const raw = (input ?? '').trim();
+
+  if (raw === '') {
+    return { value: '', valid: false, reason: 'empty', message: 'Path is required' };
+  }
+
+  // Pre-normalize character checks — run on the raw input so the error
+  // matches what the user actually typed.
+  if (/\s/.test(raw)) {
+    return { value: raw, valid: false, reason: 'whitespace', message: 'Path cannot contain spaces' };
+  }
+  if (/[?#\\]/.test(raw)) {
+    return { value: raw, valid: false, reason: 'forbidden_char', message: 'Path cannot contain `?`, `#`, or `\\`' };
+  }
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional control-char detection
+  if (/[\x00-\x1F\x7F]/.test(raw)) {
+    return { value: raw, valid: false, reason: 'control_char', message: 'Path cannot contain control characters' };
+  }
+  if (/[A-Z]/.test(raw)) {
+    return { value: raw, valid: false, reason: 'uppercase', message: 'Path must be lowercase' };
+  }
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: ASCII-only enforcement
+  if (/[^\x00-\x7F]/.test(raw)) {
+    return {
+      value: raw,
+      valid: false,
+      reason: 'non_ascii',
+      message: 'Path can only contain a–z, 0–9, `-`, `_`, `/`',
+    };
+  }
+
+  // Normalize: add leading slash, collapse //, strip trailing slash.
+  let value = raw;
+  if (!value.startsWith('/')) value = '/' + value;
+  value = value.replace(/\/+/g, '/');
+  if (value !== '/' && value.endsWith('/')) value = value.slice(0, -1);
+
+  // Segment-level check: `.` and `..` are never valid path segments.
+  // Run before the generic disallowed-char check so the user gets the
+  // more specific "traversal" message.
+  if (value !== '/') {
+    for (const seg of value.slice(1).split('/')) {
+      if (seg === '.' || seg === '..') {
+        return {
+          value,
+          valid: false,
+          reason: 'traversal_segment',
+          message: 'Path cannot contain `.` or `..` segments',
+        };
+      }
+    }
+  }
+
+  // Final allowed-chars check — catches stray dots and anything else.
+  if (!/^[a-z0-9\-_/]*$/.test(value)) {
+    return {
+      value,
+      valid: false,
+      reason: 'disallowed_char',
+      message: 'Path can only contain a–z, 0–9, `-`, `_`, `/`',
+    };
+  }
+
+  return { value, valid: true };
+}
+
+/**
  * Generate a content ID in the standard format
  * IDs are prefixed with "vx-" followed by 8 random characters
  */

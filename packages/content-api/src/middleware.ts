@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { type AssetConfig, AssetOperations } from './asset-operations';
 import type { ContentAPI } from './content-api.interface';
-import { localesOf } from './content-utils';
+import { localesOf, normalizeAndValidatePathname } from './content-utils';
 import { createGitOperations, type GitAuthor, type GitConfig } from './git-operations';
 import { compileMDX } from './mdx/compile';
 import type { APIError, ContentManifest, ErrorCode, FindOptions, GlobalFilters } from './types';
@@ -196,6 +196,12 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
         }
         if (result.reason === 'invalid_name') {
           return c.json({ ...result, ...errorResponse(ErrorCodes.INVALID_REQUEST, errMessage || 'Invalid name') }, 400);
+        }
+        if (result.reason === 'invalid_pathname') {
+          return c.json(
+            { ...result, ...errorResponse(ErrorCodes.INVALID_PATHNAME, errMessage || 'Invalid pathname') },
+            400,
+          );
         }
         if (result.reason === 'metadata_too_large') {
           return c.json(
@@ -818,19 +824,34 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
         );
       }
 
+      // Defensive: if the pathname shape is malformed, short-circuit with
+      // a structured reason instead of a meaningless index lookup. The
+      // dialog short-circuits client-side already, so this guards direct
+      // API callers (and future clients) from getting a misleading
+      // `{ available: true }` for an invalid path.
+      const validation = normalizeAndValidatePathname(pathname);
+      if (!validation.valid) {
+        return c.json({
+          available: false,
+          reason: 'invalid_pathname',
+          message: validation.message,
+        });
+      }
+      const normalized = validation.value;
+
       // Use the optimized pathname index via site.isPathnameAvailable
       const siteObj = api.getSite(site);
       if (!siteObj) {
         return c.json(errorResponse(ErrorCodes.SITE_NOT_FOUND, `Site '${site}' not found`, { site }), 404);
       }
-      const available = siteObj.isPathnameAvailable(pathname, locale, excludeId);
+      const available = siteObj.isPathnameAvailable(normalized, locale, excludeId);
 
       if (available) {
         return c.json({ available: true });
       }
 
       // Get the conflicting content ID if pathname is taken
-      const existingId = siteObj.getPathnameConflict(pathname, locale, excludeId);
+      const existingId = siteObj.getPathnameConflict(normalized, locale, excludeId);
 
       return c.json({
         available: false,

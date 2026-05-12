@@ -205,6 +205,87 @@ describe('Create Page Dialog', () => {
 
     expect(pathInput.value).toBe('/my-new-page');
   });
+
+  test('shows shape error for uppercase path and disables submit', async () => {
+    const { getByLabelText, getByTestId, findByText } = renderWithProviders(
+      <CreatePageDialog open={true} />,
+      {},
+      false,
+    );
+
+    const titleInput = getByLabelText('Title');
+    const pathInput = getByLabelText('URL Path') as HTMLInputElement;
+
+    fireEvent.change(titleInput, { target: { value: 'Test' } });
+    fireEvent.change(pathInput, { target: { value: '/About-Us' } });
+
+    await findByText('Path must be lowercase');
+    const submitBtn = getByTestId('create-page-submit') as HTMLButtonElement;
+    expect(submitBtn.disabled).toBe(true);
+  });
+
+  test('shows shape error for whitespace in path', async () => {
+    const { getByLabelText, findByText } = renderWithProviders(<CreatePageDialog open={true} />, {}, false);
+
+    const titleInput = getByLabelText('Title');
+    const pathInput = getByLabelText('URL Path') as HTMLInputElement;
+
+    fireEvent.change(titleInput, { target: { value: 'Test' } });
+    fireEvent.change(pathInput, { target: { value: '/foo bar' } });
+
+    await findByText('Path cannot contain spaces');
+  });
+
+  test('shows shape error for `..` traversal segment', async () => {
+    const { getByLabelText, findByText } = renderWithProviders(<CreatePageDialog open={true} />, {}, false);
+
+    const titleInput = getByLabelText('Title');
+    const pathInput = getByLabelText('URL Path') as HTMLInputElement;
+
+    fireEvent.change(titleInput, { target: { value: 'Test' } });
+    fireEvent.change(pathInput, { target: { value: '/foo/../bar' } });
+
+    await findByText('Path cannot contain `.` or `..` segments');
+  });
+
+  test('shows shape error for non-ASCII characters', async () => {
+    const { getByLabelText, findByText } = renderWithProviders(<CreatePageDialog open={true} />, {}, false);
+
+    const titleInput = getByLabelText('Title');
+    const pathInput = getByLabelText('URL Path') as HTMLInputElement;
+
+    fireEvent.change(titleInput, { target: { value: 'Test' } });
+    fireEvent.change(pathInput, { target: { value: '/café' } });
+
+    await findByText('Path can only contain a–z, 0–9, `-`, `_`, `/`');
+  });
+
+  test('submits the normalized pathname when input has trailing slash', async () => {
+    const onCreatePage = mock();
+    const { getByLabelText, getByTestId } = renderWithProviders(
+      <CreatePageDialog open={true} onCreatePage={onCreatePage} />,
+      {},
+      false,
+    );
+
+    const titleInput = getByLabelText('Title');
+    const pathInput = getByLabelText('URL Path') as HTMLInputElement;
+
+    fireEvent.change(titleInput, { target: { value: 'Test' } });
+    fireEvent.change(pathInput, { target: { value: '/foo/' } });
+
+    // Wait for the debounced availability check to complete so the
+    // submit button becomes enabled.
+    await waitFor(() => {
+      const submitBtn = getByTestId('create-page-submit') as HTMLButtonElement;
+      expect(submitBtn.disabled).toBe(false);
+    });
+
+    fireEvent.click(getByTestId('create-page-submit'));
+
+    expect(onCreatePage).toHaveBeenCalledTimes(1);
+    expect(onCreatePage.mock.calls[0][0].path).toBe('/foo');
+  });
 });
 
 describe('Page Metadata Dialog', () => {

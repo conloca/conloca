@@ -18,11 +18,20 @@ export type {
   LocalizedManifest,
   MDXCompileResponse,
   PageReference,
+  PathnameValidationReason,
+  PathnameValidationResult,
   SitesConfig,
   UpdateResult,
 } from '@conloca/content-api';
 // Runtime re-exports for cms-spa layer compliance
-export { blockEditableSchema, dataEditableSchema, ErrorCodes, formatFileSize, localesOf } from '@conloca/content-api';
+export {
+  blockEditableSchema,
+  dataEditableSchema,
+  ErrorCodes,
+  formatFileSize,
+  localesOf,
+  normalizeAndValidatePathname,
+} from '@conloca/content-api';
 
 export * from './client';
 export * from './hooks';

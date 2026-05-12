@@ -1,3 +1,4 @@
+import { normalizeAndValidatePathname } from '@conloca/content-api-client';
 import * as Dialog from '@radix-ui/react-dialog';
 import { AlertCircle, X } from 'lucide-react';
 import type React from 'react';
@@ -52,14 +53,30 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
   const [isPathnameAvailable, setIsPathnameAvailable] = useState(true);
   const [pathnameLoading, setPathnameLoading] = useState(false);
   const [showLoadingText, setShowLoadingText] = useState(false);
+  const [pathShapeError, setPathShapeError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!path) {
       setIsPathnameAvailable(true);
       setPathnameLoading(false);
       setShowLoadingText(false);
+      setPathShapeError(null);
       return;
     }
+
+    // Run shape validation before hitting the network. If the shape is
+    // invalid, surface the error inline and skip the availability check —
+    // the backend would reject it anyway with the same reason.
+    const validation = normalizeAndValidatePathname(path);
+    if (!validation.valid) {
+      setPathShapeError(validation.message ?? 'Invalid path');
+      setIsPathnameAvailable(true);
+      setPathnameLoading(false);
+      setShowLoadingText(false);
+      return;
+    }
+    setPathShapeError(null);
+    const normalized = validation.value;
 
     // Add a small debounce to avoid rapid consecutive requests
     const timeoutId = setTimeout(async () => {
@@ -73,7 +90,7 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
       try {
         const config = getUIConfig();
         const baseUrl = config.apiBaseUrl || '/__cms/api';
-        const url = `${baseUrl}/${site}/pathname-available?pathname=${encodeURIComponent(path)}&locale=${locale}`;
+        const url = `${baseUrl}/${site}/pathname-available?pathname=${encodeURIComponent(normalized)}&locale=${locale}`;
         const response = await fetch(url);
         const text = await response.text();
         try {
@@ -96,7 +113,12 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
     return () => clearTimeout(timeoutId);
   }, [path, site, locale]);
 
-  // Auto-generate path from title, including template prefix if applicable
+  // Auto-generate path from title, including template prefix if applicable.
+  // We read `templates` via getUIConfig() inside the effect so the dep array
+  // stays stable — using the component-scope `templates` here would re-run the
+  // effect on every render (since `config.templates || {}` creates a fresh
+  // empty object each time when no templates are configured), which clobbers
+  // manual edits to the path.
   useEffect(() => {
     const slug = slugify(title);
     if (!slug) {
@@ -104,8 +126,7 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
       return;
     }
 
-    // Check if current template has a pathPrefix
-    const templateConfig = templates[template];
+    const templateConfig = (getUIConfig().templates ?? {})[template];
     if (templateConfig?.pathPrefix) {
       const prefix = templateConfig.pathPrefix.endsWith('/')
         ? templateConfig.pathPrefix
@@ -114,7 +135,7 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
     } else {
       setPath(`/${slug}`);
     }
-  }, [title, template, templates]);
+  }, [title, template]);
 
   // Template change handler - path update handled by useEffect above
   const handleTemplateChange = (newTemplate: string) => {
@@ -123,9 +144,16 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    // Submit the normalized form so silent fixes (missing leading slash,
+    // doubled slashes, trailing slash) reach the API.
+    const validation = normalizeAndValidatePathname(path);
+    if (!validation.valid) {
+      setPathShapeError(validation.message ?? 'Invalid path');
+      return;
+    }
     onCreatePage?.({
       title,
-      path,
+      path: validation.value,
       template,
       locale,
       format,
@@ -136,7 +164,7 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
     onOpenChange?.(false);
   };
 
-  const pathError = Boolean(!isPathnameAvailable && path);
+  const pathError = Boolean(pathShapeError || (!isPathnameAvailable && path));
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -229,7 +257,7 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
                   data-testid="page-description-input"
                 />
                 <p className="text-xs text-grey-04 dark:text-grey-07 mt-1">
-                  Shown in search results and at the top of the page. You can edit this later in page settings.
+                  Shown in search results and at the top of the page. You can edit it later in the frontmatter.
                 </p>
               </div>
             )}
@@ -255,8 +283,11 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
                 )}
               </div>
               <div className="h-5 mt-1">
-                {pathError && <p className="text-sm text-red-04">This pathname is already in use</p>}
-                {pathnameLoading && showLoadingText && path && (
+                {pathShapeError && <p className="text-sm text-red-04">{pathShapeError}</p>}
+                {!pathShapeError && !isPathnameAvailable && path && (
+                  <p className="text-sm text-red-04">This pathname is already in use</p>
+                )}
+                {!pathShapeError && pathnameLoading && showLoadingText && path && (
                   <p className="text-sm text-grey-04 dark:text-grey-07">Checking availability...</p>
                 )}
               </div>
@@ -298,7 +329,7 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
               <Button
                 type="submit"
                 variant="primary"
-                disabled={!isPathnameAvailable || pathnameLoading || !title || !path}
+                disabled={Boolean(pathShapeError) || !isPathnameAvailable || pathnameLoading || !title || !path}
                 className="flex-1"
                 data-testid="create-page-submit"
               >
