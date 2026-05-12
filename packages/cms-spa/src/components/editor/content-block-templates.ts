@@ -36,7 +36,7 @@ export const contentBlockTemplates: ContentBlockTemplate[] = [
     description: 'Compact supporting content for tips, clarifications, or key reminders inside a larger landing page.',
     category: 'callouts',
     content:
-      '## {{title}}\n\n> Lead with a concise note, recommendation, or point of emphasis.\n\nAdd one short paragraph that gives the reader extra context, guidance, or a best practice.\n\n- Keep the point crisp\n- Explain why it matters\n- Point to the next action\n',
+      '## {{title}}\n\n:::note\nLead with a concise note, recommendation, or point of emphasis.\n:::\n\nAdd one short paragraph that gives the reader extra context, guidance, or a best practice.\n\n- Keep the point crisp\n- Explain why it matters\n- Point to the next action\n',
   },
   {
     id: 'comparison-narrative',

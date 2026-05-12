@@ -1,52 +1,34 @@
 import type { LocalizedEntry } from '@conloca/content-api-client';
-import { useLocalizedContent, useUpdateLocalized } from '@conloca/content-api-client';
-import { AlertTriangle, Edit2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { CMSMDXEditorModal } from '../editor/CMSMDXEditor';
+import { AlertTriangle, ExternalLink } from 'lucide-react';
+import { useNavigate, useParams } from 'react-router-dom';
 
 interface MDXEditFieldProps {
   entry: LocalizedEntry;
 }
 
 /**
- * Custom field component for editing MDX block content.
- * Renders an "Edit Content" button in the Puck properties panel.
+ * Custom field component for editing MDX block content from inside the Puck
+ * page editor's right-hand properties panel.
+ *
+ * Navigates to the dedicated `/blocks/:id?from=page&pageId=...` route rather
+ * than opening a modal. The page-route editor brings unsaved-changes guarding,
+ * conflict recovery, locale switching, and Cmd+S — none of which the modal
+ * had. The `?from=page` flag asks BlockEditor to surface a shared-content
+ * warning banner and offer a "Done" button that returns to this page.
  */
 export function MDXEditField({ entry }: MDXEditFieldProps) {
-  const [editorOpen, setEditorOpen] = useState(false);
-  const locale = 'en';
-  const { data: localizedContent } = useLocalizedContent(entry.id, locale);
-  const updateLocalized = useUpdateLocalized();
-  const [currentEtag, setCurrentEtag] = useState<string>(entry.localized.etag);
+  const navigate = useNavigate();
+  // `:id` exists because MDXEditField is only rendered inside the Puck page
+  // editor, which mounts at `/pages/:id`. If we ever surface this field
+  // elsewhere the navigation will silently lose the return path, so the
+  // button still works (lands on /blocks/:id with no Done shortcut).
+  const { id: pageId } = useParams<{ id: string }>();
 
-  useEffect(() => {
-    if (localizedContent?.localized?.etag) {
-      setCurrentEtag(localizedContent.localized.etag);
-    }
-  }, [localizedContent]);
-
-  const handleSaveEdit = async (newContent: string) => {
-    if (!entry.id || !localizedContent) return;
-
-    const result = await updateLocalized.mutateAsync({
-      id: entry.id,
-      locale,
-      data: {
-        content: {
-          mdx: newContent,
-        },
-      },
-      etag: currentEtag,
-    });
-
-    if (result.success) {
-      if (result.etag) {
-        setCurrentEtag(result.etag);
-      }
-      setEditorOpen(false);
-    } else {
-      throw new Error(result.error?.message || 'Failed to save content');
-    }
+  const handleOpenEditor = () => {
+    const target = pageId
+      ? `/blocks/${entry.id}?from=page&pageId=${encodeURIComponent(pageId)}`
+      : `/blocks/${entry.id}`;
+    navigate(target);
   };
 
   return (
@@ -58,22 +40,15 @@ export function MDXEditField({ entry }: MDXEditFieldProps) {
       </div>
 
       <button
-        onClick={() => setEditorOpen(true)}
+        onClick={handleOpenEditor}
         className="w-full px-4 py-2 bg-azure-04 text-white rounded-md hover:bg-azure-03 transition-colors flex items-center justify-center gap-2"
-        title="Edit block content"
+        title="Open this block in the dedicated editor"
         type="button"
+        data-testid="mdx-edit-field-open"
       >
-        <Edit2 className="h-4 w-4" />
-        Edit Content
+        <ExternalLink className="h-4 w-4" />
+        Open block editor
       </button>
-
-      <CMSMDXEditorModal
-        isOpen={editorOpen}
-        onClose={() => setEditorOpen(false)}
-        filePath={entry.localized.name || entry.id}
-        initialContent={(entry.localized.content as { mdx?: string })?.mdx || ''}
-        onSave={handleSaveEdit}
-      />
     </div>
   );
 }

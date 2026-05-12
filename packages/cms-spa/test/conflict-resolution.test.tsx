@@ -8,9 +8,27 @@ import {
 } from '@conloca/content-api-client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor, waitForElementToBeRemoved } from '@testing-library/react';
+import type { ReactNode } from 'react';
+import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { ConflictDialog } from '../src/components/dialogs/ConflictDialog';
 import { PageEditor } from '../src/components/editor/PageEditor';
 import { renderWithProviders, setupTestAPI, testApi } from './test-utils';
+
+/**
+ * PageEditor now uses `useUnsavedChangesGuard` which depends on react-router-dom's
+ * `useBlocker` — that hook requires a Data Router (`createBrowserRouter` /
+ * `createMemoryRouter` + `<RouterProvider>`). The legacy `MemoryRouter` element
+ * doesn't satisfy that contract in v7. Wrap PageEditor in a memory data router
+ * so the guard hook can mount cleanly inside these tests.
+ */
+function renderWithDataRouter(ui: ReactNode, queryClient: QueryClient) {
+  const router = createMemoryRouter([{ path: '/', element: ui }], { initialEntries: ['/'] });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>,
+  );
+}
 
 afterEach(() => {
   cleanup();
@@ -92,18 +110,17 @@ describe('Conflict Resolution', () => {
         return result;
       });
 
-      render(
-        <QueryClientProvider client={queryClient}>
-          <PageEditor
-            pageId={pageId}
-            entry={initialContent!}
-            config={mockConfig}
-            availableLocales={['en']}
-            onSave={onSave}
-            onBack={() => {}}
-            onOpenMetadata={() => {}}
-          />
-        </QueryClientProvider>,
+      renderWithDataRouter(
+        <PageEditor
+          pageId={pageId}
+          entry={initialContent!}
+          config={mockConfig}
+          availableLocales={['en']}
+          onSave={onSave}
+          onBack={() => {}}
+          onOpenMetadata={() => {}}
+        />,
+        queryClient,
       );
 
       expect(await screen.findByText('Test Page')).toBeDefined();
@@ -216,18 +233,17 @@ describe('Conflict Resolution', () => {
         },
       };
 
-      render(
-        <QueryClientProvider client={queryClient}>
-          <PageEditor
-            pageId={contentId}
-            entry={modifiedEntry}
-            config={mockConfig}
-            availableLocales={['en']}
-            onSave={onSave}
-            onBack={() => {}}
-            onOpenMetadata={() => {}}
-          />
-        </QueryClientProvider>,
+      renderWithDataRouter(
+        <PageEditor
+          pageId={contentId}
+          entry={modifiedEntry}
+          config={mockConfig}
+          availableLocales={['en']}
+          onSave={onSave}
+          onBack={() => {}}
+          onOpenMetadata={() => {}}
+        />,
+        queryClient,
       );
 
       // Wait for the editor to load
@@ -515,18 +531,17 @@ describe('Conflict Resolution', () => {
         },
       };
 
-      render(
-        <QueryClientProvider client={queryClient}>
-          <PageEditor
-            pageId={contentId}
-            entry={modifiedEntry}
-            config={mockConfig}
-            availableLocales={['en']}
-            onSave={onSave}
-            onBack={() => {}}
-            onOpenMetadata={() => {}}
-          />
-        </QueryClientProvider>,
+      renderWithDataRouter(
+        <PageEditor
+          pageId={contentId}
+          entry={modifiedEntry}
+          config={mockConfig}
+          availableLocales={['en']}
+          onSave={onSave}
+          onBack={() => {}}
+          onOpenMetadata={() => {}}
+        />,
+        queryClient,
       );
 
       // Wait for the editor to load

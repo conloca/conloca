@@ -3,9 +3,11 @@ import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { ContentAPIClient, setContentAPIClient } from '@conloca/content-api-client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
-import { AppRoutes } from '../src/App';
+import { createMemoryRouter, createRoutesFromElements, MemoryRouter, RouterProvider } from 'react-router-dom';
+import { AppRoutes, routeElements } from '../src/App';
+import { useDataSchemas } from '../src/data-schemas';
 import { ThemeProvider } from '../src/hooks/useTheme';
+import { usePuckConfig } from '../src/puck-config';
 import { setupTestAPI, testApi } from './test-utils';
 
 // Cleanup after each test
@@ -146,13 +148,22 @@ describe('Astro CMS Integration', () => {
       },
     });
 
-    // Render with the route already set
+    // PageEditor uses `useUnsavedChangesGuard` (→ `useBlocker`) which only
+    // works under a Data Router. Build a memory data router from the same
+    // route config the production app uses so the editor's hooks mount.
+    function Harness() {
+      const puckConfig = usePuckConfig();
+      const dataSchemas = useDataSchemas();
+      const router = createMemoryRouter(createRoutesFromElements(routeElements({ puckConfig, dataSchemas })), {
+        initialEntries: [`/pages/${actualPageId}`],
+      });
+      return <RouterProvider router={router} />;
+    }
+
     render(
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
-          <MemoryRouter initialEntries={[`/pages/${actualPageId}`]}>
-            <AppRoutes />
-          </MemoryRouter>
+          <Harness />
         </ThemeProvider>
       </QueryClientProvider>,
     );

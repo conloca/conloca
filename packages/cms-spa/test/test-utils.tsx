@@ -10,8 +10,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { type RenderOptions, render } from '@testing-library/react';
 import { Hono } from 'hono';
 import type { ReactElement, ReactNode } from 'react';
-import { MemoryRouter } from 'react-router-dom';
+import { createMemoryRouter, createRoutesFromElements, MemoryRouter, RouterProvider } from 'react-router-dom';
+import { routeElements } from '../src/App';
+import { useDataSchemas } from '../src/data-schemas';
 import { ThemeProvider } from '../src/hooks/useTheme';
+import { usePuckConfig } from '../src/puck-config';
 
 export * from '@testing-library/react';
 
@@ -201,4 +204,58 @@ export function renderWithProviders(ui: ReactElement, options?: Omit<RenderOptio
   }
 
   return render(ui, { wrapper: Wrapper, ...options });
+}
+
+/**
+ * Render the full app under a Data Router (`createMemoryRouter` +
+ * `<RouterProvider>`) using the same route config as production.
+ *
+ * Tests that navigate into the page or block editor must use this — those
+ * editors call `useUnsavedChangesGuard` → `useBlocker`, which only works
+ * under a Data Router. Rendering `<AppRoutes>` inside a legacy
+ * `<MemoryRouter>` (the default `renderWithProviders` path) makes
+ * `useBlocker` throw inside React's render phase, which deadlocks any
+ * waitFor in the surrounding test.
+ *
+ * The route config is read from `routeElements` so this stays in sync with
+ * the real app shape automatically.
+ */
+export function renderAppWithDataRouter(
+  initialEntries: string[] = ['/'],
+  options?: Omit<RenderOptions, 'wrapper'>,
+  withSetup = true,
+) {
+  if (withSetup) {
+    setupTestAPI();
+  }
+
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+        refetchOnWindowFocus: false,
+        staleTime: Number.POSITIVE_INFINITY,
+        gcTime: 0,
+      },
+      mutations: { retry: false },
+    },
+  });
+
+  function Harness() {
+    const puckConfig = usePuckConfig();
+    const dataSchemas = useDataSchemas();
+    const router = createMemoryRouter(createRoutesFromElements(routeElements({ puckConfig, dataSchemas })), {
+      initialEntries,
+    });
+    return <RouterProvider router={router} />;
+  }
+
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+        <Harness />
+      </ThemeProvider>
+    </QueryClientProvider>,
+    options,
+  );
 }

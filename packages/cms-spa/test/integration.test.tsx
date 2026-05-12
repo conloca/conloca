@@ -3,7 +3,14 @@ import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { ErrorCodes } from '@conloca/content-api-client';
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { AppRoutes } from '../src/App';
-import { API_ROUTES, mockAPIError, renderWithProviders, setupTestAPI, testApi } from './test-utils';
+import {
+  API_ROUTES,
+  mockAPIError,
+  renderAppWithDataRouter,
+  renderWithProviders,
+  setupTestAPI,
+  testApi,
+} from './test-utils';
 
 // Set test timeout
 const TEST_TIMEOUT = 10000;
@@ -357,20 +364,10 @@ describe('CMS Integration Tests', () => {
 
         const pageId = result.id!;
 
-        renderApp();
-
-        // Navigate to pages first
-        // Use getAllByRole and select the first (nav) link since dashboard also has section card links
-        const pagesLinks = screen.getAllByRole('link', { name: /pages/i });
-        fireEvent.click(pagesLinks[0]);
-
-        await waitFor(() => {
-          expect(screen.getByTestId('new-page-button')).toBeInTheDocument();
-        });
-
-        // Find the edit button for our page
-        const editButton = screen.getByTestId(`edit-${pageId}.en`);
-        fireEvent.click(editButton);
+        // PageEditor uses useBlocker → needs a Data Router. Mount the app
+        // directly at the page editor route via createMemoryRouter so the
+        // hook can resolve.
+        renderAppWithDataRouter([`/pages/${pageId}`], undefined, false);
 
         // Wait for page editor to load
         await waitFor(() => {

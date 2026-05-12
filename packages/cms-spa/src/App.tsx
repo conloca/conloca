@@ -12,7 +12,7 @@ import { PageList } from './components/pages/PageList';
 import { type DataSchemas, useDataSchemas } from './data-schemas';
 import { usePuckConfig } from './puck-config';
 
-interface RouteDeps {
+export interface RouteDeps {
   puckConfig: Config;
   dataSchemas: DataSchemas;
 }
@@ -25,8 +25,13 @@ interface RouteDeps {
  * `/pages/:id` and `/blocks/:id` sit OUTSIDE the CMSLayout shell so the
  * editors occupy the full viewport — the page-route equivalent of "modal
  * takes over the screen".
+ *
+ * Exported so tests that need `useBlocker` (the unsaved-changes guard hooks
+ * inside the page/block editors) can plug the same routes into
+ * `createMemoryRouter` + `<RouterProvider>` instead of the legacy
+ * `<MemoryRouter>` element.
  */
-function routeElements({ puckConfig, dataSchemas }: RouteDeps) {
+export function routeElements({ puckConfig, dataSchemas }: RouteDeps) {
   return (
     <>
       <Route path="/" element={<CMSLayout />}>

@@ -1,14 +1,8 @@
-import { useCreateContent, useLocalizedContent } from '@conloca/content-api-client';
+import { useLocalizedContent } from '@conloca/content-api-client';
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '../../utils/cn';
-import { slugify } from '../../utils/slugify';
-import { CMSMDXEditorModal } from '../editor/CMSMDXEditor';
-import {
-  contentBlockTemplates,
-  getContentBlockTemplate,
-  renderContentBlockTemplate,
-} from '../editor/content-block-templates';
-import { Button, Input, Select } from '../ui';
+import { CreateBlockDialog } from '../editor/CreateBlockDialog';
+import { Button } from '../ui';
 import { MDXEditField } from './MDXEditField';
 
 export interface ContentBlockOption {
@@ -49,14 +43,9 @@ function addToRecentlyUsed(blockId: string) {
 
 export function ContentBlockSelectorField({ value, onChange, options }: ContentBlockSelectorFieldProps) {
   const { data: entry } = useLocalizedContent(value || '', 'en');
-  const createContent = useCreateContent();
   const selectedOption = options.find((option) => option.value === value);
 
-  const [showCreator, setShowCreator] = useState(false);
-  const [showEditor, setShowEditor] = useState(false);
-  const [newBlockTitle, setNewBlockTitle] = useState('');
-  const [selectedTemplateId, setSelectedTemplateId] = useState(contentBlockTemplates[0]?.id || '');
-  const [creationError, setCreationError] = useState<string | null>(null);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
 
   // Searchable dropdown state
   const [isOpen, setIsOpen] = useState(false);
@@ -77,65 +66,19 @@ export function ContentBlockSelectorField({ value, onChange, options }: ContentB
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen]);
 
-  const resetCreator = () => {
-    setShowCreator(false);
-    setShowEditor(false);
-    setNewBlockTitle('');
-    setSelectedTemplateId(contentBlockTemplates[0]?.id || '');
-    setCreationError(null);
-  };
-
   const handleCreateStart = () => {
     setIsOpen(false);
-    setShowCreator(true);
-    setCreationError(null);
+    setShowCreateDialog(true);
   };
 
-  const handleContinueToEditor = () => {
-    if (!newBlockTitle.trim()) {
-      setCreationError('Enter a block title before continuing.');
-      return;
-    }
-    setCreationError(null);
-    setShowEditor(true);
-  };
-
-  const handleCreateBlock = async (content: string) => {
-    const blockTitle = newBlockTitle.trim();
-    if (!blockTitle) {
-      throw new Error('Block title is required');
-    }
-
-    const template = getContentBlockTemplate(selectedTemplateId);
-    const result = await createContent.mutateAsync({
-      kind: 'block',
-      collection: 'blocks',
-      type: 'mdx',
-      name: slugify(blockTitle) || 'untitled',
-      meta: {
-        title: blockTitle,
-        category: template?.category,
-      },
-      locales: {
-        en: {
-          meta: {
-            title: blockTitle,
-            category: template?.category,
-          },
-          content: {
-            mdx: content,
-          },
-        },
-      },
-    });
-
-    if (!result.success || !result.id) {
-      throw new Error(result.error?.message || 'Failed to create content block');
-    }
-
-    addToRecentlyUsed(result.id);
-    onChange(result.id);
-    resetCreator();
+  // CreateBlockDialog already calls `createContent` server-side with the
+  // template-rendered MDX. We just need to wire the new block id into the
+  // Puck field so the page references it; the user can customize the body
+  // via the "Open block editor" button from MDXEditField if they want to.
+  const handleBlockCreated = ({ id: newId }: { id: string }) => {
+    addToRecentlyUsed(newId);
+    onChange(newId);
+    setShowCreateDialog(false);
   };
 
   const handleSelectBlock = (blockId: string) => {
@@ -294,71 +237,12 @@ export function ContentBlockSelectorField({ value, onChange, options }: ContentB
         </Button>
       </div>
 
-      {showCreator ? (
-        <div className="space-y-3 rounded-md border border-line bg-subtle p-3">
-          <div>
-            <label
-              htmlFor="new-content-block-title"
-              className="mb-1 block text-xs font-medium uppercase tracking-wide text-grey-04"
-            >
-              Block Title
-            </label>
-            <Input
-              size="sm"
-              id="new-content-block-title"
-              type="text"
-              value={newBlockTitle}
-              onChange={(event) => setNewBlockTitle(event.target.value)}
-              placeholder="Foundational narrative"
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="new-content-block-template"
-              className="mb-1 block text-xs font-medium uppercase tracking-wide text-grey-04"
-            >
-              Starter Template
-            </label>
-            <Select
-              size="sm"
-              id="new-content-block-template"
-              value={selectedTemplateId}
-              onChange={(event) => setSelectedTemplateId(event.target.value)}
-            >
-              {contentBlockTemplates.map((template) => (
-                <option key={template.id} value={template.id}>
-                  {template.label}
-                </option>
-              ))}
-            </Select>
-            <p className="mt-2 text-xs leading-relaxed text-grey-04">
-              {getContentBlockTemplate(selectedTemplateId)?.description}
-            </p>
-          </div>
-
-          {creationError ? <p className="text-xs text-red-04">{creationError}</p> : null}
-
-          <div className="flex gap-2">
-            <Button variant="primary" size="sm" onClick={handleContinueToEditor}>
-              Open Editor
-            </Button>
-            <Button variant="outline" size="sm" onClick={resetCreator}>
-              Cancel
-            </Button>
-          </div>
-        </div>
-      ) : null}
-
       {entry ? <MDXEditField entry={entry} /> : null}
 
-      <CMSMDXEditorModal
-        isOpen={showEditor}
-        onClose={() => setShowEditor(false)}
-        filePath={newBlockTitle.trim() || 'New Content Block'}
-        initialTemplateId={selectedTemplateId}
-        initialContent={renderContentBlockTemplate(selectedTemplateId, newBlockTitle.trim() || 'Untitled Block')}
-        onSave={handleCreateBlock}
+      <CreateBlockDialog
+        isOpen={showCreateDialog}
+        onClose={() => setShowCreateDialog(false)}
+        onCreated={handleBlockCreated}
       />
     </div>
   );
