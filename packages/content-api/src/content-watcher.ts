@@ -11,6 +11,8 @@ export interface WebSocketSender {
 export interface ContentWatchEvent {
   file: string;
   action: 'update' | 'create' | 'delete';
+  inMdxRoot: boolean;
+  inContentRoot: boolean;
 }
 
 interface ReindexResultLike {
@@ -103,7 +105,7 @@ export function createContentWatchHandlers(
       }
 
       try {
-        await onReindexed?.({ file: normalizedFile, action });
+        await onReindexed?.({ file: normalizedFile, action, inMdxRoot, inContentRoot });
       } catch (error) {
         console.error('[Content Watcher] onReindexed callback failed:', error);
       }

@@ -844,8 +844,39 @@ if (import.meta.hot) {
                       ...(options.mdxPages?.root && { mdxPagesRoot: options.mdxPages.root }),
                     },
                     server.ws,
-                    async () => {
+                    async (event) => {
                       await refreshConlocaContent?.();
+
+                      // Astro 6's content-virtual-mod plugin registers an explicit
+                      // file watcher on `.astro/data-store.json` only (see
+                      // dist/content/vite-plugin-content-virtual-mod.js: `devServer.watcher.add(dataStoreFile)`).
+                      // It does NOT watch the sibling `content-modules.mjs` (file
+                      // path → render function map). When Starlight's docsLoader
+                      // adds a new MDX entry at runtime, that file IS rewritten on
+                      // disk, but Vite's SSR moduleGraph keeps the stale module
+                      // and `renderEntry` throws UnknownContentCollectionError.
+                      // Force-reload the file ourselves; `reloadModule` is the
+                      // Vite API that re-runs the load hook on next SSR import.
+                      if (event.inMdxRoot) {
+                        const dotAstroModulesFile = resolve(astroRoot, '.astro', 'content-modules.mjs');
+                        const dotAstroAssetsFile = resolve(astroRoot, '.astro', 'content-assets.mjs');
+                        for (const env of Object.values(server.environments ?? {})) {
+                          if (!env?.moduleGraph) continue;
+                          for (const filePath of [dotAstroModulesFile, dotAstroAssetsFile]) {
+                            const mod = env.moduleGraph.getModuleById(filePath);
+                            if (!mod) continue;
+                            const envWithReload = env as unknown as {
+                              reloadModule?: (m: unknown) => void | Promise<void>;
+                            };
+                            if (typeof envWithReload.reloadModule === 'function') {
+                              void Promise.resolve(envWithReload.reloadModule(mod)).catch(() => undefined);
+                            } else {
+                              env.moduleGraph.invalidateModule(mod, undefined, Date.now(), true);
+                            }
+                          }
+                          env.hot?.send('astro:content-changed', {});
+                        }
+                      }
                     },
                   );
 

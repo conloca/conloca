@@ -24,7 +24,7 @@ interface ReindexResult {
   }[];
 }
 
-function createTestSetup(options?: { reindexResult?: ReindexResult; reindexError?: Error }) {
+function createTestSetup(options?: { reindexResult?: ReindexResult; reindexError?: Error; mdxPagesRoot?: string }) {
   const reindexCalls: string[][] = [];
   const wsMessages: { type: string; event: string; data: unknown }[] = [];
   const refreshEvents: ContentWatchEvent[] = [];
@@ -50,6 +50,7 @@ function createTestSetup(options?: { reindexResult?: ReindexResult; reindexError
   const watcherOptions: ContentWatcherOptions = {
     contentRoot: '/repo/content',
     canvasDir: '/repo/canvas',
+    ...(options?.mdxPagesRoot ? { mdxPagesRoot: options.mdxPagesRoot } : {}),
   };
 
   const handlers = createContentWatchHandlers(contentApi, watcherOptions, ws, async (event) => {
@@ -90,6 +91,8 @@ describe('createContentWatchHandlers', () => {
       {
         file: '/repo/content/site/pages/home.en.vxjson',
         action: 'update',
+        inMdxRoot: false,
+        inContentRoot: true,
       },
     ]);
   });
@@ -117,6 +120,8 @@ describe('createContentWatchHandlers', () => {
       {
         file: '/repo/content/site/pages/home.en.vxjson',
         action: 'delete',
+        inMdxRoot: false,
+        inContentRoot: true,
       },
     ]);
   });
@@ -130,6 +135,24 @@ describe('createContentWatchHandlers', () => {
     expect(reindexCalls).toHaveLength(0);
     expect(wsMessages).toHaveLength(0);
     expect(refreshEvents).toHaveLength(0);
+  });
+
+  it('flags events under mdxPagesRoot as inMdxRoot for docs-loader refresh', async () => {
+    const { handlers, refreshEvents } = createTestSetup({
+      mdxPagesRoot: '/repo/website/src/content/docs',
+      reindexResult: { filesProcessed: 1, filesSkipped: 0, updated: [] },
+    });
+
+    await handlers.onAdd('/repo/website/src/content/docs/new-page.mdx');
+
+    expect(refreshEvents).toEqual([
+      {
+        file: '/repo/website/src/content/docs/new-page.mdx',
+        action: 'create',
+        inMdxRoot: true,
+        inContentRoot: false,
+      },
+    ]);
   });
 
   it('does not call the callback when reindex fails', async () => {
