@@ -3,10 +3,16 @@ import { X } from 'lucide-react';
 import type React from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { z } from 'zod';
-import { type PageSchemas, usePageSchemas } from '../../page-schemas';
+import { type PageSchemaDescriptor, resolvePageSchemaEntry, usePageSchemas } from '../../page-schemas';
 import type { PageMetadata } from '../../types';
+import { flattenForHints, unflattenFromHints } from '../../utils/pageMetadata';
+import { HintForm } from '../forms/HintForm';
 import { SchemaForm } from '../forms/SchemaForm';
 import { Button, IconButton } from '../ui';
+
+const pathnameOnlySchema = z.object({
+  pathname: z.string().describe('URL path (e.g., /about)'),
+});
 
 const pageInfoSchema = z.object({
   title: z.string().describe('Page title for SEO and browser tab'),
@@ -21,24 +27,10 @@ const seoPublishingSchema = z.object({
   unpublishAt: z.coerce.date().nullable().optional().describe('Schedule unpublish date/time'),
 });
 
-function resolvePageSchema(
-  pathname: string,
-  pageSchemas: PageSchemas,
-): { schema: z.ZodObject<z.ZodRawShape>; sectionName: string } | null {
-  let bestMatch: string | null = null;
-  for (const prefix of Object.keys(pageSchemas)) {
-    if (pathname.startsWith(prefix)) {
-      if (!bestMatch || prefix.length > bestMatch.length) {
-        bestMatch = prefix;
-      }
-    }
-  }
-  if (!bestMatch) return null;
-  const name = bestMatch.replace(/^\/|\/$/g, '');
-  const segments = name.split('/');
-  const sectionName = segments.map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join(' ') + ' Details';
-  return { schema: pageSchemas[bestMatch], sectionName };
-}
+const publishWindowSchema = z.object({
+  publishAt: z.coerce.date().nullable().optional().describe('Schedule publish date/time'),
+  unpublishAt: z.coerce.date().nullable().optional().describe('Schedule unpublish date/time'),
+});
 
 interface PageMetadataDialogProps {
   open: boolean;
@@ -50,12 +42,27 @@ interface PageMetadataDialogProps {
 export function PageMetadataDialog({ open, onOpenChange, page, onSave }: PageMetadataDialogProps) {
   const pageSchemas = usePageSchemas();
 
-  // Convert PageMetadata to form values (flatten dates to strings)
-  const initialValues = useMemo(
+  const resolved = useMemo(
+    () =>
+      resolvePageSchemaEntry(pageSchemas, {
+        pathname: page.pathname,
+        collection: page.collection,
+        type: page.type,
+      }),
+    [pageSchemas, page.pathname, page.collection, page.type],
+  );
+  const descriptor: PageSchemaDescriptor | null = resolved?.descriptor ?? null;
+  const mode = descriptor?.coreFields?.mode ?? 'full';
+
+  // Convert PageMetadata to form values (flatten dates to strings).
+  // In 'full' mode the conloca sections own title/description/robots/canonical
+  // (read from explicit PageMetadata fields). In 'minimal'/'none' modes those
+  // come from customMeta — extractPageMetadata already routed them there.
+  const initialCoreValues = useMemo(
     () => ({
       title: page.title,
-      description: page.description,
       pathname: page.pathname,
+      description: page.description,
       publishAt: page.publishDate?.toISOString().slice(0, 16) || '',
       unpublishAt: page.unpublishDate?.toISOString().slice(0, 16) || '',
       robots: page.robots || '',
@@ -64,41 +71,50 @@ export function PageMetadataDialog({ open, onOpenChange, page, onSave }: PageMet
     [page],
   );
 
-  const [formValues, setFormValues] = useState<Record<string, unknown>>(initialValues);
-  const [customValues, setCustomValues] = useState<Record<string, unknown>>(page.customMeta || {});
+  const hintKeys = useMemo(() => new Set(Object.keys(descriptor?.ui ?? {})), [descriptor]);
 
-  // Reset form when page changes
-  useEffect(() => {
-    setFormValues(initialValues);
-  }, [initialValues]);
+  const initialCustomValues = useMemo(() => {
+    const base = page.customMeta || {};
+    return flattenForHints(base, hintKeys);
+  }, [page.customMeta, hintKeys]);
 
-  useEffect(() => {
-    setCustomValues(page.customMeta || {});
-  }, [page.customMeta]);
+  const [coreValues, setCoreValues] = useState<Record<string, unknown>>(initialCoreValues);
+  const [customValues, setCustomValues] = useState<Record<string, unknown>>(initialCustomValues);
 
-  const resolvedSchema = useMemo(
-    () => resolvePageSchema((formValues.pathname as string) || page.pathname, pageSchemas),
-    [formValues.pathname, page.pathname, pageSchemas],
-  );
+  useEffect(() => setCoreValues(initialCoreValues), [initialCoreValues]);
+  useEffect(() => setCustomValues(initialCustomValues), [initialCustomValues]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Convert form values back to PageMetadata
+    const materializedCustom = descriptor?.ui ? unflattenFromHints(customValues) : customValues;
+
     const metadata: PageMetadata = {
-      title: (formValues.title as string) || '',
-      description: (formValues.description as string) || '',
-      pathname: (formValues.pathname as string) || '',
-      publishDate: formValues.publishAt ? new Date(formValues.publishAt as string) : null,
-      unpublishDate: formValues.unpublishAt ? new Date(formValues.unpublishAt as string) : null,
-      robots: (formValues.robots as string) || undefined,
-      canonical: (formValues.canonical as string) || undefined,
-      customMeta: resolvedSchema ? customValues : undefined,
+      title:
+        mode === 'full'
+          ? (coreValues.title as string) || ''
+          : (materializedCustom.title as string | undefined) || page.title || '',
+      description:
+        mode === 'full'
+          ? (coreValues.description as string) || ''
+          : (materializedCustom.description as string | undefined) || page.description || '',
+      pathname: (coreValues.pathname as string) || '',
+      publishDate:
+        mode !== 'none' && coreValues.publishAt ? new Date(coreValues.publishAt as string) : page.publishDate,
+      unpublishDate:
+        mode !== 'none' && coreValues.unpublishAt ? new Date(coreValues.unpublishAt as string) : page.unpublishDate,
+      robots: mode === 'full' ? (coreValues.robots as string) || undefined : page.robots,
+      canonical: mode === 'full' ? (coreValues.canonical as string) || undefined : page.canonical,
+      customMeta: materializedCustom,
+      collection: page.collection,
+      type: page.type,
     };
 
     onSave?.(metadata);
     onOpenChange?.(false);
   };
+
+  const headerLabel = descriptor?.label ?? 'Page Metadata';
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -106,25 +122,42 @@ export function PageMetadataDialog({ open, onOpenChange, page, onSave }: PageMet
         <Dialog.Overlay className="fixed inset-0 bg-black/50 backdrop-blur-sm" />
         <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-overlay rounded-lg shadow-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
           <div className="flex items-center justify-between mb-4">
-            <Dialog.Title className="text-lg font-semibold">Page Metadata</Dialog.Title>
+            <Dialog.Title className="text-lg font-semibold">{headerLabel}</Dialog.Title>
             <Dialog.Close asChild>
               <IconButton icon={X} ariaLabel="Close" variant="ghost" />
             </Dialog.Close>
           </div>
 
           <form onSubmit={handleSubmit}>
-            <SchemaForm schema={pageInfoSchema} values={formValues} onChange={setFormValues} />
-
-            {resolvedSchema && (
-              <SchemaForm
-                className="mt-6"
-                schema={resolvedSchema.schema}
-                values={customValues}
-                onChange={setCustomValues}
-              />
+            {mode === 'full' && <SchemaForm schema={pageInfoSchema} values={coreValues} onChange={setCoreValues} />}
+            {(mode === 'minimal' || mode === 'none') && (
+              <SchemaForm schema={pathnameOnlySchema} values={coreValues} onChange={setCoreValues} />
             )}
 
-            <SchemaForm className="mt-6" schema={seoPublishingSchema} values={formValues} onChange={setFormValues} />
+            {descriptor &&
+              (descriptor.ui ? (
+                <HintForm
+                  className="mt-6"
+                  hints={descriptor.ui}
+                  groups={descriptor.groups}
+                  values={customValues}
+                  onChange={setCustomValues}
+                />
+              ) : (
+                <SchemaForm
+                  className="mt-6"
+                  schema={descriptor.schema}
+                  values={customValues}
+                  onChange={setCustomValues}
+                />
+              ))}
+
+            {mode === 'full' && (
+              <SchemaForm className="mt-6" schema={seoPublishingSchema} values={coreValues} onChange={setCoreValues} />
+            )}
+            {mode === 'minimal' && (
+              <SchemaForm className="mt-6" schema={publishWindowSchema} values={coreValues} onChange={setCoreValues} />
+            )}
 
             <div className="flex gap-2 pt-6">
               <Button type="submit" variant="primary" className="flex-1">

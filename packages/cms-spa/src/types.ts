@@ -42,6 +42,10 @@ export interface PageMetadata {
   robots?: string;
   canonical?: string;
   customMeta?: Record<string, unknown>;
+  /** Content collection the page belongs to — drives schema resolution. */
+  collection?: string;
+  /** Content format — drives schema resolution and editor selection. */
+  type?: 'puck' | 'mdx';
 }
 
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error' | 'conflict';

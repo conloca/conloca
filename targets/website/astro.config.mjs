@@ -56,6 +56,7 @@ export default defineConfig({
     conlocaCMS({
       contentRoot: './content',
       puckConfigPath: './src/puck.config.tsx',
+      schemasPath: './src/schemas.ts',
       siteStyles: './src/styles/global.css',
       assetsPath: './public/assets',
       templates: {

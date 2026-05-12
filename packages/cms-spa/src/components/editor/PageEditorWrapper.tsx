@@ -309,10 +309,7 @@ function PuckPageEditorInner({ puckConfig }: PageEditorWrapperProps) {
     };
   }, [content?.localized?.etag, enhancedConfig, dataContextResponse]);
 
-  const pageMetadata = useMemo(
-    () => (content?.localized ? extractPageMetadata(content.localized) : null),
-    [content?.localized],
-  );
+  const pageMetadata = useMemo(() => (content?.localized ? extractPageMetadata(content) : null), [content]);
 
   // Show loading while fetching or resolving
   if (isLoadingContent || isLoadingDataContext || isResolving || !resolvedPuckData) {

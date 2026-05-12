@@ -1,5 +1,20 @@
 // Astro integration for Conloca CMS
 
+// Page-schema plugin API — hosts use these to declare frontmatter form UI
+// for the CMS page-settings dialog. Runtime registry lives in @conloca/cms-spa
+// and is wired by the schemasPath option (see ConlocaCMSOptions).
+export {
+  type CoreFieldsMode,
+  definePageSchema,
+  type FieldHint,
+  type FieldHintCommon,
+  type FieldHints,
+  type FieldHintVariant,
+  type PageSchemaDescriptor,
+  type PageSchemaEntry,
+  type PageSchemaGroup,
+  type PageSchemas,
+} from '@conloca/cms-spa/page-schemas';
 // Re-export Zod schemas and types for convenience
 export {
   type BlockMeta,

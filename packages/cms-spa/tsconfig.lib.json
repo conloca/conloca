@@ -15,6 +15,9 @@
   "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"],
   "references": [
     {
+      "path": "../content-api/tsconfig.lib.json"
+    },
+    {
       "path": "../mdx/tsconfig.lib.json"
     },
     {

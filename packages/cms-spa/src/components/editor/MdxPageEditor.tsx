@@ -103,8 +103,8 @@ export function MdxPageEditor() {
   // whenever the loaded entry changes — including after a successful
   // metadata save, when TanStack Query refetches.
   const pageMetadata = useMemo(
-    () => (loadedContent?.localized ? extractPageMetadata(loadedContent.localized) : null),
-    [loadedContent?.localized],
+    () => (loadedContent?.localized ? extractPageMetadata(loadedContent) : null),
+    [loadedContent],
   );
 
   useEffect(() => {
