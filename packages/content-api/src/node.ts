@@ -26,6 +26,7 @@ export { createContentAPI, createContentWatchHandlers } from './content-watcher'
 export { FileSystemContentAPI } from './filesystem-content-api';
 export { InMemoryContentAPI } from './in-memory-content-api';
 export { compileMDX } from './mdx/compile';
+export { remarkDirectivesToCallout } from './mdx/directive-to-callout';
 export { createContentAPIRouter, createContentMiddleware } from './middleware';
 export { Site } from './site';
 // Re-export types and utilities that are safe for Node.js environments

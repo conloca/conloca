@@ -43,6 +43,23 @@ export interface ContentAPIOptions {
    * `'default'` when no sites are configured).
    */
   mdxPagesSite?: string;
+
+  /**
+   * The site's supported locales. When provided, this wins over the
+   * `globalLocales` field in sites.json. The locale-detection parsers
+   * use this list to decide whether a folder or filename suffix that
+   * looks locale-shaped (e.g. `de`, `en-US`) is actually a locale or
+   * just a folder that happens to match the pattern.
+   *
+   * Omit to fall back to sites.json (current behavior).
+   */
+  availableLocales?: string[];
+
+  /**
+   * The site's default locale. Wins over both `mdxPagesDefaultLocale`
+   * and the per-site `defaultLocale` in sites.json when provided.
+   */
+  defaultLocale?: string;
 }
 
 // Error response format for all API errors

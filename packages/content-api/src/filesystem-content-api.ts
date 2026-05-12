@@ -175,6 +175,12 @@ export class FileSystemContentAPI implements ContentAPI {
   private mdxPagesSite = 'default';
   private mdxPagesCollection = 'pages';
 
+  // Resolved locale list used to decide whether a path segment that
+  // looks locale-shaped (e.g. `de`, `en-US`) is actually a configured
+  // locale. Source-of-truth resolution (option > sites.json) happens in
+  // the constructor; parsers read this set directly.
+  private readonly availableLocales: ReadonlySet<string>;
+
   // Getter for testing purposes
   get normalizedContentRoot(): string {
     return this.contentRoot;
@@ -190,6 +196,10 @@ export class FileSystemContentAPI implements ContentAPI {
       localeStrategy?: 'directory' | 'suffix';
       defaultLocale?: string;
       site?: string;
+    },
+    localeOptions?: {
+      availableLocales?: string[];
+      defaultLocale?: string;
     },
   ) {
     // Normalize contentRoot: remove ./ prefix for relative paths, keep absolute paths as-is
@@ -224,10 +234,33 @@ export class FileSystemContentAPI implements ContentAPI {
     // Default site: explicit option > first configured site > 'default'
     const firstSiteName = Object.keys(sitesConfig.sites)[0];
     this.mdxPagesSite = mdxPagesOptions?.site ?? firstSiteName ?? 'default';
-    // Default locale: explicit option > resolved-site's defaultLocale > first global locale > 'en'
+    // Default locale: top-level option > mdxPages option > resolved-site's
+    // defaultLocale > first global locale > 'en'. The top-level option wins
+    // because it represents an explicit framework-level declaration (e.g.
+    // forwarded from Astro's i18n block via localesFromAstroI18n).
     const siteConfig = sitesConfig.sites[this.mdxPagesSite];
     this.mdxPagesDefaultLocale =
-      mdxPagesOptions?.defaultLocale ?? siteConfig?.defaultLocale ?? sitesConfig.globalLocales[0] ?? 'en';
+      localeOptions?.defaultLocale ??
+      mdxPagesOptions?.defaultLocale ??
+      siteConfig?.defaultLocale ??
+      sitesConfig.globalLocales[0] ??
+      'en';
+
+    // Resolve the available-locales set. The top-level option is
+    // authoritative when present; otherwise we merge sites.json's global
+    // locales with the resolved-site's per-site locales. The default
+    // locale is always added so getFilePath round-trips work.
+    const merged = new Set<string>();
+    if (localeOptions?.availableLocales && localeOptions.availableLocales.length > 0) {
+      for (const loc of localeOptions.availableLocales) merged.add(loc);
+    } else {
+      for (const loc of sitesConfig.globalLocales) merged.add(loc);
+      if (siteConfig?.locales) {
+        for (const loc of siteConfig.locales) merged.add(loc);
+      }
+    }
+    merged.add(this.mdxPagesDefaultLocale);
+    this.availableLocales = merged;
 
     // Initialize blocks
     this.blocks = new Blocks(this, this.contentIndex.getBlockIndex());
@@ -283,18 +316,51 @@ export class FileSystemContentAPI implements ContentAPI {
       sitesConfig = { sites: {}, globalLocales: ['en'] };
     }
 
+    // Apply the top-level locales option as the authoritative source.
+    // We expand sitesConfig so that the BlockIndex (which keys on
+    // globalLocales) and the resolved SiteIndex (which keys on the
+    // site's locales array) both have slots for every option-declared
+    // locale. Without this, the parser would correctly identify a file's
+    // locale but `addContent` would crash on a missing index bucket.
+    if (options.availableLocales && options.availableLocales.length > 0) {
+      const optionDefaultLocale = options.defaultLocale ?? options.availableLocales[0];
+      const optionSite = options.mdxPagesSite ?? Object.keys(sitesConfig.sites)[0] ?? 'default';
+      const existingSite = sitesConfig.sites[optionSite];
+      sitesConfig = {
+        sites: {
+          ...sitesConfig.sites,
+          [optionSite]: {
+            locales: options.availableLocales,
+            defaultLocale: optionDefaultLocale,
+            ...(existingSite?.domains && { domains: existingSite.domains }),
+          },
+        },
+        globalLocales: Array.from(new Set([...sitesConfig.globalLocales, ...options.availableLocales])),
+      };
+    }
+
     // Get cached content index or create new one
     // Use the normalized contentRoot for cache key
     const normalizedContentRoot = contentRoot.startsWith('./') ? contentRoot.slice(2) : contentRoot;
     const contentIndex = await ContentIndex.getCachedOrCreate(normalizedContentRoot, sitesConfig);
 
     // Create instance (not cached)
-    const api = new FileSystemContentAPI(contentRoot, canvasDir, sitesConfig, contentIndex, {
-      root: options.mdxPagesRoot,
-      localeStrategy: options.mdxPagesLocaleStrategy,
-      defaultLocale: options.mdxPagesDefaultLocale,
-      site: options.mdxPagesSite,
-    });
+    const api = new FileSystemContentAPI(
+      contentRoot,
+      canvasDir,
+      sitesConfig,
+      contentIndex,
+      {
+        root: options.mdxPagesRoot,
+        localeStrategy: options.mdxPagesLocaleStrategy,
+        defaultLocale: options.mdxPagesDefaultLocale,
+        site: options.mdxPagesSite,
+      },
+      {
+        availableLocales: options.availableLocales,
+        defaultLocale: options.defaultLocale,
+      },
+    );
 
     // Index all content files (only if index is empty)
     if (contentIndex.entryCount === 0) {
@@ -442,8 +508,10 @@ export class FileSystemContentAPI implements ContentAPI {
           if (!noLocaleMatch) return null;
           mdxParts[mdxParts.length - 1] = noLocaleMatch[1];
 
-          // Detect a leading locale-shaped directory segment
-          if (mdxParts.length > 1 && /^[a-z]{2}(?:-[A-Z]{2})?$/.test(mdxParts[0])) {
+          // A leading folder counts as a locale only when it's a configured
+          // locale. A two-letter folder like `qa/` or `id/` is therefore
+          // left in the slug, not silently classified as a language.
+          if (mdxParts.length > 1 && this.availableLocales.has(mdxParts[0])) {
             locale = mdxParts[0];
             const slugParts = mdxParts.slice(1);
             pathname =
@@ -1005,7 +1073,9 @@ export class FileSystemContentAPI implements ContentAPI {
         if (!noLocaleMatch) return null;
         mdxParts[mdxParts.length - 1] = noLocaleMatch[1];
 
-        if (mdxParts.length > 1 && /^[a-z]{2}(?:-[A-Z]{2})?$/.test(mdxParts[0])) {
+        // Membership-based locale detection — mirrors parseFileHeaderWithRepair
+        // so both paths classify the same file identically.
+        if (mdxParts.length > 1 && this.availableLocales.has(mdxParts[0])) {
           locale = mdxParts[0];
           const slugParts = mdxParts.slice(1);
           pathname =
