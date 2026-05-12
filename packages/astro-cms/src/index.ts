@@ -21,6 +21,9 @@ export { extractSlugFromPathname, isPublished, pathnameFromSlug, toDate } from '
 export { serializeProps } from './lib/serialize-props.js';
 // New hydration API: withHydration wrapper and build-time scanner
 export { type HydrationMeta, type WithHydrationStrategy, withHydration } from './lib/withHydration.js';
+// Locale plumbing helpers — translate framework-native i18n configs
+// into Conloca's locale shape. See locales-helpers.ts for the contract.
+export { type ConlocaLocales, localesFromAstroI18n, localesFromStarlight } from './locales-helpers.js';
 // Hydration support for interactive components
 // NOTE: The root entry point is intentionally static-safe.
 // Node/Astro integration APIs live under '@conloca/astro-cms/node'.

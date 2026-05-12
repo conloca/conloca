@@ -24,6 +24,22 @@ export { SPA_MIME_TYPES } from './mime-types.js';
  * values yield no field at all (so the spread is a no-op when mdxPages is
  * not configured), which keeps mdx-page support dormant.
  */
+/**
+ * Read the top-level locales options from build-time env vars.
+ * `CONLOCA_LOCALES` is inlined as a JS array (or `null`) by Vite's
+ * `define`; `CONLOCA_DEFAULT_LOCALE` is a string (or `''`). When neither
+ * is set, returns an empty object so the spread is a no-op and the
+ * content-api falls back to sites.json (the existing behavior).
+ */
+function localesFromEnv(): { availableLocales?: string[]; defaultLocale?: string } {
+  const list = import.meta.env.CONLOCA_LOCALES as readonly string[] | null | undefined;
+  const defaultLocale = import.meta.env.CONLOCA_DEFAULT_LOCALE as string | undefined;
+  return {
+    ...(Array.isArray(list) && list.length > 0 ? { availableLocales: [...list] } : {}),
+    ...(typeof defaultLocale === 'string' && defaultLocale ? { defaultLocale } : {}),
+  };
+}
+
 function mdxPagesOptionsFromEnv(): {
   mdxPagesRoot?: string;
   mdxPagesLocaleStrategy?: 'directory' | 'suffix';
@@ -244,6 +260,7 @@ async function handleDataContext(request: Request): Promise<Response> {
     const contentApi = await createContentAPI({
       contentRoot: contentOptions.contentRoot,
       canvasDir: contentOptions.canvasDir,
+      ...localesFromEnv(),
       ...mdxPagesOptionsFromEnv(),
     });
 
@@ -335,6 +352,7 @@ async function handleContentApi(request: Request, cfResult: CFAccessResult): Pro
   const contentApi = await FileSystemContentAPI.create({
     contentRoot,
     canvasDir,
+    ...localesFromEnv(),
     ...mdxPagesOptionsFromEnv(),
   });
 

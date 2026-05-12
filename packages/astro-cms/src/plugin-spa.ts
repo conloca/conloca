@@ -8,6 +8,7 @@ import { searchForWorkspaceRoot } from 'vite';
 
 import { deriveComponentPaths, type HydrationDiscovery, scanForHydratableComponents } from './lib/hydration-scanner.js';
 import { normalizeRoutingConfig, resolveRouteConfig } from './lib/routing-config.js';
+import type { ConlocaLocales } from './locales-helpers.js';
 
 // FRAGILE: viteReact.preambleCode is an undocumented internal API of @vitejs/plugin-react.
 // It provides the React Fast Refresh preamble script needed for HMR in virtual modules.
@@ -123,10 +124,11 @@ export interface ConlocaCMSOptions extends Omit<UIConfig, 'basename'> {
    * pages alongside puck (`.vxjson`) pages in the same Pages list. The
    * MDX editor is used to edit them; rendering is decided by `renderer`.
    *
-   * Renderer-neutral by design — the integration is one wiring pattern
-   * (most commonly Astro Starlight reading `mdxPages.root` via its stock
-   * `docsLoader()`), and Conloca's core has no hard dependency on
-   * Starlight or any other framework.
+   * Renderer-neutral by design — the integration is one wiring pattern:
+   * any Astro content loader (Starlight's stock `docsLoader()` is a common
+   * example, but it can equally be a plain `glob()` loader, MDX-as-pages
+   * via Astro Content Collections, etc.) reads `mdxPages.root`, and
+   * Conloca's core has no hard dependency on any specific renderer.
    *
    * Omit to keep mdx-page support dormant.
    */
@@ -138,9 +140,17 @@ export interface ConlocaCMSOptions extends Omit<UIConfig, 'basename'> {
      * Locale storage convention.
      * - `'directory'` (default): `{root}/{locale}/{slug}.mdx` for non-default
      *   locales, `{root}/{slug}.mdx` at the root for the default locale —
-     *   matches Starlight's i18n directory convention.
+     *   the standard Astro i18n directory convention (used by Starlight's
+     *   built-in i18n routing, among others).
      * - `'suffix'`: `{root}/{slug}.{locale}.mdx` — matches Conloca's default
      *   convention for blocks.
+     */
+    localeStrategy?: 'directory' | 'suffix';
+
+    /**
+     * @deprecated Renamed to `localeStrategy`. The top-level `locales`
+     * option now carries the language list; this field will be removed
+     * in the next minor release.
      */
     locales?: 'directory' | 'suffix';
 
@@ -160,13 +170,44 @@ export interface ConlocaCMSOptions extends Omit<UIConfig, 'basename'> {
     /**
      * Who renders mdx pages.
      * - `'external'` (default): Conloca's Astro loader does NOT emit them
-     *   to the `pages` collection — the project's own setup (e.g. Starlight's
-     *   `docsLoader()`) renders them.
+     *   to the `pages` collection — the project's own setup (an Astro
+     *   content loader of any kind, e.g. Starlight's `docsLoader()` or a
+     *   plain `glob()` loader) renders them.
      * - `'conloca'`: Conloca's page-handler renders them via the runtime MDX
      *   evaluator already used for blocks.
      */
     renderer?: 'external' | 'conloca';
   };
+
+  /**
+   * The site's supported locales and default locale.
+   *
+   * When set, Conloca uses this list as the single source of truth for
+   * locale detection — folders or filename suffixes that don't match
+   * one of these locales are left in the slug rather than silently
+   * classified as a language. When omitted, falls back to the
+   * `globalLocales` field in `<contentRoot>/sites.json` (the existing
+   * behavior; preserved for backwards compatibility).
+   *
+   * Use one of the framework-bridge helpers exported from
+   * `@conloca/astro-cms` to keep the declaration in a single spot:
+   *
+   * @example Pass Astro's i18n config directly:
+   * ```ts
+   * import { conlocaCMS, localesFromAstroI18n } from '@conloca/astro-cms';
+   * const i18n = { defaultLocale: 'en', locales: ['en', 'de'] };
+   * defineConfig({
+   *   i18n,
+   *   integrations: [conlocaCMS({ locales: localesFromAstroI18n(i18n) })],
+   * });
+   * ```
+   *
+   * @example Pass a literal list:
+   * ```ts
+   * conlocaCMS({ locales: { list: ['en', 'de'], defaultLocale: 'en' } });
+   * ```
+   */
+  locales?: ConlocaLocales;
 }
 
 // Template for content change listener virtual module
@@ -348,6 +389,15 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
     schemasPath: options.schemasPath,
     projectRoot: process.cwd(),
     templates: options.templates,
+    // True when the integration is configured to surface MDX files
+    // (Starlight docs, etc.) in the CMS. Drives the "Document page"
+    // option in the create-page dialog.
+    mdxPagesEnabled: Boolean(options.mdxPages?.root),
+    // Forward the locale list so the SPA stops hardcoding en/nl/fr in
+    // the create-page dialog. The integration receives this from the
+    // top-level `locales` option, which can in turn be produced by
+    // `localesFromAstroI18n` / `localesFromStarlight`.
+    locales: options.locales ? { list: options.locales.list, defaultLocale: options.locales.defaultLocale } : undefined,
   };
 
   let refreshConlocaContent: (() => Promise<void>) | undefined;
@@ -514,6 +564,16 @@ initHydration(componentRegistry)
         if (command !== 'dev') return;
 
         // Pass options via Vite define for API routes
+        // Resolve mdxPages.locales (deprecated) into mdxPages.localeStrategy.
+        // Warn once if the legacy name is used.
+        if (options.mdxPages?.locales !== undefined && options.mdxPages.localeStrategy === undefined) {
+          console.warn(
+            '[Conloca CMS] `mdxPages.locales` is deprecated — rename it to `mdxPages.localeStrategy`. ' +
+              'The top-level `locales` option now carries the language list.',
+          );
+        }
+        const mdxLocaleStrategy = options.mdxPages?.localeStrategy ?? options.mdxPages?.locales ?? 'directory';
+
         updateConfig({
           vite: {
             define: {
@@ -522,12 +582,15 @@ initHydration(componentRegistry)
               'import.meta.env.CONLOCA_PUCK_CONFIG_PATH': JSON.stringify(options.puckConfigPath),
               'import.meta.env.CONLOCA_ASSETS_PATH': JSON.stringify(options.assetsPath || ''),
               'import.meta.env.CONLOCA_MDX_PAGES_ROOT': JSON.stringify(options.mdxPages?.root || ''),
-              'import.meta.env.CONLOCA_MDX_PAGES_LOCALE_STRATEGY': JSON.stringify(
-                options.mdxPages?.locales || 'directory',
-              ),
+              'import.meta.env.CONLOCA_MDX_PAGES_LOCALE_STRATEGY': JSON.stringify(mdxLocaleStrategy),
               'import.meta.env.CONLOCA_MDX_PAGES_DEFAULT_LOCALE': JSON.stringify(options.mdxPages?.defaultLocale || ''),
               'import.meta.env.CONLOCA_MDX_PAGES_SITE': JSON.stringify(options.mdxPages?.site || ''),
               'import.meta.env.CONLOCA_MDX_PAGES_RENDERER': JSON.stringify(options.mdxPages?.renderer || 'external'),
+              // Top-level locales. Vite `define` does literal text
+              // substitution, so this inlines as either a JS array or `null`.
+              // The runtime handler reads it as-is — no JSON.parse needed.
+              'import.meta.env.CONLOCA_LOCALES': JSON.stringify(options.locales?.list ?? null),
+              'import.meta.env.CONLOCA_DEFAULT_LOCALE': JSON.stringify(options.locales?.defaultLocale || ''),
             },
             resolve: {
               // Dedupe React to avoid multiple instances when CMS SPA source is
@@ -726,9 +789,13 @@ if (import.meta.hot) {
                   const contentApi = await createContentAPI({
                     contentRoot: options.contentRoot,
                     canvasDir: options.canvasDir || './canvas',
+                    ...(options.locales && {
+                      availableLocales: options.locales.list,
+                      defaultLocale: options.locales.defaultLocale,
+                    }),
                     ...(options.mdxPages?.root && {
                       mdxPagesRoot: options.mdxPages.root,
-                      mdxPagesLocaleStrategy: options.mdxPages.locales,
+                      mdxPagesLocaleStrategy: mdxLocaleStrategy,
                       mdxPagesDefaultLocale: options.mdxPages.defaultLocale,
                       mdxPagesSite: options.mdxPages.site,
                     }),
@@ -785,6 +852,75 @@ if (import.meta.hot) {
                   server.watcher.on('change', handlers.onChange);
                   server.watcher.on('add', handlers.onAdd);
                   server.watcher.on('unlink', handlers.onUnlink);
+                },
+              },
+              {
+                name: 'conloca-suppress-cms-save-reload',
+                apply: 'serve' as const,
+                configureServer(server) {
+                  let suppressUntil = 0;
+                  const WINDOW_MS = 2000;
+                  const cmsContentPrefix = `${cmsRoute}/api/content`;
+
+                  server.middlewares.use((req, _res, next) => {
+                    const isWrite =
+                      req.method === 'POST' ||
+                      req.method === 'PUT' ||
+                      req.method === 'PATCH' ||
+                      req.method === 'DELETE';
+                    if (isWrite && req.url?.startsWith(cmsContentPrefix)) {
+                      suppressUntil = Date.now() + WINDOW_MS;
+                    }
+                    next();
+                  });
+
+                  // During a CMS save window, drop two server→client signals that
+                  // would otherwise stomp on the CMS's own optimistic cache updates:
+                  //
+                  // 1. Vite `full-reload` — emitted by Astro 6.2.1's invalidateDataStore()
+                  //    in dist/content/vite-plugin-content-virtual-mod.js. The call site
+                  //    is in a configureServer watcher callback, outside the
+                  //    handleHotUpdate pipeline, so wrapping hot.send is the only intercept.
+                  //
+                  // 2. `conloca:content-update` custom event — emitted by
+                  //    conloca-content-watcher above. The client listener (template at
+                  //    `contentChangeListener` in this file) reacts by calling
+                  //    queryClient.invalidateQueries() with NO args, refetching every
+                  //    query and visibly blinking lists. CMS mutation hooks already do
+                  //    optimistic setQueryData, so this event is redundant for
+                  //    CMS-originated writes. External edits (outside the save window)
+                  //    still pass through normally.
+                  const shouldDropDuringWindow = (payload: unknown): boolean => {
+                    if (!payload || typeof payload !== 'object') return false;
+                    const p = payload as { type?: string; event?: string };
+                    if (p.type === 'full-reload') return true;
+                    if (p.type === 'custom' && p.event === 'conloca:content-update') return true;
+                    return false;
+                  };
+
+                  const patchSend = <T extends { send: (...a: never[]) => unknown }>(target: T | undefined) => {
+                    if (!target) return;
+                    const marked = target as unknown as { __conlocaPatched?: boolean };
+                    if (marked.__conlocaPatched) return;
+                    const origSend = target.send.bind(target);
+                    target.send = ((payload: unknown, ...rest: unknown[]) => {
+                      if (shouldDropDuringWindow(payload) && Date.now() < suppressUntil) {
+                        server.config.logger.info(
+                          `[conloca] suppressed ${(payload as { type: string }).type} during CMS save window`,
+                          { timestamp: true },
+                        );
+                        return;
+                      }
+                      return (origSend as (...a: unknown[]) => unknown)(payload, ...rest);
+                    }) as T['send'];
+                    marked.__conlocaPatched = true;
+                  };
+
+                  // Astro's content plugin sends `full-reload` via environments.client.hot.
+                  // Conloca's content watcher sends custom events via server.ws (legacy API).
+                  // Patch both; idempotent per-target via __conlocaPatched.
+                  patchSend(server.environments?.client?.hot);
+                  patchSend(server.ws);
                 },
               },
             ],
