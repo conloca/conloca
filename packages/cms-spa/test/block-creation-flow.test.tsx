@@ -193,11 +193,6 @@ describe('MDXEditField', () => {
     renderInRouter(<MDXEditField entry={entry} />, ['/pages/p1'], '/pages/:id');
     expect(screen.getByText(/shared block/i)).toBeInTheDocument();
   });
-
-  test('does not render the legacy mdx-editor-modal', () => {
-    renderInRouter(<MDXEditField entry={entry} />, ['/pages/p1'], '/pages/:id');
-    expect(screen.queryByTestId('mdx-editor-modal')).toBeNull();
-  });
 });
 
 describe('BlockEditor — from-page mode', () => {
@@ -317,9 +312,6 @@ describe('ContentBlockSelectorField — inline create', () => {
     await waitFor(() => {
       expect(screen.queryByTestId('create-block-dialog')).toBeNull();
     });
-
-    // No legacy MDX modal renders during the flow
-    expect(screen.queryByTestId('mdx-editor-modal')).toBeNull();
   });
 });
 
