@@ -1,6 +1,8 @@
+import { remarkDirectivesToCallout } from '@conloca/content-api/node';
 import { evaluate } from '@mdx-js/mdx';
 import type { ComponentType } from 'react';
 import * as runtime from 'react/jsx-runtime';
+import remarkDirective from 'remark-directive';
 import remarkFrontmatter from 'remark-frontmatter';
 import remarkGfm from 'remark-gfm';
 import remarkMdxFrontmatter from 'remark-mdx-frontmatter';
@@ -46,10 +48,15 @@ export async function evaluateMDXToComponent(
   options?: { development?: boolean },
 ): Promise<{ Component: ComponentType | null; error?: Error }> {
   try {
-    // Use evaluate() to compile and execute MDX in one step
+    // Use evaluate() to compile and execute MDX in one step.
+    // remarkDirective parses `:::note ... :::` containers; the imported
+    // transformer lowers them to `<div class="conloca-aside-*">` blocks
+    // so the runtime needs no JSX scope to render them. The same transformer
+    // runs in the server-side `/mdx/compile` endpoint (content-api) — see
+    // `directive-to-callout.ts` for why it's shared.
     const { default: MDXComponent } = await evaluate(mdxContent, {
       ...runtime,
-      remarkPlugins: [remarkFrontmatter, remarkMdxFrontmatter, remarkGfm],
+      remarkPlugins: [remarkFrontmatter, remarkMdxFrontmatter, remarkGfm, remarkDirective, remarkDirectivesToCallout],
       development: options?.development ?? false,
     });
 
