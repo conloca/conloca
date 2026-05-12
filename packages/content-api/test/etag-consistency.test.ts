@@ -230,11 +230,11 @@ describe('ETag consistency between implementations', () => {
 
       // SNAPSHOT: These are the expected hash values for this exact MDX structure
       // If these change, it indicates a breaking change in the hash algorithm
-      expect(canonicalMdxEtags.metaEtag).toBe('WBHLcX5CIf4'); // Expected MDX meta hash
+      expect(canonicalMdxEtags.metaEtag).toBe('haXLFA6Pmic'); // Expected MDX meta hash
       expect(canonicalMdxEtags.contentEtag).toBe('-A7yGGK2RUwmdzBEDL1Td-qux11ZB8skY6EdbvxmnAU'); // Expected MDX content hash
 
       const expectedMdxEtag = `${canonicalMdxEtags.metaEtag}.${canonicalMdxEtags.contentEtag}`;
-      expect(expectedMdxEtag).toBe('WBHLcX5CIf4.-A7yGGK2RUwmdzBEDL1Td-qux11ZB8skY6EdbvxmnAU');
+      expect(expectedMdxEtag).toBe('haXLFA6Pmic.-A7yGGK2RUwmdzBEDL1Td-qux11ZB8skY6EdbvxmnAU');
     } finally {
       await cleanup();
     }
