@@ -15,6 +15,8 @@ export function LocaleSelector({
   missingLocales = [],
   onChange,
 }: LocaleSelectorProps) {
+  if (availableLocales.length <= 1) return null;
+
   return (
     <Select.Root value={currentLocale} onValueChange={onChange}>
       <Select.Trigger className="flex items-center gap-1.5 px-3 py-1.5 rounded text-sm border border-grey-09 dark:border-grey-04 text-grey-01 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-04 transition-colors cursor-pointer">
