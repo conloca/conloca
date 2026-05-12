@@ -10,7 +10,9 @@ formatters:
 
   # Biome for JS/TS/JSX/TSX/JSON/HTML/CSS/GraphQL files
   biome:
-    command: "biome check --files-ignore-unknown=true --use-editorconfig=true '--stdin-file-path={}' --fix"
+    command:
+      "biome check --files-ignore-unknown=true --use-editorconfig=true --format-with-errors=true '--stdin-file-path={}'
+      --fix"
     patterns:
       - '*.js'
       - '*.ts'

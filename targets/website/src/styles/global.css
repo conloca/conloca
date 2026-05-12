@@ -194,7 +194,7 @@
  * editor surface and the published site share one source of truth. */
 
 /* Callout / admonition styles for MDX directives (`:::note ... :::`) lowered
- * to `.conloca-aside` divs by `remarkDirectivesToAside`. Four variants
+ * to `.conloca-aside` divs by `remarkDirectivesToCallout`. Four variants
  * mirror Starlight's Aside types so authors get the same mental model. */
 .conloca-aside {
   border-left: 4px solid var(--color-brand-500);

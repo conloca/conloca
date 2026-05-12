@@ -5,7 +5,15 @@
  * mirrors into the editor iframe but which also lands in our <head>).
  * Without this, the website's base utilities (.fixed, .w-full, etc.)
  * clobber our responsive variants (.md:static, .md:w-80, etc.) because
- * they load later in source order. Layers override source order. */
+ * they load later in source order. Layers override source order.
+ *
+ * The `starlight` slot is pre-declared because Starlight ships its own
+ * `@layer starlight {}` declarations and they need a slot in the ordering
+ * — otherwise an unrelated host-site cascade layer (anything not in this
+ * list) would land BEFORE `base` and lose every cms-admin override.
+ * The name is renderer-named on purpose: this is the slot for a known
+ * downstream integration. Other renderers don't need a slot of their own
+ * because their CSS lives inside iframe-isolated `siteStyles`. */
 @layer base, starlight, theme, components, utilities, cms-admin;
 
 @import "@puckeditor/core/puck.css" layer(cms-admin);
@@ -262,13 +270,11 @@ body {
   pointer-events: none !important;
 }
 
-/* MDXEditor popup z-index fix - ensure link/image dialogs appear above modal */
-.mdxeditor-popup-container {
-  z-index: 100 !important;
-}
-
+/* MDXEditor select dropdown sizing.
+ * The portaled select content (block-type, code-language) attaches to
+ * document.body, so its max-height is controlled here rather than via the
+ * library's own component styles. */
 .mdxeditor-select-content {
-  z-index: 100 !important;
   max-height: var(--radix-select-content-available-height, 300px) !important;
 }
 
@@ -289,6 +295,48 @@ body {
 .dark .mdxeditor-select-content {
   --basePageBg: var(--color-grey-02);
 }
+
+/* Editor content layout: center the writing area and give it breathing room
+   so markdown doesn't hug the viewport edges. Matches the Notion/Linear
+   page-editor idiom — the toolbar stays edge-to-edge above; only the
+   content body is centered. Targets the documented `.mdxeditor-root-contenteditable`
+   class (Lexical's root editable element) per mdxeditor.dev/editor/docs/theming.
+   72rem (vs. an earlier 56rem) gives a comfortable reading line-length on
+   13" laptops while no longer feeling squeezed on 1440/1920 monitors —
+   `body.mdxeditor-focus-mode` snaps the column back down for distraction-
+   free writing. */
+.mdxeditor-root-contenteditable {
+  max-width: 72rem;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 1.5rem 1.5rem;
+}
+
+body.mdxeditor-focus-mode .mdxeditor-root-contenteditable {
+  max-width: 48rem;
+}
+
+/* Callout / admonition styles. Mirrors the rules in
+ * `private/targets/website/src/styles/global.css` so the CMS preview pane
+ * and the published Conloca-rendered pages look the same. Directives
+ * (`:::note ... :::`) get lowered to `.conloca-aside` divs by
+ * `remarkDirectivesToCallout` in `@conloca/content-api`. The duplication
+ * across this file and the website's global.css is intentional: the live
+ * preview pane lives in the SPA's parent document, where `siteStyles`
+ * (which only feeds the Puck iframe) does not reach. */
+.conloca-aside {
+  border-left: 4px solid #0158ad;
+  background: color-mix(in srgb, #0158ad 8%, transparent);
+  border-radius: 0.5rem;
+  margin: 1.5rem 0;
+  padding: 1rem 1.25rem;
+}
+.conloca-aside-note { border-left-color: #0158ad; background: color-mix(in srgb, #0158ad 8%, transparent); }
+.conloca-aside-tip { border-left-color: #2faa53; background: color-mix(in srgb, #2faa53 8%, transparent); }
+.conloca-aside-caution { border-left-color: #ab9429; background: color-mix(in srgb, #ab9429 10%, transparent); }
+.conloca-aside-danger { border-left-color: #ac1f35; background: color-mix(in srgb, #ac1f35 10%, transparent); }
+.conloca-aside-title { font-weight: 600; margin-top: 0; margin-bottom: 0.5rem; }
+.conloca-aside > :last-child { margin-bottom: 0; }
 
 /* Right panel (SidebarSection) breadcrumbs: prevent the parent-link label
  * from overlapping the selected component's heading on narrow sidebars.
