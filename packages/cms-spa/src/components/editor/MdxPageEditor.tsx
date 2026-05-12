@@ -6,15 +6,18 @@ import {
   useUpdateLocalized,
 } from '@conloca/content-api-client';
 import type { MDXEditorMethods } from '@mdxeditor/editor';
-import { ExternalLink } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { ExternalLink, Settings } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAutoSave } from '../../hooks/useAutoSave';
 import { useErrorModal } from '../../hooks/useErrorModal';
 import { useTheme } from '../../hooks/useTheme';
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard';
+import type { PageMetadata } from '../../types';
+import { buildMetadataUpdate, extractPageMetadata } from '../../utils/pageMetadata';
 import { ConflictDialog } from '../dialogs/ConflictDialog';
 import { ErrorModal } from '../dialogs/ErrorModal';
+import { PageMetadataDialog } from '../dialogs/PageMetadataDialog';
 import { UnsavedChangesDialog } from '../dialogs/UnsavedChangesDialog';
 import { CMSMDXEditor, CMSMDXHeaderTools } from './CMSMDXEditor';
 import { LocaleSelector } from './LocaleSelector';
@@ -59,6 +62,7 @@ export function MdxPageEditor() {
   const editorRef = useRef<MDXEditorMethods>(null);
 
   const [saveState, setSaveState] = useState<SaveState>('idle');
+  const [metadataDialogOpen, setMetadataDialogOpen] = useState(false);
   // Live preview is intentionally omitted for pages: page-level MDX often
   // imports JSX components scoped by the host site's MDX provider, which
   // the in-browser compiler used by the preview pane can't resolve.
@@ -94,6 +98,14 @@ export function MdxPageEditor() {
   const editorClassName = resolvedTheme === 'dark' ? 'dark-theme' : undefined;
   const publishedPathname = loadedContent?.localized?.pathname;
   const pagePathname = publishedPathname || id || 'page';
+
+  // Snapshot of the page's frontmatter for the metadata dialog. Recomputes
+  // whenever the loaded entry changes — including after a successful
+  // metadata save, when TanStack Query refetches.
+  const pageMetadata = useMemo(
+    () => (loadedContent?.localized ? extractPageMetadata(loadedContent.localized) : null),
+    [loadedContent?.localized],
+  );
 
   useEffect(() => {
     const prev = document.title;
@@ -149,6 +161,36 @@ export function MdxPageEditor() {
 
   const handleSaveClick = () => {
     void persist(content);
+  };
+
+  // Metadata save uses the same etag the body save does — server-side, both
+  // save paths reconcile against a single per-locale version, so a successful
+  // metadata save bumps the etag we'd hand to the next body save. We don't
+  // touch `content`/`savedContentRef` here: this write only updates the
+  // YAML head, body is rebuilt from the existing on-disk file.
+  const handleSaveMetadata = async (metadata: PageMetadata) => {
+    if (!id) return;
+    try {
+      const result = await updateContent.mutateAsync({
+        id,
+        locale: currentLocale,
+        data: buildMetadataUpdate(metadata),
+        etag: currentEtag,
+      });
+
+      if (result.success && result.etag) {
+        setCurrentEtag(result.etag);
+        return;
+      }
+
+      // Surface failures the dialog can't show on its own — it auto-closes
+      // on submit, so a silent console.error would look like a successful
+      // save to the user.
+      showError('Failed to save page settings', new Error(`Save failed: ${result.reason ?? 'unknown'}`));
+    } catch (err) {
+      console.error('Failed to save page metadata:', err);
+      showError('Failed to save page settings', err);
+    }
   };
 
   // Debounced auto-save. Driven by the editor's existing `persist` function
@@ -313,6 +355,16 @@ export function MdxPageEditor() {
           )}
           <button
             type="button"
+            onClick={() => setMetadataDialogOpen(true)}
+            aria-label="Page settings"
+            title="Page settings"
+            className="p-2 rounded text-grey-04 dark:text-grey-07 hover:bg-grey-11 dark:hover:bg-grey-04"
+            data-testid="mdx-page-settings"
+          >
+            <Settings size={16} aria-hidden />
+          </button>
+          <button
+            type="button"
             onClick={handleCancel}
             disabled={saveState === 'saving'}
             className="px-3 py-1.5 text-sm border border-grey-09 dark:border-grey-04 rounded text-grey-01 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-04 disabled:opacity-50"
@@ -407,6 +459,15 @@ export function MdxPageEditor() {
           }}
         />
       )}
+      {pageMetadata && (
+        <PageMetadataDialog
+          open={metadataDialogOpen}
+          onOpenChange={setMetadataDialogOpen}
+          page={pageMetadata}
+          onSave={handleSaveMetadata}
+        />
+      )}
+
       <ErrorModal {...errorModalProps} title="Save Failed" />
     </div>
   );

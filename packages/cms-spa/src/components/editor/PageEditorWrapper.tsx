@@ -11,6 +11,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { PageMetadata } from '../../types';
 import { cn } from '../../utils/cn';
+import { buildMetadataUpdate, extractPageMetadata } from '../../utils/pageMetadata';
 import { PageMetadataDialog } from '../dialogs/PageMetadataDialog';
 import { type ContentBlockOption, ContentBlockSelectorField } from '../fields/ContentBlockSelectorField';
 import { BlockContentWrapper, BlockFieldWrapper } from './BlockWrappers';
@@ -308,37 +309,10 @@ function PuckPageEditorInner({ puckConfig }: PageEditorWrapperProps) {
     };
   }, [content?.localized?.etag, enhancedConfig, dataContextResponse]);
 
-  // Extract custom metadata: everything in meta except core SEO fields
-  const pageMetadata = useMemo(() => {
-    const localized = content?.localized;
-    if (!localized) return null;
-    const coreMetaKeys = new Set([
-      'title',
-      'description',
-      'robots',
-      'canonical',
-      'keywords',
-      'ogTitle',
-      'ogDescription',
-      'ogImage',
-    ]);
-    const customMeta: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(localized.meta)) {
-      if (!coreMetaKeys.has(key)) {
-        customMeta[key] = value;
-      }
-    }
-    return {
-      title: localized.meta.title || '',
-      description: localized.meta.description || '',
-      pathname: localized.pathname || '/',
-      publishDate: localized.publishAt ? new Date(localized.publishAt) : null,
-      unpublishDate: localized.unpublishAt ? new Date(localized.unpublishAt) : null,
-      robots: localized.meta.robots,
-      canonical: localized.meta.canonical,
-      customMeta,
-    };
-  }, [content?.localized]);
+  const pageMetadata = useMemo(
+    () => (content?.localized ? extractPageMetadata(content.localized) : null),
+    [content?.localized],
+  );
 
   // Show loading while fetching or resolving
   if (isLoadingContent || isLoadingDataContext || isResolving || !resolvedPuckData) {
@@ -417,18 +391,7 @@ function PuckPageEditorInner({ puckConfig }: PageEditorWrapperProps) {
             const result = await updateContent.mutateAsync({
               id: content.id,
               locale: 'en',
-              data: {
-                meta: {
-                  title: metadata.title,
-                  description: metadata.description,
-                  robots: metadata.robots,
-                  canonical: metadata.canonical,
-                  ...(metadata.customMeta || {}),
-                },
-                pathname: metadata.pathname,
-                publishAt: metadata.publishDate?.toISOString() || null,
-                unpublishAt: metadata.unpublishDate?.toISOString() || null,
-              },
+              data: buildMetadataUpdate(metadata),
               etag: currentEtag,
             });
 

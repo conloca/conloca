@@ -229,7 +229,7 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
                   data-testid="page-description-input"
                 />
                 <p className="text-xs text-grey-04 dark:text-grey-07 mt-1">
-                  Shown in search results and at the top of the page. You can edit it later in the frontmatter.
+                  Shown in search results and at the top of the page. You can edit this later in page settings.
                 </p>
               </div>
             )}
