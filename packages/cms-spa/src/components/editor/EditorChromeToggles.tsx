@@ -1,4 +1,4 @@
-import { Eye, EyeOff, Save, SaveOff } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 
 interface EditorChromeTogglesProps {
   /** Omit (or pass `false`) on surfaces where live preview isn't supported,
@@ -6,8 +6,6 @@ interface EditorChromeTogglesProps {
    *  MDX compiler can't resolve. */
   previewOpen?: boolean;
   onTogglePreview?: () => void;
-  autoSaveEnabled: boolean;
-  onToggleAutoSave: () => void;
 }
 
 /**
@@ -16,46 +14,24 @@ interface EditorChromeTogglesProps {
  * inserters) because the chrome toggles operate on the editor *view*, not
  * the content — they belong with Cancel/Save, not with the content tools.
  */
-export function EditorChromeToggles({
-  previewOpen,
-  onTogglePreview,
-  autoSaveEnabled,
-  onToggleAutoSave,
-}: EditorChromeTogglesProps) {
+export function EditorChromeToggles({ previewOpen, onTogglePreview }: EditorChromeTogglesProps) {
   const showPreviewToggle = previewOpen !== undefined && onTogglePreview !== undefined;
+  if (!showPreviewToggle) return null;
   const previewLabel = previewOpen ? 'Hide live preview' : 'Show live preview';
-  const autoSaveLabel = autoSaveEnabled ? 'Disable auto-save' : 'Enable auto-save';
   const PreviewIcon = previewOpen ? EyeOff : Eye;
-  const AutoSaveIcon = autoSaveEnabled ? Save : SaveOff;
 
   return (
-    <>
-      {showPreviewToggle && (
-        <button
-          type="button"
-          onClick={onTogglePreview}
-          aria-pressed={previewOpen}
-          aria-label={previewLabel}
-          title={previewLabel}
-          className={`p-2 rounded text-grey-04 dark:text-grey-07 hover:bg-grey-11 dark:hover:bg-grey-04 ${
-            previewOpen ? 'bg-grey-11 dark:bg-grey-04 text-grey-01 dark:text-grey-12' : ''
-          }`}
-        >
-          <PreviewIcon size={16} aria-hidden />
-        </button>
-      )}
-      <button
-        type="button"
-        onClick={onToggleAutoSave}
-        aria-pressed={autoSaveEnabled}
-        aria-label={autoSaveLabel}
-        title={autoSaveLabel}
-        className={`p-2 rounded text-grey-04 dark:text-grey-07 hover:bg-grey-11 dark:hover:bg-grey-04 ${
-          autoSaveEnabled ? 'bg-grey-11 dark:bg-grey-04 text-grey-01 dark:text-grey-12' : ''
-        }`}
-      >
-        <AutoSaveIcon size={16} aria-hidden />
-      </button>
-    </>
+    <button
+      type="button"
+      onClick={onTogglePreview}
+      aria-pressed={previewOpen}
+      aria-label={previewLabel}
+      title={previewLabel}
+      className={`p-2 rounded text-grey-04 dark:text-grey-07 hover:bg-grey-11 dark:hover:bg-grey-04 ${
+        previewOpen ? 'bg-grey-11 dark:bg-grey-04 text-grey-01 dark:text-grey-12' : ''
+      }`}
+    >
+      <PreviewIcon size={16} aria-hidden />
+    </button>
   );
 }

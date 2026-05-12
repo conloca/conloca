@@ -62,7 +62,6 @@ export function BlockEditor() {
 
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [previewOpen, setPreviewOpen] = useEditorPref('conloca.mdxeditor.previewOpen');
-  const [autoSaveEnabled, setAutoSaveEnabled] = useEditorPref('conloca.mdxeditor.autoSave');
 
   const { data: sitesConfig } = useSitesConfig();
   const availableLocales = sitesConfig?.globalLocales || ['en'];
@@ -146,7 +145,7 @@ export function BlockEditor() {
   };
 
   useAutoSave({
-    enabled: autoSaveEnabled,
+    enabled: true,
     content,
     isDirty,
     isSaving: saveState === 'saving',
@@ -293,12 +292,7 @@ export function BlockEditor() {
             availableLocales={availableLocales}
             onChange={handleLocaleChange}
           />
-          <EditorChromeToggles
-            previewOpen={previewOpen}
-            onTogglePreview={() => setPreviewOpen(!previewOpen)}
-            autoSaveEnabled={autoSaveEnabled}
-            onToggleAutoSave={() => setAutoSaveEnabled(!autoSaveEnabled)}
-          />
+          <EditorChromeToggles previewOpen={previewOpen} onTogglePreview={() => setPreviewOpen(!previewOpen)} />
           <button
             type="button"
             onClick={handleCancel}

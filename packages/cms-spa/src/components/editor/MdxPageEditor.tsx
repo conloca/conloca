@@ -10,7 +10,6 @@ import { ExternalLink } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAutoSave } from '../../hooks/useAutoSave';
-import { useEditorPref } from '../../hooks/useEditorPref';
 import { useErrorModal } from '../../hooks/useErrorModal';
 import { useTheme } from '../../hooks/useTheme';
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard';
@@ -18,7 +17,6 @@ import { ConflictDialog } from '../dialogs/ConflictDialog';
 import { ErrorModal } from '../dialogs/ErrorModal';
 import { UnsavedChangesDialog } from '../dialogs/UnsavedChangesDialog';
 import { CMSMDXEditor, CMSMDXHeaderTools } from './CMSMDXEditor';
-import { EditorChromeToggles } from './EditorChromeToggles';
 import { LocaleSelector } from './LocaleSelector';
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error' | 'conflict';
@@ -66,7 +64,6 @@ export function MdxPageEditor() {
   // the in-browser compiler used by the preview pane can't resolve.
   // Block-level editing keeps its preview. See ../MDXLivePreview.tsx and
   // BlockEditor.tsx.
-  const [autoSaveEnabled, setAutoSaveEnabled] = useEditorPref('conloca.mdxeditor.autoSave');
 
   const { data: sitesConfig } = useSitesConfig();
   const availableLocales = sitesConfig?.globalLocales || ['en'];
@@ -158,7 +155,7 @@ export function MdxPageEditor() {
   // so the save-state machine, conflict dialog, and "✓ Saved" pill all
   // light up exactly as they do for a manual Cmd+S press.
   useAutoSave({
-    enabled: autoSaveEnabled,
+    enabled: true,
     content,
     isDirty,
     isSaving: saveState === 'saving',
@@ -314,10 +311,6 @@ export function MdxPageEditor() {
               <ExternalLink size={16} aria-hidden />
             </a>
           )}
-          <EditorChromeToggles
-            autoSaveEnabled={autoSaveEnabled}
-            onToggleAutoSave={() => setAutoSaveEnabled(!autoSaveEnabled)}
-          />
           <button
             type="button"
             onClick={handleCancel}
