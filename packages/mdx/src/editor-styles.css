@@ -62,4 +62,12 @@
   .mdxeditor-toolbar-wrap [data-orientation="vertical"] {
     display: none;
   }
+  /* @mdxeditor/editor groups the formatting controls inside a flex-nowrap
+     row that overflows past the viewport on phones, clipping ~17 buttons
+     (Block, link, image, table, hr, code-block, …). Force that inner row
+     to wrap so every control stays tappable without horizontal scroll. */
+  .mdxeditor-toolbar-wrap > div:first-child {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
 }
