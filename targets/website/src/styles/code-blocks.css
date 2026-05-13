@@ -22,15 +22,17 @@
   --conloca-code-shadow: 1.6px 1.6px 3.2px rgb(0 0 0 / 0.08);
   --conloca-code-fg: #334155;
 
-  /* Header bar — no border-bottom: separation between header and body
-     comes from the bg color difference (matches how EC paints the tab
-     on the published page; otherwise a stray divider line shows in the
-     editor that isn't present on the rendered side). */
-  --conloca-code-header-bg: #f1f5f9;
+  /* Header has two layers: a dark BAR (`--conloca-code-header-bg`)
+     and a colored TAB chip inside it (`--conloca-code-tab-bg`),
+     matching EC's tab-on-bar silhouette on the published page. */
+  --conloca-code-header-bg: #e2e8f0;
   --conloca-code-header-fg: #475569;
-  --conloca-code-header-padding: 5px 16px;
+  --conloca-code-header-padding-x: 8px;
   --conloca-code-header-font-family: "Inter", system-ui, -apple-system, sans-serif;
   --conloca-code-header-font-size: 0.9rem;
+  --conloca-code-tab-bg: #ffffff;
+  --conloca-code-tab-radius: 1px 1px 0 0;
+  --conloca-code-tab-padding: 5px 16px;
 
   /* Language pill */
   --conloca-code-lang-bg: transparent;
@@ -55,10 +57,11 @@
   --conloca-code-shadow: 1.6px 1.6px 3.2px rgb(1 22 39 / 0.6);
   --conloca-code-fg: #d6deeb;
 
-  /* Tab/header sits a notch darker than the body so the editor's
-     header bar reads the same way EC's frame tab does (Night Owl). */
-  --conloca-code-header-bg: #0b2942;
+  /* Header is two layers: dark bar wraps a colored tab chip
+     (matches EC's figcaption + tab structure in Night Owl). */
+  --conloca-code-header-bg: #011627;
   --conloca-code-header-fg: #d2dee7;
+  --conloca-code-tab-bg: #0b2942;
 
   --conloca-code-lang-bg: transparent;
   --conloca-code-lang-fg: #94a3b8;

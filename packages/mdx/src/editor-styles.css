@@ -97,11 +97,19 @@
   --conloca-code-padding: 0.75rem 1rem;
   --conloca-code-shadow: 1.6px 1.6px 3.2px rgb(0 0 0 / 0.08);
   --conloca-code-fg: #334155;
-  --conloca-code-header-bg: #f1f5f9;
+  /* Dark bar that wraps the tab — EC paints `rgb(1, 22, 39)` on the
+     figcaption in dark mode; light mode uses a slate-200-ish stripe. */
+  --conloca-code-header-bg: #e2e8f0;
   --conloca-code-header-fg: #475569;
-  --conloca-code-header-padding: 5px 16px;
+  --conloca-code-header-padding-x: 8px;
   --conloca-code-header-font-family: "Inter", system-ui, -apple-system, sans-serif;
   --conloca-code-header-font-size: 0.9rem;
+  /* Tab chip — the colored "file tab" sitting inside the header bar.
+     EC's tab in dark mode is `rgb(11, 41, 66)`; in light mode it's
+     `rgb(246, 246, 246)` sitting on a slightly lighter bar. */
+  --conloca-code-tab-bg: #ffffff;
+  --conloca-code-tab-radius: 1px 1px 0 0;
+  --conloca-code-tab-padding: 5px 16px;
   --conloca-code-lang-bg: transparent;
   --conloca-code-lang-fg: #64748b;
   --conloca-code-copy-bg: transparent;
@@ -116,12 +124,12 @@
 :root[data-theme="dark"] {
   --conloca-code-bg: #0f172a;
   --conloca-code-border: #334155;
-  /* Tab/header bg sits a notch DARKER than the body — matches what
-     ExpressiveCode (Night Owl) paints on the published page so the
-     editor's header reads as the same "tab on top of code" silhouette
-     instead of an inverted strip. Measured value: rgb(11,41,66). */
-  --conloca-code-header-bg: #0b2942;
+  /* EC's figcaption bg in dark mode — the near-black bar that wraps
+     the tab. Measured `rgb(1, 22, 39)`. */
+  --conloca-code-header-bg: #011627;
   --conloca-code-header-fg: #d2dee7;
+  /* EC's tab inside the bar — `rgb(11, 41, 66)`. */
+  --conloca-code-tab-bg: #0b2942;
   /* Default text colour for non-tokenised characters in the code body.
      Matches the `<code>` element on EC's published page (rgb(214,222,235)). */
   --conloca-code-fg: #d6deeb;
@@ -147,9 +155,14 @@
 
 .conloca-code-block__header {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   justify-content: space-between;
   gap: 0.5rem;
+  /* Header BAR uses the darker bg — `--conloca-code-header-bg` is the
+     dark row colour (EC's figcaption: `rgb(1, 22, 39)`). The filename
+     input renders as a `--conloca-code-tab-bg` chip ON the bar,
+     matching EC's "dark bar with a colored tab on top" silhouette
+     instead of a single lighter strip. */
   background: var(--conloca-code-header-bg, #f1f5f9);
   color: var(--conloca-code-header-fg, #475569);
   /* Header reads as a UI label, not as code — EC's tab uses the host's
@@ -159,21 +172,27 @@
      sans-serif. */
   font-family: var(--conloca-code-header-font-family, "Inter", system-ui, -apple-system, sans-serif);
   font-size: var(--conloca-code-header-font-size, 0.9rem);
-  padding: var(--conloca-code-header-padding, 5px 16px);
+  padding: 0 var(--conloca-code-header-padding-x, 8px);
 }
 
+/* Filename slot renders as a `--conloca-code-tab-bg` chip sitting in
+   the darker `--conloca-code-header-bg` bar — matches EC's tab-on-bar
+   silhouette. The intrinsic-width box (`flex: 0 0 auto`) keeps the chip
+   sized to the title text instead of spanning the bar; max-width caps
+   it on narrow frames so long filenames truncate inside the chip. */
 .conloca-code-block__filename {
-  background: transparent;
+  background: var(--conloca-code-tab-bg, #ffffff);
   border: 0;
-  border-radius: 0.25rem;
+  border-radius: var(--conloca-code-tab-radius, 1px 1px 0 0);
   color: inherit;
   font: inherit;
-  flex: 1 1 auto;
+  flex: 0 1 auto;
+  align-self: flex-end;
   min-width: 0;
+  max-width: 100%;
   outline: 0;
   overflow: hidden;
-  padding: 0.1rem 0.35rem;
-  margin-inline-start: -0.35rem;
+  padding: var(--conloca-code-tab-padding, 5px 16px);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -181,10 +200,14 @@ input.conloca-code-block__filename::placeholder {
   color: color-mix(in srgb, currentColor 50%, transparent);
 }
 input.conloca-code-block__filename:hover {
-  background: color-mix(in srgb, currentColor 8%, transparent);
+  background: color-mix(in srgb, var(--conloca-code-tab-bg, #ffffff) 88%, white 12%);
+}
+:root.dark input.conloca-code-block__filename:hover,
+:root[data-theme="dark"] input.conloca-code-block__filename:hover {
+  background: color-mix(in srgb, var(--conloca-code-tab-bg, #ffffff) 88%, white 12%);
 }
 input.conloca-code-block__filename:focus {
-  background: color-mix(in srgb, currentColor 12%, transparent);
+  background: color-mix(in srgb, var(--conloca-code-tab-bg, #ffffff) 80%, white 20%);
 }
 
 .conloca-code-block__header-right {
