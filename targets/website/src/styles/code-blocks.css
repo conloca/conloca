@@ -19,6 +19,8 @@
   --conloca-code-border: #e2e8f0;
   --conloca-code-radius: 0.25rem;
   --conloca-code-padding: 0.75rem 1rem;
+  --conloca-code-shadow: 1.6px 1.6px 3.2px rgb(0 0 0 / 0.08);
+  --conloca-code-fg: #334155;
 
   /* Header bar — no border-bottom: separation between header and body
      comes from the bg color difference (matches how EC paints the tab
@@ -26,7 +28,9 @@
      editor that isn't present on the rendered side). */
   --conloca-code-header-bg: #f1f5f9;
   --conloca-code-header-fg: #475569;
-  --conloca-code-header-padding: 0.4rem 0.75rem;
+  --conloca-code-header-padding: 5px 16px;
+  --conloca-code-header-font-family: "Inter", system-ui, -apple-system, sans-serif;
+  --conloca-code-header-font-size: 0.9rem;
 
   /* Language pill */
   --conloca-code-lang-bg: transparent;
@@ -41,13 +45,15 @@
   /* Type */
   --conloca-code-font-family: "JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, Menlo, monospace;
   --conloca-code-font-size: 0.875rem;
-  --conloca-code-line-height: 1.6;
+  --conloca-code-line-height: 1.75;
 }
 
 :root.dark,
 :root[data-theme="dark"] {
   --conloca-code-bg: #0f172a;
   --conloca-code-border: #334155;
+  --conloca-code-shadow: 1.6px 1.6px 3.2px rgb(1 22 39 / 0.6);
+  --conloca-code-fg: #d6deeb;
 
   /* Tab/header sits a notch darker than the body so the editor's
      header bar reads the same way EC's frame tab does (Night Owl). */

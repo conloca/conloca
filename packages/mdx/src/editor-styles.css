@@ -95,9 +95,13 @@
   --conloca-code-border: #e2e8f0;
   --conloca-code-radius: 0.25rem;
   --conloca-code-padding: 0.75rem 1rem;
+  --conloca-code-shadow: 1.6px 1.6px 3.2px rgb(0 0 0 / 0.08);
+  --conloca-code-fg: #334155;
   --conloca-code-header-bg: #f1f5f9;
   --conloca-code-header-fg: #475569;
-  --conloca-code-header-padding: 0.4rem 0.75rem;
+  --conloca-code-header-padding: 5px 16px;
+  --conloca-code-header-font-family: "Inter", system-ui, -apple-system, sans-serif;
+  --conloca-code-header-font-size: 0.9rem;
   --conloca-code-lang-bg: transparent;
   --conloca-code-lang-fg: #64748b;
   --conloca-code-copy-bg: transparent;
@@ -106,7 +110,7 @@
   --conloca-code-copy-fg-hover: #0f172a;
   --conloca-code-font-family: "JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, Menlo, monospace;
   --conloca-code-font-size: 0.875rem;
-  --conloca-code-line-height: 1.6;
+  --conloca-code-line-height: 1.75;
 }
 :root.dark,
 :root[data-theme="dark"] {
@@ -118,6 +122,10 @@
      instead of an inverted strip. Measured value: rgb(11,41,66). */
   --conloca-code-header-bg: #0b2942;
   --conloca-code-header-fg: #d2dee7;
+  /* Default text colour for non-tokenised characters in the code body.
+     Matches the `<code>` element on EC's published page (rgb(214,222,235)). */
+  --conloca-code-fg: #d6deeb;
+  --conloca-code-shadow: 1.6px 1.6px 3.2px rgb(1 22 39 / 0.6);
   --conloca-code-lang-fg: #94a3b8;
   --conloca-code-copy-fg: #94a3b8;
   --conloca-code-copy-bg-hover: #1e293b;
@@ -127,7 +135,12 @@
 .conloca-code-block {
   background: var(--conloca-code-bg, #f8fafc);
   border: 1px solid var(--conloca-code-border, #e2e8f0);
-  border-radius: var(--conloca-code-radius, 0.5rem);
+  border-radius: var(--conloca-code-radius, 0.25rem);
+  /* Subtle drop shadow — EC paints `rgb(1,22,39) 1.6px 1.6px 3.2px 0px`
+     on the figure (`<.frame>`). Same depth here so the frame doesn't
+     read flatter than the rendered page next to it. Tokenised so a
+     host with a different surface can override. */
+  box-shadow: var(--conloca-code-shadow, 1.6px 1.6px 3.2px rgb(0 0 0 / 0.15));
   margin-block: 1.25rem;
   overflow: hidden;
 }
@@ -139,9 +152,14 @@
   gap: 0.5rem;
   background: var(--conloca-code-header-bg, #f1f5f9);
   color: var(--conloca-code-header-fg, #475569);
-  font-family: var(--conloca-code-font-family, "JetBrains Mono", "Fira Code", ui-monospace, monospace);
-  font-size: calc(var(--conloca-code-font-size, 0.875rem) * 0.92);
-  padding: var(--conloca-code-header-padding, 0.4rem 0.75rem);
+  /* Header reads as a UI label, not as code — EC's tab uses the host's
+     UI font (Inter) at 14.4px, so the title looks like a "file tab"
+     rather than another stretch of monospace. Falls back through Inter
+     to system stacks so a host without the brand font still gets
+     sans-serif. */
+  font-family: var(--conloca-code-header-font-family, "Inter", system-ui, -apple-system, sans-serif);
+  font-size: var(--conloca-code-header-font-size, 0.9rem);
+  padding: var(--conloca-code-header-padding, 5px 16px);
 }
 
 .conloca-code-block__filename {
@@ -240,8 +258,21 @@ input.conloca-code-block__filename:focus {
 }
 .conloca-code-block .conloca-code-block__body .cm-editor {
   border-radius: 0;
+  /* Default text colour for tokens that the syntax highlighter doesn't
+     cover (plain text, identifiers in rarely-tokenised positions).
+     EC paints `rgb(214, 222, 235)` here — without this the cm-content
+     default (very dark grey ~rgb(46,52,64)) is unreadable on the dark
+     body. */
+  color: var(--conloca-code-fg, #d6deeb);
   font-family: var(--conloca-code-font-family, "JetBrains Mono", "Fira Code", ui-monospace, monospace);
   font-size: var(--conloca-code-font-size, 0.875rem);
-  line-height: var(--conloca-code-line-height, 1.6);
+  line-height: var(--conloca-code-line-height, 1.75);
   padding: var(--conloca-code-padding, 0.75rem 1rem);
+}
+/* CodeMirror sets its own `color` on `.cm-content` and on token spans
+   that the higher-level `.cm-editor` colour doesn't reach. Re-assert
+   the default colour here so plain (unhighlighted) text still has
+   contrast against the dark body. Syntax tokens override per-token. */
+.conloca-code-block .conloca-code-block__body .cm-editor .cm-content {
+  color: var(--conloca-code-fg, #d6deeb);
 }
