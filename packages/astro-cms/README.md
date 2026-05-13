@@ -5,6 +5,61 @@ managing content using Puck's drag-and-drop editor, allowing developers to creat
 maintaining full control over their content structure. The CMS integrates seamlessly into your Astro development
 workflow, accessible at `/__cms` routes without requiring authentication or complex setup.
 
+## MDX component registry
+
+Hosts can register JSX components (their own, or third-party ones like Starlight's `<Steps>`, `<Tabs>`, `<Card>`) with
+the MDX editor so authors get typed insert affordances and optional auto-import injection. The registry is wired through
+the same `schemasPath` option that already loads `pageSchemas` — add an `mdxComponents` export to the file and the CMS
+picks it up at boot (and on HMR).
+
+```ts
+// src/schemas.ts
+import { defineMdxComponents } from '@conloca/astro-cms';
+
+export const pageSchemas = {
+  /* existing entries */
+};
+
+export const mdxComponents = defineMdxComponents([
+  {
+    name: 'Steps',
+    kind: 'flow',
+    hasChildren: true,
+    insert: { label: 'Steps', description: 'Numbered step-by-step list', icon: 'list-ordered' },
+    defaults: { children: '1. First step\n2. Second step\n3. Third step' },
+    import: { from: '@astrojs/starlight/components' },
+  },
+  // …other components your site uses
+]);
+```
+
+Starlight components are declared the same way as any other component — the CMS does not ship Starlight descriptors.
+Copy the props you need from each component's source (e.g.
+`node_modules/@astrojs/starlight/user-components/<Component>.astro`).
+
+In the editor, registered components appear in two places:
+
+- A slash menu, opened by typing `/` in the body. Filter by name, label, description, or keywords.
+- A toolbar dropdown next to the admonition button, listing block-level (`kind: 'flow'`) components.
+
+### Auto-import injection (and its pruning caveat)
+
+Setting `import: { from: '<module>' }` on a descriptor opts the component into automatic import injection: whenever the
+component appears in the document, the CMS save serializer emits the matching `import { Name } from '<module>'` line at
+the top of the file (after frontmatter).
+
+**Important: the editor rebuilds the import block on every save from components actually referenced in the tree.**
+Imports for unused components are dropped. So are non-JSX imports — type imports, side-effect imports
+(`import './styles.css'`), and helper-function imports — because the editor does not consider them "referred to" by a
+JSX node. This is a hard constraint of the underlying `@mdxeditor/editor` export pipeline
+([`exportMarkdownFromLexical.js:98-148`](../../node_modules/@mdxeditor/editor/dist/exportMarkdownFromLexical.js)), not a
+policy choice.
+
+For Starlight-flavored docs (where MDX only imports Starlight components from `@astrojs/starlight/components`) the
+behavior matches authorial intent — imports follow usage. For richer MDX that relies on type or side-effect imports,
+edit those files in your IDE rather than the CMS, or omit `import.from` from your descriptors so the editor does not
+claim ownership of the import line.
+
 ## How Astro Integrations Are Built
 
 Based on research of official Astro integrations:
@@ -131,12 +186,14 @@ React:
 
 ### How .astro Components Work
 
-1. **Compilation Process** ([astro/packages/astro/src/vite-plugin-astro/compile.ts](https://github.com/withastro/astro/blob/main/packages/astro/src/vite-plugin-astro/compile.ts)):
+1. **Compilation Process**
+   ([astro/packages/astro/src/vite-plugin-astro/compile.ts](https://github.com/withastro/astro/blob/main/packages/astro/src/vite-plugin-astro/compile.ts)):
    - .astro files are transformed by `@astrojs/compiler` into TypeScript/JavaScript
    - The output is an `AstroComponentFactory` function, not a React component
    - Components include metadata for hydration, slots, and server-side rendering
 
-2. **Component Factory Structure** ([astro/packages/astro/src/runtime/server/render/astro/factory.ts](https://github.com/withastro/astro/blob/main/packages/astro/src/runtime/server/render/astro/factory.ts)):
+2. **Component Factory Structure**
+   ([astro/packages/astro/src/runtime/server/render/astro/factory.ts](https://github.com/withastro/astro/blob/main/packages/astro/src/runtime/server/render/astro/factory.ts)):
 
    ```typescript
    interface AstroComponentFactory {
@@ -147,7 +204,8 @@ React:
    }
    ```
 
-3. **Container API** ([astro/packages/astro/src/container/index.ts](https://github.com/withastro/astro/blob/main/packages/astro/src/container/index.ts)):
+3. **Container API**
+   ([astro/packages/astro/src/container/index.ts](https://github.com/withastro/astro/blob/main/packages/astro/src/container/index.ts)):
    - Provides `experimental_AstroContainer` for programmatic rendering
    - Can render .astro components to HTML strings via `renderToString()`
    - Server-side only - returns static HTML, not React components
@@ -243,12 +301,14 @@ which can also be used in Astro pages via the React integration.
 
 Based on analysis of the Astro source code:
 
-1. **Compilation Pipeline** ([astro/packages/astro/src/vite-plugin-astro/index.ts](https://github.com/withastro/astro/blob/main/packages/astro/src/vite-plugin-astro/index.ts)):
+1. **Compilation Pipeline**
+   ([astro/packages/astro/src/vite-plugin-astro/index.ts](https://github.com/withastro/astro/blob/main/packages/astro/src/vite-plugin-astro/index.ts)):
    - `@astrojs/compiler` transforms .astro files into JavaScript
    - `vite-plugin-astro` orchestrates this compilation
    - The plugin integrates with Vite's module system
 
-2. **HMR Implementation** ([astro/packages/astro/src/vite-plugin-astro/hmr.ts](https://github.com/withastro/astro/blob/main/packages/astro/src/vite-plugin-astro/hmr.ts)):
+2. **HMR Implementation**
+   ([astro/packages/astro/src/vite-plugin-astro/hmr.ts](https://github.com/withastro/astro/blob/main/packages/astro/src/vite-plugin-astro/hmr.ts)):
    - Vite watches for file changes and triggers `handleHotUpdate`
    - Astro optimizes HMR for specific change types:
      - Style-only changes: Only CSS virtual modules are invalidated

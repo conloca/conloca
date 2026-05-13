@@ -1,5 +1,23 @@
 // Astro integration for Conloca CMS
 
+// MDX component registry plugin API — hosts use these to register JSX
+// components (e.g. Starlight's Steps/Tabs/Card) with typed insert editors
+// and opt-in auto-import injection. Runtime registry also wires through
+// the schemasPath option; hosts export `mdxComponents` from the same file.
+//
+// `readStringAttribute` / `writeStringAttribute` are mdast-level helpers
+// for hosts writing their own typed `Editor` components — controlled
+// inputs against a string prop. Re-exported here so a host's editor file
+// can pull everything it needs from one place.
+export {
+  defineMdxComponents,
+  type MdxComponentDescriptor,
+  type MdxComponentInsertHint,
+  type MdxComponentProp,
+  type MdxComponents,
+  readStringAttribute,
+  writeStringAttribute,
+} from '@conloca/cms-spa/mdx-components';
 // Page-schema plugin API — hosts use these to declare frontmatter form UI
 // for the CMS page-settings dialog. Runtime registry lives in @conloca/cms-spa
 // and is wired by the schemasPath option (see ConlocaCMSOptions).
@@ -22,7 +40,10 @@ export {
   type PageMeta,
   pageMetaSchema,
 } from '@conloca/content-api/schemas';
-export { type HydrationDiscovery, scanForHydratableComponents } from './lib/hydration-scanner.js';
+// `scanForHydratableComponents` lives in '@conloca/astro-cms/node' — it
+// imports fast-glob and node:fs, which crash when this barrel is
+// dynamic-imported in the browser (notably by the CMS SPA's schemas
+// loader). Hosts that need it import from the /node subpath.
 // Type-only export for sites that want to customize hydration
 export type { ComponentRegistry } from './lib/hydration-script.js';
 export {

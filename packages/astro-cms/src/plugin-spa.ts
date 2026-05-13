@@ -272,23 +272,42 @@ export default puckConfigPromise.then(m => m.default);
 // Template for the schemas loader virtual module
 const schemasLoader = (absoluteSchemasPath: string, cmsSpaDistDir?: string) => {
   const pageSchemasImport = cmsSpaDistDir ? `${cmsSpaDistDir}/page-schemas.mjs` : '@conloca/cms-spa/page-schemas';
+  const mdxComponentsImport = cmsSpaDistDir ? `${cmsSpaDistDir}/mdx-components.mjs` : '@conloca/cms-spa/mdx-components';
+  // The host's schemas file may transitively import React components (the
+  // `Editor` field on an MdxComponentDescriptor can be a JSX/TSX
+  // component). Vite's React plugin requires the Fast Refresh preamble to
+  // run before any TSX module is evaluated, so we emit it here and then
+  // dynamically import the schemas file — matching the pattern used by
+  // the Puck config loader above.
   return `
-import { setPageSchemas } from '${pageSchemasImport}';
-import * as schemas from '${absoluteSchemasPath}';
+${reactRefreshPreamble}
 
-if (schemas.pageSchemas) {
-  setPageSchemas(schemas.pageSchemas);
-}
+import { setPageSchemas } from '${pageSchemasImport}';
+import { setMdxComponents } from '${mdxComponentsImport}';
+
+const schemasPromise = import('${absoluteSchemasPath}');
+
+schemasPromise.then((schemas) => {
+  if (schemas.pageSchemas) {
+    setPageSchemas(schemas.pageSchemas);
+  }
+  if (schemas.mdxComponents) {
+    setMdxComponents(schemas.mdxComponents);
+  }
+});
 
 if (import.meta.hot) {
   import.meta.hot.accept('${absoluteSchemasPath}', async (newModule) => {
     if (newModule?.pageSchemas) {
       setPageSchemas(newModule.pageSchemas);
     }
+    if (newModule?.mdxComponents) {
+      setMdxComponents(newModule.mdxComponents);
+    }
   });
 }
 
-export default schemas;
+export default schemasPromise;
 `;
 };
 

@@ -4,6 +4,9 @@
   "exclude": ["dist"],
   "references": [
     {
+      "path": "../../packages/cms-spa"
+    },
+    {
       "path": "../../packages/astro-cms"
     }
   ]

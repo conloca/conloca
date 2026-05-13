@@ -25,6 +25,11 @@
       "import": "./dist/data-schemas.mjs",
       "default": "./dist/data-schemas.mjs"
     },
+    "./mdx-components": {
+      "types": "./dist/mdx-components.d.mts",
+      "import": "./dist/mdx-components.mjs",
+      "default": "./dist/mdx-components.mjs"
+    },
     "./page-schemas": {
       "types": "./dist/page-schemas.d.mts",
       "import": "./dist/page-schemas.mjs",
@@ -58,6 +63,7 @@
   "dependencies": {
     "@conloca/content-api-client": "workspace:*",
     "@conloca/mdx": "workspace:*",
+    "@lexical/react": "^0.35.0",
     "@mdxeditor/editor": "^3.55.0",
     "@puckeditor/core": "^0.21.2",
     "@radix-ui/react-dialog": "^1.1.15",
@@ -67,6 +73,8 @@
     "@tanstack/react-query-devtools": "^5.100.6",
     "clsx": "^2.1.1",
     "lucide-react": "^0.564.0",
+    "mdast-util-from-markdown": "^2.0.0",
+    "mdast-util-mdx-jsx": "^3.0.0",
     "react-router-dom": "^7.14.2",
     "tailwind-merge": "^3.5.0",
     "tslib": "^2.8.1",

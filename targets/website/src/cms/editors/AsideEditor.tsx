@@ -1,8 +1,9 @@
+import { readStringAttribute, writeStringAttribute } from '@conloca/astro-cms';
 import type { JsxEditorProps } from '@mdxeditor/editor';
 import { NestedLexicalEditor, useLexicalNodeRemove, useMdastNodeUpdater } from '@mdxeditor/editor';
 import { Trash2 } from 'lucide-react';
 import type * as Mdast from 'mdast';
-import type { MdxJsxAttribute, MdxJsxFlowElement } from 'mdast-util-mdx-jsx';
+import type { MdxJsxFlowElement } from 'mdast-util-mdx-jsx';
 
 type AsideType = 'note' | 'tip' | 'caution' | 'danger';
 const ASIDE_TYPES: AsideType[] = ['note', 'tip', 'caution', 'danger'];
@@ -13,20 +14,6 @@ const TYPE_STYLES: Record<AsideType, { label: string; bar: string; bg: string }>
   caution: { label: 'Caution', bar: 'border-yellow-05', bg: 'bg-yellow-11 dark:bg-yellow-02' },
   danger: { label: 'Danger', bar: 'border-red-04', bg: 'bg-red-11 dark:bg-red-02' },
 };
-
-function readStringAttribute(node: MdxJsxFlowElement, name: string): string {
-  const attr = node.attributes.find((a): a is MdxJsxAttribute => a.type === 'mdxJsxAttribute' && a.name === name);
-  if (!attr || typeof attr.value !== 'string') return '';
-  return attr.value;
-}
-
-function writeStringAttribute(attributes: MdxJsxFlowElement['attributes'], name: string, value: string) {
-  const next = attributes.filter((a) => !(a.type === 'mdxJsxAttribute' && a.name === name));
-  if (value.length > 0) {
-    next.push({ type: 'mdxJsxAttribute', name, value });
-  }
-  return next;
-}
 
 /**
  * Editor surface for `<Aside>` JSX callouts.

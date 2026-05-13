@@ -8,6 +8,7 @@ export default defineConfig({
     'page-schemas': 'src/page-schemas.ts',
     'data-schemas': 'src/data-schemas.ts',
     'site-styles': 'src/site-styles.ts',
+    'mdx-components': 'src/mdx-components.ts',
   },
   format: ['esm'],
   dts: true,

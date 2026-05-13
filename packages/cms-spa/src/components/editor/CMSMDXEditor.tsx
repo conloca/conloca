@@ -1,18 +1,24 @@
 import { useUploadAsset } from '@conloca/content-api-client';
 import { BaseMDXEditor, type BaseMDXEditorProps } from '@conloca/mdx';
-import type { MDXEditorMethods } from '@mdxeditor/editor';
+import type { JsxComponentDescriptor, MDXEditorMethods, RealmPlugin } from '@mdxeditor/editor';
 import type React from 'react';
 import { forwardRef, useCallback, useMemo, useRef, useState } from 'react';
 import { buildUploadFormData } from '../../hooks/useUpload';
+import { toJsxComponentDescriptor, useMdxComponents } from '../../mdx-components';
 import { Button, Select } from '../ui';
 import { contentBlockSnippets, getContentBlockTemplate, renderContentBlockTemplate } from './content-block-templates';
 import { ImagePickerDialog } from './ImagePickerDialog';
-import { cmsJsxDescriptors } from './jsx-descriptors';
+import { InsertMdxComponentButton } from './insert-menu/InsertMdxComponentButton';
+import { mdxComponentsPlugin } from './insert-menu/mdx-components-plugin';
+
+const mdxComponentsExtraPlugins: RealmPlugin[] = [mdxComponentsPlugin()];
 
 export interface CMSMDXEditorProps
   extends Omit<
     BaseMDXEditorProps,
     | 'disableImageSettingsButton'
+    | 'extraPlugins'
+    | 'extraToolbarItems'
     | 'imageButtonRef'
     | 'imageDialog'
     | 'imageUploadHandler'
@@ -23,6 +29,11 @@ export interface CMSMDXEditorProps
 export const CMSMDXEditor = forwardRef<MDXEditorMethods, CMSMDXEditorProps>((props, ref) => {
   const insertImageRef = useRef<HTMLButtonElement>(null);
   const uploadAsset = useUploadAsset();
+  const registeredMdxComponents = useMdxComponents();
+  const jsxComponentDescriptors = useMemo<JsxComponentDescriptor[]>(
+    () => registeredMdxComponents.map(toJsxComponentDescriptor),
+    [registeredMdxComponents],
+  );
 
   // Wire paste/drop image uploads to the same backend mutation that powers
   // the asset library's UploadModal. The library expects a Promise<string>
@@ -47,7 +58,9 @@ export const CMSMDXEditor = forwardRef<MDXEditorMethods, CMSMDXEditorProps>((pro
       disableImageSettingsButton={true}
       imageButtonRef={insertImageRef}
       imageUploadHandler={imageUploadHandler}
-      jsxComponentDescriptors={cmsJsxDescriptors}
+      jsxComponentDescriptors={jsxComponentDescriptors}
+      extraPlugins={mdxComponentsExtraPlugins}
+      extraToolbarItems={<InsertMdxComponentButton />}
       onImageShortcut={() => {
         if (insertImageRef.current) {
           insertImageRef.current.click();

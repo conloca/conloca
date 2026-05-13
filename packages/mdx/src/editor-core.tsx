@@ -14,7 +14,6 @@ import {
   GenericJsxEditor,
   HighlightToggle,
   headingsPlugin,
-  InsertAdmonition,
   InsertCodeBlock,
   InsertImage,
   InsertTable,
@@ -30,6 +29,7 @@ import {
   type MDXEditorMethods,
   markdownShortcutPlugin,
   quotePlugin,
+  type RealmPlugin,
   Separator,
   StrikeThroughSupSubToggles,
   tablePlugin,
@@ -119,6 +119,19 @@ export interface BaseMDXEditorProps {
   imageUploadHandler?: (file: File) => Promise<string>;
   jsxComponentDescriptors?: JsxComponentDescriptor[];
   /**
+   * Additional @mdxeditor/editor RealmPlugins appended to the built-in
+   * plugin list. Used by the SPA shell to register the MDX components
+   * registry-driven slash menu without coupling @conloca/mdx to
+   * @conloca/cms-spa.
+   */
+  extraPlugins?: RealmPlugin[];
+  /**
+   * Extra toolbar buttons inserted between `<InsertAdmonition />` and the
+   * separator preceding focus mode. Pass `null` (default) to keep the
+   * stock toolbar.
+   */
+  extraToolbarItems?: React.ReactNode;
+  /**
    * Class applied to the MDXEditor root element (library forwards it to the
    * toolbar and portaled popups too). Pass `"dark-theme"` to activate the
    * library's built-in Radix dark palette.
@@ -204,6 +217,8 @@ export const BaseMDXEditor = React.forwardRef<MDXEditorMethods, BaseMDXEditorPro
       imageButtonRef,
       imageUploadHandler,
       jsxComponentDescriptors,
+      extraPlugins,
+      extraToolbarItems,
       className,
       placeholder,
       autoFocus,
@@ -285,6 +300,7 @@ export const BaseMDXEditor = React.forwardRef<MDXEditorMethods, BaseMDXEditorPro
             ...(imageDialog ? { ImageDialog: imageDialog, disableImageSettingsButton } : {}),
             ...(imageUploadHandler ? { imageUploadHandler } : {}),
           }),
+          ...(extraPlugins ?? []),
           toolbarPlugin({
             // flex-wrap so the toolbar reflows on narrow viewports instead of
             // overflowing horizontally — workaround documented in
@@ -320,7 +336,7 @@ export const BaseMDXEditor = React.forwardRef<MDXEditorMethods, BaseMDXEditorPro
                           <InsertThematicBreak />
                           <Separator />
                           <InsertCodeBlock />
-                          <InsertAdmonition />
+                          {extraToolbarItems}
                           <Separator />
                           <FocusModeToggle />
                         </>
