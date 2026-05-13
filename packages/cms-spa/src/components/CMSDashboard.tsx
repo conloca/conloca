@@ -23,7 +23,7 @@ export function CMSDashboard() {
   return (
     <div className="p-6">
       {/* Welcome Header + Quick Actions */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
         <div>
           <h1 className="text-2xl font-semibold text-grey-01 dark:text-grey-12" data-testid="dashboard-title">
             Dashboard

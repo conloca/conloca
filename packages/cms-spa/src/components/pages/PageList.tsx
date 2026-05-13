@@ -460,7 +460,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
       ) : (
         /* Table */
         <div className="bg-white dark:bg-grey-02 border border-line rounded-md overflow-x-auto">
-          <table className="w-full md:min-w-[720px]">
+          <table className="w-full table-fixed md:table-auto md:min-w-[720px]">
             <thead>
               <tr className="border-b border-grey-09 dark:border-grey-03 bg-subtle">
                 <th className="text-left p-4 font-medium text-grey-01 dark:text-grey-12">Title</th>
@@ -476,7 +476,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
                     Locales
                   </th>
                 )}
-                <th className="text-left p-4 font-medium text-grey-01 dark:text-grey-12">Actions</th>
+                <th className="text-left p-4 font-medium text-grey-01 dark:text-grey-12 w-24 md:w-auto">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -513,6 +513,14 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
                           MDX
                         </span>
                       )}
+                    </div>
+                    <div className="md:hidden mt-1 flex items-center gap-2 min-w-0">
+                      <span className="font-mono text-xs text-grey-04 dark:text-grey-07 truncate">{page.path}</span>
+                      <span
+                        className={`inline-flex h-5 px-2 items-center rounded-full text-[11px] font-medium capitalize shrink-0 ${statusPill[page.status]}`}
+                      >
+                        {page.status}
+                      </span>
                     </div>
                   </td>
                   <td className="hidden lg:table-cell p-4">
