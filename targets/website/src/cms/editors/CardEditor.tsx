@@ -32,7 +32,7 @@ export function CardEditor({ mdastNode }: JsxEditorProps) {
       contentEditable={false}
     >
       <div className="flex items-center gap-2 px-3 pt-2 text-xs text-grey-04 dark:text-grey-07">
-        <span className="font-semibold uppercase tracking-wide">Card</span>
+        <span className="font-semibold uppercase tracking-wide whitespace-nowrap">Card</span>
         <input
           type="text"
           value={title}

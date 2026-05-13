@@ -30,7 +30,7 @@ export function LinkCardEditor({ mdastNode }: JsxEditorProps) {
       contentEditable={false}
     >
       <div className="flex items-center gap-2 text-xs text-grey-04 dark:text-grey-07">
-        <span className="font-semibold uppercase tracking-wide">LinkCard</span>
+        <span className="font-semibold uppercase tracking-wide whitespace-nowrap">LinkCard</span>
         <button
           type="button"
           onClick={removeNode}

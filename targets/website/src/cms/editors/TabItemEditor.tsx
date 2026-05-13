@@ -28,7 +28,7 @@ export function TabItemEditor({ mdastNode }: JsxEditorProps) {
       contentEditable={false}
     >
       <div className="flex items-center gap-2 px-3 pt-2 text-xs text-grey-04 dark:text-grey-07">
-        <span className="font-semibold uppercase tracking-wide">Tab</span>
+        <span className="font-semibold uppercase tracking-wide whitespace-nowrap">Tab</span>
         <input
           type="text"
           value={label}

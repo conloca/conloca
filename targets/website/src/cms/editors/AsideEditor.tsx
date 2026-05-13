@@ -56,7 +56,7 @@ export function AsideEditor({ mdastNode }: JsxEditorProps) {
       contentEditable={false}
     >
       <div className="flex items-center gap-2 px-3 pt-2 text-xs text-grey-04 dark:text-grey-07">
-        <span className="font-semibold uppercase tracking-wide">{styles.label}</span>
+        <span className="font-semibold uppercase tracking-wide whitespace-nowrap">{styles.label}</span>
         <select
           value={type}
           onChange={(event) => setType(event.target.value as AsideType)}
