@@ -9,7 +9,6 @@ import type { MDXEditorMethods } from '@mdxeditor/editor';
 import { ExternalLink, Settings } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useAutoSave } from '../../hooks/useAutoSave';
 import { useErrorModal } from '../../hooks/useErrorModal';
 import { useTheme } from '../../hooks/useTheme';
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard';
@@ -192,17 +191,6 @@ export function MdxPageEditor() {
       showError('Failed to save page settings', err);
     }
   };
-
-  // Debounced auto-save. Driven by the editor's existing `persist` function
-  // so the save-state machine, conflict dialog, and "✓ Saved" pill all
-  // light up exactly as they do for a manual Cmd+S press.
-  useAutoSave({
-    enabled: true,
-    content,
-    isDirty,
-    isSaving: saveState === 'saving',
-    persist: (value) => persist(value),
-  });
 
   const handleCancel = () => {
     if (isDirty) {

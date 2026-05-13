@@ -9,7 +9,6 @@ import type { MDXEditorMethods } from '@mdxeditor/editor';
 import { AlertTriangle } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { useAutoSave } from '../../hooks/useAutoSave';
 import { useEditorPref } from '../../hooks/useEditorPref';
 import { useErrorModal } from '../../hooks/useErrorModal';
 import { useTheme } from '../../hooks/useTheme';
@@ -143,14 +142,6 @@ export function BlockEditor() {
   const handleSaveClick = () => {
     void persist(content);
   };
-
-  useAutoSave({
-    enabled: true,
-    content,
-    isDirty,
-    isSaving: saveState === 'saving',
-    persist: (value) => persist(value),
-  });
 
   // Back-arrow + Cancel target. When entered via the Puck page panel,
   // returning to /pages/:pageId reopens the page editor; otherwise we go
