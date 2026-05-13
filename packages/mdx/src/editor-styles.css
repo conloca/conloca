@@ -140,9 +140,28 @@
 }
 
 .conloca-code-block__filename {
+  background: transparent;
+  border: 0;
+  border-radius: 0.25rem;
+  color: inherit;
+  font: inherit;
+  flex: 1 1 auto;
+  min-width: 0;
+  outline: 0;
   overflow: hidden;
+  padding: 0.1rem 0.35rem;
+  margin-inline-start: -0.35rem;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+input.conloca-code-block__filename::placeholder {
+  color: color-mix(in srgb, currentColor 50%, transparent);
+}
+input.conloca-code-block__filename:hover {
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+input.conloca-code-block__filename:focus {
+  background: color-mix(in srgb, currentColor 12%, transparent);
 }
 
 .conloca-code-block__header-right {

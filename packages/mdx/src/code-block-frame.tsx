@@ -1,6 +1,11 @@
-import { type CodeBlockEditorDescriptor, type CodeBlockEditorProps, CodeMirrorEditor } from '@mdxeditor/editor';
+import {
+  type CodeBlockEditorDescriptor,
+  type CodeBlockEditorProps,
+  CodeMirrorEditor,
+  useCodeBlockEditorContext,
+} from '@mdxeditor/editor';
 import { Check, Copy } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { type ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react';
 
 /**
  * Frame chrome around the editor's fenced code blocks — header bar with
@@ -14,17 +19,29 @@ import { useCallback, useEffect, useState } from 'react';
  * without remounting the descriptor.
  */
 
-const TITLE_META_RE = /title=(?:"([^"]*)"|'([^']*)'|([^\s]+))/;
+const TITLE_META_RE = /\btitle=(?:"([^"]*)"|'([^']*)'|(\S+))/;
 
-function parseFilename(meta: string): string | undefined {
-  const trimmed = meta.trim();
-  if (!trimmed) return undefined;
-  const match = trimmed.match(TITLE_META_RE);
-  if (match) return match[1] ?? match[2] ?? match[3];
-  // Bare-meta fallback: `\`\`\`ts foo.ts` — treat the whole meta as the title
-  // when it doesn't include `=`, the convention EC and rehype-pretty-code share.
-  if (!trimmed.includes('=')) return trimmed;
-  return undefined;
+interface MetaParts {
+  /** The current title value (empty string when no title meta is set). */
+  title: string;
+  /** Everything else in the meta string, with the title slice removed. */
+  rest: string;
+}
+
+function parseMeta(meta: string): MetaParts {
+  const match = meta.match(TITLE_META_RE);
+  if (!match) return { title: '', rest: meta.trim() };
+  const value = match[1] ?? match[2] ?? match[3] ?? '';
+  const rest = (meta.slice(0, match.index) + meta.slice(match.index! + match[0].length)).replace(/\s+/g, ' ').trim();
+  return { title: value, rest };
+}
+
+/** Reassemble a meta string with `title` set (or stripped when empty). */
+function buildMeta(title: string, rest: string): string {
+  const trimmedTitle = title.trim();
+  const titleFragment = trimmedTitle ? `title="${trimmedTitle.replace(/"/g, '\\"')}"` : '';
+  if (titleFragment && rest) return `${titleFragment} ${rest}`;
+  return titleFragment || rest;
 }
 
 function CopyButton({ code }: { code: string }) {
@@ -87,20 +104,63 @@ function useCodeBlockConfig(): CodeBlockConfigShape {
   return config;
 }
 
+/**
+ * Editable filename slot. Rewrites the code block's meta string via
+ * `setMeta` from `useCodeBlockEditorContext` so authors can author the
+ * frame title (`\`\`\`ts title="src/foo.ts"`) directly from the editor —
+ * the meta string round-trips through MDXEditor's markdown serializer
+ * and ExpressiveCode picks it up as the frame header on the published
+ * page. Other meta fragments (ins/del/mark/wrap) are preserved.
+ */
+function FilenameInput({ meta }: { meta: string }) {
+  const { setMeta } = useCodeBlockEditorContext();
+  const parsed = useMemo(() => parseMeta(meta), [meta]);
+  const [title, setTitle] = useState(parsed.title);
+
+  // External meta changes (HMR, language change, etc.) win over local
+  // input state. Comparing against `parsed.title` (not `meta`) avoids a
+  // round-trip flicker when this component's own change just landed.
+  useEffect(() => {
+    setTitle(parsed.title);
+  }, [parsed.title]);
+
+  const commit = useCallback(
+    (next: string) => {
+      const nextMeta = buildMeta(next, parsed.rest);
+      if (nextMeta !== meta.trim()) setMeta(nextMeta);
+    },
+    [meta, parsed.rest, setMeta],
+  );
+
+  const onChange = (e: ChangeEvent<HTMLInputElement>) => setTitle(e.target.value);
+  const onBlur = () => commit(title);
+
+  return (
+    <input
+      type="text"
+      className="conloca-code-block__filename"
+      value={title}
+      placeholder="filename"
+      spellCheck={false}
+      onChange={onChange}
+      onBlur={onBlur}
+      aria-label="Code block filename"
+    />
+  );
+}
+
 function ConlocaCodeBlockEditor(props: CodeBlockEditorProps) {
   const config = useCodeBlockConfig();
   const showCopyButton = config.showCopyButton ?? true;
   const showFilename = config.showFilename ?? true;
   const showLanguageTag = config.showLanguageTag ?? true;
-
-  const filename = showFilename ? parseFilename(props.meta) : undefined;
-  const showHeader = Boolean(filename) || showLanguageTag || showCopyButton;
+  const showHeader = showFilename || showLanguageTag || showCopyButton;
 
   return (
     <div className="conloca-code-block">
       {showHeader ? (
         <div className="conloca-code-block__header">
-          <span className="conloca-code-block__filename">{filename ?? ''}</span>
+          {showFilename ? <FilenameInput meta={props.meta} /> : <span />}
           <div className="conloca-code-block__header-right">
             {showLanguageTag && props.language ? (
               <span className="conloca-code-block__lang">{props.language}</span>
