@@ -18,7 +18,7 @@
   --conloca-code-bg: #f8fafc;
   --conloca-code-border: #e2e8f0;
   --conloca-code-radius: 0.25rem;
-  --conloca-code-padding: 1rem 1.25rem;
+  --conloca-code-padding: 0.75rem 1rem;
 
   /* Header bar — no border-bottom: separation between header and body
      comes from the bg color difference (matches how EC paints the tab

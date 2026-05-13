@@ -94,7 +94,7 @@
   --conloca-code-bg: #f8fafc;
   --conloca-code-border: #e2e8f0;
   --conloca-code-radius: 0.25rem;
-  --conloca-code-padding: 1rem 1.25rem;
+  --conloca-code-padding: 0.75rem 1rem;
   --conloca-code-header-bg: #f1f5f9;
   --conloca-code-header-fg: #475569;
   --conloca-code-header-padding: 0.4rem 0.75rem;
@@ -211,19 +211,37 @@ input.conloca-code-block__filename:focus {
   background: var(--conloca-code-bg, #f8fafc);
 }
 
+/* MDXEditor wraps CodeMirror in a hash-suffixed `_codeMirrorWrapper_*`
+   div that ships with its own `padding: 12.8px` and `margin: 0 0 20px`.
+   Inside our frame those add ~35px of empty body bg below the last
+   code line before the frame border — much taller than the ~12px EC
+   paints on the published page. Reset to 0 so the cm-editor sits flush
+   against the body; our `--conloca-code-padding` on `.cm-editor` then
+   defines the only padding the reader sees. Attribute selector covers
+   the hash rotation across library upgrades. */
+.conloca-code-block__body > [class*="codeMirrorWrapper"] {
+  margin: 0;
+  padding: 0;
+}
+
 /* Override the library's default CodeMirror surface so the frame's bg + radius
    show through. MDXEditor doesn't expose a theme prop on `codeMirrorPlugin`
-   (see plan §7), so this selector is the supported integration point.
-   Background is set transparent — the frame's `__body` paints the surface. */
-.conloca-code-block__body .cm-editor,
-.conloca-code-block__body .cm-editor .cm-scroller,
-.conloca-code-block__body .cm-editor .cm-gutters {
+   (see plan §7), so selector-based styling is the supported integration
+   point. Background is set transparent — the frame's `__body` paints the
+   surface. The padding rule beats `@mdxeditor/editor`'s own
+   `.mdxeditor .cm-editor { padding: var(--sp-space-4) 0; }` (which would
+   otherwise win as the later-declared rule at equal specificity, and
+   resolves to 0 anyway because `--sp-space-4` isn't defined in our
+   non-Radix-themed SPA shell) by stacking three class selectors. */
+.conloca-code-block .conloca-code-block__body .cm-editor,
+.conloca-code-block .conloca-code-block__body .cm-editor .cm-scroller,
+.conloca-code-block .conloca-code-block__body .cm-editor .cm-gutters {
   background: transparent;
 }
-.conloca-code-block__body .cm-editor {
+.conloca-code-block .conloca-code-block__body .cm-editor {
   border-radius: 0;
   font-family: var(--conloca-code-font-family, "JetBrains Mono", "Fira Code", ui-monospace, monospace);
   font-size: var(--conloca-code-font-size, 0.875rem);
   line-height: var(--conloca-code-line-height, 1.6);
-  padding: var(--conloca-code-padding, 1rem 1.25rem);
+  padding: var(--conloca-code-padding, 0.75rem 1rem);
 }
