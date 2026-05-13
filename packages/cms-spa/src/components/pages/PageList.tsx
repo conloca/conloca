@@ -128,6 +128,10 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
     return ['all', ...Array.from(locales).sort()];
   }, [pages]);
 
+  // Single-locale sites don't need the locale filter or column. availableLocales
+  // always contains the synthetic 'all' entry, so >2 means more than one real locale.
+  const isMultiLocale = availableLocales.length > 2;
+
   // Filter pages by locale, search, status, and sort
   const filteredPages = useMemo(() => {
     let result = selectedLocale === 'all' ? pages : pages.filter((page) => page.locales.includes(selectedLocale));
@@ -354,37 +358,22 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
   return (
     <div className="p-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
         <h1 className="text-2xl font-semibold text-grey-01 dark:text-grey-12">Pages</h1>
-        <div className="flex items-center gap-4">
-          <select
-            value={selectedLocale}
-            onChange={(e) => setSelectedLocale(e.target.value)}
-            className="px-3 py-2 border border-line rounded-md bg-panel dark:text-grey-12 hover:bg-hover transition-colors"
-            role="combobox"
-            data-testid="locale-selector"
-          >
-            {availableLocales.map((locale) => (
-              <option key={locale} value={locale}>
-                {locale === 'all' ? 'All Locales' : locale}
-              </option>
-            ))}
-          </select>
-          <button
-            onClick={handleNewPage}
-            className="px-4 py-2 rounded-md bg-grey-01 text-grey-12 hover:bg-azure-04 hover:text-white dark:bg-grey-12 dark:text-grey-01 dark:hover:bg-azure-06 dark:hover:text-white transition-colors flex items-center gap-2"
-            data-testid="new-page-button"
-          >
-            <Plus className="h-4 w-4" />
-            New Page
-          </button>
-        </div>
+        <button
+          onClick={handleNewPage}
+          className="px-4 py-2 rounded-md bg-grey-01 text-grey-12 hover:bg-azure-04 hover:text-white dark:bg-grey-12 dark:text-grey-01 dark:hover:bg-azure-06 dark:hover:text-white transition-colors flex items-center gap-2 whitespace-nowrap"
+          data-testid="new-page-button"
+        >
+          <Plus className="h-4 w-4" />
+          New Page
+        </button>
       </div>
 
       {/* Search & Filter Toolbar */}
-      <div className="flex flex-wrap items-center gap-3 mb-4">
-        {/* Search input */}
-        <div className="relative flex-1 max-w-sm">
+      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 sm:gap-3 mb-4">
+        {/* Search input — full width on mobile, capped on sm+ */}
+        <div className="relative w-full sm:flex-1 sm:max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-grey-05 dark:text-grey-06" />
           <input
             type="text"
@@ -424,6 +413,23 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
           <option value="path-asc">Path A-Z</option>
           <option value="path-desc">Path Z-A</option>
         </select>
+
+        {/* Locale filter — hidden on single-locale sites (no-op control) */}
+        {isMultiLocale && (
+          <select
+            value={selectedLocale}
+            onChange={(e) => setSelectedLocale(e.target.value)}
+            className="px-3 py-2 border border-line rounded-md bg-panel dark:text-grey-12 text-sm hover:bg-hover transition-colors"
+            role="combobox"
+            data-testid="locale-selector"
+          >
+            {availableLocales.map((locale) => (
+              <option key={locale} value={locale}>
+                {locale === 'all' ? 'All Locales' : locale}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
       {/* Empty state */}
@@ -454,14 +460,22 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
       ) : (
         /* Table */
         <div className="bg-white dark:bg-grey-02 border border-line rounded-md overflow-x-auto">
-          <table className="w-full min-w-[720px]">
+          <table className="w-full md:min-w-[720px]">
             <thead>
               <tr className="border-b border-grey-09 dark:border-grey-03 bg-subtle">
                 <th className="text-left p-4 font-medium text-grey-01 dark:text-grey-12">Title</th>
-                <th className="text-left p-4 font-medium text-grey-01 dark:text-grey-12">Path</th>
-                <th className="text-left p-4 font-medium text-grey-01 dark:text-grey-12">Status</th>
-                <th className="text-left p-4 font-medium text-grey-01 dark:text-grey-12">Modified</th>
-                <th className="text-left p-4 font-medium text-grey-01 dark:text-grey-12">Locales</th>
+                <th className="hidden lg:table-cell text-left p-4 font-medium text-grey-01 dark:text-grey-12">Path</th>
+                <th className="hidden md:table-cell text-left p-4 font-medium text-grey-01 dark:text-grey-12">
+                  Status
+                </th>
+                <th className="hidden md:table-cell text-left p-4 font-medium text-grey-01 dark:text-grey-12">
+                  Modified
+                </th>
+                {isMultiLocale && (
+                  <th className="hidden md:table-cell text-left p-4 font-medium text-grey-01 dark:text-grey-12">
+                    Locales
+                  </th>
+                )}
                 <th className="text-left p-4 font-medium text-grey-01 dark:text-grey-12">Actions</th>
               </tr>
             </thead>
@@ -501,7 +515,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
                       )}
                     </div>
                   </td>
-                  <td className="p-4">
+                  <td className="hidden lg:table-cell p-4">
                     <a
                       href={buildUrl(page.path)}
                       target="_blank"
@@ -515,32 +529,34 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
                       {page.path}
                     </a>
                   </td>
-                  <td className="p-4">
+                  <td className="hidden md:table-cell p-4">
                     <span
                       className={`inline-flex h-5 px-2 items-center rounded-full text-[11px] font-medium capitalize ${statusPill[page.status]}`}
                     >
                       {page.status}
                     </span>
                   </td>
-                  <td className="p-4 text-grey-04 dark:text-grey-07">
+                  <td className="hidden md:table-cell p-4 text-grey-04 dark:text-grey-07">
                     <div className="flex items-center gap-2">
                       <Clock className="h-4 w-4" />
                       {page.modified.toLocaleDateString()}
                     </div>
                   </td>
-                  <td className="p-4">
-                    <div className="flex gap-1">
-                      {page.locales.map((locale) => (
-                        <span
-                          key={locale}
-                          className="px-2 py-1 text-xs bg-subtle rounded-md"
-                          data-testid="locale-indicator"
-                        >
-                          {locale}
-                        </span>
-                      ))}
-                    </div>
-                  </td>
+                  {isMultiLocale && (
+                    <td className="hidden md:table-cell p-4">
+                      <div className="flex gap-1">
+                        {page.locales.map((locale) => (
+                          <span
+                            key={locale}
+                            className="px-2 py-1 text-xs bg-subtle rounded-md"
+                            data-testid="locale-indicator"
+                          >
+                            {locale}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                  )}
                   <td className="p-4">
                     <div className="flex gap-2 items-center">
                       {page.locales.map((locale) =>
