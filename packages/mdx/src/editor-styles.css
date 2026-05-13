@@ -38,3 +38,28 @@
   min-height: 0;
   overflow-y: auto;
 }
+
+/* @mdxeditor/editor's BlockTypeSelect renders an empty label when the
+   cursor sits inside a custom JSX block (currentBlockType$ stays "" until
+   selection moves back into a paragraph/heading). Surface a visible
+   placeholder so the control isn't a bare caret. */
+.mdxeditor-toolbar-wrap [aria-label="Block type"] > span:first-child:empty::before {
+  content: "Block";
+  opacity: 0.6;
+}
+
+/* Compress the toolbar on narrow viewports so all controls remain reachable
+   instead of wrapping below the visible row. Targets sm breakpoint. */
+@media (max-width: 640px) {
+  .mdxeditor-toolbar-wrap {
+    gap: 2px;
+    row-gap: 2px;
+  }
+  .mdxeditor-toolbar-wrap button {
+    padding-inline: 4px;
+  }
+  /* Hide visual group separators on narrow screens; wrap rows still convey grouping. */
+  .mdxeditor-toolbar-wrap [data-orientation="vertical"] {
+    display: none;
+  }
+}
