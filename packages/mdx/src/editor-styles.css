@@ -230,16 +230,18 @@ input.conloca-code-block__filename:focus {
 }
 
 /* MDXEditor wraps CodeMirror in a hash-suffixed `_codeMirrorWrapper_*`
-   div that ships with its own `padding: 12.8px` and `margin: 0 0 20px`.
-   Inside our frame those add ~35px of empty body bg below the last
-   code line before the frame border — much taller than the ~12px EC
-   paints on the published page. Reset to 0 so the cm-editor sits flush
-   against the body; our `--conloca-code-padding` on `.cm-editor` then
-   defines the only padding the reader sees. Attribute selector covers
-   the hash rotation across library upgrades. */
+   div that ships with its own `padding: 12.8px`, `margin: 0 0 20px`,
+   AND a `1px solid rgb(54,58,63)` border with `border-radius: 6px` —
+   visible as a second concentric ring inside our frame. Inside our
+   frame all of those have to go: layout becomes wrapper-flush-with-body,
+   visual chrome stays single-frame. Attribute selector covers the hash
+   rotation across library upgrades. */
 .conloca-code-block__body > [class*="codeMirrorWrapper"] {
   margin: 0;
   padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 /* Override the library's default CodeMirror surface so the frame's bg + radius
@@ -268,11 +270,24 @@ input.conloca-code-block__filename:focus {
   font-size: var(--conloca-code-font-size, 0.875rem);
   line-height: var(--conloca-code-line-height, 1.75);
   padding: var(--conloca-code-padding, 0.75rem 1rem);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
-/* CodeMirror sets its own `color` on `.cm-content` and on token spans
-   that the higher-level `.cm-editor` colour doesn't reach. Re-assert
-   the default colour here so plain (unhighlighted) text still has
-   contrast against the dark body. Syntax tokens override per-token. */
-.conloca-code-block .conloca-code-block__body .cm-editor .cm-content {
+/* CodeMirror declares font-family / line-height / colour again on the
+   inner `.cm-scroller`, `.cm-content`, and `.cm-line` elements, and
+   those win over the `.cm-editor` rule above — so without re-asserting
+   here the text actually rendered to the screen falls back to generic
+   `monospace` at line-height 19.6px and a dark fg. That mismatch is the
+   "texture feels different" effect: same colour tokens around the code,
+   but the glyph rendering, line spacing, and stroke contrast differ
+   from what EC paints on the published `.ec-line`. */
+.conloca-code-block .conloca-code-block__body .cm-editor .cm-scroller,
+.conloca-code-block .conloca-code-block__body .cm-editor .cm-content,
+.conloca-code-block .conloca-code-block__body .cm-editor .cm-line {
   color: var(--conloca-code-fg, #d6deeb);
+  font-family: var(--conloca-code-font-family, "JetBrains Mono", "Fira Code", ui-monospace, monospace);
+  font-size: var(--conloca-code-font-size, 0.875rem);
+  line-height: var(--conloca-code-line-height, 1.75);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
