@@ -8,6 +8,11 @@
    `@conloca/mdx` package, so authoring (`.conloca-prose--editor`) and
    publishing (`.conloca-prose`) use the same type scale. */
 @import "@conloca/mdx/prose.css" layer(components);
+/* Code-block chrome tokens — frame + header look that the MDX editor and
+   the published page share. Loaded here so the existing `siteStyles`
+   pipeline carries it into the Puck preview iframe (the option points at
+   global.css). The Starlight `<head>` also picks it up via `customCss`. */
+@import "./code-blocks.css" layer(components);
 
 /* Remove underline from all links */
 @layer base {

@@ -102,12 +102,19 @@
   padding: 0.15rem 0.4rem;
 }
 
+/* Block-level `<pre>` rendering — kept as a fallback for surfaces that
+ * don't go through the code-block frame component (Puck/live MDX
+ * previews, the Astro `RenderWithBlocks` path outside Starlight). Draws
+ * from the same `--conloca-code-*` chrome tokens the published page +
+ * MDX editor frame use, so colors stay aligned even without the header
+ * bar. Editor surface itself bypasses these rules entirely — the
+ * descriptor in `code-block-frame.tsx` owns that DOM. */
 .conloca-prose :where(pre) {
-  background: var(--color-bg-code, #f1f5f9);
-  border: 1px solid var(--color-border, #e2e8f0);
-  border-radius: 1rem;
+  background: var(--conloca-code-bg, var(--color-bg-code, #f1f5f9));
+  border: 1px solid var(--conloca-code-border, var(--color-border, #e2e8f0));
+  border-radius: var(--conloca-code-radius, 1rem);
   overflow-x: auto;
-  padding: 1rem 1.25rem;
+  padding: var(--conloca-code-padding, 1rem 1.25rem);
 }
 
 .conloca-prose :where(pre code) {
@@ -192,8 +199,8 @@
 }
 
 .dark .conloca-prose :where(pre) {
-  background: var(--color-bg-code, #1e293b);
-  border-color: var(--color-border, #334155);
+  background: var(--conloca-code-bg, var(--color-bg-code, #1e293b));
+  border-color: var(--conloca-code-border, var(--color-border, #334155));
 }
 
 .dark .conloca-prose :where(hr),

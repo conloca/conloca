@@ -65,21 +65,17 @@
   --sl-color-hairline-shade: #f1f5f9;
 }
 
-/* Code block styling */
+/* Code block styling — draws from the shared `--conloca-code-*` tokens so
+ * the published page matches the chrome the CMS MDX editor renders. Token
+ * defaults live in `./code-blocks.css` and react to both `:root.dark`
+ * (CMS SPA) and `:root[data-theme="dark"]` (Starlight). */
 .expressive-code pre {
-  background-color: #0f172a !important;
-  border-color: #334155 !important;
-}
-[data-theme="light"] .expressive-code pre {
-  background-color: #f8fafc !important;
-  border-color: #e2e8f0 !important;
+  background-color: var(--conloca-code-bg) !important;
+  border-color: var(--conloca-code-border) !important;
 }
 
 .expressive-code .frame {
-  border-color: #334155;
-}
-[data-theme="light"] .expressive-code .frame {
-  border-color: #e2e8f0;
+  border-color: var(--conloca-code-border);
 }
 
 /* Sidebar link active state — dark theme */

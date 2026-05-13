@@ -10,6 +10,7 @@
 // inputs against a string prop. Re-exported here so a host's editor file
 // can pull everything it needs from one place.
 export {
+  type CodeBlockConfig,
   defineMdxComponents,
   isJsxDescriptor,
   isSnippetDescriptor,

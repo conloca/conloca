@@ -1,7 +1,12 @@
 // Starlight MDX component descriptors for the CMS editor. The CMS shell
 // ships the plugin API only — these descriptors are the host's own code so
 // the core stays framework-agnostic.
-import { defineMdxComponents, type MdxComponentDescriptor, type MdxSnippetDescriptor } from '@conloca/astro-cms';
+import {
+  type CodeBlockConfig,
+  defineMdxComponents,
+  type MdxComponentDescriptor,
+  type MdxSnippetDescriptor,
+} from '@conloca/astro-cms';
 import { AsideEditor } from './editors/AsideEditor';
 import { CardEditor } from './editors/CardEditor';
 import { LinkCardEditor } from './editors/LinkCardEditor';
@@ -301,6 +306,18 @@ export const codeCalloutSnippet: MdxSnippetDescriptor = {
   kind: 'snippet',
   insert: { label: 'Code Callout', category: SNIPPET_CATEGORY },
   content: '```ts\nconlocaCMS({\n  contentRoot: "./content",\n  puckConfigPath: "./src/puck.config.tsx",\n})\n```\n',
+};
+
+/**
+ * Code-block frame chrome toggles. Picked up by the CMS schemas-loader and
+ * pushed into `@conloca/cms-spa`'s registry, which the MDX editor's
+ * code-block descriptor reads at render time. Theming flows through CSS
+ * tokens in `src/styles/code-blocks.css`, not this object.
+ */
+export const codeBlockConfig: CodeBlockConfig = {
+  showCopyButton: true,
+  showFilename: true,
+  showLanguageTag: true,
 };
 
 export const mdxComponents = defineMdxComponents([

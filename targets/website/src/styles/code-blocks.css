@@ -1,0 +1,61 @@
+/* Code-block chrome tokens — shared by the CMS MDX editor and the
+ * published Starlight pages so the frame around fenced code blocks
+ * looks identical on both surfaces.
+ *
+ * Syntax token colors are NOT defined here: the editor's CodeMirror
+ * uses its default Lezer highlighting and Starlight's pages render
+ * through ExpressiveCode/Shiki. Frame, header, font, padding match;
+ * syntax colors drift by design.
+ *
+ * Dark-mode triggers cover both conventions in use:
+ *   `.dark`          → CMS SPA admin (`packages/cms-spa/src/main.css`)
+ *   `[data-theme="dark"]` → Starlight site (Starlight default)
+ * The same file feeds both surfaces, so listing both selectors avoids
+ * a separate theme-attribute sync. */
+
+:root {
+  /* Frame */
+  --conloca-code-bg: #f8fafc;
+  --conloca-code-border: #e2e8f0;
+  --conloca-code-radius: 0.5rem;
+  --conloca-code-padding: 1rem 1.25rem;
+
+  /* Header bar */
+  --conloca-code-header-bg: #f1f5f9;
+  --conloca-code-header-border: #e2e8f0;
+  --conloca-code-header-fg: #475569;
+  --conloca-code-header-padding: 0.4rem 0.75rem;
+
+  /* Language pill */
+  --conloca-code-lang-bg: transparent;
+  --conloca-code-lang-fg: #64748b;
+
+  /* Copy button */
+  --conloca-code-copy-bg: transparent;
+  --conloca-code-copy-fg: #64748b;
+  --conloca-code-copy-bg-hover: #e2e8f0;
+  --conloca-code-copy-fg-hover: #0f172a;
+
+  /* Type */
+  --conloca-code-font-family: "JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --conloca-code-font-size: 0.875rem;
+  --conloca-code-line-height: 1.6;
+}
+
+:root.dark,
+:root[data-theme="dark"] {
+  --conloca-code-bg: #0f172a;
+  --conloca-code-border: #334155;
+
+  --conloca-code-header-bg: #1e293b;
+  --conloca-code-header-border: #334155;
+  --conloca-code-header-fg: #cbd5e1;
+
+  --conloca-code-lang-bg: transparent;
+  --conloca-code-lang-fg: #94a3b8;
+
+  --conloca-code-copy-bg: transparent;
+  --conloca-code-copy-fg: #94a3b8;
+  --conloca-code-copy-bg-hover: #334155;
+  --conloca-code-copy-fg-hover: #f8fafc;
+}

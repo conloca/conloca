@@ -41,6 +41,7 @@ import { Maximize2, Minimize2 } from 'lucide-react';
 import React, { useCallback, useEffect, useSyncExternalStore } from 'react';
 import '@mdxeditor/editor/style.css';
 import './editor-styles.css';
+import { conlocaCodeBlockDescriptor } from './code-block-frame';
 import { TO_MARKDOWN_OPTIONS } from './markdown-options';
 
 const FOCUS_MODE_STORAGE_KEY = 'conloca.mdxeditor.focusMode';
@@ -277,7 +278,10 @@ export const BaseMDXEditor = React.forwardRef<MDXEditorMethods, BaseMDXEditorPro
           // from `content.mdx` on load. Re-introducing the plugin would let
           // the editor round-trip a YAML block as body text, corrupting the
           // file when content is inserted above it.
-          codeBlockPlugin({ defaultCodeBlockLanguage: 'ts' }),
+          codeBlockPlugin({
+            defaultCodeBlockLanguage: 'ts',
+            codeBlockEditorDescriptors: [conlocaCodeBlockDescriptor],
+          }),
           codeMirrorPlugin({ codeBlockLanguages }),
           diffSourcePlugin({ viewMode: 'rich-text' }),
           markdownShortcutPlugin(),

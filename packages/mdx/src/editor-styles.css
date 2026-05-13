@@ -71,3 +71,135 @@
     row-gap: 2px;
   }
 }
+
+/* Code-block frame chrome — header bar + body wrapper that hosts the
+   library's CodeMirror instance. Tokens come from the host's `code-blocks.css`
+   (`--conloca-code-*`); fallbacks keep the editor readable when no host
+   defines them. The frame's visual job is to match what ExpressiveCode draws
+   on the published page; syntax colors inside CodeMirror are not themed here
+   (Pattern A — see plan).
+
+   Token defaults are declared here so the CMS SPA admin parent document
+   (where the MDXEditor mounts) gets working colors in both light and dark
+   without the host's `code-blocks.css` needing to be injected into the
+   admin shell. The host's file overrides these for brand customization
+   on the iframe + published surfaces. Two dark-mode selectors are
+   covered: `:root.dark` (CMS SPA convention) and `:root[data-theme="dark"]`
+   (Starlight convention). */
+:root {
+  --conloca-code-bg: #f8fafc;
+  --conloca-code-border: #e2e8f0;
+  --conloca-code-radius: 0.5rem;
+  --conloca-code-padding: 1rem 1.25rem;
+  --conloca-code-header-bg: #f1f5f9;
+  --conloca-code-header-border: #e2e8f0;
+  --conloca-code-header-fg: #475569;
+  --conloca-code-header-padding: 0.4rem 0.75rem;
+  --conloca-code-lang-bg: transparent;
+  --conloca-code-lang-fg: #64748b;
+  --conloca-code-copy-bg: transparent;
+  --conloca-code-copy-fg: #64748b;
+  --conloca-code-copy-bg-hover: #e2e8f0;
+  --conloca-code-copy-fg-hover: #0f172a;
+  --conloca-code-font-family: "JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --conloca-code-font-size: 0.875rem;
+  --conloca-code-line-height: 1.6;
+}
+:root.dark,
+:root[data-theme="dark"] {
+  --conloca-code-bg: #0f172a;
+  --conloca-code-border: #334155;
+  --conloca-code-header-bg: #1e293b;
+  --conloca-code-header-border: #334155;
+  --conloca-code-header-fg: #cbd5e1;
+  --conloca-code-lang-fg: #94a3b8;
+  --conloca-code-copy-fg: #94a3b8;
+  --conloca-code-copy-bg-hover: #334155;
+  --conloca-code-copy-fg-hover: #f8fafc;
+}
+
+.conloca-code-block {
+  background: var(--conloca-code-bg, #f8fafc);
+  border: 1px solid var(--conloca-code-border, #e2e8f0);
+  border-radius: var(--conloca-code-radius, 0.5rem);
+  margin-block: 1.25rem;
+  overflow: hidden;
+}
+
+.conloca-code-block__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  background: var(--conloca-code-header-bg, #f1f5f9);
+  border-bottom: 1px solid var(--conloca-code-header-border, #e2e8f0);
+  color: var(--conloca-code-header-fg, #475569);
+  font-family: var(--conloca-code-font-family, "JetBrains Mono", "Fira Code", ui-monospace, monospace);
+  font-size: calc(var(--conloca-code-font-size, 0.875rem) * 0.92);
+  padding: var(--conloca-code-header-padding, 0.4rem 0.75rem);
+}
+
+.conloca-code-block__filename {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conloca-code-block__header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.conloca-code-block__lang {
+  background: var(--conloca-code-lang-bg, transparent);
+  border-radius: 999px;
+  color: var(--conloca-code-lang-fg, #64748b);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  padding: 0.05rem 0.45rem;
+  text-transform: lowercase;
+}
+
+.conloca-code-copy {
+  align-items: center;
+  background: var(--conloca-code-copy-bg, transparent);
+  border: 0;
+  border-radius: 0.3rem;
+  color: var(--conloca-code-copy-fg, #64748b);
+  cursor: pointer;
+  display: inline-flex;
+  height: 1.5rem;
+  justify-content: center;
+  padding: 0;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+  width: 1.5rem;
+}
+.conloca-code-copy:hover {
+  background: var(--conloca-code-copy-bg-hover, #e2e8f0);
+  color: var(--conloca-code-copy-fg-hover, #0f172a);
+}
+
+.conloca-code-block__body {
+  background: var(--conloca-code-bg, #f8fafc);
+}
+
+/* Override the library's default CodeMirror surface so the frame's bg + radius
+   show through. MDXEditor doesn't expose a theme prop on `codeMirrorPlugin`
+   (see plan §7), so this selector is the supported integration point.
+   Background is set transparent — the frame's `__body` paints the surface. */
+.conloca-code-block__body .cm-editor,
+.conloca-code-block__body .cm-editor .cm-scroller,
+.conloca-code-block__body .cm-editor .cm-gutters {
+  background: transparent;
+}
+.conloca-code-block__body .cm-editor {
+  border-radius: 0;
+  font-family: var(--conloca-code-font-family, "JetBrains Mono", "Fira Code", ui-monospace, monospace);
+  font-size: var(--conloca-code-font-size, 0.875rem);
+  line-height: var(--conloca-code-line-height, 1.6);
+  padding: var(--conloca-code-padding, 1rem 1.25rem);
+}
