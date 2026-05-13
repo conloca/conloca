@@ -23,7 +23,7 @@ export default defineConfig({
         { label: 'Getting Started', slug: 'getting-started' },
         {
           label: 'Concepts',
-          autogenerate: { directory: 'concepts' },
+          items: [{ autogenerate: { directory: 'concepts' } }],
         },
         {
           label: 'Guides',
@@ -31,25 +31,25 @@ export default defineConfig({
             { label: 'Custom Blocks', slug: 'guides/custom-blocks' },
             {
               label: 'Authentication',
-              autogenerate: { directory: 'guides/auth' },
+              items: [{ autogenerate: { directory: 'guides/auth' } }],
             },
             {
               label: 'Deployment',
-              autogenerate: { directory: 'guides/deploy' },
+              items: [{ autogenerate: { directory: 'guides/deploy' } }],
             },
           ],
         },
         {
           label: 'API Reference',
-          autogenerate: { directory: 'reference/api' },
+          items: [{ autogenerate: { directory: 'reference/api' } }],
         },
         {
           label: 'Configuration',
-          slug: 'reference/configuration',
+          slug: 'configuration',
         },
         {
           label: 'Packages',
-          autogenerate: { directory: 'packages' },
+          items: [{ autogenerate: { directory: 'packages' } }],
         },
       ],
     }),
