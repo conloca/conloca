@@ -34,7 +34,7 @@ describe('buildInsertPayload', () => {
       defaults: { attributes: { stagger: true } },
     };
     const out = buildInsertPayload(d);
-    expect(out.props.stagger).toEqual({ type: 'mdxJsxAttributeValueExpression', value: 'true' });
+    expect(out.props.stagger).toEqual({ type: 'expression', value: 'true' });
   });
 
   test('parses defaults.children as CommonMark when hasChildren is true', () => {

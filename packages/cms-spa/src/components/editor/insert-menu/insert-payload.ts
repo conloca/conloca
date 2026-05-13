@@ -1,5 +1,6 @@
 import { insertJsx$, insertMarkdown$ } from '@mdxeditor/editor';
 import { fromMarkdown } from 'mdast-util-from-markdown';
+import type { MdxJsxFlowElement, MdxJsxTextElement } from 'mdast-util-mdx-jsx';
 import {
   isJsxDescriptor,
   isSnippetDescriptor,
@@ -8,23 +9,41 @@ import {
   type MdxJsxComponentDescriptor,
 } from '../../../mdx-components';
 
-type InsertJsxAttrValue = string | { type: 'mdxJsxAttributeValueExpression'; value: string };
+type InsertJsxAttrValue = string | { type: 'expression'; value: string };
 
-export interface InsertJsxPayload {
-  kind: 'flow' | 'text';
-  name: string;
-  props: Record<string, InsertJsxAttrValue>;
-  children?: unknown;
-}
+type InsertJsxProps = Record<string, InsertJsxAttrValue>;
 
 /**
- * Build the payload accepted by @mdxeditor/editor's `insertJsx$` signal
- * (verified at node_modules/@mdxeditor/editor/dist/plugins/jsx/index.js:30).
+ * Discriminated payload shape required by @mdxeditor/editor's `insertJsx$`
+ * signal (verified at node_modules/@mdxeditor/editor/dist/index.d.ts:1670).
+ *
+ * The two arms differ only in their `children` type — flow JSX accepts
+ * block-level mdast nodes; text JSX accepts phrasing-only nodes. We mirror
+ * the union exactly because the upstream `NodeRef` parameter type is the
+ * union, and a wider `kind: 'flow' | 'text'` shape no longer assigns to it
+ * under `strictFunctionTypes`.
+ */
+export type InsertJsxPayload =
+  | {
+      kind: 'flow';
+      name: string;
+      props: InsertJsxProps;
+      children?: MdxJsxFlowElement['children'];
+    }
+  | {
+      kind: 'text';
+      name: string;
+      props: InsertJsxProps;
+      children?: MdxJsxTextElement['children'];
+    };
+
+/**
+ * Build the payload accepted by @mdxeditor/editor's `insertJsx$` signal.
  *
  * Strings round-trip as plain attributes; numbers/booleans become
  * expression attributes (`{2}`, `{true}`) because the upstream
  * `mdxJsxAttribute.value` shape is either a string or an
- * `mdxJsxAttributeValueExpression`.
+ * `{ type: 'expression', value: string }` object.
  *
  * `descriptor.defaults.children` is parsed with `mdast-util-from-markdown`
  * using only CommonMark — descriptors that need MDX-flavored starter
@@ -36,27 +55,46 @@ export function buildInsertPayload(
   overrides: Record<string, string | number | boolean> = {},
 ): InsertJsxPayload {
   const merged = { ...(descriptor.defaults?.attributes ?? {}), ...overrides };
-  const props: Record<string, InsertJsxAttrValue> = {};
+  const props: InsertJsxProps = {};
   for (const [name, value] of Object.entries(merged)) {
     const propType = descriptor.props?.find((p) => p.name === name)?.type;
     if (propType === 'number' || propType === 'boolean' || typeof value === 'number' || typeof value === 'boolean') {
-      props[name] = { type: 'mdxJsxAttributeValueExpression', value: String(value) };
+      props[name] = { type: 'expression', value: String(value) };
     } else {
       props[name] = String(value);
     }
   }
 
-  let children: unknown;
+  // Parse the optional starter body. The cast on the result narrows the
+  // upstream mdast root's `children` to the flow/text element children types
+  // the library expects — `fromMarkdown` itself returns a Root whose
+  // children are block-level, which is the same set as `MdxJsxFlowElement`
+  // accepts. For text-kind descriptors, callers are responsible for
+  // providing CommonMark that is phrasing-only (the wildcard cast is
+  // explicit so the contract is visible at the call site).
+  let children: InsertJsxPayload['children'];
   if (descriptor.hasChildren && descriptor.defaults?.children) {
     const root = fromMarkdown(descriptor.defaults.children);
-    children = root.children;
+    children = root.children as InsertJsxPayload['children'];
   }
 
+  // Build via the discriminator-narrowed branches so the returned value
+  // matches one arm of the union exactly. A single object literal with
+  // `kind: descriptor.kind` would re-widen to the parent union and fail
+  // assignment to either arm.
+  if (descriptor.kind === 'flow') {
+    return {
+      kind: 'flow',
+      name: descriptor.name,
+      props,
+      children: children as MdxJsxFlowElement['children'] | undefined,
+    };
+  }
   return {
-    kind: descriptor.kind,
+    kind: 'text',
     name: descriptor.name,
     props,
-    children,
+    children: children as MdxJsxTextElement['children'] | undefined,
   };
 }
 

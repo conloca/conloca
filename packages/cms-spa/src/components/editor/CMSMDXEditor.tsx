@@ -1,7 +1,6 @@
 import { useUploadAsset } from '@conloca/content-api-client';
 import { BaseMDXEditor, type BaseMDXEditorProps } from '@conloca/mdx';
 import type { JsxComponentDescriptor, MDXEditorMethods, RealmPlugin } from '@mdxeditor/editor';
-import type React from 'react';
 import { forwardRef, useCallback, useMemo, useRef } from 'react';
 import { buildUploadFormData } from '../../hooks/useUpload';
 import { isJsxDescriptor, toJsxComponentDescriptor, useMdxComponents } from '../../mdx-components';
