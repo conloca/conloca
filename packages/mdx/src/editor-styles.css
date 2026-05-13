@@ -109,12 +109,16 @@
 :root[data-theme="dark"] {
   --conloca-code-bg: #0f172a;
   --conloca-code-border: #334155;
-  --conloca-code-header-bg: #1e293b;
+  /* Tab/header bg sits a notch DARKER than the body — matches what
+     ExpressiveCode (Night Owl) paints on the published page so the
+     editor's header reads as the same "tab on top of code" silhouette
+     instead of an inverted strip. Measured value: rgb(11,41,66). */
+  --conloca-code-header-bg: #0b2942;
   --conloca-code-header-border: #334155;
-  --conloca-code-header-fg: #cbd5e1;
+  --conloca-code-header-fg: #d2dee7;
   --conloca-code-lang-fg: #94a3b8;
   --conloca-code-copy-fg: #94a3b8;
-  --conloca-code-copy-bg-hover: #334155;
+  --conloca-code-copy-bg-hover: #1e293b;
   --conloca-code-copy-fg-hover: #f8fafc;
 }
 

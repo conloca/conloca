@@ -47,15 +47,17 @@
   --conloca-code-bg: #0f172a;
   --conloca-code-border: #334155;
 
-  --conloca-code-header-bg: #1e293b;
+  /* Tab/header sits a notch darker than the body so the editor's
+     header bar reads the same way EC's frame tab does (Night Owl). */
+  --conloca-code-header-bg: #0b2942;
   --conloca-code-header-border: #334155;
-  --conloca-code-header-fg: #cbd5e1;
+  --conloca-code-header-fg: #d2dee7;
 
   --conloca-code-lang-bg: transparent;
   --conloca-code-lang-fg: #94a3b8;
 
   --conloca-code-copy-bg: transparent;
   --conloca-code-copy-fg: #94a3b8;
-  --conloca-code-copy-bg-hover: #334155;
+  --conloca-code-copy-bg-hover: #1e293b;
   --conloca-code-copy-fg-hover: #f8fafc;
 }
