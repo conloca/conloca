@@ -1,6 +1,6 @@
 import { type CodeBlockEditorDescriptor, type CodeBlockEditorProps, CodeMirrorEditor } from '@mdxeditor/editor';
 import { Check, Copy } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 /**
  * Frame chrome around the editor's fenced code blocks — header bar with
@@ -48,25 +48,47 @@ function CopyButton({ code }: { code: string }) {
   );
 }
 
-// Reads the config at render time from the cms-spa registry without
-// importing the registry directly (would create a hard dep from @conloca/mdx
-// → @conloca/cms-spa). The registry mounts itself on `window` under a
-// documented key; absent host registration, every chrome bit defaults to on.
+// Subscribes to the cms-spa code-block config registry via the shared
+// window cell — same `__CODE_BLOCK_CONFIG_STATE__` key + subscribers set
+// `cms-spa`'s `useCodeBlockConfig` writes to. Reaching through the window
+// avoids a hard `@conloca/mdx → @conloca/cms-spa` import (which would be
+// circular: cms-spa already depends on mdx). Structural compatibility on
+// the config shape is enough — extra fields the host sets get ignored,
+// missing fields default to `true` at the call site.
 interface CodeBlockConfigShape {
   showCopyButton?: boolean;
   showFilename?: boolean;
   showLanguageTag?: boolean;
 }
 
-function readCodeBlockConfig(): CodeBlockConfigShape {
-  if (typeof window === 'undefined') return {};
-  const state = (window as unknown as { __CODE_BLOCK_CONFIG_STATE__?: { config: CodeBlockConfigShape } })
-    .__CODE_BLOCK_CONFIG_STATE__;
-  return state?.config ?? {};
+interface SharedCodeBlockConfigCell {
+  config: CodeBlockConfigShape;
+  subscribers: Set<(config: CodeBlockConfigShape) => void>;
+}
+
+function getSharedCell(): SharedCodeBlockConfigCell | undefined {
+  if (typeof window === 'undefined') return undefined;
+  return (window as unknown as { __CODE_BLOCK_CONFIG_STATE__?: SharedCodeBlockConfigCell }).__CODE_BLOCK_CONFIG_STATE__;
+}
+
+function useCodeBlockConfig(): CodeBlockConfigShape {
+  const [config, setConfig] = useState<CodeBlockConfigShape>(() => getSharedCell()?.config ?? {});
+
+  useEffect(() => {
+    const cell = getSharedCell();
+    if (!cell) return;
+    if (cell.config !== config) setConfig(cell.config);
+    cell.subscribers.add(setConfig);
+    return () => {
+      cell.subscribers.delete(setConfig);
+    };
+  }, [config]);
+
+  return config;
 }
 
 function ConlocaCodeBlockEditor(props: CodeBlockEditorProps) {
-  const config = readCodeBlockConfig();
+  const config = useCodeBlockConfig();
   const showCopyButton = config.showCopyButton ?? true;
   const showFilename = config.showFilename ?? true;
   const showLanguageTag = config.showLanguageTag ?? true;
