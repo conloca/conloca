@@ -85,14 +85,17 @@
    admin shell. The host's file overrides these for brand customization
    on the iframe + published surfaces. Two dark-mode selectors are
    covered: `:root.dark` (CMS SPA convention) and `:root[data-theme="dark"]`
-   (Starlight convention). */
+   (Starlight convention).
+
+   Radius is small on purpose — EC paints a 1px radius, basically sharp.
+   We bump to 0.25rem (4px) so the editor still reads as a softened
+   "code frame" but doesn't sit visibly rounder than the published page. */
 :root {
   --conloca-code-bg: #f8fafc;
   --conloca-code-border: #e2e8f0;
-  --conloca-code-radius: 0.5rem;
+  --conloca-code-radius: 0.25rem;
   --conloca-code-padding: 1rem 1.25rem;
   --conloca-code-header-bg: #f1f5f9;
-  --conloca-code-header-border: #e2e8f0;
   --conloca-code-header-fg: #475569;
   --conloca-code-header-padding: 0.4rem 0.75rem;
   --conloca-code-lang-bg: transparent;
@@ -114,7 +117,6 @@
      editor's header reads as the same "tab on top of code" silhouette
      instead of an inverted strip. Measured value: rgb(11,41,66). */
   --conloca-code-header-bg: #0b2942;
-  --conloca-code-header-border: #334155;
   --conloca-code-header-fg: #d2dee7;
   --conloca-code-lang-fg: #94a3b8;
   --conloca-code-copy-fg: #94a3b8;
@@ -136,7 +138,6 @@
   justify-content: space-between;
   gap: 0.5rem;
   background: var(--conloca-code-header-bg, #f1f5f9);
-  border-bottom: 1px solid var(--conloca-code-header-border, #e2e8f0);
   color: var(--conloca-code-header-fg, #475569);
   font-family: var(--conloca-code-font-family, "JetBrains Mono", "Fira Code", ui-monospace, monospace);
   font-size: calc(var(--conloca-code-font-size, 0.875rem) * 0.92);

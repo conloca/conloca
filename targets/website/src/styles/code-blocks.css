@@ -17,12 +17,14 @@
   /* Frame */
   --conloca-code-bg: #f8fafc;
   --conloca-code-border: #e2e8f0;
-  --conloca-code-radius: 0.5rem;
+  --conloca-code-radius: 0.25rem;
   --conloca-code-padding: 1rem 1.25rem;
 
-  /* Header bar */
+  /* Header bar — no border-bottom: separation between header and body
+     comes from the bg color difference (matches how EC paints the tab
+     on the published page; otherwise a stray divider line shows in the
+     editor that isn't present on the rendered side). */
   --conloca-code-header-bg: #f1f5f9;
-  --conloca-code-header-border: #e2e8f0;
   --conloca-code-header-fg: #475569;
   --conloca-code-header-padding: 0.4rem 0.75rem;
 
@@ -50,7 +52,6 @@
   /* Tab/header sits a notch darker than the body so the editor's
      header bar reads the same way EC's frame tab does (Night Owl). */
   --conloca-code-header-bg: #0b2942;
-  --conloca-code-header-border: #334155;
   --conloca-code-header-fg: #d2dee7;
 
   --conloca-code-lang-bg: transparent;
