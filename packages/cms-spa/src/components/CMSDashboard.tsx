@@ -33,14 +33,14 @@ export function CMSDashboard() {
         <div className="flex items-center gap-2">
           <Link
             to="/pages"
-            className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-grey-01 text-grey-12 hover:bg-azure-04 hover:text-white dark:bg-grey-12 dark:text-grey-01 dark:hover:bg-azure-06 dark:hover:text-white transition-colors"
+            className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium whitespace-nowrap bg-grey-01 text-grey-12 hover:bg-azure-04 hover:text-white dark:bg-grey-12 dark:text-grey-01 dark:hover:bg-azure-06 dark:hover:text-white transition-colors"
           >
             <Plus className="h-4 w-4" />
             New Page
           </Link>
           <Link
             to="/media"
-            className="flex items-center gap-2 px-3 py-2 border border-grey-09 dark:border-grey-03 rounded-md text-sm font-medium text-grey-01 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
+            className="flex items-center gap-2 px-3 py-2 border border-grey-09 dark:border-grey-03 rounded-md text-sm font-medium whitespace-nowrap text-grey-01 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
           >
             <Upload className="h-4 w-4" />
             Upload
