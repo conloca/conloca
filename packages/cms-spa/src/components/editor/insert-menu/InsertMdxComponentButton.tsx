@@ -1,36 +1,83 @@
 // IMPORTANT: Import gurx hooks from @mdxeditor/editor, NOT from @mdxeditor/gurx directly.
 // @mdxeditor/editor re-exports gurx, and using that ensures we get the same module instance
 // as the editor internals, avoiding React context isolation issues.
-import { insertJsx$, usePublisher } from '@mdxeditor/editor';
+import { usePublisher } from '@mdxeditor/editor';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { Plus } from 'lucide-react';
 import { useMemo } from 'react';
 import { type MdxComponentDescriptor, useMdxComponents } from '../../../mdx-components';
-import { buildInsertPayload } from './insert-payload';
+import { dispatchInsert, insertJsx$, insertMarkdown$ } from './insert-payload';
+
+interface DescriptorGroup {
+  /** Section header label. Empty string for the ungrouped bucket. */
+  category: string;
+  descriptors: MdxComponentDescriptor[];
+}
 
 /**
- * Toolbar dropdown that inserts registered MDX components. Mirrors the
- * slash menu but lists only `kind: 'flow'` entries — inline components
- * (`Icon`) are reachable via the slash menu since toolbar inserts are
- * always block-level. Alphabetical, no categories (revisit if a second
- * adapter source ships).
+ * Group descriptors by `insert.category`. Descriptors with no category land
+ * in the leading ungrouped bucket so the dropdown still feels flat when no
+ * host opts into grouping. Insertion order within a group is preserved so
+ * hosts can hand-curate the visible ordering instead of inheriting alphabetical.
+ */
+function groupByCategory(descriptors: MdxComponentDescriptor[]): DescriptorGroup[] {
+  const groups = new Map<string, MdxComponentDescriptor[]>();
+  for (const d of descriptors) {
+    const category = d.insert?.category ?? '';
+    const bucket = groups.get(category);
+    if (bucket) {
+      bucket.push(d);
+    } else {
+      groups.set(category, [d]);
+    }
+  }
+  // Stable order: ungrouped first (matches the previous flat behavior),
+  // then categories in first-seen order.
+  const result: DescriptorGroup[] = [];
+  const ungrouped = groups.get('');
+  if (ungrouped) result.push({ category: '', descriptors: ungrouped });
+  for (const [category, items] of groups) {
+    if (category === '') continue;
+    result.push({ category, descriptors: items });
+  }
+  return result;
+}
+
+/**
+ * Toolbar dropdown that inserts registered MDX components and snippets.
+ * Mirrors the slash menu but lists only block-level entries:
+ *
+ * - JSX descriptors with `kind: 'flow'` (inline `kind: 'text'` components
+ *   like `<Icon>` are only reachable via the slash menu, since toolbar
+ *   inserts are always block-level).
+ * - Snippet descriptors (always block-level; snippets are raw MDX, not
+ *   inline atoms).
+ *
+ * Entries are grouped by `insert.category` so a host that registers both
+ * components and snippets sees them sectioned (e.g. "Components" / "Patterns").
  */
 export function InsertMdxComponentButton() {
   const allComponents = useMdxComponents();
-  const insertJsx = usePublisher(insertJsx$);
+  const publishJsx = usePublisher(insertJsx$);
+  const publishMarkdown = usePublisher(insertMarkdown$);
 
-  const items = useMemo<MdxComponentDescriptor[]>(() => {
-    return allComponents
-      .filter((d) => d.kind === 'flow' && !!d.insert)
-      .slice()
-      .sort((a, b) => (a.insert?.label ?? a.name).localeCompare(b.insert?.label ?? b.name));
+  const groups = useMemo<DescriptorGroup[]>(() => {
+    const visible = allComponents.filter((d) => {
+      if (!d.insert) return false;
+      // Inline JSX (kind: 'text') is hidden from the toolbar because a
+      // block-level toolbar click would force the cursor out of its
+      // paragraph context. The slash menu handles inline insertion.
+      if (d.kind === 'text') return false;
+      return true;
+    });
+    return groupByCategory(visible.slice());
   }, [allComponents]);
 
-  if (items.length === 0) return null;
+  const total = groups.reduce((n, g) => n + g.descriptors.length, 0);
+  if (total === 0) return null;
 
   const onSelect = (descriptor: MdxComponentDescriptor) => {
-    const payload = buildInsertPayload(descriptor);
-    insertJsx(payload as Parameters<typeof insertJsx>[0]);
+    dispatchInsert(descriptor, { jsx: publishJsx, markdown: publishMarkdown });
   };
 
   return (
@@ -51,17 +98,29 @@ export function InsertMdxComponentButton() {
           align="start"
           className="z-50 min-w-[14rem] max-h-72 overflow-auto rounded-md border border-grey-09 dark:border-grey-04 bg-white dark:bg-grey-02 shadow-md py-1 text-sm"
         >
-          {items.map((descriptor) => (
-            <DropdownMenu.Item
-              key={descriptor.name}
-              onSelect={() => onSelect(descriptor)}
-              className="block px-3 py-1.5 cursor-default outline-none data-[highlighted]:bg-grey-10 dark:data-[highlighted]:bg-grey-03"
-            >
-              <div className="font-medium">{descriptor.insert?.label ?? descriptor.name}</div>
-              {descriptor.insert?.description ? (
-                <div className="text-xs text-grey-04 dark:text-grey-07">{descriptor.insert.description}</div>
+          {groups.map((group, groupIndex) => (
+            <div key={group.category || '__ungrouped__'}>
+              {group.category ? (
+                <DropdownMenu.Label className="px-3 pt-2 pb-1 text-[10px] uppercase tracking-wide text-grey-04 dark:text-grey-07">
+                  {group.category}
+                </DropdownMenu.Label>
               ) : null}
-            </DropdownMenu.Item>
+              {group.descriptors.map((descriptor) => (
+                <DropdownMenu.Item
+                  key={descriptor.name}
+                  onSelect={() => onSelect(descriptor)}
+                  className="block px-3 py-1.5 cursor-default outline-none data-[highlighted]:bg-grey-10 dark:data-[highlighted]:bg-grey-03"
+                >
+                  <div className="font-medium">{descriptor.insert?.label ?? descriptor.name}</div>
+                  {descriptor.insert?.description ? (
+                    <div className="text-xs text-grey-04 dark:text-grey-07">{descriptor.insert.description}</div>
+                  ) : null}
+                </DropdownMenu.Item>
+              ))}
+              {groupIndex < groups.length - 1 ? (
+                <DropdownMenu.Separator className="my-1 h-px bg-grey-09 dark:bg-grey-04" />
+              ) : null}
+            </div>
           ))}
         </DropdownMenu.Content>
       </DropdownMenu.Portal>

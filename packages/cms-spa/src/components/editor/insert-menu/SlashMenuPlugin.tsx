@@ -4,11 +4,11 @@ import {
   MenuOption,
   useBasicTypeaheadTriggerMatch,
 } from '@lexical/react/LexicalTypeaheadMenuPlugin';
-import { insertJsx$, usePublisher } from '@mdxeditor/editor';
+import { usePublisher } from '@mdxeditor/editor';
 import { useCallback, useContext, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { type MdxComponentDescriptor, useMdxComponents } from '../../../mdx-components';
-import { buildInsertPayload } from './insert-payload';
+import { dispatchInsert, insertJsx$, insertMarkdown$ } from './insert-payload';
 
 class MdxComponentOption extends MenuOption {
   constructor(public descriptor: MdxComponentDescriptor) {
@@ -31,13 +31,14 @@ function matchesQuery(descriptor: MdxComponentDescriptor, query: string): boolea
 }
 
 /**
- * Slash menu for inserting registered MDX JSX components.
+ * Slash menu for inserting registered MDX components and snippets.
  *
  * Triggers on `/` (via `useBasicTypeaheadTriggerMatch`). The query filters
- * descriptors by name, label, description, and keywords. Selecting an
- * option publishes through @mdxeditor/editor's `insertJsx$` signal, which
- * pipes through Lexical's `insertDecoratorNode$` and handles flow-vs-text
- * placement based on the descriptor's `kind`.
+ * descriptors by name, label, description, and keywords. JSX descriptors
+ * route through `insertJsx$` (typed Lexical decorator node); snippet
+ * descriptors route through `insertMarkdown$` (raw MDX spliced at the
+ * cursor). Categories are intentionally ignored here — typeahead works
+ * better as a flat list than as nested sections.
  */
 export function SlashMenuPlugin() {
   // Read the Lexical context directly (not via useLexicalComposerContext) so
@@ -51,7 +52,8 @@ export function SlashMenuPlugin() {
   const ctx = useContext(LexicalComposerContext);
   const editor = ctx?.[0] ?? null;
   const allComponents = useMdxComponents();
-  const insertJsx = usePublisher(insertJsx$);
+  const publishJsx = usePublisher(insertJsx$);
+  const publishMarkdown = usePublisher(insertMarkdown$);
   const [queryString, setQueryString] = useState<string | null>(null);
 
   const triggerFn = useBasicTypeaheadTriggerMatch('/', { minLength: 0, maxLength: 32 });
@@ -68,11 +70,10 @@ export function SlashMenuPlugin() {
       editor.update(() => {
         if (nodeToReplace) nodeToReplace.remove();
       });
-      const payload = buildInsertPayload(option.descriptor);
-      insertJsx(payload as Parameters<typeof insertJsx>[0]);
+      dispatchInsert(option.descriptor, { jsx: publishJsx, markdown: publishMarkdown });
       closeMenu();
     },
-    [editor, insertJsx],
+    [editor, publishJsx, publishMarkdown],
   );
 
   if (!editor) return null;

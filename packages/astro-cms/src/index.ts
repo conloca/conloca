@@ -11,10 +11,14 @@
 // can pull everything it needs from one place.
 export {
   defineMdxComponents,
+  isJsxDescriptor,
+  isSnippetDescriptor,
   type MdxComponentDescriptor,
   type MdxComponentInsertHint,
   type MdxComponentProp,
   type MdxComponents,
+  type MdxJsxComponentDescriptor,
+  type MdxSnippetDescriptor,
   readStringAttribute,
   writeStringAttribute,
 } from '@conloca/cms-spa/mdx-components';

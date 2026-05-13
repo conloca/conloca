@@ -10,9 +10,9 @@ interface EditorChromeTogglesProps {
 
 /**
  * Compact row of editor-level toggles rendered in the header next to the
- * save button. Kept separate from `CMSMDXHeaderTools` (snippet/template
- * inserters) because the chrome toggles operate on the editor *view*, not
- * the content — they belong with Cancel/Save, not with the content tools.
+ * save button. The chrome toggles operate on the editor *view*, not the
+ * content — they belong with Cancel/Save, not with the content-insertion
+ * tools (which now live entirely in the editor toolbar).
  */
 export function EditorChromeToggles({ previewOpen, onTogglePreview }: EditorChromeTogglesProps) {
   const showPreviewToggle = previewOpen !== undefined && onTogglePreview !== undefined;

@@ -16,7 +16,7 @@ import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard';
 import { ConflictDialog } from '../dialogs/ConflictDialog';
 import { ErrorModal } from '../dialogs/ErrorModal';
 import { UnsavedChangesDialog } from '../dialogs/UnsavedChangesDialog';
-import { CMSMDXEditor, CMSMDXHeaderTools } from './CMSMDXEditor';
+import { CMSMDXEditor } from './CMSMDXEditor';
 import { EditorChromeToggles } from './EditorChromeToggles';
 import { LocaleSelector } from './LocaleSelector';
 import { MDXLivePreview } from './MDXLivePreview';
@@ -277,7 +277,6 @@ export function BlockEditor() {
           <h1 className="text-base font-medium text-grey-01 dark:text-grey-12 truncate">Edit: {filePath}</h1>
         </div>
         <div className="flex items-center gap-2">
-          <CMSMDXHeaderTools setContent={setContent} editorRef={editorRef} filePath={filePath} />
           <LocaleSelector
             currentLocale={currentLocale}
             availableLocales={availableLocales}

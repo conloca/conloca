@@ -6,12 +6,6 @@ export interface ContentBlockTemplate {
   content: string;
 }
 
-export interface ContentBlockSnippet {
-  id: string;
-  label: string;
-  content: string;
-}
-
 export const contentBlockTemplates: ContentBlockTemplate[] = [
   {
     id: 'long-form',
@@ -53,46 +47,6 @@ export const contentBlockTemplates: ContentBlockTemplate[] = [
     category: 'story',
     content:
       '# {{title}}\n\nStart with a direct statement of belief. This should sound like a human, not a feature checklist.\n\n## What we kept seeing\n\nDescribe the repeated pattern that convinced you the problem was real.\n\n## What we decided to build instead\n\nExplain the product choice and the philosophy behind it.\n\n> The best CMS should make editors faster without taking the codebase away from developers.\n',
-  },
-];
-
-export const contentBlockSnippets: ContentBlockSnippet[] = [
-  {
-    id: 'section-heading',
-    label: 'Section Heading',
-    content: '## Section title\n\nWrite the opening paragraph for this section here.\n',
-  },
-  {
-    id: 'callout-quote',
-    label: 'Callout Quote',
-    content: '> A short, sharp takeaway or highlighted recommendation.\n',
-  },
-  {
-    id: 'proof-points',
-    label: 'Proof Points',
-    content: '- Clear editorial workflow\n- Reusable narrative blocks\n- Git-native publishing history\n',
-  },
-  {
-    id: 'comparison-table',
-    label: 'Comparison Table',
-    content:
-      '| Option | Best for | Tradeoff |\n| --- | --- | --- |\n| Option A | Teams that want speed | Less flexibility |\n| Option B | Teams that need control | More setup |\n',
-  },
-  {
-    id: 'before-after',
-    label: 'Before / After Table',
-    content:
-      '| Before | After |\n| --- | --- |\n| Editors wait on developers | Editors publish with reusable blocks |\n| Content lives in tools | Content lives in the repo |\n',
-  },
-  {
-    id: 'next-steps',
-    label: 'Next Steps List',
-    content: '## Next steps\n\n1. First action\n2. Second action\n3. Third action\n',
-  },
-  {
-    id: 'code-callout',
-    label: 'Code Callout',
-    content: '```ts\nconlocaCMS({\n  contentRoot: "./content",\n  puckConfigPath: "./src/puck.config.tsx",\n})\n```\n',
   },
 ];
 

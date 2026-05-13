@@ -18,7 +18,7 @@ import { ConflictDialog } from '../dialogs/ConflictDialog';
 import { ErrorModal } from '../dialogs/ErrorModal';
 import { PageMetadataDialog } from '../dialogs/PageMetadataDialog';
 import { UnsavedChangesDialog } from '../dialogs/UnsavedChangesDialog';
-import { CMSMDXEditor, CMSMDXHeaderTools } from './CMSMDXEditor';
+import { CMSMDXEditor } from './CMSMDXEditor';
 import { LocaleSelector } from './LocaleSelector';
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error' | 'conflict';
@@ -323,7 +323,6 @@ export function MdxPageEditor() {
           <h1 className="text-base font-medium text-grey-01 dark:text-grey-12 truncate">Edit: {pagePathname}</h1>
         </div>
         <div className="flex items-center gap-2">
-          <CMSMDXHeaderTools setContent={setContent} editorRef={editorRef} filePath={pagePathname} />
           <LocaleSelector
             currentLocale={currentLocale}
             availableLocales={availableLocales}

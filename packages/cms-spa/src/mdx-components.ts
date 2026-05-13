@@ -4,20 +4,28 @@ import type { ComponentType } from 'react';
 import { useEffect, useState } from 'react';
 
 /**
- * Plugin API for registering MDX JSX components that the CMS editor knows how
- * to insert, prop-edit, and (optionally) keep imports synced for.
+ * Plugin API for registering insertable content for the CMS editor.
+ *
+ * Two flavors live in the same registry:
+ *
+ * 1. JSX components (`kind: 'flow' | 'text'`) — typed MDX components with
+ *    prop-editor forms and optional auto-import injection.
+ * 2. Markdown snippets (`kind: 'snippet'`) — host-defined boilerplate
+ *    chunks the toolbar/slash menu insert as raw MDX. Used for "starting
+ *    points" that are pure prose (callouts, comparison tables, lists)
+ *    rather than reusable JSX surfaces.
  *
  * Mirrors the shape of `page-schemas.ts` — same `define*` identity helper,
- * same `setX/getX/useX` triad backed by a shared window-state cell, same HMR
- * subscriber pattern. Hosts add a `mdxComponents` export to the file pointed
- * at by the Astro integration's `schemasPath` option; the virtual module
- * loader in `@conloca/astro-cms` picks it up alongside `pageSchemas`.
+ * same `setX/getX/useX` triad backed by a shared window-state cell, same
+ * HMR subscriber pattern. Hosts add an `mdxComponents` export to the file
+ * pointed at by the Astro integration's `schemasPath` option; the virtual
+ * module loader in `@conloca/astro-cms` picks it up alongside `pageSchemas`.
  *
- * Pruning caveat: when `import.from` is set, the import is added/removed by
- * `@mdxeditor/editor`'s own export pipeline, which rebuilds the import block
- * on every save from the components actually referenced in the document.
- * Unrelated author imports (types, side effects) are dropped. See the
- * astro-cms README for the full constraint.
+ * Pruning caveat (JSX flavor only): when `import.from` is set, the import
+ * is added/removed by `@mdxeditor/editor`'s own export pipeline, which
+ * rebuilds the import block on every save from the components actually
+ * referenced in the document. Unrelated author imports (types, side
+ * effects) are dropped. See the astro-cms README for the full constraint.
  */
 
 export type MdxComponentProp =
@@ -56,9 +64,20 @@ export interface MdxComponentInsertHint {
   icon?: string;
   /** Aliases that match in slash-menu search ('callout' would match Aside). */
   keywords?: ReadonlyArray<string>;
+  /**
+   * Optional grouping label for the toolbar dropdown. Descriptors with the
+   * same `category` render under a shared section header; descriptors that
+   * omit it land in the default ungrouped bucket. Slash-menu rendering
+   * currently ignores this — typeahead works better as a flat list.
+   */
+  category?: string;
 }
 
-export interface MdxComponentDescriptor {
+/**
+ * JSX component descriptor — a typed MDX surface the editor can prop-edit
+ * and (optionally) keep imports synced for.
+ */
+export interface MdxJsxComponentDescriptor {
   /** Tag name authors write in MDX, e.g. 'Steps'. Unique across the registry. */
   name: string;
   /** Block-level (`flow`) or inline (`text`). */
@@ -87,26 +106,68 @@ export interface MdxComponentDescriptor {
   import?: { from: string; default?: boolean };
 }
 
+/**
+ * Markdown snippet descriptor — a host-defined boilerplate chunk inserted
+ * as raw MDX. No props, no auto-import, no in-place editor: once inserted
+ * the snippet *is* the document content, edited inline like any other
+ * markdown.
+ */
+export interface MdxSnippetDescriptor {
+  /**
+   * Stable id. Not exposed in the output MDX; used only as a registry key
+   * (so two snippets named 'Callout' would collide the same way two JSX
+   * `<Callout>` components would).
+   */
+  name: string;
+  kind: 'snippet';
+  /** Insert-time UI hints. Required — a snippet with no label can't be inserted. */
+  insert: MdxComponentInsertHint;
+  /**
+   * Raw MDX inserted at the cursor when the snippet is chosen. Parsed by
+   * `@mdxeditor/editor`'s markdown insertion path, so JSX (e.g. nested
+   * `<Card>`) round-trips through the registered JSX descriptors.
+   */
+  content: string;
+}
+
+export type MdxComponentDescriptor = MdxJsxComponentDescriptor | MdxSnippetDescriptor;
+
 export type MdxComponents = ReadonlyArray<MdxComponentDescriptor>;
+
+/** Type guard: descriptor is the JSX variant (vs. a snippet). */
+export function isJsxDescriptor(d: MdxComponentDescriptor): d is MdxJsxComponentDescriptor {
+  return d.kind === 'flow' || d.kind === 'text';
+}
+
+/** Type guard: descriptor is the snippet variant. */
+export function isSnippetDescriptor(d: MdxComponentDescriptor): d is MdxSnippetDescriptor {
+  return d.kind === 'snippet';
+}
 
 /**
  * Identity helper that validates registration-time invariants.
  *
  * Throws on:
- * - duplicate `name` across the array;
+ * - duplicate `name` across the array (across kinds — a JSX `<Aside>` and a
+ *   snippet named 'Aside' would clash in the insert menu);
  * - `kind: 'text'` with `hasChildren: true` (text-kind JSX is treated as an
  *   inline atom by the Lexical bridge);
- * - two descriptors with conflicting `import.from` for the same `name`
+ * - two JSX descriptors with conflicting `import.from` for the same `name`
  *   (deterministic merge failure that would otherwise surface as a confusing
- *   save-time error).
+ *   save-time error);
+ * - snippet descriptors with an empty `content` string (would silently
+ *   insert nothing and look like a broken menu item).
  */
 export function defineMdxComponents(components: MdxComponents): MdxComponents {
   const seen = new Map<string, MdxComponentDescriptor>();
   for (const descriptor of components) {
     const existing = seen.get(descriptor.name);
     if (existing) {
-      const a = existing.import?.from;
-      const b = descriptor.import?.from;
+      // Duplicate-import is reported with its specific message because that
+      // class of mistake comes from two registration files merging — the
+      // generic 'duplicate descriptor' hint isn't enough to debug it.
+      const a = isJsxDescriptor(existing) ? existing.import?.from : undefined;
+      const b = isJsxDescriptor(descriptor) ? descriptor.import?.from : undefined;
       if (a !== b) {
         throw new Error(
           `defineMdxComponents: duplicate descriptor for '${descriptor.name}' with conflicting import.from (` +
@@ -115,10 +176,16 @@ export function defineMdxComponents(components: MdxComponents): MdxComponents {
       }
       throw new Error(`defineMdxComponents: duplicate descriptor for '${descriptor.name}'.`);
     }
-    if (descriptor.kind === 'text' && descriptor.hasChildren) {
+    if (isJsxDescriptor(descriptor) && descriptor.kind === 'text' && descriptor.hasChildren) {
       throw new Error(
         `defineMdxComponents: descriptor '${descriptor.name}' has kind: 'text' with hasChildren: true — ` +
           "text-kind JSX is treated as an inline atom; use kind: 'flow' for components with children.",
+      );
+    }
+    if (isSnippetDescriptor(descriptor) && descriptor.content.length === 0) {
+      throw new Error(
+        `defineMdxComponents: snippet descriptor '${descriptor.name}' has empty content — ` +
+          'a snippet with no content would silently insert nothing.',
       );
     }
     seen.set(descriptor.name, descriptor);
@@ -158,12 +225,18 @@ export function writeStringAttribute<T extends MdxJsxFlowElement | MdxJsxTextEle
 }
 
 /**
- * Translate a plugin descriptor to the upstream `JsxComponentDescriptor`
- * shape that `@mdxeditor/editor` consumes. Booleans surface as expressions
- * (`{true}`) because the upstream `JsxPropertyDescriptor.type` is
- * `'string' | 'number' | 'expression'`.
+ * Translate a JSX-flavored plugin descriptor to the upstream
+ * `JsxComponentDescriptor` shape that `@mdxeditor/editor` consumes.
+ * Booleans surface as expressions (`{true}`) because the upstream
+ * `JsxPropertyDescriptor.type` is `'string' | 'number' | 'expression'`.
+ *
+ * Snippet descriptors are not JSX — call sites filter them out before
+ * dispatching here. Passing one throws to surface the misuse loudly.
  */
 export function toJsxComponentDescriptor(d: MdxComponentDescriptor): JsxComponentDescriptor {
+  if (!isJsxDescriptor(d)) {
+    throw new Error(`toJsxComponentDescriptor: '${d.name}' is a snippet, not a JSX component.`);
+  }
   return {
     name: d.name,
     kind: d.kind,

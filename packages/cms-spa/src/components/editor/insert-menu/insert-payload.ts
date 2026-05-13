@@ -1,5 +1,12 @@
+import { insertJsx$, insertMarkdown$ } from '@mdxeditor/editor';
 import { fromMarkdown } from 'mdast-util-from-markdown';
-import type { MdxComponentDescriptor, MdxComponentProp } from '../../../mdx-components';
+import {
+  isJsxDescriptor,
+  isSnippetDescriptor,
+  type MdxComponentDescriptor,
+  type MdxComponentProp,
+  type MdxJsxComponentDescriptor,
+} from '../../../mdx-components';
 
 type InsertJsxAttrValue = string | { type: 'mdxJsxAttributeValueExpression'; value: string };
 
@@ -25,7 +32,7 @@ export interface InsertJsxPayload {
  * author build the body via in-place editing.
  */
 export function buildInsertPayload(
-  descriptor: MdxComponentDescriptor,
+  descriptor: MdxJsxComponentDescriptor,
   overrides: Record<string, string | number | boolean> = {},
 ): InsertJsxPayload {
   const merged = { ...(descriptor.defaults?.attributes ?? {}), ...overrides };
@@ -53,7 +60,53 @@ export function buildInsertPayload(
   };
 }
 
-/** Whether the descriptor has any required props the inserter must prompt for. */
-export function hasRequiredProps(descriptor: MdxComponentDescriptor): boolean {
+/** Whether the JSX descriptor has any required props the inserter must prompt for. */
+export function hasRequiredProps(descriptor: MdxJsxComponentDescriptor): boolean {
   return !!descriptor.props?.some((p): p is MdxComponentProp => p.required === true);
 }
+
+/**
+ * Publisher bundle accepted by `dispatchInsert`. The slash menu and the
+ * toolbar `+` button each call `usePublisher` for both signals up-front
+ * (hooks can't be conditional) and pass the pair in; the dispatcher then
+ * routes by descriptor kind. Keeping the two publishers together in one
+ * value also makes future signal additions a single-line change at the
+ * call sites.
+ */
+export interface InsertPublishers {
+  jsx: (payload: InsertJsxPayload) => void;
+  markdown: (value: string) => void;
+}
+
+/**
+ * Insert a descriptor's content into the editor. JSX descriptors go
+ * through `insertJsx$` so they land as a proper Lexical decorator node
+ * (typed prop editor and all); snippet descriptors go through
+ * `insertMarkdown$` which parses the snippet body as MDX and splices it
+ * at the current selection.
+ *
+ * `insertMarkdown$` is the right primitive for snippets because the
+ * library handles cursor placement and frontmatter-safety internally —
+ * we don't need the get/rewrite/set dance the previous snippet path used.
+ */
+export function dispatchInsert(descriptor: MdxComponentDescriptor, publishers: InsertPublishers): void {
+  if (isJsxDescriptor(descriptor)) {
+    publishers.jsx(buildInsertPayload(descriptor));
+    return;
+  }
+  if (isSnippetDescriptor(descriptor)) {
+    publishers.markdown(descriptor.content);
+    return;
+  }
+  // Exhaustiveness check — adding a new kind to the union here forces the
+  // compiler to point us at this dispatcher.
+  const _exhaustive: never = descriptor;
+  void _exhaustive;
+}
+
+/**
+ * Convenience re-export of the upstream signals so call sites don't need
+ * to import them separately. Keeping both signal references in one module
+ * also documents which library symbols the insert pipeline depends on.
+ */
+export { insertJsx$, insertMarkdown$ };
