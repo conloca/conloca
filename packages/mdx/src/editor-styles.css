@@ -101,7 +101,6 @@
      figcaption in dark mode; light mode uses a slate-200-ish stripe. */
   --conloca-code-header-bg: #e2e8f0;
   --conloca-code-header-fg: #475569;
-  --conloca-code-header-padding-x: 8px;
   --conloca-code-header-font-family: "Inter", system-ui, -apple-system, sans-serif;
   --conloca-code-header-font-size: 0.9rem;
   /* Tab chip — the colored "file tab" sitting inside the header bar.
@@ -162,8 +161,16 @@
      dark row colour (EC's figcaption: `rgb(1, 22, 39)`). The filename
      input renders as a `--conloca-code-tab-bg` chip ON the bar,
      matching EC's "dark bar with a colored tab on top" silhouette
-     instead of a single lighter strip. */
-  background: var(--conloca-code-header-bg, #f1f5f9);
+     instead of a single lighter strip.
+
+     Bottom 1px of the bar is overlaid with the tab colour — EC paints
+     a `linear-gradient(to top, tab-bg 1px, transparent 1px)` accent
+     stripe that the tab visually "sits on". Replicated via the same
+     gradient stack so the editor reads with the same subtle accent
+     line as the page. */
+  background:
+    linear-gradient(to top, var(--conloca-code-tab-bg, #ffffff) 1px, transparent 1px),
+    var(--conloca-code-header-bg, #f1f5f9);
   color: var(--conloca-code-header-fg, #475569);
   /* Header reads as a UI label, not as code — EC's tab uses the host's
      UI font (Inter) at 14.4px, so the title looks like a "file tab"
@@ -172,7 +179,11 @@
      sans-serif. */
   font-family: var(--conloca-code-header-font-family, "Inter", system-ui, -apple-system, sans-serif);
   font-size: var(--conloca-code-header-font-size, 0.9rem);
-  padding: 0 var(--conloca-code-header-padding-x, 8px);
+  /* No horizontal padding — EC's tab hugs the left edge of the
+     figcaption. Right-side controls sit flush against the right edge
+     too (EC's copy button has offsetRight: 0). Padding inside the
+     tab chip itself handles breathing room for the title text. */
+  padding: 0;
 }
 
 /* Filename slot renders as a `--conloca-code-tab-bg` chip sitting in

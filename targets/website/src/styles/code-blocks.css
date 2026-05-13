@@ -27,7 +27,6 @@
      matching EC's tab-on-bar silhouette on the published page. */
   --conloca-code-header-bg: #e2e8f0;
   --conloca-code-header-fg: #475569;
-  --conloca-code-header-padding-x: 8px;
   --conloca-code-header-font-family: "Inter", system-ui, -apple-system, sans-serif;
   --conloca-code-header-font-size: 0.9rem;
   --conloca-code-tab-bg: #ffffff;
