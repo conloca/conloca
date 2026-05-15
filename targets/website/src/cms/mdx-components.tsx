@@ -10,6 +10,7 @@ import {
 import { AsideEditor } from './editors/AsideEditor';
 import { CardEditor } from './editors/CardEditor';
 import { LinkCardEditor } from './editors/LinkCardEditor';
+import { StepsEditor } from './editors/StepsEditor';
 import { TabItemEditor } from './editors/TabItemEditor';
 
 const STARLIGHT_SOURCE = '@astrojs/starlight/components';
@@ -61,6 +62,7 @@ export const stepsDescriptor: MdxComponentDescriptor = {
     keywords: ['ordered', 'numbered', 'list'],
   },
   defaults: { children: '1. First step\n2. Second step\n3. Third step' },
+  Editor: StepsEditor,
   import: { from: STARLIGHT_SOURCE },
 };
 
@@ -204,47 +206,6 @@ export const iconDescriptor: MdxComponentDescriptor = {
 };
 
 /**
- * Starlight `<Code>` — the JSX form of a code block (used when the source
- * comes from a string variable rather than a fenced triple-backtick). Props
- * from astro-expressive-code/components/Code.astro (re-exported by
- * Starlight) — `code` and `lang` are the load-bearing ones; the rest are
- * passed through to expressive-code.
- */
-export const codeDescriptor: MdxComponentDescriptor = {
-  name: 'Code',
-  kind: 'flow',
-  hasChildren: false,
-  insert: {
-    label: 'Code block (JSX)',
-    description: 'String-driven code block',
-    icon: 'code',
-    keywords: ['code', 'syntax', 'highlight'],
-  },
-  props: [
-    { name: 'code', type: 'string', required: true, label: 'Code' },
-    { name: 'lang', type: 'string', required: true, label: 'Language', defaultValue: 'ts' },
-    { name: 'title', type: 'string', label: 'Title' },
-    {
-      name: 'frame',
-      type: 'string',
-      label: 'Frame',
-      options: [
-        { value: 'auto', label: 'Auto' },
-        { value: 'code', label: 'Code' },
-        { value: 'terminal', label: 'Terminal' },
-        { value: 'none', label: 'None' },
-      ],
-    },
-    { name: 'ins', type: 'string', label: 'Inserted lines / marker' },
-    { name: 'del', type: 'string', label: 'Deleted lines / marker' },
-    { name: 'mark', type: 'string', label: 'Marked lines / marker' },
-    { name: 'meta', type: 'string', label: 'Meta string' },
-    { name: 'wrap', type: 'boolean', label: 'Wrap long lines' },
-  ],
-  defaults: { attributes: { code: 'const x = 1;', lang: 'ts' } },
-  import: { from: STARLIGHT_SOURCE },
-};
-/**
  * Markdown snippets — host-curated boilerplate the toolbar/slash menu
  * inserts as raw MDX. Migrated from the hardcoded `contentBlockSnippets`
  * list that used to live in `@conloca/cms-spa`; moved here so consumer-specific
@@ -330,7 +291,6 @@ export const mdxComponents = defineMdxComponents([
   linkCardDescriptor,
   fileTreeDescriptor,
   iconDescriptor,
-  codeDescriptor,
   sectionHeadingSnippet,
   calloutQuoteSnippet,
   proofPointsSnippet,

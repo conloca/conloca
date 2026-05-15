@@ -13,6 +13,15 @@
    pipeline carries it into the Puck preview iframe (the option points at
    global.css). The Starlight `<head>` also picks it up via `customCss`. */
 @import "./code-blocks.css" layer(components);
+/* Aside / callout chrome tokens — same role as code-blocks.css but for
+   `<Aside>` JSX, `:::note` directives, and the MDX editor's AsideEditor
+   descriptor. Imported here for the Puck iframe via siteStyles; customCss
+   in astro.config.mjs picks it up for the Starlight `<head>` too. */
+@import "./asides.css" layer(components);
+/* Card / CardGrid / LinkCard / TabItem / Steps chrome — same role as
+   asides.css. Loaded here so the Puck iframe via siteStyles + Starlight
+   `<head>` via customCss both see the tokens. */
+@import "./starlight-components.css" layer(components);
 
 /* Remove underline from all links */
 @layer base {
@@ -198,37 +207,6 @@
  * `@conloca/mdx/prose.css` and imported at the top of this file so the CMS
  * editor surface and the published site share one source of truth. */
 
-/* Callout / admonition styles for MDX directives (`:::note ... :::`) lowered
- * to `.conloca-aside` divs by `remarkDirectivesToCallout`. Four variants
- * mirror Starlight's Aside types so authors get the same mental model. */
-.conloca-aside {
-  border-left: 4px solid var(--color-brand-500);
-  background: color-mix(in srgb, var(--color-brand-500) 8%, transparent);
-  border-radius: 0.5rem;
-  margin: 1.5rem 0;
-  padding: 1rem 1.25rem;
-}
-.conloca-aside-note {
-  border-left-color: #0158ad;
-  background: color-mix(in srgb, #0158ad 8%, transparent);
-}
-.conloca-aside-tip {
-  border-left-color: #2faa53;
-  background: color-mix(in srgb, #2faa53 8%, transparent);
-}
-.conloca-aside-caution {
-  border-left-color: #ab9429;
-  background: color-mix(in srgb, #ab9429 10%, transparent);
-}
-.conloca-aside-danger {
-  border-left-color: #ac1f35;
-  background: color-mix(in srgb, #ac1f35 10%, transparent);
-}
-.conloca-aside-title {
-  font-weight: 600;
-  margin-top: 0;
-  margin-bottom: 0.5rem;
-}
-.conloca-aside > :last-child {
-  margin-bottom: 0;
-}
+/* `.conloca-aside*` callout rules moved to `./asides.css` (imported above)
+ * so the directive-lowered divs, Starlight's `<Aside>` JSX output, and the
+ * CMS editor's AsideEditor surface share one set of tokens. */

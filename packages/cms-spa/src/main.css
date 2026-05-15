@@ -316,27 +316,12 @@ body.mdxeditor-focus-mode .mdxeditor-root-contenteditable {
   max-width: 48rem;
 }
 
-/* Callout / admonition styles. Mirrors the rules in
- * `private/targets/website/src/styles/global.css` so the CMS preview pane
- * and the published Conloca-rendered pages look the same. Directives
- * (`:::note ... :::`) get lowered to `.conloca-aside` divs by
- * `remarkDirectivesToCallout` in `@conloca/content-api`. The duplication
- * across this file and the website's global.css is intentional: the live
- * preview pane lives in the SPA's parent document, where `siteStyles`
- * (which only feeds the Puck iframe) does not reach. */
-.conloca-aside {
-  border-left: 4px solid #0158ad;
-  background: color-mix(in srgb, #0158ad 8%, transparent);
-  border-radius: 0.5rem;
-  margin: 1.5rem 0;
-  padding: 1rem 1.25rem;
-}
-.conloca-aside-note { border-left-color: #0158ad; background: color-mix(in srgb, #0158ad 8%, transparent); }
-.conloca-aside-tip { border-left-color: #2faa53; background: color-mix(in srgb, #2faa53 8%, transparent); }
-.conloca-aside-caution { border-left-color: #ab9429; background: color-mix(in srgb, #ab9429 10%, transparent); }
-.conloca-aside-danger { border-left-color: #ac1f35; background: color-mix(in srgb, #ac1f35 10%, transparent); }
-.conloca-aside-title { font-weight: 600; margin-top: 0; margin-bottom: 0.5rem; }
-.conloca-aside > :last-child { margin-bottom: 0; }
+/* `.conloca-aside*` rules now live in `@conloca/mdx/editor-styles.css`,
+ * which is imported as a side effect of any `@conloca/mdx` consumer (the
+ * CMS preview pane uses `useMDXEvaluation`, so the bundle picks up the
+ * shared stylesheet automatically). One source of truth for the editor,
+ * the preview pane, and the published site's `.conloca-aside`/`.starlight-aside`
+ * surfaces. */
 
 /* Right panel (SidebarSection) breadcrumbs: prevent the parent-link label
  * from overlapping the selected component's heading on narrow sidebars.

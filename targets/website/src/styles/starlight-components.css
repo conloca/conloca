@@ -1,0 +1,504 @@
+/* Tokens + rules for the Starlight MDX components the CMS editor exposes
+ * (Card, CardGrid, LinkCard, TabItem, Tabs, Steps). Same role as
+ * `code-blocks.css` and `asides.css`: one set of tokens and one set of
+ * selectors feed both the published Starlight markup and the MDX editor's
+ * custom-editor surfaces, so each component looks the same when an author
+ * flips between the two.
+ *
+ * Tokens come straight from the Starlight defaults
+ * (`node_modules/@astrojs/starlight/user-components/{Card,LinkCard,...}.astro`).
+ * We resolve them to the `--sl-color-*` scale already declared in
+ * `custom.css` so a brand recolor on either palette flows through.
+ *
+ * Dark-mode triggers cover both conventions in use:
+ *   `.dark`               → CMS SPA admin shell
+ *   `[data-theme="dark"]` → Starlight site
+ * Same file feeds both surfaces so the two switches stay in sync. */
+
+/* ---------- Card ---------- */
+
+:root {
+  /* Frame */
+  --conloca-card-bg: var(--sl-color-black, #ffffff);
+  --conloca-card-fg: var(--sl-color-text, #334155);
+  --conloca-card-border-color: var(--sl-color-gray-5, #e2e8f0);
+  --conloca-card-padding: clamp(1rem, calc(0.125rem + 3vw), 2.5rem);
+  --conloca-card-gap: clamp(0.5rem, calc(0.125rem + 1vw), 1rem);
+  --conloca-card-font-family: var(--sl-font, "Inter", system-ui, -apple-system, sans-serif);
+
+  /* Title */
+  --conloca-card-title-color: var(--sl-color-white, #020617);
+  --conloca-card-title-font-size: var(--sl-text-h4, 1.5rem);
+  --conloca-card-title-font-weight: 600;
+  --conloca-card-title-line-height: var(--sl-line-height-headings, 1.2);
+  --conloca-card-title-gap: 1rem;
+
+  /* Icon — Starlight rotates the accent across nth-child siblings; we
+     ship a single default (purple) and let the host override per-instance
+     if they want. */
+  --conloca-card-icon-border: var(--sl-color-purple, hsl(281, 90%, 60%));
+  --conloca-card-icon-bg: var(--sl-color-purple-low, hsl(281, 80%, 90%));
+  --conloca-card-icon-padding: 0.2em;
+  --conloca-card-icon-radius: 0.25rem;
+  --conloca-card-icon-size: 1.333em;
+}
+:root.dark,
+:root[data-theme="dark"] {
+  --conloca-card-icon-border: var(--sl-color-purple, hsl(281, 82%, 63%));
+  --conloca-card-icon-bg: var(--sl-color-purple-low, hsl(281, 39%, 22%));
+}
+
+/* Editor-side card chrome. Mirrors Starlight's `article.card` silhouette;
+   the `--editor` modifier adds inline title + icon inputs and the remove
+   button. The conloca-card class on its own is also useful for content
+   authors who insert raw `<div class="conloca-card">` blocks. */
+.conloca-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--conloca-card-gap, 1rem);
+  padding: var(--conloca-card-padding, 1rem);
+  border: 1px solid var(--conloca-card-border-color, #e2e8f0);
+  background-color: var(--conloca-card-bg, #ffffff);
+  color: var(--conloca-card-fg, inherit);
+  font-family: var(--conloca-card-font-family, "Inter", system-ui, -apple-system, sans-serif);
+  border-radius: 0;
+  margin-block: 1rem 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.conloca-card__title {
+  display: flex;
+  align-items: center;
+  gap: var(--conloca-card-title-gap, 1rem);
+  margin: 0;
+  font-size: var(--conloca-card-title-font-size, 1.5rem);
+  font-weight: var(--conloca-card-title-font-weight, 600);
+  line-height: var(--conloca-card-title-line-height, 1.2);
+  color: var(--conloca-card-title-color, inherit);
+}
+.conloca-card__icon {
+  font-size: var(--conloca-card-icon-size, 1.333em);
+  width: 1em;
+  height: 1em;
+  padding: var(--conloca-card-icon-padding, 0.2em);
+  border: 1px solid var(--conloca-card-icon-border);
+  background-color: var(--conloca-card-icon-bg);
+  border-radius: var(--conloca-card-icon-radius, 0.25rem);
+  flex-shrink: 0;
+  box-sizing: content-box;
+}
+.conloca-card__body {
+  margin: 0;
+  font-size: clamp(var(--sl-text-sm, 0.875rem), calc(0.5rem + 1vw), var(--sl-text-body, 1rem));
+}
+
+/* Editor controls: title input + icon-name input + remove button.
+   Transparent borders that surface on hover/focus — same affordance
+   pattern as the Aside editor. */
+.conloca-card-editor .conloca-card__title-input,
+.conloca-card-editor .conloca-card__icon-input {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: inherit;
+  font: inherit;
+  padding: 2px 6px;
+  outline: 0;
+}
+.conloca-card-editor .conloca-card__title-input {
+  flex: 1;
+  min-width: 0;
+}
+.conloca-card-editor .conloca-card__icon-input {
+  width: 9rem;
+  font-size: 0.75em;
+}
+.conloca-card-editor .conloca-card__title-input::placeholder,
+.conloca-card-editor .conloca-card__icon-input::placeholder {
+  color: color-mix(in srgb, currentColor 50%, transparent);
+}
+.conloca-card-editor .conloca-card__title-input:hover,
+.conloca-card-editor .conloca-card__title-input:focus,
+.conloca-card-editor .conloca-card__icon-input:hover,
+.conloca-card-editor .conloca-card__icon-input:focus {
+  border-color: color-mix(in srgb, currentColor 30%, transparent);
+}
+.conloca-card-editor .conloca-card__remove {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 1.75rem;
+  justify-content: center;
+  opacity: 0.7;
+  padding: 0;
+  width: 1.75rem;
+}
+.conloca-card-editor .conloca-card__remove:hover {
+  background: color-mix(in srgb, currentColor 15%, transparent);
+  opacity: 1;
+}
+/* Neutralize MDXEditor's `_nestedEditor_*` chip inside the card body. */
+.conloca-card-editor [class*="nestedEditor"] {
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+}
+
+/* Override Starlight's `article.card` rules so the published page also
+   reads from our tokens. Starlight ships its rules inside
+   `@layer starlight.components`, so unlayered selectors win at cascade. */
+article.card {
+  background-color: var(--conloca-card-bg);
+  border-color: var(--conloca-card-border-color);
+  padding: var(--conloca-card-padding);
+  gap: var(--conloca-card-gap);
+}
+article.card .title {
+  font-size: var(--conloca-card-title-font-size);
+  font-weight: var(--conloca-card-title-font-weight);
+  line-height: var(--conloca-card-title-line-height);
+  color: var(--conloca-card-title-color);
+  gap: var(--conloca-card-title-gap);
+}
+
+/* ---------- CardGrid ---------- */
+
+:root {
+  --conloca-card-grid-gap: clamp(1rem, calc(0.25rem + 2vw), 2rem);
+}
+.conloca-card-grid,
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(clamp(16rem, 50vw, 18rem), 1fr));
+  gap: var(--conloca-card-grid-gap);
+}
+
+/* ---------- LinkCard ---------- */
+
+:root {
+  --conloca-link-card-padding: 1rem;
+  --conloca-link-card-radius: 0.5rem;
+  --conloca-link-card-gap: 0.5rem;
+  --conloca-link-card-border: var(--sl-color-gray-5, #e2e8f0);
+  --conloca-link-card-border-hover: var(--sl-color-gray-2, #94a3b8);
+  --conloca-link-card-bg-hover: var(--sl-color-gray-7, #f8fafc);
+  --conloca-link-card-fg: var(--sl-color-text, #334155);
+  --conloca-link-card-font-family: var(--sl-font, "Inter", system-ui, -apple-system, sans-serif);
+  --conloca-link-card-title-color: var(--sl-color-white, #020617);
+  --conloca-link-card-title-font-size: var(--sl-text-lg, 1.125rem);
+  --conloca-link-card-title-font-weight: 600;
+  --conloca-link-card-title-line-height: var(--sl-line-height-headings, 1.2);
+  --conloca-link-card-description-color: var(--sl-color-gray-3, #94a3b8);
+  --conloca-link-card-description-line-height: 1.5;
+  --conloca-link-card-icon-color: var(--sl-color-gray-3, #94a3b8);
+  --conloca-link-card-icon-size: 1.333em;
+  --conloca-link-card-shadow: var(--sl-shadow-sm, 0px 1px 1px hsla(0, 0%, 0%, 0.12), 0px 2px 1px hsla(0, 0%, 0%, 0.24));
+}
+
+.conloca-link-card,
+.sl-link-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--conloca-link-card-gap, 0.5rem);
+  border: 1px solid var(--conloca-link-card-border);
+  border-radius: var(--conloca-link-card-radius, 0.5rem);
+  padding: var(--conloca-link-card-padding, 1rem);
+  box-shadow: var(--conloca-link-card-shadow);
+  margin-block: 1rem 0;
+  color: var(--conloca-link-card-fg, inherit);
+  font-family: var(--conloca-link-card-font-family);
+  position: relative;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.conloca-link-card__stack,
+.sl-link-card .stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--conloca-link-card-gap, 0.5rem);
+  min-width: 0;
+}
+.conloca-link-card__title,
+.sl-link-card .title {
+  color: var(--conloca-link-card-title-color);
+  font-weight: var(--conloca-link-card-title-font-weight, 600);
+  font-size: var(--conloca-link-card-title-font-size);
+  line-height: var(--sl-line-height-headings, 1.2);
+}
+.conloca-link-card__description,
+.sl-link-card .description {
+  color: var(--conloca-link-card-description-color);
+  line-height: var(--conloca-link-card-description-line-height, 1.5);
+}
+.conloca-link-card__icon,
+.sl-link-card .icon {
+  color: var(--conloca-link-card-icon-color);
+  align-self: center;
+  flex-shrink: 0;
+}
+
+/* Editor inputs: stacked inputs that look like the rendered title and
+   description, plus a small URL input that hangs at the bottom. */
+.conloca-link-card-editor .conloca-link-card__title-input,
+.conloca-link-card-editor .conloca-link-card__description-input,
+.conloca-link-card-editor .conloca-link-card__href-input {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: inherit;
+  font: inherit;
+  padding: 2px 6px;
+  outline: 0;
+  width: 100%;
+  display: block;
+}
+.conloca-link-card-editor .conloca-link-card__title-input {
+  font-size: var(--conloca-link-card-title-font-size);
+  font-weight: var(--conloca-link-card-title-font-weight, 600);
+  color: var(--conloca-link-card-title-color);
+}
+.conloca-link-card-editor .conloca-link-card__description-input {
+  color: var(--conloca-link-card-description-color);
+}
+.conloca-link-card-editor .conloca-link-card__href-input {
+  font-family: var(--sl-font-mono, ui-monospace, monospace);
+  font-size: 0.75em;
+  color: color-mix(in srgb, currentColor 70%, transparent);
+}
+.conloca-link-card-editor .conloca-link-card__title-input::placeholder,
+.conloca-link-card-editor .conloca-link-card__description-input::placeholder,
+.conloca-link-card-editor .conloca-link-card__href-input::placeholder {
+  color: color-mix(in srgb, currentColor 50%, transparent);
+}
+.conloca-link-card-editor .conloca-link-card__title-input:hover,
+.conloca-link-card-editor .conloca-link-card__title-input:focus,
+.conloca-link-card-editor .conloca-link-card__description-input:hover,
+.conloca-link-card-editor .conloca-link-card__description-input:focus,
+.conloca-link-card-editor .conloca-link-card__href-input:hover,
+.conloca-link-card-editor .conloca-link-card__href-input:focus {
+  border-color: color-mix(in srgb, currentColor 30%, transparent);
+}
+.conloca-link-card-editor .conloca-link-card__remove {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 1.75rem;
+  justify-content: center;
+  opacity: 0.7;
+  padding: 0;
+  width: 1.75rem;
+}
+.conloca-link-card-editor .conloca-link-card__remove:hover {
+  background: color-mix(in srgb, currentColor 15%, transparent);
+  opacity: 1;
+}
+
+/* ---------- TabItem (editor renders each panel as its own block) ---------- */
+
+:root {
+  --conloca-tab-border: var(--sl-color-gray-5, #cbd5e1);
+  --conloca-tab-border-active: var(--sl-color-text-accent, #0891b2);
+  --conloca-tab-fg: var(--sl-color-gray-3, #94a3b8);
+  --conloca-tab-fg-active: var(--sl-color-white, #020617);
+  --conloca-tab-padding: 0.275rem 1.25rem;
+  --conloca-tab-gap: 0.5rem;
+  --conloca-tab-panel-margin-top: 1rem;
+}
+
+/* Wrapper that mirrors the published `<starlight-tabs>` + first
+   `<a role="tab">` + `<div role="tabpanel">` layout. Authors edit the
+   panel content inline; the label + icon input render as the tab chip. */
+.conloca-tab-item-editor {
+  margin-block: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--conloca-card-font-family, var(--sl-font, "Inter", system-ui, -apple-system, sans-serif));
+  color: var(--conloca-card-fg, var(--sl-color-text, inherit));
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.conloca-tab-item-editor .conloca-tab__chip {
+  display: flex;
+  align-items: center;
+  gap: var(--conloca-tab-gap);
+  padding: var(--conloca-tab-padding);
+  /* Tab chip is the "active" affordance — editor always shows the
+     active state because the panel below is being edited. Starlight
+     paints the accent stripe via box-shadow, not border-bottom, so use
+     the same prop to keep the stripe in the same vertical position. */
+  color: var(--conloca-tab-fg-active);
+  font-weight: 600;
+  line-height: var(--sl-line-height-headings, 1.2);
+  align-self: flex-start;
+  box-shadow: 0 2px 0 var(--conloca-tab-border-active);
+}
+.conloca-tab-item-editor .conloca-tab__label-input,
+.conloca-tab-item-editor .conloca-tab__icon-input {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: inherit;
+  font: inherit;
+  padding: 2px 6px;
+  outline: 0;
+}
+.conloca-tab-item-editor .conloca-tab__label-input {
+  font-weight: 600;
+}
+.conloca-tab-item-editor .conloca-tab__icon-input {
+  width: 9rem;
+  font-size: 0.75em;
+  color: color-mix(in srgb, currentColor 70%, transparent);
+}
+.conloca-tab-item-editor .conloca-tab__label-input::placeholder,
+.conloca-tab-item-editor .conloca-tab__icon-input::placeholder {
+  color: color-mix(in srgb, currentColor 50%, transparent);
+}
+.conloca-tab-item-editor .conloca-tab__label-input:hover,
+.conloca-tab-item-editor .conloca-tab__label-input:focus,
+.conloca-tab-item-editor .conloca-tab__icon-input:hover,
+.conloca-tab-item-editor .conloca-tab__icon-input:focus {
+  border-color: color-mix(in srgb, currentColor 30%, transparent);
+}
+.conloca-tab-item-editor .conloca-tab__remove {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 1.75rem;
+  justify-content: center;
+  margin-inline-start: auto;
+  opacity: 0.7;
+  padding: 0;
+  width: 1.75rem;
+}
+.conloca-tab-item-editor .conloca-tab__remove:hover {
+  background: color-mix(in srgb, currentColor 15%, transparent);
+  opacity: 1;
+}
+.conloca-tab-item-editor .conloca-tab__panel {
+  margin-top: var(--conloca-tab-panel-margin-top);
+}
+.conloca-tab-item-editor [class*="nestedEditor"] {
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+}
+
+/* ---------- Steps ---------- */
+
+/* Mirror Starlight's `.sl-steps` numbered-list chrome on our own
+   `.conloca-steps` class so the editor's StepsEditor can wrap its child
+   list in this class and render identical chrome.
+   See https://github.com/withastro/starlight/blob/main/packages/starlight/user-components/Steps.astro
+   for the source. */
+/* Three selectors so the same chip chrome paints on:
+   1. `.sl-steps`   — Starlight's rehype-processed published list.
+   2. `.conloca-steps` — direct authoring class.
+   3. `.conloca-steps-editor [class*="nestedEditor"] ol` — the inner
+      ordered list the StepsEditor renders inside MDXEditor's nested
+      Lexical wrapper. Targeting the unclassed `<ol>` here means we
+      don't have to fork Starlight's rehype pipeline into the editor. */
+.conloca-steps,
+.sl-steps,
+.conloca-steps-editor [class*="nestedEditor"] ol {
+  --bullet-size: calc(var(--sl-line-height, 1.75) * 1rem);
+  --bullet-margin: 0.375rem;
+  list-style: none;
+  counter-reset: steps-counter var(--sl-steps-start, 0);
+  padding-inline-start: 0;
+}
+.conloca-steps > li,
+.sl-steps > li,
+.conloca-steps-editor [class*="nestedEditor"] ol > li {
+  counter-increment: steps-counter;
+  position: relative;
+  padding-inline-start: calc(var(--bullet-size) + 1rem);
+  padding-bottom: 1px;
+  min-height: calc(var(--bullet-size) + var(--bullet-margin));
+}
+.conloca-steps > li + li,
+.sl-steps > li + li,
+.conloca-steps-editor [class*="nestedEditor"] ol > li + li {
+  margin-top: 0;
+}
+.conloca-steps > li::before,
+.sl-steps > li::before,
+.conloca-steps-editor [class*="nestedEditor"] ol > li::before {
+  content: counter(steps-counter);
+  position: absolute;
+  top: 0;
+  inset-inline-start: 0;
+  width: var(--bullet-size);
+  height: var(--bullet-size);
+  line-height: var(--bullet-size);
+  font-size: var(--sl-text-xs, 0.75rem);
+  font-weight: 600;
+  text-align: center;
+  color: var(--sl-color-white, #020617);
+  background-color: var(--sl-color-gray-6, #0f172a);
+  border-radius: 99rem;
+  box-shadow: inset 0 0 0 1px var(--sl-color-gray-5, #cbd5e1);
+}
+.conloca-steps > li::after,
+.sl-steps > li::after,
+.conloca-steps-editor [class*="nestedEditor"] ol > li::after {
+  --guide-width: 1px;
+  content: "";
+  position: absolute;
+  top: calc(var(--bullet-size) + var(--bullet-margin));
+  bottom: var(--bullet-margin);
+  inset-inline-start: calc((var(--bullet-size) - var(--guide-width)) / 2);
+  width: var(--guide-width);
+  background-color: var(--sl-color-hairline-light, var(--sl-color-hairline, #334155));
+}
+
+.conloca-steps-editor {
+  position: relative;
+  margin-block: 1rem 0;
+  font-family: var(--conloca-card-font-family, var(--sl-font, "Inter", system-ui, -apple-system, sans-serif));
+  color: var(--conloca-card-fg, var(--sl-color-text, inherit));
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.conloca-steps-editor [class*="nestedEditor"] {
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+}
+.conloca-steps-editor .conloca-steps__remove {
+  position: absolute;
+  top: 0;
+  right: 0;
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  height: 1.75rem;
+  justify-content: center;
+  opacity: 0.5;
+  padding: 0;
+  width: 1.75rem;
+  z-index: 1;
+}
+.conloca-steps-editor .conloca-steps__remove:hover {
+  background: color-mix(in srgb, currentColor 15%, transparent);
+  opacity: 1;
+}

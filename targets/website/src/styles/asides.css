@@ -1,0 +1,176 @@
+/* Aside / callout chrome tokens — shared by the CMS MDX editor and the
+ * published Starlight pages so a `<Aside>` JSX block, a `:::note` directive
+ * (lowered to `.conloca-aside*` by `remarkDirectivesToCallout`), and the
+ * MDXEditor's editing surface all render with the same colors, fonts,
+ * border and title treatment.
+ *
+ * Per-type colors come from Starlight's own `--sl-color-{purple,blue,...}-*`
+ * scale so the tip/note/caution/danger asides match what Starlight ships by
+ * default. Kept as their own `--conloca-aside-*` tokens (not direct
+ * references to `--sl-color-*`) so the editor surfaces can resolve them in
+ * the CMS SPA admin doc, where the Starlight tokens aren't defined.
+ *
+ * Dark-mode triggers cover both conventions in use:
+ *   `.dark`               → CMS SPA admin shell (`packages/cms-spa/src/main.css`)
+ *   `[data-theme="dark"]` → Starlight site (Starlight default)
+ * Same file feeds both surfaces, so listing both selectors keeps the two
+ * theme switches in sync without a separate attribute bridge. */
+
+:root {
+  /* Frame */
+  --conloca-aside-padding: 1rem;
+  --conloca-aside-margin-block: 1rem;
+  --conloca-aside-border-width: 0.25rem;
+  --conloca-aside-radius: 0;
+
+  /* Type */
+  --conloca-aside-font-family: "Inter", system-ui, -apple-system, sans-serif;
+  --conloca-aside-font-size: 1rem;
+  --conloca-aside-line-height: 1.75;
+  --conloca-aside-fg: #020617;
+
+  /* Title row — matches Starlight `.starlight-aside__title` */
+  --conloca-aside-title-font-size: 1.125rem;
+  --conloca-aside-title-font-weight: 600;
+  --conloca-aside-title-line-height: 1.2;
+  --conloca-aside-title-gap: 0.5rem;
+  --conloca-aside-title-margin-bottom: 0.5rem;
+  --conloca-aside-icon-size: 1.333em;
+
+  /* Per-type colors — Starlight light-mode palette
+     (purple-* / blue-* / orange-* / red-* from @astrojs/starlight defaults). */
+  --conloca-aside-note-border: hsl(234, 90%, 60%);
+  --conloca-aside-note-bg: hsl(234, 88%, 90%);
+  --conloca-aside-note-accent: hsl(234, 80%, 30%);
+
+  --conloca-aside-tip-border: hsl(281, 90%, 60%);
+  --conloca-aside-tip-bg: hsl(281, 80%, 90%);
+  --conloca-aside-tip-accent: hsl(281, 90%, 30%);
+
+  --conloca-aside-caution-border: hsl(41, 90%, 60%);
+  --conloca-aside-caution-bg: hsl(41, 90%, 88%);
+  --conloca-aside-caution-accent: hsl(41, 80%, 25%);
+
+  --conloca-aside-danger-border: hsl(339, 90%, 60%);
+  --conloca-aside-danger-bg: hsl(339, 80%, 90%);
+  --conloca-aside-danger-accent: hsl(339, 80%, 30%);
+}
+
+:root.dark,
+:root[data-theme="dark"] {
+  /* Body text reads as near-white against the saturated low-bg
+     (Starlight's `--sl-color-white` resolves to `#f8fafc` in dark mode). */
+  --conloca-aside-fg: #f8fafc;
+
+  --conloca-aside-note-border: hsl(234, 100%, 60%);
+  --conloca-aside-note-bg: hsl(234, 54%, 20%);
+  --conloca-aside-note-accent: hsl(234, 100%, 87%);
+
+  --conloca-aside-tip-border: hsl(281, 82%, 63%);
+  --conloca-aside-tip-bg: hsl(281, 39%, 22%);
+  --conloca-aside-tip-accent: hsl(281, 82%, 89%);
+
+  --conloca-aside-caution-border: hsl(41, 82%, 63%);
+  --conloca-aside-caution-bg: hsl(41, 39%, 22%);
+  --conloca-aside-caution-accent: hsl(41, 82%, 87%);
+
+  --conloca-aside-danger-border: hsl(339, 82%, 63%);
+  --conloca-aside-danger-bg: hsl(339, 39%, 22%);
+  --conloca-aside-danger-accent: hsl(339, 82%, 87%);
+}
+
+/* Starlight's `.starlight-aside*` rules ship inside `@layer starlight.components`,
+   so these unlayered overrides win at the cascade. Same color/sizing tokens
+   feed the directive-rendered `.conloca-aside*` divs below and the editor's
+   `.conloca-aside-editor` chrome in `packages/mdx/src/editor-styles.css`. */
+.starlight-aside,
+.conloca-aside {
+  padding: var(--conloca-aside-padding);
+  margin-block: var(--conloca-aside-margin-block) 0;
+  border-inline-start: var(--conloca-aside-border-width) solid var(--conloca-aside-note-border);
+  border-radius: var(--conloca-aside-radius);
+  background-color: var(--conloca-aside-note-bg);
+  color: var(--conloca-aside-fg);
+  font-family: var(--conloca-aside-font-family);
+  font-size: var(--conloca-aside-font-size);
+  line-height: var(--conloca-aside-line-height);
+}
+
+.starlight-aside--note,
+.conloca-aside-note {
+  --conloca-aside-active-border: var(--conloca-aside-note-border);
+  --conloca-aside-active-bg: var(--conloca-aside-note-bg);
+  --conloca-aside-active-accent: var(--conloca-aside-note-accent);
+  border-inline-start-color: var(--conloca-aside-note-border);
+  background-color: var(--conloca-aside-note-bg);
+}
+.starlight-aside--tip,
+.conloca-aside-tip {
+  --conloca-aside-active-border: var(--conloca-aside-tip-border);
+  --conloca-aside-active-bg: var(--conloca-aside-tip-bg);
+  --conloca-aside-active-accent: var(--conloca-aside-tip-accent);
+  border-inline-start-color: var(--conloca-aside-tip-border);
+  background-color: var(--conloca-aside-tip-bg);
+}
+.starlight-aside--caution,
+.conloca-aside-caution {
+  --conloca-aside-active-border: var(--conloca-aside-caution-border);
+  --conloca-aside-active-bg: var(--conloca-aside-caution-bg);
+  --conloca-aside-active-accent: var(--conloca-aside-caution-accent);
+  border-inline-start-color: var(--conloca-aside-caution-border);
+  background-color: var(--conloca-aside-caution-bg);
+}
+.starlight-aside--danger,
+.conloca-aside-danger {
+  --conloca-aside-active-border: var(--conloca-aside-danger-border);
+  --conloca-aside-active-bg: var(--conloca-aside-danger-bg);
+  --conloca-aside-active-accent: var(--conloca-aside-danger-accent);
+  border-inline-start-color: var(--conloca-aside-danger-border);
+  background-color: var(--conloca-aside-danger-bg);
+}
+
+/* Title row */
+.starlight-aside__title,
+.conloca-aside-title {
+  display: flex;
+  gap: var(--conloca-aside-title-gap);
+  align-items: center;
+  margin: 0;
+  font-size: var(--conloca-aside-title-font-size);
+  font-weight: var(--conloca-aside-title-font-weight);
+  line-height: var(--conloca-aside-title-line-height);
+  color: var(--conloca-aside-active-accent, var(--conloca-aside-note-accent));
+}
+
+.starlight-aside__icon {
+  font-size: var(--conloca-aside-icon-size);
+  width: 1em;
+  height: 1em;
+}
+
+/* Spacer between title and content — Starlight uses the adjacent-sibling
+   selector so an aside without a title doesn't get an empty 0.5rem gap. */
+.starlight-aside__title + .starlight-aside__content,
+.conloca-aside-title + * {
+  margin-top: var(--conloca-aside-title-margin-bottom);
+}
+
+.starlight-aside__content:empty {
+  display: none;
+}
+
+.starlight-aside__content a,
+.conloca-aside a {
+  color: var(--conloca-aside-active-accent, var(--conloca-aside-note-accent));
+  /* Starlight strips link underline inside asides; the editor's prose
+     contenteditable inherits `.conloca-prose :where(a) { text-decoration:
+     underline }` from `prose.css` and would otherwise paint a cyan
+     underline that the published page never has. Same drop on both
+     surfaces. */
+  text-decoration: none;
+}
+
+.starlight-aside > :last-child,
+.conloca-aside > :last-child {
+  margin-bottom: 0;
+}

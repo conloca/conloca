@@ -1,36 +1,51 @@
 import { readStringAttribute, writeStringAttribute } from '@conloca/astro-cms';
 import type { JsxEditorProps } from '@mdxeditor/editor';
 import { NestedLexicalEditor, useLexicalNodeRemove, useMdastNodeUpdater } from '@mdxeditor/editor';
-import { Trash2 } from 'lucide-react';
+import { AlertOctagon, AlertTriangle, Info, type LucideIcon, Rocket, Trash2 } from 'lucide-react';
 import type * as Mdast from 'mdast';
 import type { MdxJsxFlowElement } from 'mdast-util-mdx-jsx';
 
 type AsideType = 'note' | 'tip' | 'caution' | 'danger';
 const ASIDE_TYPES: AsideType[] = ['note', 'tip', 'caution', 'danger'];
 
-const TYPE_STYLES: Record<AsideType, { label: string; bar: string; bg: string }> = {
-  note: { label: 'Note', bar: 'border-azure-04', bg: 'bg-azure-11 dark:bg-azure-02' },
-  tip: { label: 'Tip', bar: 'border-green-05', bg: 'bg-green-11 dark:bg-green-02' },
-  caution: { label: 'Caution', bar: 'border-yellow-05', bg: 'bg-yellow-11 dark:bg-yellow-02' },
-  danger: { label: 'Danger', bar: 'border-red-04', bg: 'bg-red-11 dark:bg-red-02' },
+/**
+ * Lucide icons chosen to read close to Starlight's built-in aside icons
+ * (pen / rocket / triangle / shield) without pulling Starlight's SVG
+ * sprite into the editor bundle. The icon colour inherits `currentColor`
+ * so it picks up `--conloca-aside-active-accent` via the title rule in
+ * `@conloca/mdx/editor-styles.css`.
+ */
+const TYPE_ICON: Record<AsideType, LucideIcon> = {
+  note: Info,
+  tip: Rocket,
+  caution: AlertTriangle,
+  danger: AlertOctagon,
+};
+
+const TYPE_LABEL: Record<AsideType, string> = {
+  note: 'Note',
+  tip: 'Tip',
+  caution: 'Caution',
+  danger: 'Danger',
 };
 
 /**
  * Editor surface for `<Aside>` JSX callouts.
  *
- * Renders a framed box with a type dropdown + title input on top and a
- * nested rich-text editor for the body. The descriptor is registered
- * against `name: 'Aside'`, so this only activates for `<Aside>` tags —
- * unknown JSX falls through to the wildcard GenericJsxEditor in
- * editor-core.tsx.
+ * Markup mirrors the directive-lowered `.conloca-aside` shape and the
+ * Starlight `<aside class="starlight-aside">` shape so all three surfaces
+ * read the same `--conloca-aside-*` tokens declared in
+ * `targets/website/src/styles/asides.css` (host) and re-declared as
+ * fallbacks in `@conloca/mdx/editor-styles.css` for the CMS SPA admin doc.
  *
- * The four type values (`note | tip | caution | danger`) are the
- * conventional callout vocabulary used by most MDX docs systems
- * (Starlight, Docusaurus, VitePress, etc.). Anything outside that set is
- * normalized down to `note` on first edit so the dropdown always reflects
- * a real option. Once a consumer-supplied descriptor registry lands, this
- * type list should move into the descriptor config so sites can ship
- * their own callout vocabulary.
+ * The `.conloca-aside-editor` modifier adds the interactive title row
+ * (icon + type select + optional title + remove button) on top of the
+ * shared chrome. The descriptor is registered against `name: 'Aside'`, so
+ * unknown JSX still falls through to the wildcard GenericJsxEditor.
+ *
+ * The four type values (`note | tip | caution | danger`) match the
+ * Starlight Aside vocabulary; anything outside that set is normalised to
+ * `note` on first edit so the dropdown always reflects a real option.
  */
 export function AsideEditor({ mdastNode }: JsxEditorProps) {
   const updater = useMdastNodeUpdater<MdxJsxFlowElement>();
@@ -40,7 +55,7 @@ export function AsideEditor({ mdastNode }: JsxEditorProps) {
   const rawType = readStringAttribute(node, 'type');
   const type: AsideType = (ASIDE_TYPES as string[]).includes(rawType) ? (rawType as AsideType) : 'note';
   const title = readStringAttribute(node, 'title');
-  const styles = TYPE_STYLES[type];
+  const Icon = TYPE_ICON[type];
 
   const setType = (nextType: AsideType) => {
     updater({ attributes: writeStringAttribute(node.attributes, 'type', nextType) });
@@ -50,22 +65,18 @@ export function AsideEditor({ mdastNode }: JsxEditorProps) {
   };
 
   return (
-    <div
-      className={`my-3 border-l-4 ${styles.bar} ${styles.bg} rounded-r-md`}
-      data-aside-editor
-      contentEditable={false}
-    >
-      <div className="flex items-center gap-2 px-3 pt-2 text-xs text-grey-04 dark:text-grey-07">
-        <span className="font-semibold uppercase tracking-wide whitespace-nowrap">{styles.label}</span>
+    <div className={`conloca-aside conloca-aside-${type} conloca-aside-editor`} contentEditable={false}>
+      <div className="conloca-aside-title">
+        <Icon className="conloca-aside-title__icon" aria-hidden focusable={false} />
         <select
           value={type}
           onChange={(event) => setType(event.target.value as AsideType)}
           aria-label="Aside type"
-          className="bg-transparent border border-grey-09 dark:border-grey-04 rounded px-1.5 py-0.5 text-xs"
+          className="conloca-aside-title__select"
         >
           {ASIDE_TYPES.map((option) => (
             <option key={option} value={option}>
-              {TYPE_STYLES[option].label}
+              {TYPE_LABEL[option]}
             </option>
           ))}
         </select>
@@ -75,24 +86,22 @@ export function AsideEditor({ mdastNode }: JsxEditorProps) {
           onChange={(event) => setTitle(event.target.value)}
           placeholder="Optional title"
           aria-label="Aside title"
-          className="flex-1 bg-transparent border border-grey-09 dark:border-grey-04 rounded px-1.5 py-0.5 text-xs"
+          className="conloca-aside-title__input"
         />
         <button
           type="button"
           onClick={removeNode}
           aria-label="Remove aside"
           title="Remove aside"
-          className="p-1 rounded hover:bg-grey-10 dark:hover:bg-grey-04"
+          className="conloca-aside-title__remove"
         >
-          <Trash2 size={12} aria-hidden />
+          <Trash2 size={14} aria-hidden />
         </button>
       </div>
-      <div className="px-4 py-2">
-        <NestedLexicalEditor<MdxJsxFlowElement>
-          getContent={(n) => n.children as Mdast.PhrasingContent[]}
-          getUpdatedMdastNode={(n, children) => ({ ...n, children: children as MdxJsxFlowElement['children'] })}
-        />
-      </div>
+      <NestedLexicalEditor<MdxJsxFlowElement>
+        getContent={(n) => n.children as Mdast.PhrasingContent[]}
+        getUpdatedMdastNode={(n, children) => ({ ...n, children: children as MdxJsxFlowElement['children'] })}
+      />
     </div>
   );
 }

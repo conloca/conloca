@@ -1,12 +1,20 @@
 import { readStringAttribute, writeStringAttribute } from '@conloca/astro-cms';
 import type { JsxEditorProps } from '@mdxeditor/editor';
 import { NestedLexicalEditor, useLexicalNodeRemove, useMdastNodeUpdater } from '@mdxeditor/editor';
-import { Trash2 } from 'lucide-react';
+import { Square, Trash2 } from 'lucide-react';
 import type * as Mdast from 'mdast';
 import type { MdxJsxFlowElement } from 'mdast-util-mdx-jsx';
 
 /**
  * Editor for Starlight `<TabItem>` — a single tab inside a `<Tabs>` group.
+ *
+ * Published `<Tabs>` renders one `[role="tabpanel"]` at a time with a chip
+ * row above. The editor flattens that: each TabItem renders as its own
+ * stacked block — a chip-shaped header row with the label/icon controls
+ * and a panel area below for the rich body content. Visual chrome lines up
+ * with the active-tab look on the published page (accent underline, white
+ * text, 600 weight).
+ *
  * Props from node_modules/@astrojs/starlight/user-components/TabItem.astro.
  */
 export function TabItemEditor({ mdastNode }: JsxEditorProps) {
@@ -22,20 +30,16 @@ export function TabItemEditor({ mdastNode }: JsxEditorProps) {
   };
 
   return (
-    <div
-      className="my-2 border border-grey-09 dark:border-grey-04 rounded-md"
-      data-starlight-tabitem-editor
-      contentEditable={false}
-    >
-      <div className="flex items-center gap-2 px-3 pt-2 text-xs text-grey-04 dark:text-grey-07">
-        <span className="font-semibold uppercase tracking-wide whitespace-nowrap">Tab</span>
+    <div className="conloca-tab-item-editor" contentEditable={false}>
+      <div className="conloca-tab__chip">
+        <Square className="conloca-tab__chip-icon" size={16} aria-hidden focusable={false} />
         <input
           type="text"
           value={label}
           onChange={(e) => setAttr('label', e.target.value)}
-          placeholder="Label (required)"
+          placeholder="Tab label"
           aria-label="Tab label"
-          className="flex-1 bg-transparent border border-grey-09 dark:border-grey-04 rounded px-1.5 py-0.5 text-xs"
+          className="conloca-tab__label-input"
         />
         <input
           type="text"
@@ -43,19 +47,19 @@ export function TabItemEditor({ mdastNode }: JsxEditorProps) {
           onChange={(e) => setAttr('icon', e.target.value)}
           placeholder="Icon (optional)"
           aria-label="Tab icon"
-          className="w-32 bg-transparent border border-grey-09 dark:border-grey-04 rounded px-1.5 py-0.5 text-xs"
+          className="conloca-tab__icon-input"
         />
         <button
           type="button"
           onClick={removeNode}
           aria-label="Remove tab"
           title="Remove tab"
-          className="p-1 rounded hover:bg-grey-10 dark:hover:bg-grey-04"
+          className="conloca-tab__remove"
         >
-          <Trash2 size={12} aria-hidden />
+          <Trash2 size={14} aria-hidden />
         </button>
       </div>
-      <div className="px-4 py-2">
+      <div className="conloca-tab__panel">
         <NestedLexicalEditor<MdxJsxFlowElement>
           getContent={(n) => n.children as Mdast.PhrasingContent[]}
           getUpdatedMdastNode={(n, children) => ({

@@ -325,3 +325,638 @@ input.conloca-code-block__filename:focus {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+/* Aside / callout chrome — same role as the code-block block above. Tokens
+   come from the host's `asides.css` (`--conloca-aside-*`); fallbacks keep
+   the editor readable when no host defines them. Same per-type palette as
+   `.starlight-aside--{note,tip,caution,danger}` on the published site,
+   resolved from Starlight's `--sl-color-{blue,purple,orange,red}-*` scale.
+   Defaults declared here so the CMS SPA admin parent document (where the
+   MDXEditor mounts) gets working colors without the host's asides.css
+   being injected into the admin shell.
+
+   The `.conloca-aside-editor` selector adds the editor-only header row
+   (icon + type select + title input + remove button) on top of the same
+   chrome; the body becomes a NestedLexicalEditor whose hash-suffixed
+   `_nestedEditor_*` wrapper has to be neutralized so it doesn't paint a
+   second concentric chip inside the aside. */
+:root {
+  --conloca-aside-padding: 1rem;
+  --conloca-aside-margin-block: 1rem;
+  --conloca-aside-border-width: 0.25rem;
+  --conloca-aside-radius: 0;
+  --conloca-aside-font-family: "Inter", system-ui, -apple-system, sans-serif;
+  --conloca-aside-font-size: 1rem;
+  --conloca-aside-line-height: 1.75;
+  --conloca-aside-fg: #020617;
+  --conloca-aside-title-font-size: 1.125rem;
+  --conloca-aside-title-font-weight: 600;
+  --conloca-aside-title-line-height: 1.2;
+  --conloca-aside-title-gap: 0.5rem;
+  --conloca-aside-title-margin-bottom: 0.5rem;
+  --conloca-aside-icon-size: 1.333em;
+  --conloca-aside-note-border: hsl(234, 90%, 60%);
+  --conloca-aside-note-bg: hsl(234, 88%, 90%);
+  --conloca-aside-note-accent: hsl(234, 80%, 30%);
+  --conloca-aside-tip-border: hsl(281, 90%, 60%);
+  --conloca-aside-tip-bg: hsl(281, 80%, 90%);
+  --conloca-aside-tip-accent: hsl(281, 90%, 30%);
+  --conloca-aside-caution-border: hsl(41, 90%, 60%);
+  --conloca-aside-caution-bg: hsl(41, 90%, 88%);
+  --conloca-aside-caution-accent: hsl(41, 80%, 25%);
+  --conloca-aside-danger-border: hsl(339, 90%, 60%);
+  --conloca-aside-danger-bg: hsl(339, 80%, 90%);
+  --conloca-aside-danger-accent: hsl(339, 80%, 30%);
+}
+:root.dark,
+:root[data-theme="dark"] {
+  --conloca-aside-fg: #f8fafc;
+  --conloca-aside-note-border: hsl(234, 100%, 60%);
+  --conloca-aside-note-bg: hsl(234, 54%, 20%);
+  --conloca-aside-note-accent: hsl(234, 100%, 87%);
+  --conloca-aside-tip-border: hsl(281, 82%, 63%);
+  --conloca-aside-tip-bg: hsl(281, 39%, 22%);
+  --conloca-aside-tip-accent: hsl(281, 82%, 89%);
+  --conloca-aside-caution-border: hsl(41, 82%, 63%);
+  --conloca-aside-caution-bg: hsl(41, 39%, 22%);
+  --conloca-aside-caution-accent: hsl(41, 82%, 87%);
+  --conloca-aside-danger-border: hsl(339, 82%, 63%);
+  --conloca-aside-danger-bg: hsl(339, 39%, 22%);
+  --conloca-aside-danger-accent: hsl(339, 82%, 87%);
+}
+
+.conloca-aside {
+  padding: var(--conloca-aside-padding, 1rem);
+  margin-block: var(--conloca-aside-margin-block, 1rem) 0;
+  border-inline-start: var(--conloca-aside-border-width, 0.25rem) solid
+    var(--conloca-aside-active-border, var(--conloca-aside-note-border, hsl(234, 100%, 60%)));
+  border-radius: var(--conloca-aside-radius, 0);
+  background-color: var(--conloca-aside-active-bg, var(--conloca-aside-note-bg, hsl(234, 54%, 20%)));
+  color: var(--conloca-aside-fg, #f8fafc);
+  font-family: var(--conloca-aside-font-family, "Inter", system-ui, -apple-system, sans-serif);
+  font-size: var(--conloca-aside-font-size, 1rem);
+  line-height: var(--conloca-aside-line-height, 1.75);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.conloca-aside-note {
+  --conloca-aside-active-border: var(--conloca-aside-note-border, hsl(234, 100%, 60%));
+  --conloca-aside-active-bg: var(--conloca-aside-note-bg, hsl(234, 54%, 20%));
+  --conloca-aside-active-accent: var(--conloca-aside-note-accent, hsl(234, 100%, 87%));
+}
+.conloca-aside-tip {
+  --conloca-aside-active-border: var(--conloca-aside-tip-border, hsl(281, 82%, 63%));
+  --conloca-aside-active-bg: var(--conloca-aside-tip-bg, hsl(281, 39%, 22%));
+  --conloca-aside-active-accent: var(--conloca-aside-tip-accent, hsl(281, 82%, 89%));
+}
+.conloca-aside-caution {
+  --conloca-aside-active-border: var(--conloca-aside-caution-border, hsl(41, 82%, 63%));
+  --conloca-aside-active-bg: var(--conloca-aside-caution-bg, hsl(41, 39%, 22%));
+  --conloca-aside-active-accent: var(--conloca-aside-caution-accent, hsl(41, 82%, 87%));
+}
+.conloca-aside-danger {
+  --conloca-aside-active-border: var(--conloca-aside-danger-border, hsl(339, 82%, 63%));
+  --conloca-aside-active-bg: var(--conloca-aside-danger-bg, hsl(339, 39%, 22%));
+  --conloca-aside-active-accent: var(--conloca-aside-danger-accent, hsl(339, 82%, 87%));
+}
+.conloca-aside-title {
+  display: flex;
+  gap: var(--conloca-aside-title-gap, 0.5rem);
+  align-items: center;
+  margin: 0;
+  font-size: var(--conloca-aside-title-font-size, 1.125rem);
+  font-weight: var(--conloca-aside-title-font-weight, 600);
+  line-height: var(--conloca-aside-title-line-height, 1.2);
+  color: var(--conloca-aside-active-accent, var(--conloca-aside-note-accent, hsl(234, 100%, 87%)));
+}
+.conloca-aside-title + * {
+  margin-top: var(--conloca-aside-title-margin-bottom, 0.5rem);
+}
+.conloca-aside a {
+  color: var(--conloca-aside-active-accent, var(--conloca-aside-note-accent, hsl(234, 100%, 87%)));
+  /* Beats `.conloca-prose :where(a) { text-decoration: underline }` in
+     prose.css; `:where()` is 0-specificity so a single-class + type
+     selector wins. Keeps editor link rendering aligned with the
+     published `.starlight-aside__content a` which inherits the default
+     `a { text-decoration: none }` from global.css. */
+  text-decoration: none;
+}
+.conloca-aside > :last-child {
+  margin-bottom: 0;
+}
+
+/* Editor-only chrome — interactive title row replaces the Starlight icon/
+   label `<p>` with controls that edit `<Aside>` attributes (type select,
+   optional title input, remove button). Layout matches the title row
+   silhouette so the editor sits flush against the published surface when
+   the author flips between the two. */
+.conloca-aside-editor .conloca-aside-title {
+  /* Override the `+ *` margin-top rule so the body chip sits at the
+     post-title spacing — needed because the title row in editor mode is
+     a div, not a `<p>`, and we render the icon outside the `<p>` flow. */
+  margin-bottom: 0;
+}
+/* Icon matches Starlight's `.starlight-aside__icon` proportions —
+   `font-size: 1.333em; width: 1em; height: 1em` resolves to 24x24 at
+   the 18px title font-size. SVG sizing takes the CSS width/height,
+   ignoring lucide-react's default 24px attribute (both resolve to the
+   same value here; the rule keeps the icon proportional if the title
+   font-size changes). */
+.conloca-aside-editor .conloca-aside-title__icon {
+  font-size: var(--conloca-aside-icon-size, 1.333em);
+  width: 1em;
+  height: 1em;
+  flex-shrink: 0;
+}
+.conloca-aside-editor .conloca-aside-title__select,
+.conloca-aside-editor .conloca-aside-title__input {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: inherit;
+  font: inherit;
+  padding: 2px 6px;
+  outline: 0;
+  /* Heavier hover/focus border picks up the per-aside accent so the
+     control's affordance reads in-context. */
+}
+.conloca-aside-editor .conloca-aside-title__input {
+  flex: 1;
+  min-width: 0;
+}
+.conloca-aside-editor .conloca-aside-title__input::placeholder {
+  color: color-mix(in srgb, currentColor 50%, transparent);
+}
+.conloca-aside-editor .conloca-aside-title__select:hover,
+.conloca-aside-editor .conloca-aside-title__select:focus,
+.conloca-aside-editor .conloca-aside-title__input:hover,
+.conloca-aside-editor .conloca-aside-title__input:focus {
+  border-color: color-mix(in srgb, currentColor 30%, transparent);
+}
+.conloca-aside-editor .conloca-aside-title__remove {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 1.75rem;
+  justify-content: center;
+  opacity: 0.7;
+  padding: 0;
+  width: 1.75rem;
+}
+.conloca-aside-editor .conloca-aside-title__remove:hover {
+  background: color-mix(in srgb, currentColor 15%, transparent);
+  opacity: 1;
+}
+
+/* MDXEditor wraps the inline-editable body in a hash-suffixed
+   `_nestedEditor_*` div that ships with its own `background: rgb(41,41,41)`,
+   `border-radius: 6px` and `padding: 4px 8px` — visible as a second chip
+   sitting inside our aside frame, the analogue of the `_codeMirrorWrapper_*`
+   ring we neutralize for code blocks. Strip the chrome so the body reads as
+   a plain text region against the aside's tinted bg. */
+.conloca-aside-editor [class*="nestedEditor"] {
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+}
+
+/* ============================================================
+   Card / CardGrid / LinkCard / TabItem / Steps chrome —
+   token defaults + selectors for the host's custom editor
+   surfaces. Tokens come from the host's `starlight-components.css`;
+   fallbacks declared here keep the editor readable when no host
+   defines them. Same dark-mode-trigger pattern as the aside block
+   above (`.dark` + `[data-theme="dark"]`).
+   See `targets/website/src/styles/starlight-components.css` for
+   the canonical token sourcing (the per-color values resolve from
+   Starlight's `--sl-color-{purple,gray,white,...}` scale). */
+
+:root {
+  /* Fallbacks resolve to the same values Starlight's `--sl-color-*` scale
+     ships on the published page (read via `targets/website/src/styles/
+     custom.css` + Starlight defaults). Listed verbatim here so the CMS
+     SPA admin doc, which doesn't load Starlight's `<head>`, paints the
+     same chrome. */
+  --conloca-card-bg: #ffffff;
+  --conloca-card-fg: #334155;
+  --conloca-card-border-color: #e2e8f0;
+  --conloca-card-padding: clamp(1rem, calc(0.125rem + 3vw), 2.5rem);
+  --conloca-card-gap: clamp(0.5rem, calc(0.125rem + 1vw), 1rem);
+  --conloca-card-font-family: "Inter", system-ui, -apple-system, sans-serif;
+  --conloca-card-title-color: #020617;
+  --conloca-card-title-font-size: 1.5rem;
+  --conloca-card-title-font-weight: 600;
+  --conloca-card-title-line-height: 1.2;
+  --conloca-card-title-gap: 1rem;
+  --conloca-card-icon-border: hsl(281, 90%, 60%);
+  --conloca-card-icon-bg: hsl(281, 80%, 90%);
+  --conloca-card-icon-padding: 0.2em;
+  --conloca-card-icon-radius: 0.25rem;
+  --conloca-card-icon-size: 1.333em;
+  --conloca-card-grid-gap: clamp(1rem, calc(0.25rem + 2vw), 2rem);
+  --conloca-link-card-padding: 1rem;
+  --conloca-link-card-radius: 0.5rem;
+  --conloca-link-card-gap: 0.5rem;
+  --conloca-link-card-border: #e2e8f0;
+  --conloca-link-card-fg: #334155;
+  --conloca-link-card-title-color: #020617;
+  --conloca-link-card-title-font-size: 1.125rem;
+  --conloca-link-card-title-font-weight: 600;
+  --conloca-link-card-title-line-height: 1.2;
+  /* Description color is `--sl-color-gray-3`, which custom.css sets to
+     `#94a3b8` (light) / `#475569` (dark). */
+  --conloca-link-card-description-color: #94a3b8;
+  --conloca-link-card-description-line-height: 1.5;
+  --conloca-link-card-icon-color: #94a3b8;
+  --conloca-link-card-icon-size: 1.333em;
+  --conloca-link-card-shadow: 0px 1px 1px hsla(0, 0%, 0%, 0.12), 0px 2px 1px hsla(0, 0%, 0%, 0.24);
+  --conloca-tab-border: #e2e8f0;
+  --conloca-tab-border-active: #0891b2;
+  --conloca-tab-fg: #94a3b8;
+  --conloca-tab-fg-active: #020617;
+  --conloca-tab-padding: 0.275rem 1.25rem;
+  --conloca-tab-gap: 0.5rem;
+  --conloca-tab-panel-margin-top: 1rem;
+}
+:root.dark,
+:root[data-theme="dark"] {
+  /* `--sl-color-black` upstream is `oklch(21% 0.006 285.885)` — matches the
+     published `article.card` bg byte-for-byte once the audit converts to
+     the same color space. */
+  --conloca-card-bg: oklch(21% 0.006 285.885);
+  --conloca-card-fg: #e2e8f0;
+  --conloca-card-border-color: #1e293b;
+  --conloca-card-title-color: #f8fafc;
+  --conloca-card-icon-border: hsl(281, 82%, 63%);
+  --conloca-card-icon-bg: hsl(281, 39%, 22%);
+  --conloca-link-card-border: #1e293b;
+  --conloca-link-card-fg: #e2e8f0;
+  --conloca-link-card-title-color: #f8fafc;
+  /* Custom.css maps `--sl-color-gray-3` to `#475569` (slate-600) in dark. */
+  --conloca-link-card-description-color: #475569;
+  --conloca-link-card-icon-color: #475569;
+  --conloca-tab-border: #1e293b;
+  --conloca-tab-border-active: #22d3ee;
+  --conloca-tab-fg: #94a3b8;
+  --conloca-tab-fg-active: #f8fafc;
+}
+
+.conloca-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--conloca-card-gap, 1rem);
+  padding: var(--conloca-card-padding, 1rem);
+  border: 1px solid var(--conloca-card-border-color, #e2e8f0);
+  background-color: var(--conloca-card-bg, #ffffff);
+  color: var(--conloca-card-fg, inherit);
+  font-family: var(--conloca-card-font-family, "Inter", system-ui, -apple-system, sans-serif);
+  /* Starlight's `article.card` ships no radius — sharp corners match. */
+  border-radius: 0;
+  /* Prose default — first `+ *` sibling gets 16px top, no bottom. */
+  margin-block: 1rem 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.conloca-card__title {
+  display: flex;
+  align-items: center;
+  gap: var(--conloca-card-title-gap, 1rem);
+  margin: 0;
+  font-size: var(--conloca-card-title-font-size, 1.5rem);
+  font-weight: var(--conloca-card-title-font-weight, 600);
+  line-height: var(--conloca-card-title-line-height, 1.2);
+  color: var(--conloca-card-title-color, inherit);
+}
+/* Icon matches Starlight's `.card .icon` proportions:
+   - `font-size: 1.333em` of parent title (24px → 32px), driven by inline
+     `--sl-icon-size: 1.333em` on the SVG.
+   - `width/height: 1em` → renders at the icon's own font-size.
+   - `padding: 0.2em` → ~6.4px frame breathing room. */
+.conloca-card__icon {
+  font-size: var(--conloca-card-icon-size, 1.333em);
+  width: 1em;
+  height: 1em;
+  padding: var(--conloca-card-icon-padding, 0.2em);
+  border: 1px solid var(--conloca-card-icon-border);
+  background-color: var(--conloca-card-icon-bg);
+  border-radius: var(--conloca-card-icon-radius, 0.25rem);
+  flex-shrink: 0;
+  box-sizing: content-box;
+}
+.conloca-card-editor .conloca-card__title-input,
+.conloca-card-editor .conloca-card__icon-input {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: inherit;
+  font: inherit;
+  padding: 2px 6px;
+  outline: 0;
+}
+.conloca-card-editor .conloca-card__title-input {
+  flex: 1;
+  min-width: 0;
+}
+.conloca-card-editor .conloca-card__icon-input {
+  width: 9rem;
+  font-size: 0.75em;
+}
+.conloca-card-editor .conloca-card__title-input::placeholder,
+.conloca-card-editor .conloca-card__icon-input::placeholder {
+  color: color-mix(in srgb, currentColor 50%, transparent);
+}
+.conloca-card-editor .conloca-card__title-input:hover,
+.conloca-card-editor .conloca-card__title-input:focus,
+.conloca-card-editor .conloca-card__icon-input:hover,
+.conloca-card-editor .conloca-card__icon-input:focus {
+  border-color: color-mix(in srgb, currentColor 30%, transparent);
+}
+.conloca-card-editor .conloca-card__remove {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 1.75rem;
+  justify-content: center;
+  opacity: 0.7;
+  padding: 0;
+  width: 1.75rem;
+}
+.conloca-card-editor .conloca-card__remove:hover {
+  background: color-mix(in srgb, currentColor 15%, transparent);
+  opacity: 1;
+}
+.conloca-card-editor [class*="nestedEditor"] {
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+}
+
+.conloca-link-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--conloca-link-card-gap, 0.5rem);
+  border: 1px solid var(--conloca-link-card-border);
+  border-radius: var(--conloca-link-card-radius, 0.5rem);
+  padding: var(--conloca-link-card-padding, 1rem);
+  box-shadow: var(--conloca-link-card-shadow);
+  margin-block: 1rem 0;
+  color: var(--conloca-link-card-fg, inherit);
+  font-family: var(--conloca-card-font-family, "Inter", system-ui, -apple-system, sans-serif);
+  position: relative;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.conloca-link-card__stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--conloca-link-card-gap, 0.5rem);
+  min-width: 0;
+}
+.conloca-link-card-editor .conloca-link-card__icon {
+  font-size: var(--conloca-link-card-icon-size, 1.333em);
+  width: 1em;
+  height: 1em;
+}
+.conloca-link-card-editor .conloca-link-card__title-input,
+.conloca-link-card-editor .conloca-link-card__description-input,
+.conloca-link-card-editor .conloca-link-card__href-input {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: inherit;
+  font: inherit;
+  padding: 2px 6px;
+  outline: 0;
+  width: 100%;
+  display: block;
+}
+.conloca-link-card-editor .conloca-link-card__title-input {
+  font-size: var(--conloca-link-card-title-font-size);
+  font-weight: var(--conloca-link-card-title-font-weight, 600);
+  line-height: var(--conloca-link-card-title-line-height, 1.2);
+  color: var(--conloca-link-card-title-color);
+}
+.conloca-link-card-editor .conloca-link-card__description-input {
+  color: var(--conloca-link-card-description-color);
+  line-height: var(--conloca-link-card-description-line-height, 1.5);
+}
+.conloca-link-card-editor .conloca-link-card__href-input {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.75em;
+  color: color-mix(in srgb, currentColor 70%, transparent);
+}
+.conloca-link-card-editor .conloca-link-card__title-input::placeholder,
+.conloca-link-card-editor .conloca-link-card__description-input::placeholder,
+.conloca-link-card-editor .conloca-link-card__href-input::placeholder {
+  color: color-mix(in srgb, currentColor 50%, transparent);
+}
+.conloca-link-card-editor .conloca-link-card__title-input:hover,
+.conloca-link-card-editor .conloca-link-card__title-input:focus,
+.conloca-link-card-editor .conloca-link-card__description-input:hover,
+.conloca-link-card-editor .conloca-link-card__description-input:focus,
+.conloca-link-card-editor .conloca-link-card__href-input:hover,
+.conloca-link-card-editor .conloca-link-card__href-input:focus {
+  border-color: color-mix(in srgb, currentColor 30%, transparent);
+}
+.conloca-link-card-editor .conloca-link-card__icon {
+  color: var(--conloca-link-card-icon-color);
+  align-self: center;
+  flex-shrink: 0;
+}
+.conloca-link-card-editor .conloca-link-card__remove {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 1.75rem;
+  justify-content: center;
+  opacity: 0.7;
+  padding: 0;
+  width: 1.75rem;
+}
+.conloca-link-card-editor .conloca-link-card__remove:hover {
+  background: color-mix(in srgb, currentColor 15%, transparent);
+  opacity: 1;
+}
+
+.conloca-tab-item-editor {
+  margin-block: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--conloca-card-font-family, "Inter", system-ui, -apple-system, sans-serif);
+  color: var(--conloca-card-fg, inherit);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.conloca-tab-item-editor .conloca-tab__chip {
+  display: flex;
+  align-items: center;
+  gap: var(--conloca-tab-gap, 0.5rem);
+  padding: var(--conloca-tab-padding, 0.275rem 1.25rem);
+  color: var(--conloca-tab-fg-active);
+  font-weight: 600;
+  line-height: 1.2;
+  align-self: flex-start;
+  /* Starlight paints the accent stripe via box-shadow not border —
+     `.tab > [role='tab'][aria-selected='true'] { box-shadow: 0 2px 0
+     var(--sl-color-text-accent); }`. Mirroring the same prop keeps the
+     accent line in the same vertical position. */
+  box-shadow: 0 2px 0 var(--conloca-tab-border-active);
+}
+.conloca-tab-item-editor .conloca-tab__label-input,
+.conloca-tab-item-editor .conloca-tab__icon-input {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: inherit;
+  font: inherit;
+  padding: 2px 6px;
+  outline: 0;
+}
+.conloca-tab-item-editor .conloca-tab__label-input {
+  font-weight: 600;
+}
+.conloca-tab-item-editor .conloca-tab__icon-input {
+  width: 9rem;
+  font-size: 0.75em;
+  color: color-mix(in srgb, currentColor 70%, transparent);
+}
+.conloca-tab-item-editor .conloca-tab__label-input::placeholder,
+.conloca-tab-item-editor .conloca-tab__icon-input::placeholder {
+  color: color-mix(in srgb, currentColor 50%, transparent);
+}
+.conloca-tab-item-editor .conloca-tab__label-input:hover,
+.conloca-tab-item-editor .conloca-tab__label-input:focus,
+.conloca-tab-item-editor .conloca-tab__icon-input:hover,
+.conloca-tab-item-editor .conloca-tab__icon-input:focus {
+  border-color: color-mix(in srgb, currentColor 30%, transparent);
+}
+.conloca-tab-item-editor .conloca-tab__remove {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 1.75rem;
+  justify-content: center;
+  margin-inline-start: auto;
+  opacity: 0.7;
+  padding: 0;
+  width: 1.75rem;
+}
+.conloca-tab-item-editor .conloca-tab__remove:hover {
+  background: color-mix(in srgb, currentColor 15%, transparent);
+  opacity: 1;
+}
+.conloca-tab-item-editor .conloca-tab__panel {
+  margin-top: var(--conloca-tab-panel-margin-top, 1rem);
+}
+.conloca-tab-item-editor [class*="nestedEditor"] {
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+}
+
+/* Steps chrome — same selectors as `starlight-components.css` so the
+   StepsEditor renders the numbered chip + vertical guideline in the SPA
+   admin doc, where the host's stylesheet doesn't reach. */
+.conloca-steps,
+.conloca-steps-editor [class*="nestedEditor"] ol {
+  --bullet-size: calc(1.75 * 1rem);
+  --bullet-margin: 0.375rem;
+  list-style: none;
+  counter-reset: steps-counter 0;
+  padding-inline-start: 0;
+}
+.conloca-steps > li,
+.conloca-steps-editor [class*="nestedEditor"] ol > li {
+  counter-increment: steps-counter;
+  position: relative;
+  padding-inline-start: calc(var(--bullet-size) + 1rem);
+  padding-bottom: 1px;
+  min-height: calc(var(--bullet-size) + var(--bullet-margin));
+}
+.conloca-steps > li + li,
+.conloca-steps-editor [class*="nestedEditor"] ol > li + li {
+  margin-top: 0;
+}
+.conloca-steps > li::before,
+.conloca-steps-editor [class*="nestedEditor"] ol > li::before {
+  content: counter(steps-counter);
+  position: absolute;
+  top: 0;
+  inset-inline-start: 0;
+  width: var(--bullet-size);
+  height: var(--bullet-size);
+  line-height: var(--bullet-size);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-align: center;
+  color: #f8fafc;
+  background-color: #0f172a;
+  border-radius: 99rem;
+  box-shadow: inset 0 0 0 1px #1e293b;
+}
+.conloca-steps > li::after,
+.conloca-steps-editor [class*="nestedEditor"] ol > li::after {
+  --guide-width: 1px;
+  content: "";
+  position: absolute;
+  top: calc(var(--bullet-size) + var(--bullet-margin));
+  bottom: var(--bullet-margin);
+  inset-inline-start: calc((var(--bullet-size) - var(--guide-width)) / 2);
+  width: var(--guide-width);
+  background-color: #1e293b;
+}
+.conloca-steps-editor {
+  position: relative;
+  margin-block: 1rem 0;
+  font-family: var(--conloca-card-font-family, "Inter", system-ui, -apple-system, sans-serif);
+  color: var(--conloca-card-fg, inherit);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.conloca-steps-editor [class*="nestedEditor"] {
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+}
+.conloca-steps-editor .conloca-steps__remove {
+  position: absolute;
+  top: 0;
+  right: 0;
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  height: 1.75rem;
+  justify-content: center;
+  opacity: 0.5;
+  padding: 0;
+  width: 1.75rem;
+  z-index: 1;
+}
+.conloca-steps-editor .conloca-steps__remove:hover {
+  background: color-mix(in srgb, currentColor 15%, transparent);
+  opacity: 1;
+}
