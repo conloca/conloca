@@ -46,8 +46,8 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
   // 'puck' to match prior behavior; the MDX option only renders when
   // the integration was configured with `mdxPages.root`.
   const [format, setFormat] = useState<'puck' | 'mdx'>('puck');
-  // Only collected/shown for MDX pages. Starlight recommends a
-  // description; leaving it empty is still valid.
+  // Only collected/shown for MDX pages. Optional — leaving it empty is
+  // valid; renderers that surface a description use it when present.
   const [description, setDescription] = useState('');
 
   const [isPathnameAvailable, setIsPathnameAvailable] = useState(true);
@@ -223,9 +223,7 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
                   </button>
                 </div>
                 <p className="text-xs text-grey-04 dark:text-grey-07 mt-1">
-                  {format === 'puck'
-                    ? 'Drag-and-drop blocks on a canvas.'
-                    : 'Markdown-based docs page rendered by Starlight.'}
+                  {format === 'puck' ? 'Drag-and-drop blocks on a canvas.' : 'Markdown page rendered by the host site.'}
                 </p>
               </div>
             )}

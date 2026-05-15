@@ -56,7 +56,7 @@ export type PageSchemaGroup = {
  *   host fields + `seoPublishingSchema` (description/robots/canonical/
  *   publishAt/unpublishAt). Backwards-compatible with existing dialogs.
  * - `'minimal'`: show pathname only + host fields + publishAt/unpublishAt.
- *   Suitable for Starlight, where host owns title/description.
+ *   Use when the host owns title/description in its own schema.
  * - `'none'`: host fields only. Host must declare `title` in its schema
  *   (validated at registration; ContentMeta.title is required at the
  *   content-api level).
@@ -84,9 +84,9 @@ export interface PageSchemaDescriptor {
  * @example
  * ```ts
  * export const pageSchemas = {
- *   'collection:docs': definePageSchema({
- *     label: 'Starlight page',
- *     schema: starlightZod,
+ *   'type:mdx': definePageSchema({
+ *     label: 'MDX page',
+ *     schema: mdxPageSchema,
  *     ui: { title: { control: 'text', group: 'basics', required: true } },
  *     groups: [{ id: 'basics', label: 'Basics' }],
  *     coreFields: { mode: 'minimal' },
