@@ -673,7 +673,9 @@ input.conloca-code-block__filename:focus {
   background-color: var(--conloca-card-icon-bg);
   border-radius: var(--conloca-card-icon-radius, 0.25rem);
   flex-shrink: 0;
-  box-sizing: content-box;
+  /* Match Starlight's reset (every SVG on `border-box`) so padding + border
+     collapse into the 1em width instead of growing it. */
+  box-sizing: border-box;
 }
 .conloca-card-editor .conloca-card__title-input,
 .conloca-card-editor .conloca-card__icon-input {
@@ -919,10 +921,8 @@ input.conloca-code-block__filename:focus {
   padding-inline-start: calc(var(--bullet-size) + 1rem);
   padding-bottom: 1px;
   min-height: calc(var(--bullet-size) + var(--bullet-margin));
-}
-.conloca-steps > li + li,
-.conloca-steps-editor [class*="nestedEditor"] ol > li + li {
-  margin-top: 0;
+  /* Zero prose-default li margin so first step chip sits flush at the top. */
+  margin: 0;
 }
 .conloca-steps > li::before,
 .conloca-steps-editor [class*="nestedEditor"] ol > li::before {
