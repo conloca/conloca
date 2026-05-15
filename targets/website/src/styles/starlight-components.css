@@ -170,6 +170,7 @@ article.card .title {
 
 :root {
   --conloca-card-grid-gap: clamp(1rem, calc(0.25rem + 2vw), 2rem);
+  --conloca-card-grid-stagger-height: 5rem;
 }
 .conloca-card-grid,
 .card-grid {
@@ -177,6 +178,84 @@ article.card .title {
   grid-template-columns: repeat(auto-fit, minmax(clamp(16rem, 50vw, 18rem), 1fr));
   gap: var(--conloca-card-grid-gap);
 }
+
+/* Editor chrome — chip header with stagger toggle above the grid. The
+   grid itself is the same `.conloca-card-grid` shape so the inner
+   `<article class="conloca-card">` cards render exactly like the
+   published page. */
+.conloca-card-grid-editor {
+  margin-block: 1.5rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  font-family: var(--conloca-card-font-family, var(--sl-font, "Inter", system-ui, -apple-system, sans-serif));
+  color: var(--conloca-card-fg, var(--sl-color-text, inherit));
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.conloca-card-grid-editor .conloca-card-grid__chip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  align-self: flex-start;
+  padding: 0.275rem 0.75rem;
+  color: var(--conloca-tab-fg-active);
+  font-weight: 600;
+  font-size: 0.875rem;
+  line-height: var(--sl-line-height-headings, 1.2);
+  /* Same accent stripe as the TabItem chip so the four wrappers read as
+     siblings of a single chip family. */
+  box-shadow: 0 2px 0 var(--conloca-tab-border-active);
+}
+.conloca-card-grid-editor .conloca-card-grid__chip-icon {
+  flex-shrink: 0;
+}
+.conloca-card-grid-editor .conloca-card-grid__chip-label {
+  flex-shrink: 0;
+}
+.conloca-card-grid-editor .conloca-card-grid__stagger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75em;
+  font-weight: 500;
+  color: color-mix(in srgb, currentColor 80%, transparent);
+  cursor: pointer;
+}
+.conloca-card-grid-editor .conloca-card-grid__stagger input {
+  margin: 0;
+  cursor: pointer;
+}
+.conloca-card-grid-editor .conloca-card-grid__remove {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 1.75rem;
+  justify-content: center;
+  margin-inline-start: 0.5rem;
+  opacity: 0.7;
+  padding: 0;
+  width: 1.75rem;
+}
+.conloca-card-grid-editor .conloca-card-grid__remove:hover {
+  background: color-mix(in srgb, currentColor 15%, transparent);
+  opacity: 1;
+}
+/* Pattern A drift: Starlight's `.card-grid` lays its children out with
+   `display: grid` because they are direct `<article class="card">`
+   siblings. Inside the editor, MDXEditor's NestedLexicalEditor wraps
+   the cards in `<p><p><span>` levels (each decorator becomes a `<span
+   data-lexical-decorator>` inside a `<p>`). `display: grid` on the
+   wrapper sees one child (the nestedEditor div) and so degrades to a
+   single column. The stagger rotation has the same problem. Cards
+   stack vertically in the editor; the chip header above says
+   "CardGrid" + the stagger toggle so the author still knows the
+   block's identity. */
 
 /* ---------- LinkCard ---------- */
 
@@ -397,6 +476,261 @@ article.card .title {
   background: transparent;
   border-radius: 0;
   padding: 0;
+}
+
+/* ---------- Tabs (wrapper around TabItems) ---------- */
+
+/* Editor surface mirrors `<starlight-tabs>` — chip header naming the
+   block + the inner `[role=tabpanel]` slot. Pattern A drift: the
+   published page hides every panel except the active one and lets the
+   StarlightTabs custom element switch; the editor stacks them so each
+   panel is editable inline. */
+.conloca-tabs-editor {
+  margin-block: 1.5rem 0;
+  display: block;
+  font-family: var(--conloca-card-font-family, var(--sl-font, "Inter", system-ui, -apple-system, sans-serif));
+  color: var(--conloca-card-fg, var(--sl-color-text, inherit));
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.conloca-tabs-editor .conloca-tabs__chip {
+  display: flex;
+  align-items: center;
+  gap: var(--conloca-tab-gap, 0.5rem);
+  padding: var(--conloca-tab-padding, 0.275rem 1.25rem);
+  color: var(--conloca-tab-fg-active);
+  font-weight: 600;
+  font-size: 0.875rem;
+  line-height: var(--sl-line-height-headings, 1.2);
+  border-bottom: 2px solid var(--conloca-tab-border);
+}
+.conloca-tabs-editor .conloca-tabs__chip-icon,
+.conloca-tabs-editor .conloca-tabs__chip-label {
+  flex-shrink: 0;
+}
+.conloca-tabs-editor .conloca-tabs__synckey-input {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: color-mix(in srgb, currentColor 70%, transparent);
+  font: inherit;
+  font-size: 0.75em;
+  padding: 2px 6px;
+  outline: 0;
+  margin-inline-start: auto;
+  width: 12rem;
+}
+.conloca-tabs-editor .conloca-tabs__synckey-input::placeholder {
+  color: color-mix(in srgb, currentColor 50%, transparent);
+}
+.conloca-tabs-editor .conloca-tabs__synckey-input:hover,
+.conloca-tabs-editor .conloca-tabs__synckey-input:focus {
+  border-color: color-mix(in srgb, currentColor 30%, transparent);
+}
+.conloca-tabs-editor .conloca-tabs__remove {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 1.75rem;
+  justify-content: center;
+  opacity: 0.7;
+  padding: 0;
+  width: 1.75rem;
+}
+.conloca-tabs-editor .conloca-tabs__remove:hover {
+  background: color-mix(in srgb, currentColor 15%, transparent);
+  opacity: 1;
+}
+.conloca-tabs-editor .conloca-tabs__panels {
+  margin-top: var(--conloca-tab-panel-margin-top, 1rem);
+}
+.conloca-tabs-editor [class*="nestedEditor"] {
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+}
+
+/* ---------- FileTree ---------- */
+
+:root {
+  --conloca-file-tree-bg: var(--sl-color-gray-6, #f1f5f9);
+  --conloca-file-tree-border: var(--sl-color-gray-5, #e2e8f0);
+  --conloca-file-tree-fg: var(--sl-color-white, #020617);
+  --conloca-file-tree-muted: var(--sl-color-gray-3, #94a3b8);
+  --conloca-file-tree-font: var(--__sl-font-mono, var(--sl-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace));
+  --conloca-file-tree-font-size: var(--sl-text-xs, 0.8125rem);
+  --conloca-file-tree-padding: 1rem;
+}
+
+/* Editor frame mirrors `starlight-file-tree`'s outer chrome — 1px border,
+   gray-6 bg, monospace, padding. Pattern A drift: the published page's
+   rehype-file-tree pass decorates each `<li>` with `.directory` /
+   `.file`, swaps in `<details>` / `<summary>` chrome, and inlines SVG
+   tree icons; that happens server-side. The editor leaves the inner
+   `<ul>` unclassed and styles the descendant list via descendant
+   selectors so the silhouette still reads "file tree" without
+   replicating the rehype logic. Folder/file icons + collapse toggles
+   don't appear in the editor (Pattern A drift). */
+.conloca-file-tree-editor {
+  margin-block: 1.5rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-family: var(--conloca-card-font-family, var(--sl-font, "Inter", system-ui, -apple-system, sans-serif));
+  color: var(--conloca-card-fg, var(--sl-color-text, inherit));
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.conloca-file-tree-editor .conloca-file-tree__chip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  align-self: flex-start;
+  padding: 0.275rem 0.75rem;
+  color: var(--conloca-tab-fg-active);
+  font-weight: 600;
+  font-size: 0.875rem;
+  line-height: var(--sl-line-height-headings, 1.2);
+  box-shadow: 0 2px 0 var(--conloca-tab-border-active);
+}
+.conloca-file-tree-editor .conloca-file-tree__chip-icon,
+.conloca-file-tree-editor .conloca-file-tree__chip-label {
+  flex-shrink: 0;
+}
+.conloca-file-tree-editor .conloca-file-tree__remove {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 1.75rem;
+  justify-content: center;
+  margin-inline-start: 0.5rem;
+  opacity: 0.7;
+  padding: 0;
+  width: 1.75rem;
+}
+.conloca-file-tree-editor .conloca-file-tree__remove:hover {
+  background: color-mix(in srgb, currentColor 15%, transparent);
+  opacity: 1;
+}
+
+/* Tree body — same chrome as Starlight's `<starlight-file-tree>` block.
+   The unclassed `<ul>` is reached through the nestedEditor wrapper
+   (same trick as StepsEditor's inner `<ol>`). */
+.conloca-file-tree,
+starlight-file-tree {
+  display: block;
+  border: 1px solid var(--conloca-file-tree-border);
+  padding: var(--conloca-file-tree-padding);
+  background-color: var(--conloca-file-tree-bg);
+  font-size: var(--conloca-file-tree-font-size);
+  font-family: var(--conloca-file-tree-font);
+  overflow-x: auto;
+  color: var(--conloca-file-tree-fg);
+}
+.conloca-file-tree [class*="nestedEditor"] {
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+}
+.conloca-file-tree [class*="nestedEditor"] ul {
+  list-style: none;
+  margin-inline-start: 0.5rem;
+  border-inline-start: 1px solid var(--conloca-file-tree-border);
+  padding: 0;
+  padding-inline-start: 0.5rem;
+}
+.conloca-file-tree [class*="nestedEditor"] > ul {
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+.conloca-file-tree [class*="nestedEditor"] li {
+  margin: 0.125rem 0;
+}
+
+/* ---------- Icon ---------- */
+
+:root {
+  --conloca-icon-editor-bg: color-mix(in srgb, var(--sl-color-gray-5, #e2e8f0) 70%, transparent);
+  --conloca-icon-editor-border: var(--sl-color-gray-5, #e2e8f0);
+  --conloca-icon-editor-fg: var(--sl-color-white, #020617);
+}
+
+/* Inline chip that stands in for Starlight's `<svg>` rendering — name
+   string + lucide-react preview + remove button. Same chip-stripe accent
+   as the block wrappers so the four editors read as one family. */
+.conloca-icon-editor {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 1px 6px;
+  background-color: var(--conloca-icon-editor-bg);
+  border: 1px solid var(--conloca-icon-editor-border);
+  border-radius: 4px;
+  color: var(--conloca-icon-editor-fg);
+  font-family: var(--conloca-card-font-family, var(--sl-font, "Inter", system-ui, -apple-system, sans-serif));
+  font-size: 0.8125em;
+  line-height: 1.2;
+  vertical-align: baseline;
+  white-space: nowrap;
+}
+.conloca-icon-editor__glyph {
+  flex-shrink: 0;
+  color: var(--conloca-tab-border-active);
+}
+.conloca-icon-editor__name-input,
+.conloca-icon-editor__label-input {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: inherit;
+  font: inherit;
+  padding: 0 2px;
+  outline: 0;
+  width: 7rem;
+  min-width: 0;
+}
+.conloca-icon-editor__label-input {
+  font-size: 0.875em;
+  color: color-mix(in srgb, currentColor 70%, transparent);
+}
+.conloca-icon-editor__name-input::placeholder,
+.conloca-icon-editor__label-input::placeholder {
+  color: color-mix(in srgb, currentColor 50%, transparent);
+}
+.conloca-icon-editor__name-input:hover,
+.conloca-icon-editor__name-input:focus,
+.conloca-icon-editor__label-input:hover,
+.conloca-icon-editor__label-input:focus {
+  border-color: color-mix(in srgb, currentColor 30%, transparent);
+}
+.conloca-icon-editor__remove {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  height: 1rem;
+  justify-content: center;
+  opacity: 0.6;
+  padding: 0;
+  width: 1rem;
+}
+.conloca-icon-editor__remove:hover {
+  background: color-mix(in srgb, currentColor 15%, transparent);
+  opacity: 1;
 }
 
 /* ---------- Steps ---------- */

@@ -582,6 +582,24 @@ input.conloca-code-block__filename:focus {
   --conloca-tab-padding: 0.275rem 1.25rem;
   --conloca-tab-gap: 0.5rem;
   --conloca-tab-panel-margin-top: 1rem;
+  --conloca-card-grid-stagger-height: 5rem;
+  /* FileTree: matches Starlight's `starlight-file-tree` chrome — gray-6
+     bg, gray-5 border, mono font, gray-3 muted accents. Token values
+     resolve from `targets/website/src/styles/custom.css` on the page;
+     repeated here so the SPA admin doc paints the same frame. */
+  --conloca-file-tree-bg: #f1f5f9;
+  --conloca-file-tree-border: #e2e8f0;
+  --conloca-file-tree-fg: #020617;
+  --conloca-file-tree-muted: #94a3b8;
+  --conloca-file-tree-font:
+    "JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+  --conloca-file-tree-font-size: 0.8125rem;
+  --conloca-file-tree-padding: 1rem;
+  /* Icon chip — gray-5 70% bg, gray-5 border, white fg. */
+  --conloca-icon-editor-bg: color-mix(in srgb, #e2e8f0 70%, transparent);
+  --conloca-icon-editor-border: #e2e8f0;
+  --conloca-icon-editor-fg: #020617;
 }
 :root.dark,
 :root[data-theme="dark"] {
@@ -604,6 +622,15 @@ input.conloca-code-block__filename:focus {
   --conloca-tab-border-active: #22d3ee;
   --conloca-tab-fg: #94a3b8;
   --conloca-tab-fg-active: #f8fafc;
+  /* FileTree dark — gray-6 #0f172a bg, gray-5 #1e293b border, white #f8fafc fg. */
+  --conloca-file-tree-bg: #0f172a;
+  --conloca-file-tree-border: #1e293b;
+  --conloca-file-tree-fg: #f8fafc;
+  --conloca-file-tree-muted: #475569;
+  /* Icon chip dark — gray-5 70% bg, gray-5 border, white fg. */
+  --conloca-icon-editor-bg: color-mix(in srgb, #1e293b 70%, transparent);
+  --conloca-icon-editor-border: #1e293b;
+  --conloca-icon-editor-fg: #f8fafc;
 }
 
 .conloca-card {
@@ -957,6 +984,290 @@ input.conloca-code-block__filename:focus {
   z-index: 1;
 }
 .conloca-steps-editor .conloca-steps__remove:hover {
+  background: color-mix(in srgb, currentColor 15%, transparent);
+  opacity: 1;
+}
+
+/* CardGrid editor chrome — mirrors the host rules so the SPA admin doc
+   paints the same grid + chip header without the host stylesheet. */
+.conloca-card-grid-editor {
+  margin-block: 1.5rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  font-family: var(--conloca-card-font-family, "Inter", system-ui, -apple-system, sans-serif);
+  color: var(--conloca-card-fg, inherit);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.conloca-card-grid-editor .conloca-card-grid__chip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  align-self: flex-start;
+  padding: 0.275rem 0.75rem;
+  color: var(--conloca-tab-fg-active);
+  font-weight: 600;
+  font-size: 0.875rem;
+  line-height: 1.2;
+  box-shadow: 0 2px 0 var(--conloca-tab-border-active);
+}
+.conloca-card-grid-editor .conloca-card-grid__chip-icon,
+.conloca-card-grid-editor .conloca-card-grid__chip-label {
+  flex-shrink: 0;
+}
+.conloca-card-grid-editor .conloca-card-grid__stagger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75em;
+  font-weight: 500;
+  color: color-mix(in srgb, currentColor 80%, transparent);
+  cursor: pointer;
+}
+.conloca-card-grid-editor .conloca-card-grid__stagger input {
+  margin: 0;
+  cursor: pointer;
+}
+.conloca-card-grid-editor .conloca-card-grid__remove {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 1.75rem;
+  justify-content: center;
+  margin-inline-start: 0.5rem;
+  opacity: 0.7;
+  padding: 0;
+  width: 1.75rem;
+}
+.conloca-card-grid-editor .conloca-card-grid__remove:hover {
+  background: color-mix(in srgb, currentColor 15%, transparent);
+  opacity: 1;
+}
+/* Cards stack vertically in the editor — see Pattern A drift note in
+   `starlight-components.css`. The grid layout is left to the published
+   page. */
+.conloca-card-grid-editor .conloca-card-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--conloca-card-grid-gap, 1rem);
+}
+
+/* Tabs (wrapper) editor chrome. Pattern A drift documented in host file. */
+.conloca-tabs-editor {
+  margin-block: 1.5rem 0;
+  display: block;
+  font-family: var(--conloca-card-font-family, "Inter", system-ui, -apple-system, sans-serif);
+  color: var(--conloca-card-fg, inherit);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.conloca-tabs-editor .conloca-tabs__chip {
+  display: flex;
+  align-items: center;
+  gap: var(--conloca-tab-gap, 0.5rem);
+  padding: var(--conloca-tab-padding, 0.275rem 1.25rem);
+  color: var(--conloca-tab-fg-active);
+  font-weight: 600;
+  font-size: 0.875rem;
+  line-height: 1.2;
+  border-bottom: 2px solid var(--conloca-tab-border);
+}
+.conloca-tabs-editor .conloca-tabs__chip-icon,
+.conloca-tabs-editor .conloca-tabs__chip-label {
+  flex-shrink: 0;
+}
+.conloca-tabs-editor .conloca-tabs__synckey-input {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: color-mix(in srgb, currentColor 70%, transparent);
+  font: inherit;
+  font-size: 0.75em;
+  padding: 2px 6px;
+  outline: 0;
+  margin-inline-start: auto;
+  width: 12rem;
+}
+.conloca-tabs-editor .conloca-tabs__synckey-input::placeholder {
+  color: color-mix(in srgb, currentColor 50%, transparent);
+}
+.conloca-tabs-editor .conloca-tabs__synckey-input:hover,
+.conloca-tabs-editor .conloca-tabs__synckey-input:focus {
+  border-color: color-mix(in srgb, currentColor 30%, transparent);
+}
+.conloca-tabs-editor .conloca-tabs__remove {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 1.75rem;
+  justify-content: center;
+  opacity: 0.7;
+  padding: 0;
+  width: 1.75rem;
+}
+.conloca-tabs-editor .conloca-tabs__remove:hover {
+  background: color-mix(in srgb, currentColor 15%, transparent);
+  opacity: 1;
+}
+.conloca-tabs-editor .conloca-tabs__panels {
+  margin-top: var(--conloca-tab-panel-margin-top, 1rem);
+}
+.conloca-tabs-editor [class*="nestedEditor"] {
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+}
+
+/* FileTree editor chrome. Tree-icon + collapse drift documented in host file. */
+.conloca-file-tree-editor {
+  margin-block: 1.5rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-family: var(--conloca-card-font-family, "Inter", system-ui, -apple-system, sans-serif);
+  color: var(--conloca-card-fg, inherit);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.conloca-file-tree-editor .conloca-file-tree__chip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  align-self: flex-start;
+  padding: 0.275rem 0.75rem;
+  color: var(--conloca-tab-fg-active);
+  font-weight: 600;
+  font-size: 0.875rem;
+  line-height: 1.2;
+  box-shadow: 0 2px 0 var(--conloca-tab-border-active);
+}
+.conloca-file-tree-editor .conloca-file-tree__chip-icon,
+.conloca-file-tree-editor .conloca-file-tree__chip-label {
+  flex-shrink: 0;
+}
+.conloca-file-tree-editor .conloca-file-tree__remove {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 1.75rem;
+  justify-content: center;
+  margin-inline-start: 0.5rem;
+  opacity: 0.7;
+  padding: 0;
+  width: 1.75rem;
+}
+.conloca-file-tree-editor .conloca-file-tree__remove:hover {
+  background: color-mix(in srgb, currentColor 15%, transparent);
+  opacity: 1;
+}
+.conloca-file-tree {
+  display: block;
+  border: 1px solid var(--conloca-file-tree-border, #e2e8f0);
+  padding: var(--conloca-file-tree-padding, 1rem);
+  background-color: var(--conloca-file-tree-bg, #f1f5f9);
+  font-size: var(--conloca-file-tree-font-size, 0.8125rem);
+  font-family: var(--conloca-file-tree-font, ui-monospace, monospace);
+  overflow-x: auto;
+  color: var(--conloca-file-tree-fg, inherit);
+}
+.conloca-file-tree [class*="nestedEditor"] {
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+}
+.conloca-file-tree [class*="nestedEditor"] ul {
+  list-style: none;
+  margin-inline-start: 0.5rem;
+  border-inline-start: 1px solid var(--conloca-file-tree-border, #e2e8f0);
+  padding: 0;
+  padding-inline-start: 0.5rem;
+}
+.conloca-file-tree [class*="nestedEditor"] > ul {
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+.conloca-file-tree [class*="nestedEditor"] li {
+  margin: 0.125rem 0;
+}
+
+/* Icon inline-chip editor. Pattern A drift documented in host file. */
+.conloca-icon-editor {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 1px 6px;
+  background-color: var(--conloca-icon-editor-bg, color-mix(in srgb, #e2e8f0 70%, transparent));
+  border: 1px solid var(--conloca-icon-editor-border, #e2e8f0);
+  border-radius: 4px;
+  color: var(--conloca-icon-editor-fg, inherit);
+  font-family: var(--conloca-card-font-family, "Inter", system-ui, -apple-system, sans-serif);
+  font-size: 0.8125em;
+  line-height: 1.2;
+  vertical-align: baseline;
+  white-space: nowrap;
+}
+.conloca-icon-editor__glyph {
+  flex-shrink: 0;
+  color: var(--conloca-tab-border-active);
+}
+.conloca-icon-editor__name-input,
+.conloca-icon-editor__label-input {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: inherit;
+  font: inherit;
+  padding: 0 2px;
+  outline: 0;
+  width: 7rem;
+  min-width: 0;
+}
+.conloca-icon-editor__label-input {
+  font-size: 0.875em;
+  color: color-mix(in srgb, currentColor 70%, transparent);
+}
+.conloca-icon-editor__name-input::placeholder,
+.conloca-icon-editor__label-input::placeholder {
+  color: color-mix(in srgb, currentColor 50%, transparent);
+}
+.conloca-icon-editor__name-input:hover,
+.conloca-icon-editor__name-input:focus,
+.conloca-icon-editor__label-input:hover,
+.conloca-icon-editor__label-input:focus {
+  border-color: color-mix(in srgb, currentColor 30%, transparent);
+}
+.conloca-icon-editor__remove {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  height: 1rem;
+  justify-content: center;
+  opacity: 0.6;
+  padding: 0;
+  width: 1rem;
+}
+.conloca-icon-editor__remove:hover {
   background: color-mix(in srgb, currentColor 15%, transparent);
   opacity: 1;
 }

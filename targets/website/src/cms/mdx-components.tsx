@@ -9,9 +9,13 @@ import {
 } from '@conloca/astro-cms';
 import { AsideEditor } from './editors/AsideEditor';
 import { CardEditor } from './editors/CardEditor';
+import { CardGridEditor } from './editors/CardGridEditor';
+import { FileTreeEditor } from './editors/FileTreeEditor';
+import { IconEditor } from './editors/IconEditor';
 import { LinkCardEditor } from './editors/LinkCardEditor';
 import { StepsEditor } from './editors/StepsEditor';
 import { TabItemEditor } from './editors/TabItemEditor';
+import { TabsEditor } from './editors/TabsEditor';
 
 const STARLIGHT_SOURCE = '@astrojs/starlight/components';
 
@@ -81,6 +85,7 @@ export const tabsDescriptor: MdxComponentDescriptor = {
   defaults: {
     children: '<TabItem label="One">First tab content</TabItem>\n<TabItem label="Two">Second tab content</TabItem>',
   },
+  Editor: TabsEditor,
   import: { from: STARLIGHT_SOURCE },
 };
 
@@ -137,6 +142,7 @@ export const cardGridDescriptor: MdxComponentDescriptor = {
   },
   props: [{ name: 'stagger', type: 'boolean', label: 'Stagger', help: 'Offset cards vertically on wide screens' }],
   defaults: { children: '<Card title="One">First</Card>\n<Card title="Two">Second</Card>' },
+  Editor: CardGridEditor,
   import: { from: STARLIGHT_SOURCE },
 };
 
@@ -178,6 +184,7 @@ export const fileTreeDescriptor: MdxComponentDescriptor = {
     keywords: ['files', 'directory', 'folder'],
   },
   defaults: { children: '- src/\n  - **index.ts**\n  - utils.ts\n- package.json' },
+  Editor: FileTreeEditor,
   import: { from: STARLIGHT_SOURCE },
 };
 
@@ -202,6 +209,7 @@ export const iconDescriptor: MdxComponentDescriptor = {
     { name: 'color', type: 'string', label: 'Color (CSS color)' },
   ],
   defaults: { attributes: { name: 'star' } },
+  Editor: IconEditor,
   import: { from: STARLIGHT_SOURCE },
 };
 
