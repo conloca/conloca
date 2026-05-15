@@ -486,7 +486,7 @@ article.card .title {
    StarlightTabs custom element switch; the editor stacks them so each
    panel is editable inline. */
 .conloca-tabs-editor {
-  margin-block: 1.5rem 0;
+  margin-block: 1rem 0;
   display: block;
   font-family: var(--conloca-card-font-family, var(--sl-font, "Inter", system-ui, -apple-system, sans-serif));
   color: var(--conloca-card-fg, var(--sl-color-text, inherit));

@@ -1060,7 +1060,7 @@ input.conloca-code-block__filename:focus {
 
 /* Tabs (wrapper) editor chrome. Pattern A drift documented in host file. */
 .conloca-tabs-editor {
-  margin-block: 1.5rem 0;
+  margin-block: 1rem 0;
   display: block;
   font-family: var(--conloca-card-font-family, "Inter", system-ui, -apple-system, sans-serif);
   color: var(--conloca-card-fg, inherit);
