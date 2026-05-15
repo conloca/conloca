@@ -1,7 +1,8 @@
 // Page-settings schemas for the Conloca CMS metadata dialog.
 //
-// Both the Starlight `docs` collection and the Conloca `pages` collection
-// render under `/`, so we key on collection name rather than pathname prefix.
+// All pages live in the `pages` collection regardless of format; `type`
+// distinguishes puck pages from mdx pages. The Starlight-shaped schema
+// below applies to every mdx page on the site, so we key it on `type:mdx`.
 
 import { definePageSchema } from '@conloca/astro-cms';
 import { z } from 'zod';
@@ -48,7 +49,7 @@ const starlightZod = z.object({
 });
 
 export const pageSchemas = {
-  'collection:docs': definePageSchema({
+  'type:mdx': definePageSchema({
     label: 'Starlight page',
     schema: starlightZod,
     ui: {
