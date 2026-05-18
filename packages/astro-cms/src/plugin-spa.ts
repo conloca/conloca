@@ -266,7 +266,7 @@ const schemasLoader = (absoluteSchemasPath: string, cmsSpaDistDir?: string) => {
 ${reactRefreshPreamble}
 
 import { setPageSchemas } from '${pageSchemasImport}';
-import { setMdxComponents, setCodeBlockConfig } from '${mdxComponentsImport}';
+import { setMdxComponents } from '${mdxComponentsImport}';
 
 const schemasPromise = import('${absoluteSchemasPath}');
 
@@ -277,9 +277,6 @@ schemasPromise.then((schemas) => {
   if (schemas.mdxComponents) {
     setMdxComponents(schemas.mdxComponents);
   }
-  if (schemas.codeBlockConfig) {
-    setCodeBlockConfig(schemas.codeBlockConfig);
-  }
 });
 
 if (import.meta.hot) {
@@ -289,9 +286,6 @@ if (import.meta.hot) {
     }
     if (newModule?.mdxComponents) {
       setMdxComponents(newModule.mdxComponents);
-    }
-    if (newModule?.codeBlockConfig) {
-      setCodeBlockConfig(newModule.codeBlockConfig);
     }
   });
 }

@@ -7,7 +7,7 @@
 import { definePageSchema } from '@conloca/astro-cms';
 import { z } from 'zod';
 
-export { codeBlockConfig, mdxComponents } from './cms/mdx-components';
+export { mdxComponents } from './cms/mdx-components';
 
 const BADGE_VARIANTS = [
   { value: 'default', label: 'Default' },

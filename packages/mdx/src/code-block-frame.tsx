@@ -13,10 +13,7 @@ import { type ChangeEvent, useCallback, useEffect, useMemo, useState } from 'rea
  * `--conloca-code-*` CSS tokens defined in the host's `code-blocks.css`)
  * to the frame ExpressiveCode draws on the published page.
  *
- * Host-agnostic: no Shiki / Starlight / ExpressiveCode imports. Behavior
- * toggles flow through the host's `codeBlockConfig` (`packages/cms-spa`).
- * Reads the config lazily inside the Editor component so HMR updates land
- * without remounting the descriptor.
+ * Host-agnostic: no Shiki / Starlight / ExpressiveCode imports.
  */
 
 const TITLE_META_RE = /\btitle=(?:"([^"]*)"|'([^']*)'|(\S+))/;
@@ -85,45 +82,6 @@ function CopyButton({ code }: { code: string }) {
       {copied ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
     </button>
   );
-}
-
-// Subscribes to the cms-spa code-block config registry via the shared
-// window cell — same `__CODE_BLOCK_CONFIG_STATE__` key + subscribers set
-// `cms-spa`'s `useCodeBlockConfig` writes to. Reaching through the window
-// avoids a hard `@conloca/mdx → @conloca/cms-spa` import (which would be
-// circular: cms-spa already depends on mdx). Structural compatibility on
-// the config shape is enough — extra fields the host sets get ignored,
-// missing fields default to `true` at the call site.
-interface CodeBlockConfigShape {
-  showCopyButton?: boolean;
-  showFilename?: boolean;
-  showLanguageTag?: boolean;
-}
-
-interface SharedCodeBlockConfigCell {
-  config: CodeBlockConfigShape;
-  subscribers: Set<(config: CodeBlockConfigShape) => void>;
-}
-
-function getSharedCell(): SharedCodeBlockConfigCell | undefined {
-  if (typeof window === 'undefined') return undefined;
-  return (window as unknown as { __CODE_BLOCK_CONFIG_STATE__?: SharedCodeBlockConfigCell }).__CODE_BLOCK_CONFIG_STATE__;
-}
-
-function useCodeBlockConfig(): CodeBlockConfigShape {
-  const [config, setConfig] = useState<CodeBlockConfigShape>(() => getSharedCell()?.config ?? {});
-
-  useEffect(() => {
-    const cell = getSharedCell();
-    if (!cell) return;
-    if (cell.config !== config) setConfig(cell.config);
-    cell.subscribers.add(setConfig);
-    return () => {
-      cell.subscribers.delete(setConfig);
-    };
-  }, [config]);
-
-  return config;
 }
 
 /**
@@ -199,25 +157,15 @@ function FilenameInput({ meta, code }: { meta: string; code: string }) {
 }
 
 function ConlocaCodeBlockEditor(props: CodeBlockEditorProps) {
-  const config = useCodeBlockConfig();
-  const showCopyButton = config.showCopyButton ?? true;
-  const showFilename = config.showFilename ?? true;
-  const showLanguageTag = config.showLanguageTag ?? true;
-  const showHeader = showFilename || showLanguageTag || showCopyButton;
-
   return (
     <div className="conloca-code-block">
-      {showHeader ? (
-        <div className="conloca-code-block__header">
-          {showFilename ? <FilenameInput meta={props.meta} code={props.code} /> : <span />}
-          <div className="conloca-code-block__header-right">
-            {showLanguageTag && props.language ? (
-              <span className="conloca-code-block__lang">{props.language}</span>
-            ) : null}
-            {showCopyButton ? <CopyButton code={props.code} /> : null}
-          </div>
+      <div className="conloca-code-block__header">
+        <FilenameInput meta={props.meta} code={props.code} />
+        <div className="conloca-code-block__header-right">
+          {props.language ? <span className="conloca-code-block__lang">{props.language}</span> : null}
+          <CopyButton code={props.code} />
         </div>
-      ) : null}
+      </div>
       <div className="conloca-code-block__body">
         <CodeMirrorEditor {...props} />
       </div>
