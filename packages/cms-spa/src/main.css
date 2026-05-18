@@ -343,10 +343,6 @@ body.mdxeditor-focus-mode .mdxeditor-root-contenteditable {
     position: relative;
   }
 
-  .conloca-generic-block__rendered {
-    /* The host CSS scoped to `.mdxeditor` styles whatever is inside. */
-  }
-
   .conloca-generic-block__error {
     font-size: 0.75rem;
     color: rgb(220 38 38);
@@ -354,6 +350,28 @@ body.mdxeditor-focus-mode .mdxeditor-root-contenteditable {
     border: 1px solid rgb(220 38 38 / 0.3);
     border-radius: 0.25rem;
     margin-block: 0.5rem;
+  }
+
+  /* Architectural rule: rendered previews are pure host-CSS surfaces.
+   * MDXEditor's nested-editor wrappers (`_nestedEditor_*`, hashed by
+   * its CSS Modules pipeline) carry their own visual chrome — grey
+   * background, padding — meant to hint "you can edit here" in a
+   * bare-document editor. Inside an SSR'd preview that hint is noise:
+   * the host's rendered framework markup already conveys the editable
+   * region visually (the Aside's body area, the Card's body, etc).
+   *
+   * The override drops MDXEditor's chrome inside the rendered region
+   * so the editable surface is indistinguishable from the published
+   * page. `!important` is intentional and minimal: MDXEditor's CSS
+   * Modules ship unlayered (CSS-Modules-via-Vite are inserted at
+   * runtime without a containing `@layer`), and unlayered rules win
+   * over layered rules in the cascade regardless of declaration
+   * order. This is the documented way to override unlayered styles
+   * from inside a layer. */
+  .conloca-generic-block__rendered [class*="_nestedEditor_"] {
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
   }
 }
 
