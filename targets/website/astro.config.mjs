@@ -64,6 +64,11 @@ export default defineConfig({
       puckConfigPath: './src/puck.config.tsx',
       schemasPath: './src/schemas.ts',
       siteStyles: './src/styles/global.css',
+      editorStyles: [
+        './src/styles/asides.css',
+        './src/styles/starlight-components.css',
+        './src/styles/code-blocks.css',
+      ],
       assetsPath: './public/assets',
       templates: {
         contentPage: {

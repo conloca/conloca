@@ -4,7 +4,7 @@ import type { JsxComponentDescriptor, MDXEditorMethods, RealmPlugin } from '@mdx
 import { forwardRef, useCallback, useMemo, useRef } from 'react';
 import { buildUploadFormData } from '../../hooks/useUpload';
 import { isJsxDescriptor, toJsxComponentDescriptor, useMdxComponents } from '../../mdx-components';
-import { useInjectHostStyles } from '../../site-styles';
+import { useEditorStyles, useInjectHostStyles } from '../../site-styles';
 import { ImagePickerDialog } from './ImagePickerDialog';
 import { InsertMdxComponentButton } from './insert-menu/InsertMdxComponentButton';
 import { mdxComponentsPlugin } from './insert-menu/mdx-components-plugin';
@@ -28,12 +28,15 @@ export const CMSMDXEditor = forwardRef<MDXEditorMethods, CMSMDXEditorProps>((pro
   const insertImageRef = useRef<HTMLButtonElement>(null);
   const uploadAsset = useUploadAsset();
   const registeredMdxComponents = useMdxComponents();
-  // Inject the host's `siteStyles` into the admin document while the MDX
-  // editor is mounted, so host CSS for things like `.conloca-aside` and
-  // `.conloca-card` decorates the in-editor preview. Wrapped in the
-  // `conloca-host-preview` layer (declared in main.css before `cms-admin`)
-  // so host CSS only wins on selectors admin chrome doesn't claim.
-  useInjectHostStyles('conloca-host-preview');
+  // Inject the host's `editorStyles` (a narrow, component-only CSS path —
+  // NOT the broad `siteStyles` the Puck iframe uses) into the admin
+  // document while the MDX editor is mounted. Wrapped in the
+  // `conloca-host-preview` layer (declared in main.css after `cms-admin`)
+  // so host-component rules beat Tailwind preflight; the narrow input
+  // avoids dragging host Tailwind utilities into the admin chrome's
+  // cascade — see site-styles.ts for the full split rationale.
+  const editorStyles = useEditorStyles();
+  useInjectHostStyles('conloca-host-preview', editorStyles);
   const jsxComponentDescriptors = useMemo<JsxComponentDescriptor[]>(
     // Filter to JSX flavors before translating — snippets live in the same
     // registry but aren't valid input for @mdxeditor/editor's jsxPlugin, and

@@ -118,6 +118,27 @@ export interface ConlocaCMSOptions extends Omit<UIConfig, 'basename'> {
   siteStyles?: string | string[];
 
   /**
+   * Narrow CSS path injected into the MDX editor's admin document while the
+   * editor is mounted. Use this to ship host-component styling
+   * (`.conloca-aside`, `.conloca-card`, etc.) so the editor preview matches
+   * the published surface, WITHOUT pulling in host Tailwind utilities or
+   * `:root` token overrides that would collide with admin chrome.
+   *
+   * What belongs here: stylesheets that target only host-component class
+   * selectors. Examples: `./src/styles/asides.css`,
+   * `./src/styles/starlight-components.css`, `./src/styles/code-blocks.css`.
+   *
+   * What does NOT belong: the host's `global.css` (Tailwind base, theme,
+   * utilities), `prose.css` (already loaded by `@conloca/mdx`), or any
+   * stylesheet with `body`, `:root`, or `*` rules that would override
+   * admin chrome. Those go in `siteStyles` instead — that path is only
+   * injected into the Puck iframe, never the admin shell.
+   *
+   * @example ['./src/styles/asides.css', './src/styles/starlight-components.css']
+   */
+  editorStyles?: string | string[];
+
+  /**
    * Optional configuration enabling `type: 'mdx'` page support.
    *
    * When set, Conloca's CMS surfaces `.mdx` files at `mdxPages.root` as
@@ -305,6 +326,35 @@ ${imports}
 import { setSiteStyles } from '${siteStylesImport}';
 
 setSiteStyles([${vars}]);
+
+if (import.meta.hot) {
+  import.meta.hot.accept();
+}
+
+export default {};
+`;
+};
+
+// Template for the editor styles loader virtual module — same shape as
+// siteStylesLoader but feeds a different registry (`setEditorStyles`),
+// consumed by the MDX editor's `useInjectHostStyles` call. Kept separate
+// from `siteStyles` because the two surfaces have opposite cascade needs;
+// see `packages/cms-spa/src/site-styles.ts` for the rationale.
+const editorStylesLoader = (cssPaths: string[], cmsSpaDistDir?: string) => {
+  const imports = cssPaths
+    .map((p, i) => {
+      const absolutePath = p.startsWith('./') ? `/${p.slice(2)}` : p;
+      return `import css${i} from '${absolutePath}?inline';`;
+    })
+    .join('\n');
+  const vars = cssPaths.map((_, i) => `css${i}`).join(', ');
+  const siteStylesImport = cmsSpaDistDir ? `${cmsSpaDistDir}/site-styles.mjs` : '@conloca/cms-spa/site-styles';
+
+  return `
+${imports}
+import { setEditorStyles } from '${siteStylesImport}';
+
+setEditorStyles([${vars}]);
 
 if (import.meta.hot) {
   import.meta.hot.accept();
@@ -653,6 +703,9 @@ initHydration(componentRegistry)
                   if (id === `${cmsRoute}/site-styles.js`) {
                     return id;
                   }
+                  if (id === `${cmsRoute}/editor-styles.js`) {
+                    return id;
+                  }
                   if (id === VIRTUAL_PAGE_API) {
                     return RESOLVED_PAGE_API;
                   }
@@ -692,6 +745,13 @@ initHydration(componentRegistry)
                     if (options.siteStyles) {
                       const paths = Array.isArray(options.siteStyles) ? options.siteStyles : [options.siteStyles];
                       return siteStylesLoader(paths, cmsSpaDistDir);
+                    }
+                    return 'export default {};';
+                  }
+                  if (id === `${cmsRoute}/editor-styles.js`) {
+                    if (options.editorStyles) {
+                      const paths = Array.isArray(options.editorStyles) ? options.editorStyles : [options.editorStyles];
+                      return editorStylesLoader(paths, cmsSpaDistDir);
                     }
                     return 'export default {};';
                   }

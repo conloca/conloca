@@ -1,14 +1,27 @@
 import { useEffect, useState } from 'react';
 
 /**
- * Shared registry for host-site CSS strings across module instances.
+ * Two parallel registries for host-supplied CSS strings: `siteStyles` for the
+ * Puck preview iframe (full page styling, Tailwind included), and
+ * `editorStyles` for the MDX editor admin shell (narrow component CSS only).
  *
- * The astro-cms virtual module (`${cmsRoute}/site-styles.js`) imports each
- * configured CSS file with Vite's `?inline` query (so the full CSS pipeline
- * runs) and calls `setSiteStyles` with the processed strings. The editor's
- * iframe bridge consumes them via `useSiteStyles` and injects them directly
- * into Puck's preview iframe <head>, bypassing the CMS chrome's parent <head>
- * so host-site CSS cannot bleed into the CMS UI.
+ * Each registry has an astro-cms virtual module (`${cmsRoute}/site-styles.js`
+ * and `${cmsRoute}/editor-styles.js`) that imports the configured CSS files
+ * with Vite's `?inline` query (so the full CSS pipeline runs) and calls the
+ * corresponding setter. Consumers read via the matching hook.
+ *
+ * The split exists because the two surfaces have opposite cascade
+ * requirements:
+ * - The iframe shows the host's published page — host CSS should fully win,
+ *   so `siteStyles` injects everything (Tailwind utilities, `:root` tokens,
+ *   component CSS) wrapped in `@layer conloca-site` declared after every
+ *   other top-level layer.
+ * - The admin shell shows the editor — admin chrome must keep its own
+ *   Tailwind utilities (`.bg-white`, `.text-grey-*`, dark variants). Host
+ *   CSS injected here must NOT include Tailwind utilities or `:root` token
+ *   overrides; it should be only the host-component selectors
+ *   (`.conloca-aside`, `.conloca-card`, etc.). `editorStyles` is that
+ *   narrow path.
  *
  * Uses window to ensure virtual modules and bundled code share the same state.
  */
@@ -23,6 +36,7 @@ interface SharedSiteStylesState {
 declare global {
   interface Window {
     __SITE_STYLES_STATE__?: SharedSiteStylesState;
+    __EDITOR_STYLES_STATE__?: SharedSiteStylesState;
   }
 }
 
@@ -82,29 +96,60 @@ export function useSiteStyles(): SiteStyles {
   return styles;
 }
 
+// ---------------------------------------------------------------------------
+// editorStyles registry — narrow CSS path for the MDX editor admin shell.
+// Mirrors the siteStyles pattern; see the top-of-file comment for why the
+// split exists.
+// ---------------------------------------------------------------------------
+
+const getEditorStylesState = (): SharedSiteStylesState => {
+  if (typeof window !== 'undefined') {
+    if (!window.__EDITOR_STYLES_STATE__) {
+      window.__EDITOR_STYLES_STATE__ = { styles: [], subscribers: new Set() };
+    }
+    return window.__EDITOR_STYLES_STATE__;
+  }
+  return { styles: [], subscribers: new Set() };
+};
+
+export function setEditorStyles(styles: SiteStyles): void {
+  const state = getEditorStylesState();
+  state.styles = styles;
+  state.subscribers.forEach((fn) => fn(styles));
+}
+
+export function getEditorStyles(): SiteStyles {
+  return getEditorStylesState().styles;
+}
+
+export function useEditorStyles(): SiteStyles {
+  const [styles, setStyles] = useState(() => getEditorStylesState().styles);
+
+  useEffect(() => {
+    const state = getEditorStylesState();
+    if (state.styles !== styles) setStyles(state.styles);
+    state.subscribers.add(setStyles);
+    return () => {
+      state.subscribers.delete(setStyles);
+    };
+  }, []);
+
+  return styles;
+}
+
 /**
- * Inject the registered host-site CSS into the current document's `<head>`
- * while the calling component is mounted. Each stylesheet gets wrapped in a
- * named cascade layer so its rules sit at a known position in the cascade.
+ * Inject host CSS strings into the current document's `<head>` while the
+ * calling component is mounted. Each stylesheet gets wrapped in a named
+ * cascade layer so its rules sit at a known position in the cascade.
  *
- * Use this from the MDX editor in the main admin document, where there is
- * no iframe to isolate host CSS. Pick a layer name declared in main.css's
- * layer ordering BEFORE `cms-admin` so host CSS decorates host-defined
- * component classes (`.conloca-aside`, `.conloca-card`, etc.) without
- * overriding admin chrome.
- *
- * The Puck preview iframe path uses a different mechanism (style tags
- * appended directly to the iframe's `<head>` via `IframeBridge`, wrapped
- * in `@layer conloca-site` so host CSS wins inside the rendered page). Two
- * targets, two layer positions, one CSS registry.
+ * Pass the styles array explicitly so callers stay in control of which
+ * registry they consume (siteStyles vs editorStyles).
  *
  * `@import url(...)` statements are hoisted to the top of the injected
  * `<style>` tag because they must come before other rules to be valid.
  * Hosts using Tailwind / Google Fonts depend on this.
  */
-export function useInjectHostStyles(layerName: string): void {
-  const styles = useSiteStyles();
-
+export function useInjectHostStyles(layerName: string, styles: SiteStyles): void {
   useEffect(() => {
     if (typeof document === 'undefined' || styles.length === 0) return;
 
