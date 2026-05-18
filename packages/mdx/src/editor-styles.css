@@ -84,8 +84,9 @@
    without the host's `code-blocks.css` needing to be injected into the
    admin shell. The host's file overrides these for brand customization
    on the iframe + published surfaces. Two dark-mode selectors are
-   covered: `:root.dark` (CMS SPA convention) and `:root[data-theme="dark"]`
-   (Starlight convention).
+   covered: `:root.dark` (the CMS SPA convention) and
+   `:root[data-theme="dark"]` (a common attribute-driven convention,
+   used by Astro Starlight among others).
 
    Radius is small on purpose — EC paints a 1px radius, basically sharp.
    We bump to 0.25rem (4px) so the editor still reads as a softened
@@ -327,13 +328,12 @@ input.conloca-code-block__filename:focus {
 }
 
 /* Aside / callout chrome — same role as the code-block block above. Tokens
-   come from the host's `asides.css` (`--conloca-aside-*`); fallbacks keep
-   the editor readable when no host defines them. Same per-type palette as
-   `.starlight-aside--{note,tip,caution,danger}` on the published site,
-   resolved from Starlight's `--sl-color-{blue,purple,orange,red}-*` scale.
-   Defaults declared here so the CMS SPA admin parent document (where the
-   MDXEditor mounts) gets working colors without the host's asides.css
-   being injected into the admin shell.
+   come from the host's stylesheet (`--conloca-aside-*`); the fallbacks
+   below keep the editor readable when no host CSS is loaded (e.g. in the
+   CMS SPA admin parent document where the MDXEditor mounts standalone).
+   Fallback palette uses the conventional admonition colour family —
+   note=blue, tip=green, caution=amber, danger=red — and is renderer-
+   agnostic. Hosts that want different shades override the tokens.
 
    The `.conloca-aside-editor` selector adds the editor-only header row
    (icon + type select + title input + remove button) on top of the same
@@ -355,43 +355,43 @@ input.conloca-code-block__filename:focus {
   --conloca-aside-title-gap: 0.5rem;
   --conloca-aside-title-margin-bottom: 0.5rem;
   --conloca-aside-icon-size: 1.333em;
-  --conloca-aside-note-border: hsl(234, 90%, 60%);
-  --conloca-aside-note-bg: hsl(234, 88%, 90%);
-  --conloca-aside-note-accent: hsl(234, 80%, 30%);
-  --conloca-aside-tip-border: hsl(281, 90%, 60%);
-  --conloca-aside-tip-bg: hsl(281, 80%, 90%);
-  --conloca-aside-tip-accent: hsl(281, 90%, 30%);
-  --conloca-aside-caution-border: hsl(41, 90%, 60%);
-  --conloca-aside-caution-bg: hsl(41, 90%, 88%);
-  --conloca-aside-caution-accent: hsl(41, 80%, 25%);
-  --conloca-aside-danger-border: hsl(339, 90%, 60%);
-  --conloca-aside-danger-bg: hsl(339, 80%, 90%);
-  --conloca-aside-danger-accent: hsl(339, 80%, 30%);
+  --conloca-aside-note-border: hsl(210, 85%, 55%);
+  --conloca-aside-note-bg: hsl(210, 90%, 92%);
+  --conloca-aside-note-accent: hsl(210, 70%, 32%);
+  --conloca-aside-tip-border: hsl(150, 60%, 42%);
+  --conloca-aside-tip-bg: hsl(150, 60%, 92%);
+  --conloca-aside-tip-accent: hsl(150, 60%, 26%);
+  --conloca-aside-caution-border: hsl(38, 90%, 55%);
+  --conloca-aside-caution-bg: hsl(38, 90%, 90%);
+  --conloca-aside-caution-accent: hsl(38, 80%, 28%);
+  --conloca-aside-danger-border: hsl(0, 75%, 55%);
+  --conloca-aside-danger-bg: hsl(0, 80%, 92%);
+  --conloca-aside-danger-accent: hsl(0, 70%, 35%);
 }
 :root.dark,
 :root[data-theme="dark"] {
   --conloca-aside-fg: #f8fafc;
-  --conloca-aside-note-border: hsl(234, 100%, 60%);
-  --conloca-aside-note-bg: hsl(234, 54%, 20%);
-  --conloca-aside-note-accent: hsl(234, 100%, 87%);
-  --conloca-aside-tip-border: hsl(281, 82%, 63%);
-  --conloca-aside-tip-bg: hsl(281, 39%, 22%);
-  --conloca-aside-tip-accent: hsl(281, 82%, 89%);
-  --conloca-aside-caution-border: hsl(41, 82%, 63%);
-  --conloca-aside-caution-bg: hsl(41, 39%, 22%);
-  --conloca-aside-caution-accent: hsl(41, 82%, 87%);
-  --conloca-aside-danger-border: hsl(339, 82%, 63%);
-  --conloca-aside-danger-bg: hsl(339, 39%, 22%);
-  --conloca-aside-danger-accent: hsl(339, 82%, 87%);
+  --conloca-aside-note-border: hsl(210, 90%, 65%);
+  --conloca-aside-note-bg: hsl(210, 55%, 20%);
+  --conloca-aside-note-accent: hsl(210, 90%, 88%);
+  --conloca-aside-tip-border: hsl(150, 65%, 55%);
+  --conloca-aside-tip-bg: hsl(150, 35%, 18%);
+  --conloca-aside-tip-accent: hsl(150, 65%, 85%);
+  --conloca-aside-caution-border: hsl(38, 85%, 60%);
+  --conloca-aside-caution-bg: hsl(38, 40%, 20%);
+  --conloca-aside-caution-accent: hsl(38, 85%, 85%);
+  --conloca-aside-danger-border: hsl(0, 80%, 60%);
+  --conloca-aside-danger-bg: hsl(0, 40%, 22%);
+  --conloca-aside-danger-accent: hsl(0, 80%, 87%);
 }
 
 .conloca-aside {
   padding: var(--conloca-aside-padding, 1rem);
   margin-block: var(--conloca-aside-margin-block, 1rem) 0;
   border-inline-start: var(--conloca-aside-border-width, 0.25rem) solid
-    var(--conloca-aside-active-border, var(--conloca-aside-note-border, hsl(234, 100%, 60%)));
+    var(--conloca-aside-active-border, var(--conloca-aside-note-border, hsl(210, 90%, 65%)));
   border-radius: var(--conloca-aside-radius, 0);
-  background-color: var(--conloca-aside-active-bg, var(--conloca-aside-note-bg, hsl(234, 54%, 20%)));
+  background-color: var(--conloca-aside-active-bg, var(--conloca-aside-note-bg, hsl(210, 55%, 20%)));
   color: var(--conloca-aside-fg, #f8fafc);
   font-family: var(--conloca-aside-font-family, "Inter", system-ui, -apple-system, sans-serif);
   font-size: var(--conloca-aside-font-size, 1rem);
@@ -400,24 +400,24 @@ input.conloca-code-block__filename:focus {
   -moz-osx-font-smoothing: grayscale;
 }
 .conloca-aside-note {
-  --conloca-aside-active-border: var(--conloca-aside-note-border, hsl(234, 100%, 60%));
-  --conloca-aside-active-bg: var(--conloca-aside-note-bg, hsl(234, 54%, 20%));
-  --conloca-aside-active-accent: var(--conloca-aside-note-accent, hsl(234, 100%, 87%));
+  --conloca-aside-active-border: var(--conloca-aside-note-border, hsl(210, 90%, 65%));
+  --conloca-aside-active-bg: var(--conloca-aside-note-bg, hsl(210, 55%, 20%));
+  --conloca-aside-active-accent: var(--conloca-aside-note-accent, hsl(210, 90%, 88%));
 }
 .conloca-aside-tip {
-  --conloca-aside-active-border: var(--conloca-aside-tip-border, hsl(281, 82%, 63%));
-  --conloca-aside-active-bg: var(--conloca-aside-tip-bg, hsl(281, 39%, 22%));
-  --conloca-aside-active-accent: var(--conloca-aside-tip-accent, hsl(281, 82%, 89%));
+  --conloca-aside-active-border: var(--conloca-aside-tip-border, hsl(150, 65%, 55%));
+  --conloca-aside-active-bg: var(--conloca-aside-tip-bg, hsl(150, 35%, 18%));
+  --conloca-aside-active-accent: var(--conloca-aside-tip-accent, hsl(150, 65%, 85%));
 }
 .conloca-aside-caution {
-  --conloca-aside-active-border: var(--conloca-aside-caution-border, hsl(41, 82%, 63%));
-  --conloca-aside-active-bg: var(--conloca-aside-caution-bg, hsl(41, 39%, 22%));
-  --conloca-aside-active-accent: var(--conloca-aside-caution-accent, hsl(41, 82%, 87%));
+  --conloca-aside-active-border: var(--conloca-aside-caution-border, hsl(38, 85%, 60%));
+  --conloca-aside-active-bg: var(--conloca-aside-caution-bg, hsl(38, 40%, 20%));
+  --conloca-aside-active-accent: var(--conloca-aside-caution-accent, hsl(38, 85%, 85%));
 }
 .conloca-aside-danger {
-  --conloca-aside-active-border: var(--conloca-aside-danger-border, hsl(339, 82%, 63%));
-  --conloca-aside-active-bg: var(--conloca-aside-danger-bg, hsl(339, 39%, 22%));
-  --conloca-aside-active-accent: var(--conloca-aside-danger-accent, hsl(339, 82%, 87%));
+  --conloca-aside-active-border: var(--conloca-aside-danger-border, hsl(0, 80%, 60%));
+  --conloca-aside-active-bg: var(--conloca-aside-danger-bg, hsl(0, 40%, 22%));
+  --conloca-aside-active-accent: var(--conloca-aside-danger-accent, hsl(0, 80%, 87%));
 }
 .conloca-aside-title {
   display: flex;
@@ -427,41 +427,39 @@ input.conloca-code-block__filename:focus {
   font-size: var(--conloca-aside-title-font-size, 1.125rem);
   font-weight: var(--conloca-aside-title-font-weight, 600);
   line-height: var(--conloca-aside-title-line-height, 1.2);
-  color: var(--conloca-aside-active-accent, var(--conloca-aside-note-accent, hsl(234, 100%, 87%)));
+  color: var(--conloca-aside-active-accent, var(--conloca-aside-note-accent, hsl(210, 90%, 88%)));
 }
 .conloca-aside-title + * {
   margin-top: var(--conloca-aside-title-margin-bottom, 0.5rem);
 }
 .conloca-aside a {
-  color: var(--conloca-aside-active-accent, var(--conloca-aside-note-accent, hsl(234, 100%, 87%)));
+  color: var(--conloca-aside-active-accent, var(--conloca-aside-note-accent, hsl(210, 90%, 88%)));
   /* Beats `.conloca-prose :where(a) { text-decoration: underline }` in
      prose.css; `:where()` is 0-specificity so a single-class + type
-     selector wins. Keeps editor link rendering aligned with the
-     published `.starlight-aside__content a` which inherits the default
-     `a { text-decoration: none }` from global.css. */
+     selector wins. Aside-internal links sit on the type-coloured
+     background and the underline would clash with the accent colour. */
   text-decoration: none;
 }
 .conloca-aside > :last-child {
   margin-bottom: 0;
 }
 
-/* Editor-only chrome — interactive title row replaces the Starlight icon/
-   label `<p>` with controls that edit `<Aside>` attributes (type select,
-   optional title input, remove button). Layout matches the title row
-   silhouette so the editor sits flush against the published surface when
-   the author flips between the two. */
+/* Editor-only chrome — interactive title row replaces the published-site
+   icon/label `<p>` with controls that edit `<Aside>` attributes (type
+   select, optional title input, remove button). Layout matches the title
+   row silhouette so the editor sits flush against the published surface
+   when the author flips between the two. */
 .conloca-aside-editor .conloca-aside-title {
   /* Override the `+ *` margin-top rule so the body chip sits at the
      post-title spacing — needed because the title row in editor mode is
      a div, not a `<p>`, and we render the icon outside the `<p>` flow. */
   margin-bottom: 0;
 }
-/* Icon matches Starlight's `.starlight-aside__icon` proportions —
-   `font-size: 1.333em; width: 1em; height: 1em` resolves to 24x24 at
-   the 18px title font-size. SVG sizing takes the CSS width/height,
-   ignoring lucide-react's default 24px attribute (both resolve to the
-   same value here; the rule keeps the icon proportional if the title
-   font-size changes). */
+/* Icon proportions — `font-size: 1.333em; width: 1em; height: 1em`
+   resolves to 24x24 at the 18px title font-size. SVG sizing takes the
+   CSS width/height, ignoring lucide-react's default 24px attribute
+   (both resolve to the same value here; the rule keeps the icon
+   proportional if the title font-size changes). */
 .conloca-aside-editor .conloca-aside-title__icon {
   font-size: var(--conloca-aside-icon-size, 1.333em);
   width: 1em;
