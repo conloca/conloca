@@ -122,13 +122,11 @@ export interface ConlocaCMSOptions extends Omit<UIConfig, 'basename'> {
    *
    * When set, Conloca's CMS surfaces `.mdx` files at `mdxPages.root` as
    * pages alongside puck (`.vxjson`) pages in the same Pages list. The
-   * MDX editor is used to edit them; rendering is decided by `renderer`.
-   *
-   * Renderer-neutral by design — the integration is one wiring pattern:
-   * any Astro content loader (Starlight's stock `docsLoader()` is a common
-   * example, but it can equally be a plain `glob()` loader, MDX-as-pages
-   * via Astro Content Collections, etc.) reads `mdxPages.root`, and
-   * Conloca's core has no hard dependency on any specific renderer.
+   * MDX editor edits them in place; the project's own Astro content
+   * loader (Starlight's stock `docsLoader()` is a common example, but
+   * it can equally be a plain `glob()` loader, MDX-as-pages via Astro
+   * Content Collections, etc.) renders them — Conloca's core has no
+   * hard dependency on any specific renderer.
    *
    * Omit to keep mdx-page support dormant.
    */
@@ -149,17 +147,6 @@ export interface ConlocaCMSOptions extends Omit<UIConfig, 'basename'> {
      * Defaults to the first configured site, or `'default'`.
      */
     site?: string;
-
-    /**
-     * Who renders mdx pages.
-     * - `'external'` (default): Conloca's Astro loader does NOT emit them
-     *   to the `pages` collection — the project's own setup (an Astro
-     *   content loader of any kind, e.g. Starlight's `docsLoader()` or a
-     *   plain `glob()` loader) renders them.
-     * - `'conloca'`: Conloca's page-handler renders them via the runtime MDX
-     *   evaluator already used for blocks.
-     */
-    renderer?: 'external' | 'conloca';
   };
 
   /**
@@ -576,7 +563,6 @@ initHydration(componentRegistry)
               'import.meta.env.CONLOCA_MDX_PAGES_ROOT': JSON.stringify(options.mdxPages?.root || ''),
               'import.meta.env.CONLOCA_MDX_PAGES_DEFAULT_LOCALE': JSON.stringify(options.mdxPages?.defaultLocale || ''),
               'import.meta.env.CONLOCA_MDX_PAGES_SITE': JSON.stringify(options.mdxPages?.site || ''),
-              'import.meta.env.CONLOCA_MDX_PAGES_RENDERER': JSON.stringify(options.mdxPages?.renderer || 'external'),
               // Top-level locales. Vite `define` does literal text
               // substitution, so this inlines as either a JS array or `null`.
               // The runtime handler reads it as-is — no JSON.parse needed.

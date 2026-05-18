@@ -41,8 +41,7 @@ export function conlocaLoader(options: ConlocaLoaderOptions): Loader {
         // Skip type:'mdx' pages — they're owned by an external renderer
         // (any Astro loader reading from mdxPages.root, such as Starlight's
         // stock docsLoader) and would otherwise collide with the puck-page
-        // route handler. Conloca-side rendering of mdx pages
-        // (mdxPages.renderer === 'conloca') is future work.
+        // route handler.
         if (kind === 'page' && manifest.type === 'mdx') continue;
 
         for (const [locale, localeVersion] of Object.entries(manifest.locales)) {

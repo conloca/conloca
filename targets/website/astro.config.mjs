@@ -93,7 +93,6 @@ export default defineConfig({
         root: './src/content/docs',
         defaultLocale: 'en',
         site: 'default',
-        renderer: 'external',
       },
     }),
   ],
