@@ -5,10 +5,10 @@ import type { UIConfig } from '@conloca/cms-spa';
 import viteReact from '@vitejs/plugin-react';
 import type { AstroIntegration } from 'astro';
 import { searchForWorkspaceRoot } from 'vite';
-
 import { deriveComponentPaths, type HydrationDiscovery, scanForHydratableComponents } from './lib/hydration-scanner.js';
 import { normalizeRoutingConfig, resolveRouteConfig } from './lib/routing-config.js';
 import type { ConlocaLocales } from './locales-helpers.js';
+import { createStylesEndpoint } from './site-styles/styles-endpoint.js';
 
 // FRAGILE: viteReact.preambleCode is an undocumented internal API of @vitejs/plugin-react.
 // It provides the React Fast Refresh preamble script needed for HMR in virtual modules.
@@ -441,6 +441,19 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
 
   let refreshConlocaContent: (() => Promise<void>) | undefined;
 
+  // Captured at `astro:routes:resolved`. Used by the per-page styles endpoint
+  // to translate a public URL (eg `/foo/`) into the filesystem entrypoint
+  // that Vite's module graph walker can start from.
+  let routeManifest: Array<{ pattern: RegExp; entrypoint?: string }> = [];
+
+  const resolveRouteEntrypoint = (routeUrl: string): string | null => {
+    for (const route of routeManifest) {
+      if (!route.entrypoint) continue;
+      if (route.pattern.test(routeUrl)) return route.entrypoint;
+    }
+    return null;
+  };
+
   return {
     name: '@conloca/astro-cms',
     hooks: {
@@ -818,6 +831,19 @@ if (import.meta.hot) {
                 },
               },
               {
+                // Per-page styles endpoint. Walks Vite's module graph from a
+                // route URL and returns the concatenated CSS the editor needs
+                // for that page.
+                name: 'conloca-styles-endpoint',
+                apply: 'serve' as const,
+                configureServer(server) {
+                  server.middlewares.use(
+                    `${cmsRoute}/api/styles`,
+                    createStylesEndpoint(server, resolveRouteEntrypoint),
+                  );
+                },
+              },
+              {
                 name: 'conloca-content-watcher',
                 async configureServer(server) {
                   const { createContentAPI, createContentWatchHandlers } = await loadContentApiNode();
@@ -1035,6 +1061,11 @@ if (import.meta.hot) {
       },
 
       'astro:routes:resolved': ({ routes, logger }) => {
+        // Capture every route so the styles endpoint can translate a public
+        // URL into its filesystem entrypoint. Done before any early-return
+        // so it works even when routing config is disabled.
+        routeManifest = routes.map((r) => ({ pattern: r.patternRegex, entrypoint: r.entrypoint }));
+
         // Check for route conflicts when routing is enabled
         if (!resolvedRoutingConfig?.enabled) return;
 
