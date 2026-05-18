@@ -81,3 +81,52 @@ export function useSiteStyles(): SiteStyles {
 
   return styles;
 }
+
+/**
+ * Inject the registered host-site CSS into the current document's `<head>`
+ * while the calling component is mounted. Each stylesheet gets wrapped in a
+ * named cascade layer so its rules sit at a known position in the cascade.
+ *
+ * Use this from the MDX editor in the main admin document, where there is
+ * no iframe to isolate host CSS. Pick a layer name declared in main.css's
+ * layer ordering BEFORE `cms-admin` so host CSS decorates host-defined
+ * component classes (`.conloca-aside`, `.conloca-card`, etc.) without
+ * overriding admin chrome.
+ *
+ * The Puck preview iframe path uses a different mechanism (style tags
+ * appended directly to the iframe's `<head>` via `IframeBridge`, wrapped
+ * in `@layer conloca-site` so host CSS wins inside the rendered page). Two
+ * targets, two layer positions, one CSS registry.
+ *
+ * `@import url(...)` statements are hoisted to the top of the injected
+ * `<style>` tag because they must come before other rules to be valid.
+ * Hosts using Tailwind / Google Fonts depend on this.
+ */
+export function useInjectHostStyles(layerName: string): void {
+  const styles = useSiteStyles();
+
+  useEffect(() => {
+    if (typeof document === 'undefined' || styles.length === 0) return;
+
+    const tags: HTMLStyleElement[] = [];
+    const marker = `data-conloca-host-styles-${layerName}`;
+
+    for (const css of styles) {
+      const imports: string[] = [];
+      const cleaned = css.replace(/@import\s+url\([^)]*\)[^;]*;/g, (m) => {
+        imports.push(m.trim());
+        return '';
+      });
+      const wrapped = `${imports.join('\n')}\n@layer ${layerName} {\n${cleaned}\n}`;
+      const tag = document.createElement('style');
+      tag.setAttribute(marker, '');
+      tag.textContent = wrapped;
+      document.head.appendChild(tag);
+      tags.push(tag);
+    }
+
+    return () => {
+      for (const tag of tags) tag.remove();
+    };
+  }, [styles, layerName]);
+}

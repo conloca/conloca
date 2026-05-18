@@ -13,8 +13,15 @@
  * list) would land BEFORE `base` and lose every cms-admin override.
  * The name is renderer-named on purpose: this is the slot for a known
  * downstream integration. Other renderers don't need a slot of their own
- * because their CSS lives inside iframe-isolated `siteStyles`. */
-@layer base, starlight, theme, components, utilities, cms-admin;
+ * because their CSS lives inside iframe-isolated `siteStyles`.
+ *
+ * `conloca-host-preview` is the slot for host CSS injected directly into
+ * the main admin document while an MDX editor is mounted (see
+ * `useInjectHostStyles` in site-styles.ts). Sits BEFORE `cms-admin` so
+ * the host's `.conloca-aside`, `.conloca-card`, etc. rules decorate
+ * host-component classes the admin doesn't claim, while admin chrome
+ * (toolbar, sidebar, Tailwind utilities) wins on overlap. */
+@layer base, starlight, conloca-host-preview, theme, components, utilities, cms-admin;
 
 @import "@puckeditor/core/puck.css" layer(cms-admin);
 @import "tailwindcss" layer(cms-admin);
