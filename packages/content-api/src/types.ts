@@ -15,22 +15,11 @@ export interface ContentAPIOptions {
   mdxPagesRoot?: string;
 
   /**
-   * How locales are encoded in mdx-page filenames under `mdxPagesRoot`.
-   *
-   * - `'directory'` (default): `{root}/{locale}/{slug}.mdx`, with the
-   *   default locale at the root as `{root}/{slug}.mdx`.
-   * - `'suffix'`: `{root}/{slug}.{locale}.mdx` — matches Conloca's
-   *   convention for blocks.
-   */
-  mdxPagesLocaleStrategy?: 'directory' | 'suffix';
-
-  /**
-   * Default locale for the `'directory'` strategy. The default locale's
-   * files live at `{mdxPagesRoot}/{slug}.mdx` (no locale prefix); other
-   * locales live at `{mdxPagesRoot}/{locale}/{slug}.mdx`.
+   * Default locale for mdx pages. The default locale's files live at
+   * `{mdxPagesRoot}/{slug}.mdx` (no locale prefix); other locales live at
+   * `{mdxPagesRoot}/{locale}/{slug}.mdx`.
    *
    * If omitted, falls back to the first site's `defaultLocale`, or `'en'`.
-   * Ignored under the `'suffix'` strategy.
    */
   mdxPagesDefaultLocale?: string;
 

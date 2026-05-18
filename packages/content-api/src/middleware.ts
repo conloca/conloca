@@ -4,8 +4,7 @@ import { type AssetConfig, AssetOperations } from './asset-operations';
 import type { ContentAPI } from './content-api.interface';
 import { localesOf, normalizeAndValidatePathname } from './content-utils';
 import { createGitOperations, type GitAuthor, type GitConfig } from './git-operations';
-import { compileMDX } from './mdx/compile';
-import type { APIError, ContentManifest, ErrorCode, FindOptions, GlobalFilters } from './types';
+import type { APIError, ContentManifest, ErrorCode, FindOptions, GlobalFilters, MDXCompileResponse } from './types';
 import { ErrorCodes } from './types';
 
 /**
@@ -42,6 +41,12 @@ export interface ContentAPIRouterOptions {
   assetConfig?: Omit<AssetConfig, 'assetsPath'>;
   /** Content root directory for asset usage tracking */
   contentRoot?: string;
+  /**
+   * MDX compiler injected by the host layer (e.g. `@conloca/mdx`). When
+   * absent, the `/mdx/compile` route returns 501. content-api does not
+   * own the renderer — see ADR / audit B1.
+   */
+  compileMDX?: (content: string) => Promise<MDXCompileResponse>;
 }
 
 export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRouterOptions) {
@@ -1228,6 +1233,11 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
   // The browser sends raw MDX, the server compiles it to a JavaScript function body
   // that can be executed with @mdx-js/mdx's run() (which has zero dependencies).
   app.post('/mdx/compile', async (c) => {
+    const compile = options?.compileMDX;
+    if (!compile) {
+      return c.json(errorResponse(ErrorCodes.MDX_COMPILE_FAILED, 'MDX compiler not configured on this router'), 501);
+    }
+
     try {
       let body: unknown;
 
@@ -1247,7 +1257,7 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
         );
       }
 
-      const { code, metadata } = await compileMDX(mdxContent);
+      const { code, metadata } = await compile(mdxContent);
 
       return c.json({ code, metadata });
     } catch (error) {
@@ -1265,8 +1275,8 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
  * Create middleware for backwards compatibility with existing code
  * This wraps the Hono app to work with Node.js IncomingMessage/ServerResponse
  */
-export function createContentMiddleware(contentApi: ContentAPI) {
-  const app = createContentAPIRouter(contentApi);
+export function createContentMiddleware(contentApi: ContentAPI, options?: ContentAPIRouterOptions) {
+  const app = createContentAPIRouter(contentApi, options);
 
   // Convert Hono app to Node.js middleware
   return async (req: any, res: any, next: () => void) => {

@@ -6,6 +6,7 @@ import {
   type SitesConfig,
 } from '@conloca/content-api/node';
 import { API_ROUTES, ContentAPIClient, setContentAPIClient } from '@conloca/content-api-client';
+import { compileMDX } from '@conloca/mdx/node';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { type RenderOptions, render } from '@testing-library/react';
 import { Hono } from 'hono';
@@ -62,7 +63,7 @@ export function setupTestAPI(baseUrl = '/__cms/api', sitesConfig?: SitesConfig) 
     );
 
     // Create the content API router with error injection
-    const apiRouter = createContentAPIRouter(testApi);
+    const apiRouter = createContentAPIRouter(testApi, { compileMDX });
 
     // Create the main app and mount at the specified base URL
     const app = new Hono();

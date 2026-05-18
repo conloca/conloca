@@ -91,7 +91,6 @@ export default defineConfig({
       // edits them in-place.
       mdxPages: {
         root: './src/content/docs',
-        localeStrategy: 'directory',
         defaultLocale: 'en',
         site: 'default',
         renderer: 'external',

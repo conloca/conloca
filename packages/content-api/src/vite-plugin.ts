@@ -3,11 +3,17 @@ import type { Plugin, ViteDevServer } from 'vite';
 import { createContentAPI, createContentWatchHandlers } from './content-watcher';
 import type { FileSystemContentAPI } from './filesystem-content-api';
 import { createContentAPIRouter } from './middleware';
+import type { MDXCompileResponse } from './types';
 
 export interface ConlocaContentOptions {
   contentRoot: string;
   canvasDir?: string;
   basePath?: string;
+  /**
+   * MDX compiler injected by the host (typically `compileMDX` from
+   * `@conloca/mdx/node`). When absent, `/mdx/compile` returns 501.
+   */
+  compileMDX?: (content: string) => Promise<MDXCompileResponse>;
 }
 
 /**
@@ -30,7 +36,9 @@ export function conlocaContent(options: ConlocaContentOptions): Plugin {
       server.watcher.add(options.contentRoot);
 
       // Create Hono app with routes
-      const app = createContentAPIRouter(contentApi);
+      const app = createContentAPIRouter(contentApi, {
+        ...(options.compileMDX && { compileMDX: options.compileMDX }),
+      });
 
       // Add to Vite as middleware using @hono/node-server
       server.middlewares.use(basePath, getRequestListener(app.fetch));

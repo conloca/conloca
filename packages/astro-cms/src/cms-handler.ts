@@ -11,6 +11,7 @@ import {
   FileSystemContentAPI,
   validateCFAccessRequest,
 } from '@conloca/content-api/node';
+import { compileMDX } from '@conloca/mdx/node';
 import type { APIRoute } from 'astro';
 import { SPA_MIME_TYPES } from './mime-types.js';
 import { isPathWithinBase } from './path-validation.js';
@@ -42,20 +43,15 @@ function localesFromEnv(): { availableLocales?: string[]; defaultLocale?: string
 
 function mdxPagesOptionsFromEnv(): {
   mdxPagesRoot?: string;
-  mdxPagesLocaleStrategy?: 'directory' | 'suffix';
   mdxPagesDefaultLocale?: string;
   mdxPagesSite?: string;
 } {
   const root = import.meta.env.CONLOCA_MDX_PAGES_ROOT;
   if (!root) return {};
-  const localeStrategy = import.meta.env.CONLOCA_MDX_PAGES_LOCALE_STRATEGY;
   const defaultLocale = import.meta.env.CONLOCA_MDX_PAGES_DEFAULT_LOCALE;
   const site = import.meta.env.CONLOCA_MDX_PAGES_SITE;
   return {
     mdxPagesRoot: root,
-    ...(localeStrategy === 'directory' || localeStrategy === 'suffix'
-      ? { mdxPagesLocaleStrategy: localeStrategy }
-      : {}),
     ...(defaultLocale ? { mdxPagesDefaultLocale: defaultLocale } : {}),
     ...(site ? { mdxPagesSite: site } : {}),
   };
@@ -358,7 +354,11 @@ async function handleContentApi(request: Request, cfResult: CFAccessResult): Pro
 
   // Create the Hono router with assets and content root for git operations
   const assetsPath = import.meta.env.CONLOCA_ASSETS_PATH || '';
-  const app = createContentAPIRouter(contentApi, { ...(assetsPath && { assetsPath }), contentRoot });
+  const app = createContentAPIRouter(contentApi, {
+    ...(assetsPath && { assetsPath }),
+    contentRoot,
+    compileMDX,
+  });
 
   // Extract the path after the API base
   const url = new URL(request.url);

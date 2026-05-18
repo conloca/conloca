@@ -1,8 +1,7 @@
 /* Aside / callout chrome tokens — shared by the CMS MDX editor and the
- * published Starlight pages so a `<Aside>` JSX block, a `:::note` directive
- * (lowered to `.conloca-aside*` by `remarkDirectivesToCallout`), and the
- * MDXEditor's editing surface all render with the same colors, fonts,
- * border and title treatment.
+ * published Starlight pages so a `<Aside>` JSX block and the MDXEditor's
+ * editing surface render with the same colors, fonts, border and title
+ * treatment.
  *
  * Per-type colors come from Starlight's own `--sl-color-{purple,blue,...}-*`
  * scale so the tip/note/caution/danger asides match what Starlight ships by

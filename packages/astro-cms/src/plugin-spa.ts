@@ -137,27 +137,10 @@ export interface ConlocaCMSOptions extends Omit<UIConfig, 'basename'> {
     root: string;
 
     /**
-     * Locale storage convention.
-     * - `'directory'` (default): `{root}/{locale}/{slug}.mdx` for non-default
-     *   locales, `{root}/{slug}.mdx` at the root for the default locale —
-     *   the standard Astro i18n directory convention (used by Starlight's
-     *   built-in i18n routing, among others).
-     * - `'suffix'`: `{root}/{slug}.{locale}.mdx` — matches Conloca's default
-     *   convention for blocks.
-     */
-    localeStrategy?: 'directory' | 'suffix';
-
-    /**
-     * @deprecated Renamed to `localeStrategy`. The top-level `locales`
-     * option now carries the language list; this field will be removed
-     * in the next minor release.
-     */
-    locales?: 'directory' | 'suffix';
-
-    /**
-     * Default locale name (used by `'directory'` strategy to decide which
-     * locale's files live without a locale prefix). Defaults to the first
-     * configured site's `defaultLocale`, or `'en'`.
+     * Default locale name. Files for the default locale live at
+     * `{root}/{slug}.mdx` (no locale prefix); other locales live at
+     * `{root}/{locale}/{slug}.mdx`. Defaults to the first configured
+     * site's `defaultLocale`, or `'en'`.
      */
     defaultLocale?: string;
 
@@ -589,16 +572,6 @@ initHydration(componentRegistry)
         if (command !== 'dev') return;
 
         // Pass options via Vite define for API routes
-        // Resolve mdxPages.locales (deprecated) into mdxPages.localeStrategy.
-        // Warn once if the legacy name is used.
-        if (options.mdxPages?.locales !== undefined && options.mdxPages.localeStrategy === undefined) {
-          console.warn(
-            '[Conloca CMS] `mdxPages.locales` is deprecated — rename it to `mdxPages.localeStrategy`. ' +
-              'The top-level `locales` option now carries the language list.',
-          );
-        }
-        const mdxLocaleStrategy = options.mdxPages?.localeStrategy ?? options.mdxPages?.locales ?? 'directory';
-
         updateConfig({
           vite: {
             define: {
@@ -607,7 +580,6 @@ initHydration(componentRegistry)
               'import.meta.env.CONLOCA_PUCK_CONFIG_PATH': JSON.stringify(options.puckConfigPath),
               'import.meta.env.CONLOCA_ASSETS_PATH': JSON.stringify(options.assetsPath || ''),
               'import.meta.env.CONLOCA_MDX_PAGES_ROOT': JSON.stringify(options.mdxPages?.root || ''),
-              'import.meta.env.CONLOCA_MDX_PAGES_LOCALE_STRATEGY': JSON.stringify(mdxLocaleStrategy),
               'import.meta.env.CONLOCA_MDX_PAGES_DEFAULT_LOCALE': JSON.stringify(options.mdxPages?.defaultLocale || ''),
               'import.meta.env.CONLOCA_MDX_PAGES_SITE': JSON.stringify(options.mdxPages?.site || ''),
               'import.meta.env.CONLOCA_MDX_PAGES_RENDERER': JSON.stringify(options.mdxPages?.renderer || 'external'),
@@ -820,7 +792,6 @@ if (import.meta.hot) {
                     }),
                     ...(options.mdxPages?.root && {
                       mdxPagesRoot: options.mdxPages.root,
-                      mdxPagesLocaleStrategy: mdxLocaleStrategy,
                       mdxPagesDefaultLocale: options.mdxPages.defaultLocale,
                       mdxPagesSite: options.mdxPages.site,
                     }),

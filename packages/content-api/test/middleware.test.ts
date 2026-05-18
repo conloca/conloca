@@ -288,8 +288,36 @@ describe('Content API Middleware', () => {
   });
 
   describe('POST /mdx/compile', () => {
-    test('compiles MDX into browser-runnable code', async () => {
+    // The compiler itself lives in @conloca/mdx; these tests verify only
+    // the route contract — option threading, payload validation, error
+    // mapping. Real-compile coverage belongs to @conloca/mdx's tests.
+    const stubCompiler = async (content: string) => ({
+      code: `COMPILED:${content}`,
+      metadata: { stubbed: true },
+    });
+
+    test('returns 501 when no compileMDX option is configured', async () => {
       const app = createContentAPIRouter(api);
+      const res = await app.fetch(
+        new Request('http://localhost/mdx/compile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mdxContent: '# Hello' }),
+        }),
+      );
+
+      expect(res.status).toBe(501);
+
+      const response = await parseJsonResponse(res);
+      const data = response.data;
+      expect(isErrorResponse(data)).toBe(true);
+      if (isErrorResponse(data)) {
+        expect(data.error.code).toBe(ErrorCodes.MDX_COMPILE_FAILED);
+      }
+    });
+
+    test('calls the injected compiler and returns its result', async () => {
+      const app = createContentAPIRouter(api, { compileMDX: stubCompiler });
       const res = await app.fetch(
         new Request('http://localhost/mdx/compile', {
           method: 'POST',
@@ -302,13 +330,12 @@ describe('Content API Middleware', () => {
 
       const response = await parseJsonResponse<{ code: string; metadata: Record<string, unknown> }>(res);
 
-      expect(typeof response.data.code).toBe('string');
-      expect(response.data.code.length).toBeGreaterThan(0);
-      expect(response.data.metadata).toEqual({});
+      expect(response.data.code).toBe('COMPILED:# Hello MDX');
+      expect(response.data.metadata).toEqual({ stubbed: true });
     });
 
     test('returns a validation error when mdxContent is missing', async () => {
-      const app = createContentAPIRouter(api);
+      const app = createContentAPIRouter(api, { compileMDX: stubCompiler });
       const res = await app.fetch(
         new Request('http://localhost/mdx/compile', {
           method: 'POST',
@@ -330,7 +357,7 @@ describe('Content API Middleware', () => {
     });
 
     test('returns invalid request for malformed JSON', async () => {
-      const app = createContentAPIRouter(api);
+      const app = createContentAPIRouter(api, { compileMDX: stubCompiler });
       const res = await app.fetch(
         new Request('http://localhost/mdx/compile', {
           method: 'POST',
@@ -351,8 +378,11 @@ describe('Content API Middleware', () => {
       }
     });
 
-    test('returns a compile error for invalid MDX', async () => {
-      const app = createContentAPIRouter(api);
+    test('returns 422 when the injected compiler throws', async () => {
+      const failingCompiler = async () => {
+        throw new Error('MDX compilation failed: bad token');
+      };
+      const app = createContentAPIRouter(api, { compileMDX: failingCompiler });
       const res = await app.fetch(
         new Request('http://localhost/mdx/compile', {
           method: 'POST',

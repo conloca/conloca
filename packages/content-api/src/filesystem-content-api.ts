@@ -170,7 +170,6 @@ export class FileSystemContentAPI implements ContentAPI {
   // mdx-page support: optional second filesystem root for kind:'page'+type:'mdx'.
   // See ContentAPIOptions.mdxPagesRoot for the design rationale.
   private absoluteMdxPagesRoot?: string;
-  private mdxPagesLocaleStrategy: 'directory' | 'suffix' = 'directory';
   private mdxPagesDefaultLocale = 'en';
   private mdxPagesSite = 'default';
   private mdxPagesCollection = 'pages';
@@ -193,7 +192,6 @@ export class FileSystemContentAPI implements ContentAPI {
     contentIndex: ContentIndex,
     mdxPagesOptions?: {
       root?: string;
-      localeStrategy?: 'directory' | 'suffix';
       defaultLocale?: string;
       site?: string;
     },
@@ -227,9 +225,6 @@ export class FileSystemContentAPI implements ContentAPI {
         ? mdxPagesOptions.root.slice(2)
         : mdxPagesOptions.root;
       this.absoluteMdxPagesRoot = resolve(normalizedMdxRoot);
-    }
-    if (mdxPagesOptions?.localeStrategy) {
-      this.mdxPagesLocaleStrategy = mdxPagesOptions.localeStrategy;
     }
     // Default site: explicit option > first configured site > 'default'
     const firstSiteName = Object.keys(sitesConfig.sites)[0];
@@ -352,7 +347,6 @@ export class FileSystemContentAPI implements ContentAPI {
       contentIndex,
       {
         root: options.mdxPagesRoot,
-        localeStrategy: options.mdxPagesLocaleStrategy,
         defaultLocale: options.mdxPagesDefaultLocale,
         site: options.mdxPagesSite,
       },
@@ -474,9 +468,9 @@ export class FileSystemContentAPI implements ContentAPI {
 
       // Files under the optional mdxPagesRoot are kind:'page' + type:'mdx',
       // independent of the directory tree rooted at absoluteContentRoot. The
-      // leading prefix is stripped here and locale/pathname are derived from
-      // the configured locale strategy ('directory' = locale-prefixed dirs,
-      // 'suffix' = Conloca's existing block convention).
+      // leading prefix is stripped here; locale lives as a directory segment
+      // ({locale}/{slug}.mdx for non-default locales, {slug}.mdx at the root
+      // for the default locale).
       if (this.absoluteMdxPagesRoot && filePath.startsWith(this.absoluteMdxPagesRoot + '/')) {
         kind = 'page';
         site = this.mdxPagesSite;
@@ -485,46 +479,26 @@ export class FileSystemContentAPI implements ContentAPI {
         const mdxParts = mdxRelativePath.split('/');
         const mdxFilename = mdxParts[mdxParts.length - 1];
 
-        if (this.mdxPagesLocaleStrategy === 'suffix') {
-          // {slug}.{locale}.mdx — Conloca convention
-          const suffixMatch = mdxFilename.match(/^(.+)\.([a-z]{2}(?:-[A-Z]{2})?)\.mdx$/);
-          if (suffixMatch) {
-            mdxParts[mdxParts.length - 1] = suffixMatch[1];
-            locale = suffixMatch[2];
-          } else {
-            const noLocaleMatch = mdxFilename.match(/^(.+)\.mdx$/);
-            if (!noLocaleMatch) return null;
-            mdxParts[mdxParts.length - 1] = noLocaleMatch[1];
-            locale = this.mdxPagesDefaultLocale;
-          }
+        const noLocaleMatch = mdxFilename.match(/^(.+)\.mdx$/);
+        if (!noLocaleMatch) return null;
+        mdxParts[mdxParts.length - 1] = noLocaleMatch[1];
+
+        // A leading folder counts as a locale only when it's a configured
+        // locale. A two-letter folder like `qa/` or `id/` is therefore
+        // left in the slug, not silently classified as a language.
+        if (mdxParts.length > 1 && this.availableLocales.has(mdxParts[0])) {
+          locale = mdxParts[0];
+          const slugParts = mdxParts.slice(1);
+          pathname =
+            slugParts[slugParts.length - 1] === 'index'
+              ? '/' + slugParts.slice(0, -1).join('/') || '/'
+              : '/' + slugParts.join('/');
+        } else {
+          locale = this.mdxPagesDefaultLocale;
           pathname =
             mdxParts[mdxParts.length - 1] === 'index'
               ? '/' + mdxParts.slice(0, -1).join('/') || '/'
               : '/' + mdxParts.join('/');
-        } else {
-          // 'directory' strategy. {locale}/{slug}.mdx for non-default locales,
-          // {slug}.mdx at the root for the default locale.
-          const noLocaleMatch = mdxFilename.match(/^(.+)\.mdx$/);
-          if (!noLocaleMatch) return null;
-          mdxParts[mdxParts.length - 1] = noLocaleMatch[1];
-
-          // A leading folder counts as a locale only when it's a configured
-          // locale. A two-letter folder like `qa/` or `id/` is therefore
-          // left in the slug, not silently classified as a language.
-          if (mdxParts.length > 1 && this.availableLocales.has(mdxParts[0])) {
-            locale = mdxParts[0];
-            const slugParts = mdxParts.slice(1);
-            pathname =
-              slugParts[slugParts.length - 1] === 'index'
-                ? '/' + slugParts.slice(0, -1).join('/') || '/'
-                : '/' + slugParts.join('/');
-          } else {
-            locale = this.mdxPagesDefaultLocale;
-            pathname =
-              mdxParts[mdxParts.length - 1] === 'index'
-                ? '/' + mdxParts.slice(0, -1).join('/') || '/'
-                : '/' + mdxParts.join('/');
-          }
         }
 
         parsedData = parse4KBMDX(buffer, bytesRead);
@@ -1011,15 +985,12 @@ export class FileSystemContentAPI implements ContentAPI {
       const basePath = pathname.replace(/^\//, '').replace(/\/$/, '') || 'index';
 
       // mdx-type pages live under absoluteMdxPagesRoot when configured.
-      // The locale strategy decides whether the locale appears as a
-      // directory segment or as a filename suffix.
+      // The locale appears as a directory segment for non-default locales;
+      // the default locale's files live at the root with no locale prefix.
       if (manifest.type === 'mdx' && this.absoluteMdxPagesRoot) {
-        if (this.mdxPagesLocaleStrategy === 'directory') {
-          return locale === this.mdxPagesDefaultLocale
-            ? join(this.absoluteMdxPagesRoot, `${basePath}.mdx`)
-            : join(this.absoluteMdxPagesRoot, locale, `${basePath}.mdx`);
-        }
-        return join(this.absoluteMdxPagesRoot, `${basePath}.${locale}.mdx`);
+        return locale === this.mdxPagesDefaultLocale
+          ? join(this.absoluteMdxPagesRoot, `${basePath}.mdx`)
+          : join(this.absoluteMdxPagesRoot, locale, `${basePath}.mdx`);
       }
 
       // Existing behavior: type:'puck' pages live under contentRoot/{site}/{collection}.
@@ -1053,42 +1024,25 @@ export class FileSystemContentAPI implements ContentAPI {
       let locale: string;
       let pathname: string;
 
-      if (this.mdxPagesLocaleStrategy === 'suffix') {
-        const suffixMatch = mdxFilename.match(/^(.+)\.([a-z]{2}(?:-[A-Z]{2})?)\.mdx$/);
-        if (suffixMatch) {
-          mdxParts[mdxParts.length - 1] = suffixMatch[1];
-          locale = suffixMatch[2];
-        } else {
-          const noLocaleMatch = mdxFilename.match(/^(.+)\.mdx$/);
-          if (!noLocaleMatch) return null;
-          mdxParts[mdxParts.length - 1] = noLocaleMatch[1];
-          locale = this.mdxPagesDefaultLocale;
-        }
+      const noLocaleMatch = mdxFilename.match(/^(.+)\.mdx$/);
+      if (!noLocaleMatch) return null;
+      mdxParts[mdxParts.length - 1] = noLocaleMatch[1];
+
+      // Membership-based locale detection — mirrors parseFileHeaderWithRepair
+      // so both paths classify the same file identically.
+      if (mdxParts.length > 1 && this.availableLocales.has(mdxParts[0])) {
+        locale = mdxParts[0];
+        const slugParts = mdxParts.slice(1);
+        pathname =
+          slugParts[slugParts.length - 1] === 'index'
+            ? '/' + slugParts.slice(0, -1).join('/') || '/'
+            : '/' + slugParts.join('/');
+      } else {
+        locale = this.mdxPagesDefaultLocale;
         pathname =
           mdxParts[mdxParts.length - 1] === 'index'
             ? '/' + mdxParts.slice(0, -1).join('/') || '/'
             : '/' + mdxParts.join('/');
-      } else {
-        const noLocaleMatch = mdxFilename.match(/^(.+)\.mdx$/);
-        if (!noLocaleMatch) return null;
-        mdxParts[mdxParts.length - 1] = noLocaleMatch[1];
-
-        // Membership-based locale detection — mirrors parseFileHeaderWithRepair
-        // so both paths classify the same file identically.
-        if (mdxParts.length > 1 && this.availableLocales.has(mdxParts[0])) {
-          locale = mdxParts[0];
-          const slugParts = mdxParts.slice(1);
-          pathname =
-            slugParts[slugParts.length - 1] === 'index'
-              ? '/' + slugParts.slice(0, -1).join('/') || '/'
-              : '/' + slugParts.join('/');
-        } else {
-          locale = this.mdxPagesDefaultLocale;
-          pathname =
-            mdxParts[mdxParts.length - 1] === 'index'
-              ? '/' + mdxParts.slice(0, -1).join('/') || '/'
-              : '/' + mdxParts.join('/');
-        }
       }
 
       return {

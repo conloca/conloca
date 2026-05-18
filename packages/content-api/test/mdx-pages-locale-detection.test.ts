@@ -80,7 +80,6 @@ describe('mdx-pages locale detection', () => {
       contentRoot,
       canvasDir,
       mdxPagesRoot,
-      mdxPagesLocaleStrategy: 'directory',
     });
 
     const parsed = api.parseFilePath(join(mdxPagesRoot, 'de/install.mdx'));
@@ -101,7 +100,6 @@ describe('mdx-pages locale detection', () => {
       contentRoot,
       canvasDir,
       mdxPagesRoot,
-      mdxPagesLocaleStrategy: 'directory',
     });
 
     const parsed = api.parseFilePath(join(mdxPagesRoot, 'qa/checklist.mdx'));
@@ -122,7 +120,6 @@ describe('mdx-pages locale detection', () => {
       contentRoot,
       canvasDir,
       mdxPagesRoot,
-      mdxPagesLocaleStrategy: 'directory',
     });
 
     const parsed = api.parseFilePath(join(mdxPagesRoot, 'fr/bonjour.mdx'));
@@ -143,7 +140,6 @@ describe('mdx-pages locale detection', () => {
       contentRoot,
       canvasDir,
       mdxPagesRoot,
-      mdxPagesLocaleStrategy: 'directory',
       availableLocales: ['en', 'de'],
       defaultLocale: 'en',
     });
@@ -166,7 +162,6 @@ describe('mdx-pages locale detection', () => {
       contentRoot,
       canvasDir,
       mdxPagesRoot,
-      mdxPagesLocaleStrategy: 'directory',
     });
 
     const enParsed = api.parseFilePath(join(mdxPagesRoot, 'index.mdx'));
@@ -189,7 +184,6 @@ describe('mdx-pages locale detection', () => {
       contentRoot,
       canvasDir,
       mdxPagesRoot,
-      mdxPagesLocaleStrategy: 'directory',
     });
 
     const parsed = api.parseFilePath(join(mdxPagesRoot, 'qa/auth/api.mdx'));

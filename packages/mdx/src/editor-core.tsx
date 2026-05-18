@@ -1,5 +1,4 @@
 import {
-  AdmonitionDirectiveDescriptor,
   BlockTypeSelect,
   BoldItalicUnderlineToggles,
   ButtonWithTooltip,
@@ -10,7 +9,6 @@ import {
   codeMirrorPlugin,
   DiffSourceToggleWrapper,
   diffSourcePlugin,
-  directivesPlugin,
   GenericJsxEditor,
   HighlightToggle,
   headingsPlugin,
@@ -285,18 +283,6 @@ export const BaseMDXEditor = React.forwardRef<MDXEditorMethods, BaseMDXEditorPro
           codeMirrorPlugin({ codeBlockLanguages }),
           diffSourcePlugin({ viewMode: 'rich-text' }),
           markdownShortcutPlugin(),
-          // Admonition / callout directives — :::note ... ::: etc. The
-          // descriptor handles in-editor rendering; the runtime side adds
-          // remark-directive in @conloca/mdx/node so the published preview
-          // resolves them too. See `mdx/src/mdx/evaluate.ts`.
-          // `escapeUnknownTextDirectives: true` keeps stray inline colons
-          // (e.g. `:path` inside prose, `key:value` glossary entries) as
-          // plain text — without it, remark-directive would parse every
-          // `:word` as a textDirective and crash for lack of a descriptor.
-          directivesPlugin({
-            directiveDescriptors: [AdmonitionDirectiveDescriptor],
-            escapeUnknownTextDirectives: true,
-          }),
           jsxPlugin({
             jsxComponentDescriptors: [...(jsxComponentDescriptors ?? []), ...wildcardJsxDescriptors],
           }),
