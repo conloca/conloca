@@ -1,15 +1,11 @@
 // Starlight MDX component descriptors for the CMS editor. The CMS shell
 // ships the plugin API only — these descriptors are the host's own code so
-// the core stays framework-agnostic.
+// the core stays framework-agnostic. All in-editor rendering goes through
+// `GenericBlock` in `@conloca/cms-spa`, which reads each descriptor's
+// `props` to drive the controls row and looks up a Starlight-shape
+// template by tag name.
 import { defineMdxComponents, type MdxComponentDescriptor, type MdxSnippetDescriptor } from '@conloca/astro-cms';
-import { CardEditor } from './editors/CardEditor';
-import { CardGridEditor } from './editors/CardGridEditor';
-import { FileTreeEditor } from './editors/FileTreeEditor';
 import { IconEditor } from './editors/IconEditor';
-import { LinkCardEditor } from './editors/LinkCardEditor';
-import { StepsEditor } from './editors/StepsEditor';
-import { TabItemEditor } from './editors/TabItemEditor';
-import { TabsEditor } from './editors/TabsEditor';
 
 const STARLIGHT_SOURCE = '@astrojs/starlight/components';
 
@@ -60,7 +56,6 @@ export const stepsDescriptor: MdxComponentDescriptor = {
     keywords: ['ordered', 'numbered', 'list'],
   },
   defaults: { children: '1. First step\n2. Second step\n3. Third step' },
-  Editor: StepsEditor,
   import: { from: STARLIGHT_SOURCE },
 };
 
@@ -79,7 +74,6 @@ export const tabsDescriptor: MdxComponentDescriptor = {
   defaults: {
     children: '<TabItem label="One">First tab content</TabItem>\n<TabItem label="Two">Second tab content</TabItem>',
   },
-  Editor: TabsEditor,
   import: { from: STARLIGHT_SOURCE },
 };
 
@@ -99,7 +93,6 @@ export const tabItemDescriptor: MdxComponentDescriptor = {
     { name: 'icon', type: 'string', label: 'Icon (StarlightIcon name)' },
   ],
   defaults: { attributes: { label: 'New tab' }, children: 'Tab content' },
-  Editor: TabItemEditor,
   import: { from: STARLIGHT_SOURCE },
 };
 
@@ -119,7 +112,6 @@ export const cardDescriptor: MdxComponentDescriptor = {
     { name: 'icon', type: 'string', label: 'Icon (StarlightIcon name)' },
   ],
   defaults: { attributes: { title: 'Card title' }, children: 'Card body content.' },
-  Editor: CardEditor,
   import: { from: STARLIGHT_SOURCE },
 };
 
@@ -136,7 +128,6 @@ export const cardGridDescriptor: MdxComponentDescriptor = {
   },
   props: [{ name: 'stagger', type: 'boolean', label: 'Stagger', help: 'Offset cards vertically on wide screens' }],
   defaults: { children: '<Card title="One">First</Card>\n<Card title="Two">Second</Card>' },
-  Editor: CardGridEditor,
   import: { from: STARLIGHT_SOURCE },
 };
 
@@ -162,7 +153,6 @@ export const linkCardDescriptor: MdxComponentDescriptor = {
     { name: 'description', type: 'string', label: 'Description' },
   ],
   defaults: { attributes: { title: 'Link title', href: '/' } },
-  Editor: LinkCardEditor,
   import: { from: STARLIGHT_SOURCE },
 };
 
@@ -178,7 +168,6 @@ export const fileTreeDescriptor: MdxComponentDescriptor = {
     keywords: ['files', 'directory', 'folder'],
   },
   defaults: { children: '- src/\n  - **index.ts**\n  - utils.ts\n- package.json' },
-  Editor: FileTreeEditor,
   import: { from: STARLIGHT_SOURCE },
 };
 

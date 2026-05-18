@@ -35,6 +35,24 @@ interface BlockTemplate {
   render: (attrs: Record<string, string>, slot: React.ReactNode) => React.ReactNode;
 }
 
+/**
+ * Astro scoped-style hashes. Astro appends a `astro-<hash>` class to every
+ * element rendered by a `.astro` component file and scopes the file's CSS
+ * by that hash (eg `.card.astro-e3flfouy { ... }`). The hashes are
+ * file-stable but version-specific to Starlight; if Starlight bumps and a
+ * component starts looking off in the editor, re-capture the hash from
+ * the published page's DOM and update here. Future work moves these into
+ * a `@conloca/astro-cms-starlight` preset so hosts opt in by version
+ * instead of GenericBlock holding the knowledge.
+ */
+const STARLIGHT_SCOPE = {
+  card: 'astro-e3flfouy',
+  cardGrid: 'astro-j3wxc5cd',
+  linkCard: 'astro-2dfusmpi',
+  tabs: 'astro-pfofihih',
+  fileTree: 'astro-mbvz7br7',
+} as const;
+
 const TEMPLATES: Record<string, BlockTemplate> = {
   Aside: {
     render: (attrs, slot) => {
@@ -48,6 +66,57 @@ const TEMPLATES: Record<string, BlockTemplate> = {
         </aside>
       );
     },
+  },
+  Card: {
+    render: (attrs, slot) => (
+      <article className={`card sl-flex ${STARLIGHT_SCOPE.card}`}>
+        <p className={`title sl-flex ${STARLIGHT_SCOPE.card}`}>{attrs.title?.trim() || 'Card title'}</p>
+        <div>{slot}</div>
+      </article>
+    ),
+  },
+  CardGrid: {
+    render: (_attrs, slot) => <div className={`card-grid ${STARLIGHT_SCOPE.cardGrid}`}>{slot}</div>,
+  },
+  LinkCard: {
+    // LinkCard has no children — render title + description from attrs only.
+    render: (attrs) => (
+      <div className={`sl-link-card ${STARLIGHT_SCOPE.linkCard}`}>
+        <span className={`sl-flex stack ${STARLIGHT_SCOPE.linkCard}`}>
+          <span className={`title ${STARLIGHT_SCOPE.linkCard}`}>{attrs.title?.trim() || 'Link title'}</span>
+          {attrs.description?.trim() && (
+            <span className={`description ${STARLIGHT_SCOPE.linkCard}`}>{attrs.description}</span>
+          )}
+        </span>
+      </div>
+    ),
+  },
+  Steps: {
+    // Author already writes `1. … 2. …` markdown inside; the slot renders the
+    // ordered list. We add Starlight's `sl-steps` class so the list gets the
+    // step-marker chrome.
+    render: (_attrs, slot) => <div className="sl-steps">{slot}</div>,
+  },
+  FileTree: {
+    render: (_attrs, slot) => (
+      <div className={`not-content ${STARLIGHT_SCOPE.fileTree}`} data-conloca-file-tree>
+        {slot}
+      </div>
+    ),
+  },
+  Tabs: {
+    // Editor renders all panels stacked — Starlight's runtime tablist is
+    // interactive and switches panels via JS, which we don't want in an
+    // editing surface. Authors see every TabItem inline and edit each.
+    render: (_attrs, slot) => <div className={`conloca-tabs-editor ${STARLIGHT_SCOPE.tabs}`}>{slot}</div>,
+  },
+  TabItem: {
+    render: (attrs, slot) => (
+      <section className="conloca-tab-item-editor" aria-label={attrs.label?.trim() || 'Tab'}>
+        <header className="conloca-tab-item-editor__label">{attrs.label?.trim() || 'Tab'}</header>
+        <div>{slot}</div>
+      </section>
+    ),
   },
 };
 
