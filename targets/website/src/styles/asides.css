@@ -80,8 +80,8 @@
 
 /* Starlight's `.starlight-aside*` rules ship inside `@layer starlight.components`,
    so these unlayered overrides win at the cascade. Same color/sizing tokens
-   feed the directive-rendered `.conloca-aside*` divs below and the editor's
-   `.conloca-aside-editor` chrome in `packages/mdx/src/editor-styles.css`. */
+   feed the `.conloca-aside*` divs the AsideEditor emits below and the
+   editor-only chrome at the bottom of this file. */
 .starlight-aside,
 .conloca-aside {
   padding: var(--conloca-aside-padding);
@@ -172,4 +172,94 @@
 .starlight-aside > :last-child,
 .conloca-aside > :last-child {
   margin-bottom: 0;
+}
+
+/* ============================================================================
+   Editor-only chrome — interactive title row that replaces the published-site
+   icon/label `<p>` with controls that edit `<Aside>` attributes (type select,
+   optional title input, remove button). Emitted by `AsideEditor.tsx` via the
+   `.conloca-aside-editor` modifier on the aside wrapper. Loaded into the CMS
+   admin shell through `conlocaCMS({ siteStyles })` so the editor renders
+   identically to the published surface plus the form controls.
+   ============================================================================ */
+
+.conloca-aside-editor .conloca-aside-title {
+  /* Override the `+ *` margin-top rule so the body chip sits at the
+     post-title spacing — needed because the title row in editor mode is
+     a div, not a `<p>`, and we render the icon outside the `<p>` flow. */
+  margin-bottom: 0;
+}
+
+/* Icon proportions — `font-size: 1.333em; width: 1em; height: 1em`
+   resolves to 24x24 at the 18px title font-size. SVG sizing takes the
+   CSS width/height, ignoring lucide-react's default 24px attribute
+   (both resolve to the same value here; the rule keeps the icon
+   proportional if the title font-size changes). */
+.conloca-aside-editor .conloca-aside-title__icon {
+  font-size: var(--conloca-aside-icon-size, 1.333em);
+  width: 1em;
+  height: 1em;
+  flex-shrink: 0;
+}
+
+.conloca-aside-editor .conloca-aside-title__select,
+.conloca-aside-editor .conloca-aside-title__input {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: inherit;
+  font: inherit;
+  padding: 2px 6px;
+  outline: 0;
+  /* Heavier hover/focus border picks up the per-aside accent so the
+     control's affordance reads in-context. */
+}
+
+.conloca-aside-editor .conloca-aside-title__input {
+  flex: 1;
+  min-width: 0;
+}
+
+.conloca-aside-editor .conloca-aside-title__input::placeholder {
+  color: color-mix(in srgb, currentColor 50%, transparent);
+}
+
+.conloca-aside-editor .conloca-aside-title__select:hover,
+.conloca-aside-editor .conloca-aside-title__select:focus,
+.conloca-aside-editor .conloca-aside-title__input:hover,
+.conloca-aside-editor .conloca-aside-title__input:focus {
+  border-color: color-mix(in srgb, currentColor 30%, transparent);
+}
+
+.conloca-aside-editor .conloca-aside-title__remove {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 1.75rem;
+  justify-content: center;
+  opacity: 0.7;
+  padding: 0;
+  width: 1.75rem;
+}
+
+.conloca-aside-editor .conloca-aside-title__remove:hover {
+  background: color-mix(in srgb, currentColor 15%, transparent);
+  opacity: 1;
+}
+
+/* MDXEditor wraps the inline-editable body in a hash-suffixed
+   `_nestedEditor_*` div that ships with its own `background: rgb(41,41,41)`,
+   `border-radius: 6px` and `padding: 4px 8px` — visible as a second chip
+   sitting inside our aside frame, the analogue of the `_codeMirrorWrapper_*`
+   ring we neutralize for code blocks. Strip the chrome so the body reads as
+   a plain text region against the aside's tinted bg. */
+.conloca-aside-editor [class*="nestedEditor"] {
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
 }
