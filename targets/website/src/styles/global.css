@@ -13,14 +13,9 @@
    pipeline carries it into the Puck preview iframe (the option points at
    global.css). The Starlight `<head>` also picks it up via `customCss`. */
 @import "./code-blocks.css" layer(components);
-/* Aside / callout chrome tokens — same role as code-blocks.css but for
-   `<Aside>` JSX, `:::note` directives, and the MDX editor's AsideEditor
-   descriptor. Imported here for the Puck iframe via siteStyles; customCss
-   in astro.config.mjs picks it up for the Starlight `<head>` too. */
-@import "./asides.css" layer(components);
-/* Card / CardGrid / LinkCard / TabItem / Steps chrome — same role as
-   asides.css. Loaded here so the Puck iframe via siteStyles + Starlight
-   `<head>` via customCss both see the tokens. */
+/* Card / CardGrid / LinkCard / TabItem / Steps chrome. Loaded here so the
+   Puck iframe via siteStyles + Starlight `<head>` via customCss both see
+   the tokens. */
 @import "./starlight-components.css" layer(components);
 
 /* Remove underline from all links */
@@ -206,7 +201,3 @@
 /* `.conloca-prose` and `.conloca-prose--editor` typography moved to
  * `@conloca/mdx/prose.css` and imported at the top of this file so the CMS
  * editor surface and the published site share one source of truth. */
-
-/* `.conloca-aside*` callout rules moved to `./asides.css` (imported above)
- * so the directive-lowered divs, Starlight's `<Aside>` JSX output, and the
- * CMS editor's AsideEditor surface share one set of tokens. */
