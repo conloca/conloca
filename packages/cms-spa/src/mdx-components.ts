@@ -1,7 +1,8 @@
-import { GenericJsxEditor, type JsxComponentDescriptor, type JsxEditorProps } from '@mdxeditor/editor';
+import type { JsxComponentDescriptor, JsxEditorProps } from '@mdxeditor/editor';
 import type { MdxJsxAttribute, MdxJsxFlowElement, MdxJsxTextElement } from 'mdast-util-mdx-jsx';
 import type { ComponentType } from 'react';
 import { useEffect, useState } from 'react';
+import { GenericBlock } from './components/editor/GenericBlock';
 
 /**
  * Plugin API for registering insertable content for the CMS editor.
@@ -246,7 +247,7 @@ export function toJsxComponentDescriptor(d: MdxComponentDescriptor): JsxComponen
       required: p.required,
     })),
     hasChildren: d.hasChildren,
-    Editor: d.Editor ?? GenericJsxEditor,
+    Editor: d.Editor ?? GenericBlock,
     ...(d.import ? { source: d.import.from, defaultExport: d.import.default ?? false } : {}),
   };
 }

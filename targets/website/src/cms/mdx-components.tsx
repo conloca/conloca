@@ -2,7 +2,6 @@
 // ships the plugin API only — these descriptors are the host's own code so
 // the core stays framework-agnostic.
 import { defineMdxComponents, type MdxComponentDescriptor, type MdxSnippetDescriptor } from '@conloca/astro-cms';
-import { AsideEditor } from './editors/AsideEditor';
 import { CardEditor } from './editors/CardEditor';
 import { CardGridEditor } from './editors/CardGridEditor';
 import { FileTreeEditor } from './editors/FileTreeEditor';
@@ -15,7 +14,8 @@ import { TabsEditor } from './editors/TabsEditor';
 const STARLIGHT_SOURCE = '@astrojs/starlight/components';
 
 /**
- * Starlight `<Aside>` — callout box with type + title.
+ * Starlight `<Aside>` — callout box with type + title. Edited via the
+ * shared `GenericBlock` in `@conloca/cms-spa` (no per-component editor).
  * The `source` is required: without it the editor's save pipeline would
  * strip the host's `import { Aside } ...` line on every save.
  */
@@ -45,7 +45,6 @@ export const asideDescriptor: MdxComponentDescriptor = {
     { name: 'title', type: 'string', label: 'Title (optional)' },
   ],
   defaults: { attributes: { type: 'note' }, children: 'Callout body content.' },
-  Editor: AsideEditor,
   import: { from: STARLIGHT_SOURCE },
 };
 

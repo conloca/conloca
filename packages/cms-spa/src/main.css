@@ -328,14 +328,95 @@ body.mdxeditor-focus-mode .mdxeditor-root-contenteditable {
   max-width: 48rem;
 }
 
-/* Host-component chrome (`.conloca-aside*`, `.conloca-card*`, `.conloca-tabs*`
- * etc.) lives in the host's stylesheets — for the conloca website that's
- * `targets/website/src/styles/asides.css` and `starlight-components.css`.
- * The host wires them into the CMS admin via `conlocaCMS({ siteStyles })`,
- * which the `useInjectHostStyles` hook in site-styles.ts loads into the
- * `conloca-host-preview` cascade layer while the MDX editor is mounted.
- * `@conloca/mdx`'s editor-styles.css is now purely the editor frame +
- * code-block chrome; it has no opinion about Aside/Card/Tabs/etc. */
+/* Host-component chrome (Starlight's `.starlight-aside`, etc.) reaches the
+ * editor through `useFetchedSiteStyles` in site-styles.ts, which fetches the
+ * host's compiled CSS for the current page from astro-cms's per-page styles
+ * endpoint and injects it into the `conloca-host-preview` layer wrapped in
+ * `@scope (.mdxeditor)` so it can't leak into admin chrome. */
+
+/* Generic-block editing overlay — the small controls row above any MDX
+ * block edited via GenericBlock.tsx (prop fields + delete). Kept minimal
+ * and admin-tone'd so it reads as CMS chrome, not as part of the rendered
+ * block below. */
+@layer cms-admin {
+  .conloca-generic-block {
+    margin-block: 0.5rem;
+  }
+
+  .conloca-generic-block__controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.375rem 0.5rem;
+    background: rgb(0 0 0 / 0.04);
+    border: 1px dashed rgb(0 0 0 / 0.1);
+    border-radius: 0.25rem 0.25rem 0 0;
+    font-size: 0.75rem;
+    color: rgb(0 0 0 / 0.6);
+  }
+
+  :root.dark .conloca-generic-block__controls {
+    background: rgb(255 255 255 / 0.04);
+    border-color: rgb(255 255 255 / 0.1);
+    color: rgb(255 255 255 / 0.6);
+  }
+
+  .conloca-generic-block__name {
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .conloca-generic-block__field {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .conloca-generic-block__field > span {
+    opacity: 0.7;
+  }
+
+  .conloca-generic-block__field select,
+  .conloca-generic-block__field input {
+    font: inherit;
+    color: inherit;
+    background: rgb(255 255 255 / 0.8);
+    border: 1px solid rgb(0 0 0 / 0.15);
+    border-radius: 0.25rem;
+    padding: 0.125rem 0.375rem;
+    min-width: 0;
+  }
+
+  :root.dark .conloca-generic-block__field select,
+  :root.dark .conloca-generic-block__field input {
+    background: rgb(0 0 0 / 0.4);
+    border-color: rgb(255 255 255 / 0.15);
+  }
+
+  .conloca-generic-block__remove {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.25rem;
+    border-radius: 0.25rem;
+    background: transparent;
+    color: inherit;
+    opacity: 0.6;
+    cursor: pointer;
+  }
+
+  .conloca-generic-block__remove:hover {
+    opacity: 1;
+    background: rgb(0 0 0 / 0.08);
+  }
+
+  :root.dark .conloca-generic-block__remove:hover {
+    background: rgb(255 255 255 / 0.1);
+  }
+}
 
 /* Right panel (SidebarSection) breadcrumbs: prevent the parent-link label
  * from overlapping the selected component's heading on narrow sidebars.
