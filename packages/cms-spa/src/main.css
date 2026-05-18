@@ -352,6 +352,34 @@ body.mdxeditor-focus-mode .mdxeditor-root-contenteditable {
     margin-block: 0.5rem;
   }
 
+  /* Generic fallback wrapper — shown when SSR isn't possible for a
+   * component (no `import` source, or the framework component rejects
+   * the slot marker, eg Starlight `<Steps>` / `<FileTree>` whose
+   * rehype validators require `<ol>` / `<ul>` content). Body stays
+   * editable; the label tells the author what the block will render
+   * as on the published page. */
+  .conloca-generic-block__fallback {
+    display: block;
+    margin-block: 0.5rem;
+    border: 1px dashed rgb(0 0 0 / 0.15);
+    border-radius: 0.25rem;
+    padding: 0.5rem 0.75rem;
+  }
+
+  :root.dark .conloca-generic-block__fallback {
+    border-color: rgb(255 255 255 / 0.15);
+  }
+
+  .conloca-generic-block__fallback-label {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    opacity: 0.55;
+    margin-bottom: 0.25rem;
+  }
+
   /* Architectural rule: rendered previews are pure host-CSS surfaces.
    * MDXEditor's nested-editor wrappers (`_nestedEditor_*`, hashed by
    * its CSS Modules pipeline) carry their own visual chrome — grey

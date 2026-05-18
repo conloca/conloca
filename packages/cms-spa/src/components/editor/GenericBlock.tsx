@@ -184,16 +184,21 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
     <div className="conloca-generic-block" onMouseDownCapture={handleSelect}>
       {/* Wrapper that hosts the SSR'd HTML. The nested editor portals
           into the <conloca-slot> element inside this HTML. When no source
-          is registered or the render fails, we fall back to rendering the
-          slot inline so the body stays editable regardless. */}
-      {source ? (
+          is registered or the SSR call fails (eg components like Starlight's
+          `<Steps>` / `<FileTree>` validate their slot must be a specific
+          list element and reject the `<conloca-slot>` marker), fall back to
+          a generic wrapper so the body stays editable and visual chrome
+          appears at least labeled. */}
+      {source && !error ? (
         <>
           <div ref={wrapperRef} className="conloca-generic-block__rendered" />
           {slotEl && createPortal(slot, slotEl)}
-          {error && <div className="conloca-generic-block__error">Render failed: {error}</div>}
         </>
       ) : (
-        <div data-mdx-block={name}>{slot}</div>
+        <div className="conloca-generic-block__fallback" data-mdx-block={name}>
+          <span className="conloca-generic-block__fallback-label">{name}</span>
+          <div className="conloca-generic-block__fallback-body">{slot}</div>
+        </div>
       )}
     </div>
   );

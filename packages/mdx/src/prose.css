@@ -8,9 +8,14 @@
  * surface, which has its own Puck/Tailwind theme and doesn't redeclare
  * brand colors.
  *
- * `:where()` is used throughout so utility classes (Tailwind's
- * `max-w-none`, MDXEditor's chrome) outrank these zero-specificity
- * descendant selectors. */
+ * `:where()` wraps both the root class AND the inner element selector
+ * for every descendant rule, dropping the combined specificity to
+ * 0,0,0. This makes prose styling a "default" that any framework-
+ * specific rule (`.starlight-aside__title`, `.starlight-card .title`,
+ * etc.) naturally overrides — even when the framework's markup ends
+ * up nested inside `.conloca-prose` (as it does in the CMS editor's
+ * single contenteditable surface). The naked-prose case still works
+ * because there's no competing rule to beat 0,0,0. */
 
 .conloca-prose {
   color: var(--color-text-secondary, #475569);
@@ -27,7 +32,7 @@
   margin-bottom: 0;
 }
 
-.conloca-prose :where(h1, h2, h3, h4, h5, h6) {
+:where(.conloca-prose) :where(h1, h2, h3, h4, h5, h6) {
   color: var(--color-text-heading, #0f172a);
   font-weight: 700;
   line-height: 1.2;
@@ -35,64 +40,64 @@
   margin-bottom: 1rem;
 }
 
-.conloca-prose :where(h1) {
+:where(.conloca-prose) :where(h1) {
   font-size: clamp(2rem, 4vw, 2.75rem);
   margin-bottom: 1.25rem;
 }
 
-.conloca-prose :where(h2) {
+:where(.conloca-prose) :where(h2) {
   font-size: clamp(1.5rem, 3vw, 2rem);
   margin-top: 2.75rem;
 }
 
-.conloca-prose :where(h3) {
+:where(.conloca-prose) :where(h3) {
   font-size: 1.25rem;
   margin-top: 2rem;
 }
 
-.conloca-prose :where(h4, h5, h6) {
+:where(.conloca-prose) :where(h4, h5, h6) {
   font-size: 1rem;
   margin-top: 1.5rem;
 }
 
-.conloca-prose :where(p, ul, ol, blockquote, pre, table) {
+:where(.conloca-prose) :where(p, ul, ol, blockquote, pre, table) {
   margin-top: 0;
   margin-bottom: 1.25rem;
 }
 
-.conloca-prose :where(ul, ol) {
+:where(.conloca-prose) :where(ul, ol) {
   padding-left: 1.5rem;
 }
 
-.conloca-prose :where(ul) {
+:where(.conloca-prose) :where(ul) {
   list-style: disc;
 }
 
-.conloca-prose :where(ol) {
+:where(.conloca-prose) :where(ol) {
   list-style: decimal;
 }
 
-.conloca-prose :where(li + li) {
+:where(.conloca-prose) :where(li + li) {
   margin-top: 0.35rem;
 }
 
-.conloca-prose :where(li > p) {
+:where(.conloca-prose) :where(li > p) {
   margin-bottom: 0.5rem;
 }
 
-.conloca-prose :where(a) {
+:where(.conloca-prose) :where(a) {
   color: var(--color-brand-700, #0e7490);
   text-decoration: underline;
   text-decoration-color: color-mix(in srgb, var(--color-brand-500, #06b6d4) 40%, transparent);
   text-underline-offset: 0.2em;
 }
 
-.conloca-prose :where(strong) {
+:where(.conloca-prose) :where(strong) {
   color: var(--color-text-heading, #0f172a);
   font-weight: 600;
 }
 
-.conloca-prose :where(code) {
+:where(.conloca-prose) :where(code) {
   background: var(--color-bg-code, #f1f5f9);
   border: 1px solid var(--color-border, #e2e8f0);
   border-radius: 0.4rem;
@@ -109,7 +114,7 @@
  * MDX editor frame use, so colors stay aligned even without the header
  * bar. Editor surface itself bypasses these rules entirely — the
  * descriptor in `code-block-frame.tsx` owns that DOM. */
-.conloca-prose :where(pre) {
+:where(.conloca-prose) :where(pre) {
   background: var(--conloca-code-bg, var(--color-bg-code, #f1f5f9));
   border: 1px solid var(--conloca-code-border, var(--color-border, #e2e8f0));
   border-radius: var(--conloca-code-radius, 1rem);
@@ -117,43 +122,50 @@
   padding: var(--conloca-code-padding, 1rem 1.25rem);
 }
 
-.conloca-prose :where(pre code) {
+:where(.conloca-prose) :where(pre code) {
   background: transparent;
   border: 0;
   padding: 0;
 }
 
-.conloca-prose :where(blockquote) {
+:where(.conloca-prose) :where(blockquote) {
   border-left: 3px solid var(--color-brand-400, #22d3ee);
   color: var(--color-text-primary, #0f172a);
   padding-left: 1rem;
 }
 
-.conloca-prose :where(hr) {
+:where(.conloca-prose) :where(hr) {
   border: 0;
   border-top: 1px solid var(--color-border, #e2e8f0);
   margin: 2rem 0;
 }
 
-.conloca-prose :where(table) {
+:where(.conloca-prose) :where(table) {
   border-collapse: collapse;
   width: 100%;
 }
 
-.conloca-prose :where(th, td) {
+:where(.conloca-prose) :where(th, td) {
   border: 1px solid var(--color-border, #e2e8f0);
   padding: 0.75rem 0.9rem;
   text-align: left;
   vertical-align: top;
 }
 
-.conloca-prose :where(th) {
+:where(.conloca-prose) :where(th) {
   color: var(--color-text-heading, #0f172a);
   font-weight: 600;
 }
 
 .conloca-prose--editor {
   min-height: 100%;
+  /* Cap content width so blocks (Asides, Cards, etc.) render at the
+   * same proportions they have on the published page. The default
+   * matches typical content-container widths; hosts whose framework
+   * uses a different content cap override the variable in their own
+   * stylesheet (eg `.conloca-prose--editor { --conloca-editor-max-width: 50rem }`). */
+  max-width: var(--conloca-editor-max-width, 45rem);
+  margin-inline: auto;
 }
 
 /* Editor-only specificity bump: MDXEditor's contenteditable carries a
@@ -182,28 +194,28 @@
   color: var(--color-text-secondary, #cbd5e1);
 }
 
-.dark .conloca-prose :where(h1, h2, h3, h4, h5, h6),
-.dark .conloca-prose :where(strong),
-.dark .conloca-prose :where(th) {
+.dark :where(.conloca-prose) :where(h1, h2, h3, h4, h5, h6),
+.dark :where(.conloca-prose) :where(strong),
+.dark :where(.conloca-prose) :where(th) {
   color: var(--color-text-heading, #f1f5f9);
 }
 
-.dark .conloca-prose :where(blockquote) {
+.dark :where(.conloca-prose) :where(blockquote) {
   color: var(--color-text-primary, #e2e8f0);
 }
 
-.dark .conloca-prose :where(code) {
+.dark :where(.conloca-prose) :where(code) {
   background: var(--color-bg-code, #1e293b);
   border-color: var(--color-border, #334155);
   color: var(--color-text-code, #e2e8f0);
 }
 
-.dark .conloca-prose :where(pre) {
+.dark :where(.conloca-prose) :where(pre) {
   background: var(--conloca-code-bg, var(--color-bg-code, #1e293b));
   border-color: var(--conloca-code-border, var(--color-border, #334155));
 }
 
-.dark .conloca-prose :where(hr),
-.dark .conloca-prose :where(th, td) {
+.dark :where(.conloca-prose) :where(hr),
+.dark :where(.conloca-prose) :where(th, td) {
   border-color: var(--color-border, #334155);
 }

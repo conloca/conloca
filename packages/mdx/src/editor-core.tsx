@@ -262,7 +262,7 @@ export const BaseMDXEditor = React.forwardRef<MDXEditorMethods, BaseMDXEditorPro
         className={className}
         placeholder={placeholder}
         autoFocus={autoFocus}
-        contentEditableClassName="conloca-prose conloca-prose--editor max-w-none"
+        contentEditableClassName="conloca-prose conloca-prose--editor"
         plugins={[
           headingsPlugin(),
           listsPlugin(),
