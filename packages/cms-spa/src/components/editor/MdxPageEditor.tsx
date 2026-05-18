@@ -19,6 +19,7 @@ import { ErrorModal } from '../dialogs/ErrorModal';
 import { PageMetadataDialog } from '../dialogs/PageMetadataDialog';
 import { UnsavedChangesDialog } from '../dialogs/UnsavedChangesDialog';
 import { CMSMDXEditor } from './CMSMDXEditor';
+import { JsxPropsPanel } from './JsxPropsPanel';
 import { LocaleSelector } from './LocaleSelector';
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error' | 'conflict';
@@ -402,6 +403,11 @@ export function MdxPageEditor() {
             placeholder="Start writing your page…"
           />
         </div>
+        {/* Right-side panel showing prop fields for the currently-selected
+            MDX JSX block. Reads from the shared registry that GenericBlock
+            publishes to on selection. Renders nothing visible-but-empty
+            when no block is selected. */}
+        <JsxPropsPanel />
       </div>
 
       {/* In-app navigation guard (sidebar click, back button, programmatic

@@ -1,6 +1,5 @@
 import type { JsxEditorProps } from '@mdxeditor/editor';
 import { NestedLexicalEditor, useLexicalNodeRemove, useMdastNodeUpdater } from '@mdxeditor/editor';
-import { Trash2 } from 'lucide-react';
 import type * as Mdast from 'mdast';
 import type { MdxJsxFlowElement } from 'mdast-util-mdx-jsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -11,6 +10,7 @@ import {
   useMdxComponents,
   writeStringAttribute,
 } from '../../mdx-components';
+import { getSelectedBlock, setSelectedBlock } from '../../selected-block';
 
 /**
  * One editor component for any MDX JSX block. Replaces the per-component
@@ -161,29 +161,27 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
     [updater, node.attributes],
   );
 
+  // Publish to the side-panel registry whenever this block is the
+  // currently-selected one, or its props change while still selected.
+  // The panel reads `descriptor`/`attrs` to render the form and calls
+  // back through `onPropChange`/`removeNode` (closed over the block's
+  // own updater hooks) so updates flow on the same path inline editing
+  // used.
+  useEffect(() => {
+    if (!descriptor) return;
+    if (getSelectedBlock()?.descriptor.name === name) {
+      setSelectedBlock({ name, descriptor, attrs, onPropChange, onRemove: removeNode });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [propsJson, descriptor, name, onPropChange, removeNode]);
+
+  const handleSelect = useCallback(() => {
+    if (!descriptor) return;
+    setSelectedBlock({ name, descriptor, attrs, onPropChange, onRemove: removeNode });
+  }, [descriptor, name, attrs, onPropChange, removeNode]);
+
   return (
-    <div className="conloca-generic-block">
-      <div className="conloca-generic-block__controls" contentEditable={false}>
-        <span className="conloca-generic-block__name">{name}</span>
-        {descriptor?.props?.map((prop) => (
-          <PropInput
-            key={prop.name}
-            name={prop.name}
-            label={prop.label}
-            value={attrs[prop.name] ?? ''}
-            options={prop.type === 'string' ? prop.options : undefined}
-            onChange={(next) => onPropChange(prop.name, next)}
-          />
-        ))}
-        <button
-          type="button"
-          onClick={removeNode}
-          aria-label={`Remove ${name}`}
-          className="conloca-generic-block__remove"
-        >
-          <Trash2 size={14} aria-hidden />
-        </button>
-      </div>
+    <div className="conloca-generic-block" onMouseDownCapture={handleSelect}>
       {/* Wrapper that hosts the SSR'd HTML. The nested editor portals
           into the <conloca-slot> element inside this HTML. When no source
           is registered or the render fails, we fall back to rendering the
@@ -198,44 +196,5 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
         <div data-mdx-block={name}>{slot}</div>
       )}
     </div>
-  );
-}
-
-interface PropInputProps {
-  name: string;
-  label?: string;
-  value: string;
-  options?: ReadonlyArray<{ value: string; label: string }>;
-  onChange: (value: string) => void;
-}
-
-function PropInput({ name, label, value, options, onChange }: PropInputProps) {
-  const display = label ?? name;
-  if (options && options.length > 0) {
-    return (
-      <label className="conloca-generic-block__field">
-        <span>{display}</span>
-        <select value={value} onChange={(e) => onChange(e.target.value)} aria-label={display}>
-          <option value="">—</option>
-          {options.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-      </label>
-    );
-  }
-  return (
-    <label className="conloca-generic-block__field">
-      <span>{display}</span>
-      <input
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={display}
-        aria-label={display}
-      />
-    </label>
   );
 }
