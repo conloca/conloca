@@ -3,6 +3,8 @@ import { NestedLexicalEditor, useLexicalNodeRemove, useMdastNodeUpdater } from '
 import { Trash2 } from 'lucide-react';
 import type * as Mdast from 'mdast';
 import type { MdxJsxFlowElement } from 'mdast-util-mdx-jsx';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   isJsxDescriptor,
   type MdxComponentDescriptor,
@@ -14,122 +16,66 @@ import {
  * One editor component for any MDX JSX block. Replaces the per-component
  * `AsideEditor` / `CardEditor` / ... files in the host project.
  *
- * Renders the block as the same HTML shape the host framework would emit
- * at render time (eg `<aside class="starlight-aside starlight-aside--tip">`
- * for Starlight). The fetched site CSS already in the editor document
- * styles it without any lookalike sheet.
+ * Markup comes from the integration's `/api/render` endpoint, which runs
+ * the real framework component via Astro's Container API and returns the
+ * exact HTML the published page would emit. No hardcoded templates, no
+ * version-pinned class names — every component the host can render on
+ * its live site renders identically in the editor.
  *
  * Editing affordances (prop fields + delete) live in a small overlay row
- * above the block. The body is a `NestedLexicalEditor` so authors type
- * into it inline, matching the position of the rendered content slot.
+ * above the block. The body is a `NestedLexicalEditor` portaled into a
+ * `<conloca-slot>` element inside the rendered HTML, so wrapper-HTML
+ * replacement on prop change preserves the editor's mounting state
+ * (focus, selection, undo stack).
  *
- * Templates live in a per-name registry keyed by JSX tag name. Unknown
- * tags fall through to a plain `<div data-mdx-block>` wrapper — author
- * still gets editable body, just no framework-specific markup. Future
- * library presets (`@conloca/astro-cms-starlight` etc.) can extend the
- * registry from outside instead of editing this file.
+ * If a component has no `import` source (descriptor missing), or the
+ * render endpoint fails, falls back to a plain wrapper so the body
+ * stays editable and the document still saves correctly.
  */
 
-interface BlockTemplate {
-  /** Markup wrapper. Receives current attribute map and the slot children. */
-  render: (attrs: Record<string, string>, slot: React.ReactNode) => React.ReactNode;
+type AnyProps = Record<string, unknown>;
+
+interface RenderRequest {
+  component: string;
+  source: string;
+  defaultExport?: boolean;
+  props: AnyProps;
 }
 
+const SLOT_TAG = 'conloca-slot';
+const RENDER_ENDPOINT = '/__cms/api/render';
+
 /**
- * Astro scoped-style hashes. Astro appends a `astro-<hash>` class to every
- * element rendered by a `.astro` component file and scopes the file's CSS
- * by that hash (eg `.card.astro-e3flfouy { ... }`). The hashes are
- * file-stable but version-specific to Starlight; if Starlight bumps and a
- * component starts looking off in the editor, re-capture the hash from
- * the published page's DOM and update here. Future work moves these into
- * a `@conloca/astro-cms-starlight` preset so hosts opt in by version
- * instead of GenericBlock holding the knowledge.
+ * In-memory cache of rendered HTML keyed by component + source + props.
+ * Same edit state (eg the author scrolls back to a prop they already
+ * tried) reuses the cached HTML without a server roundtrip. Cleared on
+ * page reload.
  */
-const STARLIGHT_SCOPE = {
-  card: 'astro-e3flfouy',
-  cardGrid: 'astro-j3wxc5cd',
-  linkCard: 'astro-2dfusmpi',
-  tabs: 'astro-pfofihih',
-  fileTree: 'astro-mbvz7br7',
-} as const;
+const renderCache = new Map<string, string>();
 
-const TEMPLATES: Record<string, BlockTemplate> = {
-  Aside: {
-    render: (attrs, slot) => {
-      const raw = attrs.type;
-      const type: AsideType = isAsideType(raw) ? raw : 'note';
-      const title = attrs.title?.trim() || ASIDE_TYPE_LABEL[type];
-      return (
-        <aside className={`starlight-aside starlight-aside--${type}`}>
-          <p className="starlight-aside__title">{title}</p>
-          <div className="starlight-aside__content">{slot}</div>
-        </aside>
-      );
-    },
-  },
-  Card: {
-    render: (attrs, slot) => (
-      <article className={`card sl-flex ${STARLIGHT_SCOPE.card}`}>
-        <p className={`title sl-flex ${STARLIGHT_SCOPE.card}`}>{attrs.title?.trim() || 'Card title'}</p>
-        <div>{slot}</div>
-      </article>
-    ),
-  },
-  CardGrid: {
-    render: (_attrs, slot) => <div className={`card-grid ${STARLIGHT_SCOPE.cardGrid}`}>{slot}</div>,
-  },
-  LinkCard: {
-    // LinkCard has no children — render title + description from attrs only.
-    render: (attrs) => (
-      <div className={`sl-link-card ${STARLIGHT_SCOPE.linkCard}`}>
-        <span className={`sl-flex stack ${STARLIGHT_SCOPE.linkCard}`}>
-          <span className={`title ${STARLIGHT_SCOPE.linkCard}`}>{attrs.title?.trim() || 'Link title'}</span>
-          {attrs.description?.trim() && (
-            <span className={`description ${STARLIGHT_SCOPE.linkCard}`}>{attrs.description}</span>
-          )}
-        </span>
-      </div>
-    ),
-  },
-  Steps: {
-    // Author already writes `1. … 2. …` markdown inside; the slot renders the
-    // ordered list. We add Starlight's `sl-steps` class so the list gets the
-    // step-marker chrome.
-    render: (_attrs, slot) => <div className="sl-steps">{slot}</div>,
-  },
-  FileTree: {
-    render: (_attrs, slot) => (
-      <div className={`not-content ${STARLIGHT_SCOPE.fileTree}`} data-conloca-file-tree>
-        {slot}
-      </div>
-    ),
-  },
-  Tabs: {
-    // Editor renders all panels stacked — Starlight's runtime tablist is
-    // interactive and switches panels via JS, which we don't want in an
-    // editing surface. Authors see every TabItem inline and edit each.
-    render: (_attrs, slot) => <div className={`conloca-tabs-editor ${STARLIGHT_SCOPE.tabs}`}>{slot}</div>,
-  },
-  TabItem: {
-    render: (attrs, slot) => (
-      <section className="conloca-tab-item-editor" aria-label={attrs.label?.trim() || 'Tab'}>
-        <header className="conloca-tab-item-editor__label">{attrs.label?.trim() || 'Tab'}</header>
-        <div>{slot}</div>
-      </section>
-    ),
-  },
-};
+function cacheKey(req: RenderRequest): string {
+  return `${req.source}::${req.defaultExport ? '*default*:' : ''}${req.component}::${stableStringify(req.props)}`;
+}
 
-const ASIDE_TYPES = ['note', 'tip', 'caution', 'danger'] as const;
-type AsideType = (typeof ASIDE_TYPES)[number];
-const ASIDE_TYPE_LABEL: Record<AsideType, string> = {
-  note: 'Note',
-  tip: 'Tip',
-  caution: 'Caution',
-  danger: 'Danger',
-};
-function isAsideType(v: string | undefined): v is AsideType {
-  return v != null && (ASIDE_TYPES as readonly string[]).includes(v);
+function stableStringify(obj: AnyProps): string {
+  const keys = Object.keys(obj).sort();
+  return JSON.stringify(Object.fromEntries(keys.map((k) => [k, obj[k]])));
+}
+
+async function fetchRendered(req: RenderRequest): Promise<string> {
+  const key = cacheKey(req);
+  const cached = renderCache.get(key);
+  if (cached !== undefined) return cached;
+
+  const res = await fetch(RENDER_ENDPOINT, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(req),
+  });
+  if (!res.ok) throw new Error(`Render endpoint returned ${res.status}: ${await res.text()}`);
+  const html = await res.text();
+  renderCache.set(key, html);
+  return html;
 }
 
 function readAttrs(node: MdxJsxFlowElement): Record<string, string> {
@@ -150,13 +96,69 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
   const name = node.name ?? '';
   const found = descriptors.find((d): d is MdxComponentDescriptor => 'name' in d && d.name === name);
   const descriptor = found && isJsxDescriptor(found) ? found : null;
-  const template = TEMPLATES[name];
+  const source = descriptor?.import?.from;
+  const defaultExport = descriptor?.import?.default ?? false;
+
+  // Memoize the request so we don't re-fetch on every render — only when
+  // name/source/props actually change. Props are compared via stable JSON
+  // so attribute reordering doesn't trigger a re-fetch.
+  const propsJson = useMemo(() => stableStringify(attrs), [attrs]);
+  const renderReq = useMemo<RenderRequest | null>(
+    () => (source ? { component: name, source, defaultExport, props: attrs } : null),
+    // attrs is regenerated on every render but its identity is stable per propsJson.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [name, source, defaultExport, propsJson],
+  );
+
+  const [html, setHtml] = useState<string | null>(() =>
+    renderReq ? (renderCache.get(cacheKey(renderReq)) ?? null) : null,
+  );
+  const [error, setError] = useState<string | null>(null);
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const [slotEl, setSlotEl] = useState<Element | null>(null);
+
+  // Fetch (or serve from cache) the rendered HTML on prop changes.
+  useEffect(() => {
+    if (!renderReq) return;
+    let cancelled = false;
+    setError(null);
+    fetchRendered(renderReq)
+      .then((next) => {
+        if (!cancelled) setHtml(next);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : String(err));
+        console.warn('[Conloca] GenericBlock render failed:', err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [renderReq]);
+
+  // Imperatively swap the wrapper's inner HTML when the rendered string
+  // changes, then locate the slot element so the nested editor can portal
+  // into it. Imperative swap (vs `dangerouslySetInnerHTML`) makes it easy
+  // to keep the slot ref stable for React to find via the portal.
+  useEffect(() => {
+    const wrap = wrapperRef.current;
+    if (!wrap || html == null) return;
+    wrap.innerHTML = html;
+    setSlotEl(wrap.querySelector(SLOT_TAG));
+  }, [html]);
 
   const slot = (
     <NestedLexicalEditor<MdxJsxFlowElement>
       getContent={(n) => n.children as Mdast.PhrasingContent[]}
       getUpdatedMdastNode={(n, children) => ({ ...n, children: children as MdxJsxFlowElement['children'] })}
     />
+  );
+
+  const onPropChange = useCallback(
+    (propName: string, next: string) => {
+      updater({ attributes: writeStringAttribute(node.attributes, propName, next) as typeof node.attributes });
+    },
+    [updater, node.attributes],
   );
 
   return (
@@ -170,9 +172,7 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
             label={prop.label}
             value={attrs[prop.name] ?? ''}
             options={prop.type === 'string' ? prop.options : undefined}
-            onChange={(next) =>
-              updater({ attributes: writeStringAttribute(node.attributes, prop.name, next) as typeof node.attributes })
-            }
+            onChange={(next) => onPropChange(prop.name, next)}
           />
         ))}
         <button
@@ -184,7 +184,19 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
           <Trash2 size={14} aria-hidden />
         </button>
       </div>
-      {template ? template.render(attrs, slot) : <div data-mdx-block={name}>{slot}</div>}
+      {/* Wrapper that hosts the SSR'd HTML. The nested editor portals
+          into the <conloca-slot> element inside this HTML. When no source
+          is registered or the render fails, we fall back to rendering the
+          slot inline so the body stays editable regardless. */}
+      {source ? (
+        <>
+          <div ref={wrapperRef} className="conloca-generic-block__rendered" />
+          {slotEl && createPortal(slot, slotEl)}
+          {error && <div className="conloca-generic-block__error">Render failed: {error}</div>}
+        </>
+      ) : (
+        <div data-mdx-block={name}>{slot}</div>
+      )}
     </div>
   );
 }

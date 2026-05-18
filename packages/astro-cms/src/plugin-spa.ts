@@ -8,6 +8,7 @@ import { searchForWorkspaceRoot } from 'vite';
 import { deriveComponentPaths, type HydrationDiscovery, scanForHydratableComponents } from './lib/hydration-scanner.js';
 import { normalizeRoutingConfig, resolveRouteConfig } from './lib/routing-config.js';
 import type { ConlocaLocales } from './locales-helpers.js';
+import { createRenderEndpoint } from './site-styles/render-endpoint.js';
 import { createStylesEndpoint } from './site-styles/styles-endpoint.js';
 
 // FRAGILE: viteReact.preambleCode is an undocumented internal API of @vitejs/plugin-react.
@@ -841,6 +842,17 @@ if (import.meta.hot) {
                     `${cmsRoute}/api/styles`,
                     createStylesEndpoint(server, resolveRouteEntrypoint),
                   );
+                },
+              },
+              {
+                // Per-component render endpoint. Renders a single MDX component
+                // (Aside, Card, …) via Astro's Container API so the CMS editor
+                // can display the real framework markup, paired with the
+                // per-page CSS from the styles endpoint above.
+                name: 'conloca-render-endpoint',
+                apply: 'serve' as const,
+                configureServer(server) {
+                  server.middlewares.use(`${cmsRoute}/api/render`, createRenderEndpoint(server));
                 },
               },
               {
