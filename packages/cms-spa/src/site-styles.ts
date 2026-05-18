@@ -137,19 +137,78 @@ export function useEditorStyles(): SiteStyles {
   return styles;
 }
 
+// ---------------------------------------------------------------------------
+// Fetched site styles — runtime CSS discovery from the integration endpoint.
+//
+// Replaces the manually-curated `editorStyles` list with the host's real CSS
+// for the page being edited. The integration walks Vite's module graph from
+// the page's URL and returns the concatenated stylesheets (Tailwind, theme
+// CSS, framework-scoped styles) so the editor matches the published page.
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch the host's CSS for a route URL from the integration's
+ * `/api/styles` endpoint and return it as a single-element array suitable
+ * for `useInjectHostStyles`. Empty until the fetch resolves; empty if no
+ * URL is given.
+ */
+export function useFetchedSiteStyles(routeUrl: string | undefined, options: { cmsRoute?: string } = {}): SiteStyles {
+  const [styles, setStyles] = useState<SiteStyles>([]);
+  const cmsRoute = options.cmsRoute ?? '/__cms';
+
+  useEffect(() => {
+    if (!routeUrl) {
+      setStyles([]);
+      return;
+    }
+
+    let cancelled = false;
+    const endpoint = `${cmsRoute}/api/styles?url=${encodeURIComponent(routeUrl)}`;
+
+    fetch(endpoint)
+      .then((res) => {
+        if (!res.ok) throw new Error(`Styles endpoint returned ${res.status}`);
+        return res.text();
+      })
+      .then((css) => {
+        if (cancelled) return;
+        setStyles(css ? [css] : []);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.warn('[Conloca] Failed to fetch site styles:', err);
+        setStyles([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [routeUrl, cmsRoute]);
+
+  return styles;
+}
+
 /**
  * Inject host CSS strings into the current document's `<head>` while the
  * calling component is mounted. Each stylesheet gets wrapped in a named
  * cascade layer so its rules sit at a known position in the cascade.
  *
- * Pass the styles array explicitly so callers stay in control of which
- * registry they consume (siteStyles vs editorStyles).
+ * When `scopeSelector` is given, every rule is additionally wrapped in
+ * `@scope (<selector>)` so host CSS can only affect elements inside that
+ * subtree. Use this when the injected CSS is broad (Tailwind utilities,
+ * `:root` token redeclarations, `*` preflight resets) and would otherwise
+ * collide with the admin chrome's own cascade — scoping confines host
+ * rules to the editor's content area and leaves admin chrome untouched.
+ *
+ * `:root` and `:root, :host` selectors are rewritten to `:scope` inside
+ * the scope so host CSS variables continue to apply on the scope root
+ * (and inherit downward) without trying to retarget the document root.
  *
  * `@import url(...)` statements are hoisted to the top of the injected
  * `<style>` tag because they must come before other rules to be valid.
  * Hosts using Tailwind / Google Fonts depend on this.
  */
-export function useInjectHostStyles(layerName: string, styles: SiteStyles): void {
+export function useInjectHostStyles(layerName: string, styles: SiteStyles, scopeSelector?: string): void {
   useEffect(() => {
     if (typeof document === 'undefined' || styles.length === 0) return;
 
@@ -162,7 +221,8 @@ export function useInjectHostStyles(layerName: string, styles: SiteStyles): void
         imports.push(m.trim());
         return '';
       });
-      const wrapped = `${imports.join('\n')}\n@layer ${layerName} {\n${cleaned}\n}`;
+      const body = scopeSelector ? scopeCss(cleaned, scopeSelector) : cleaned;
+      const wrapped = `${imports.join('\n')}\n@layer ${layerName} {\n${body}\n}`;
       const tag = document.createElement('style');
       tag.setAttribute(marker, '');
       tag.textContent = wrapped;
@@ -173,5 +233,21 @@ export function useInjectHostStyles(layerName: string, styles: SiteStyles): void
     return () => {
       for (const tag of tags) tag.remove();
     };
-  }, [styles, layerName]);
+  }, [styles, layerName, scopeSelector]);
+}
+
+/**
+ * Wrap a stylesheet in `@scope (<selector>) { ... }` and rewrite root-level
+ * selectors so they target the scope root instead of the document root.
+ *
+ * Real-world host CSS declares CSS custom properties on `:root` (or
+ * `:root, :host`). Inside `@scope`, `:root` still resolves to `<html>` —
+ * which sits outside the scope and never matches — so unmodified rules
+ * silently drop their variables. Substituting `:scope` puts the variables
+ * on the scope root element, where they cascade to its descendants as
+ * intended.
+ */
+function scopeCss(css: string, scopeSelector: string): string {
+  const rewritten = css.replace(/(^|[^.\w])(?::root\s*,\s*:host|:host\s*,\s*:root|:root)\b/g, '$1:scope');
+  return `@scope (${scopeSelector}) {\n${rewritten}\n}`;
 }

@@ -380,6 +380,11 @@ export function MdxPageEditor() {
             key={`${id}-${currentLocale}`}
             ref={editorRef}
             value={content}
+            // Pull the host's real CSS for this page's route. The page id
+            // is the slug; the host renders it at `/<slug>/` for typical
+            // content-collection setups, with the trailing slash matching
+            // common defaults.
+            previewRouteUrl={id ? `/${id}/` : undefined}
             onChange={(next, initialNormalize) => {
               setContent(next);
               // First parse pass round-trips the on-disk markdown through the
