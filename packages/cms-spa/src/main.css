@@ -323,12 +323,14 @@ body.mdxeditor-focus-mode .mdxeditor-root-contenteditable {
   max-width: 48rem;
 }
 
-/* `.conloca-aside*` rules now live in `@conloca/mdx/editor-styles.css`,
- * which is imported as a side effect of any `@conloca/mdx` consumer (the
- * CMS preview pane uses `useMDXEvaluation`, so the bundle picks up the
- * shared stylesheet automatically). One source of truth for the editor,
- * the preview pane, and the published site's `.conloca-aside`/`.starlight-aside`
- * surfaces. */
+/* Host-component chrome (`.conloca-aside*`, `.conloca-card*`, `.conloca-tabs*`
+ * etc.) lives in the host's stylesheets — for the conloca website that's
+ * `targets/website/src/styles/asides.css` and `starlight-components.css`.
+ * The host wires them into the CMS admin via `conlocaCMS({ siteStyles })`,
+ * which the `useInjectHostStyles` hook in site-styles.ts loads into the
+ * `conloca-host-preview` cascade layer while the MDX editor is mounted.
+ * `@conloca/mdx`'s editor-styles.css is now purely the editor frame +
+ * code-block chrome; it has no opinion about Aside/Card/Tabs/etc. */
 
 /* Right panel (SidebarSection) breadcrumbs: prevent the parent-link label
  * from overlapping the selected component's heading on narrow sidebars.
