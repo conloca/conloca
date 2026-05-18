@@ -17,11 +17,16 @@
  *
  * `conloca-host-preview` is the slot for host CSS injected directly into
  * the main admin document while an MDX editor is mounted (see
- * `useInjectHostStyles` in site-styles.ts). Sits BEFORE `cms-admin` so
- * the host's `.conloca-aside`, `.conloca-card`, etc. rules decorate
- * host-component classes the admin doesn't claim, while admin chrome
- * (toolbar, sidebar, Tailwind utilities) wins on overlap. */
-@layer base, starlight, conloca-host-preview, theme, components, utilities, cms-admin;
+ * `useInjectHostStyles` in site-styles.ts). Sits AFTER `cms-admin` —
+ * Tailwind preflight (`*, ::before, ::after { border-width: 0; margin: 0;
+ * padding: 0 }`) is part of cms-admin, and a "before cms-admin" position
+ * means every host rule fights universal resets it cannot win on
+ * specificity (a class selector loses to `*` once layer order beats it).
+ * The host's CSS only targets `.conloca-aside`, `.conloca-card`, and
+ * other host-component selectors that admin chrome never claims, so
+ * letting host CSS win on those classes is safe; admin chrome stays
+ * intact because no host rule names admin selectors. */
+@layer base, starlight, theme, components, utilities, cms-admin, conloca-host-preview;
 
 @import "@puckeditor/core/puck.css" layer(cms-admin);
 @import "tailwindcss" layer(cms-admin);
