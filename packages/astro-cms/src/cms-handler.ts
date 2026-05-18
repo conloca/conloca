@@ -8,6 +8,7 @@ import {
   type CFAccessResult,
   createContentAPI,
   createContentAPIRouter,
+  ErrorCodes,
   FileSystemContentAPI,
   validateCFAccessRequest,
 } from '@conloca/content-api/node';
@@ -357,7 +358,44 @@ async function handleContentApi(request: Request, cfResult: CFAccessResult): Pro
   const app = createContentAPIRouter(contentApi, {
     ...(assetsPath && { assetsPath }),
     contentRoot,
-    compileMDX,
+  });
+
+  // POST /mdx/compile — server-side MDX compilation for the browser preview.
+  // The route lives here (not in @conloca/content-api) because compileMDX is
+  // a renderer concern; content-api is purely storage. The browser sends raw
+  // MDX, we return a JavaScript function body that @mdx-js/mdx's run() can
+  // execute.
+  app.post('/mdx/compile', async (c) => {
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: { code: ErrorCodes.INVALID_REQUEST, message: 'Invalid JSON body' } }, 400);
+    }
+
+    const mdxContent = typeof body === 'object' && body !== null ? (body as { mdxContent?: unknown }).mdxContent : null;
+
+    if (!mdxContent || typeof mdxContent !== 'string') {
+      return c.json(
+        {
+          error: {
+            code: ErrorCodes.MISSING_REQUIRED_FIELD,
+            message: 'mdxContent string required',
+            details: { field: 'mdxContent' },
+          },
+        },
+        400,
+      );
+    }
+
+    try {
+      const { code, metadata } = await compileMDX(mdxContent);
+      return c.json({ code, metadata });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to compile MDX';
+      console.error('[CMS] /mdx/compile failed:', error);
+      return c.json({ error: { code: ErrorCodes.MDX_COMPILE_FAILED, message } }, 422);
+    }
   });
 
   // Extract the path after the API base

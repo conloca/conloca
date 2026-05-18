@@ -4,7 +4,7 @@ import { type AssetConfig, AssetOperations } from './asset-operations';
 import type { ContentAPI } from './content-api.interface';
 import { localesOf, normalizeAndValidatePathname } from './content-utils';
 import { createGitOperations, type GitAuthor, type GitConfig } from './git-operations';
-import type { APIError, ContentManifest, ErrorCode, FindOptions, GlobalFilters, MDXCompileResponse } from './types';
+import type { APIError, ContentManifest, ErrorCode, FindOptions, GlobalFilters } from './types';
 import { ErrorCodes } from './types';
 
 /**
@@ -41,12 +41,6 @@ export interface ContentAPIRouterOptions {
   assetConfig?: Omit<AssetConfig, 'assetsPath'>;
   /** Content root directory for asset usage tracking */
   contentRoot?: string;
-  /**
-   * MDX compiler injected by the host layer (e.g. `@conloca/mdx`). When
-   * absent, the `/mdx/compile` route returns 501. content-api does not
-   * own the renderer — see ADR / audit B1.
-   */
-  compileMDX?: (content: string) => Promise<MDXCompileResponse>;
 }
 
 export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRouterOptions) {
@@ -1226,45 +1220,6 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
         return c.json(errorResponse(ErrorCodes.GIT_NOT_REPO, error.message), 400);
       }
       return c.json(logAndCreateErrorResponse(error, ErrorCodes.GIT_PULL_FAILED, 'Failed to pull from origin'), 500);
-    }
-  });
-
-  // POST /mdx/compile — Server-side MDX compilation for browser-safe evaluation.
-  // The browser sends raw MDX, the server compiles it to a JavaScript function body
-  // that can be executed with @mdx-js/mdx's run() (which has zero dependencies).
-  app.post('/mdx/compile', async (c) => {
-    const compile = options?.compileMDX;
-    if (!compile) {
-      return c.json(errorResponse(ErrorCodes.MDX_COMPILE_FAILED, 'MDX compiler not configured on this router'), 501);
-    }
-
-    try {
-      let body: unknown;
-
-      try {
-        body = await c.req.json();
-      } catch {
-        return c.json(errorResponse(ErrorCodes.INVALID_REQUEST, 'Invalid JSON body'), 400);
-      }
-
-      const mdxContent =
-        typeof body === 'object' && body !== null ? (body as { mdxContent?: unknown }).mdxContent : null;
-
-      if (!mdxContent || typeof mdxContent !== 'string') {
-        return c.json(
-          errorResponse(ErrorCodes.MISSING_REQUIRED_FIELD, 'mdxContent string required', { field: 'mdxContent' }),
-          400,
-        );
-      }
-
-      const { code, metadata } = await compile(mdxContent);
-
-      return c.json({ code, metadata });
-    } catch (error) {
-      return c.json(
-        logAndCreateErrorResponse(error, ErrorCodes.MDX_COMPILE_FAILED, errorMessage(error, 'Failed to compile MDX')),
-        422,
-      );
     }
   });
 
