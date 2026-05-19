@@ -5,7 +5,6 @@ import {
   useSitesConfig,
   useUpdateLocalized,
 } from '@conloca/content-api-client';
-import type { MDXEditorMethods } from '@mdxeditor/editor';
 import { AlertTriangle } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -16,8 +15,8 @@ import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard';
 import { ConflictDialog } from '../dialogs/ConflictDialog';
 import { ErrorModal } from '../dialogs/ErrorModal';
 import { UnsavedChangesDialog } from '../dialogs/UnsavedChangesDialog';
-import { CMSMDXEditor } from './CMSMDXEditor';
 import { EditorChromeToggles } from './EditorChromeToggles';
+import { EditorFrame } from './EditorFrame';
 import { LocaleSelector } from './LocaleSelector';
 import { MDXLivePreview } from './MDXLivePreview';
 
@@ -57,7 +56,6 @@ export function BlockEditor() {
   // editor until the loaded value has been written into state.
   const [isContentLoaded, setIsContentLoaded] = useState(false);
   const savedContentRef = useRef<string>('');
-  const editorRef = useRef<MDXEditorMethods>(null);
 
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [previewOpen, setPreviewOpen] = useEditorPref('conloca.mdxeditor.previewOpen');
@@ -324,13 +322,18 @@ export function BlockEditor() {
       )}
       <div className="flex-1 overflow-hidden flex flex-row min-h-0">
         <div className="flex-1 min-w-0 overflow-hidden">
-          <CMSMDXEditor
-            // Re-mount on locale switch so the editor re-initializes with the
-            // new locale's markdown — `markdown` prop changes are otherwise
-            // ignored after first mount.
+          <EditorFrame
+            // Re-mount on locale switch so the iframe-side editor
+            // re-initializes with the new locale's markdown — `value` is
+            // read once on first mount inside the iframe.
             key={`${id}-${currentLocale}`}
-            ref={editorRef}
             value={content}
+            // Block content has no canonical page route, so there's no
+            // `previewRouteUrl` to drive per-page CSS discovery. The
+            // editor falls back to the static editor stylesheet — the
+            // iframe's document boundary still provides the cascade
+            // isolation that the page editor relies on.
+            previewRouteUrl={undefined}
             onChange={(next, initialNormalize) => {
               setContent(next);
               // See MdxPageEditor: the library's first onChange call after
