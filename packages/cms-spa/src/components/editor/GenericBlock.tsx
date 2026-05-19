@@ -112,7 +112,7 @@ const RENDER_ENDPOINT = '/__cms/api/render';
 const renderCache = new Map<string, string>();
 
 function cacheKey(req: RenderRequest): string {
-  return `${req.documentIndex}::${stableStringify(req.tree as unknown as AnyProps)}`;
+  return `${req.documentIndex}::${req.inline ? 'inline::' : ''}${stableStringify(stripBodyFields(req.tree as unknown as AnyProps) as AnyProps)}`;
 }
 
 function stableStringify(obj: AnyProps): string {
@@ -128,6 +128,29 @@ function stableStringify(obj: AnyProps): string {
     return v;
   };
   return JSON.stringify(sort(obj));
+}
+
+/**
+ * Strip the `body` and `bodyHtml` fields from every node in the render
+ * tree. Cache keys should hash only structural shape (component names,
+ * import sources, props, child topology) — NOT prose body text. When a
+ * user types inside a portaled `<NestedLexicalEditor>` the leaf body
+ * mdast changes; without this strip every keystroke would mint a
+ * different cache key and force a server roundtrip — even though the
+ * SSR HTML itself doesn't change (the body lives in the portaled slot,
+ * not in the SSR'd markup the cache serves).
+ */
+function stripBodyFields(node: unknown): unknown {
+  if (Array.isArray(node)) return node.map(stripBodyFields);
+  if (node && typeof node === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
+      if (k === 'body' || k === 'bodyHtml') continue;
+      out[k] = stripBodyFields(v);
+    }
+    return out;
+  }
+  return node;
 }
 
 async function fetchRendered(req: RenderRequest): Promise<string> {
@@ -200,18 +223,97 @@ function effectiveChildren(node: { children?: unknown[] }): unknown[] {
 }
 
 /**
- * Extract the visible text content of an mdast subtree. Used to ship
- * a leaf child's body as a static fallback inside its `<conloca-slot>`
- * marker in container-mode SSR, so authored text shows up. Doesn't
- * format inline marks (bold/italic/links) — Phase 3 replaces this
- * with a real editor portal, which will own formatting.
+ * Parse a slot id like `"root.0.1"` into a numeric path `[0, 1]`. The
+ * leading `"root"` is the buildRenderTree prefix and isn't a real
+ * index; each subsequent segment is an index into the kids array as
+ * `buildRenderTree` saw it (post-effectiveChildren-unwrap and
+ * post-named-slot-filter). The empty path corresponds to the root
+ * itself, which is never an inline-editable slot (it's the parent we
+ * SSR'd) — included only for completeness.
  */
-function extractText(node: unknown): string {
-  if (!node || typeof node !== 'object') return '';
-  const n = node as { type?: string; value?: unknown; children?: unknown[] };
-  if (n.type === 'text' && typeof n.value === 'string') return n.value;
-  if (Array.isArray(n.children)) return n.children.map(extractText).join('');
-  return '';
+function slotIdToPath(slotId: string): number[] {
+  return slotId
+    .split('.')
+    .slice(1)
+    .map((s) => Number.parseInt(s, 10));
+}
+
+/**
+ * Walk the mdast tree following the same logic `buildRenderTree` uses
+ * (effectiveChildren unwrap → named-slot filter → kid at index) and
+ * return the subtree at `path`. Returns `null` when the path doesn't
+ * resolve (eg the structure changed between SSR and this walk).
+ */
+function getMdastAtPath(root: unknown, path: number[]): MdxJsxFlowElement | null {
+  let node: unknown = root;
+  for (const step of path) {
+    if (!node || typeof node !== 'object') return null;
+    const allKids = effectiveChildren(node as { children?: unknown[] });
+    const kids = allKids.filter((k) => getNamedSlotName(k) == null);
+    node = kids[step];
+    if (!node) return null;
+  }
+  return (node as MdxJsxFlowElement) ?? null;
+}
+
+/**
+ * Return a NEW root with the subtree at `path` having its `children`
+ * replaced by `newChildren`. The walk mirrors `getMdastAtPath` —
+ * effectiveChildren unwrap + named-slot filter — and the write
+ * reverses the unwrap when it happened, so the original mdast shape
+ * (paragraph wrapper or not) round-trips on save.
+ *
+ * Empty `path` means "replace the root's children" — the only caller
+ * for that case would be the top-level editor, which doesn't go
+ * through this path.
+ */
+function replaceMdastAtPath(
+  root: MdxJsxFlowElement,
+  path: number[],
+  newChildren: MdxJsxFlowElement['children'],
+): MdxJsxFlowElement {
+  if (path.length === 0) {
+    return { ...root, children: newChildren };
+  }
+  const [head, ...rest] = path;
+  const originalKids = (root.children ?? []) as unknown[];
+
+  // Detect the same paragraph-unwrap effectiveChildren did on read.
+  const isUnwrapped =
+    originalKids.length === 1 && (originalKids[0] as { type?: string } | undefined)?.type === 'paragraph';
+  const workingKids = isUnwrapped ? ((originalKids[0] as { children?: unknown[] }).children ?? []) : originalKids;
+
+  // Walk `workingKids` skipping named-slot children, find the original
+  // index in `workingKids` that corresponds to filtered-index `head`.
+  let filteredIdx = 0;
+  let originalIdx = -1;
+  for (let i = 0; i < workingKids.length; i++) {
+    if (getNamedSlotName(workingKids[i]) != null) continue;
+    if (filteredIdx === head) {
+      originalIdx = i;
+      break;
+    }
+    filteredIdx++;
+  }
+  if (originalIdx === -1) return root;
+
+  const targetKid = workingKids[originalIdx] as MdxJsxFlowElement;
+  const updatedKid =
+    rest.length === 0
+      ? ({ ...targetKid, children: newChildren } as MdxJsxFlowElement)
+      : replaceMdastAtPath(targetKid, rest, newChildren);
+
+  const newWorkingKids = [...workingKids];
+  newWorkingKids[originalIdx] = updatedKid;
+
+  if (isUnwrapped) {
+    const paragraphWrap = originalKids[0] as { children?: unknown[] };
+    return {
+      ...root,
+      children: [{ ...paragraphWrap, children: newWorkingKids }] as MdxJsxFlowElement['children'],
+    };
+  }
+  return { ...root, children: newWorkingKids as MdxJsxFlowElement['children'] };
 }
 
 function escapeHtml(s: string): string {
@@ -481,11 +583,15 @@ function buildRenderTree(
   // no wrapper.
   const bodyHtml = !hasJsxChildren && bodyNeedsStaticHtml(kids) ? mdastToHtml({ children: kids }) : undefined;
 
-  // Nested leaves get a static text fallback inside their slot so
-  // they display authored text even without an editor portal. Root
-  // leaves stay empty so their portaled editor owns the body. Skip
-  // when bodyHtml is set — that path replaces the slot wrapper.
-  const body = !hasJsxChildren && !isRoot && !bodyHtml ? escapeHtml(extractText({ children: kids })) : undefined;
+  // Previously, nested leaves shipped a static-text `body` fallback
+  // inside their slot so authored text was visible even without an
+  // inline editor — back when only the root slot got a Lexical
+  // portal. Every container child now gets its own `ContainerSlotEditor`
+  // portaled in (see `GenericBlock`), so the slot's owner is always
+  // an editor. Emitting `body` here would render the same text twice:
+  // once as static text from the SSR'd slot, once via the portaled
+  // editor's contentEditable. Always omit.
+  const body: string | undefined = undefined;
 
   return {
     component: name,
@@ -526,6 +632,42 @@ function isPureContainer(node: MdxJsxFlowElement): boolean {
     return false;
   }
   return sawJsx;
+}
+
+/**
+ * One nested editor scoped to a single child inside a container's
+ * render-tree. The parent's MDXEditor `JsxNode` owns the WHOLE mdast
+ * subtree (CardGrid + its Cards + grandchildren) as one opaque blob;
+ * we can't give each child its own Lexical node within the library's
+ * data model. Instead, this component sits inside the parent's JsxEditor
+ * context (via `<NestedLexicalEditor>`) and uses `getContent` /
+ * `getUpdatedMdastNode` to read and write a SPECIFIC child by mdast
+ * path. The same `effectiveChildren` unwrap that buildRenderTree did
+ * on read is mirrored in the write helper so the original tree shape
+ * round-trips on save.
+ *
+ * Concurrency caveat: when two `ContainerSlotEditor` instances inside
+ * the same parent both fire `getUpdatedMdastNode`, each sees the
+ * parent snapshot captured by `useMdastNodeUpdater` at its render
+ * time. MDXEditor's `discrete: true` update path makes the parent
+ * commit synchronously between blurs and React re-renders before
+ * the next blur could fire, so blur-driven prose edits are safe. The
+ * race exists only for non-blur updates (codemirror's
+ * `NESTED_EDITOR_UPDATED_COMMAND` while still focused) — vanishingly
+ * rare in container-child editing today.
+ */
+function ContainerSlotEditor({ path }: { path: number[] }) {
+  return (
+    <NestedLexicalEditor<MdxJsxFlowElement>
+      getContent={(parent) => {
+        const target = getMdastAtPath(parent, path);
+        return (target?.children as Mdast.PhrasingContent[]) ?? [];
+      }}
+      getUpdatedMdastNode={(parent, newChildren) =>
+        replaceMdastAtPath(parent, path, newChildren as MdxJsxFlowElement['children'])
+      }
+    />
+  );
 }
 
 export function GenericBlock({ mdastNode }: JsxEditorProps) {
@@ -614,6 +756,10 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
   const [error, setError] = useState<string | null>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const [slotEl, setSlotEl] = useState<Element | null>(null);
+  /** Container-mode slots: slot-id → element. Each entry portals a
+   * `<ContainerSlotEditor>` into that element so every child's body
+   * is inline-editable, even when N children share one SSR'd wrapper. */
+  const [containerSlots, setContainerSlots] = useState<Map<string, Element>>(() => new Map());
 
   // Fetch (or serve from cache) the rendered HTML on prop changes.
   useEffect(() => {
@@ -635,21 +781,35 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
   }, [renderReq]);
 
   // Imperatively swap the wrapper's inner HTML when the rendered
-  // string changes, then locate the body slot to portal the nested
-  // editor into. In container mode the SSR'd HTML has one slot per
-  // child (each child's editable body) — we don't portal into any of
-  // them yet, so child bodies aren't inline-editable but layout +
-  // positional CSS work. The single-slot case (leaf) keeps the same
-  // portal flow as before.
+  // string changes, then locate every body slot in the SSR'd markup.
+  //
+  // Leaf mode: one `<conloca-slot>` at the root, portaled with a
+  // single `<NestedLexicalEditor>` for the component's body.
+  //
+  // Container mode: each child JSX node also emits a slot (carrying
+  // its `data-slot-id` from the buildRenderTree path). Each gets its
+  // own portaled `<ContainerSlotEditor>` scoped to that child's mdast
+  // subtree via path resolution — so editing the body of a Card
+  // inside a CardGrid works the same as editing the body of a
+  // root-level Aside.
   useEffect(() => {
     const wrap = wrapperRef.current;
     if (!wrap || html == null) return;
     wrap.innerHTML = html;
     if (containerMode) {
-      // Multiple slots — no single body to portal into here. The next
-      // iteration adds per-child portals for inline editing.
+      // Multiple slots — discover them all and key by slot-id so the
+      // path resolution in `ContainerSlotEditor` can find the right
+      // mdast subtree to edit.
+      const next = new Map<string, Element>();
+      const slotEls = wrap.querySelectorAll(`${SLOT_TAG}[data-slot-id]`);
+      for (const el of Array.from(slotEls)) {
+        const slotId = el.getAttribute('data-slot-id');
+        if (slotId) next.set(slotId, el);
+      }
+      setContainerSlots(next);
       setSlotEl(null);
     } else {
+      setContainerSlots(new Map());
       setSlotEl(wrap.querySelector(SLOT_TAG));
     }
   }, [html, containerMode]);
@@ -739,7 +899,17 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
       {source && !error ? (
         <>
           <div ref={wrapperRef} className="conloca-generic-block__rendered" />
+          {/* Leaf mode: one slot at the wrapper level, portaled with a
+              single nested editor for the block's body. */}
           {slotEl && createPortal(slot, slotEl)}
+          {/* Container mode: each child JSX node also emits a slot
+              with its `data-slot-id`. Portal a `ContainerSlotEditor`
+              into each, scoped to that child's mdast subtree via
+              path resolution. */}
+          {containerMode &&
+            Array.from(containerSlots).map(([slotId, el]) =>
+              createPortal(<ContainerSlotEditor key={slotId} path={slotIdToPath(slotId)} />, el),
+            )}
         </>
       ) : (
         <div className="conloca-generic-block__fallback" data-mdx-block={name}>
