@@ -86,8 +86,19 @@ interface RenderRequest {
    * children. Server prepends `documentIndex - 1` hidden phantom
    * siblings inside the wrapper so the real component lands at
    * `:nth-child(N)` for positional CSS rules.
+   *
+   * Inline (text-kind) components aren't root flow children, so they
+   * skip this — set to 0 (or omit) to suppress the wrapping div + phantoms.
    */
   documentIndex: number;
+  /**
+   * When true, the server emits inline HTML with no `<div
+   * class="sl-markdown-content">` wrapper and no phantom siblings,
+   * suitable for splicing into a paragraph's text flow. Used for
+   * text-kind components like `<Icon>` whose published markup is an
+   * inline `<svg>`.
+   */
+  inline?: boolean;
 }
 
 const SLOT_TAG = 'conloca-slot';
@@ -530,13 +541,23 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
   const descriptor = found && isJsxDescriptor(found) ? found : null;
   const source = descriptor?.import?.from;
 
+  // Inline (text-kind) components — `<Icon>`, anything rendered as
+  // `mdxJsxTextElement` — sit inside a paragraph's text flow and must
+  // NOT carry block wrappers. The phantom-sibling / `sl-markdown-content`
+  // path only makes sense for root-level flow blocks (Card colour
+  // cycle, CSS-grid placement); for inline elements it would force a
+  // line break and stack hidden siblings around the glyph.
+  const isInline = descriptor?.kind === 'text';
+
   // This block's 1-based position among Lexical's root-level children.
   // Passed to the render endpoint so it can prepend phantom siblings and
   // restore the same `:nth-child(N)` position the live page would have.
   // Subscribes to the parent editor so the index updates when the user
-  // adds, deletes, or reorders blocks above this one.
+  // adds, deletes, or reorders blocks above this one. Inline components
+  // skip this entirely — they aren't root children.
   const [documentIndex, setDocumentIndex] = useState(1);
   useEffect(() => {
+    if (isInline) return;
     const computeIndex = () => {
       parentEditor.getEditorState().read(() => {
         const me = $getNodeByKey(lexicalNode.getKey());
@@ -555,7 +576,7 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
     };
     computeIndex();
     return parentEditor.registerUpdateListener(computeIndex);
-  }, [parentEditor, lexicalNode]);
+  }, [parentEditor, lexicalNode, isInline]);
 
   // Container mode: when all of this node's children are themselves
   // JSX flow elements with known descriptors, we render the whole
@@ -582,9 +603,9 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
 
   const propsJson = useMemo(() => stableStringify(attrs), [attrs]);
   const renderReq = useMemo<RenderRequest | null>(
-    () => (tree ? { tree, documentIndex } : null),
+    () => (tree ? { tree, documentIndex, ...(isInline ? { inline: true } : {}) } : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [tree, documentIndex, propsJson],
+    [tree, documentIndex, propsJson, isInline],
   );
 
   const [html, setHtml] = useState<string | null>(() =>
@@ -679,6 +700,31 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
         // eslint-disable-next-line react/no-danger
         dangerouslySetInnerHTML={{ __html: rawHtml }}
       />
+    );
+  }
+
+  // Text-kind components are inline glyphs (Icon, raw-HTML inline tags).
+  // Wrapping them in a `<div>` would force a line break inside the
+  // paragraph that contains them. Use `<span>` wrappers and a class
+  // modifier so CSS can drop block-level styling for this path.
+  if (isInline) {
+    return (
+      <span className="conloca-generic-block conloca-generic-block--inline" onMouseDownCapture={handleSelect}>
+        {source && !error ? (
+          <>
+            <span
+              ref={wrapperRef as unknown as React.RefObject<HTMLSpanElement>}
+              className="conloca-generic-block__rendered"
+            />
+            {slotEl && createPortal(slot, slotEl)}
+          </>
+        ) : (
+          <span className="conloca-generic-block__fallback" data-mdx-block={name}>
+            <span className="conloca-generic-block__fallback-label">{name}</span>
+            <span className="conloca-generic-block__fallback-body">{slot}</span>
+          </span>
+        )}
+      </span>
     );
   }
 

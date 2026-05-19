@@ -343,6 +343,41 @@ body.mdxeditor-focus-mode .mdxeditor-root-contenteditable {
     position: relative;
   }
 
+  /* Inline modifier — applied by GenericBlock when the descriptor's
+   * `kind === 'text'`. Sites the wrapper in text flow (eg an Icon
+   * inside a paragraph) instead of forcing a new block context.
+   * No vertical margin: the surrounding text controls line spacing.
+   *
+   * The `.sl-markdown-content` rule also flattens the host-wrapper
+   * `<div>` the render endpoint still emits when the dev server has
+   * not yet restarted with the inline-aware code path. `display:
+   * contents` makes the wrapper transparent so the inline `<svg>`
+   * inside flows as a sibling of surrounding text. Once the server
+   * restarts and stops emitting the wrapper for inline requests,
+   * this rule has no element to match — safe to leave for resilience. */
+  .conloca-generic-block--inline,
+  .conloca-generic-block--inline .conloca-generic-block__rendered {
+    display: inline;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+  }
+  .conloca-generic-block--inline .sl-markdown-content {
+    display: contents;
+  }
+  /* Tailwind preflight (in the `base` sub-layer of `cms-admin`)
+   * declares `svg { display: block; vertical-align: middle }`. For
+   * Icon — a text-kind component whose payload is a single inline
+   * SVG — that wipes the line and forces a wrap. Pin display back to
+   * `inline-block` so the glyph sits in text flow with surrounding
+   * letters. `!important` because the host CSS in
+   * `conloca-host-preview` (later layer) may declare its own svg
+   * rules; the inline wrapper's class scopes this fix tightly enough
+   * that nothing inside SSR'd block components is affected. */
+  .conloca-generic-block--inline svg {
+    display: inline-block !important;
+    vertical-align: -0.125em;
+  }
+
   /* MDXEditor's contentEditable wraps the entire editor surface and
    * sets text-editing properties on itself (`white-space: pre-wrap`,
    * `word-break: break-word`, etc.) so user-typed spaces and long
@@ -448,6 +483,7 @@ body.mdxeditor-focus-mode .mdxeditor-root-contenteditable {
 .mdxeditor p:has(> span > .conloca-generic-block):has(+ p > span > .conloca-generic-block) {
   margin-bottom: 0;
 }
+
 
 /* Right-side props panel — appears next to the MDX editor surface,
  * shows the descriptor's `props` as form fields for the currently

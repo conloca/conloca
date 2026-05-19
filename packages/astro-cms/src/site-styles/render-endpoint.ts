@@ -85,10 +85,21 @@ export function createRenderEndpoint(server: ViteDevServer): Connect.NextHandleF
       // with `(documentIndex - 1)` hidden phantom siblings so root-level
       // components match the live page's `:nth-child(N)` position. See
       // earlier commit for the rationale (Starlight Card cycle).
-      const documentIndex = body.documentIndex;
-      const phantomCount = typeof documentIndex === 'number' && documentIndex > 0 ? documentIndex - 1 : 0;
-      const phantoms = phantomCount > 0 ? '<span hidden aria-hidden="true"></span>'.repeat(phantomCount) : '';
-      const html = `<div class="sl-markdown-content">${phantoms}${rendered}</div>`;
+      //
+      // Inline (text-kind) requests skip the wrapper entirely: the
+      // rendered HTML is destined for inline text flow (eg an Icon's
+      // `<svg>` inside a paragraph), where a block wrapper would force
+      // a line break and phantom siblings make no sense (the node
+      // isn't a root flow child).
+      let html: string;
+      if (body.inline) {
+        html = rendered;
+      } else {
+        const documentIndex = body.documentIndex;
+        const phantomCount = typeof documentIndex === 'number' && documentIndex > 0 ? documentIndex - 1 : 0;
+        const phantoms = phantomCount > 0 ? '<span hidden aria-hidden="true"></span>'.repeat(phantomCount) : '';
+        html = `<div class="sl-markdown-content">${phantoms}${rendered}</div>`;
+      }
 
       res.statusCode = 200;
       res.setHeader('content-type', 'text/html; charset=utf-8');
@@ -137,6 +148,12 @@ interface RequestBody {
   props?: Record<string, unknown>;
   // Top-level wrapping
   documentIndex?: number;
+  /** When true, suppress the `<div class="sl-markdown-content">` wrapper
+   * and phantom siblings — the rendered HTML is destined for inline
+   * text flow (eg `<Icon>`), where a block wrapper would force a line
+   * break and phantom siblings make no sense (the node isn't a root
+   * flow child). */
+  inline?: boolean;
 }
 
 async function renderTree(
