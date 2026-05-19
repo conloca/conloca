@@ -5,6 +5,7 @@ import type { UIConfig } from '@conloca/cms-spa';
 import viteReact from '@vitejs/plugin-react';
 import type { AstroIntegration } from 'astro';
 import { searchForWorkspaceRoot } from 'vite';
+import { createRegistryEndpoint } from './discovery/registry-endpoint.js';
 import { deriveComponentPaths, type HydrationDiscovery, scanForHydratableComponents } from './lib/hydration-scanner.js';
 import { normalizeRoutingConfig, resolveRouteConfig } from './lib/routing-config.js';
 import type { ConlocaLocales } from './locales-helpers.js';
@@ -96,6 +97,21 @@ export interface ConlocaCMSOptions extends Omit<UIConfig, 'basename'> {
    * @example ['src/components/puck']
    */
   componentPaths?: string[];
+
+  /**
+   * Folders to scan for locally-authored MDX components. Their
+   * `interface Props { ... }` is parsed into the editor's prop
+   * panel automatically — no hand-written descriptors needed.
+   *
+   * Combined with the MDX usage scan (which picks up imports from
+   * npm packages like `@astrojs/starlight/components`), this powers
+   * the auto-discover registry served at `/__cms/api/registry`.
+   *
+   * Paths are project-relative. Defaults to `['src/components/mdx']`.
+   *
+   * @example ['src/components/mdx', 'src/components/blocks']
+   */
+  mdxComponentFolders?: string[];
 
   /**
    * Path to the assets directory for image uploads.
@@ -853,6 +869,35 @@ if (import.meta.hot) {
                 apply: 'serve' as const,
                 configureServer(server) {
                   server.middlewares.use(`${cmsRoute}/api/render`, createRenderEndpoint(server));
+                },
+              },
+              {
+                // Auto-discover registry endpoint. Scans MDX content for
+                // imports + usages and the configured local component
+                // folders for `interface Props { ... }`, merges into a
+                // single descriptor list, returns it as JSON. The SPA
+                // fetches this on mount and seeds `setMdxComponents`,
+                // replacing the hand-written `mdx-components.tsx` flow.
+                name: 'conloca-registry-endpoint',
+                apply: 'serve' as const,
+                configureServer(server) {
+                  const { handler, invalidate } = createRegistryEndpoint(server, {
+                    contentRoot: options.mdxPages?.root ?? options.contentRoot,
+                    componentFolders: options.mdxComponentFolders ?? ['src/components/mdx'],
+                    projectRoot: process.cwd(),
+                  });
+                  server.middlewares.use(`${cmsRoute}/api/registry`, handler);
+
+                  // Invalidate the cached scan whenever an .mdx file or
+                  // any component file changes. Coarse for now — every
+                  // change re-scans everything; cheap enough for typical
+                  // project sizes.
+                  const onFsChange = (filepath: string) => {
+                    if (/\.(mdx|astro|tsx)$/.test(filepath)) invalidate();
+                  };
+                  server.watcher.on('add', onFsChange);
+                  server.watcher.on('change', onFsChange);
+                  server.watcher.on('unlink', onFsChange);
                 },
               },
               {
