@@ -50,7 +50,11 @@ export function JsxPropsPanel() {
               label={prop.label}
               help={prop.help}
               required={prop.required}
-              value={attrs[prop.name] ?? ''}
+              value={(() => {
+                const v = attrs[prop.name];
+                if (v == null) return '';
+                return typeof v === 'string' ? v : JSON.stringify(v);
+              })()}
               options={prop.type === 'string' ? prop.options : undefined}
               onChange={(next) => onPropChange(prop.name, next)}
             />

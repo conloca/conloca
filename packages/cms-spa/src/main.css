@@ -343,6 +343,33 @@ body.mdxeditor-focus-mode .mdxeditor-root-contenteditable {
     position: relative;
   }
 
+  /* MDXEditor's contentEditable wraps the entire editor surface and
+   * sets text-editing properties on itself (`white-space: pre-wrap`,
+   * `word-break: break-word`, etc.) so user-typed spaces and long
+   * words preserve correctly. The *inherited* members of that set
+   * cascade into every descendant — including the SSR'd component
+   * preview HTML, which doesn't want them. On the published page
+   * those properties hold their user-agent defaults; the host's CSS
+   * doesn't override them because it never has to. So the leak is
+   * one-directional: editor → preview, no rule from the host to
+   * counter it.
+   *
+   * Each property is set to its CSS spec initial value (the same the
+   * UA uses on the live page). `revert` doesn't work here because the
+   * contentEditable ancestor declares `pre-wrap` via inline style;
+   * inheritance flows through and `revert` only rolls back rules that
+   * target this element directly. Explicit values force the cascade.
+   * If MDXEditor adds another text-editing property that leaks
+   * visibly, add it to this list with its spec initial value.
+   *
+   * The nested editor portal mounts its own contentEditable inside
+   * `<conloca-slot>`, so the editable body inside a component
+   * re-establishes its own text-editing properties. */
+  .conloca-generic-block__rendered {
+    white-space: normal;
+    word-break: normal;
+  }
+
   .conloca-generic-block__error {
     font-size: 0.75rem;
     color: rgb(220 38 38);
@@ -401,6 +428,25 @@ body.mdxeditor-focus-mode .mdxeditor-root-contenteditable {
     padding: 0 !important;
     margin: 0 !important;
   }
+}
+
+/* Adjacent JSX blocks: when two consecutive Lexical paragraphs each
+ * wrap a single JSX block (Aside, Card, etc.), drop the first
+ * paragraph's bottom margin so the two blocks sit closer together.
+ *
+ * Lexical's default 20px margin between block paragraphs stacks on
+ * top of the 28px cursor-placement zone inside the paragraph,
+ * producing a 48px gap between adjacent JSX blocks — much wider than
+ * the ~16px the live page shows. Dropping the margin brings the gap
+ * to ~28px without removing the cursor zone (so clicking between
+ * blocks still works for adding text).
+ *
+ * Declared OUTSIDE `@layer cms-admin` because the prose rule that
+ * sets `margin-bottom: 1.25rem` on paragraphs (in `@conloca/mdx`'s
+ * `prose.css`) is unlayered, and unlayered rules win over layered
+ * ones regardless of specificity. */
+.mdxeditor p:has(> span > .conloca-generic-block):has(+ p > span > .conloca-generic-block) {
+  margin-bottom: 0;
 }
 
 /* Right-side props panel — appears next to the MDX editor surface,

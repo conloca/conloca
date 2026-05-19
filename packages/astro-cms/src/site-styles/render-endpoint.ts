@@ -2,37 +2,49 @@ import { experimental_AstroContainer } from 'astro/container';
 import type { Connect, ViteDevServer } from 'vite';
 
 /**
- * Vite middleware that renders a single MDX component to HTML on demand.
+ * Vite middleware that renders an MDX JSX subtree to HTML on demand.
  *
- * Used by the CMS editor SPA to display authored components (Aside, Card,
- * Tabs, …) inside the editor with the same markup the framework emits at
- * request time — so the auto-discovered site CSS already in the editor
- * document styles them identically to the published page, without any
- * lookalike template hardcoded in Conloca.
+ * Container components (CardGrid, Tabs, …) have JSX children that on
+ * the published page render as direct DOM children of the parent —
+ * positional CSS (`:nth-child` colour cycling on Card grids, CSS-grid
+ * placement) depends on that DOM shape. Per-block isolated rendering
+ * breaks both: each child gets its own wrapper, and the parent's only
+ * direct child is a slot marker.
+ *
+ * This endpoint renders a recursive tree: each node provides its
+ * component name + source + props, optionally with its own `children`
+ * tree. The server renders leaves first and assembles parents by
+ * passing rendered children HTML as the parent's default slot, so the
+ * final markup matches what Astro would emit for the same MDX
+ * source — same DOM, same CSS context.
  *
  * Request shape (JSON body):
- *   { component: string, source: string, defaultExport?: boolean,
- *     props?: Record<string, unknown> }
+ *   {
+ *     tree: {
+ *       component: string,
+ *       source: string,
+ *       defaultExport?: boolean,
+ *       props?: Record<string, unknown>,
+ *       slotId: string,
+ *       children?: RenderTreeNode[]
+ *     },
+ *     documentIndex?: number  // wraps top-level output to fix
+ *                             // sibling-position CSS for root-level
+ *                             // blocks (see phantom-sibling fix).
+ *   }
  *
- * The component is loaded via Vite's `ssrLoadModule(source)` and looked
- * up as a named export by `component` (or as `default` when
- * `defaultExport: true`). It is then rendered with
- * `experimental_AstroContainer.renderToString`. A
- * `<conloca-slot></conloca-slot>` element is passed as the default slot
- * so the SPA can `querySelector` it in the returned HTML and replace it
- * with the nested Lexical editor via a React portal — preserving the
- * editor's mounting state across re-renders triggered by prop edits.
+ * Legacy shape (kept for backward compatibility):
+ *   { component, source, defaultExport?, props?, documentIndex? }
+ *
+ * For each node, the rendered slot content is either:
+ *   - The concatenated HTML of recursively-rendered children, if any.
+ *   - `<conloca-slot data-slot-id="<id>"></conloca-slot>` placeholder
+ *     otherwise (the SPA portals a Lexical editor into it).
  *
  * Returns 200 with `Content-Type: text/html` on success; 4xx with a
- * plain-text error otherwise. Errors are intentionally surfaced (not
- * swallowed) so the SPA can fall back to a generic wrapper visibly
- * rather than silently mis-render.
+ * plain-text error otherwise.
  */
-export function createRenderEndpoint(_server: ViteDevServer): Connect.NextHandleFunction {
-  // One container per dev session — reused across requests. The renderers
-  // map gets populated lazily on first request as it depends on Vite's
-  // SSR runtime to load Astro itself; doing this eagerly here would race
-  // with Astro's own startup sequence.
+export function createRenderEndpoint(server: ViteDevServer): Connect.NextHandleFunction {
   let containerPromise: Promise<experimental_AstroContainer> | null = null;
   const getContainer = () => {
     if (!containerPromise) containerPromise = experimental_AstroContainer.create();
@@ -48,47 +60,35 @@ export function createRenderEndpoint(_server: ViteDevServer): Connect.NextHandle
     }
 
     try {
-      const body = await readJson(req);
-      const { component, source, defaultExport, props } = body as {
-        component?: string;
-        source?: string;
-        defaultExport?: boolean;
-        props?: Record<string, unknown>;
+      const body = (await readJson(req)) as RequestBody;
+
+      // Normalize: accept either { tree } or the legacy flat shape.
+      const tree: RenderTreeNode = body.tree ?? {
+        component: body.component ?? '',
+        source: body.source ?? '',
+        defaultExport: body.defaultExport,
+        props: body.props,
+        slotId: 'root',
       };
 
-      if (!component || !source) {
+      if (!tree.component || !tree.source) {
         res.statusCode = 400;
         res.setHeader('content-type', 'text/plain');
-        res.end('Missing required fields: component, source');
-        return;
-      }
-
-      const module = (await _server.ssrLoadModule(source)) as Record<string, unknown>;
-      const exportKey = defaultExport ? 'default' : component;
-      const factory = module[exportKey];
-
-      if (typeof factory !== 'function') {
-        res.statusCode = 404;
-        res.setHeader('content-type', 'text/plain');
-        res.end(`Component '${component}' not found at '${source}' (export '${exportKey}')`);
+        res.end('Missing required fields: tree.component, tree.source');
         return;
       }
 
       const container = await getContainer();
-      const html = await container.renderToString(
-        factory as Parameters<experimental_AstroContainer['renderToString']>[0],
-        {
-          props,
-          slots: { default: '<conloca-slot></conloca-slot>' },
-          // Frameworks (Starlight, others) sometimes look up content via
-          // `Astro.locals.t(...)` set by their own middleware. The bare
-          // container has no middleware, so we provide a minimal fallback:
-          // strip the namespace, capitalize the leaf so 'asides.note' → 'Note'.
-          // Real content (titles, body) is always overridable via props in
-          // the editor — this only affects the framework's default labels.
-          locals: { t: defaultI18nFallback } as App.Locals,
-        },
-      );
+      const rendered = await renderTree(tree, container, server);
+
+      // Wrap top-level output in a host-marker parent (`.sl-markdown-content`)
+      // with `(documentIndex - 1)` hidden phantom siblings so root-level
+      // components match the live page's `:nth-child(N)` position. See
+      // earlier commit for the rationale (Starlight Card cycle).
+      const documentIndex = body.documentIndex;
+      const phantomCount = typeof documentIndex === 'number' && documentIndex > 0 ? documentIndex - 1 : 0;
+      const phantoms = phantomCount > 0 ? '<span hidden aria-hidden="true"></span>'.repeat(phantomCount) : '';
+      const html = `<div class="sl-markdown-content">${phantoms}${rendered}</div>`;
 
       res.statusCode = 200;
       res.setHeader('content-type', 'text/html; charset=utf-8');
@@ -100,6 +100,100 @@ export function createRenderEndpoint(_server: ViteDevServer): Connect.NextHandle
       res.end(`Render failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
+}
+
+interface RenderTreeNode {
+  component: string;
+  source: string;
+  defaultExport?: boolean;
+  props?: Record<string, unknown>;
+  slotId: string;
+  /** HTML-escaped text fallback for leaf body. Shown when no editor
+   * is portaled into the slot (eg inside container-rendered children
+   * before Phase 3 inline editing lands). */
+  body?: string;
+  /** Raw HTML that REPLACES the conloca-slot wrapper. Used for
+   * components whose Astro implementation validates the slot element
+   * type (Starlight's `<Steps>` requires `<ol>`, `<FileTree>` requires
+   * `<ul>`) — wrapping in `<conloca-slot>` makes the Container API
+   * render call throw. With `bodyHtml`, the validator sees the real
+   * element. No inline editing possible until per-position slot
+   * markers are added inside the rendered list. */
+  bodyHtml?: string;
+  children?: RenderTreeNode[];
+  /** Named-slot HTML keyed by slot name. Passed as additional slots
+   * to `container.renderToString`. Source MDX uses
+   * `<Fragment slot="...">…</Fragment>` to declare them. */
+  namedSlots?: Record<string, string>;
+}
+
+interface RequestBody {
+  // New shape
+  tree?: RenderTreeNode;
+  // Legacy shape (one component, no children)
+  component?: string;
+  source?: string;
+  defaultExport?: boolean;
+  props?: Record<string, unknown>;
+  // Top-level wrapping
+  documentIndex?: number;
+}
+
+async function renderTree(
+  node: RenderTreeNode,
+  container: experimental_AstroContainer,
+  server: ViteDevServer,
+): Promise<string> {
+  const module = (await server.ssrLoadModule(node.source)) as Record<string, unknown>;
+  const exportKey = node.defaultExport ? 'default' : node.component;
+  const factory = module[exportKey];
+
+  if (typeof factory !== 'function') {
+    throw new Error(`Component '${node.component}' not found at '${node.source}' (export '${exportKey}')`);
+  }
+
+  // Slot content priority:
+  //   1. `children` (recursive tree)    — pure-JSX container case.
+  //   2. `bodyHtml`                     — raw HTML emitted as-is, no
+  //                                       conloca-slot wrapper. For
+  //                                       components whose Astro
+  //                                       implementation validates the
+  //                                       slot's element type.
+  //   3. `<conloca-slot data-slot-id>{body}</conloca-slot>`
+  //                                     — default path for everything
+  //                                       else. The slot marker is the
+  //                                       portal target; `body` is the
+  //                                       static text fallback shown
+  //                                       when no portal is mounted.
+  let slotContent: string;
+  if (node.children && node.children.length > 0) {
+    const renderedChildren = await Promise.all(node.children.map((child) => renderTree(child, container, server)));
+    slotContent = renderedChildren.join('');
+  } else if (node.bodyHtml) {
+    slotContent = node.bodyHtml;
+  } else {
+    const fallback = node.body ?? '';
+    slotContent = `<conloca-slot data-slot-id="${escapeHtml(node.slotId)}">${fallback}</conloca-slot>`;
+  }
+
+  // Named slots (Astro's `<Fragment slot="header">` pattern) are
+  // passed alongside `default`. The client extracts them from mdast
+  // and ships each as an HTML string keyed by slot name.
+  const slots: Record<string, string> = { default: slotContent, ...(node.namedSlots ?? {}) };
+
+  return container.renderToString(factory as Parameters<experimental_AstroContainer['renderToString']>[0], {
+    props: node.props,
+    slots,
+    // Frameworks (Starlight, others) read content via `Astro.locals.t(...)`
+    // set by their middleware. The bare container has none, so we
+    // pass a fallback: strip namespace, capitalize the leaf
+    // ('asides.note' → 'Note'). Real titles/body come from props.
+    locals: { t: defaultI18nFallback } as App.Locals,
+  });
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function defaultI18nFallback(key: string): string {
