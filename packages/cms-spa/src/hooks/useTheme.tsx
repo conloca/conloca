@@ -32,6 +32,18 @@ function applyTheme(resolved: ResolvedTheme) {
   } else {
     root.classList.remove('dark');
   }
+  // Many host frameworks key dark-mode tokens off
+  // `:root[data-theme="dark"]` (Starlight, shadcn-style themes,
+  // custom setups). Mirror the resolved scheme as `data-theme` on
+  // <html> so host CSS reaching the editor surface (via
+  // `useFetchedSiteStyles`) resolves dark tokens the same way it does
+  // on the published page. Without this, host `:root.dark` rules
+  // (Tailwind class convention) fire but `[data-theme="dark"]` rules
+  // don't — and any token defined only in the latter falls back to
+  // its light value, producing visibly different text colors in the
+  // editor vs the live page.
+  root.setAttribute('data-theme', resolved);
+  root.style.colorScheme = resolved;
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {

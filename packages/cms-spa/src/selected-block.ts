@@ -26,7 +26,7 @@ export interface SelectedBlock {
   /** Descriptor providing the prop schema. */
   descriptor: MdxJsxComponentDescriptor;
   /** Current attribute values from the mdast node. */
-  attrs: Record<string, string>;
+  attrs: Record<string, unknown>;
   /** Apply a prop change. Wrapped by the owning block over its updater. */
   onPropChange: (name: string, value: string) => void;
   /** Remove the block from the document. */
@@ -44,14 +44,37 @@ declare global {
   }
 }
 
-function getState(): SharedState {
-  if (typeof window !== 'undefined') {
-    if (!window.__CONLOCA_SELECTED_BLOCK__) {
-      window.__CONLOCA_SELECTED_BLOCK__ = { selected: null, subscribers: new Set() };
+/**
+ * When the editor runs inside `EditorFrame`'s iframe, the block lives
+ * in the iframe's window but the side panel reading the selection
+ * lives in the parent. To keep one registry shared across both, prefer
+ * `window.parent` whenever it's a different same-origin window — the
+ * editor-side writes hit the parent's set and the parent-side hook
+ * picks them up. Standalone (top-window) usage falls through to the
+ * current window unchanged.
+ */
+function getRegistryHost(): Window | undefined {
+  if (typeof window === 'undefined') return undefined;
+  try {
+    if (window.parent && window.parent !== window) {
+      // Cross-origin access throws — gate access with the try/catch
+      // and fall back to the local window if the parent isn't ours.
+      void window.parent.document;
+      return window.parent;
     }
-    return window.__CONLOCA_SELECTED_BLOCK__;
+  } catch {
+    return window;
   }
-  return { selected: null, subscribers: new Set() };
+  return window;
+}
+
+function getState(): SharedState {
+  const host = getRegistryHost();
+  if (!host) return { selected: null, subscribers: new Set() };
+  if (!host.__CONLOCA_SELECTED_BLOCK__) {
+    host.__CONLOCA_SELECTED_BLOCK__ = { selected: null, subscribers: new Set() };
+  }
+  return host.__CONLOCA_SELECTED_BLOCK__;
 }
 
 /** Replace the currently-selected block. Pass `null` to clear. */

@@ -50,13 +50,13 @@ export const CMSMDXEditor = forwardRef<MDXEditorMethods, CMSMDXEditorProps>(({ p
   // in the cascade — admin chrome wins on collisions via layer order.
   const fetchedStyles = useFetchedSiteStyles(previewRouteUrl);
   const staticEditorStyles = useEditorStyles();
-  const usingFetched = fetchedStyles.length > 0;
-  const activeStyles = usingFetched ? fetchedStyles : staticEditorStyles;
-  // Fetched CSS is broad (Tailwind utilities, :root tokens, * preflight).
-  // Scope it to `.mdxeditor` so it can't leak into admin chrome (top bar,
-  // sidebars, modals). The narrow static path doesn't need scoping —
-  // those rules target host-component classes only.
-  useInjectHostStyles('conloca-host-preview', activeStyles, usingFetched ? '.mdxeditor' : undefined);
+  const activeStyles = fetchedStyles.length > 0 ? fetchedStyles : staticEditorStyles;
+  // The editor mounts inside `EditorFrame`'s iframe, which is its own
+  // document — host CSS can be injected raw without colliding with
+  // the admin chrome that lives in the parent window. Legacy
+  // same-document mounts (BlockEditor today) get the same untouched
+  // CSS; that path is slated to migrate to `EditorFrame` too.
+  useInjectHostStyles('conloca-host-preview', activeStyles);
   const jsxComponentDescriptors = useMemo<JsxComponentDescriptor[]>(
     // Filter to JSX flavors before translating — snippets live in the same
     // registry but aren't valid input for @mdxeditor/editor's jsxPlugin, and

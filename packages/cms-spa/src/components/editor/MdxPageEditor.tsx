@@ -5,7 +5,6 @@ import {
   useSitesConfig,
   useUpdateLocalized,
 } from '@conloca/content-api-client';
-import type { MDXEditorMethods } from '@mdxeditor/editor';
 import { ExternalLink, Settings } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -18,7 +17,7 @@ import { ConflictDialog } from '../dialogs/ConflictDialog';
 import { ErrorModal } from '../dialogs/ErrorModal';
 import { PageMetadataDialog } from '../dialogs/PageMetadataDialog';
 import { UnsavedChangesDialog } from '../dialogs/UnsavedChangesDialog';
-import { CMSMDXEditor } from './CMSMDXEditor';
+import { EditorFrame } from './EditorFrame';
 import { JsxPropsPanel } from './JsxPropsPanel';
 import { LocaleSelector } from './LocaleSelector';
 
@@ -59,7 +58,6 @@ export function MdxPageEditor() {
   // Mirror of the saved-on-disk content; used as the dirty-check anchor and
   // to seed the conflict dialog's force-save payload.
   const savedContentRef = useRef<string>('');
-  const editorRef = useRef<MDXEditorMethods>(null);
 
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [metadataDialogOpen, setMetadataDialogOpen] = useState(false);
@@ -374,12 +372,11 @@ export function MdxPageEditor() {
           and the page-level scrollbar takes over instead of the editor's. */}
       <div className="flex-1 overflow-hidden flex flex-row min-h-0">
         <div className="flex-1 min-w-0 overflow-hidden">
-          <CMSMDXEditor
-            // Re-mount on locale switch so the editor re-initializes with the
-            // new locale's markdown — `markdown` prop changes are otherwise
-            // ignored after first mount.
+          <EditorFrame
+            // Re-mount on locale switch so the iframe-side editor
+            // re-initializes with the new locale's markdown — `value`
+            // is read once on first mount inside the iframe.
             key={`${id}-${currentLocale}`}
-            ref={editorRef}
             value={content}
             // Pull the host's real CSS for this page's route. The page id
             // is the slug; the host renders it at `/<slug>/` for typical
