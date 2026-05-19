@@ -378,6 +378,47 @@ body.mdxeditor-focus-mode .mdxeditor-root-contenteditable {
     vertical-align: -0.125em;
   }
 
+  /* MDX expression chip — MDXEditor library renders `{frontmatter.title}`,
+   * `{cond && X}`, MDX comment expressions and other mdast-level
+   * expressions as a tiny `<input>` between literal `{` `}` characters.
+   * Functional
+   * (editable, round-trips on save) but visually looks like a broken
+   * form field next to prose. Style it like a code chip so authors
+   * read it as "this is a code expression I can edit" rather than
+   * "something is wrong here". Targets the library's hashed class
+   * via attribute substring; the inner input element keeps the
+   * library's behavior, we just paint the wrapper. */
+  [class*="_mdxExpression_"] {
+    display: inline-flex;
+    align-items: baseline;
+    padding: 0 0.35em;
+    margin: 0 0.1em;
+    border-radius: 0.25em;
+    background: rgb(0 0 0 / 0.05);
+    line-height: 1.4;
+    font-size: 0.92em;
+    color: var(--color-text-secondary, rgb(71, 85, 105));
+  }
+  :root.dark [class*="_mdxExpression_"],
+  :root[data-theme="dark"] [class*="_mdxExpression_"] {
+    background: rgb(255 255 255 / 0.08);
+    color: var(--color-text-secondary, rgb(203, 213, 225));
+  }
+  [class*="_mdxExpression_"] input {
+    background: transparent;
+    border: 0;
+    outline: 0;
+    padding: 0;
+    color: inherit;
+    font: inherit;
+  }
+  [class*="_mdxExpression_"] input:focus-visible {
+    /* Faint focus halo via box-shadow keeps the chip's rounded shape
+     * intact (a real border would shift layout). */
+    box-shadow: 0 0 0 1.5px rgb(59 130 246 / 0.55);
+    border-radius: 2px;
+  }
+
   /* MDXEditor's contentEditable wraps the entire editor surface and
    * sets text-editing properties on itself (`white-space: pre-wrap`,
    * `word-break: break-word`, etc.) so user-typed spaces and long
