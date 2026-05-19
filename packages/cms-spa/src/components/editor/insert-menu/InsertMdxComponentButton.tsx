@@ -62,14 +62,28 @@ export function InsertMdxComponentButton() {
   const publishMarkdown = usePublisher(insertMarkdown$);
 
   const groups = useMemo<DescriptorGroup[]>(() => {
-    const visible = allComponents.filter((d) => {
-      if (!d.insert) return false;
-      // Inline JSX (kind: 'text') is hidden from the toolbar because a
-      // block-level toolbar click would force the cursor out of its
-      // paragraph context. The slash menu handles inline insertion.
-      if (d.kind === 'text') return false;
-      return true;
-    });
+    const visible = allComponents
+      .filter((d) => {
+        // Inline JSX (kind: 'text') is hidden from the toolbar because a
+        // block-level toolbar click would force the cursor out of its
+        // paragraph context. The slash menu handles inline insertion.
+        if (d.kind === 'text') return false;
+        // Block-level (flow + snippet) descriptors are insertable by
+        // default. Hosts opt out by setting `insert: undefined` after
+        // discovery — but the auto-discover pipeline doesn't bother
+        // populating `insert` (sensible — every flow component should
+        // be insertable). Synthesizing a default below keeps the
+        // dropdown populated without server-side glue.
+        return true;
+      })
+      .map((d) =>
+        d.insert
+          ? d
+          : {
+              ...d,
+              insert: { label: d.name, category: d.kind === 'flow' ? 'Components' : 'Patterns' },
+            },
+      );
     return groupByCategory(visible.slice());
   }, [allComponents]);
 

@@ -218,6 +218,15 @@ class DescriptorBuilder {
       hasChildren: true, // default — most components accept a body slot.
       props,
       import: { from: this.source, ...(this.defaultExport ? { default: true } : {}) },
+      // Default `insert` metadata so the toolbar's "Insert component"
+      // dropdown surfaces every auto-discovered component. Without
+      // this, the toolbar's filter (`if (!d.insert) return false`)
+      // hides the entry and users have no way to add the block from
+      // the UI — only typed-out JSX would work. Hosts can still
+      // override label/category via sidecar `cmsConfig` on the
+      // component file (when that lands), but the sensible default
+      // is the component's own name in a single "Components" bucket.
+      insert: { label: this.name, category: 'Components' },
     };
     if (Object.keys(this.aliases).length > 0) descriptor.aliases = this.aliases;
     return descriptor;
