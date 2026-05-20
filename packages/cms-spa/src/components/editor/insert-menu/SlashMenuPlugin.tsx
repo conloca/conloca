@@ -59,7 +59,22 @@ export function SlashMenuPlugin() {
   const triggerFn = useBasicTypeaheadTriggerMatch('/', { minLength: 0, maxLength: 32 });
 
   const options = useMemo<MdxComponentOption[]>(() => {
-    const visible = allComponents.filter((d) => !!d.insert);
+    // Auto-discovered descriptors from `/__cms/api/registry` carry
+    // `insert: { label, category }` only after the dev server picks up
+    // the latest `merge-registry.ts`. Synthesize a default for anything
+    // that reaches us without one so the slash menu surfaces every
+    // block-level component the editor knows about, no server restart
+    // required. Hosts that want different labels can still override by
+    // setting `insert` explicitly. Same fallback strategy as
+    // `InsertMdxComponentButton`.
+    const visible = allComponents.map((d) =>
+      d.insert
+        ? d
+        : {
+            ...d,
+            insert: { label: d.name, category: d.kind === 'flow' ? 'Components' : 'Patterns' },
+          },
+    );
     const matching = visible.filter((d) => matchesQuery(d, queryString ?? ''));
     return matching.map((d) => new MdxComponentOption(d));
   }, [allComponents, queryString]);
