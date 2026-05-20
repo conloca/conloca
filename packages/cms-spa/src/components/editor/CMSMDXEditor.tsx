@@ -51,11 +51,13 @@ export const CMSMDXEditor = forwardRef<MDXEditorMethods, CMSMDXEditorProps>(({ p
   const fetchedStyles = useFetchedSiteStyles(previewRouteUrl);
   const staticEditorStyles = useEditorStyles();
   const activeStyles = fetchedStyles.length > 0 ? fetchedStyles : staticEditorStyles;
-  // The editor mounts inside `EditorFrame`'s iframe, which is its own
-  // document — host CSS can be injected raw without colliding with
-  // the admin chrome that lives in the parent window. Legacy
-  // same-document mounts (BlockEditor today) get the same untouched
-  // CSS; that path is slated to migrate to `EditorFrame` too.
+  // The editor mounts directly in the parent SPA's React tree (the
+  // EditorFrame iframe was removed). Host CSS is injected globally
+  // into the page document; chrome that visibly collides with the
+  // host's Tailwind utilities uses the cms-admin semantic palette
+  // (`bg-panel`, `text-foreground`, `border-line`, etc.) whose class
+  // names the host's Tailwind can't generate. See main.css's `@theme`
+  // and `@utility` blocks for the chrome token definitions.
   useInjectHostStyles('conloca-host-preview', activeStyles);
   const jsxComponentDescriptors = useMemo<JsxComponentDescriptor[]>(
     // Filter to JSX flavors before translating — snippets live in the same

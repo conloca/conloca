@@ -45,7 +45,7 @@ declare global {
 }
 
 /**
- * When the editor runs inside `EditorFrame`'s iframe, the block lives
+ * When the editor mounts in the parent SPA tree, the block lives
  * in the iframe's window but the side panel reading the selection
  * lives in the parent. To keep one registry shared across both, prefer
  * `window.parent` whenever it's a different same-origin window — the

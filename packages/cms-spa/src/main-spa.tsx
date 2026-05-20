@@ -24,7 +24,7 @@ export function mountSpa(): void {
 
   const queryClient = new QueryClient(config.queryClientOptions);
 
-  // Both the content-change listener and `<EditorFrame>` reach for
+  // The content-change listener (and the editor it drives) reach for
   // these on the window — exposing both keeps cross-window bridging
   // simple and lets the iframe-side editor reuse the parent's cache
   // and API client without duplicating connections.

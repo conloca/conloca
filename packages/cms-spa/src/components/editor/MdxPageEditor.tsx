@@ -17,7 +17,7 @@ import { ConflictDialog } from '../dialogs/ConflictDialog';
 import { ErrorModal } from '../dialogs/ErrorModal';
 import { PageMetadataDialog } from '../dialogs/PageMetadataDialog';
 import { UnsavedChangesDialog } from '../dialogs/UnsavedChangesDialog';
-import { EditorFrame } from './EditorFrame';
+import { CMSMDXEditor } from './CMSMDXEditor';
 import { JsxPropsPanel } from './JsxPropsPanel';
 import { LocaleSelector } from './LocaleSelector';
 
@@ -372,10 +372,11 @@ export function MdxPageEditor() {
           and the page-level scrollbar takes over instead of the editor's. */}
       <div className="flex-1 overflow-hidden flex flex-row min-h-0">
         <div className="flex-1 min-w-0 overflow-hidden">
-          <EditorFrame
-            // Re-mount on locale switch so the iframe-side editor
-            // re-initializes with the new locale's markdown — `value`
-            // is read once on first mount inside the iframe.
+          <CMSMDXEditor
+            // Re-mount on locale switch so the editor re-initializes with
+            // the new locale's markdown — `value` is read once on first
+            // mount (the underlying BaseMDXEditor seeds its Lexical state
+            // from the initial prop and doesn't reactively swap it).
             key={`${id}-${currentLocale}`}
             value={content}
             // Pull the host's real CSS for this page's route. The page id

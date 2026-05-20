@@ -197,11 +197,13 @@ export function useFetchedSiteStyles(routeUrl: string | undefined, options: { cm
  * `<style>` tag because they must come before other rules to be valid.
  * Hosts using Tailwind / Google Fonts depend on this.
  *
- * The pre-iframe era of this hook took a `scopeSelector` and wrapped
- * everything in `@scope (...)` to keep host CSS from leaking into the
- * admin chrome. With the editor now isolated in its own iframe (see
- * `EditorFrame.tsx`), no such scoping is needed — the iframe's
- * document boundary does the work.
+ * The chrome / host collision is handled at the class-name level —
+ * chrome surfaces that visibly overlap host's Tailwind utilities use
+ * the cms-admin semantic palette (`bg-panel`, `text-foreground`,
+ * `border-line`, etc.) whose names the host's Tailwind can't generate.
+ * Earlier iterations of this hook took a `scopeSelector` and wrapped
+ * everything in `@scope (...)`; that approach broke host components
+ * relying on ancestor selectors (eg `html.dark .starlight-aside`).
  */
 export function useInjectHostStyles(layerName: string, styles: SiteStyles): void {
   useEffect(() => {
