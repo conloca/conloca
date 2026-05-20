@@ -1,8 +1,11 @@
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { basename, dirname, extname, relative } from 'node:path';
+import { basename, dirname, extname, relative, resolve } from 'node:path';
 import fg from 'fast-glob';
+import type { Project } from 'ts-morph';
+import { extractAstroFrontmatter } from './astro-frontmatter.js';
+import { createScanProject, extractPropsViaTs } from './extract-props-ts.js';
 import type { MdxScanResult } from './scan-mdx';
 
 /**
@@ -12,14 +15,20 @@ import type { MdxScanResult } from './scan-mdx';
  * populate the CMS registry without the host hand-writing
  * `mdx-components.tsx`.
  *
- * The extraction is regex-based — not a real TS parser. That's
- * intentional: most authored components define `Props` as a flat
- * interface with primitive types, and regex covers that 90% case
- * without pulling in TypeScript or a full AST parser. Components
- * with complex generic Props, mapped types, or inheritance fall
- * through to "no inferred props" — the editor still discovers them
- * by name and lets the author edit attributes free-form. Sidecar
- * `cmsConfig` overrides cover anything the regex misses.
+ * Type extraction uses the TypeScript compiler API (via ts-morph,
+ * see `./extract-props-ts.ts`). Derived types — `(typeof X)[number]`,
+ * imported aliases, mapped types, conditional types — all resolve
+ * to their concrete shape, which is what makes the registry feel
+ * smart for real component libraries (eg Starlight's Aside, whose
+ * `type` prop uses indexed access). For `.astro` files we extract
+ * the leading `---` frontmatter block and feed it to the same
+ * extractor as a virtual `.ts` source.
+ *
+ * A single ts-morph Project is built per scan run and shared across
+ * every file in that run, so the per-file cost is small after the
+ * initial type-checker warmup. Sidecar `cmsConfig` overrides still
+ * apply (see `./scan-overrides.ts`) for components whose author
+ * wants to override or annotate fields beyond what the type says.
  *
  * Component name = basename of the file without extension.
  * Component source = the resolved file path. The render endpoint
@@ -87,10 +96,18 @@ export async function scanLocalComponents(folders: string[], projectRoot: string
     seen.add(name);
     allFiles.push(file);
   }
+  // One ts-morph Project per scan run, shared across every file
+  // we extract from. Building the Project loads `lib.dom.d.ts` etc.
+  // (the dominant cost ~500ms-2s); sharing across files amortises
+  // it. Fed the host's tsconfig when present so cross-file `typeof`
+  // refs and path mappings (`@/foo`) resolve as authored.
+  const tsConfigFilePath = findTsConfig(projectRoot);
+  const project = createScanProject(tsConfigFilePath);
+
   const results: LocalComponentScanResult[] = [];
   for (const file of allFiles) {
     try {
-      const r = await scanFile(file, projectRoot);
+      const r = await scanFile(file, projectRoot, project);
       if (r) results.push(r);
     } catch (err) {
       console.warn(`[conloca:discovery] failed to scan ${file}:`, err instanceof Error ? err.message : err);
@@ -99,14 +116,18 @@ export async function scanLocalComponents(folders: string[], projectRoot: string
   return results;
 }
 
-async function scanFile(filepath: string, projectRoot: string): Promise<LocalComponentScanResult | null> {
+async function scanFile(
+  filepath: string,
+  projectRoot: string,
+  project: Project,
+): Promise<LocalComponentScanResult | null> {
   const content = await readFile(filepath, 'utf8');
   const name = componentNameFromPath(filepath);
   // Components typically start with a capital. Lowercase-named files
   // are usually utilities, not authorable components — skip them so
   // we don't pollute the registry with `helpers.ts` and friends.
   if (!/^[A-Z]/.test(name)) return null;
-  const props = extractPropsInterface(content, name);
+  const props = extractPropsForFile(project, filepath, content, name);
   const importSpecifier = `/${relative(projectRoot, filepath).replace(/\\/g, '/')}`;
   return {
     filepath,
@@ -116,6 +137,39 @@ async function scanFile(filepath: string, projectRoot: string): Promise<LocalCom
     kind: 'flow',
     props,
   };
+}
+
+/**
+ * Bridge between the file-level scanner and the ts-morph extractor.
+ * Handles the three file types we accept:
+ *   - `.astro` — extract the `---`-fenced frontmatter, feed it as
+ *     a virtual `.ts` source.
+ *   - `.tsx` / `.d.ts` — feed the whole file content directly.
+ *
+ * The virtual source path is the real filepath suffixed with
+ * `.virtual.ts` for `.astro` files, so ts-morph's diagnostics still
+ * point back at the right author file. For `.tsx` / `.d.ts` we use
+ * the real path verbatim — ts-morph parses TS extensions natively.
+ */
+function extractPropsForFile(project: Project, filepath: string, content: string, componentName: string): ParsedProp[] {
+  if (filepath.endsWith('.astro')) {
+    const frontmatter = extractAstroFrontmatter(content);
+    if (!frontmatter) return [];
+    return extractPropsViaTs(project, `${filepath}.virtual.ts`, frontmatter, componentName);
+  }
+  return extractPropsViaTs(project, filepath, content, componentName);
+}
+
+/**
+ * Locate the host's `tsconfig.json` so the ts-morph Project can
+ * resolve cross-file `typeof` refs, path aliases, and node_modules
+ * declarations the same way the author's IDE does. Walks up from
+ * `projectRoot` looking for the closest tsconfig; returns `undefined`
+ * if none found (the Project then uses permissive defaults).
+ */
+function findTsConfig(projectRoot: string): string | undefined {
+  const candidate = resolve(projectRoot, 'tsconfig.json');
+  return existsSync(candidate) ? candidate : undefined;
 }
 
 /**
@@ -176,6 +230,11 @@ export async function scanExternalComponents(
   const specifiers = collectExternalSpecifiers(mdxScans);
   if (specifiers.size === 0) return [];
 
+  // Same Project-per-scan rationale as scanLocalComponents — pay the
+  // checker init cost once, share across every external file.
+  const tsConfigFilePath = findTsConfig(projectRoot);
+  const project = createScanProject(tsConfigFilePath);
+
   const results: LocalComponentScanResult[] = [];
   // `createRequire(projectRoot/package.json)` so resolution starts in
   // the consumer's tree. Without this, Node looks up modules relative
@@ -233,7 +292,7 @@ export async function scanExternalComponents(
 
       for (const file of scanFiles) {
         try {
-          const r = await scanExternalFile(file, specifier);
+          const r = await scanExternalFile(file, specifier, project);
           if (r) results.push(r);
         } catch (err) {
           console.warn(`[conloca:discovery] failed to scan ${file}:`, err instanceof Error ? err.message : err);
@@ -258,11 +317,15 @@ export async function scanExternalComponents(
  * npm specifier instead of the absolute file path. See the function
  * doc on `scanExternalComponents` for why.
  */
-async function scanExternalFile(filepath: string, specifier: string): Promise<LocalComponentScanResult | null> {
+async function scanExternalFile(
+  filepath: string,
+  specifier: string,
+  project: Project,
+): Promise<LocalComponentScanResult | null> {
   const content = await readFile(filepath, 'utf8');
   const name = componentNameFromPath(filepath);
   if (!/^[A-Z]/.test(name)) return null;
-  const props = extractPropsInterface(content, name);
+  const props = extractPropsForFile(project, filepath, content, name);
   return {
     filepath,
     name,
@@ -397,118 +460,10 @@ function findPackageRoot(resolvedPath: string): string | null {
   return null;
 }
 
-/**
- * Pull a Props-shaped interface block out of source and parse each
- * field. Three acceptable shapes the look-up tries in order:
- *
- *   1. `interface ${ComponentName}Props { ... }` / `type ${ComponentName}Props = { ... }`
- *      — the React/TSX convention. `Card.tsx` declares `interface
- *      CardProps`; `Dialog.d.ts` shipped from Radix declares
- *      `interface DialogProps`. We try this first so per-component
- *      `.d.ts` files in compiled packages get their schema.
- *
- *   2. `interface Props { ... }` / `type Props = { ... }`
- *      — the Astro convention. `Card.astro` declares `interface Props`
- *      because Astro always reads `Astro.props`, so the type name
- *      doesn't carry semantic load.
- *
- *   3. Nothing — return empty, descriptor still surfaces with
- *      usage-only inferred props (no `required` flag).
- *
- * Inside the braces, each prop is `name: type` or `name?: type`,
- * one per line (with optional trailing semicolons or commas).
- * Comments are stripped before matching.
- */
-function extractPropsInterface(source: string, componentName?: string): ParsedProp[] {
-  // Strip block + line comments so they don't confuse the field
-  // matcher. Crude but safe: comments in TS source code don't
-  // contain `}` followed by newline at the top level for any
-  // realistic component header.
-  const cleaned = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
-
-  // Match `interface <Name> { ... }` OR `type <Name> = { ... }`,
-  // trying the component-specific name first. Brace matching is
-  // non-trivial with nested objects; we use a small hand-rolled
-  // balancer below to be robust to nested types like `events:
-  // { onClick: () => void }`.
-  const candidates: RegExp[] = [];
-  if (componentName) {
-    // Escape user input even though component names are normally just
-    // identifiers — defensive in case a path produces weird basenames.
-    const safe = componentName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    candidates.push(new RegExp(`(?:interface\\s+${safe}Props\\s*\\{|type\\s+${safe}Props\\s*=\\s*\\{)`));
-  }
-  candidates.push(/(?:interface\s+Props\s*\{|type\s+Props\s*=\s*\{)/);
-
-  let startMatch: RegExpExecArray | null = null;
-  for (const re of candidates) {
-    startMatch = re.exec(cleaned);
-    if (startMatch) break;
-  }
-  if (!startMatch) return [];
-  let depth = 1;
-  let i = startMatch.index + startMatch[0].length;
-  const startBody = i;
-  while (i < cleaned.length && depth > 0) {
-    const ch = cleaned[i];
-    if (ch === '{') depth++;
-    else if (ch === '}') depth--;
-    i++;
-  }
-  if (depth !== 0) return [];
-  const body = cleaned.slice(startBody, i - 1);
-
-  const props: ParsedProp[] = [];
-  // Split fields by top-level `;` or newline. Track brace depth so
-  // splits don't fire inside nested `{ ... }` types.
-  const fields: string[] = [];
-  {
-    let buf = '';
-    let bd = 0;
-    for (const c of body) {
-      if (c === '{') bd++;
-      if (c === '}') bd--;
-      if (bd === 0 && (c === ';' || c === '\n')) {
-        if (buf.trim()) fields.push(buf.trim());
-        buf = '';
-        continue;
-      }
-      buf += c;
-    }
-    if (buf.trim()) fields.push(buf.trim());
-  }
-
-  for (const field of fields) {
-    const m = /^([A-Za-z_$][\w$]*)\s*(\?)?\s*:\s*(.+?)\s*[,;]?$/.exec(field);
-    if (!m) continue;
-    const propName = m[1];
-    const optional = !!m[2];
-    const typeExpr = m[3].trim();
-    props.push(parseTypeExpr(propName, typeExpr, !optional));
-  }
-  return props;
-}
-
-function parseTypeExpr(name: string, typeExpr: string, required: boolean): ParsedProp {
-  // Quick wins for primitives.
-  if (typeExpr === 'string') return { name, type: 'string', required };
-  if (typeExpr === 'number') return { name, type: 'number', required };
-  if (typeExpr === 'boolean') return { name, type: 'boolean', required };
-
-  // Literal-string union: `'a' | 'b' | 'c'` (also `"a" | "b"`).
-  // Trailing `| string` etc. broadens the type — still treat as
-  // string with the literal options as suggestions.
-  const literalMatches = [...typeExpr.matchAll(/['"]([^'"\n]+)['"]/g)];
-  if (literalMatches.length > 0 && /^[\s|]*(?:['"][^'"]+['"][\s|]*)+(?:\|\s*string\s*)?$/.test(typeExpr)) {
-    return {
-      name,
-      type: 'string',
-      required,
-      options: literalMatches.map((m) => m[1]),
-    };
-  }
-
-  // Anything else (arrays, function types, branded types, etc.)
-  // — let the panel render as free-form.
-  return { name, type: 'expression', required };
-}
+// Prop extraction lives in `./extract-props-ts.ts` (TypeScript
+// compiler API via ts-morph). The previous regex-based scanner —
+// `extractPropsInterface` + `parseTypeExpr` — was removed in the
+// migration: it silently dropped options for derived types like
+// `(typeof asideVariants)[number]`, mapped types, conditional types,
+// and imported aliases. The ts-morph path resolves all of those.
+// Astro frontmatter extraction lives in `./astro-frontmatter.ts`.

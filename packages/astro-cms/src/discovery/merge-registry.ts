@@ -297,18 +297,15 @@ class DescriptorBuilder {
     }
 
     // Usage-observed props that weren't in the interface (or were
-    // never in any interface — npm components). Inferred as strings
-    // with usage-derived option suggestions.
+    // never in any interface — npm components). Inferred as plain
+    // strings; we don't auto-promote observed values to a dropdown
+    // because there's no interface declaration telling us the prop
+    // is meant to be enum-like. Authors who want a curated picker
+    // can declare options via the sidecar `cmsConfig` override
+    // (see scan-overrides.ts).
     for (const name of this.observedPropNames) {
       if (interfacePropNames.has(name)) continue;
-      const observed = this.observedValues.get(name);
-      props.push({
-        name,
-        type: 'string',
-        ...(observed && observed.size > 0 && observed.size <= 5
-          ? { options: Array.from(observed).map((v) => ({ value: v, label: v })) }
-          : {}),
-      });
+      props.push({ name, type: 'string' });
     }
 
     // Build `defaults.attributes` for every required prop. The insert
@@ -384,12 +381,19 @@ function placeholderForProp(prop: MdxComponentProp, observed: Set<string> | unde
 }
 
 function toMdxComponentProp(parsed: ParsedProp, observed: Set<string> | undefined): MdxComponentProp {
-  // Merge interface-declared options with usage-observed values:
-  // anything seen in usage that the interface didn't list gets
-  // appended (still capped at the 5-distinct dropdown heuristic).
+  // Only emit dropdown `options` when the interface itself declared a
+  // literal union (eg `type?: 'note' | 'tip' | 'caution' | 'danger'`).
+  // Free-form string props like `title`, `description`, `href` have no
+  // such union — emitting an `options` array based purely on what we
+  // observed in usage would lock authors to past values when the field
+  // is meant to accept any text. The side panel renders prop fields with
+  // options as `<select>` and prop fields without as `<input type=text>`,
+  // so this single switch decides which one shows up. Observed values
+  // can still enrich a real enum: when `parsed.options` IS set, append
+  // any usage-seen values the interface didn't list (capped at 5 distinct).
   let optionStrings: string[] | undefined = parsed.options;
-  if (observed && observed.size > 0) {
-    const combined = new Set<string>(optionStrings ?? []);
+  if (optionStrings && observed && observed.size > 0) {
+    const combined = new Set<string>(optionStrings);
     for (const v of observed) combined.add(v);
     if (combined.size <= 5) optionStrings = Array.from(combined);
   }
