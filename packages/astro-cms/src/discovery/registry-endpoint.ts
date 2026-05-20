@@ -1,7 +1,7 @@
 import { resolve } from 'node:path';
 import type { Connect, ViteDevServer } from 'vite';
 import { type DiscoveredComponent, mergeRegistry } from './merge-registry';
-import { scanLocalComponents } from './scan-components';
+import { scanExternalComponents, scanLocalComponents } from './scan-components';
 import { scanMdxFiles } from './scan-mdx';
 
 /**
@@ -43,11 +43,20 @@ export function createRegistryEndpoint(
   const compute = (): Promise<DiscoveredComponent[]> => {
     if (cached) return cached;
     cached = (async () => {
-      const [mdxScans, localComponents] = await Promise.all([
-        scanMdxFiles(contentRoot),
+      // MDX scan first — its results feed BOTH the merge step AND the
+      // external-package scan (which uses the imports to know what
+      // packages to walk into).
+      const mdxScans = await scanMdxFiles(contentRoot);
+      const [localComponents, externalComponents] = await Promise.all([
         scanLocalComponents(options.componentFolders, projectRoot),
+        scanExternalComponents(mdxScans, projectRoot),
       ]);
-      return mergeRegistry(mdxScans, localComponents);
+      // Order matters in the merge: external (npm) components first,
+      // local components second, so local always wins on (source,name)
+      // collision — a host shadowing a Starlight component with their
+      // own implementation expects the local one to be used. The merge
+      // logic also runs a separate collision pass on `name` alone.
+      return mergeRegistry(mdxScans, [...externalComponents, ...localComponents]);
     })();
     return cached;
   };

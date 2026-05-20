@@ -97,7 +97,7 @@ export function mergeRegistry(
         });
         byKey.set(key, builder);
       }
-      builder.observeUsage(usage.attrs, scan.filepath, usage.name, imp);
+      builder.observeUsage(usage.attrs, scan.filepath, usage.name, imp, usage.kind);
     }
   }
 
@@ -135,7 +135,25 @@ class DescriptorBuilder {
   private readonly name: string;
   private readonly source: string;
   private readonly defaultExport: boolean;
-  private readonly kind: 'flow' | 'text';
+  /**
+   * Component flow/text kind. Mutable across `observeUsage` calls
+   * because mdast classifies the SAME component differently based on
+   * how each instance is authored in source: `<Steps>...</Steps>` on
+   * one line parses as `mdxJsxTextElement` (inline), but the same
+   * component with blank-line-separated children parses as
+   * `mdxJsxFlowElement` (block). The component's intrinsic nature is
+   * "block" — so any single flow observation must promote the kind
+   * from text to flow. Without this, one stray inline usage in a
+   * fixture poisons the registry, MDXEditor mounts the JSX as inline,
+   * and saves serialize block components as single-line MDX — which
+   * Starlight's strict-slot validators (Steps wants `<ol>`, FileTree
+   * wants `<ul>`) then reject at render time.
+   *
+   * Demotion in the other direction never happens: a component seen
+   * as flow even once is intrinsically flow-capable, regardless of
+   * other inline observations.
+   */
+  private kind: 'flow' | 'text';
   private readonly propsFromInterface: ParsedProp[];
   /** propName → set of distinct string values observed in MDX. */
   private readonly observedValues = new Map<string, Set<string>>();
@@ -162,8 +180,16 @@ class DescriptorBuilder {
     this.propsFromInterface = init.propsFromInterface ?? [];
   }
 
-  observeUsage(attrs: Record<string, string>, filepath: string, localName: string, imp: MdxImport): void {
+  observeUsage(
+    attrs: Record<string, string>,
+    filepath: string,
+    localName: string,
+    imp: MdxImport,
+    observedKind: 'flow' | 'text',
+  ): void {
     this.usageCount++;
+    // Flow-wins promotion (see kind field doc above).
+    if (observedKind === 'flow') this.kind = 'flow';
     if (imp.aliasedFrom && localName !== this.name) {
       this.aliases[filepath] = localName;
     }
@@ -212,6 +238,29 @@ class DescriptorBuilder {
       });
     }
 
+    // Build `defaults.attributes` for every required prop. The insert
+    // flow (buildInsertPayload) merges these as starter attributes when
+    // a fresh `<Component>` is dropped in, so components like
+    // `<TabItem label="...">` never get inserted as `<TabItem />` and
+    // immediately fail Astro's component validation at render time.
+    //
+    // Placeholder priority per prop:
+    //   1. First literal-union option if the prop has one (Aside.type
+    //      → 'note'). The component's own type system says this is a
+    //      valid value, so it's the safest choice.
+    //   2. First observed usage value if any author file already passes
+    //      something (TabItem.label → 'Bun' from a Starlight fixture).
+    //      Reuses authored content as the starter so the insert looks
+    //      stylistically consistent with the rest of the project.
+    //   3. Title-cased prop name as final fallback (Card.title →
+    //      'Title'). Always editable — the placeholder text becomes the
+    //      first thing the author clicks and overwrites.
+    const requiredAttributes: Record<string, string | number | boolean> = {};
+    for (const p of props) {
+      if (!p.required) continue;
+      requiredAttributes[p.name] = placeholderForProp(p, this.observedValues.get(p.name));
+    }
+
     const descriptor: DiscoveredComponent = {
       name: this.name,
       kind: this.kind,
@@ -227,10 +276,38 @@ class DescriptorBuilder {
       // component file (when that lands), but the sensible default
       // is the component's own name in a single "Components" bucket.
       insert: { label: this.name, category: 'Components' },
+      ...(Object.keys(requiredAttributes).length > 0 ? { defaults: { attributes: requiredAttributes } } : {}),
     };
     if (Object.keys(this.aliases).length > 0) descriptor.aliases = this.aliases;
     return descriptor;
   }
+}
+
+/**
+ * Pick a sensible starter value for a required prop so the insert flow
+ * has something to put on the attribute. See the call site in
+ * `DescriptorBuilder.toDescriptor` for the priority rationale; this
+ * function just executes it.
+ *
+ * Number and boolean placeholders are intentionally trivial — `0` and
+ * `true` — because numeric/boolean props are rare in MDX components and
+ * any concrete value beats `undefined`. The interesting work is on the
+ * string path, where union options and observed usage give us real
+ * authored values to reuse.
+ */
+function placeholderForProp(prop: MdxComponentProp, observed: Set<string> | undefined): string | number | boolean {
+  if (prop.type === 'number') return 0;
+  if (prop.type === 'boolean') return true;
+  // string
+  if (prop.options && prop.options.length > 0) return prop.options[0].value;
+  if (observed && observed.size > 0) {
+    const first = observed.values().next();
+    if (!first.done) return first.value;
+  }
+  // Title-case the prop name (`label` → `Label`). The author sees this
+  // as the placeholder text on first insert; one click selects it for
+  // overwrite.
+  return prop.name.charAt(0).toUpperCase() + prop.name.slice(1);
 }
 
 function toMdxComponentProp(parsed: ParsedProp, observed: Set<string> | undefined): MdxComponentProp {
