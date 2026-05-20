@@ -105,10 +105,18 @@ export function SlashMenuPlugin() {
       ) => {
         const anchor = anchorElementRef.current;
         if (!anchor || opts.length === 0) return null;
+        // Color classes use the cms-admin semantic palette (bg-panel,
+        // bg-selected, bg-hover, text-muted, text-foreground, border-line)
+        // rather than bare Tailwind utilities. Same rationale as
+        // InsertMdxComponentButton — the typeahead anchor is somewhere in
+        // the editor's prose surface, alongside the host site's injected
+        // CSS that ships its own bare-utility class names. Semantic tokens
+        // map to CSS vars the host's Tailwind never generates, so
+        // collisions are impossible by construction.
         return createPortal(
           <div
             role="listbox"
-            className="z-50 min-w-[14rem] max-h-72 overflow-auto rounded-md border border-grey-09 dark:border-grey-04 bg-white dark:bg-grey-02 shadow-md py-1 text-sm"
+            className="z-50 min-w-[14rem] max-h-72 overflow-auto rounded-md border border-line bg-panel shadow-md py-1 text-sm text-foreground"
             style={{ position: 'absolute', top: '100%', left: 0 }}
             data-slash-menu
           >
@@ -121,10 +129,7 @@ export function SlashMenuPlugin() {
                   ref={(el) => opt.setRefElement(el)}
                   role="option"
                   aria-selected={isSelected}
-                  className={
-                    'block w-full text-left px-3 py-1.5 ' +
-                    (isSelected ? 'bg-grey-10 dark:bg-grey-03' : 'hover:bg-grey-10 dark:hover:bg-grey-03')
-                  }
+                  className={`block w-full text-left px-3 py-1.5 ${isSelected ? 'bg-selected' : 'hover:bg-hover'}`}
                   onMouseDown={(event) => {
                     event.preventDefault();
                     selectOptionAndCleanUp(opt);
@@ -133,7 +138,7 @@ export function SlashMenuPlugin() {
                 >
                   <div className="font-medium">{opt.descriptor.insert?.label ?? opt.descriptor.name}</div>
                   {opt.descriptor.insert?.description ? (
-                    <div className="text-xs text-grey-04 dark:text-grey-07">{opt.descriptor.insert.description}</div>
+                    <div className="text-xs text-muted">{opt.descriptor.insert.description}</div>
                   ) : null}
                 </button>
               );

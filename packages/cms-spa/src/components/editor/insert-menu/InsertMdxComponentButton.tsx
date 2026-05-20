@@ -101,21 +101,29 @@ export function InsertMdxComponentButton() {
           type="button"
           aria-label="Insert component"
           title="Insert component"
-          className="inline-flex items-center justify-center h-7 w-7 rounded hover:bg-grey-10 dark:hover:bg-grey-04"
+          className="inline-flex items-center justify-center h-7 w-7 rounded hover:bg-hover"
         >
           <Plus size={16} aria-hidden />
         </button>
       </DropdownMenu.Trigger>
+      {/* Color classes use the cms-admin semantic palette (`bg-panel`,
+          `bg-hover`, `text-muted`, `border-line`) rather than bare Tailwind
+          color utilities. Radix portals this content into `document.body`
+          where the host site's CSS — including their own `.bg-white`,
+          `.text-grey-*` utilities from Tailwind — also lives. Bare utilities
+          would lose the cascade fight; the semantic names map to CSS vars
+          the host's Tailwind never generates, so collision is impossible
+          by construction. Layout utilities stay bare: they don't collide. */}
       <DropdownMenu.Portal>
         <DropdownMenu.Content
           sideOffset={4}
           align="start"
-          className="z-50 min-w-[14rem] max-h-72 overflow-auto rounded-md border border-grey-09 dark:border-grey-04 bg-white dark:bg-grey-02 shadow-md py-1 text-sm"
+          className="z-50 min-w-[14rem] max-h-72 overflow-auto rounded-md border border-line bg-panel shadow-md py-1 text-sm text-foreground"
         >
           {groups.map((group, groupIndex) => (
             <div key={group.category || '__ungrouped__'}>
               {group.category ? (
-                <DropdownMenu.Label className="px-3 pt-2 pb-1 text-[10px] uppercase tracking-wide text-grey-04 dark:text-grey-07">
+                <DropdownMenu.Label className="px-3 pt-2 pb-1 text-[10px] uppercase tracking-wide text-muted">
                   {group.category}
                 </DropdownMenu.Label>
               ) : null}
@@ -123,17 +131,15 @@ export function InsertMdxComponentButton() {
                 <DropdownMenu.Item
                   key={descriptor.name}
                   onSelect={() => onSelect(descriptor)}
-                  className="block px-3 py-1.5 cursor-default outline-none data-[highlighted]:bg-grey-10 dark:data-[highlighted]:bg-grey-03"
+                  className="block px-3 py-1.5 cursor-default outline-none data-[highlighted]:bg-selected"
                 >
                   <div className="font-medium">{descriptor.insert?.label ?? descriptor.name}</div>
                   {descriptor.insert?.description ? (
-                    <div className="text-xs text-grey-04 dark:text-grey-07">{descriptor.insert.description}</div>
+                    <div className="text-xs text-muted">{descriptor.insert.description}</div>
                   ) : null}
                 </DropdownMenu.Item>
               ))}
-              {groupIndex < groups.length - 1 ? (
-                <DropdownMenu.Separator className="my-1 h-px bg-grey-09 dark:bg-grey-04" />
-              ) : null}
+              {groupIndex < groups.length - 1 ? <DropdownMenu.Separator className="my-1 h-px bg-hover" /> : null}
             </div>
           ))}
         </DropdownMenu.Content>
