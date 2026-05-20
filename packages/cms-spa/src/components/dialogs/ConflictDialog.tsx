@@ -44,18 +44,18 @@ export function ConflictDialog({ conflict, onReload, onForceSave, onCancel }: Co
         aria-labelledby="conflict-dialog-title"
         className="bg-overlay rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto"
       >
-        <h2 id="conflict-dialog-title" className="text-2xl font-bold mb-4 text-grey-01 dark:text-grey-12">
+        <h2 id="conflict-dialog-title" className="text-2xl font-bold mb-4 text-foreground">
           Conflict Detected
         </h2>
 
         <div className="mb-6">
-          <p className="text-grey-03 dark:text-grey-09 mb-2" data-testid="conflict-main-message">
+          <p className="text-foreground mb-2" data-testid="conflict-main-message">
             The content has been modified by another user or process since you started editing.
           </p>
 
           {conflictDetails && (
             <div className="mt-4 p-4 bg-subtle rounded-md">
-              <h3 className="font-semibold mb-2 text-grey-01 dark:text-grey-12">Changes detected:</h3>
+              <h3 className="font-semibold mb-2 text-foreground">Changes detected:</h3>
               {hasMetaChanges && hasContentChanges && (
                 <p data-testid="conflict-details">Both metadata and content have been modified.</p>
               )}
@@ -67,12 +67,12 @@ export function ConflictDialog({ conflict, onReload, onForceSave, onCancel }: Co
 
           {conflictDetails?.currentMeta && (
             <div className="mt-4 p-4 bg-azure-11 dark:bg-azure-02 rounded-md">
-              <h3 className="font-semibold mb-2 text-grey-01 dark:text-grey-12">Current metadata:</h3>
+              <h3 className="font-semibold mb-2 text-foreground">Current metadata:</h3>
               <dl className="space-y-1">
                 {Object.entries(conflictDetails.currentMeta).map(([key, value]) => (
                   <div key={key} className="flex">
-                    <dt className="font-medium capitalize mr-2 text-grey-01 dark:text-grey-12">{key}:</dt>
-                    <dd className="text-grey-03 dark:text-grey-09">
+                    <dt className="font-medium capitalize mr-2 text-foreground">{key}:</dt>
+                    <dd className="text-foreground">
                       {key === 'publishAt' && typeof value === 'string'
                         ? `Publish on ${new Date(value).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`
                         : String(value)}

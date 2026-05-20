@@ -15,14 +15,14 @@ export function UnsavedChangesDialog({ onSave, onDiscard, onCancel }: UnsavedCha
         <div className="flex items-center justify-between p-4 border-b border-line">
           <div className="flex items-center gap-3">
             <AlertTriangle className="h-5 w-5 text-yellow-05" />
-            <h2 className="text-lg font-semibold text-grey-01 dark:text-grey-12">Unsaved Changes</h2>
+            <h2 className="text-lg font-semibold text-foreground">Unsaved Changes</h2>
           </div>
           <IconButton icon={X} ariaLabel="Close dialog" onClick={onCancel} variant="ghost" />
         </div>
 
         {/* Content */}
         <div className="p-4">
-          <p className="text-grey-02 dark:text-grey-10">You have unsaved changes. What would you like to do?</p>
+          <p className="text-foreground">You have unsaved changes. What would you like to do?</p>
         </div>
 
         {/* Actions */}

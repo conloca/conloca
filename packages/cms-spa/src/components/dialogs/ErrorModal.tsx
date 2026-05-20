@@ -57,21 +57,21 @@ export function ErrorModal({ isOpen, onClose, title = 'Error', message, error, a
         <div className="flex items-center justify-between p-4 border-b border-line">
           <div className="flex items-center gap-3">
             <AlertTriangle className="h-5 w-5 text-red-04" />
-            <h2 className="text-lg font-semibold text-grey-01 dark:text-grey-12">{title}</h2>
+            <h2 className="text-lg font-semibold text-foreground">{title}</h2>
           </div>
           <IconButton icon={X} ariaLabel="Close error dialog" onClick={onClose} variant="ghost" />
         </div>
 
         {/* Content */}
         <div className="p-4">
-          <p className="text-grey-02 dark:text-grey-10 mb-4">{message}</p>
+          <p className="text-foreground mb-4">{message}</p>
 
           {errorDetails && (
             <details className="mb-4">
-              <summary className="text-sm text-grey-04 dark:text-grey-07 cursor-pointer hover:text-grey-02 transition-colors">
+              <summary className="text-sm text-muted cursor-pointer hover:text-foreground transition-colors">
                 Show technical details
               </summary>
-              <pre className="mt-2 p-3 bg-subtle rounded-md text-xs text-grey-03 dark:text-grey-09 overflow-x-auto max-h-40 overflow-y-auto">
+              <pre className="mt-2 p-3 bg-subtle rounded-md text-xs text-foreground overflow-x-auto max-h-40 overflow-y-auto">
                 {errorDetails}
               </pre>
             </details>
