@@ -1,6 +1,7 @@
 import type { MdxComponentProp, MdxJsxComponentDescriptor } from '@conloca/cms-spa/mdx-components';
 import type { LocalComponentScanResult, ParsedProp } from './scan-components';
 import type { MdxImport, MdxScanResult } from './scan-mdx';
+import type { CmsOverride } from './scan-overrides';
 
 /**
  * Combine the MDX usage scan with the local-component folder scan
@@ -58,6 +59,7 @@ export interface DiscoveredComponent extends MdxJsxComponentDescriptor {
 export function mergeRegistry(
   mdxScans: MdxScanResult[],
   localComponents: LocalComponentScanResult[],
+  overrides?: Map<string, CmsOverride>,
 ): DiscoveredComponent[] {
   // Key descriptors by `${source}::${exportName}` so we can merge
   // local-folder data with MDX-usage data and so two components
@@ -124,9 +126,80 @@ export function mergeRegistry(
       if (aHasSchema !== bHasSchema) return aHasSchema ? -1 : 1;
       return 0;
     });
-    winners.push(candidates[0].toDescriptor());
+    let descriptor = candidates[0].toDescriptor();
+    const override = overrides?.get(descriptor.name);
+    if (override) descriptor = applyOverride(descriptor, override);
+    winners.push(descriptor);
   }
   return winners;
+}
+
+/**
+ * Apply a host-provided override to an auto-discovered descriptor.
+ *
+ * Three kinds of merges happen:
+ *
+ *   1. **Shallow object merges** for `insert` and `defaults` — host
+ *      fields overwrite inferred fields one key at a time, so a host
+ *      can tweak only the label without losing the inferred category.
+ *
+ *   2. **Per-prop merges** for the `props` array — match by `name`,
+ *      override individual fields (`required`, `label`, `help`,
+ *      `options`) while keeping the rest of the prop's inferred
+ *      schema (type, defaultValue). Props the override doesn't mention
+ *      stay untouched.
+ *
+ *   3. **Scalar overrides** for `hasChildren` and `kind` — host value
+ *      replaces inferred value directly.
+ *
+ * The override is INTENTIONALLY a subset of `MdxJsxComponentDescriptor`
+ * — fields the host can sensibly customize. Things like `name` and
+ * `import` come from the actual file system / MDX scan and can't be
+ * meaningfully overridden by a sidecar JSON.
+ */
+function applyOverride(descriptor: DiscoveredComponent, override: CmsOverride): DiscoveredComponent {
+  const next: DiscoveredComponent = { ...descriptor };
+
+  if (override.insert) {
+    next.insert = { ...(descriptor.insert ?? { label: descriptor.name }), ...override.insert };
+  }
+  if (override.defaults) {
+    next.defaults = {
+      ...(descriptor.defaults ?? {}),
+      ...override.defaults,
+      ...(override.defaults.attributes
+        ? { attributes: { ...(descriptor.defaults?.attributes ?? {}), ...override.defaults.attributes } }
+        : {}),
+    };
+  }
+  if (override.hasChildren !== undefined) {
+    next.hasChildren = override.hasChildren;
+  }
+  if (override.kind) {
+    next.kind = override.kind;
+  }
+  if (override.props && descriptor.props) {
+    const overridesByName = override.props;
+    next.props = descriptor.props.map((p) => {
+      const o = overridesByName[p.name];
+      if (!o) return p;
+      // Cast through string-type narrowing — `options` and `defaultValue`
+      // shape vary per prop type, so we merge field-by-field and
+      // preserve the discriminated union by keeping the original
+      // `type` value.
+      const merged: MdxComponentProp = { ...p };
+      if (o.required !== undefined) merged.required = o.required;
+      if (o.label !== undefined) merged.label = o.label;
+      if (o.help !== undefined) merged.help = o.help;
+      if (o.options && merged.type === 'string') {
+        (merged as MdxComponentProp & { options?: ReadonlyArray<{ value: string; label: string }> }).options =
+          o.options;
+      }
+      return merged;
+    });
+  }
+
+  return next;
 }
 
 /** Internal accumulator. Combines interface-derived schema with

@@ -891,9 +891,11 @@ if (import.meta.hot) {
                   // Invalidate the cached scan whenever an .mdx file or
                   // any component file changes. Coarse for now — every
                   // change re-scans everything; cheap enough for typical
-                  // project sizes.
+                  // project sizes. `.cms.json` sidecars also trigger
+                  // invalidation so host overrides apply live without a
+                  // dev-server restart.
                   const onFsChange = (filepath: string) => {
-                    if (/\.(mdx|astro|tsx)$/.test(filepath)) invalidate();
+                    if (/\.(mdx|astro|tsx|d\.ts|cms\.json)$/.test(filepath)) invalidate();
                   };
                   server.watcher.on('add', onFsChange);
                   server.watcher.on('change', onFsChange);

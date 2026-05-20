@@ -3,6 +3,7 @@ import type { Connect, ViteDevServer } from 'vite';
 import { type DiscoveredComponent, mergeRegistry } from './merge-registry';
 import { scanExternalComponents, scanLocalComponents } from './scan-components';
 import { scanMdxFiles } from './scan-mdx';
+import { loadCmsOverrides } from './scan-overrides';
 
 /**
  * Vite middleware that returns the auto-discovered MDX component
@@ -27,6 +28,11 @@ export interface RegistryEndpointOptions {
   contentRoot: string;
   /** Project-relative paths to scan for local components. */
   componentFolders: string[];
+  /** Project-relative folder of `*.cms.json` sidecar override files,
+   * keyed by component basename (`Card.cms.json` → overrides `Card`).
+   * Defaults to `src/cms-overrides` — host can omit when they don't
+   * need any overrides yet. */
+  overridesFolder?: string;
   /** Used to resolve `componentFolders` relative to it. Defaults to
    * `process.cwd()`. */
   projectRoot?: string;
@@ -47,16 +53,20 @@ export function createRegistryEndpoint(
       // external-package scan (which uses the imports to know what
       // packages to walk into).
       const mdxScans = await scanMdxFiles(contentRoot);
-      const [localComponents, externalComponents] = await Promise.all([
+      const overridesFolder = options.overridesFolder ?? 'src/cms-overrides';
+      const [localComponents, externalComponents, overrides] = await Promise.all([
         scanLocalComponents(options.componentFolders, projectRoot),
         scanExternalComponents(mdxScans, projectRoot),
+        loadCmsOverrides(overridesFolder, projectRoot),
       ]);
       // Order matters in the merge: external (npm) components first,
       // local components second, so local always wins on (source,name)
       // collision — a host shadowing a Starlight component with their
       // own implementation expects the local one to be used. The merge
       // logic also runs a separate collision pass on `name` alone.
-      return mergeRegistry(mdxScans, [...externalComponents, ...localComponents]);
+      // Host sidecar overrides apply last as the highest-priority
+      // layer (see `applyOverride` in merge-registry).
+      return mergeRegistry(mdxScans, [...externalComponents, ...localComponents], overrides);
     })();
     return cached;
   };
