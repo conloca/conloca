@@ -272,8 +272,8 @@ export function MdxPageEditor() {
   // with a placeholder empty string and update it later.
   if (isLoading || !isContentLoaded) {
     return (
-      <div className="flex items-center justify-center h-screen bg-grey-12 dark:bg-grey-01">
-        <div className="flex items-center gap-3 text-grey-04 dark:text-grey-07">
+      <div className="flex items-center justify-center h-screen bg-page">
+        <div className="flex items-center gap-3 text-muted">
           <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-azure-04" />
           <span>Loading page…</span>
         </div>
@@ -283,7 +283,7 @@ export function MdxPageEditor() {
 
   if (error && !loadedContent && !savedContentRef.current) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen bg-grey-12 dark:bg-grey-01 gap-4">
+      <div className="flex flex-col items-center justify-center h-screen bg-page gap-4">
         <div className="text-red-04">Failed to load page: {error?.message || 'Not found'}</div>
         <button
           type="button"
@@ -308,18 +308,18 @@ export function MdxPageEditor() {
             : 'Save';
 
   return (
-    <div className="h-screen flex flex-col bg-grey-12 dark:bg-grey-01">
-      <header className="flex items-center justify-between gap-4 px-4 py-2 border-b border-grey-09 dark:border-grey-04 bg-white dark:bg-grey-03 shrink-0">
+    <div className="h-screen flex flex-col bg-page">
+      <header className="flex items-center justify-between gap-4 px-4 py-2 border-b border-line bg-overlay shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           <button
             type="button"
             onClick={handleCancel}
             aria-label="Back to pages"
-            className="p-2 rounded text-grey-04 dark:text-grey-07 hover:bg-grey-11 dark:hover:bg-grey-04"
+            className="p-2 rounded text-muted hover:bg-hover"
           >
             ←
           </button>
-          <h1 className="text-base font-medium text-grey-01 dark:text-grey-12 truncate">Edit: {pagePathname}</h1>
+          <h1 className="text-base font-medium text-foreground truncate">Edit: {pagePathname}</h1>
         </div>
         <div className="flex items-center gap-2">
           <LocaleSelector
@@ -334,7 +334,7 @@ export function MdxPageEditor() {
               rel="noopener noreferrer"
               aria-label="Open published page in a new tab"
               title="Open published page"
-              className="p-2 rounded text-grey-04 dark:text-grey-07 hover:bg-grey-11 dark:hover:bg-grey-04"
+              className="p-2 rounded text-muted hover:bg-hover"
             >
               <ExternalLink size={16} aria-hidden />
             </a>
@@ -344,7 +344,7 @@ export function MdxPageEditor() {
             onClick={() => setMetadataDialogOpen(true)}
             aria-label="Page settings"
             title="Page settings"
-            className="p-2 rounded text-grey-04 dark:text-grey-07 hover:bg-grey-11 dark:hover:bg-grey-04"
+            className="p-2 rounded text-muted hover:bg-hover"
             data-testid="mdx-page-settings"
           >
             <Settings size={16} aria-hidden />
@@ -353,7 +353,7 @@ export function MdxPageEditor() {
             type="button"
             onClick={handleCancel}
             disabled={saveState === 'saving'}
-            className="px-3 py-1.5 text-sm border border-grey-09 dark:border-grey-04 rounded text-grey-01 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-04 disabled:opacity-50"
+            className="px-3 py-1.5 text-sm border border-line rounded text-foreground hover:bg-hover disabled:opacity-50"
           >
             Cancel
           </button>

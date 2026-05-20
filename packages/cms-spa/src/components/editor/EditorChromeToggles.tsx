@@ -27,9 +27,7 @@ export function EditorChromeToggles({ previewOpen, onTogglePreview }: EditorChro
       aria-pressed={previewOpen}
       aria-label={previewLabel}
       title={previewLabel}
-      className={`p-2 rounded text-grey-04 dark:text-grey-07 hover:bg-grey-11 dark:hover:bg-grey-04 ${
-        previewOpen ? 'bg-grey-11 dark:bg-grey-04 text-grey-01 dark:text-grey-12' : ''
-      }`}
+      className={`p-2 rounded text-muted hover:bg-hover ${previewOpen ? 'bg-hover text-foreground' : ''}`}
     >
       <PreviewIcon size={16} aria-hidden />
     </button>

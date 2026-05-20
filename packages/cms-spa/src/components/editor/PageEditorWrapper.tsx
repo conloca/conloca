@@ -231,17 +231,13 @@ function PuckPageEditorInner({ puckConfig }: PageEditorWrapperProps) {
                     {label}
                   </p>
                 ) : null}
-                {title ? (
-                  <h2 className="text-2xl sm:text-3xl font-bold text-grey-01 dark:text-grey-12 mb-4">{title}</h2>
-                ) : null}
-                {subtitle ? (
-                  <p className="text-grey-04 dark:text-grey-07 text-sm leading-relaxed mb-6">{subtitle}</p>
-                ) : null}
+                {title ? <h2 className="text-2xl sm:text-3xl font-bold text-foreground mb-4">{title}</h2> : null}
+                {subtitle ? <p className="text-muted text-sm leading-relaxed mb-6">{subtitle}</p> : null}
                 <div className={cn(contentBlockToneClasses[tone])}>
                   {blockId ? (
                     <BlockContentWrapper contentId={blockId} />
                   ) : (
-                    <div className="rounded-md border border-dashed border-grey-09 dark:border-grey-03 px-5 py-6 text-sm text-grey-04 dark:text-grey-07">
+                    <div className="rounded-md border border-dashed border-line px-5 py-6 text-sm text-muted">
                       Select an MDX content block to render here.
                     </div>
                   )}
