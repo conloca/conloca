@@ -65,10 +65,30 @@ export interface LocalComponentScanResult {
  */
 export async function scanLocalComponents(folders: string[], projectRoot: string): Promise<LocalComponentScanResult[]> {
   if (folders.length === 0) return [];
-  const patterns = folders.map((f) => `${f.replace(/\/+$/, '')}/**/*.{astro,tsx}`);
-  const files = await fg(patterns, { cwd: projectRoot, absolute: true, dot: false });
+  // Source files (`.astro` for Astro, `.tsx` for React) first; `.d.ts`
+  // declaration files only if no matching source file exists. Same
+  // priority rationale as `scanExternalComponents` — host source is
+  // ground truth, declarations are last-resort schema.
+  const sourcePatterns = folders.map((f) => `${f.replace(/\/+$/, '')}/**/*.{astro,tsx}`);
+  const dtsPatterns = folders.map((f) => `${f.replace(/\/+$/, '')}/**/*.d.ts`);
+  const sourceFiles = await fg(sourcePatterns, { cwd: projectRoot, absolute: true, dot: false });
+  const dtsFiles = await fg(dtsPatterns, { cwd: projectRoot, absolute: true, dot: false });
+  const seen = new Set<string>();
+  const allFiles: string[] = [];
+  for (const file of sourceFiles) {
+    const name = componentNameFromPath(file);
+    if (seen.has(name)) continue;
+    seen.add(name);
+    allFiles.push(file);
+  }
+  for (const file of dtsFiles) {
+    const name = componentNameFromPath(file);
+    if (seen.has(name)) continue;
+    seen.add(name);
+    allFiles.push(file);
+  }
   const results: LocalComponentScanResult[] = [];
-  for (const file of files) {
+  for (const file of allFiles) {
     try {
       const r = await scanFile(file, projectRoot);
       if (r) results.push(r);
@@ -81,12 +101,12 @@ export async function scanLocalComponents(folders: string[], projectRoot: string
 
 async function scanFile(filepath: string, projectRoot: string): Promise<LocalComponentScanResult | null> {
   const content = await readFile(filepath, 'utf8');
-  const name = basename(filepath, extname(filepath));
+  const name = componentNameFromPath(filepath);
   // Components typically start with a capital. Lowercase-named files
   // are usually utilities, not authorable components — skip them so
   // we don't pollute the registry with `helpers.ts` and friends.
   if (!/^[A-Z]/.test(name)) return null;
-  const props = extractPropsInterface(content);
+  const props = extractPropsInterface(content, name);
   const importSpecifier = `/${relative(projectRoot, filepath).replace(/\\/g, '/')}`;
   return {
     filepath,
@@ -96,6 +116,25 @@ async function scanFile(filepath: string, projectRoot: string): Promise<LocalCom
     kind: 'flow',
     props,
   };
+}
+
+/**
+ * Derive the canonical component name from a file path.
+ *
+ * Two extension shapes:
+ *   - Single (`.astro`, `.tsx`) → strip with `extname`/`basename`.
+ *   - Compound (`.d.ts`) → strip `.d.ts` explicitly, since `extname`
+ *     would return only `.ts` and leave a trailing `.d` (`Card.d`).
+ *
+ * Keeps the rule simple and consistent: file basename === component
+ * name. Multi-component files (a `.d.ts` exporting many React
+ * components from one barrel) are NOT supported through this path —
+ * the sidecar `cmsConfig` mechanism (future task) covers those.
+ */
+function componentNameFromPath(filepath: string): string {
+  const base = basename(filepath);
+  if (base.endsWith('.d.ts')) return base.slice(0, -'.d.ts'.length);
+  return base.slice(0, -extname(base).length);
 }
 
 /**
@@ -149,13 +188,50 @@ export async function scanExternalComponents(
       const resolved = requireFromProject.resolve(specifier);
       const packageRoot = findPackageRoot(resolved);
       if (!packageRoot) continue;
-      const files = await fg('**/*.{astro,tsx}', {
-        cwd: packageRoot,
-        absolute: true,
-        dot: false,
-        deep: 4,
-      });
-      for (const file of files) {
+
+      // First try: parse the resolved file as a re-export barrel
+      // (`export { default as Card } from './user-components/Card.astro'`).
+      // If we find re-exports, scan ONLY those files — the package's
+      // own author has declared the public surface, and everything
+      // else is internal noise we don't want in the registry.
+      //
+      // This is the Starlight case: `@astrojs/starlight/components`
+      // resolves to a barrel `.ts` listing exactly the 12 components
+      // the package intends for MDX use, hiding ~30 internal layout
+      // components in the same `node_modules` tree.
+      const barrelFiles = await collectBarrelExports(resolved, packageRoot);
+      let scanFiles: string[];
+      if (barrelFiles.length > 0) {
+        scanFiles = barrelFiles;
+      } else {
+        // Fallback: glob the whole package. Source files (`.astro`,
+        // `.tsx`) first, then `.d.ts` as a last-resort schema source
+        // for compiled packages. Dedupe by component name so a package
+        // shipping BOTH `Card.tsx` and `Card.d.ts` uses the source
+        // file (more reliable schema) and ignores the declaration.
+        const sourceFiles = await fg('**/*.{astro,tsx}', {
+          cwd: packageRoot,
+          absolute: true,
+          dot: false,
+          deep: 4,
+        });
+        const dtsFiles = await fg('**/*.d.ts', {
+          cwd: packageRoot,
+          absolute: true,
+          dot: false,
+          deep: 4,
+        });
+        const seen = new Set<string>();
+        scanFiles = [];
+        for (const file of [...sourceFiles, ...dtsFiles]) {
+          const name = componentNameFromPath(file);
+          if (seen.has(name)) continue;
+          seen.add(name);
+          scanFiles.push(file);
+        }
+      }
+
+      for (const file of scanFiles) {
         try {
           const r = await scanExternalFile(file, specifier);
           if (r) results.push(r);
@@ -184,9 +260,9 @@ export async function scanExternalComponents(
  */
 async function scanExternalFile(filepath: string, specifier: string): Promise<LocalComponentScanResult | null> {
   const content = await readFile(filepath, 'utf8');
-  const name = basename(filepath, extname(filepath));
+  const name = componentNameFromPath(filepath);
   if (!/^[A-Z]/.test(name)) return null;
-  const props = extractPropsInterface(content);
+  const props = extractPropsInterface(content, name);
   return {
     filepath,
     name,
@@ -222,6 +298,86 @@ function collectExternalSpecifiers(mdxScans: MdxScanResult[]): Set<string> {
 }
 
 /**
+ * If `resolvedFile` is a barrel (re-export aggregator), return the
+ * absolute paths of every re-exported component file. Otherwise
+ * return an empty array.
+ *
+ * Patterns recognized:
+ *   - `export { default as Foo } from './path/to/Foo.astro'`
+ *   - `export { Foo } from './path/to/Foo'`
+ *   - `export { Foo, Bar } from './path/to/m'`
+ *   - `export * from './path/to/m'`        (treated as opaque — we
+ *                                            can't enumerate the
+ *                                            names without a real
+ *                                            parser, so we skip and
+ *                                            fall back to glob-all)
+ *
+ * The barrel must resolve to a real file we can re-resolve to one of
+ * the supported extensions (`.astro`, `.tsx`, `.d.ts`). Missing or
+ * unsupported targets are dropped quietly. Comments are stripped
+ * first to avoid matching commented-out exports.
+ *
+ * Why this matters: Starlight's `@astrojs/starlight/components`
+ * barrel lists exactly the 12 MDX-friendly components. Globbing the
+ * whole package would also pull in ~30 internal layout components
+ * (Banner, Hero, Pagination, ...) — they'd litter the slash menu
+ * even though they're not meant for author use.
+ */
+async function collectBarrelExports(resolvedFile: string, packageRoot: string): Promise<string[]> {
+  // Only `.ts` / `.js` / `.mjs` source files can be barrels; an
+  // `.astro` or `.tsx` file is the component itself, not an
+  // aggregator. Bail early to avoid reading binary or unsupported
+  // file types.
+  if (!/\.(?:m?[jt]s)$/.test(resolvedFile)) return [];
+
+  let content: string;
+  try {
+    content = await readFile(resolvedFile, 'utf8');
+  } catch {
+    return [];
+  }
+  const cleaned = content.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+
+  // Collect the relative source paths from every `export {...} from '<path>'`.
+  // We don't need the export names here — we just need the files to
+  // scan. Each scanned file's component name comes from its own
+  // basename, the same way local components work.
+  const pathRe = /export\s*(?:\{[^}]*\}|\*)\s*from\s*['"]([^'"]+)['"]/g;
+  const relPaths = new Set<string>();
+  for (const m of cleaned.matchAll(pathRe)) {
+    const rel = m[1];
+    // Skip `export *` — we can't enumerate without a real parser, and
+    // re-running the barrel collector recursively would invite cycles.
+    // Falls through to glob-all below if no other re-exports exist.
+    if (!rel) continue;
+    relPaths.add(rel);
+  }
+  if (relPaths.size === 0) return [];
+
+  // Resolve each relative path. `import.meta.resolve` doesn't take a
+  // base file, so use the barrel's directory as the resolution root.
+  const barrelDir = dirname(resolvedFile);
+  const requireFromBarrel = createRequire(`${barrelDir}/_.js`);
+  const resolved: string[] = [];
+  for (const rel of relPaths) {
+    try {
+      const target = requireFromBarrel.resolve(rel);
+      // Only keep targets that look like component files we can
+      // scan (extensions our extractor supports) AND live inside
+      // the package root (defensive — barrels in the wild can
+      // re-export from sibling packages, which we don't want to
+      // descend into).
+      if (!/\.(?:astro|tsx|d\.ts)$/.test(target)) continue;
+      if (!target.startsWith(packageRoot)) continue;
+      resolved.push(target);
+    } catch {
+      // Missing optional file or extension we don't handle — skip.
+    }
+  }
+  return resolved;
+}
+
+/**
  * Walk up from a resolved file path until we find the directory that
  * contains the closest `package.json`. That's the package root we'll
  * glob for component files. Returns `null` if no package.json is found
@@ -242,28 +398,53 @@ function findPackageRoot(resolvedPath: string): string | null {
 }
 
 /**
- * Pull the `interface Props { ... }` block out of source and parse
- * each field. Two acceptable forms:
+ * Pull a Props-shaped interface block out of source and parse each
+ * field. Three acceptable shapes the look-up tries in order:
  *
- *   interface Props { ... }
- *   type Props = { ... }
+ *   1. `interface ${ComponentName}Props { ... }` / `type ${ComponentName}Props = { ... }`
+ *      — the React/TSX convention. `Card.tsx` declares `interface
+ *      CardProps`; `Dialog.d.ts` shipped from Radix declares
+ *      `interface DialogProps`. We try this first so per-component
+ *      `.d.ts` files in compiled packages get their schema.
+ *
+ *   2. `interface Props { ... }` / `type Props = { ... }`
+ *      — the Astro convention. `Card.astro` declares `interface Props`
+ *      because Astro always reads `Astro.props`, so the type name
+ *      doesn't carry semantic load.
+ *
+ *   3. Nothing — return empty, descriptor still surfaces with
+ *      usage-only inferred props (no `required` flag).
  *
  * Inside the braces, each prop is `name: type` or `name?: type`,
  * one per line (with optional trailing semicolons or commas).
  * Comments are stripped before matching.
  */
-function extractPropsInterface(source: string): ParsedProp[] {
+function extractPropsInterface(source: string, componentName?: string): ParsedProp[] {
   // Strip block + line comments so they don't confuse the field
   // matcher. Crude but safe: comments in TS source code don't
   // contain `}` followed by newline at the top level for any
   // realistic component header.
   const cleaned = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
 
-  // Match `interface Props { ... }` OR `type Props = { ... }`.
-  // Brace matching is non-trivial with nested objects; we use a
-  // small hand-rolled balancer to be robust to nested types like
-  // `events: { onClick: () => void }`.
-  const startMatch = /(?:interface\s+Props\s*\{|type\s+Props\s*=\s*\{)/.exec(cleaned);
+  // Match `interface <Name> { ... }` OR `type <Name> = { ... }`,
+  // trying the component-specific name first. Brace matching is
+  // non-trivial with nested objects; we use a small hand-rolled
+  // balancer below to be robust to nested types like `events:
+  // { onClick: () => void }`.
+  const candidates: RegExp[] = [];
+  if (componentName) {
+    // Escape user input even though component names are normally just
+    // identifiers — defensive in case a path produces weird basenames.
+    const safe = componentName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    candidates.push(new RegExp(`(?:interface\\s+${safe}Props\\s*\\{|type\\s+${safe}Props\\s*=\\s*\\{)`));
+  }
+  candidates.push(/(?:interface\s+Props\s*\{|type\s+Props\s*=\s*\{)/);
+
+  let startMatch: RegExpExecArray | null = null;
+  for (const re of candidates) {
+    startMatch = re.exec(cleaned);
+    if (startMatch) break;
+  }
   if (!startMatch) return [];
   let depth = 1;
   let i = startMatch.index + startMatch[0].length;
