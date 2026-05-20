@@ -79,7 +79,17 @@ export function createRenderEndpoint(server: ViteDevServer): Connect.NextHandleF
       }
 
       const container = await getContainer();
-      const rendered = await renderTree(tree, container, server);
+      // Even the top-level render is wrapped: a hard failure here would
+      // 500 the whole response and leave the editor with no usable
+      // HTML to portal a body editor into. The stub keeps the surface
+      // editable so the author can fix the broken prop in place.
+      let rendered: string;
+      try {
+        rendered = await renderTree(tree, container, server);
+      } catch (err) {
+        console.warn(`[conloca:render] <${tree.component}> failed:`, err instanceof Error ? err.message : err);
+        rendered = renderErrorStub(tree, err);
+      }
 
       // Wrap top-level output in a host-marker parent (`.sl-markdown-content`)
       // with `(documentIndex - 1)` hidden phantom siblings so root-level
@@ -184,7 +194,24 @@ async function renderTree(
   //                                       when no portal is mounted.
   let slotContent: string;
   if (node.children && node.children.length > 0) {
-    const renderedChildren = await Promise.all(node.children.map((child) => renderTree(child, container, server)));
+    // Per-child error isolation: one broken `<Card>` no longer blanks
+    // its sibling Cards. A failure to render any specific child
+    // becomes an inline error stub (carrying that child's slot id so
+    // the body editor still portals into it), and the parent goes on
+    // to render with the stub HTML in that child's position.
+    const renderedChildren = await Promise.all(
+      node.children.map(async (child) => {
+        try {
+          return await renderTree(child, container, server);
+        } catch (err) {
+          // Log to the dev console so the failure isn't entirely
+          // invisible — the inline stub is the author's surface, but
+          // a dev tailing the terminal still wants the stack trace.
+          console.warn(`[conloca:render] <${child.component}> failed:`, err instanceof Error ? err.message : err);
+          return renderErrorStub(child, err);
+        }
+      }),
+    );
     slotContent = renderedChildren.join('');
   } else if (node.bodyHtml) {
     slotContent = node.bodyHtml;
@@ -207,6 +234,42 @@ async function renderTree(
     // ('asides.note' → 'Note'). Real titles/body come from props.
     locals: { t: defaultI18nFallback } as App.Locals,
   });
+}
+
+/**
+ * Build a self-contained, editable error stub for one render failure.
+ *
+ * Three jobs:
+ *   1. Surface the error inline so the author sees *exactly* which
+ *      component blew up and why, right where it sits in the document.
+ *      No console-spelunking required.
+ *   2. Keep the slot id intact so GenericBlock's portal-discovery loop
+ *      (`querySelectorAll('conloca-slot[data-slot-id]')`) still finds a
+ *      mount point inside the stub. The body editor mounts as normal;
+ *      the author can edit the children even though the parent
+ *      component's own render failed — typically that's enough to fix
+ *      whatever the validator was upset about.
+ *   3. Stay structurally innocuous. A `<div>` wrapper renders cleanly
+ *      inside any parent slot that accepts arbitrary HTML, and a
+ *      data-attribute on the wrapper lets host CSS style it however
+ *      they like (yellow background, red border, whatever).
+ *
+ * Note: if the parent component itself has a strict-slot validator
+ * (eg `<Tabs>` rejects non-TabItem children), the stub will fail the
+ * parent's render too — but the recursion at the parent level then
+ * catches THAT failure and emits its own stub one level up. The
+ * worst case bubbles all the way to the top-level wrap in the
+ * endpoint handler. Errors never escape as 500s.
+ */
+function renderErrorStub(node: RenderTreeNode, err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  const name = node.component || 'unknown';
+  return (
+    `<div class="conloca-render-error" data-component="${escapeHtml(name)}" data-slot-id="${escapeHtml(node.slotId)}" role="alert">` +
+    `<div class="conloca-render-error__label">&lt;${escapeHtml(name)}&gt; failed to render: ${escapeHtml(message)}</div>` +
+    `<conloca-slot data-slot-id="${escapeHtml(node.slotId)}"></conloca-slot>` +
+    '</div>'
+  );
 }
 
 function escapeHtml(s: string): string {
