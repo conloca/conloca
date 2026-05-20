@@ -131,21 +131,27 @@ function stableStringify(obj: AnyProps): string {
 }
 
 /**
- * Strip the `body` and `bodyHtml` fields from every node in the render
- * tree. Cache keys should hash only structural shape (component names,
- * import sources, props, child topology) — NOT prose body text. When a
- * user types inside a portaled `<NestedLexicalEditor>` the leaf body
- * mdast changes; without this strip every keystroke would mint a
- * different cache key and force a server roundtrip — even though the
- * SSR HTML itself doesn't change (the body lives in the portaled slot,
- * not in the SSR'd markup the cache serves).
+ * Strip the `body` (escaped-text fallback) field from every node in the
+ * render tree before hashing for the SSR cache key. Cache keys should
+ * hash structural shape — NOT prose body text from the portaled
+ * `<NestedLexicalEditor>`s. Without this, every keystroke inside a
+ * leaf body would mint a different cache key and force a server
+ * roundtrip even though the SSR HTML itself doesn't change (the body
+ * lives in the portaled slot, not in the SSR markup).
+ *
+ * `bodyHtml` is NOT stripped — unlike `body` (a static text fallback
+ * the editor portal hides), `bodyHtml` IS the actual rendered slot
+ * content for strict-slot components (Steps, FileTree) where the
+ * editor doesn't portal an inline editor. Its value must participate
+ * in the cache key, otherwise changes to the list structure won't
+ * bust the stale cached HTML and the SSR returns out-of-date markup.
  */
 function stripBodyFields(node: unknown): unknown {
   if (Array.isArray(node)) return node.map(stripBodyFields);
   if (node && typeof node === 'object') {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
-      if (k === 'body' || k === 'bodyHtml') continue;
+      if (k === 'body') continue;
       out[k] = stripBodyFields(v);
     }
     return out;
@@ -435,8 +441,30 @@ function mdastToHtml(node: unknown): string {
       const tag = n.ordered ? 'ol' : 'ul';
       return `<${tag}>${(n.children ?? []).map(mdastToHtml).join('')}</${tag}>`;
     }
-    case 'listItem':
-      return `<li>${(n.children ?? []).map(mdastToHtml).join('')}</li>`;
+    case 'listItem': {
+      // Unwrap `paragraph` children of list items so their contents
+      // render inline-of-the-`<li>` rather than wrapped in a block
+      // `<p>`. Matches Astro's MDX pipeline for both tight lists (a
+      // single-paragraph listItem) AND loose lists like `<FileTree>`'s
+      // directory items (`paragraph` for the name + nested `list` for
+      // children).
+      //
+      // Without this, Starlight's <FileTree> renders directory names
+      // in a block <p>, which inside .tree-entry (inline-flex) wraps
+      // onto its own line — folder icons end up stacked above their
+      // names instead of inline with them, the way the live page
+      // renders. Same fix protects any list-bearing strict-slot
+      // component shipped via bodyHtml.
+      const kids = n.children ?? [];
+      const inner = kids
+        .map((c) =>
+          (c as { type?: string } | undefined)?.type === 'paragraph'
+            ? ((c as { children?: unknown[] }).children ?? []).map(mdastToHtml).join('')
+            : mdastToHtml(c),
+        )
+        .join('');
+      return `<li>${inner}</li>`;
+    }
     case 'thematicBreak':
       return '<hr />';
     case 'code': {
