@@ -189,6 +189,72 @@ export function useFetchedSiteStyles(routeUrl: string | undefined, options: { cm
 }
 
 /**
+ * Shape returned by the `/api/content-wrapper?url=…` endpoint — the
+ * tag name and class list of the host page's content-root element.
+ * Kept in lock-step with `ContentWrapperInfo` in
+ * `packages/astro-cms/src/site-styles/content-wrapper-endpoint.ts`.
+ */
+export interface HostContentWrapper {
+  tagName: string;
+  className: string;
+}
+
+/**
+ * Fetches the host page's content-root shape for the given route URL.
+ * The editor then renders its contenteditable inside a clone of that
+ * wrapper (via the `hostWrapperPlugin`), so host CSS like
+ * `article.card { background: …; padding: … }` paints the editor's
+ * content surface through the normal cascade — no per-color JS bridge.
+ *
+ * Returns `null` while the fetch is in flight or when the host route
+ * has no discoverable wrapper. Callers should treat null as "no
+ * wrapping" — the editor still renders, just without the host's
+ * surface paint behind the contenteditable.
+ *
+ * Re-fetches whenever `routeUrl` changes (eg locale switch / doc
+ * switch). Errors are logged and swallowed; the caller falls back to
+ * the no-wrapper render path.
+ */
+export function useFetchedContentWrapper(
+  routeUrl: string | undefined,
+  options: { cmsRoute?: string } = {},
+): HostContentWrapper | null {
+  const [wrapper, setWrapper] = useState<HostContentWrapper | null>(null);
+  const cmsRoute = options.cmsRoute ?? '/__cms';
+
+  useEffect(() => {
+    if (!routeUrl) {
+      setWrapper(null);
+      return;
+    }
+
+    let cancelled = false;
+    const endpoint = `${cmsRoute}/api/content-wrapper?url=${encodeURIComponent(routeUrl)}`;
+
+    fetch(endpoint)
+      .then((res) => {
+        if (!res.ok) throw new Error(`Content-wrapper endpoint returned ${res.status}`);
+        return res.json() as Promise<HostContentWrapper | null>;
+      })
+      .then((data) => {
+        if (cancelled) return;
+        setWrapper(data);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.warn('[Conloca] Failed to fetch content wrapper:', err);
+        setWrapper(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [routeUrl, cmsRoute]);
+
+  return wrapper;
+}
+
+/**
  * Inject host CSS strings into the current document's `<head>` while the
  * calling component is mounted. Each stylesheet gets wrapped in a named
  * cascade layer so its rules sit at a known position in the cascade.
@@ -226,8 +292,38 @@ export function useInjectHostStyles(layerName: string, styles: SiteStyles): void
       tags.push(tag);
     }
 
+    /**
+     * Bridge the host page's `body { background }` into a CSS custom
+     * property the editor's content-surround region can read. Works
+     * together with the `hostWrapperPlugin` (which mirrors the host's
+     * `<main>`/marked element around the contenteditable):
+     *
+     *   - Editor's chrome wrapper paints `bg-page` (the CMS grey).
+     *   - Inside the chrome, the content column paints the host body
+     *     bg via this bridged var (`--conloca-host-body-bg`).
+     *   - Inside that surround, the host's content wrapper (eg
+     *     `<main>`) is rendered around the contenteditable. Hosts who
+     *     paint a card surface on that wrapper get the paint; hosts
+     *     like Starlight whose `<main>` is transparent rely on the
+     *     surround's body bg showing through.
+     *
+     * Defers a frame so the freshly-appended `<style>` tags actually
+     * apply before we read computed style.
+     */
+    const rafId = requestAnimationFrame(() => {
+      const bg = getComputedStyle(document.body).backgroundColor;
+      if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') {
+        document.documentElement.style.setProperty('--conloca-host-body-bg', bg);
+      }
+    });
+
     return () => {
+      cancelAnimationFrame(rafId);
       for (const tag of tags) tag.remove();
+      // Drop the bridged var so a doc switch to a host without a body
+      // bg falls back cleanly to the cms grey fallback rather than
+      // sticking with the previous host's color.
+      document.documentElement.style.removeProperty('--conloca-host-body-bg');
     };
   }, [styles, layerName]);
 }

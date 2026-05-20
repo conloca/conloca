@@ -361,7 +361,7 @@ export function MdxPageEditor() {
             type="button"
             onClick={handleSaveClick}
             disabled={saveState === 'saving' || (!isDirty && saveState === 'idle')}
-            className="px-3 py-1.5 text-sm bg-azure-04 text-white rounded hover:bg-azure-03 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3 py-1.5 text-sm bg-accent text-accent-foreground rounded hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saveButtonLabel}
           </button>
@@ -371,7 +371,16 @@ export function MdxPageEditor() {
           without it the editor pane can't shrink past its content height
           and the page-level scrollbar takes over instead of the editor's. */}
       <div className="flex-1 overflow-hidden flex flex-row min-h-0">
-        <div className="flex-1 min-w-0 overflow-hidden">
+        {/* `conloca-mdx-editor-surround` — paints the area around the
+            prose card with the host body bg (set by the
+            useInjectHostStyles bridge after auto-discovered host CSS
+            loads). Inside this surround, `hostWrapperPlugin` mirrors
+            the host's content-root element (eg `<main>`) around the
+            contenteditable. Result: when the host paints the wrapper
+            (eg a card surface), the wrapper paints; when the host's
+            wrapper is transparent (Starlight's `<main>`), the
+            surround's body bg shows through. */}
+        <div className="flex-1 min-w-0 overflow-hidden conloca-mdx-editor-surround">
           <CMSMDXEditor
             // Re-mount on locale switch so the editor re-initializes with
             // the new locale's markdown — `value` is read once on first

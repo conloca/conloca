@@ -4,12 +4,16 @@ import type { JsxComponentDescriptor, MDXEditorMethods, RealmPlugin } from '@mdx
 import { forwardRef, useCallback, useMemo, useRef } from 'react';
 import { buildUploadFormData } from '../../hooks/useUpload';
 import { isJsxDescriptor, toJsxComponentDescriptor, useMdxComponents } from '../../mdx-components';
-import { useEditorStyles, useFetchedSiteStyles, useInjectHostStyles } from '../../site-styles';
+import {
+  useEditorStyles,
+  useFetchedContentWrapper,
+  useFetchedSiteStyles,
+  useInjectHostStyles,
+} from '../../site-styles';
+import { hostWrapperPlugin } from './host-wrapper-plugin';
 import { ImagePickerDialog } from './ImagePickerDialog';
 import { InsertMdxComponentButton } from './insert-menu/InsertMdxComponentButton';
 import { mdxComponentsPlugin } from './insert-menu/mdx-components-plugin';
-
-const mdxComponentsExtraPlugins: RealmPlugin[] = [mdxComponentsPlugin()];
 
 export interface CMSMDXEditorProps
   extends Omit<
@@ -59,6 +63,19 @@ export const CMSMDXEditor = forwardRef<MDXEditorMethods, CMSMDXEditorProps>(({ p
   // names the host's Tailwind can't generate. See main.css's `@theme`
   // and `@utility` blocks for the chrome token definitions.
   useInjectHostStyles('conloca-host-preview', activeStyles);
+  // Discover the host page's content-root shape (eg `<article class="card">`
+  // on Starlight). The editor wraps its contenteditable in a clone of that
+  // element via `hostWrapperPlugin`, so host CSS paints the editor's
+  // content surface naturally — no per-color JS bridging needed.
+  const hostWrapper = useFetchedContentWrapper(previewRouteUrl);
+  // Recompose the plugins list whenever the wrapper changes so the plugin
+  // re-runs its `update` and the wrapper component refreshes inside the
+  // editor. The hostWrapperPlugin's renderer also reads reactively from its
+  // own Cell, so we DON'T need to remount the entire editor for this.
+  const extraPlugins = useMemo<RealmPlugin[]>(
+    () => [mdxComponentsPlugin(), hostWrapperPlugin({ wrapper: hostWrapper })],
+    [hostWrapper],
+  );
   const jsxComponentDescriptors = useMemo<JsxComponentDescriptor[]>(
     // Filter to JSX flavors before translating — snippets live in the same
     // registry but aren't valid input for @mdxeditor/editor's jsxPlugin, and
@@ -91,7 +108,7 @@ export const CMSMDXEditor = forwardRef<MDXEditorMethods, CMSMDXEditorProps>(({ p
       imageButtonRef={insertImageRef}
       imageUploadHandler={imageUploadHandler}
       jsxComponentDescriptors={jsxComponentDescriptors}
-      extraPlugins={mdxComponentsExtraPlugins}
+      extraPlugins={extraPlugins}
       extraToolbarItems={<InsertMdxComponentButton />}
       onImageShortcut={() => {
         if (insertImageRef.current) {

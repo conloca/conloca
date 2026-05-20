@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import { defineMdxComponents, type MdxJsxComponentDescriptor, type MdxSnippetDescriptor } from '../src/mdx-components';
+import {
+  containsMarkdownMarkers,
+  defineMdxComponents,
+  type MdxJsxComponentDescriptor,
+  type MdxSnippetDescriptor,
+} from '../src/mdx-components';
 
 // Smallest JSX descriptor that satisfies the type — `kind: 'flow'` is the
 // default insert path, `name` is required, everything else stays optional.
@@ -67,5 +72,38 @@ describe('defineMdxComponents', () => {
 
   test('throws on snippet with empty content', () => {
     expect(() => defineMdxComponents([snippetMinimal({ content: '' })])).toThrow(/empty content/);
+  });
+});
+
+/**
+ * Guards the conservative marker detection used by both the inline-prop
+ * wiring (GenericBlock) and the side-panel hint (JsxPropsPanel). The
+ * goal is "true on values whose formatting plaintext editing would
+ * silently strip"; false-positive cost is just "edit via panel" (fine),
+ * false-negative cost is silent formatting loss (not fine).
+ */
+describe('containsMarkdownMarkers', () => {
+  test('detects bold markers', () => {
+    expect(containsMarkdownMarkers('see **note** here')).toBe(true);
+  });
+  test('detects inline code backticks', () => {
+    expect(containsMarkdownMarkers('use the `cli` command')).toBe(true);
+  });
+  test('detects link syntax', () => {
+    expect(containsMarkdownMarkers('check the [docs](/docs)')).toBe(true);
+  });
+  test('false on plain text', () => {
+    expect(containsMarkdownMarkers('Setting up your project')).toBe(false);
+  });
+  test('false on filenames with underscores (no false positive on __)', () => {
+    // __init__.py would false-positive if we matched bare `__`.
+    expect(containsMarkdownMarkers('edit __init__.py')).toBe(false);
+  });
+  test('false on prose with single asterisk', () => {
+    // Single `*` appears in math, footnote markers, plain prose.
+    expect(containsMarkdownMarkers('see footnote *')).toBe(false);
+  });
+  test('false on empty string', () => {
+    expect(containsMarkdownMarkers('')).toBe(false);
   });
 });

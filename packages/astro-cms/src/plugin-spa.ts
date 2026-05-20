@@ -9,6 +9,7 @@ import { createRegistryEndpoint } from './discovery/registry-endpoint.js';
 import { deriveComponentPaths, type HydrationDiscovery, scanForHydratableComponents } from './lib/hydration-scanner.js';
 import { normalizeRoutingConfig, resolveRouteConfig } from './lib/routing-config.js';
 import type { ConlocaLocales } from './locales-helpers.js';
+import { createContentWrapperEndpoint } from './site-styles/content-wrapper-endpoint.js';
 import { createRenderEndpoint } from './site-styles/render-endpoint.js';
 import { createStylesEndpoint } from './site-styles/styles-endpoint.js';
 
@@ -869,6 +870,20 @@ if (import.meta.hot) {
                 apply: 'serve' as const,
                 configureServer(server) {
                   server.middlewares.use(`${cmsRoute}/api/render`, createRenderEndpoint(server));
+                },
+              },
+              {
+                // Per-route content-wrapper endpoint. Fetches the live page
+                // HTML and returns the host's content-root element shape
+                // (`{ tagName, className }`) so the editor can render its
+                // contenteditable inside a clone of that wrapper — letting
+                // the host's CSS (eg `article.card { background: … }`) paint
+                // the editor's content surface naturally, with no per-color
+                // bridging.
+                name: 'conloca-content-wrapper-endpoint',
+                apply: 'serve' as const,
+                configureServer(server) {
+                  server.middlewares.use(`${cmsRoute}/api/content-wrapper`, createContentWrapperEndpoint(server));
                 },
               },
               {

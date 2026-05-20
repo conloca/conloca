@@ -201,6 +201,25 @@ export function defineMdxComponents(components: MdxComponents): MdxComponents {
  * an `MdxComponentDescriptor` — the typed editor that wants to drive a
  * controlled `<input value={...}>` against a string prop.
  */
+/**
+ * Conservative detection for "this string prop value carries markdown
+ * formatting." Used to decide whether inline editing in the SSR'd
+ * preview is safe: a plaintext-only contenteditable would strip the
+ * formatting on commit, so we'd rather route those props through the
+ * side panel (where the author sees the raw text and decides).
+ *
+ * Detects only unambiguous markers — `**bold**` / `*em*`, inline code
+ * `` `x` ``, and the `[text](url)` link form. Skips `_` / `__` (would
+ * false-positive on filenames like `__init__.py`) and skips single
+ * `*` (false-positive risk on prose). False positives just mean "edit
+ * via panel instead of inline" which is the safe fallback; false
+ * negatives silently destroy formatting, which is not.
+ */
+const MARKDOWN_MARKER_RE = /\*\*|`|\[[^\]\n]+?\]\([^)\n]+?\)/;
+export function containsMarkdownMarkers(value: string): boolean {
+  return MARKDOWN_MARKER_RE.test(value);
+}
+
 export function readStringAttribute(node: MdxJsxFlowElement | MdxJsxTextElement, name: string): string {
   const attr = node.attributes.find((a): a is MdxJsxAttribute => a.type === 'mdxJsxAttribute' && a.name === name);
   if (!attr || typeof attr.value !== 'string') return '';
@@ -221,6 +240,51 @@ export function writeStringAttribute<T extends MdxJsxFlowElement | MdxJsxTextEle
   const next = attributes.filter((a) => !(a.type === 'mdxJsxAttribute' && a.name === name));
   if (value.length > 0) {
     next.push({ type: 'mdxJsxAttribute', name, value });
+  }
+  return next as T['attributes'];
+}
+
+/**
+ * Type-aware attribute writer. Encodes the value into the right
+ * mdast shape so the saved MDX matches what an author would write
+ * by hand:
+ *
+ *   - `string`           → `prop="value"`         (or removed if empty)
+ *   - `boolean true`     → `prop`                 (JSX shorthand; value: null)
+ *   - `boolean false`    → REMOVED                (default is implicit-false)
+ *   - `number`           → `prop={42}`            (expression so `2` ≠ `"2"`)
+ *   - `null`/`undefined` → REMOVED
+ *
+ * The string-only `writeStringAttribute` stays for callers that only
+ * deal with strings (the inline-prop editor, free-text inputs). This
+ * is for the side panel where booleans and numbers need correct mdast
+ * encoding so a `stagger?: boolean` round-trips as `<CardGrid stagger>`
+ * and not the truthy-but-incorrect `<CardGrid stagger="true">`.
+ */
+export function writeAttribute<T extends MdxJsxFlowElement | MdxJsxTextElement>(
+  attributes: T['attributes'],
+  name: string,
+  value: string | boolean | number | null | undefined,
+): T['attributes'] {
+  const next = attributes.filter((a) => !(a.type === 'mdxJsxAttribute' && a.name === name));
+  if (value === null || value === undefined) return next as T['attributes'];
+  if (typeof value === 'string') {
+    if (value.length === 0) return next as T['attributes'];
+    next.push({ type: 'mdxJsxAttribute', name, value });
+  } else if (typeof value === 'boolean') {
+    if (!value) return next as T['attributes'];
+    // JSX shorthand: `<Component prop />` is `value: null` in mdast.
+    next.push({ type: 'mdxJsxAttribute', name, value: null });
+  } else if (typeof value === 'number') {
+    // Numbers must be expressions so the compiler reads `2` as a
+    // number, not the string `"2"`. mdast-util-mdx-jsx expects an
+    // `mdxJsxAttributeValueExpression` whose `value` is the source
+    // text the runtime will evaluate.
+    next.push({
+      type: 'mdxJsxAttribute',
+      name,
+      value: { type: 'mdxJsxAttributeValueExpression', value: String(value) },
+    });
   }
   return next as T['attributes'];
 }

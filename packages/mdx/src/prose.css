@@ -50,6 +50,18 @@
   color: inherit !important;
 }
 
+/* Editor prose surface is intentionally transparent: the live page
+ * paints the content area with body bg (navy on Starlight, white on a
+ * marketing site) and lets sub-components (Asides, Cards, etc) supply
+ * their own card surfaces. The editor mirrors that — `--conloca-host-
+ * body-bg` paints the surround region (see `.conloca-mdx-editor-
+ * surround` in cms-spa's main.css) and the prose surface itself stays
+ * transparent so that color shows through. An earlier iteration painted
+ * the prose with `--conloca-card-bg`, which was wrong: `article.card`
+ * on the live page is a small footer card, NOT the main content
+ * surface — sampling pixel coords inside the live article returned
+ * body, not the article element. */
+
 @scope (.conloca-prose) to (.conloca-generic-block) {
   :scope > :first-child {
     margin-top: 0;

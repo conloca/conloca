@@ -11,12 +11,13 @@ import type { MdxJsxFlowElement } from 'mdast-util-mdx-jsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
+  containsMarkdownMarkers,
   isJsxDescriptor,
   type MdxComponentDescriptor,
   useMdxComponents,
-  writeStringAttribute,
+  writeAttribute,
 } from '../../mdx-components';
-import { getSelectedBlock, setSelectedBlock } from '../../selected-block';
+import { getSelectedBlock, setSelectedBlock, useSelectedBlock } from '../../selected-block';
 
 /**
  * One editor component for any MDX JSX block. Replaces the per-component
@@ -103,6 +104,255 @@ interface RenderRequest {
 
 const SLOT_TAG = 'conloca-slot';
 const RENDER_ENDPOINT = '/__cms/api/render';
+
+/**
+ * Find string-prop values inside the SSR'd preview and make their rendering
+ * element directly editable. The author types in place; on blur the new
+ * value flows back through `onPropChange`, which routes through the same
+ * mdast updater the side panel uses — so a LinkCard's `description` can
+ * be edited inline OR in the side panel, both update the same source.
+ *
+ * Resolution is a conservative text-match heuristic: only leaf elements
+ * (no element children) whose `textContent.trim()` equals the prop value
+ * qualify, AND the match must be unique. If two elements happen to render
+ * the same string, or the value is too short to disambiguate (<3 chars),
+ * the prop falls back to side-panel-only editing. This avoids accidentally
+ * binding the wrong element when a value like "tip" coincides with body
+ * text or a CSS class.
+ *
+ * Commits land on blur (or Enter), not on keystroke — committing per-key
+ * would refire the render endpoint on every character and lose focus
+ * each time the new HTML replaces the wrapper.
+ *
+ * No registry opt-in for now; the uniqueness + length guards make the
+ * heuristic safe enough that "automatically inline-editable for components
+ * where it makes sense" matches the zero-config goal of the broader
+ * registry work.
+ */
+function wireInlinePropEditors(
+  wrap: HTMLElement,
+  attrs: Record<string, unknown>,
+  onPropChange: (propName: string, value: string) => void,
+): void {
+  for (const [propName, rawValue] of Object.entries(attrs)) {
+    if (typeof rawValue !== 'string') continue;
+    const value = rawValue.trim();
+    if (value.length < 3) continue;
+    // Skip markdown-bearing values. A `plaintext-only` contenteditable
+    // strips `**bold**` / inline code / link syntax on commit, so we
+    // route these props through the side panel instead. The author sees
+    // the raw string there and decides whether to keep the formatting.
+    // Conservative detection (see `containsMarkdownMarkers`) — false
+    // positive cost is "edit via panel" which is fine; false negative
+    // cost is silent formatting loss, which isn't.
+    if (containsMarkdownMarkers(value)) continue;
+
+    // Two parallel walks, combined for uniqueness. The element walk
+    // catches "value lives in a leaf span" cases (LinkCard's
+    // `<span class="description">`); the text-node walk catches "value
+    // is a text node sibling of an icon" cases (Aside's title sits
+    // inside `<p class="starlight-aside__title">` right next to an SVG).
+    // Total matches across both walks must equal 1 — otherwise we can't
+    // unambiguously bind the prop to a single rendering location and
+    // fall back to side-panel-only editing.
+    const elementMatches: HTMLElement[] = [];
+    for (const el of Array.from(wrap.querySelectorAll<HTMLElement>('*'))) {
+      // Leaf-only — skip elements with element children, otherwise we'd
+      // turn an entire `<a class="sl-link-card">` into a contenteditable.
+      if (el.children.length > 0) continue;
+      // Skip already-wired editors so re-renders don't double-bind.
+      if (el.hasAttribute('data-conloca-prop')) continue;
+      if ((el.textContent ?? '').trim() === value) elementMatches.push(el);
+    }
+    const textMatches: Text[] = [];
+    const walker = wrap.ownerDocument.createTreeWalker(wrap, NodeFilter.SHOW_TEXT);
+    let textNode: Node | null;
+    while ((textNode = walker.nextNode())) {
+      const t = textNode as Text;
+      if (!t.parentElement) continue;
+      // Don't double-count: a text node that is the sole content of a
+      // leaf element is already caught by the element walk above.
+      const parentIsLeaf = t.parentElement.children.length === 0;
+      if (parentIsLeaf) continue;
+      // Skip text inside an already-wired inline editor.
+      if (t.parentElement.closest('[data-conloca-prop]')) continue;
+      if ((t.nodeValue ?? '').trim() === value) textMatches.push(t);
+    }
+    if (elementMatches.length + textMatches.length !== 1) continue;
+
+    // Resolve the actual target element. For text-node matches we wrap
+    // the value in a fresh span so we have something to attach
+    // contenteditable to. Surrounding whitespace stays as plain text
+    // nodes either side of the span, so the icon→text spacing the host
+    // designed for is preserved.
+    let target: HTMLElement;
+    if (elementMatches.length === 1) {
+      target = elementMatches[0];
+    } else {
+      const t = textMatches[0];
+      const original = t.nodeValue ?? '';
+      const idx = original.indexOf(value);
+      const before = idx > 0 ? original.slice(0, idx) : '';
+      const after = idx + value.length < original.length ? original.slice(idx + value.length) : '';
+      const span = wrap.ownerDocument.createElement('span');
+      span.textContent = value;
+      const parent = t.parentNode!;
+      if (before) parent.insertBefore(wrap.ownerDocument.createTextNode(before), t);
+      parent.insertBefore(span, t);
+      if (after) parent.insertBefore(wrap.ownerDocument.createTextNode(after), t);
+      parent.removeChild(t);
+      target = span;
+    }
+
+    bindInlinePropEditor(target, propName, onPropChange);
+  }
+}
+
+/**
+ * Attach the inline-prop event listeners to a target element. Pulled
+ * out of `wireInlinePropEditors` so both the selector-driven path
+ * (defaults like Aside's auto-derived "Note" title) and the text-match
+ * path (explicit prop values that render as visible text) share the
+ * same wiring code — contenteditable attribute, focus override against
+ * stretched-link anchors, Enter/Escape semantics, and the blur commit
+ * that flows back through `onPropChange`.
+ */
+function bindInlinePropEditor(
+  target: HTMLElement,
+  propName: string,
+  onPropChange: (propName: string, value: string) => void,
+): void {
+  // `plaintext-only` keeps the contenteditable from accepting rich
+  // formatting (bold, italic, pasted markup). String props are flat
+  // text — bolding inside one would silently lose the styling on
+  // save anyway, so the affordance shouldn't suggest otherwise.
+  target.setAttribute('contenteditable', 'plaintext-only');
+  target.setAttribute('data-conloca-prop', propName);
+  target.setAttribute('spellcheck', 'true');
+  // Small visual cue so the author can tell which inline regions
+  // accept editing. Faint outline-color on hover, no layout shift.
+  target.classList.add('conloca-inline-prop');
+
+  let committed = (target.textContent ?? '').trim();
+  const commit = () => {
+    const next = (target.textContent ?? '').trim();
+    if (next !== committed) {
+      committed = next;
+      onPropChange(propName, next);
+    }
+  };
+  target.addEventListener('blur', commit);
+  target.addEventListener('keydown', (e: KeyboardEvent) => {
+    // Enter commits (string props are single-line); Escape reverts.
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      target.blur();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      target.textContent = committed;
+      target.blur();
+    }
+  });
+  // Anchor-parent focus override. When the inline-editable element sits
+  // inside a clickable anchor (Starlight's `<LinkCard>` wraps title +
+  // description in a single `<a>`), the browser's default mousedown
+  // focuses the anchor, not our contenteditable child. Override by
+  // calling preventDefault() to stop the anchor's default focus, then
+  // explicitly focus the contenteditable and place the caret at the
+  // click point. `stopPropagation` is intentionally NOT used — the
+  // parent block's mousedownCapture still needs to fire so the side
+  // panel updates with this block's props.
+  target.addEventListener('mousedown', (e: MouseEvent) => {
+    e.preventDefault();
+    target.focus();
+    // `caretPositionFromPoint` is the spec API; WebKit/older Chromium
+    // ship `caretRangeFromPoint` instead. Try both, fall back to the
+    // end of the text if neither works.
+    const doc = target.ownerDocument;
+    let range: Range | null = null;
+    const cp = (
+      doc as unknown as {
+        caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
+      }
+    ).caretPositionFromPoint;
+    if (cp) {
+      const pos = cp.call(doc, e.clientX, e.clientY);
+      if (pos) {
+        range = doc.createRange();
+        range.setStart(pos.offsetNode, pos.offset);
+        range.collapse(true);
+      }
+    } else if (
+      (doc as unknown as { caretRangeFromPoint?: (x: number, y: number) => Range | null }).caretRangeFromPoint
+    ) {
+      range = (doc as unknown as { caretRangeFromPoint: (x: number, y: number) => Range | null }).caretRangeFromPoint(
+        e.clientX,
+        e.clientY,
+      );
+    }
+    if (!range) {
+      range = doc.createRange();
+      range.selectNodeContents(target);
+      range.collapse(false);
+    }
+    const sel = doc.defaultView?.getSelection();
+    if (sel) {
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+  });
+}
+
+/**
+ * Activate the tab the author clicked on inside an SSR'd `<starlight-tabs>`
+ * preview. Mirrors what `<starlight-tabs>`'s connectedCallback does at
+ * runtime on the published page — toggling `aria-selected` on the trigger
+ * and the `hidden` attribute on the matching panel — but runs purely off
+ * the DOM we already SSR'd, so the editor doesn't need to load the host's
+ * tab script.
+ *
+ * Starlight's tab markup ([starlight-tabs] > [role=tablist] > a[role=tab]
+ * with `href="#tab-panel-N"`, and `<section role="tabpanel" id="...">`
+ * siblings of the tablist) is stable enough that this resolves by
+ * traversing roles + the href hash. If Starlight ever ships a different
+ * variant the resolution falls back to no-op, which is the same as the
+ * pre-fix behaviour.
+ */
+function activateTabInPlace(tab: HTMLElement): void {
+  const tablist = tab.closest('[role="tablist"]');
+  // The panels live as siblings of the tablist inside the same custom
+  // element (or inside a generic ancestor if Starlight changes shape).
+  const tabsRoot = tab.closest('starlight-tabs') ?? tablist?.parentElement ?? null;
+  if (!tablist || !tabsRoot) return;
+
+  // Deselect every trigger in this tablist; tabindex=-1 keeps keyboard
+  // focus order matching Starlight's runtime behaviour.
+  for (const t of tablist.querySelectorAll('[role="tab"]')) {
+    t.setAttribute('aria-selected', 'false');
+    t.setAttribute('tabindex', '-1');
+  }
+  tab.setAttribute('aria-selected', 'true');
+  tab.setAttribute('tabindex', '0');
+
+  // Resolve target panel via the trigger's `href="#id"`. Falls back to
+  // positional match if href is missing — covers future Starlight shapes
+  // that wire via aria-controls or index.
+  const href = tab.getAttribute('href') || '';
+  const targetId = href.startsWith('#') ? href.slice(1) : '';
+  const panels = Array.from(tabsRoot.querySelectorAll('[role="tabpanel"]'));
+  let activeIndex = -1;
+  if (targetId) {
+    activeIndex = panels.findIndex((p) => p.id === targetId);
+  }
+  if (activeIndex < 0) {
+    const triggers = Array.from(tablist.querySelectorAll('[role="tab"]'));
+    activeIndex = triggers.indexOf(tab);
+  }
+  panels.forEach((p, i) => {
+    if (i === activeIndex) p.removeAttribute('hidden');
+    else p.setAttribute('hidden', '');
+  });
+}
 
 /**
  * In-memory cache of rendered HTML keyed by the full tree shape +
@@ -320,6 +570,338 @@ function replaceMdastAtPath(
     };
   }
   return { ...root, children: newWorkingKids as MdxJsxFlowElement['children'] };
+}
+
+/**
+ * Like `replaceMdastAtPath` but swaps the WHOLE node at `path`, not
+ * just its children. Used when the side panel edits a CHILD
+ * component's attributes (eg a Card inside a CardGrid): we replace
+ * the child JSX node with a new one carrying updated attributes.
+ *
+ * `replaceMdastAtPath` only rewrites `children` because that's all
+ * the inline body editors ever change. For attribute edits the whole
+ * node needs replacement, hence this twin.
+ */
+function replaceMdastNodeAtPath(
+  root: MdxJsxFlowElement,
+  path: number[],
+  newNode: MdxJsxFlowElement,
+): MdxJsxFlowElement {
+  if (path.length === 0) return newNode;
+  const [head, ...rest] = path;
+  const originalKids = (root.children ?? []) as unknown[];
+  const isUnwrapped =
+    originalKids.length === 1 && (originalKids[0] as { type?: string } | undefined)?.type === 'paragraph';
+  const workingKids = isUnwrapped ? ((originalKids[0] as { children?: unknown[] }).children ?? []) : originalKids;
+  let filteredIdx = 0;
+  let originalIdx = -1;
+  for (let i = 0; i < workingKids.length; i++) {
+    if (getNamedSlotName(workingKids[i]) != null) continue;
+    if (filteredIdx === head) {
+      originalIdx = i;
+      break;
+    }
+    filteredIdx++;
+  }
+  if (originalIdx === -1) return root;
+  const targetKid = workingKids[originalIdx] as MdxJsxFlowElement;
+  const updatedKid = rest.length === 0 ? newNode : replaceMdastNodeAtPath(targetKid, rest, newNode);
+  const newWorkingKids = [...workingKids];
+  newWorkingKids[originalIdx] = updatedKid;
+  if (isUnwrapped) {
+    const paragraphWrap = originalKids[0] as { children?: unknown[] };
+    return {
+      ...root,
+      children: [{ ...paragraphWrap, children: newWorkingKids }] as MdxJsxFlowElement['children'],
+    };
+  }
+  return { ...root, children: newWorkingKids as MdxJsxFlowElement['children'] };
+}
+
+/**
+ * Drop the JSX node at `path` from its parent's children. Same walk
+ * as `replaceMdastNodeAtPath` — at the leaf we splice instead of
+ * replace. Used when the side panel's Remove button fires on a
+ * selected CHILD inside a container (eg removing one Card from a
+ * CardGrid without touching the grid itself).
+ */
+function removeMdastNodeAtPath(root: MdxJsxFlowElement, path: number[]): MdxJsxFlowElement {
+  if (path.length === 0) return root;
+  const [head, ...rest] = path;
+  const originalKids = (root.children ?? []) as unknown[];
+  const isUnwrapped =
+    originalKids.length === 1 && (originalKids[0] as { type?: string } | undefined)?.type === 'paragraph';
+  const workingKids = isUnwrapped ? ((originalKids[0] as { children?: unknown[] }).children ?? []) : originalKids;
+  let filteredIdx = 0;
+  let originalIdx = -1;
+  for (let i = 0; i < workingKids.length; i++) {
+    if (getNamedSlotName(workingKids[i]) != null) continue;
+    if (filteredIdx === head) {
+      originalIdx = i;
+      break;
+    }
+    filteredIdx++;
+  }
+  if (originalIdx === -1) return root;
+  let newWorkingKids: unknown[];
+  if (rest.length === 0) {
+    // Leaf — splice the child out.
+    newWorkingKids = workingKids.filter((_, i) => i !== originalIdx);
+  } else {
+    const targetKid = workingKids[originalIdx] as MdxJsxFlowElement;
+    const updatedKid = removeMdastNodeAtPath(targetKid, rest);
+    newWorkingKids = [...workingKids];
+    newWorkingKids[originalIdx] = updatedKid;
+  }
+  if (isUnwrapped) {
+    const paragraphWrap = originalKids[0] as { children?: unknown[] };
+    return {
+      ...root,
+      children: [{ ...paragraphWrap, children: newWorkingKids }] as MdxJsxFlowElement['children'],
+    };
+  }
+  return { ...root, children: newWorkingKids as MdxJsxFlowElement['children'] };
+}
+
+/**
+ * Given a child slot element inside a container's SSR'd preview,
+ * return the DOM subtree that belongs to ONLY this child. Used to
+ * bound the inline-prop scan so we don't accidentally match a
+ * sibling child's title.
+ *
+ * Heuristic: walk up from the slot. Each ancestor is a candidate.
+ * We keep walking as long as the parent of the ancestor contains
+ * exactly one slot-with-data-slot-id descendant (this slot). The
+ * moment we'd step into an ancestor whose subtree contains MORE
+ * than one slot — that's the boundary between children — we stop
+ * and return the last single-slot ancestor.
+ *
+ * For Starlight CardGrid the result is the `<article class="card">`
+ * for each child. For a future framework that wraps each child
+ * differently the same logic applies — we don't care about the
+ * specific class names.
+ *
+ * Returns `null` if the slot isn't actually inside a container with
+ * sibling slots (eg edge cases where the framework only emits one
+ * child). The caller falls back to wiring against the whole wrapper.
+ */
+function findChildRegion(slot: HTMLElement): HTMLElement | null {
+  let region: HTMLElement = slot;
+  let parent = slot.parentElement;
+  while (parent) {
+    const slotCount = parent.querySelectorAll(`${SLOT_TAG}[data-slot-id]`).length;
+    if (slotCount > 1) {
+      // Parent encloses more than one child — region is the current
+      // node (before stepping into the multi-child container).
+      return region === slot ? null : region;
+    }
+    region = parent;
+    parent = parent.parentElement;
+  }
+  return region === slot ? null : region;
+}
+
+/**
+ * Find the first mdast `list` node inside a component's effective
+ * children. Returns both the list and the path that `getMdastAtPath`
+ * would walk to reach it. `null` when no list is present at the top
+ * level — eg a regular Aside body where children are paragraphs.
+ *
+ * Handles two common shapes:
+ *   1. `{ name: 'Steps', children: [list] }` — path: `[0]`
+ *   2. `{ name: 'Steps', children: [{paragraph, children:[list]}] }`
+ *      — `effectiveChildren` unwraps the single-paragraph wrapper, so
+ *      the list is still reached at path `[0]`.
+ *
+ * Restricted to "first child is a list" because that's the strict-
+ * slot list pattern (Steps, FileTree). A Card body that happens to
+ * contain a list as a non-leading child stays in the regular slot
+ * path — those have a real `<conloca-slot>` from the server already.
+ */
+function findTopLevelList(
+  node: MdxJsxFlowElement,
+): { list: { children: unknown[]; ordered?: boolean }; path: number[] } | null {
+  const effective = effectiveChildren(node as { children?: unknown[] });
+  if (effective.length === 0) return null;
+  const first = effective[0] as { type?: string; children?: unknown[]; ordered?: boolean } | undefined;
+  if (first?.type !== 'list' || !Array.isArray(first.children)) return null;
+  return { list: first as { children: unknown[]; ordered?: boolean }, path: [0] };
+}
+
+/**
+ * Wire each `<li>` of the first ordered/unordered list in the
+ * rendered preview as a contenteditable, with on-blur commit that
+ * rewrites the corresponding mdast `listItem`. Used for strict-slot
+ * list components (Starlight `<Steps>`, `<FileTree>`) where the
+ * framework rejects `<conloca-slot>` children — we can't portal a
+ * Lexical editor into them, so we edit the rendered HTML in place.
+ *
+ * Trade-off vs the portal path: this loses any inline formatting on
+ * commit (the blur handler reads `textContent` and rewrites the item
+ * as plain text). The rendered output keeps whatever formatting the
+ * framework SSR'd (bold survives across renders that don't touch the
+ * item), but typing in a step replaces its content with plaintext.
+ * For step descriptions and file-tree labels that's usually fine; for
+ * heavily-formatted lists the user has to edit through markdown.
+ *
+ * DOM mutation safety: we DO NOT replace the li's children or inject
+ * anything React might reconcile against. Just set `contenteditable`
+ * on the existing element and attach listeners. The next render's
+ * `wrap.innerHTML = html` wipes the contenteditable cleanly.
+ */
+function wireListItemEditors(
+  wrap: HTMLElement,
+  node: MdxJsxFlowElement,
+  updater: (partial: Partial<MdxJsxFlowElement>) => void,
+  pendingFocusIndexRef: { current: number | null },
+): void {
+  const found = findTopLevelList(node);
+  if (!found) return;
+  const domList = wrap.querySelector('ol, ul');
+  if (!domList) return;
+  const domItems = Array.from(domList.children).filter((c): c is HTMLElement => c.tagName === 'LI');
+  if (domItems.length !== found.list.children.length) return;
+  // Default-deny tree-shaped lists. A flat plaintext editor over an
+  // `<li>` that contains a nested `<ul>`/`<ol>` would collapse the
+  // sub-tree into a single text node on commit. FileTree is the
+  // canonical case, but the same trap applies to any nav-menu /
+  // outline / nested-list component. The side panel still works;
+  // authors who need to restructure the tree edit the raw MDX.
+  // Future: a proper tree-aware editor can ship as a follow-up that
+  // handles recursive wiring, path-scoped writes, and add/remove
+  // affordances for sub-items.
+  if (domItems.some((li) => li.querySelector('ul, ol') !== null)) return;
+  const listOrdered = found.list.ordered ?? false;
+
+  /**
+   * Shared helper that writes a new list of items back through the
+   * mdast updater, preserving the paragraph-wrap shape if any. All
+   * commit / insert / remove paths funnel through this so the
+   * write-side logic stays in one place.
+   */
+  const writeListChildren = (newListChildren: unknown[]) => {
+    const newList = { type: 'list', ordered: listOrdered, children: newListChildren };
+    const originalKids = (node.children ?? []) as unknown[];
+    const isWrapped =
+      originalKids.length === 1 && (originalKids[0] as { type?: string } | undefined)?.type === 'paragraph';
+    const newChildren = isWrapped ? [{ ...(originalKids[0] as object), children: [newList] }] : [newList];
+    updater({ children: newChildren as typeof node.children });
+  };
+  const buildListItem = (text: string) => ({
+    type: 'listItem',
+    children: [{ type: 'paragraph', children: [{ type: 'text', value: text }] }],
+  });
+
+  for (let i = 0; i < domItems.length; i++) {
+    const li = domItems[i];
+    // Skip already-wired editors so re-renders don't double-bind.
+    if (li.hasAttribute('data-conloca-listitem')) continue;
+    li.setAttribute('data-conloca-listitem', String(i));
+    li.setAttribute('contenteditable', 'plaintext-only');
+    li.classList.add('conloca-listitem');
+    let committed = (li.textContent ?? '').trim();
+    const itemIndex = i;
+    const commit = () => {
+      const next = (li.textContent ?? '').trim();
+      if (next === committed) return;
+      committed = next;
+      // Build a fresh listItem with a single paragraph of plain text.
+      // Future enhancement: parse inline markdown so `**bold**` round-
+      // trips correctly. For now, plaintext-only matches the editing
+      // affordance authors see (no formatting toolbar in the li).
+      const newListChildren = found.list.children.map((it, idx) => (idx === itemIndex ? buildListItem(next) : it));
+      writeListChildren(newListChildren);
+    };
+    /**
+     * Insert an empty list item BELOW this one and ask the next
+     * render to focus the new li. The render cycle is:
+     *   1. writeListChildren → mdast updates → React re-renders
+     *   2. html-injection effect runs `wrap.innerHTML = html`
+     *   3. wireListItemEditors runs again; it sees the pending
+     *      focus index and focuses that li.
+     * The ref decouples the focus request from the render — we
+     * can't focus the new li synchronously because it doesn't
+     * exist in the DOM yet.
+     */
+    const insertItemBelow = () => {
+      // Commit current text first so we don't lose any unsaved
+      // typing in this li. `commit` is a no-op if nothing changed.
+      const currentText = (li.textContent ?? '').trim();
+      const updatedCurrent = buildListItem(currentText);
+      const newListChildren = [
+        ...found.list.children.slice(0, itemIndex),
+        updatedCurrent,
+        buildListItem(''),
+        ...found.list.children.slice(itemIndex + 1),
+      ];
+      pendingFocusIndexRef.current = itemIndex + 1;
+      writeListChildren(newListChildren);
+    };
+    /**
+     * Remove this list item from the list. Used when the author
+     * presses Backspace at the start of an already-empty step. If
+     * removing would leave the list empty we leave one empty item
+     * — Starlight's `<Steps>` rejects an empty `<ol>` and the
+     * author probably wants to keep editing.
+     */
+    const removeSelf = () => {
+      if (found.list.children.length <= 1) return;
+      const newListChildren = found.list.children.filter((_, idx) => idx !== itemIndex);
+      // Focus the previous item after re-render (or the new first
+      // item if we removed the head).
+      pendingFocusIndexRef.current = Math.max(0, itemIndex - 1);
+      writeListChildren(newListChildren);
+    };
+
+    li.addEventListener('blur', commit);
+    li.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        // Enter splits the list: commit current text, append a new
+        // empty item below, focus it. Standard list-editor pattern
+        // (Notion, Bear, native markdown editors).
+        e.preventDefault();
+        insertItemBelow();
+      } else if (e.key === 'Backspace') {
+        // Backspace at the start of an empty item removes the item.
+        // Anywhere else: default delete-character behaviour.
+        const text = (li.textContent ?? '').trim();
+        if (text.length === 0) {
+          e.preventDefault();
+          removeSelf();
+        }
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        li.textContent = committed;
+        li.blur();
+      }
+    });
+  }
+
+  // After every re-wire pass, honor any pending focus request from
+  // the previous render's keyboard handler. This is what makes Enter
+  // / Backspace feel responsive — the new li appears AND gets the
+  // caret in one perceived action.
+  if (pendingFocusIndexRef.current !== null) {
+    const targetIdx = pendingFocusIndexRef.current;
+    pendingFocusIndexRef.current = null;
+    const target = domItems[targetIdx];
+    if (target) {
+      // Defer to next microtask so any in-flight focus management
+      // (Lexical refocus after the discrete update) settles first.
+      Promise.resolve().then(() => {
+        target.focus();
+        // Place caret at start for the freshly-inserted empty item.
+        const range = target.ownerDocument.createRange();
+        range.selectNodeContents(target);
+        range.collapse(true);
+        const sel = target.ownerDocument.defaultView?.getSelection();
+        if (sel) {
+          sel.removeAllRanges();
+          sel.addRange(range);
+        }
+      });
+    }
+  }
 }
 
 function escapeHtml(s: string): string {
@@ -788,6 +1370,12 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
    * `<ContainerSlotEditor>` into that element so every child's body
    * is inline-editable, even when N children share one SSR'd wrapper. */
   const [containerSlots, setContainerSlots] = useState<Map<string, Element>>(() => new Map());
+  /** Index of a list item that should receive focus after the next
+   * render commits. Set by the Enter / Backspace handlers in
+   * `wireListItemEditors`; consumed by the same function on the
+   * next re-wire pass. Lives at component level (not effect-local)
+   * so it survives across render cycles. */
+  const pendingListItemFocusRef = useRef<number | null>(null);
 
   // Fetch (or serve from cache) the rendered HTML on prop changes.
   useEffect(() => {
@@ -824,6 +1412,13 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
     const wrap = wrapperRef.current;
     if (!wrap || html == null) return;
     wrap.innerHTML = html;
+    // After replacing the preview HTML, scan for string-prop values that
+    // appear exactly once as a leaf element's textContent and wire those
+    // elements as contenteditable. Authors edit eg LinkCard's `description`
+    // in place; the blur handler commits via `onPropChange`. Runs after
+    // every prop change because the new HTML wipes prior contenteditable
+    // attributes — re-wiring keeps inline editing alive across re-renders.
+    wireInlinePropEditors(wrap, attrs, onPropChange);
     if (containerMode) {
       // Multiple slots — discover them all and key by slot-id so the
       // path resolution in `ContainerSlotEditor` can find the right
@@ -836,10 +1431,67 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
       }
       setContainerSlots(next);
       setSlotEl(null);
+      // Per-child inline-prop wiring. The container's own
+      // `wireInlinePropEditors` call above only matches against the
+      // container's props (eg CardGrid's `stagger`) — child Cards'
+      // `title` and `icon` values are skipped because the matcher
+      // doesn't know they belong to a child. For each child slot
+      // we find the enclosing region (the DOM subtree the framework
+      // rendered for that one child), then run the matcher against
+      // the child's own attrs with a child-scoped `onPropChange` that
+      // routes through `replaceMdastNodeAtPath`. This is what lets
+      // the author click "First card" inside a CardGrid and edit it.
+      for (const [slotId, slotEl] of next) {
+        const childPath = slotIdToPath(slotId);
+        const childNode = getMdastAtPath(node, childPath);
+        if (!childNode) continue;
+        const region = findChildRegion(slotEl as HTMLElement);
+        if (!region) continue;
+        // Tag the child's enclosing region with its path so the
+        // wrapper-level mousedown/focus handler (`handleSelect`) can
+        // resolve which child a click landed in. The slot-id walk
+        // alone isn't enough — clicks on a child's title or icon
+        // (which sit OUTSIDE the slot) wouldn't find a slot ancestor
+        // via `closest`. This attribute IS a child ancestor in those
+        // cases, so `closest('[data-conloca-child-path]')` lands on
+        // the right region.
+        region.setAttribute('data-conloca-child-path', slotId);
+        const childAttrs = readAttrs(childNode);
+        const childOnPropChange = (propName: string, value: string | boolean | number | null | undefined) => {
+          const newChild = {
+            ...childNode,
+            attributes: writeAttribute(childNode.attributes, propName, value),
+          } as MdxJsxFlowElement;
+          const nextRoot = replaceMdastNodeAtPath(node, childPath, newChild);
+          updater({ children: nextRoot.children as typeof node.children });
+        };
+        wireInlinePropEditors(region, childAttrs, childOnPropChange);
+      }
     } else {
+      // Not a JSX container (so `containerMode` is false). But the
+      // mdast might still be a list-based strict-slot component (Steps,
+      // FileTree, anything else whose framework component validates
+      // its slot as a real `<ol>` / `<ul>` and rejects `<conloca-slot>`
+      // children). For those, we wire each `<li>` as a contenteditable
+      // with on-blur commit — no DOM mutation, no portal collision
+      // with React. Trade-off: plaintext-only commits (loses bold/
+      // italic on edit). Future enhancement: parse inline markdown
+      // back from contenteditable text so formatting round-trips.
+      wireListItemEditors(wrap, node, updater, pendingListItemFocusRef);
       setContainerSlots(new Map());
       setSlotEl(wrap.querySelector(SLOT_TAG));
     }
+    // `attrs` and `onPropChange` are NOT in deps on purpose. They get a
+    // fresh identity on every render (new object from `readAttrs`, new
+    // callback closure), so listing them would re-run this effect for
+    // every parent render — including selection-change re-renders that
+    // don't actually touch the preview HTML. That would re-set
+    // `innerHTML` mid-typing and trash the contenteditable's focus.
+    // The effect already runs whenever `html` changes, and `html` only
+    // updates after `propsJson` changes (via the renderReq fetch path),
+    // so the closure captures the right `attrs`/`onPropChange` for the
+    // commit that triggered the new render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [html, containerMode]);
 
   const slot = (
@@ -850,8 +1502,14 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
   );
 
   const onPropChange = useCallback(
-    (propName: string, next: string) => {
-      updater({ attributes: writeStringAttribute(node.attributes, propName, next) as typeof node.attributes });
+    (propName: string, next: string | boolean | number | null | undefined) => {
+      // Route through the type-aware writer so booleans become JSX
+      // shorthand (`<CardGrid stagger />`), numbers become expressions
+      // (`<Box columns={3} />`), and strings stay as string literals.
+      // The inline-prop editor in the preview still calls this with
+      // string values — `writeAttribute` handles those identically to
+      // `writeStringAttribute` (the previous narrow writer).
+      updater({ attributes: writeAttribute(node.attributes, propName, next) as typeof node.attributes });
     },
     [updater, node.attributes],
   );
@@ -862,18 +1520,166 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
   // back through `onPropChange`/`removeNode` (closed over the block's
   // own updater hooks) so updates flow on the same path inline editing
   // used.
+  // Stable per-block identity. `useLexicalNodeRemove` returns a fresh
+  // closure on each render so we can't key off `removeNode`. The Lexical
+  // node `getKey()` is stable for the block's whole lifetime and unique
+  // across siblings — exactly what the side-panel registry and the
+  // `is-selected` className need to identify the active block.
+  const blockKey = lexicalNode.getKey();
+
   useEffect(() => {
     if (!descriptor) return;
-    if (getSelectedBlock()?.descriptor.name === name) {
-      setSelectedBlock({ name, descriptor, attrs, onPropChange, onRemove: removeNode });
+    const current = getSelectedBlock();
+    if (!current) return;
+    if (current.key === blockKey) {
+      // Container/leaf itself is selected — republish with current attrs.
+      setSelectedBlock({ key: blockKey, name, descriptor, attrs, onPropChange, onRemove: removeNode });
+      return;
     }
+    // A child of this container might be the selection. Child keys are
+    // `${containerKey}:${dotPath}` — strip our prefix to find which
+    // child path the panel is showing. Re-resolve that child from the
+    // current mdast so panel inputs reflect prop edits done elsewhere
+    // (inline editor commits, programmatic updates).
+    if (containerMode && current.key.startsWith(`${blockKey}:`)) {
+      const dotPath = current.key.slice(blockKey.length + 1);
+      const childPath = dotPath ? dotPath.split('.').map((s) => Number.parseInt(s, 10)) : [];
+      const childNode = getMdastAtPath(node, childPath);
+      if (!childNode || childNode.name !== current.name) return;
+      const childDescriptor = descriptors.find((d) => d.name === childNode.name);
+      if (!childDescriptor || !isJsxDescriptor(childDescriptor)) return;
+      const childAttrs = readAttrs(childNode);
+      const childOnPropChange = (propName: string, value: string | boolean | number | null | undefined) => {
+        const newChild = {
+          ...childNode,
+          attributes: writeAttribute(childNode.attributes, propName, value),
+        } as MdxJsxFlowElement;
+        const next = replaceMdastNodeAtPath(node, childPath, newChild);
+        updater({ children: next.children as typeof node.children });
+      };
+      const childOnRemove = () => {
+        const next = removeMdastNodeAtPath(node, childPath);
+        updater({ children: next.children as typeof node.children });
+      };
+      setSelectedBlock({
+        key: current.key,
+        name: childNode.name,
+        descriptor: childDescriptor,
+        attrs: childAttrs,
+        onPropChange: childOnPropChange,
+        onRemove: childOnRemove,
+      });
+    }
+    // Deps are intentionally narrow. `propsJson` is the content the panel
+    // reads; `descriptor`/`name`/`blockKey` define identity. `onPropChange`
+    // and `removeNode` are FRESH closures on every render (Lexical's
+    // updater hooks rebuild them), so including them would trigger a
+    // re-publish → useSelectedBlock fires → all blocks re-render →
+    // closure identities change → re-publish → infinite loop. We capture
+    // the latest closures via the `attrs`/`propsJson` change signal
+    // instead, which is the moment the panel actually needs an update.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [propsJson, descriptor, name, onPropChange, removeNode]);
+  }, [propsJson, descriptor, name, blockKey, containerMode]);
 
-  const handleSelect = useCallback(() => {
-    if (!descriptor) return;
-    setSelectedBlock({ name, descriptor, attrs, onPropChange, onRemove: removeNode });
-  }, [descriptor, name, attrs, onPropChange, removeNode]);
+  const handleSelect = useCallback(
+    (e?: React.SyntheticEvent) => {
+      if (!descriptor) return;
+      // Container resolution: when the click/focus landed inside a
+      // child slot (eg a Card inside a CardGrid), publish the CHILD's
+      // descriptor + attrs to the panel instead of the container's.
+      // The same wrapper handler covers both cases — we walk from the
+      // event target to find the nearest `data-slot-id` ancestor; if
+      // one exists, the user clicked into a child, otherwise the click
+      // hit container-level chrome and the container itself is the
+      // selection.
+      if (containerMode && e) {
+        const target = e.target as HTMLElement | null;
+        // Prefer the child-region marker stamped by the html-injection
+        // effect — covers clicks anywhere inside a child (title, icon,
+        // body). The slot-id fallback covers the case where the
+        // region marker is missing (eg edge cases where the region
+        // walker couldn't find a bounded subtree).
+        const regionEl = target?.closest<HTMLElement>('[data-conloca-child-path]');
+        const slotEl = regionEl ?? target?.closest<HTMLElement>('[data-slot-id]');
+        if (slotEl) {
+          const slotId = slotEl.getAttribute('data-conloca-child-path') ?? slotEl.getAttribute('data-slot-id') ?? '';
+          const childPath = slotIdToPath(slotId);
+          const childNode = getMdastAtPath(node, childPath);
+          if (childNode && childNode.name) {
+            const childDescriptor = descriptors.find((d) => d.name === childNode.name);
+            if (childDescriptor && isJsxDescriptor(childDescriptor)) {
+              const childAttrs = readAttrs(childNode);
+              const childKey = `${blockKey}:${childPath.join('.')}`;
+              const childOnPropChange = (propName: string, value: string | boolean | number | null | undefined) => {
+                const newChild = {
+                  ...childNode,
+                  attributes: writeAttribute(childNode.attributes, propName, value),
+                } as MdxJsxFlowElement;
+                const next = replaceMdastNodeAtPath(node, childPath, newChild);
+                updater({ children: next.children as typeof node.children });
+              };
+              const childOnRemove = () => {
+                const next = removeMdastNodeAtPath(node, childPath);
+                updater({ children: next.children as typeof node.children });
+              };
+              setSelectedBlock({
+                key: childKey,
+                name: childNode.name,
+                descriptor: childDescriptor,
+                attrs: childAttrs,
+                onPropChange: childOnPropChange,
+                onRemove: childOnRemove,
+              });
+              return;
+            }
+          }
+        }
+      }
+      setSelectedBlock({ key: blockKey, name, descriptor, attrs, onPropChange, onRemove: removeNode });
+    },
+    [blockKey, descriptor, name, attrs, onPropChange, removeNode, containerMode, node, descriptors, updater],
+  );
+
+  // SSR'd component previews ship with real interactive anchors — Starlight
+  // `<LinkCard>`s navigate, `<Tabs>` triggers are `<a role="tab" href="#...">`,
+  // any `<a>` inside a `<Card>` body, etc. In a live page Starlight's custom
+  // elements (`<starlight-tabs>`) wire click → tab-panel toggle, and link
+  // anchors navigate. In the editor neither of those is desirable: the JS
+  // that runs `<starlight-tabs>`'s connectedCallback isn't loaded under
+  // /__cms, and navigation yanks the author away from what they're editing.
+  //
+  // So intercept anchor clicks in capture phase and handle the two cases:
+  //   1. `[role="tab"]` → switch tabs in place (manual ARIA toggle that
+  //      mirrors what `<starlight-tabs>` would do at runtime). The author
+  //      can now click "npm" to see and edit the npm tab body.
+  //   2. Any other `<a>` → swallow. Selection still fires from the
+  //      `mousedown` handler so the block becomes selected as if it were a
+  //      static surface.
+  //
+  // `auxclick` (middle-click) gets the anchor swallow too — without it
+  // middle-click on a LinkCard would still "open in new tab" and escape
+  // the editor.
+  const handleAnchorClickInPreview = useCallback((e: React.MouseEvent) => {
+    const target = e.target as HTMLElement | null;
+    const tab = target?.closest('[role="tab"]');
+    if (tab) {
+      e.preventDefault();
+      e.stopPropagation();
+      activateTabInPlace(tab as HTMLElement);
+      return;
+    }
+    if (target?.closest('a')) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }, []);
+
+  // Per-block "am I selected" subscription. Compares the registry's
+  // current key with this block's stable key; safe across re-renders.
+  // The CSS hook is the `is-selected` class on the wrapper, which paints
+  // the accent outline; the side panel keys off the same registry.
+  const selected = useSelectedBlock();
+  const isSelected = selected?.key === blockKey;
 
   // Raw HTML in MDX (`<div class="x">`, `<details>`, etc.) lands here
   // with a lowercase tag name and no registered component descriptor.
@@ -883,8 +1689,11 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
     const rawHtml = mdastToHtml(node);
     return (
       <div
-        className="conloca-generic-block conloca-generic-block--html"
+        className={`conloca-generic-block conloca-generic-block--html${isSelected ? ' is-selected' : ''}`}
         onMouseDownCapture={handleSelect}
+        onFocusCapture={handleSelect}
+        onClickCapture={handleAnchorClickInPreview}
+        onAuxClickCapture={handleAnchorClickInPreview}
         // eslint-disable-next-line react/no-danger
         dangerouslySetInnerHTML={{ __html: rawHtml }}
       />
@@ -897,7 +1706,13 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
   // modifier so CSS can drop block-level styling for this path.
   if (isInline) {
     return (
-      <span className="conloca-generic-block conloca-generic-block--inline" onMouseDownCapture={handleSelect}>
+      <span
+        className={`conloca-generic-block conloca-generic-block--inline${isSelected ? ' is-selected' : ''}`}
+        onMouseDownCapture={handleSelect}
+        onFocusCapture={handleSelect}
+        onClickCapture={handleAnchorClickInPreview}
+        onAuxClickCapture={handleAnchorClickInPreview}
+      >
         {source && !error ? (
           <>
             <span
@@ -917,7 +1732,13 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
   }
 
   return (
-    <div className="conloca-generic-block" onMouseDownCapture={handleSelect}>
+    <div
+      className={`conloca-generic-block${isSelected ? ' is-selected' : ''}`}
+      onMouseDownCapture={handleSelect}
+      onFocusCapture={handleSelect}
+      onClickCapture={handleAnchorClickInPreview}
+      onAuxClickCapture={handleAnchorClickInPreview}
+    >
       {/* Wrapper that hosts the SSR'd HTML. The nested editor portals
           into the <conloca-slot> element inside this HTML. When no source
           is registered (unknown JSX tag, custom React/Vue component without
@@ -930,14 +1751,16 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
           {/* Leaf mode: one slot at the wrapper level, portaled with a
               single nested editor for the block's body. */}
           {slotEl && createPortal(slot, slotEl)}
-          {/* Container mode: each child JSX node also emits a slot
-              with its `data-slot-id`. Portal a `ContainerSlotEditor`
-              into each, scoped to that child's mdast subtree via
-              path resolution. */}
-          {containerMode &&
-            Array.from(containerSlots).map(([slotId, el]) =>
-              createPortal(<ContainerSlotEditor key={slotId} path={slotIdToPath(slotId)} />, el),
-            )}
+          {/* Container/list slots: each child node OR list item gets
+              a slot with `data-slot-id`. Portal a `ContainerSlotEditor`
+              into each, scoped to that child's mdast subtree via path
+              resolution. The same render path covers two cases —
+              container components (CardGrid → Card children) and
+              strict-slot list components (Steps → listItem children)
+              where the slot markers are injected client-side post-SSR. */}
+          {Array.from(containerSlots).map(([slotId, el]) =>
+            createPortal(<ContainerSlotEditor key={slotId} path={slotIdToPath(slotId)} />, el),
+          )}
         </>
       ) : (
         <div className="conloca-generic-block__fallback" data-mdx-block={name}>

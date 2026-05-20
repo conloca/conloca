@@ -21,14 +21,24 @@ import type { MdxJsxComponentDescriptor } from './mdx-components';
  */
 
 export interface SelectedBlock {
+  /** Stable per-block identity — the owning Lexical node's `getKey()`.
+   * Used to compare "am I the selected block?" across re-renders without
+   * tripping on closure-identity changes (`useLexicalNodeRemove` returns
+   * a fresh function every render, so we can't compare by callback). */
+  key: string;
   /** Tag name (eg 'Aside'). Used as the panel heading. */
   name: string;
   /** Descriptor providing the prop schema. */
   descriptor: MdxJsxComponentDescriptor;
   /** Current attribute values from the mdast node. */
   attrs: Record<string, unknown>;
-  /** Apply a prop change. Wrapped by the owning block over its updater. */
-  onPropChange: (name: string, value: string) => void;
+  /** Apply a prop change. Wrapped by the owning block over its updater.
+   * Accepts strings (text props), booleans (checkbox props), numbers
+   * (numeric inputs), or `null`/`undefined` (remove the attribute).
+   * The block routes the value through `writeAttribute` which picks
+   * the right mdast shape — string literal, JSX shorthand, or
+   * expression. */
+  onPropChange: (name: string, value: string | boolean | number | null | undefined) => void;
   /** Remove the block from the document. */
   onRemove: () => void;
 }

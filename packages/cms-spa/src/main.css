@@ -118,6 +118,8 @@
   --color-selected: #efefef; /* selected item bg (eg highlighted menu item) */
   --color-foreground: #181818; /* primary text on surfaces */
   --color-muted: #5a5a5a; /* secondary/disabled text, captions */
+  --color-accent: #0158ad; /* brand-blue used by primary buttons + selection ring */
+  --color-accent-foreground: #ffffff; /* text on accent surfaces */
 }
 
 /* Semantic utilities — defined explicitly so they're guaranteed in the
@@ -158,6 +160,12 @@
 }
 @utility text-muted {
   color: var(--color-muted);
+}
+@utility bg-accent {
+  background-color: var(--color-accent);
+}
+@utility text-accent-foreground {
+  color: var(--color-accent-foreground);
 }
 
 /* Dark mode: selector strategy for manual toggle + system preference.
@@ -253,6 +261,8 @@ body {
   --color-selected: var(--color-grey-03);   /* #404040 */
   --color-foreground: var(--color-grey-12); /* #fafafa */
   --color-muted: var(--color-grey-07);      /* #ababab */
+  --color-accent: var(--color-azure-05);    /* #3479be — slightly lighter for dark surfaces */
+  --color-accent-foreground: #ffffff;
 
   color-scheme: dark;
   color: var(--color-grey-12);
@@ -370,6 +380,103 @@ body.mdxeditor-focus-mode .mdxeditor-root-contenteditable {
 @layer cms-admin {
   .conloca-generic-block {
     position: relative;
+    /* The wrapper itself never paints — affordances ride on outline so
+     * they don't shift layout (which border would). Outline lives at
+     * 2px outside the box so it doesn't clip the host's own border on
+     * Asides etc. Transition keeps the hover/selected swap from
+     * snapping. */
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    border-radius: 0.25rem;
+    transition: outline-color 120ms ease-out;
+  }
+  /* Hover ring — only when the author can actually click into the
+   * block (no ring on text-flow inline wrappers, no ring on the raw-
+   * html static path which has its own surface). Cursor hint matches
+   * the affordance so the surface reads as interactive. */
+  .conloca-generic-block:not(.conloca-generic-block--inline):hover {
+    outline-color: var(--color-line);
+    cursor: text;
+  }
+  /* Anchors inside an SSR'd preview (Starlight `<LinkCard>`, links inside
+   * a `<Card>` body, etc) are click-through in the editor. Two reasons:
+   *
+   *   1. Navigation. Without this they'd swallow author clicks and
+   *      yank them to another route. The JS-level click handler also
+   *      blocks navigation (see `handleAnchorClickInPreview`), but
+   *      letting the click reach an inner contenteditable element
+   *      requires the anchor to be transparent to pointer events.
+   *
+   *   2. Stretched-link overlays. Starlight `<LinkCard>` ships a
+   *      full-card `<a>` overlay on top of the card content; without
+   *      `pointer-events: none` the overlay intercepts every click and
+   *      the inner `<span class="description">` never sees a mousedown,
+   *      so inline-prop editing of the description is impossible.
+   *
+   * Tab triggers (`<a role="tab">`) are excluded — they need real
+   * clicks so `activateTabInPlace` can run. Cursor matches behaviour:
+   * `text` for click-through anchors (you're editing, not navigating),
+   * default pointer for tabs (you're switching, the click does
+   * something visible). */
+  .conloca-generic-block__rendered a:not([role="tab"]) {
+    cursor: text;
+    pointer-events: none;
+  }
+  /* Anchors that author-supplied bodies emit (eg an inline link inside
+   * a Card body the author wrote with `[text](url)`) ARE part of the
+   * editable nested editor, not the SSR'd preview chrome. They need
+   * pointer events so the author can place a caret inside the link
+   * text. The nested editor's contenteditable shadows the preview
+   * cascade, so target those specifically. */
+  .conloca-generic-block__rendered [data-lexical-editor="true"] a {
+    pointer-events: auto;
+    cursor: text;
+  }
+
+  /* Inline-editable string props inside an SSR'd preview. Wired by
+   * `wireInlinePropEditors` in GenericBlock.tsx — the element renders
+   * the prop's current value AND accepts typing, with blur committing
+   * back through `onPropChange`. Visual: faint dashed underline on
+   * hover/focus so the author can see which inline regions accept
+   * editing without intrusive permanent chrome. Selection ring on the
+   * parent block already signals "this block is active", so the inline
+   * cue stays subtle. */
+  .conloca-inline-prop {
+    cursor: text;
+    border-radius: 2px;
+    transition: background-color 120ms ease-out;
+  }
+  .conloca-inline-prop:hover {
+    background-color: color-mix(in srgb, var(--color-accent) 8%, transparent);
+  }
+  .conloca-inline-prop:focus {
+    outline: 1px solid var(--color-accent);
+    outline-offset: 1px;
+    background-color: color-mix(in srgb, var(--color-accent) 6%, transparent);
+  }
+  /* List-item editing for strict-slot list components (Steps,
+   * FileTree). Each `<li>` is a contenteditable with on-blur commit
+   * — same affordance pattern as `.conloca-inline-prop` so the cue
+   * stays consistent across both inline-edit paths. */
+  .conloca-listitem {
+    cursor: text;
+    border-radius: 2px;
+    transition: background-color 120ms ease-out;
+  }
+  .conloca-listitem:hover {
+    background-color: color-mix(in srgb, var(--color-accent) 8%, transparent);
+  }
+  .conloca-listitem:focus {
+    outline: 1px solid var(--color-accent);
+    outline-offset: 1px;
+    background-color: color-mix(in srgb, var(--color-accent) 6%, transparent);
+  }
+  /* Selection ring — published from `setSelectedBlock`. Beats the
+   * hover ring via specificity; both share the same outline slot so
+   * there's no double border. */
+  .conloca-generic-block.is-selected,
+  .conloca-generic-block.is-selected:hover {
+    outline-color: var(--color-accent);
   }
 
   /* Inline modifier — applied by GenericBlock when the descriptor's
@@ -533,6 +640,28 @@ body.mdxeditor-focus-mode .mdxeditor-root-contenteditable {
     padding: 0 !important;
     margin: 0 !important;
   }
+
+  /* MDXEditor's NestedLexicalEditor always wraps the editor content in
+   * a "root paragraph" (block=false default; see
+   * @mdxeditor/editor/dist/plugins/core/NestedLexicalEditor.js line 100-103).
+   * For block-level children (Aside, Card, etc. whose mdast children are
+   * already paragraphs) this produces nested <p><p>...</p></p> in the
+   * DOM. The host's prose CSS then applies its 1em top/bottom margin to
+   * the INNER <p>, pushing the body text visibly down inside the block.
+   *
+   * Tight fix: zero margins/padding only when a <p> sits directly inside
+   * another <p> inside a nested editor. Doesn't match flat sibling
+   * paragraphs (which need their normal spacing).
+   *
+   * Structural fix is to switch NestedLexicalEditor to `block={true}`
+   * everywhere in GenericBlock.tsx — that'd skip the wrapper paragraph
+   * entirely. Deferred until we can verify save round-trip on all
+   * shapes (single-text-body Aside, multi-paragraph Aside, nested
+   * lists, etc). */
+  .conloca-generic-block__rendered [class*="_nestedEditor_"] p > p {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
 }
 
 /* Adjacent JSX blocks: when two consecutive Lexical paragraphs each
@@ -554,6 +683,20 @@ body.mdxeditor-focus-mode .mdxeditor-root-contenteditable {
   margin-bottom: 0;
 }
 
+
+/* MDX editor content column — sits between the chrome header and the
+ * right-side props panel. Paints the host page's body bg (set via the
+ * `--conloca-host-body-bg` bridge in useInjectHostStyles) so the area
+ * around the prose card matches the live page's body color. Inside
+ * this region, the `hostWrapperPlugin` mirrors the host's content-
+ * root element (`<main>` or `[data-conloca-content-root]`) around the
+ * contenteditable — so host CSS targeting that wrapper (eg `main.card
+ * { padding: … }`) applies through the normal cascade. */
+@layer cms-admin {
+  .conloca-mdx-editor-surround {
+    background-color: var(--conloca-host-body-bg, transparent);
+  }
+}
 
 /* Right-side props panel — appears next to the MDX editor surface,
  * shows the descriptor's `props` as form fields for the currently
@@ -625,6 +768,29 @@ body.mdxeditor-focus-mode .mdxeditor-root-contenteditable {
     flex-direction: column;
     gap: 0.25rem;
   }
+  /* Inline variant for boolean (checkbox) props — checkbox on the
+   * left, label next to it. The default column layout is meant for
+   * input-with-label-above; that's weird for a checkbox where the
+   * label should sit beside the control. */
+  .conloca-jsx-props-panel__field--inline {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .conloca-jsx-props-panel__field--inline input[type='checkbox'] {
+    /* Default checkboxes inherit the input padding/border block we
+     * use for text inputs — visually wrong. Reset to native sizing. */
+    padding: 0 !important;
+    width: 1rem;
+    height: 1rem;
+    margin: 0;
+    border-radius: 2px;
+    accent-color: var(--color-accent);
+    flex-shrink: 0;
+  }
+  .conloca-jsx-props-panel__field--inline .conloca-jsx-props-panel__label {
+    flex: 1;
+  }
 
   .conloca-jsx-props-panel__label {
     font-size: 0.75rem;
@@ -656,6 +822,14 @@ body.mdxeditor-focus-mode .mdxeditor-root-contenteditable {
   .conloca-jsx-props-panel__help {
     font-size: 0.75rem;
     opacity: 0.6;
+  }
+
+  /* Markdown-bearing string prop: tells the author why inline editing
+   * isn't lit up in the preview for this prop. Slightly brighter than
+   * the default help so it reads as informational, not decoration. */
+  .conloca-jsx-props-panel__help--md {
+    opacity: 0.85;
+    font-style: italic;
   }
 
   .conloca-jsx-props-panel__hint {
