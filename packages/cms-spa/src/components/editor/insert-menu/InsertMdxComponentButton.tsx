@@ -107,15 +107,25 @@ export function InsertMdxComponentButton() {
         </button>
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
+        {/* Color tokens here use the cms-admin semantic palette
+            (`bg-panel`, `--color-line`, `--color-hover`) rather than
+            the `dark:` Tailwind variants. Radix portals the content
+            outside `.mdxeditor`, and in that location the `dark:`
+            variant's `:is(.dark, .dark *)` chain doesn't always win
+            against the bare `bg-white` rule — the menu ends up white
+            on white in dark mode. Semantic tokens auto-flip via the
+            `:root` vs `.dark` token redefinition in `main.css`, so
+            they work regardless of where the portal lands. */}
         <DropdownMenu.Content
           sideOffset={4}
           align="start"
-          className="z-50 min-w-[14rem] max-h-72 overflow-auto rounded-md border border-grey-09 dark:border-grey-04 bg-white dark:bg-grey-02 shadow-md py-1 text-sm"
+          className="z-50 min-w-[14rem] max-h-72 overflow-auto rounded-md border bg-panel shadow-md py-1 text-sm text-grey-01 dark:text-grey-11"
+          style={{ borderColor: 'var(--color-line)' }}
         >
           {groups.map((group, groupIndex) => (
             <div key={group.category || '__ungrouped__'}>
               {group.category ? (
-                <DropdownMenu.Label className="px-3 pt-2 pb-1 text-[10px] uppercase tracking-wide text-grey-04 dark:text-grey-07">
+                <DropdownMenu.Label className="px-3 pt-2 pb-1 text-[10px] uppercase tracking-wide text-grey-05 dark:text-grey-08">
                   {group.category}
                 </DropdownMenu.Label>
               ) : null}
@@ -123,16 +133,16 @@ export function InsertMdxComponentButton() {
                 <DropdownMenu.Item
                   key={descriptor.name}
                   onSelect={() => onSelect(descriptor)}
-                  className="block px-3 py-1.5 cursor-default outline-none data-[highlighted]:bg-grey-10 dark:data-[highlighted]:bg-grey-03"
+                  className="block px-3 py-1.5 cursor-default outline-none data-[highlighted]:bg-hover"
                 >
                   <div className="font-medium">{descriptor.insert?.label ?? descriptor.name}</div>
                   {descriptor.insert?.description ? (
-                    <div className="text-xs text-grey-04 dark:text-grey-07">{descriptor.insert.description}</div>
+                    <div className="text-xs text-grey-05 dark:text-grey-08">{descriptor.insert.description}</div>
                   ) : null}
                 </DropdownMenu.Item>
               ))}
               {groupIndex < groups.length - 1 ? (
-                <DropdownMenu.Separator className="my-1 h-px bg-grey-09 dark:bg-grey-04" />
+                <DropdownMenu.Separator className="my-1 h-px" style={{ backgroundColor: 'var(--color-line)' }} />
               ) : null}
             </div>
           ))}
