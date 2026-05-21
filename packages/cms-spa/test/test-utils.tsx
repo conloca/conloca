@@ -2,6 +2,7 @@ import {
   type APIError,
   createContentAPIRouter,
   type ErrorCode,
+  ErrorCodes,
   InMemoryContentAPI,
   type SitesConfig,
 } from '@conloca/content-api/node';
@@ -63,7 +64,41 @@ export function setupTestAPI(baseUrl = '/__cms/api', sitesConfig?: SitesConfig) 
     );
 
     // Create the content API router with error injection
-    const apiRouter = createContentAPIRouter(testApi, { compileMDX });
+    const apiRouter = createContentAPIRouter(testApi);
+
+    // POST /mdx/compile lives in @conloca/astro-cms's cms-handler (not in
+    // createContentAPIRouter) because compileMDX is a renderer concern.
+    // Mirror it here so tests that exercise useCompileMDX see the same
+    // endpoint shape they would in a real Astro host.
+    apiRouter.post('/mdx/compile', async (c) => {
+      let body: unknown;
+      try {
+        body = await c.req.json();
+      } catch {
+        return c.json({ error: { code: ErrorCodes.INVALID_REQUEST, message: 'Invalid JSON body' } }, 400);
+      }
+      const mdxContent =
+        typeof body === 'object' && body !== null ? (body as { mdxContent?: unknown }).mdxContent : null;
+      if (!mdxContent || typeof mdxContent !== 'string') {
+        return c.json(
+          {
+            error: {
+              code: ErrorCodes.MISSING_REQUIRED_FIELD,
+              message: 'mdxContent string required',
+              details: { field: 'mdxContent' },
+            },
+          },
+          400,
+        );
+      }
+      try {
+        const { code, metadata } = await compileMDX(mdxContent);
+        return c.json({ code, metadata });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to compile MDX';
+        return c.json({ error: { code: ErrorCodes.MDX_COMPILE_FAILED, message } }, 422);
+      }
+    });
 
     // Create the main app and mount at the specified base URL
     const app = new Hono();

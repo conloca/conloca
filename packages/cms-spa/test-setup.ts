@@ -16,6 +16,24 @@ mock.module('@radix-ui/react-portal', () => ({
   Portal: ({ children }: { children: React.ReactNode }) => children,
 }));
 
+// `@lexical/react/LexicalTypeaheadMenuPlugin` ships a `node` export
+// condition that does a top-level `await import(...)` to pick the
+// dev/prod bundle. Under Bun's test runner that path lands in a state
+// where the React dispatcher reads as null when the menu component
+// calls `useCallback`, killing any test that mounts MDXEditor. None of
+// our tests actually exercise the slash-menu UI, so stub it out at
+// module-load time.
+mock.module('@lexical/react/LexicalTypeaheadMenuPlugin', () => ({
+  LexicalTypeaheadMenuPlugin: () => null,
+  MenuOption: class MenuOption {
+    key: string;
+    constructor(key: string) {
+      this.key = key;
+    }
+  },
+  useBasicTypeaheadTriggerMatch: () => () => null,
+}));
+
 mock.module('@puckeditor/core', () => ({
   Puck: ({ data, headerTitle, overrides }: { data: any; headerTitle?: string; overrides?: Record<string, any> }) =>
     React.createElement(

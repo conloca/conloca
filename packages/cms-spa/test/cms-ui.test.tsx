@@ -310,8 +310,13 @@ describe('Page Metadata Dialog', () => {
     fireEvent.click(getByText('Save'));
 
     await waitFor(() => {
-      expect(onSave).toHaveBeenCalledWith({
-        ...mockPage,
+      expect(onSave).toHaveBeenCalledTimes(1);
+      // PageMetadataDialog now emits additional fields (customMeta,
+      // robots, canonical, collection, type). Assert on the fields the
+      // test actually cares about.
+      expect(onSave.mock.calls[0][0]).toMatchObject({
+        title: mockPage.title,
+        pathname: mockPage.pathname,
         description: 'Updated description',
       });
     });
