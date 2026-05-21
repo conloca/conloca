@@ -110,15 +110,15 @@ export function mergeRegistry(
   // registry until the disambiguation UI exists.
   const grouped = new Map<string, DescriptorBuilder[]>();
   for (const builder of byKey.values()) {
-    const arr = grouped.get(builder.getName()) ?? [];
+    const arr = grouped.get(builder.name) ?? [];
     arr.push(builder);
-    grouped.set(builder.getName(), arr);
+    grouped.set(builder.name, arr);
   }
   const winners: DiscoveredComponent[] = [];
   for (const candidates of grouped.values()) {
     candidates.sort((a, b) => {
       // Higher actual MDX usage wins.
-      if (a.getUsageCount() !== b.getUsageCount()) return b.getUsageCount() - a.getUsageCount();
+      if (a.usageCount !== b.usageCount) return b.usageCount - a.usageCount;
       // Tie: prefer the one with an interface-derived schema (more
       // likely to be the right one).
       const aHasSchema = a.hasInterfaceSchema();
@@ -205,7 +205,7 @@ function applyOverride(descriptor: DiscoveredComponent, override: CmsOverride): 
 /** Internal accumulator. Combines interface-derived schema with
  * usage-derived observations as scans arrive. */
 class DescriptorBuilder {
-  private readonly name: string;
+  readonly name: string;
   private readonly source: string;
   private readonly defaultExport: boolean;
   /**
@@ -237,7 +237,7 @@ class DescriptorBuilder {
   private readonly observedPropNames = new Set<string>();
   /** How many `<Foo>` usages of this component were seen across all
    * MDX files. Used to pick a winner on name collisions. */
-  private usageCount = 0;
+  usageCount = 0;
 
   constructor(init: {
     name: string;
@@ -271,14 +271,6 @@ class DescriptorBuilder {
       if (!this.observedValues.has(propName)) this.observedValues.set(propName, new Set());
       this.observedValues.get(propName)!.add(value);
     }
-  }
-
-  getUsageCount(): number {
-    return this.usageCount;
-  }
-
-  getName(): string {
-    return this.name;
   }
 
   hasInterfaceSchema(): boolean {

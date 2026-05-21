@@ -37,7 +37,7 @@ function localesFromEnv(): { availableLocales?: string[]; defaultLocale?: string
   const list = import.meta.env.CONLOCA_LOCALES as readonly string[] | null | undefined;
   const defaultLocale = import.meta.env.CONLOCA_DEFAULT_LOCALE as string | undefined;
   return {
-    ...(Array.isArray(list) && list.length > 0 ? { availableLocales: [...list] } : {}),
+    ...(Array.isArray(list) && list.length > 0 ? { availableLocales: list as string[] } : {}),
     ...(typeof defaultLocale === 'string' && defaultLocale ? { defaultLocale } : {}),
   };
 }
