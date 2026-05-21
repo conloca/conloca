@@ -2,6 +2,16 @@ import { Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { containsMarkdownMarkers, type MdxComponentProp } from '../../mdx-components';
 import { useSelectedBlock } from '../../selected-block';
+import { SearchableSelect } from './SearchableSelect';
+
+/**
+ * Above this many options, swap the native `<select>` for the
+ * searchable combobox. Native selects are great up to ~20 entries
+ * (scroll + arrow keys are enough); beyond that, finding a value
+ * means scrolling through a wall of text. Starlight's `<Icon>` ships
+ * ~270 options — comfortably past this threshold.
+ */
+const SEARCHABLE_THRESHOLD = 20;
 
 /**
  * Fixed-position right-side panel showing prop fields for the
@@ -145,14 +155,24 @@ function PropField({ prop, rawValue, onChange }: PropFieldProps) {
         {prop.required && <em aria-hidden> *</em>}
       </span>
       {prop.options && prop.options.length > 0 ? (
-        <select value={stringValue} onChange={(e) => onChange(e.target.value)} aria-label={display}>
-          <option value="">—</option>
-          {prop.options.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
+        prop.options.length > SEARCHABLE_THRESHOLD ? (
+          <SearchableSelect
+            options={prop.options}
+            value={stringValue}
+            onChange={(next) => onChange(next)}
+            placeholder={display}
+            ariaLabel={display}
+          />
+        ) : (
+          <select value={stringValue} onChange={(e) => onChange(e.target.value)} aria-label={display}>
+            <option value="">—</option>
+            {prop.options.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        )
       ) : (
         <TextInput value={stringValue} onCommit={(next) => onChange(next)} placeholder={display} ariaLabel={display} />
       )}
