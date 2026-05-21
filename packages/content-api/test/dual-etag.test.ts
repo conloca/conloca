@@ -633,9 +633,10 @@ describe('Dual ETag System', () => {
         expect(updatedModified).not.toBe(originalModified);
         expect(new Date(updatedModified).getTime()).toBeGreaterThan(new Date(originalModified).getTime());
 
-        // Verify content was updated and frontmatter shows new modified date
+        // Verify content was updated. The `modified` timestamp is
+        // asserted on the locale envelope above — `content.mdx` is
+        // body-only on read (see commit a631a43).
         expect(updated.locales.en.content.mdx).toContain('Version 2');
-        expect(updated.locales.en.content.mdx).toContain(`modified: ${updatedModified}`);
       }
     }
   });

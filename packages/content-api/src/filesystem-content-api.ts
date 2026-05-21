@@ -840,9 +840,10 @@ export class FileSystemContentAPI implements ContentAPI {
           const etags = calculateEtagsFromMdxBuffer(repairedBuffer, contentStartPos);
           const etag = `${etags.metaEtag}.${etags.contentEtag}`;
 
-          // Return the repaired data
+          // Return the repaired data. Strip leading newlines so the
+          // body matches what the author wrote — see `readLocaleFile`.
           return {
-            content: { mdx: parsed.content },
+            content: { mdx: parsed.content.replace(/^\n+/, '') },
             etag,
             modified: parsed.data.modified || now,
           };
@@ -1198,7 +1199,11 @@ export class FileSystemContentAPI implements ContentAPI {
       const content = textDecoder.decode(buffer);
 
       if (filePath.endsWith('.mdx')) {
-        const { data: frontmatter, content: body } = matter(content);
+        const { data: frontmatter, content: rawBody } = matter(content);
+        // gray-matter leaves the blank line after the closing `---` on
+        // the body. Strip leading newlines so the round-trip matches the
+        // body the author wrote.
+        const body = rawBody.replace(/^\n+/, '');
 
         // Calculate etags from the file buffer
         const contentPos = findMdxContentStartPosition(buffer);

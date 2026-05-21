@@ -95,26 +95,14 @@ export class InMemoryContentAPI implements ContentAPI {
       const { locale } = localeVersion;
       const cachedContent = this.contentIndex.getCachedContent(id, locale);
       if (cachedContent) {
-        // For MDX content, include frontmatter for variable access
-        let contentToReturn = cachedContent;
-        if (manifest.type === 'mdx' && cachedContent.mdx) {
-          const frontmatterData = {
-            id: manifest.id,
-            created: localeVersion.created,
-            modified: localeVersion.modified,
-            ...(localeVersion.publishAt && { publishAt: localeVersion.publishAt }),
-            ...(localeVersion.unpublishAt && { unpublishAt: localeVersion.unpublishAt }),
-            ...localeVersion.meta, // Spread metadata fields directly
-          };
-          contentToReturn = {
-            ...cachedContent,
-            mdx: serializeMdxWithFrontmatter(frontmatterData, cachedContent.mdx),
-          };
-        }
-
+        // `content.mdx` is body-only on read — frontmatter is server-
+        // owned and exposed via `meta` / `created` / `modified`. Mirrors
+        // FileSystemContentAPI.readLocaleFile (see commit a631a43 — the
+        // editor cannot round-trip frontmatter as body text without
+        // duplicating it on disk).
         contentEntry.locales[locale] = {
           ...localeVersion,
-          content: contentToReturn,
+          content: cachedContent,
         };
       }
     }
@@ -135,22 +123,8 @@ export class InMemoryContentAPI implements ContentAPI {
       return null;
     }
 
-    // For MDX content, include frontmatter for variable access
-    let contentToReturn = { ...cachedContent };
-    if (manifest.type === 'mdx' && cachedContent.mdx) {
-      const frontmatterData = {
-        id: manifest.id,
-        created: localeVersion.created,
-        modified: localeVersion.modified,
-        ...(localeVersion.publishAt && { publishAt: localeVersion.publishAt }),
-        ...(localeVersion.unpublishAt && { unpublishAt: localeVersion.unpublishAt }),
-        ...localeVersion.meta, // Spread metadata fields directly
-      };
-      contentToReturn = {
-        ...cachedContent,
-        mdx: serializeMdxWithFrontmatter(frontmatterData, cachedContent.mdx),
-      };
-    }
+    // `content.mdx` is body-only on read (see `getContent` above).
+    const contentToReturn = { ...cachedContent };
 
     // Return a deep copy to prevent modifications to the original data
     return {

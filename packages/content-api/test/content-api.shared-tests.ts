@@ -926,11 +926,13 @@ And some more text with [a link](https://example.com).`;
         const enLocale = retrieved.locales.en;
         expect(enLocale).toBeDefined();
 
-        // MDX content should include the frontmatter
-        expect(enLocale.content.mdx).toContain('---');
-        expect(enLocale.content.mdx).toContain('title: Test MDX Document');
-        expect(enLocale.content.mdx).toContain('description: A test document for MDX round-trip validation');
-        expect(enLocale.content.mdx).toContain(mdxContent); // Should contain the original content part
+        // `content.mdx` is body-only — frontmatter is server-owned and
+        // surfaced via `meta` / `created` / `modified`. See commit
+        // a631a43 (the editor cannot round-trip frontmatter as body
+        // text without duplicating it on disk).
+        expect(enLocale.content.mdx).toContain(mdxContent);
+        expect(enLocale.content.mdx).not.toContain('---');
+        expect(enLocale.content.mdx).not.toContain('title: Test MDX Document');
 
         // Check all metadata fields
         expect(enLocale.meta.title).toBe('Test MDX Document');
@@ -996,18 +998,9 @@ And some more text with [a link](https://example.com).`;
         const retrieved = await contentApi.getContent(id);
         assertDefined(retrieved, 'Content should exist');
 
-        // Build expected MDX with frontmatter
-        const expectedMdx = `---
-id: ${id}
-created: ${retrieved.locales.en.created}
-modified: ${retrieved.locales.en.modified}
-title: Minimal MDX
----
-
-${mdxContent}`;
-
-        // MDX content includes frontmatter for variable access
-        expect(retrieved.locales.en.content.mdx).toBe(expectedMdx);
+        // `content.mdx` is body-only on read — frontmatter is exposed
+        // via `meta` / `created` / `modified`. See commit a631a43.
+        expect(retrieved.locales.en.content.mdx).toBe(mdxContent);
         expect(retrieved.locales.en.meta.title).toBe('Minimal MDX');
       });
 
