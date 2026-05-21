@@ -134,8 +134,8 @@ function MDXLivePreviewInner({ markdown, debounceMs }: { markdown: string; debou
       <div className="m-4 p-3 rounded-md border border-yellow-08 bg-yellow-11 dark:bg-yellow-02 dark:border-yellow-03 text-sm text-yellow-02 dark:text-yellow-09">
         <p className="font-semibold mb-1">Preview unavailable</p>
         <p className="text-xs">
-          The preview can&apos;t compile <code>import</code> / <code>export</code> statements. Remove them, or use MDX
-          directives (like <code>:::note</code>) for callouts so this block stays previewable.
+          The preview can&apos;t compile <code>import</code> / <code>export</code> statements. Remove them so this block
+          stays previewable.
         </p>
       </div>
     );

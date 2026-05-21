@@ -59,12 +59,13 @@ export function createRegistryEndpoint(
         scanExternalComponents(mdxScans, projectRoot),
         loadCmsOverrides(overridesFolder, projectRoot),
       ]);
-      // Order matters in the merge: external (npm) components first,
-      // local components second, so local always wins on (source,name)
-      // collision — a host shadowing a Starlight component with their
-      // own implementation expects the local one to be used. The merge
-      // logic also runs a separate collision pass on `name` alone.
-      // Host sidecar overrides apply last as the highest-priority
+      // External (npm) and local components live in disjoint key
+      // spaces — external source strings are npm specifiers, local
+      // source strings are absolute paths — so they never collide on
+      // the `${source}::${name}` dedup key. The interesting collision
+      // case is two sources sharing a `name`; that pass is resolved
+      // inside `mergeRegistry` by usage count (see rule 6 in its top
+      // doc). Host sidecar overrides apply last as the highest-priority
       // layer (see `applyOverride` in merge-registry).
       return mergeRegistry(mdxScans, [...externalComponents, ...localComponents], overrides);
     })();

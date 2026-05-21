@@ -40,10 +40,11 @@ import type { CmsOverride } from './scan-overrides';
  *      the file back out.
  *
  *   6. Name collisions across different sources (local `<Card>` vs
- *      Starlight `<Card>`) — for MVP, the local source wins. Both
- *      remain available; the editor's insert flow will need to
- *      disambiguate by current-file context (TODO when the insert
- *      menu lands).
+ *      Starlight `<Card>`) — the higher-usage source wins; ties
+ *      break in favor of the source whose props came from an
+ *      interface schema. The dropped alternative isn't lost from
+ *      the merge itself — it just doesn't surface in the registry
+ *      until per-file disambiguation exists in the insert flow.
  */
 
 /** Same shape as `MdxJsxComponentDescriptor` from cms-spa, extended

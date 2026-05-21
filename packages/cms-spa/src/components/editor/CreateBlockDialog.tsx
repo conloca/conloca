@@ -1,8 +1,7 @@
 import { APIClientError, ErrorCodes, useCreateContent } from '@conloca/content-api-client';
 import { useEffect, useState } from 'react';
 import { slugify } from '../../utils/slugify';
-import { Button, Input, Select } from '../ui';
-import { contentBlockTemplates, getContentBlockTemplate, renderContentBlockTemplate } from './content-block-templates';
+import { Button, Input } from '../ui';
 
 // Friendly inline copy for the typed failures the server can return when
 // creating a block. The dialog renders the result under the title field and
@@ -53,27 +52,21 @@ interface CreateBlockDialogProps {
    * the id back into a parent field (Puck `onChange`).
    */
   onCreated: (result: { id: string; etag?: string }) => void;
-  /**
-   * Optional initial template id. Defaults to the first registered template.
-   * Useful when a parent UI wants to pre-pick a template variant.
-   */
-  initialTemplateId?: string;
 }
 
 /**
- * Metadata-first "new block" dialog. Asks for a title + starter template,
- * then creates the entity server-side with the rendered template MDX as the
- * initial content and hands the new id back to the parent.
+ * Metadata-first "new block" dialog. Asks for a title, then creates the
+ * entity server-side with a one-line MDX scaffold (`# <title>` plus a
+ * blank-line prompt) and hands the new id back to the parent.
  *
  * Replaces the old "metadata dialog → fullscreen MDX modal" two-step. The
  * page-route editor (`/blocks/:id`) takes over after creation, giving the
  * user the full unsaved-changes guard, conflict recovery, and locale
  * switching that the modal lacked.
  */
-export function CreateBlockDialog({ isOpen, onClose, onCreated, initialTemplateId }: CreateBlockDialogProps) {
+export function CreateBlockDialog({ isOpen, onClose, onCreated }: CreateBlockDialogProps) {
   const createContent = useCreateContent();
   const [titleInput, setTitleInput] = useState('');
-  const [selectedTemplateId, setSelectedTemplateId] = useState(initialTemplateId || contentBlockTemplates[0]?.id || '');
   const [error, setError] = useState<string | null>(null);
 
   // Reset transient state every time the dialog re-opens so a previously
@@ -81,10 +74,9 @@ export function CreateBlockDialog({ isOpen, onClose, onCreated, initialTemplateI
   useEffect(() => {
     if (isOpen) {
       setTitleInput('');
-      setSelectedTemplateId(initialTemplateId || contentBlockTemplates[0]?.id || '');
       setError(null);
     }
-  }, [isOpen, initialTemplateId]);
+  }, [isOpen]);
 
   if (!isOpen) {
     return null;
@@ -101,8 +93,7 @@ export function CreateBlockDialog({ isOpen, onClose, onCreated, initialTemplateI
     }
 
     setError(null);
-    const template = getContentBlockTemplate(selectedTemplateId);
-    const initialContent = renderContentBlockTemplate(selectedTemplateId, title);
+    const initialContent = `# ${title}\n\nWrite your content here.\n`;
 
     try {
       const result = await createContent.mutateAsync({
@@ -110,16 +101,10 @@ export function CreateBlockDialog({ isOpen, onClose, onCreated, initialTemplateI
         collection: 'blocks',
         type: 'mdx',
         name: slugify(title) || 'untitled',
-        meta: {
-          title,
-          category: template?.category,
-        },
+        meta: { title },
         locales: {
           en: {
-            meta: {
-              title,
-              category: template?.category,
-            },
+            meta: { title },
             content: {
               mdx: initialContent,
             },
@@ -190,26 +175,6 @@ export function CreateBlockDialog({ isOpen, onClose, onCreated, initialTemplateI
           />
           <p className="mt-2 text-sm text-grey-04 dark:text-grey-07">
             This will be used as the display name for your block
-          </p>
-        </div>
-        <div className="mb-4">
-          <label htmlFor="block-template" className="block text-sm font-medium mb-2 text-grey-01 dark:text-grey-12">
-            Starter Template
-          </label>
-          <Select
-            id="block-template"
-            value={selectedTemplateId}
-            onChange={(e) => setSelectedTemplateId(e.target.value)}
-            disabled={isPending}
-          >
-            {contentBlockTemplates.map((template) => (
-              <option key={template.id} value={template.id}>
-                {template.label}
-              </option>
-            ))}
-          </Select>
-          <p className="mt-2 text-sm text-grey-04 dark:text-grey-07">
-            {getContentBlockTemplate(selectedTemplateId)?.description}
           </p>
         </div>
         {error ? (
