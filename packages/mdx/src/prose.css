@@ -196,39 +196,46 @@
 
 /* Dark-mode token overrides — applied the same scoped way so they
  * don't reach framework internals. The `.dark` ancestor lives on
- * `<html>`, outside the scope root, so the scope root's
- * `:scope:where(.dark, .dark *)` form would be more precise; but
- * using `.dark` as a normal selector at the scope's matched-element
- * level works as long as something on the ancestor chain has it.
- * Both `.dark` (Tailwind convention) and `[data-theme="dark"]`
+ * `<html>`, outside the scope root, so an unanchored `:where(.dark) h1`
+ * inside the @scope block doesn't match: per CSS @scope semantics,
+ * compound selectors are implicitly descended from `:scope`, so
+ * `:where(.dark) h1` becomes `:scope :where(.dark) h1` — meaning
+ * "a `.dark` DESCENDANT of `.conloca-prose`, then an h1 below it",
+ * which never matches when `.dark` is on `<html>`. The form below
+ * (`:scope:where(.dark *, [data-theme="dark"] *) h1`) anchors the
+ * `.dark` check on the scope root itself: the scope must be (or be
+ * a descendant of) something with `.dark`/`[data-theme="dark"]`. The
+ * editor body sits inside `<html class="dark">` in both block- and
+ * page-editor contexts, so the scope root qualifies and the override
+ * applies. Both `.dark` (Tailwind convention) and `[data-theme="dark"]`
  * (Starlight/shadcn convention) are honored by hosts that set them
  * — see `useTheme` mirroring. */
 @scope (.conloca-prose) to (.conloca-generic-block) {
-  :where(.dark, [data-theme="dark"]) h1,
-  :where(.dark, [data-theme="dark"]) h2,
-  :where(.dark, [data-theme="dark"]) h3,
-  :where(.dark, [data-theme="dark"]) h4,
-  :where(.dark, [data-theme="dark"]) h5,
-  :where(.dark, [data-theme="dark"]) h6,
-  :where(.dark, [data-theme="dark"]) strong,
-  :where(.dark, [data-theme="dark"]) th {
+  :scope:where(.dark *, [data-theme="dark"] *) h1,
+  :scope:where(.dark *, [data-theme="dark"] *) h2,
+  :scope:where(.dark *, [data-theme="dark"] *) h3,
+  :scope:where(.dark *, [data-theme="dark"] *) h4,
+  :scope:where(.dark *, [data-theme="dark"] *) h5,
+  :scope:where(.dark *, [data-theme="dark"] *) h6,
+  :scope:where(.dark *, [data-theme="dark"] *) strong,
+  :scope:where(.dark *, [data-theme="dark"] *) th {
     color: var(--color-text-heading, #f1f5f9);
   }
-  :where(.dark, [data-theme="dark"]) blockquote {
+  :scope:where(.dark *, [data-theme="dark"] *) blockquote {
     color: var(--color-text-primary, #e2e8f0);
   }
-  :where(.dark, [data-theme="dark"]) code {
+  :scope:where(.dark *, [data-theme="dark"] *) code {
     background: var(--color-bg-code, #1e293b);
     border-color: var(--color-border, #334155);
     color: var(--color-text-code, #e2e8f0);
   }
-  :where(.dark, [data-theme="dark"]) pre {
+  :scope:where(.dark *, [data-theme="dark"] *) pre {
     background: var(--conloca-code-bg, var(--color-bg-code, #1e293b));
     border-color: var(--conloca-code-border, var(--color-border, #334155));
   }
-  :where(.dark, [data-theme="dark"]) hr,
-  :where(.dark, [data-theme="dark"]) th,
-  :where(.dark, [data-theme="dark"]) td {
+  :scope:where(.dark *, [data-theme="dark"] *) hr,
+  :scope:where(.dark *, [data-theme="dark"] *) th,
+  :scope:where(.dark *, [data-theme="dark"] *) td {
     border-color: var(--color-border, #334155);
   }
 }
