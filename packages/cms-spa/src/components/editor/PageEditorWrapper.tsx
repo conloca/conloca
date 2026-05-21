@@ -3,6 +3,7 @@ import {
   useContent,
   useDataContext,
   useLocalizedContent,
+  useSitesConfig,
   useUpdateLocalized,
 } from '@conloca/content-api-client';
 import type { ComponentConfig, Config, Data } from '@puckeditor/core';
@@ -128,8 +129,17 @@ function PuckPageEditorInner({ puckConfig }: PageEditorWrapperProps) {
   const navigate = useNavigate();
   const updateContent = useUpdateLocalized();
 
-  // Load page content
-  const { data: content, isLoading: isLoadingContent, error } = useLocalizedContent(id || '', 'en');
+  // Mirrors BlockEditor / MdxPageEditor: derive the locale list from the
+  // host's sites config and let the editor switch between them. Initial
+  // value is `'en'` for parity with the sibling editors; on a site whose
+  // globalLocales don't include 'en', the user picks an available locale
+  // from the switcher PageEditor renders when availableLocales.length > 1.
+  const [currentLocale, setCurrentLocale] = useState<string>('en');
+  const { data: sitesConfig } = useSitesConfig();
+  const availableLocales = sitesConfig?.globalLocales || ['en'];
+
+  // Load page content for the active locale.
+  const { data: content, isLoading: isLoadingContent, error } = useLocalizedContent(id || '', currentLocale);
 
   // Load user-created blocks for config enhancement
   const { data: blocksData } = useBlocks();
@@ -340,12 +350,13 @@ function PuckPageEditorInner({ puckConfig }: PageEditorWrapperProps) {
         config={enhancedConfig}
         // Pass dataContext for Puck's internal resolveData (field changes, etc.)
         metadata={dataContextResponse?.dataContext ? { metadata: dataContextResponse.dataContext } : undefined}
-        availableLocales={['en']}
+        availableLocales={availableLocales}
+        onLocaleChange={setCurrentLocale}
         onSave={async (newData, forceEtag) => {
           try {
             const result = await updateContent.mutateAsync({
               id: content.id,
-              locale: 'en',
+              locale: currentLocale,
               data: {
                 content: { puckData: newData },
               },
@@ -383,7 +394,7 @@ function PuckPageEditorInner({ puckConfig }: PageEditorWrapperProps) {
           try {
             const result = await updateContent.mutateAsync({
               id: content.id,
-              locale: 'en',
+              locale: currentLocale,
               data: buildMetadataUpdate(metadata),
               etag: currentEtag,
             });

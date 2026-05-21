@@ -951,7 +951,18 @@ export class FileSystemContentAPI implements ContentAPI {
     // Also scan mdxPagesRoot for .mdx files when the second root is configured.
     // Supports projects that store mdx-type pages outside the main content
     // tree (the rendering pipeline that consumes them is the project's choice).
-    if (this.absoluteMdxPagesRoot && this.absoluteMdxPagesRoot !== this.absoluteContentRoot) {
+    //
+    // Skip the second scan when mdxPagesRoot is the same as contentRoot OR
+    // nested inside it — the first scan already walked those files, and a
+    // second pass would push every `.mdx` onto `files` twice. The nested case
+    // is the documented Starlight pattern (`contentRoot: './src/content'`,
+    // `mdxPagesRoot: './src/content/docs'`), so the prefix check matters in
+    // practice.
+    if (
+      this.absoluteMdxPagesRoot &&
+      this.absoluteMdxPagesRoot !== this.absoluteContentRoot &&
+      !this.absoluteMdxPagesRoot.startsWith(this.absoluteContentRoot + '/')
+    ) {
       async function scanMdxPages(dir: string) {
         try {
           const entries = await readdir(dir, { withFileTypes: true });
