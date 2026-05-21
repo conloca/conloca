@@ -157,6 +157,60 @@ export interface ConlocaCMSOptions extends Omit<UIConfig, 'basename'> {
   editorStyles?: string | string[];
 
   /**
+   * Route URL whose styles + content-wrapper shape get applied when
+   * editing a standalone BLOCK (not a page). Blocks aren't tied to a
+   * specific route, but they're consumed inside pages — so the
+   * authoring experience should look like the user's actual site. The
+   * editor fetches this route's CSS (via `/api/styles?url=…`) and its
+   * content-root wrapper (via `/api/content-wrapper?url=…`) the same
+   * way it does for pages, then renders the block inside that frame.
+   *
+   * Pick a representative content page on your site — typically the
+   * site root or a docs landing page. Hosts that ship rich typography
+   * benefit most; for hosts whose body bg matches the editor chrome,
+   * the value barely matters. Defaults to `/` (site root).
+   *
+   * Per-block overrides via block frontmatter remain on the roadmap
+   * for cases where one block ships only inside a specific layout.
+   *
+   * @example '/getting-started/'
+   */
+  blockPreviewRoute?: string;
+
+  /**
+   * Inline CSS to inject into the editor's `conloca-host-preview`
+   * layer, applied AFTER auto-discovered host stylesheets. The
+   * editor's content surround, prose card, and individual MDX
+   * components all surface here; anything you write at this layer
+   * wins on cascade order against the auto-discovery output (same
+   * specificity, later layer position).
+   *
+   * Use for one-off overrides when:
+   *   - Your host body bg doesn't read well behind the editor chrome
+   *     and you want a specific color regardless.
+   *   - You want a different prose surface only inside the editor
+   *     (eg lighter for accessibility while authoring).
+   *   - A component renders correctly on the published page but
+   *     needs a small visual tweak in the editor — toolbar gutter,
+   *     focus ring, etc.
+   *
+   * Pure raw CSS. Conloca does no scoping or transformation, so any
+   * selector you write needs to be specific enough not to leak into
+   * the admin chrome (the chrome's selectors live in the `cms-admin`
+   * layer, which sits LOWER in the cascade — so without explicitly
+   * naming admin selectors, your CSS only reaches host components
+   * and the content surround).
+   *
+   * @example `
+   *   /* Force a darker editor body even though the live page is light. *\/
+   *   body { background-color: #0a0a0f; }
+   *   /* Custom focus ring for the prose surface. *\/
+   *   .conloca-prose--editor:focus-within { outline: 2px solid hotpink; }
+   * `
+   */
+  editorCSS?: string;
+
+  /**
    * Optional configuration enabling `type: 'mdx'` page support.
    *
    * When set, Conloca's CMS surfaces `.mdx` files at `mdxPages.root` as
@@ -644,6 +698,14 @@ initHydration(componentRegistry)
               'import.meta.env.CONLOCA_MDX_PAGES_ROOT': JSON.stringify(options.mdxPages?.root || ''),
               'import.meta.env.CONLOCA_MDX_PAGES_DEFAULT_LOCALE': JSON.stringify(options.mdxPages?.defaultLocale || ''),
               'import.meta.env.CONLOCA_MDX_PAGES_SITE': JSON.stringify(options.mdxPages?.site || ''),
+              // Default route URL the block editor uses for style /
+              // wrapper discovery. See `blockPreviewRoute` option doc
+              // above. `/` is a sane fallback for most layouts.
+              'import.meta.env.CONLOCA_BLOCK_PREVIEW_ROUTE': JSON.stringify(options.blockPreviewRoute || '/'),
+              // Raw CSS the host wants injected into the editor's
+              // `conloca-host-preview` layer for visual overrides.
+              // See `editorCSS` option doc above for use cases.
+              'import.meta.env.CONLOCA_EDITOR_CSS': JSON.stringify(options.editorCSS || ''),
               // Top-level locales. Vite `define` does literal text
               // substitution, so this inlines as either a JS array or `null`.
               // The runtime handler reads it as-is — no JSON.parse needed.

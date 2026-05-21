@@ -5,6 +5,7 @@ import { forwardRef, useCallback, useMemo, useRef } from 'react';
 import { buildUploadFormData } from '../../hooks/useUpload';
 import { isJsxDescriptor, toJsxComponentDescriptor, useMdxComponents } from '../../mdx-components';
 import {
+  type SiteStyles,
   useEditorStyles,
   useFetchedContentWrapper,
   useFetchedSiteStyles,
@@ -62,7 +63,18 @@ export const CMSMDXEditor = forwardRef<MDXEditorMethods, CMSMDXEditorProps>(({ p
   // (`bg-panel`, `text-foreground`, `border-line`, etc.) whose class
   // names the host's Tailwind can't generate. See main.css's `@theme`
   // and `@utility` blocks for the chrome token definitions.
-  useInjectHostStyles('conloca-host-preview', activeStyles);
+  //
+  // The host can also append raw CSS via the integration's `editorCSS`
+  // option (see `ConlocaCMSOptions`) — concatenated AFTER auto-
+  // discovered styles so it sits later in the same cascade layer and
+  // wins on tie-breaks. Empty string when the host didn't set it; no
+  // marker `<style>` is emitted for the no-op case.
+  const editorCSS: string = import.meta.env.CONLOCA_EDITOR_CSS || '';
+  const styleStack = useMemo<SiteStyles>(
+    () => (editorCSS ? [...activeStyles, editorCSS] : activeStyles),
+    [activeStyles, editorCSS],
+  );
+  useInjectHostStyles('conloca-host-preview', styleStack);
   // Discover the host page's content-root shape (eg `<article class="card">`
   // on Starlight). The editor wraps its contenteditable in a clone of that
   // element via `hostWrapperPlugin`, so host CSS paints the editor's

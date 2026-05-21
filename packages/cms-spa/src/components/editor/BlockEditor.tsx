@@ -225,8 +225,8 @@ export function BlockEditor() {
   // with a placeholder empty string and update it later.
   if (isLoading || !isContentLoaded) {
     return (
-      <div className="flex items-center justify-center h-screen bg-grey-12 dark:bg-grey-01">
-        <div className="flex items-center gap-3 text-grey-04 dark:text-grey-07">
+      <div className="flex items-center justify-center h-screen bg-page">
+        <div className="flex items-center gap-3 text-muted">
           <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-azure-04" />
           <span>Loading block…</span>
         </div>
@@ -236,7 +236,7 @@ export function BlockEditor() {
 
   if (error && !loadedContent && !savedContentRef.current) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen bg-grey-12 dark:bg-grey-01 gap-4">
+      <div className="flex flex-col items-center justify-center h-screen bg-page gap-4">
         <div className="text-red-04">Failed to load block: {error?.message || 'Not found'}</div>
         <button
           type="button"
@@ -261,18 +261,18 @@ export function BlockEditor() {
             : 'Save';
 
   return (
-    <div className="h-screen flex flex-col bg-grey-12 dark:bg-grey-01">
-      <header className="flex items-center justify-between gap-4 px-4 py-2 border-b border-grey-09 dark:border-grey-04 bg-white dark:bg-grey-03 shrink-0">
+    <div className="h-screen flex flex-col bg-page">
+      <header className="flex items-center justify-between gap-4 px-4 py-2 border-b border-line bg-overlay shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           <button
             type="button"
             onClick={handleCancel}
             aria-label={fromPage ? 'Back to page' : 'Back to blocks'}
-            className="p-2 rounded text-grey-04 dark:text-grey-07 hover:bg-grey-11 dark:hover:bg-grey-04"
+            className="p-2 rounded text-muted hover:bg-hover"
           >
             ←
           </button>
-          <h1 className="text-base font-medium text-grey-01 dark:text-grey-12 truncate">Edit: {filePath}</h1>
+          <h1 className="text-base font-medium text-foreground truncate">Edit: {filePath}</h1>
         </div>
         <div className="flex items-center gap-2">
           <LocaleSelector
@@ -285,7 +285,7 @@ export function BlockEditor() {
             type="button"
             onClick={handleCancel}
             disabled={saveState === 'saving'}
-            className="px-3 py-1.5 text-sm border border-grey-09 dark:border-grey-04 rounded text-grey-01 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-04 disabled:opacity-50"
+            className="px-3 py-1.5 text-sm border border-line rounded text-foreground hover:bg-hover disabled:opacity-50"
           >
             Cancel
           </button>
@@ -293,7 +293,7 @@ export function BlockEditor() {
             type="button"
             onClick={handleSaveClick}
             disabled={saveState === 'saving' || (!isDirty && saveState === 'idle')}
-            className="px-3 py-1.5 text-sm bg-azure-04 text-white rounded hover:bg-azure-03 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3 py-1.5 text-sm bg-accent text-accent-foreground rounded hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saveButtonLabel}
           </button>
@@ -302,7 +302,7 @@ export function BlockEditor() {
               type="button"
               onClick={handleDone}
               disabled={saveState === 'saving'}
-              className="px-3 py-1.5 text-sm border border-grey-09 dark:border-grey-04 rounded text-grey-01 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-04 disabled:opacity-50"
+              className="px-3 py-1.5 text-sm border border-line rounded text-foreground hover:bg-hover disabled:opacity-50"
               data-testid="block-editor-done"
             >
               Done
@@ -321,7 +321,13 @@ export function BlockEditor() {
         </div>
       )}
       <div className="flex-1 overflow-hidden flex flex-row min-h-0">
-        <div className="flex-1 min-w-0 overflow-hidden">
+        {/* `conloca-mdx-editor-surround` paints the area around the
+            prose card with the host site's body bg (via the
+            `--conloca-host-body-bg` bridge in site-styles). Same class
+            MdxPageEditor uses — the two surfaces now share the
+            surround treatment so a block visually matches the page
+            it'll ultimately appear in. */}
+        <div className="flex-1 min-w-0 overflow-hidden conloca-mdx-editor-surround">
           <CMSMDXEditor
             // Re-mount on locale switch so the editor re-initializes with
             // the new locale's markdown — `value` is read once on first
@@ -329,10 +335,17 @@ export function BlockEditor() {
             // from the initial prop and doesn't reactively swap it).
             key={`${id}-${currentLocale}`}
             value={content}
-            // Block content has no canonical page route, so there's no
-            // `previewRouteUrl` to drive per-page CSS discovery. The
-            // editor falls back to the static editor stylesheet.
-            previewRouteUrl={undefined}
+            // Block content has no canonical page route, so we
+            // synthesize one from the integration's
+            // `blockPreviewRoute` option (defaults to `/` — see
+            // `ConlocaCMSOptions` in `plugin-spa.ts`). The editor
+            // then fetches that route's CSS and content-root wrapper
+            // the same way it does for pages, so authoring a block
+            // visually matches the host site instead of falling back
+            // to the editor's bare chrome. Per-block overrides via
+            // frontmatter (`previewRoute`) are on the roadmap for the
+            // case where one block is tied to a specific layout.
+            previewRouteUrl={import.meta.env.CONLOCA_BLOCK_PREVIEW_ROUTE || '/'}
             onChange={(next, initialNormalize) => {
               setContent(next);
               // See MdxPageEditor: the library's first onChange call after
@@ -349,7 +362,7 @@ export function BlockEditor() {
           />
         </div>
         {previewOpen && (
-          <div className="w-1/2 min-w-0 overflow-auto border-l border-grey-09 dark:border-grey-04 bg-white dark:bg-grey-02">
+          <div className="w-1/2 min-w-0 overflow-auto border-l border-line bg-panel">
             <MDXLivePreview markdown={content} />
           </div>
         )}
