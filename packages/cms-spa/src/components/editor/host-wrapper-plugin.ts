@@ -1,5 +1,4 @@
-import { addEditorWrapper$, realmPlugin, useCellValue } from '@mdxeditor/editor';
-import { Cell } from '@mdxeditor/gurx';
+import { addEditorWrapper$, Cell, realmPlugin, useCellValue } from '@mdxeditor/editor';
 import { type ComponentType, createElement, Fragment, type ReactElement, type ReactNode } from 'react';
 
 /**
