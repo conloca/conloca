@@ -41,7 +41,11 @@ export interface RegistryEndpointOptions {
 export function createRegistryEndpoint(
   _server: ViteDevServer,
   options: RegistryEndpointOptions,
-): { handler: Connect.NextHandleFunction; invalidate: () => void } {
+): {
+  handler: Connect.NextHandleFunction;
+  invalidate: () => void;
+  getAllowedSources: () => Promise<Set<string>>;
+} {
   const projectRoot = options.projectRoot ?? process.cwd();
   const contentRoot = resolve(projectRoot, options.contentRoot);
 
@@ -92,6 +96,27 @@ export function createRegistryEndpoint(
     handler,
     invalidate: () => {
       cached = null;
+    },
+    /**
+     * Set of import sources the render endpoint is allowed to load.
+     *
+     * Reuses the same memoized scan as `handler`, so the allowlist stays
+     * in sync with the registry the SPA sees — invalidation in one place
+     * invalidates both. Failing closed (returning an empty set) on scan
+     * error is intentional: better to refuse all renders than to fall
+     * back to "trust the request body".
+     */
+    getAllowedSources: async (): Promise<Set<string>> => {
+      try {
+        const components = await compute();
+        const sources = new Set<string>();
+        for (const c of components) {
+          if (c.import?.from) sources.add(c.import.from);
+        }
+        return sources;
+      } catch {
+        return new Set();
+      }
     },
   };
 }

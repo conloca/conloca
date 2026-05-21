@@ -924,17 +924,6 @@ if (import.meta.hot) {
                 },
               },
               {
-                // Per-component render endpoint. Renders a single MDX component
-                // (Aside, Card, …) via Astro's Container API so the CMS editor
-                // can display the real framework markup, paired with the
-                // per-page CSS from the styles endpoint above.
-                name: 'conloca-render-endpoint',
-                apply: 'serve' as const,
-                configureServer(server) {
-                  server.middlewares.use(`${cmsRoute}/api/render`, createRenderEndpoint(server));
-                },
-              },
-              {
                 // Per-route content-wrapper endpoint. Fetches the live page
                 // HTML and returns the host's content-root element shape
                 // (`{ tagName, className }`) so the editor can render its
@@ -949,21 +938,37 @@ if (import.meta.hot) {
                 },
               },
               {
-                // Auto-discover registry endpoint. Scans MDX content for
-                // imports + usages and the configured local component
-                // folders for `interface Props { ... }`, merges into a
-                // single descriptor list, returns it as JSON. The SPA
-                // fetches this on mount and seeds `setMdxComponents`,
-                // replacing the hand-written `mdx-components.tsx` flow.
-                name: 'conloca-registry-endpoint',
+                // Registry + render endpoints are paired: the registry
+                // builds the list of legal component sources, and the
+                // render endpoint validates every incoming `source`
+                // against that list before passing it to ssrLoadModule.
+                // Constructing both in one configureServer hook means
+                // they share the same memoized scan — no cross-plugin
+                // state, no startup-order race.
+                //
+                //  - Registry: scans MDX content for imports + usages and
+                //    the configured local component folders for
+                //    `interface Props { ... }`, merges into a single
+                //    descriptor list, returns it as JSON. The SPA fetches
+                //    this on mount and seeds `setMdxComponents`,
+                //    replacing the hand-written `mdx-components.tsx` flow.
+                //  - Render: renders a single MDX component (Aside,
+                //    Card, …) via Astro's Container API so the CMS editor
+                //    can display the real framework markup, paired with
+                //    the per-page CSS from the styles endpoint above.
+                name: 'conloca-registry-and-render-endpoints',
                 apply: 'serve' as const,
                 configureServer(server) {
-                  const { handler, invalidate } = createRegistryEndpoint(server, {
+                  const registry = createRegistryEndpoint(server, {
                     contentRoot: options.mdxPages?.root ?? options.contentRoot,
                     componentFolders: options.mdxComponentFolders ?? ['src/components/mdx'],
                     projectRoot: process.cwd(),
                   });
-                  server.middlewares.use(`${cmsRoute}/api/registry`, handler);
+                  server.middlewares.use(`${cmsRoute}/api/registry`, registry.handler);
+                  server.middlewares.use(
+                    `${cmsRoute}/api/render`,
+                    createRenderEndpoint(server, registry.getAllowedSources),
+                  );
 
                   // Invalidate the cached scan whenever an .mdx file or
                   // any component file changes. Coarse for now — every
@@ -972,7 +977,7 @@ if (import.meta.hot) {
                   // invalidation so host overrides apply live without a
                   // dev-server restart.
                   const onFsChange = (filepath: string) => {
-                    if (/\.(mdx|astro|tsx|d\.ts|cms\.json)$/.test(filepath)) invalidate();
+                    if (/\.(mdx|astro|tsx|d\.ts|cms\.json)$/.test(filepath)) registry.invalidate();
                   };
                   server.watcher.on('add', onFsChange);
                   server.watcher.on('change', onFsChange);

@@ -44,7 +44,10 @@ import type { Connect, ViteDevServer } from 'vite';
  * Returns 200 with `Content-Type: text/html` on success; 4xx with a
  * plain-text error otherwise.
  */
-export function createRenderEndpoint(server: ViteDevServer): Connect.NextHandleFunction {
+export function createRenderEndpoint(
+  server: ViteDevServer,
+  getAllowedSources: () => Promise<Set<string>>,
+): Connect.NextHandleFunction {
   let containerPromise: Promise<experimental_AstroContainer> | null = null;
   const getContainer = () => {
     if (!containerPromise) containerPromise = experimental_AstroContainer.create();
@@ -75,6 +78,21 @@ export function createRenderEndpoint(server: ViteDevServer): Connect.NextHandleF
         res.statusCode = 400;
         res.setHeader('content-type', 'text/plain');
         res.end('Missing required fields: tree.component, tree.source');
+        return;
+      }
+
+      // Allowlist check. `source` flows into `server.ssrLoadModule`,
+      // which will load and execute ANY file Vite can resolve — so
+      // accepting arbitrary strings here would let any localhost POST
+      // (eg from a malicious tab visited during `bun dev`) run any
+      // JS file on the developer's machine. The registry already knows
+      // every legal component source; reject anything outside it.
+      const allowed = await getAllowedSources();
+      const disallowed = collectDisallowedSources(tree, allowed);
+      if (disallowed.length > 0) {
+        res.statusCode = 400;
+        res.setHeader('content-type', 'text/plain');
+        res.end(`source not in registry: ${disallowed.join(', ')}`);
         return;
       }
 
@@ -270,6 +288,15 @@ function renderErrorStub(node: RenderTreeNode, err: unknown): string {
     `<conloca-slot data-slot-id="${escapeHtml(node.slotId)}"></conloca-slot>` +
     '</div>'
   );
+}
+
+function collectDisallowedSources(node: RenderTreeNode, allowed: Set<string>): string[] {
+  const bad: string[] = [];
+  if (!allowed.has(node.source)) bad.push(node.source);
+  if (node.children) {
+    for (const child of node.children) bad.push(...collectDisallowedSources(child, allowed));
+  }
+  return bad;
 }
 
 function escapeHtml(s: string): string {
