@@ -4,6 +4,8 @@
 // (which imports the MDX editor + sandpack-react).
 // precedent for thin per-piece imports.
 export { ConlocaLogo } from '../ConlocaLogo';
+export type { BannerAppearance, BannerProps, BannerVariant } from './Banner';
+export { Banner } from './Banner';
 export { Button } from './Button';
 export { Card } from './Card';
 export { FieldError } from './FieldError';
