@@ -4,7 +4,7 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "dev": "nx run conloca-website:dev --outputStyle=dynamic-legacy",
+    "dev": "nx run conloca-website:dev",
     "build": "nx run conloca-website:build",
     "preview": "nx run conloca-website:preview --outputStyle=stream",
     "astro": "astro",
