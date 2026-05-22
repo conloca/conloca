@@ -11,8 +11,8 @@ import { getUIConfig } from './ui-config';
 /**
  * The full cms-spa editor as a React component.
  *
- * Reads the current `UIConfig` via `getUIConfig()` — callers MUST call
- * `configureUI()` before rendering this component. The `QueryClient`
+ * Reads the current `UIConfig` via `getUIConfig` — callers MUST call
+ * `configureUI` before rendering this component. The `QueryClient`
  * and `ContentAPIClient` singletons are built via `useMemo`, so
  * consumers that force a fresh mount via React `key` (e.g. on
  * workspace switch) get clean cache state for the new workspace,

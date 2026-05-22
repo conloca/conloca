@@ -26,7 +26,7 @@ import { PageEditor } from './PageEditor';
  * When loading, we need to merge defaultProps so field UI shows correct values.
  * Without this, select/radio fields show wrong defaults (first option instead of actual default).
  *
- * Note: This merge is intentionally shallow (`{ ...defaultProps, ...item.props }`).
+ * Note: This merge is intentionally shallow (`{...defaultProps...item.props }`).
  * New top-level fields added to a component get their default value automatically.
  * However, new fields added inside array item types (e.g., adding `linkTarget` to
  * FeatureCard) won't be backfilled into existing saved items — component renders
@@ -91,7 +91,7 @@ const contentBlockToneClasses: Record<NonNullable<ContentBlockSectionProps['tone
  *
  * Key insight: Puck's internal resolveData only runs on mount and doesn't
  * react to metadata prop changes. To ensure data-bound components (like
- * BlogPostGrid) receive their data, we must pre-resolve using resolveAllData()
+ * BlogPostGrid) receive their data, we must pre-resolve using resolveAllData
  * BEFORE passing data to Puck. This matches the production renderer behavior
  * in page-handler.astro.
  */

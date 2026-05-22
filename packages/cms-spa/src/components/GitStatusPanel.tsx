@@ -9,15 +9,15 @@ import { cn } from '../utils/cn';
  * commit / push) against a single-tenant content-api endpoint
  * (`/__conloca/api/git/*`). It is rendered ONLY when
  * `configureUI({ hosted: false })` — see `Sidebar.tsx`, which
- * gates the mount on `getUIConfig().hosted !== true`.
+ * gates the mount on `getUIConfig.hosted !== true`.
  *
  * In hosted mode (hosted service), the host shell owns the
  * equivalent surface — a four-layer status pill plus popover for
  * editor save / commit / push / deploy. The hosted impl lives at
  * the host shell's status slot
- * (GL-197) and is driven by `HostClient.subscribeStatus`, not by
+ * and is driven by `HostClient.subscribeStatus`, not by
  * the content-api git endpoints. The two flows are NOT
- * interchangeable: hosted goes through the Branch DO (epic GL-22)
+ * interchangeable: hosted goes through the Branch DO (the backend)
  * which mediates commits and pushes server-side; VPS assumes the
  * caller IS the git user with direct filesystem access.
  *

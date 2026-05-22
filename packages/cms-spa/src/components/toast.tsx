@@ -6,7 +6,7 @@ import { Toaster as SonnerToaster, type ToasterProps } from 'sonner';
  *
  * Thin wrapper around [Sonner](https://sonner.emilkowal.ski/) so consumers
  * share the same toast vocabulary without each one re-mirroring Sonner's
- * defaults by hand. Mirrors the GL-191 `./ui` and `./dialog` precedent: a
+ * defaults by hand. Mirrors the `./ui` and `./dialog` precedent: a
  * single subpath export, minimal additive surface, sonner's own API stays
  * the API.
  *

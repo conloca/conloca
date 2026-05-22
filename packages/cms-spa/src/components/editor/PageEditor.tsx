@@ -81,7 +81,7 @@ const drawerItemOverride = ({ children, name }: { children: React.ReactNode; nam
  *    chrome — the iframe is the only intended consumer.
  *
  *    Puck's internal `CopyHostStyles` runs `doc.head.innerHTML = ''` once
- *    on mount inside an async `Promise.all().then(...)`. Because React
+ *    on mount inside an async `Promise.all.then(...)`. Because React
  *    fires child effects before parent effects, that wipe lands AFTER
  *    this component's initial append. A `MutationObserver` re-injects
  *    the tags when it sees them removed, so the injection survives the
@@ -107,7 +107,7 @@ function IframeBridge({ children, document: iframeDoc }: { children: React.React
     // the site's active scheme regardless of which convention it uses.
     html.setAttribute('data-theme', canvasTheme);
     // Signals the browser to pick a sensible default canvas color when the
-    // site's Layout (which usually applies `body { background: ... }`) isn't
+    // site's Layout (which usually applies `body { background:... }`) isn't
     // wrapping the Puck content. Sites that want an exact match should set
     // body background-color via their own CSS.
     html.style.colorScheme = canvasTheme;
@@ -121,7 +121,7 @@ function IframeBridge({ children, document: iframeDoc }: { children: React.React
     // Unlayered reset that re-asserts the site's font over cms-spa's
     // `main.css` rule `html, body { font-family: var(--puck-font-family) }`
     // (which Puck's CopyHostStyles mirrors into this iframe). main.css's rule
-    // is unlayered and therefore beats site `@layer base { body { ... } }`
+    // is unlayered and therefore beats site `@layer base { body {... } }`
     // declarations at equal specificity. We win back by using `:root` (one
     // specificity class higher than `html`) while falling back to the cms-spa
     // default if the site did not define `--font-sans`, so consumers without

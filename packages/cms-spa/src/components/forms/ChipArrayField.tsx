@@ -9,7 +9,7 @@ interface ChipArrayFieldProps {
 }
 
 /**
- * Chip/pill input for z.array(z.string()) schema fields.
+ * Chip/pill input for z.array(z.string) schema fields.
  * Enter or comma adds a chip, Backspace on empty input removes the last chip.
  */
 export function ChipArrayField({ value, onChange, placeholder = 'Type and press Enter to add' }: ChipArrayFieldProps) {

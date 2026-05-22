@@ -81,7 +81,7 @@ function SidebarContent() {
       </nav>
 
       {/* GitStatusPanel is VPS-ONLY. In hosted mode the host shell
-          owns the four-layer sync status surface (GL-197 in
+          owns the four-layer sync status surface ( in
           the host shell — see `targets/the host shell/src/app/slots/
           sync-status/SyncStatusSlot.tsx`). The two flows are NOT
           interchangeable: VPS assumes a single-tenant filesystem
