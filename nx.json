@@ -69,6 +69,12 @@
     "build": {
       "cache": true,
       "outputs": ["{projectRoot}/dist"]
+    },
+    "tsc-js": {
+      "dependsOn": ["^build"]
+    },
+    "typecheck": {
+      "dependsOn": ["^build"]
     }
   },
   "generators": {
