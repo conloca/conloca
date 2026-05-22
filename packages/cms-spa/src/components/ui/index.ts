@@ -5,6 +5,7 @@
 // precedent for thin per-piece imports.
 export { ConlocaLogo } from '../ConlocaLogo';
 export { Button } from './Button';
+export { Card } from './Card';
 export { FieldError } from './FieldError';
 export { IconButton } from './IconButton';
 export { Input } from './Input';
