@@ -2,6 +2,31 @@ import { useCommitChanges, useGitStatus, usePullChanges, usePushChanges } from '
 import { AlertCircle, ArrowDownToLine, Check, GitBranch, Loader2, Upload } from 'lucide-react';
 import { cn } from '../utils/cn';
 
+/**
+ * VPS-ONLY git status surface.
+ *
+ * This panel surfaces filesystem-backed git operations (pull /
+ * commit / push) against a single-tenant content-api endpoint
+ * (`/__conloca/api/git/*`). It is rendered ONLY when
+ * `configureUI({ hosted: false })` — see `Sidebar.tsx`, which
+ * gates the mount on `getUIConfig().hosted !== true`.
+ *
+ * In hosted mode (hosted service), the host shell owns the
+ * equivalent surface — a four-layer status pill plus popover for
+ * editor save / commit / push / deploy. The hosted impl lives at
+ * the host shell's status slot
+ * (GL-197) and is driven by `HostClient.subscribeStatus`, not by
+ * the content-api git endpoints. The two flows are NOT
+ * interchangeable: hosted goes through the Branch DO (epic GL-22)
+ * which mediates commits and pushes server-side; VPS assumes the
+ * caller IS the git user with direct filesystem access.
+ *
+ * Do not refactor this component to "support hosted mode" — the
+ * deployment-mode seam at `Sidebar.tsx` is intentional. If
+ * cms-spa ever needs to surface hosted status, add a new
+ * component; don't extend this one.
+ */
+
 interface GitStatusPanelProps {
   variant?: 'header' | 'sidebar';
 }

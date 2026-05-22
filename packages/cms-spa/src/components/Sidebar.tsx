@@ -80,6 +80,15 @@ function SidebarContent() {
         <NavItem to="/data" icon={Database} label="Data" />
       </nav>
 
+      {/* GitStatusPanel is VPS-ONLY. In hosted mode the host shell
+          owns the four-layer sync status surface (GL-197 in
+          the host shell — see `targets/the host shell/src/app/slots/
+          sync-status/SyncStatusSlot.tsx`). The two flows are NOT
+          interchangeable: VPS assumes a single-tenant filesystem
+          repo with synchronous git ops; hosted goes through the
+          Branch DO with layered server-side state. Do NOT try to
+          unify them via shared hooks — the `hosted` flag is the
+          deployment-mode seam, and it stays the seam. */}
       {!hosted && (
         <div className="px-3 py-3 border-t border-grey-09 dark:border-grey-03">
           <GitStatusPanel variant="sidebar" />
