@@ -114,7 +114,7 @@ function MarketingHero({
     <section
       itemScope
       itemType="https://schema.org/SoftwareApplication"
-      className="relative flex items-center justify-center overflow-hidden min-h-screen pt-16"
+      className="relative flex items-center justify-center overflow-hidden min-h-[calc(100svh_-_4rem)] pt-16"
     >
       <meta itemProp="applicationCategory" content="Content Management System" />
       <meta itemProp="operatingSystem" content="Cross-platform" />
