@@ -16,6 +16,13 @@
 
 <style>
   .sl-theme-toggle {
+    /* inline-flex + align-items: center is what actually vertically
+       centers the inline SVG inside the button — block-level buttons
+       baseline-align inline content, which pulls the icon ~4px above
+       the geometric center in this 44px header slot. */
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     background: transparent;
     border: none;
     cursor: pointer;
