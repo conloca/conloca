@@ -129,4 +129,10 @@ export interface ConflictBridge {
   submit(input: { sessionId: string; decisions: Record<string, ConflictDecisionMap> }): Promise<void>;
   /** Abandon the session — discards in-progress decisions, keeps the held-back set intact. */
   abandon(input: { sessionId: string }): Promise<void>;
+  /**
+   * Persist one page's in-progress decisions so navigating away and
+   * coming back paints the same partial state. Fire-and-forget from
+   * the resolver UI on each pick / unpick / custom-edit save.
+   */
+  patch(input: { sessionId: string; pageKey: string; decisions: ConflictDecisionMap }): Promise<void>;
 }

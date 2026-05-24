@@ -5,7 +5,13 @@ import { toast } from 'sonner';
 import { BlockPickerRow } from '../../conflict/BlockPickerRow';
 import { FieldPickerRow } from '../../conflict/FieldPickerRow';
 import type { ConflictDecisionMap, ConflictPage, ResolutionDecision } from '../../conflict/types';
-import { pageKey, useConflictSession, useSubmitConflictResolution } from '../../conflict/use-conflict-session';
+import {
+  pageKey,
+  useAbandonConflictSession,
+  useConflictSession,
+  usePatchPageDecisions,
+  useSubmitConflictResolution,
+} from '../../conflict/use-conflict-session';
 
 /**
  * Per-page conflict resolver. Picks between the VXJSON field-picker
@@ -70,6 +76,8 @@ function VxjsonResolver({ page, sessionId, initialDecisions }: VxjsonResolverPro
   const [decisions, setDecisions] = useState<ConflictDecisionMap>(initialDecisions);
   const navigate = useNavigate();
   const submit = useSubmitConflictResolution();
+  const abandon = useAbandonConflictSession();
+  const patch = usePatchPageDecisions();
 
   const totalFields = page.fields.length;
   const resolvedCount = useMemo(
@@ -77,12 +85,22 @@ function VxjsonResolver({ page, sessionId, initialDecisions }: VxjsonResolverPro
     [decisions, page.fields],
   );
   const allDone = resolvedCount === totalFields && totalFields > 0;
+  const thisPageKey = pageKey(page.pageId, page.locale);
+
+  // Persist decisions to the bridge so navigating away and coming
+  // back paints the same partial state. Fire-and-forget — local
+  // state is the source of truth for the current paint, the patch
+  // is for resumability.
+  const persist = (next: ConflictDecisionMap) => {
+    patch.mutate({ sessionId, pageKey: thisPageKey, decisions: next });
+  };
 
   const setDecision = (path: string, next: ResolutionDecision | undefined) => {
     setDecisions((prev) => {
       const updated = { ...prev };
       if (next === undefined) delete updated[path];
       else updated[path] = next;
+      persist(updated);
       return updated;
     });
   };
@@ -91,15 +109,36 @@ function VxjsonResolver({ page, sessionId, initialDecisions }: VxjsonResolverPro
     const next: ConflictDecisionMap = {};
     for (const field of page.fields) next[field.path] = { kind: 'accept-yours' };
     setDecisions(next);
+    persist(next);
   };
 
   const acceptAllTheirs = () => {
     const next: ConflictDecisionMap = {};
     for (const field of page.fields) next[field.path] = { kind: 'accept-theirs' };
     setDecisions(next);
+    persist(next);
   };
 
-  const clearAll = () => setDecisions({});
+  const clearAll = () => {
+    setDecisions({});
+    persist({});
+  };
+
+  const handleAbandon = () => {
+    abandon.mutate(
+      { sessionId },
+      {
+        onSuccess: () => {
+          toast.success('Changes discarded');
+          navigate('/conflicts');
+        },
+        onError: (error) => {
+          const message = error instanceof Error ? error.message : 'Could not discard the changes.';
+          toast.error(message);
+        },
+      },
+    );
+  };
 
   return (
     <div className="max-w-4xl mx-auto py-6 px-4 pb-32">
@@ -164,9 +203,17 @@ function VxjsonResolver({ page, sessionId, initialDecisions }: VxjsonResolverPro
           <div className="flex items-center gap-2">
             <button
               type="button"
+              onClick={handleAbandon}
+              disabled={abandon.isPending || submit.isPending}
+              className="text-sm font-medium px-3 py-2 rounded-md text-grey-04 dark:text-grey-07 hover:bg-grey-11 dark:hover:bg-grey-03 hover:text-grey-01 dark:hover:text-grey-12 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Discard changes
+            </button>
+            <button
+              type="button"
               onClick={() => {
                 submit.mutate(
-                  { sessionId, decisions: { [pageKey(page.pageId, page.locale)]: decisions } },
+                  { sessionId, decisions: { [thisPageKey]: decisions } },
                   {
                     onSuccess: () => {
                       toast.success('Merge saved');
@@ -179,7 +226,7 @@ function VxjsonResolver({ page, sessionId, initialDecisions }: VxjsonResolverPro
                   },
                 );
               }}
-              disabled={!allDone || submit.isPending}
+              disabled={!allDone || submit.isPending || abandon.isPending}
               className="inline-flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-md bg-azure-04 hover:bg-azure-03 dark:bg-azure-06 dark:hover:bg-azure-07 text-white transition-colors disabled:opacity-50 disabled:hover:bg-azure-04 dark:disabled:hover:bg-azure-06 disabled:cursor-not-allowed"
               title={allDone ? 'Save the merge' : 'Review every field first'}
             >
@@ -218,6 +265,8 @@ function MdxResolver({ page, sessionId, initialDecisions }: MdxResolverProps) {
   const [decisions, setDecisions] = useState<ConflictDecisionMap>(initialDecisions);
   const navigate = useNavigate();
   const submit = useSubmitConflictResolution();
+  const abandon = useAbandonConflictSession();
+  const patch = usePatchPageDecisions();
 
   const totalBlocks = page.blocks.length;
   const resolvedCount = useMemo(
@@ -225,6 +274,11 @@ function MdxResolver({ page, sessionId, initialDecisions }: MdxResolverProps) {
     [decisions, page.blocks],
   );
   const allDone = resolvedCount === totalBlocks && totalBlocks > 0;
+  const thisPageKey = pageKey(page.pageId, page.locale);
+
+  const persist = (next: ConflictDecisionMap) => {
+    patch.mutate({ sessionId, pageKey: thisPageKey, decisions: next });
+  };
 
   const setDecision = (blockIndex: number, next: ResolutionDecision | undefined) => {
     const key = String(blockIndex);
@@ -232,6 +286,7 @@ function MdxResolver({ page, sessionId, initialDecisions }: MdxResolverProps) {
       const updated = { ...prev };
       if (next === undefined) delete updated[key];
       else updated[key] = next;
+      persist(updated);
       return updated;
     });
   };
@@ -240,15 +295,36 @@ function MdxResolver({ page, sessionId, initialDecisions }: MdxResolverProps) {
     const next: ConflictDecisionMap = {};
     for (const block of page.blocks) next[String(block.blockIndex)] = { kind: 'accept-yours' };
     setDecisions(next);
+    persist(next);
   };
 
   const acceptAllTheirs = () => {
     const next: ConflictDecisionMap = {};
     for (const block of page.blocks) next[String(block.blockIndex)] = { kind: 'accept-theirs' };
     setDecisions(next);
+    persist(next);
   };
 
-  const clearAll = () => setDecisions({});
+  const clearAll = () => {
+    setDecisions({});
+    persist({});
+  };
+
+  const handleAbandon = () => {
+    abandon.mutate(
+      { sessionId },
+      {
+        onSuccess: () => {
+          toast.success('Changes discarded');
+          navigate('/conflicts');
+        },
+        onError: (error) => {
+          const message = error instanceof Error ? error.message : 'Could not discard the changes.';
+          toast.error(message);
+        },
+      },
+    );
+  };
 
   return (
     <div className="max-w-4xl mx-auto py-6 px-4 pb-32">
@@ -313,9 +389,17 @@ function MdxResolver({ page, sessionId, initialDecisions }: MdxResolverProps) {
           <div className="flex items-center gap-2">
             <button
               type="button"
+              onClick={handleAbandon}
+              disabled={abandon.isPending || submit.isPending}
+              className="text-sm font-medium px-3 py-2 rounded-md text-grey-04 dark:text-grey-07 hover:bg-grey-11 dark:hover:bg-grey-03 hover:text-grey-01 dark:hover:text-grey-12 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Discard changes
+            </button>
+            <button
+              type="button"
               onClick={() => {
                 submit.mutate(
-                  { sessionId, decisions: { [pageKey(page.pageId, page.locale)]: decisions } },
+                  { sessionId, decisions: { [thisPageKey]: decisions } },
                   {
                     onSuccess: () => {
                       toast.success('Merge saved');
@@ -328,7 +412,7 @@ function MdxResolver({ page, sessionId, initialDecisions }: MdxResolverProps) {
                   },
                 );
               }}
-              disabled={!allDone || submit.isPending}
+              disabled={!allDone || submit.isPending || abandon.isPending}
               className="inline-flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-md bg-azure-04 hover:bg-azure-03 dark:bg-azure-06 dark:hover:bg-azure-07 text-white transition-colors disabled:opacity-50 disabled:hover:bg-azure-04 dark:disabled:hover:bg-azure-06 disabled:cursor-not-allowed"
               title={allDone ? 'Save the merge' : 'Review every section first'}
             >

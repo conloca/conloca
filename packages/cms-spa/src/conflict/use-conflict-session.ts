@@ -101,6 +101,28 @@ export function useAbandonConflictSession() {
 }
 
 /**
+ * Persist one page's in-progress decisions through the host bridge.
+ * Fire-and-forget from the resolver UI on each pick / unpick /
+ * custom-edit save — the local state is the source of truth for the
+ * current paint; the bridge call is for resumability across
+ * navigation.
+ *
+ * Does NOT invalidate the session query — that would re-fetch and
+ * potentially overwrite the user's in-flight edits with a stale
+ * snapshot. The next mount of `ConflictsResolverPage` re-reads the
+ * session naturally.
+ */
+export function usePatchPageDecisions() {
+  return useMutation({
+    mutationFn: async (input: { sessionId: string; pageKey: string; decisions: ConflictDecisionMap }) => {
+      const bridge = getUIConfig().conflictBridge;
+      if (!bridge) return; // no-op for cms-spa running standalone
+      await bridge.patch(input);
+    },
+  });
+}
+
+/**
  * Pure helper: how many of a page's conflicts are resolved in the
  * current decision map. Lets the page list paint "12 of 18 fields
  * resolved" without re-deriving counts at every render site.
