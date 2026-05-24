@@ -1,10 +1,11 @@
 import { Loader2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { toast } from 'sonner';
 import { BlockPickerRow } from '../../conflict/BlockPickerRow';
 import { FieldPickerRow } from '../../conflict/FieldPickerRow';
 import type { ConflictDecisionMap, ConflictPage, ResolutionDecision } from '../../conflict/types';
-import { pageKey, useConflictSession } from '../../conflict/use-conflict-session';
+import { pageKey, useConflictSession, useSubmitConflictResolution } from '../../conflict/use-conflict-session';
 
 /**
  * Per-page conflict resolver. Picks between the VXJSON field-picker
@@ -53,19 +54,22 @@ export function ConflictsResolverPage() {
   const initialDecisions = session.decisions[pageKey(page.pageId, page.locale)] ?? {};
 
   if (page.kind === 'vxjson') {
-    return <VxjsonResolver page={page} initialDecisions={initialDecisions} />;
+    return <VxjsonResolver page={page} sessionId={session.sessionId} initialDecisions={initialDecisions} />;
   }
 
-  return <MdxResolver page={page} initialDecisions={initialDecisions} />;
+  return <MdxResolver page={page} sessionId={session.sessionId} initialDecisions={initialDecisions} />;
 }
 
 interface VxjsonResolverProps {
   page: Extract<ConflictPage, { kind: 'vxjson' }>;
+  sessionId: string;
   initialDecisions: ConflictDecisionMap;
 }
 
-function VxjsonResolver({ page, initialDecisions }: VxjsonResolverProps) {
+function VxjsonResolver({ page, sessionId, initialDecisions }: VxjsonResolverProps) {
   const [decisions, setDecisions] = useState<ConflictDecisionMap>(initialDecisions);
+  const navigate = useNavigate();
+  const submit = useSubmitConflictResolution();
 
   const totalFields = page.fields.length;
   const resolvedCount = useMemo(
@@ -161,17 +165,32 @@ function VxjsonResolver({ page, initialDecisions }: VxjsonResolverProps) {
             <button
               type="button"
               onClick={() => {
-                // Submit lands in C6. Logging the payload so the
-                // shape is visible to dev users until the bridge
-                // wiring exists.
-                // biome-ignore lint/suspicious/noConsole: dev-only stub
-                console.info('[conflict resolver] would submit:', { sessionId: 'mock', decisions });
+                submit.mutate(
+                  { sessionId, decisions: { [pageKey(page.pageId, page.locale)]: decisions } },
+                  {
+                    onSuccess: () => {
+                      toast.success('Merge saved');
+                      navigate('/conflicts');
+                    },
+                    onError: (error) => {
+                      const message = error instanceof Error ? error.message : 'Could not save the merge.';
+                      toast.error(message);
+                    },
+                  },
+                );
               }}
-              disabled={!allDone}
-              className="text-sm font-medium px-4 py-2 rounded-md bg-azure-04 hover:bg-azure-03 dark:bg-azure-06 dark:hover:bg-azure-07 text-white transition-colors disabled:opacity-50 disabled:hover:bg-azure-04 dark:disabled:hover:bg-azure-06 disabled:cursor-not-allowed"
+              disabled={!allDone || submit.isPending}
+              className="inline-flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-md bg-azure-04 hover:bg-azure-03 dark:bg-azure-06 dark:hover:bg-azure-07 text-white transition-colors disabled:opacity-50 disabled:hover:bg-azure-04 dark:disabled:hover:bg-azure-06 disabled:cursor-not-allowed"
               title={allDone ? 'Save the merge' : 'Review every field first'}
             >
-              Save the merge
+              {submit.isPending ? (
+                <>
+                  <Loader2 aria-hidden className="h-4 w-4 animate-spin" />
+                  Saving…
+                </>
+              ) : (
+                'Save the merge'
+              )}
             </button>
           </div>
         </div>
@@ -182,6 +201,7 @@ function VxjsonResolver({ page, initialDecisions }: VxjsonResolverProps) {
 
 interface MdxResolverProps {
   page: Extract<ConflictPage, { kind: 'mdx' }>;
+  sessionId: string;
   initialDecisions: ConflictDecisionMap;
 }
 
@@ -194,8 +214,10 @@ interface MdxResolverProps {
  * collapsed sections, etc.) that wouldn't make sense for the
  * structured-field side.
  */
-function MdxResolver({ page, initialDecisions }: MdxResolverProps) {
+function MdxResolver({ page, sessionId, initialDecisions }: MdxResolverProps) {
   const [decisions, setDecisions] = useState<ConflictDecisionMap>(initialDecisions);
+  const navigate = useNavigate();
+  const submit = useSubmitConflictResolution();
 
   const totalBlocks = page.blocks.length;
   const resolvedCount = useMemo(
@@ -292,16 +314,32 @@ function MdxResolver({ page, initialDecisions }: MdxResolverProps) {
             <button
               type="button"
               onClick={() => {
-                // Submit lands in C6. Logging the payload so the
-                // shape is visible until the bridge wiring exists.
-                // biome-ignore lint/suspicious/noConsole: dev-only stub
-                console.info('[conflict resolver] would submit:', { sessionId: 'mock', decisions });
+                submit.mutate(
+                  { sessionId, decisions: { [pageKey(page.pageId, page.locale)]: decisions } },
+                  {
+                    onSuccess: () => {
+                      toast.success('Merge saved');
+                      navigate('/conflicts');
+                    },
+                    onError: (error) => {
+                      const message = error instanceof Error ? error.message : 'Could not save the merge.';
+                      toast.error(message);
+                    },
+                  },
+                );
               }}
-              disabled={!allDone}
-              className="text-sm font-medium px-4 py-2 rounded-md bg-azure-04 hover:bg-azure-03 dark:bg-azure-06 dark:hover:bg-azure-07 text-white transition-colors disabled:opacity-50 disabled:hover:bg-azure-04 dark:disabled:hover:bg-azure-06 disabled:cursor-not-allowed"
+              disabled={!allDone || submit.isPending}
+              className="inline-flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-md bg-azure-04 hover:bg-azure-03 dark:bg-azure-06 dark:hover:bg-azure-07 text-white transition-colors disabled:opacity-50 disabled:hover:bg-azure-04 dark:disabled:hover:bg-azure-06 disabled:cursor-not-allowed"
               title={allDone ? 'Save the merge' : 'Review every section first'}
             >
-              Save the merge
+              {submit.isPending ? (
+                <>
+                  <Loader2 aria-hidden className="h-4 w-4 animate-spin" />
+                  Saving…
+                </>
+              ) : (
+                'Save the merge'
+              )}
             </button>
           </div>
         </div>
