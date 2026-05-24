@@ -1,21 +1,21 @@
 import { Loader2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { BlockPickerRow } from '../../conflict/BlockPickerRow';
 import { FieldPickerRow } from '../../conflict/FieldPickerRow';
 import type { ConflictDecisionMap, ConflictPage, ResolutionDecision } from '../../conflict/types';
 import { pageKey, useConflictSession } from '../../conflict/use-conflict-session';
 
 /**
  * Per-page conflict resolver. Picks between the VXJSON field-picker
- * (this commit) and the (next-commit) MDX block-picker based on
- * `ConflictPage.kind`. Both share the same chrome — header, progress
- * counter, bulk actions, save/discard footer — and only the row
- * renderer differs.
+ * and the MDX block-picker based on `ConflictPage.kind`. Both share
+ * the same chrome — header, progress counter, bulk actions, save
+ * footer — and only the row renderer differs.
  *
  * Decision state is local for now. Initial values come from the
  * session's `decisions[<pageKey>]` map (so a resumed session
  * paints with prior choices). Submit-through-Save and abandon-with-
- * persistence land in C6+C7; the "Save resolution" button is a stub
+ * persistence land in C6+C7; the "Save the merge" button is a stub
  * here.
  */
 export function ConflictsResolverPage() {
@@ -56,27 +56,7 @@ export function ConflictsResolverPage() {
     return <VxjsonResolver page={page} initialDecisions={initialDecisions} />;
   }
 
-  // MDX resolver lands in the next commit. The placeholder confirms
-  // routing reaches this branch correctly.
-  return (
-    <div className="max-w-3xl mx-auto py-8 px-4">
-      <Link
-        to="/conflicts"
-        className="text-sm font-medium text-grey-04 dark:text-grey-07 hover:text-grey-01 dark:hover:text-grey-12 mb-4 inline-block"
-      >
-        ← Back to all changes
-      </Link>
-      <header className="mb-6">
-        <h1 className="text-2xl font-semibold text-grey-01 dark:text-grey-12 mb-1">{page.pageLabel}</h1>
-        <p className="text-sm text-grey-04 dark:text-grey-07">
-          {page.blocks.length} sections need review ({page.locale})
-        </p>
-      </header>
-      <div className="rounded-md border border-dashed border-grey-09 dark:border-grey-03 py-12 px-6 text-center">
-        <p className="text-sm text-grey-04 dark:text-grey-07">The prose-side picker lands in the next commit.</p>
-      </div>
-    </div>
-  );
+  return <MdxResolver page={page} initialDecisions={initialDecisions} />;
 }
 
 interface VxjsonResolverProps {
@@ -190,6 +170,136 @@ function VxjsonResolver({ page, initialDecisions }: VxjsonResolverProps) {
               disabled={!allDone}
               className="text-sm font-medium px-4 py-2 rounded-md bg-azure-04 hover:bg-azure-03 dark:bg-azure-06 dark:hover:bg-azure-07 text-white transition-colors disabled:opacity-50 disabled:hover:bg-azure-04 dark:disabled:hover:bg-azure-06 disabled:cursor-not-allowed"
               title={allDone ? 'Save the merge' : 'Review every field first'}
+            >
+              Save the merge
+            </button>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+}
+
+interface MdxResolverProps {
+  page: Extract<ConflictPage, { kind: 'mdx' }>;
+  initialDecisions: ConflictDecisionMap;
+}
+
+/**
+ * Same shell as `VxjsonResolver` — header with progress, bulk
+ * actions, sticky save footer — keyed on `blockIndex` instead of
+ * `path`. Kept parallel rather than abstracted: the duplication is
+ * ~50 lines of JSX shell and the two resolvers may diverge as the
+ * MDX surface picks up prose-only affordances (typeset preview,
+ * collapsed sections, etc.) that wouldn't make sense for the
+ * structured-field side.
+ */
+function MdxResolver({ page, initialDecisions }: MdxResolverProps) {
+  const [decisions, setDecisions] = useState<ConflictDecisionMap>(initialDecisions);
+
+  const totalBlocks = page.blocks.length;
+  const resolvedCount = useMemo(
+    () => page.blocks.filter((b) => decisions[String(b.blockIndex)] !== undefined).length,
+    [decisions, page.blocks],
+  );
+  const allDone = resolvedCount === totalBlocks && totalBlocks > 0;
+
+  const setDecision = (blockIndex: number, next: ResolutionDecision | undefined) => {
+    const key = String(blockIndex);
+    setDecisions((prev) => {
+      const updated = { ...prev };
+      if (next === undefined) delete updated[key];
+      else updated[key] = next;
+      return updated;
+    });
+  };
+
+  const acceptAllMine = () => {
+    const next: ConflictDecisionMap = {};
+    for (const block of page.blocks) next[String(block.blockIndex)] = { kind: 'accept-yours' };
+    setDecisions(next);
+  };
+
+  const acceptAllTheirs = () => {
+    const next: ConflictDecisionMap = {};
+    for (const block of page.blocks) next[String(block.blockIndex)] = { kind: 'accept-theirs' };
+    setDecisions(next);
+  };
+
+  const clearAll = () => setDecisions({});
+
+  return (
+    <div className="max-w-4xl mx-auto py-6 px-4 pb-32">
+      <Link
+        to="/conflicts"
+        className="text-sm font-medium text-grey-04 dark:text-grey-07 hover:text-grey-01 dark:hover:text-grey-12 mb-4 inline-block"
+      >
+        ← Back to all changes
+      </Link>
+      <header className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold text-grey-01 dark:text-grey-12 mb-1">{page.pageLabel}</h1>
+          <p className="text-sm text-grey-04 dark:text-grey-07">
+            {resolvedCount} of {totalBlocks} sections reviewed ({page.locale})
+          </p>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            type="button"
+            onClick={acceptAllMine}
+            className="text-xs font-medium px-3 py-1.5 rounded-md border border-grey-09 dark:border-grey-03 text-grey-01 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
+          >
+            Use mine for all
+          </button>
+          <button
+            type="button"
+            onClick={acceptAllTheirs}
+            className="text-xs font-medium px-3 py-1.5 rounded-md border border-grey-09 dark:border-grey-03 text-grey-01 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
+          >
+            Use theirs for all
+          </button>
+          {resolvedCount > 0 ? (
+            <button
+              type="button"
+              onClick={clearAll}
+              className="text-xs font-medium px-3 py-1.5 rounded-md text-grey-04 dark:text-grey-07 hover:bg-grey-11 dark:hover:bg-grey-03 hover:text-grey-01 dark:hover:text-grey-12 transition-colors"
+            >
+              Clear all
+            </button>
+          ) : null}
+        </div>
+      </header>
+
+      <div className="space-y-3 mb-6" aria-label="Block-level conflicts">
+        {page.blocks.map((block) => (
+          <BlockPickerRow
+            key={block.blockIndex}
+            block={block}
+            decision={decisions[String(block.blockIndex)]}
+            onDecide={(next) => setDecision(block.blockIndex, next)}
+          />
+        ))}
+      </div>
+
+      <footer className="fixed bottom-0 left-0 right-0 border-t border-grey-09 dark:border-grey-03 bg-white dark:bg-grey-02 px-4 py-3 z-10">
+        <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
+          <p className="text-sm text-grey-04 dark:text-grey-07">
+            {allDone
+              ? 'All sections reviewed — ready to save the merge.'
+              : resolvedCount + ' of ' + totalBlocks + ' reviewed'}
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                // Submit lands in C6. Logging the payload so the
+                // shape is visible until the bridge wiring exists.
+                // biome-ignore lint/suspicious/noConsole: dev-only stub
+                console.info('[conflict resolver] would submit:', { sessionId: 'mock', decisions });
+              }}
+              disabled={!allDone}
+              className="text-sm font-medium px-4 py-2 rounded-md bg-azure-04 hover:bg-azure-03 dark:bg-azure-06 dark:hover:bg-azure-07 text-white transition-colors disabled:opacity-50 disabled:hover:bg-azure-04 dark:disabled:hover:bg-azure-06 disabled:cursor-not-allowed"
+              title={allDone ? 'Save the merge' : 'Review every section first'}
             >
               Save the merge
             </button>
