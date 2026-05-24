@@ -20,7 +20,12 @@ import { CONFLICT_REVIEW_OPEN_EVENT } from './use-conflict-session';
 export function useConflictReviewOpenNavigator() {
   const navigate = useNavigate();
   useEffect(() => {
-    const handler = () => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ target?: { pageId: string; locale: string } } | null>).detail;
+      if (detail?.target) {
+        navigate('/conflicts/' + detail.target.pageId + '/' + detail.target.locale);
+        return;
+      }
       navigate('/conflicts');
     };
     window.addEventListener(CONFLICT_REVIEW_OPEN_EVENT, handler);
