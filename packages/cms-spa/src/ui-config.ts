@@ -1,4 +1,5 @@
 import type { QueryClientConfig } from '@tanstack/react-query';
+import type { ConflictBridge } from './conflict/types';
 
 export interface TemplateConfig {
   label: string;
@@ -42,6 +43,16 @@ export interface UIConfig {
    * false: cms-spa runs as the whole page (astro-cms, dev-entry).
    */
   hosted?: boolean;
+  /**
+   * Bridge for the host shell's conflict-resolution session. When
+   * present, the `/conflicts` route reads and writes through this;
+   * the sidebar shows a "Conflicts" entry with a count when a
+   * session is active. When absent (local dev / astro-cms standalone),
+   * `/conflicts` reports "All clear" and submit/abandon disable —
+   * conflict resolution is a hosted-service-only surface and there's
+   * no plausible mock for it without a host shell.
+   */
+  conflictBridge?: ConflictBridge;
 }
 
 const defaultConfig: UIConfig = {

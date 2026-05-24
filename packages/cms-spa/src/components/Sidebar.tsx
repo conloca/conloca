@@ -1,6 +1,18 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { Database, FileText, ImageIcon, LayoutDashboard, Monitor, Moon, Package, Sun, X } from 'lucide-react';
+import {
+  AlertTriangle,
+  Database,
+  FileText,
+  ImageIcon,
+  LayoutDashboard,
+  Monitor,
+  Moon,
+  Package,
+  Sun,
+  X,
+} from 'lucide-react';
 import { NavLink } from 'react-router-dom';
+import { useConflictSession } from '../conflict/use-conflict-session';
 import { useTheme } from '../hooks/useTheme';
 import { getUIConfig } from '../ui-config';
 import { cn } from '../utils/cn';
@@ -13,9 +25,11 @@ interface NavItemProps {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   end?: boolean;
+  /** Optional right-aligned count badge (e.g. number of pages needing review). */
+  badge?: number;
 }
 
-function NavItem({ to, icon: Icon, label, end }: NavItemProps) {
+function NavItem({ to, icon: Icon, label, end, badge }: NavItemProps) {
   return (
     <NavLink
       to={to}
@@ -30,9 +44,30 @@ function NavItem({ to, icon: Icon, label, end }: NavItemProps) {
       }
     >
       <Icon className="h-4 w-4 flex-shrink-0" />
-      <span>{label}</span>
+      <span className="flex-1">{label}</span>
+      {badge !== undefined && badge > 0 ? (
+        <span
+          aria-label={badge + ' pages need review'}
+          className="ml-auto inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-semibold bg-red-04 text-white"
+        >
+          {badge}
+        </span>
+      ) : null}
     </NavLink>
   );
+}
+
+/**
+ * Conditional sidebar entry for the conflict-resolution surface.
+ * Renders only when a session is active — no need to occupy real
+ * estate when there's nothing to review. The badge shows the page
+ * count so the user knows the size of what's ahead without
+ * clicking through.
+ */
+function ConflictsNavItem() {
+  const { data: session } = useConflictSession();
+  if (!session || session.pages.length === 0) return null;
+  return <NavItem to="/conflicts" icon={AlertTriangle} label="Review changes" badge={session.pages.length} />;
 }
 
 const themeOrder = ['system', 'light', 'dark'] as const;
@@ -78,6 +113,7 @@ function SidebarContent() {
         <NavItem to="/media" icon={ImageIcon} label="Media" />
         <NavItem to="/blocks" icon={Package} label="Blocks" />
         <NavItem to="/data" icon={Database} label="Data" />
+        <ConflictsNavItem />
       </nav>
 
       {/* GitStatusPanel is VPS-ONLY. In hosted mode the host shell
