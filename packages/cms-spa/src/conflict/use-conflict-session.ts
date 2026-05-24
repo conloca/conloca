@@ -123,6 +123,41 @@ export function usePatchPageDecisions() {
 }
 
 /**
+ * Map of page-conflict status keyed by `pageId` → set of locales
+ * that are in the active conflict session. Lets the page list
+ * paint per-locale indicators ("the en version of this page has
+ * conflicts; the fr version doesn't") without doing the lookup at
+ * every render site. Returns an empty Map when no session is active
+ * or when no bridge is configured (cms-spa standalone).
+ *
+ * Memoized against the session data so identity is stable across
+ * re-renders that don't change the held-back set.
+ */
+export function useSessionConflictsByPage(): Map<string, Set<string>> {
+  const { data: session } = useConflictSession();
+  if (!session) return EMPTY_CONFLICT_MAP;
+  const map = new Map<string, Set<string>>();
+  for (const page of session.pages) {
+    const set = map.get(page.pageId) ?? new Set<string>();
+    set.add(page.locale);
+    map.set(page.pageId, set);
+  }
+  return map;
+}
+
+const EMPTY_CONFLICT_MAP: Map<string, Set<string>> = new Map();
+
+/**
+ * Aggregate count of held-back pages across the active session.
+ * Used by the page list's banner ("3 pages need review") so the
+ * count is glanceable without scrolling.
+ */
+export function useSessionConflictCount(): number {
+  const { data: session } = useConflictSession();
+  return session?.pages.length ?? 0;
+}
+
+/**
  * Pure helper: how many of a page's conflicts are resolved in the
  * current decision map. Lets the page list paint "12 of 18 fields
  * resolved" without re-deriving counts at every render site.
