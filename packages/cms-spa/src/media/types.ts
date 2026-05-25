@@ -20,6 +20,33 @@
 export type AssetScope = 'branch' | 'published';
 
 /**
+ * Standing media issue surfaced by the host shell alongside the
+ * `AssetScope` pill. Distinct from a per-call promote outcome:
+ * an issue here is a property OF the asset that persists until
+ * the customer resolves it.
+ *
+ * cms-spa's renderer-neutral asset model doesn't carry these
+ * fields because the local-Astro case has no notion of upload
+ * limits or passthrough scanning — they're hosted-only state the
+ * host exposes through `UIConfig.mediaBridge.getMediaIssue`.
+ *
+ * - `oversized` — file exceeds the inline-blob limit. The asset
+ *   is still served, just slower than it should be. Surface
+ *   paints an amber warning with "move to media storage"
+ *   guidance.
+ * - `blocked` — content is held back by the passthrough scanner
+ *   (malware, EXIF leak, policy violation). Preview falls back
+ *   to a placeholder; publishing is hard-blocked until resolved.
+ *   Surface paints a red error with the scanner's reason.
+ *
+ * Both variants carry `filename` so flat lists are self-joinable
+ * to the user's dirty page set without a second lookup.
+ */
+export type MediaIssue =
+  | { kind: 'oversized'; filename: string; sizeBytes: number; limitBytes: number }
+  | { kind: 'blocked'; filename: string; reason: string };
+
+/**
  * Bridge cms-spa uses to read host-shell-supplied metadata about
  * media assets that cms-spa's renderer-neutral model doesn't carry.
  * Installed by the host shell via `UIConfig.mediaBridge` before
@@ -48,4 +75,19 @@ export interface MediaBridge {
    * call in a `useQuery` so the resolved scope is memoised.
    */
   getAssetScope(input: { filename: string }): Promise<AssetScope | null>;
+  /**
+   * Resolve the standing media issue for a single asset, or `null`
+   * when the asset is healthy. Called by AssetCard /
+   * AssetDetailSidebar whenever they paint the per-asset
+   * error/warning badge.
+   *
+   * Returns `null` for the same reasons as `getAssetScope`: host
+   * has no opinion (asset unknown, pre-bootstrap state, non-hosted
+   * mount). Surfaces treat `null` the same as "no bridge" — badge
+   * hidden, `AssetEntry` rendered unchanged.
+   *
+   * The host caches the lookup so cms-spa's `useMediaIssue` wrapper
+   * doesn't have to think about per-asset cache windows.
+   */
+  getMediaIssue(input: { filename: string }): Promise<MediaIssue | null>;
 }

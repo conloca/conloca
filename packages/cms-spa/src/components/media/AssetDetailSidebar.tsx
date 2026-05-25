@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import type { AssetEntry } from '../../hooks';
 import { useAssetUsage, useDeleteAsset, useMoveAssets, useUpdateAssetMetadata } from '../../hooks';
 import { AssetScopePill } from '../../media/AssetScopePill';
+import { MediaIssueBadge } from '../../media/MediaIssueBadge';
 import { useAssetScope } from '../../media/use-asset-scope';
+import { useMediaIssue } from '../../media/use-media-issue';
 import { buildAssetServeUrl } from '../../utils/asset-url';
 import { MoveFolderDialog } from '../dialogs';
 import { Button, IconButton, Input } from '../ui';
@@ -42,6 +44,10 @@ export function AssetDetailSidebar({
   // host bridge is installed, so the pill is naturally hidden in
   // astro-cms / local dev.
   const scope = useAssetScope(asset.filename);
+  // hosted-only: passthrough-scanner / quota-tracker issue, if any.
+  // Returns null when the host has no opinion or the asset is
+  // healthy; the badge collapses to nothing in either case.
+  const issue = useMediaIssue(asset.filename);
 
   // Reset local state when asset changes
   useEffect(() => {
@@ -145,6 +151,11 @@ export function AssetDetailSidebar({
                 with the asset name itself. Renders nothing when no
                 host bridge is installed. */}
             {scope ? <AssetScopePill scope={scope} size="md" /> : null}
+            {/* Issue badge — `md` paints the full scanner reason /
+                oversized delta so the sidebar explains itself
+                without forcing the user back to a separate diagnostics
+                surface. Stacks beneath the scope pill. */}
+            {issue ? <MediaIssueBadge issue={issue} size="md" /> : null}
           </div>
           <IconButton icon={X} ariaLabel="Close" title="Close" onClick={onClose} variant="ghost" />
         </div>

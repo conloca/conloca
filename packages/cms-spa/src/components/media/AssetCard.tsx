@@ -1,6 +1,8 @@
 import type { AssetEntry } from '../../hooks';
 import { AssetScopePill } from '../../media/AssetScopePill';
+import { MediaIssueBadge } from '../../media/MediaIssueBadge';
 import { useAssetScope } from '../../media/use-asset-scope';
+import { useMediaIssue } from '../../media/use-media-issue';
 import { buildAssetServeUrl } from '../../utils/asset-url';
 import { cn } from '../../utils/cn';
 
@@ -27,6 +29,11 @@ export function AssetCard({
   // the AssetScopePill skips rendering, so astro-cms / local dev see
   // the card unchanged.
   const scope = useAssetScope(asset.filename);
+  // hosted-only: oversized / blocked status the passthrough scanner
+  // or quota tracker flags. Returns null when the host has no
+  // opinion — surfaces degrade exactly like the scope pill in
+  // standalone mounts.
+  const issue = useMediaIssue(asset.filename);
 
   const handleClick = () => {
     onClick?.();
@@ -67,6 +74,11 @@ export function AssetCard({
             asset's own visual focus point without clipping the
             filename caption below. */}
         {scope ? <AssetScopePill scope={scope} size="sm" className="absolute top-1.5 left-1.5" /> : null}
+        {/* Issue badge — top-right corner so it doesn't collide
+            with the scope pill. Red blocked / amber oversized so
+            scanning a library at a glance separates "scope" (left)
+            from "health" (right). Hidden when null. */}
+        {issue ? <MediaIssueBadge issue={issue} size="sm" className="absolute top-1.5 right-1.5" /> : null}
       </div>
 
       {/* Info - filename only */}
