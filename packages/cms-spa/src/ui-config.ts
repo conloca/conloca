@@ -1,5 +1,6 @@
 import type { QueryClientConfig } from '@tanstack/react-query';
 import type { ConflictBridge } from './conflict/types';
+import type { MediaBridge } from './media/types';
 
 export interface TemplateConfig {
   label: string;
@@ -53,6 +54,20 @@ export interface UIConfig {
    * no plausible mock for it without a host shell.
    */
   conflictBridge?: ConflictBridge;
+  /**
+   * Bridge the host shell installs to surface hosted-only media
+   * metadata (e.g. branch-vs-published scope) in cms-spa's media
+   * surfaces. cms-spa's renderer-neutral `AssetEntry` does NOT
+   * carry scope because the local-Astro case has no notion of
+   * branch-only assets. Surfaces consult the bridge through a
+   * TanStack-wrapped hook (`useAssetScope` in `media/use-asset-scope.ts`)
+   * so per-asset lookups cache cleanly.
+   *
+   * Optional in `UIConfig` — when absent, AssetCard /
+   * AssetDetailSidebar skip the scope pill entirely. This keeps
+   * astro-cms standalone working unchanged.
+   */
+  mediaBridge?: MediaBridge;
 }
 
 const defaultConfig: UIConfig = {

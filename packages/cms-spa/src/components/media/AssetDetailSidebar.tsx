@@ -3,6 +3,8 @@ import { FolderInput, Loader2, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import type { AssetEntry } from '../../hooks';
 import { useAssetUsage, useDeleteAsset, useMoveAssets, useUpdateAssetMetadata } from '../../hooks';
+import { AssetScopePill } from '../../media/AssetScopePill';
+import { useAssetScope } from '../../media/use-asset-scope';
 import { buildAssetServeUrl } from '../../utils/asset-url';
 import { MoveFolderDialog } from '../dialogs';
 import { Button, IconButton, Input } from '../ui';
@@ -36,6 +38,10 @@ export function AssetDetailSidebar({
   const [tagsInput, setTagsInput] = useState(asset.tags?.join(', ') || '');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showMoveDialog, setShowMoveDialog] = useState(false);
+  // hosted-only: branch vs published scope. Returns null when no
+  // host bridge is installed, so the pill is naturally hidden in
+  // astro-cms / local dev.
+  const scope = useAssetScope(asset.filename);
 
   // Reset local state when asset changes
   useEffect(() => {
@@ -128,10 +134,18 @@ export function AssetDetailSidebar({
       />
       <div className="fixed inset-y-0 right-0 z-40 w-full max-w-sm shadow-2xl md:static md:max-w-none md:w-80 md:z-auto md:shadow-none border-l border-line bg-white dark:bg-grey-02 flex flex-col h-full overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-line">
-          <h3 className="font-semibold text-grey-01 dark:text-grey-12 truncate" title={asset.originalName}>
-            {asset.originalName}
-          </h3>
+        <div className="flex items-start justify-between gap-3 px-4 py-3 border-b border-line">
+          <div className="flex-1 min-w-0 flex flex-col gap-1">
+            <h3 className="font-semibold text-grey-01 dark:text-grey-12 truncate" title={asset.originalName}>
+              {asset.originalName}
+            </h3>
+            {/* Scope pill — `md` variant here (vs `sm` on AssetCard
+                corners). Sits below the filename so the hosted-only
+                context is visible at a glance without competing
+                with the asset name itself. Renders nothing when no
+                host bridge is installed. */}
+            {scope ? <AssetScopePill scope={scope} size="md" /> : null}
+          </div>
           <IconButton icon={X} ariaLabel="Close" title="Close" onClick={onClose} variant="ghost" />
         </div>
 

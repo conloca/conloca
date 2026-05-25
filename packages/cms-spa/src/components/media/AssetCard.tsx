@@ -1,4 +1,6 @@
 import type { AssetEntry } from '../../hooks';
+import { AssetScopePill } from '../../media/AssetScopePill';
+import { useAssetScope } from '../../media/use-asset-scope';
 import { buildAssetServeUrl } from '../../utils/asset-url';
 import { cn } from '../../utils/cn';
 
@@ -20,6 +22,12 @@ export function AssetCard({
   onDoubleClick,
   assetsBasePath = '/__cms/api/assets/serve',
 }: AssetCardProps) {
+  // hosted-only: ask the host shell whether this asset is branch-only
+  // or published. Returns null when no `mediaBridge` is installed —
+  // the AssetScopePill skips rendering, so astro-cms / local dev see
+  // the card unchanged.
+  const scope = useAssetScope(asset.filename);
+
   const handleClick = () => {
     onClick?.();
   };
@@ -47,13 +55,18 @@ export function AssetCard({
       )}
     >
       {/* Thumbnail */}
-      <div className="aspect-square bg-grey-11 dark:bg-grey-03 flex items-center justify-center overflow-hidden">
+      <div className="relative aspect-square bg-grey-11 dark:bg-grey-03 flex items-center justify-center overflow-hidden">
         <img
           src={buildAssetServeUrl(assetsBasePath, asset.folder, asset.filename)}
           alt={asset.alt || asset.originalName}
           className="w-full h-full object-contain"
           loading="lazy"
         />
+        {/* Scope pill — renders only when a host bridge supplied a
+            non-null scope. Top-left corner so it sits above the
+            asset's own visual focus point without clipping the
+            filename caption below. */}
+        {scope ? <AssetScopePill scope={scope} size="sm" className="absolute top-1.5 left-1.5" /> : null}
       </div>
 
       {/* Info - filename only */}
