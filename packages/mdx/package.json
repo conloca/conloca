@@ -48,12 +48,10 @@
       "types": "./dist/node.d.mts",
       "import": "./dist/node.mjs",
       "default": "./dist/node.mjs"
-    },
-    "./prose.css": "./src/prose.css"
+    }
   },
   "files": [
     "dist",
-    "src/prose.css",
     "!**/*.tsbuildinfo"
   ],
   "scripts": {

@@ -65,19 +65,6 @@
   --sl-color-hairline-shade: #f1f5f9;
 }
 
-/* Code block styling — draws from the shared `--conloca-code-*` tokens so
- * the published page matches the chrome the CMS MDX editor renders. Token
- * defaults live in `./code-blocks.css` and react to both `:root.dark`
- * (CMS SPA) and `:root[data-theme="dark"]` (Starlight). */
-.expressive-code pre {
-  background-color: var(--conloca-code-bg) !important;
-  border-color: var(--conloca-code-border) !important;
-}
-
-.expressive-code .frame {
-  border-color: var(--conloca-code-border);
-}
-
 /* Sidebar link active state — dark theme */
 [data-current="true"] > a,
 a[aria-current="page"] {
