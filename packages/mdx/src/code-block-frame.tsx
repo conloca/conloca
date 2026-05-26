@@ -1,20 +1,45 @@
 import {
+  Cell,
   type CodeBlockEditorDescriptor,
   type CodeBlockEditorProps,
   CodeMirrorEditor,
+  useCellValue,
   useCodeBlockEditorContext,
 } from '@mdxeditor/editor';
 import { Check, Copy } from 'lucide-react';
-import { type ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { type ChangeEvent, createElement, type ReactElement, useCallback, useEffect, useMemo, useState } from 'react';
 
 /**
  * Frame chrome around the editor's fenced code blocks — header bar with
- * filename, language tag, and a copy button — matched (via the shared
- * `--conloca-code-*` CSS tokens defined in the host's `code-blocks.css`)
- * to the frame ExpressiveCode draws on the published page.
+ * filename, language tag, and a copy button. The outer wrapper picks up
+ * the host's code-block classes (published via `codeBlockWrapperInfo$`
+ * by the host-wrapper plugin in cms-spa), so the host's actual code-
+ * block CSS (Starlight's expressive-code, Tailwind's pre styling, etc.)
+ * reaches the editor's frame through the cascade — no shipped mirror.
  *
- * Host-agnostic: no Shiki / Starlight / ExpressiveCode imports.
+ * Host-agnostic: no Shiki / Starlight / ExpressiveCode imports. Class
+ * names are discovered at runtime from the host's live HTML.
  */
+
+/**
+ * Realm-published cell carrying the host's code-block wrapper chain,
+ * outermost first. For Starlight's expressive-code:
+ *
+ *   [
+ *     { tagName: 'div',    className: 'expressive-code' },
+ *     { tagName: 'figure', className: 'frame has-title not-content' },
+ *   ]
+ *
+ * The cms-spa `hostWrapperPlugin` writes to this whenever the fetched
+ * wrapper info changes; the code-block frame reads from it to render
+ * each chain link as a nested element with the host's expected tag
+ * name. Same publish-pattern as the content-wrapper plugin in cms-spa.
+ *
+ * Null when the host has no code-block chrome (or the fetch is in
+ * flight). The frame then falls back to its base `.conloca-code-block`
+ * wrapper with no host inheritance — "looks plain but not broken."
+ */
+export const codeBlockWrapperInfo$ = Cell<{ tagName: string; className: string }[] | null>(null);
 
 const TITLE_META_RE = /\btitle=(?:"([^"]*)"|'([^']*)'|(\S+))/;
 // First-line filename comment, the convention ExpressiveCode's frames
@@ -157,19 +182,71 @@ function FilenameInput({ meta, code }: { meta: string; code: string }) {
 }
 
 function ConlocaCodeBlockEditor(props: CodeBlockEditorProps) {
-  return (
-    <div className="conloca-code-block">
-      <div className="conloca-code-block__header">
-        <FilenameInput meta={props.meta} code={props.code} />
-        <div className="conloca-code-block__header-right">
-          {props.language ? <span className="conloca-code-block__lang">{props.language}</span> : null}
-          <CopyButton code={props.code} />
-        </div>
-      </div>
-      <div className="conloca-code-block__body">
+  // Materialise the host's discovered code-block chain as nested
+  // elements. The INNERMOST link in the chain becomes the "frame"
+  // element that directly holds the filename header, the code body,
+  // and the copy slot — matching ExpressiveCode's authoring shape:
+  //
+  //   <div class="expressive-code">                ← outer link
+  //     <figure class="frame has-title …">         ← inner link (frame)
+  //       <figcaption class="header">
+  //         <span class="title"><FilenameInput /></span>
+  //       </figcaption>
+  //       <pre><CodeMirror /></pre>
+  //       <div class="copy"><CopyButton /></div>
+  //     </figure>
+  //   </div>
+  //
+  // Rendering with the host's expected tags (figure / figcaption / pre)
+  // and nesting depth lets descendant CSS selectors land — both single-
+  // class (`.frame { ... }`) and descendant (`.expressive-code .frame
+  // .header > .title { ... }`) rules paint without us shipping a
+  // parallel copy.
+  //
+  // When chain is null/empty (host has no code-block chrome, or the
+  // wrapper fetch hasn't resolved yet) we fall back to a bare
+  // `<div class="conloca-code-block">` containing the same inner
+  // shape — "looks plain but not broken."
+  const chain = useCellValue(codeBlockWrapperInfo$) ?? [];
+  const frameLink = chain.length > 0 ? chain[chain.length - 1] : null;
+  const outerLinks = frameLink ? chain.slice(0, -1) : [];
+
+  const frameInner = (
+    <>
+      <figcaption className="conloca-code-block__header header">
+        <span className="title">
+          <FilenameInput meta={props.meta} code={props.code} />
+        </span>
+      </figcaption>
+      <pre className="conloca-code-block__pre">
         <CodeMirrorEditor {...props} />
+      </pre>
+      {/* `.copy` matches expressive-code's expected slot name so any
+          `.frame .copy` styling from the host paints. We host only the
+          copy button here — language selection lives in MDXEditor's
+          own `_codeMirrorToolbar_*` (combobox), positioned via
+          editor-styles.css so it doesn't overlap the code. */}
+      <div className="conloca-code-block__copy copy">
+        <CopyButton code={props.code} />
       </div>
-    </div>
+    </>
+  );
+
+  // The frame element carries `conloca-code-block` (our own targeting
+  // hook) alongside the host's discovered classes. When the host has
+  // no chain, we still wrap in a plain `<div>` so the inner shape is
+  // consistent for our utility selectors.
+  const frame = frameLink ? (
+    createElement(frameLink.tagName, { className: `conloca-code-block ${frameLink.className}` }, frameInner)
+  ) : (
+    <div className="conloca-code-block">{frameInner}</div>
+  );
+
+  // Wrap outer links from inside out. `reduceRight` so the first
+  // chain link ends up as the outermost rendered element.
+  return outerLinks.reduceRight<ReactElement>(
+    (kids, link) => createElement(link.tagName, { className: link.className }, kids),
+    frame,
   );
 }
 

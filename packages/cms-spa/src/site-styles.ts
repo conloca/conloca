@@ -200,31 +200,41 @@ export interface HostContentWrapper {
 }
 
 /**
- * Fetches the host page's content-root shape for the given route URL.
- * The editor then renders its contenteditable inside a clone of that
- * wrapper (via the `hostWrapperPlugin`), so host CSS like
- * `article.card { background: …; padding: … }` paints the editor's
- * content surface through the normal cascade — no per-color JS bridge.
+ * Discovered host wrappers for a given route. `content` is the
+ * prose-content wrapper (eg `.sl-markdown-content`). `codeBlock` is
+ * the ordered chain of classed wrappers between the content wrapper
+ * and `<pre>`, outermost first (eg `[.expressive-code, .frame ...]`).
+ * Either may be null when not present on the page.
+ */
+export interface HostWrappers {
+  content: HostContentWrapper | null;
+  codeBlock: HostContentWrapper[] | null;
+}
+
+/**
+ * Fetches the host page's wrappers for the given route URL. The
+ * editor mirrors them: the contenteditable is wrapped in a clone of
+ * `content` (via the `hostWrapperPlugin`), and the code-block frame
+ * picks up the `codeBlock` classes so the host's code-block CSS
+ * reaches via the cascade — no shipped mirror needed.
  *
- * Returns `null` while the fetch is in flight or when the host route
- * has no discoverable wrapper. Callers should treat null as "no
- * wrapping" — the editor still renders, just without the host's
- * surface paint behind the contenteditable.
+ * Returns `{ content: null, codeBlock: null }` while the fetch is in
+ * flight or when the host route has no discoverable wrappers.
  *
  * Re-fetches whenever `routeUrl` changes (eg locale switch / doc
  * switch). Errors are logged and swallowed; the caller falls back to
  * the no-wrapper render path.
  */
-export function useFetchedContentWrapper(
+export function useFetchedHostWrappers(
   routeUrl: string | undefined,
   options: { cmsRoute?: string } = {},
-): HostContentWrapper | null {
-  const [wrapper, setWrapper] = useState<HostContentWrapper | null>(null);
+): HostWrappers {
+  const [wrappers, setWrappers] = useState<HostWrappers>({ content: null, codeBlock: null });
   const cmsRoute = options.cmsRoute ?? '/__cms';
 
   useEffect(() => {
     if (!routeUrl) {
-      setWrapper(null);
+      setWrappers({ content: null, codeBlock: null });
       return;
     }
 
@@ -234,16 +244,16 @@ export function useFetchedContentWrapper(
     fetch(endpoint)
       .then((res) => {
         if (!res.ok) throw new Error(`Content-wrapper endpoint returned ${res.status}`);
-        return res.json() as Promise<HostContentWrapper | null>;
+        return res.json() as Promise<HostWrappers>;
       })
       .then((data) => {
         if (cancelled) return;
-        setWrapper(data);
+        setWrappers({ content: data?.content ?? null, codeBlock: data?.codeBlock ?? null });
       })
       .catch((err) => {
         if (cancelled) return;
-        console.warn('[Conloca] Failed to fetch content wrapper:', err);
-        setWrapper(null);
+        console.warn('[Conloca] Failed to fetch host wrappers:', err);
+        setWrappers({ content: null, codeBlock: null });
       });
 
     return () => {
@@ -251,7 +261,7 @@ export function useFetchedContentWrapper(
     };
   }, [routeUrl, cmsRoute]);
 
-  return wrapper;
+  return wrappers;
 }
 
 /**

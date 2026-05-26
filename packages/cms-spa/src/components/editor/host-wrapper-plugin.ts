@@ -1,3 +1,4 @@
+import { codeBlockWrapperInfo$ } from '@conloca/mdx';
 import { addEditorWrapper$, Cell, realmPlugin, useCellValue } from '@mdxeditor/editor';
 import { type ComponentType, createElement, Fragment, type ReactElement, type ReactNode } from 'react';
 
@@ -63,17 +64,28 @@ const HostWrapperRenderer: ComponentType<{ children: ReactNode }> = ({ children 
 };
 
 /** Parameters the plugin accepts. `wrapper: null` means "no wrapping" —
- * useful as the initial state before the live-HTML fetch resolves. */
+ * useful as the initial state before the live-HTML fetch resolves.
+ *
+ * `codeBlockWrapper` carries the host's code-block wrapper chain
+ * (outermost first) to a separate Cell that lives in @conloca/mdx, so
+ * the code-block frame component can read it without depending on
+ * cms-spa internals. The frame component materialises the chain as
+ * nested elements (eg `<div.expressive-code> > <figure.frame>`) so
+ * the host's code-block CSS reaches via the cascade including
+ * descendant selectors — not just single-class targets. */
 export interface HostWrapperPluginParams {
   wrapper: HostWrapperInfo | null;
+  codeBlockWrapper?: HostWrapperInfo[] | null;
 }
 
 export const hostWrapperPlugin = realmPlugin<HostWrapperPluginParams>({
   init(realm, params) {
     realm.pub(addEditorWrapper$, HostWrapperRenderer);
     realm.pub(hostWrapperInfo$, params?.wrapper ?? null);
+    realm.pub(codeBlockWrapperInfo$, params?.codeBlockWrapper ?? null);
   },
   update(realm, params) {
     realm.pub(hostWrapperInfo$, params?.wrapper ?? null);
+    realm.pub(codeBlockWrapperInfo$, params?.codeBlockWrapper ?? null);
   },
 });
