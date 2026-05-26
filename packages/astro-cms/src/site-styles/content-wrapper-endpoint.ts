@@ -6,29 +6,40 @@ import type { Connect, ViteDevServer } from 'vite';
  * The editor mirrors the host's content surface by rendering its
  * contenteditable inside a clone of whatever element the host wraps
  * its page content in. This endpoint fetches the live HTML the dev
- * server serves at `?url=<route>`, locates that wrapper, and returns
- * its `tagName` + `className` as JSON. The SPA feeds those values
- * into an MDXEditor plugin (`hostWrapperPlugin`) that publishes a
- * wrapping component via `addEditorWrapper$` — same hook the
- * library's own diff-source plugin uses.
+ * server serves at `?url=<route>`, locates the relevant wrappers
+ * (prose content + code-block chrome), and returns them as JSON.
  *
- * Discovery priority:
+ * Returned shape:
  *
- * 1. `[data-conloca-content-root]` — explicit host opt-in. Pin a
- *    single attribute on the element you want the editor to mirror;
- *    nothing else needed.
- * 2. `<article class="card">` — Starlight default (and the Conloca
- *    starter layout). Soft heuristic: "an article that has a class
- *    called card." Not coupled to the framework's name, just to a
- *    pattern that happens to be common.
- * 3. `<main>` — HTML5 semantic default; any layout that uses `<main>`
- *    around its content gets a sensible mirror without further config.
- * 4. Nothing → returns `null`. The editor falls back to its previous
- *    chrome (the `--conloca-host-body-bg` bridge, until that lands a
- *    follow-up cleanup).
+ *   {
+ *     content:   { tagName, className } | null,
+ *     codeBlock: { tagName, className }[] | null,
+ *   }
  *
- * Returns `null` rather than failing when no wrapper is found so the
- * caller doesn't have to special-case the no-match path.
+ * - `content` is the wrapper for prose (h1-h6, p, lists, etc.). The
+ *   editor wraps its contenteditable in a clone so the host's prose
+ *   CSS reaches via the cascade.
+ * - `codeBlock` is the ORDERED chain of classed wrappers around the
+ *   host's `<pre>`, outermost first. For Starlight's expressive-code:
+ *   `[{ div, 'expressive-code' }, { figure, 'frame has-title …' }]`.
+ *   The editor's CodeMirror frame renders each link as a nested
+ *   element (outer→inner) so the host's code-block CSS reaches via
+ *   the cascade including descendant selectors (`.expressive-code
+ *   .frame .header`, etc.) — not just single-class targets.
+ *
+ * Discovery priorities (content):
+ *
+ *   1. `[data-conloca-content-root]` — explicit opt-in.
+ *   2. The smallest classed wrapper inside `<main>` containing the
+ *      majority of prose tags.
+ *   3. `<main>` itself.
+ *   4. `null`.
+ *
+ * Discovery (codeBlock): walk up from a `<pre>` inside `<main>` and
+ * collect classed ancestors between the content wrapper and `<pre>`,
+ * preserving their nesting order. Returns null when no `<pre>` exists,
+ * or when there are no classed wrappers between the prose wrapper and
+ * the `<pre>`.
  */
 export interface ContentWrapperInfo {
   /** Lower-case HTML tag name as it appeared in source, eg `'article'`. */
@@ -38,6 +49,19 @@ export interface ContentWrapperInfo {
    * scoped CSS only matches when those hashes are present on the
    * element. */
   className: string;
+}
+
+export interface DiscoveredWrappers {
+  /** The element wrapping the page's prose content (h1-h6, p, etc.).
+   * For Starlight: `.sl-markdown-content`. For Tailwind Typography:
+   * `.prose`. Null when no prose wrapper exists on the page. */
+  content: ContentWrapperInfo | null;
+  /** Ordered chain of classed wrappers between the content wrapper
+   * and the `<pre>`, outermost first. For Starlight:
+   * `[{ div, 'expressive-code' }, { figure, 'frame has-title …' }]`.
+   * Null when the page has no code blocks or no classed wrappers
+   * between the prose wrapper and the `<pre>`. */
+  codeBlock: ContentWrapperInfo[] | null;
 }
 
 export function createContentWrapperEndpoint(_server: ViteDevServer): Connect.NextHandleFunction {
@@ -52,26 +76,19 @@ export function createContentWrapperEndpoint(_server: ViteDevServer): Connect.Ne
         return;
       }
 
-      // Fetch the live page from the dev server we're attached to.
-      // `req.headers.host` includes the port, so we hit the same
-      // server (not a guessed port). Same-origin keeps any auth
-      // cookies / dev middleware in play.
       const host = req.headers.host ?? 'localhost:4321';
       const protocol = (req.headers['x-forwarded-proto'] as string) ?? 'http';
       const liveUrl = `${protocol}://${host}${routeUrl}`;
       const html = await fetch(liveUrl, {
-        // Pass through cookies so authenticated dev environments
-        // resolve correctly. Without this, route guards could 401
-        // and we'd discover nothing.
         headers: req.headers.cookie ? { cookie: req.headers.cookie } : undefined,
       }).then((r) => r.text());
 
-      const wrapper = findContentWrapper(html);
+      const wrappers = findContentWrapper(html);
 
       res.statusCode = 200;
       res.setHeader('content-type', 'application/json; charset=utf-8');
       res.setHeader('cache-control', 'no-store');
-      res.end(JSON.stringify(wrapper));
+      res.end(JSON.stringify(wrappers));
     } catch (err) {
       res.statusCode = 500;
       res.setHeader('content-type', 'text/plain');
@@ -80,70 +97,216 @@ export function createContentWrapperEndpoint(_server: ViteDevServer): Connect.Ne
   };
 }
 
-/**
- * Locate the host's content wrapper in raw HTML. Pure-string regex
- * walk — no DOM parser dep needed for this single targeted task. The
- * regex matches opening tags `<tag … >` and inspects their attribute
- * blob; we never try to recover full document structure.
- *
- * Exported for unit testing.
- */
-export function findContentWrapper(html: string): ContentWrapperInfo | null {
-  // Strip comments so we don't match opening-tag-shaped strings inside
-  // them. Cheap; full sanitisation isn't needed since we only look at
-  // opening tags.
-  const cleaned = html.replace(/<!--[\s\S]*?-->/g, '');
+/** Tags whose presence signals "this element holds prose content."
+ * We walk up from the first such element we find inside `<main>` to
+ * locate the wrapper. Headings + paragraphs cover every prose-styling
+ * convention we've seen — every CSS framework scopes typography
+ * through descendant selectors on `h1`–`h6` and `p`. */
+const PROSE_TAGS = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p']);
 
-  // 1. Explicit opt-in: `[data-conloca-content-root]`. Hosts that
-  //    want pinpoint control add this attribute to their layout's
-  //    content wrapper.
-  const explicit = findFirstOpeningTagWhere(cleaned, (_, attrs) => 'data-conloca-content-root' in attrs);
-  if (explicit) return explicit;
+/** Tag that anchors code-block wrapper discovery. The host's code-
+ * block library (Starlight's expressive-code, Tailwind's `pre`
+ * styling, etc.) always renders a `<pre>` containing the code,
+ * often wrapped in additional classed elements. */
+const CODE_BLOCK_ANCHOR = 'pre';
 
-  // 2. `<main>` — HTML5 semantic for "the main content area". Starlight
-  //    emits a `<main>` around the article body, Astro defaults do too,
-  //    and most layout templates pick it up. Unambiguous: at most one
-  //    `<main>` per page.
-  //
-  //    Earlier iterations also tried `article.card` as a fallback —
-  //    rejected because it false-positives on inner Card components
-  //    used inside the content (Starlight's `<Card>` user-component
-  //    renders `<article class="card">`), so we'd pick a sub-element
-  //    instead of the page wrapper. Sticking with `<main>` keeps the
-  //    contract simple: "the host's `<main>` is what we mirror."
-  const main = findFirstOpeningTagWhere(cleaned, (tag) => tag === 'main');
-  if (main) return main;
+/** HTML5 void elements — never push onto the open-tag stack since they
+ * have no closing tag. */
+const VOID_TAGS = new Set([
+  'area',
+  'base',
+  'br',
+  'col',
+  'embed',
+  'hr',
+  'img',
+  'input',
+  'link',
+  'meta',
+  'source',
+  'track',
+  'wbr',
+]);
 
-  return null;
+interface OpenTag {
+  tag: string;
+  className: string;
+  attrs: Record<string, string>;
 }
 
 /**
- * Iterate every opening tag in `html`, return the first whose
- * `(tagName, attrs)` satisfies `predicate`. `tagName` is normalised
- * to lower-case; attribute names preserve original case but most
- * HTML serialisers emit them lower-case anyway.
+ * Locate the host's content + code-block wrappers in raw HTML. Single-
+ * pass regex walk with a stack so we can recover ancestor chains for
+ * both prose tags and `<pre>` tags without a full DOM parser dep.
  *
- * The opening-tag regex is intentionally permissive: it skips
- * self-closing `/>`-trailing tags the same as plain `>` ones, since
- * either form has the same attributes we care about.
+ * Exported for unit testing.
  */
-function findFirstOpeningTagWhere(
-  html: string,
-  predicate: (tagName: string, attrs: Record<string, string>) => boolean,
-): ContentWrapperInfo | null {
-  const tagRe = /<([a-zA-Z][a-zA-Z0-9-]*)([^>]*)>/g;
+export function findContentWrapper(html: string): DiscoveredWrappers {
+  // Strip comments and scripts so opening-tag-shaped strings inside
+  // them don't pollute the walk.
+  const cleaned = html
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '');
+
+  const tagRe = /<(\/?)([a-zA-Z][a-zA-Z0-9-]*)((?:\s+[^>]*)?)\s*(\/?)>/g;
+  const stack: OpenTag[] = [];
+
+  let explicit: ContentWrapperInfo | null = null;
+  let mainEl: OpenTag | null = null;
+  const proseAncestorChains: OpenTag[][] = [];
+  const preAncestorChains: OpenTag[][] = [];
+
   let match: RegExpExecArray | null;
-  while ((match = tagRe.exec(html)) !== null) {
-    const tagName = match[1].toLowerCase();
-    // Skip closing tags `</foo>` — the regex above doesn't allow
-    // a leading `/` in the tag name, but defence in depth.
-    if (tagName.startsWith('/')) continue;
-    const attrs = parseAttributes(match[2]);
-    if (predicate(tagName, attrs)) {
-      return { tagName, className: attrs.class ?? '' };
+  while ((match = tagRe.exec(cleaned)) !== null) {
+    const isClose = match[1] === '/';
+    const tagName = match[2].toLowerCase();
+    const attrBlob = match[3] ?? '';
+    const explicitlySelfClosing = match[4] === '/';
+
+    if (isClose) {
+      for (let i = stack.length - 1; i >= 0; i--) {
+        if (stack[i].tag === tagName) {
+          stack.length = i;
+          break;
+        }
+      }
+      continue;
+    }
+
+    const attrs = parseAttributes(attrBlob);
+    const className = attrs.class ?? '';
+    const el: OpenTag = { tag: tagName, className, attrs };
+
+    // Priority 1 (content only): explicit opt-in. Capture and keep
+    // walking — we still need to discover the code-block wrapper.
+    if (!explicit && 'data-conloca-content-root' in attrs) {
+      explicit = { tagName, className };
+    }
+
+    if (!mainEl && tagName === 'main') {
+      mainEl = el;
+    }
+
+    if (mainEl && PROSE_TAGS.has(tagName)) {
+      const mainIdx = stack.indexOf(mainEl);
+      if (mainIdx >= 0) {
+        proseAncestorChains.push(stack.slice(mainIdx + 1));
+      }
+    }
+
+    if (mainEl && tagName === CODE_BLOCK_ANCHOR) {
+      const mainIdx = stack.indexOf(mainEl);
+      if (mainIdx >= 0) {
+        preAncestorChains.push(stack.slice(mainIdx + 1));
+      }
+    }
+
+    const isVoid = VOID_TAGS.has(tagName);
+    if (!isVoid && !explicitlySelfClosing) {
+      stack.push(el);
     }
   }
-  return null;
+
+  const content = resolveContentWrapper(explicit, mainEl, proseAncestorChains);
+  const codeBlock = resolveCodeBlockWrapper(content, preAncestorChains);
+
+  return { content, codeBlock };
+}
+
+/**
+ * Pick the content wrapper from the walk's collected data.
+ *
+ * Priority: explicit opt-in > majority-prose-wrapper-inside-main >
+ * `<main>` fallback > null.
+ */
+function resolveContentWrapper(
+  explicit: ContentWrapperInfo | null,
+  mainEl: OpenTag | null,
+  proseAncestorChains: OpenTag[][],
+): ContentWrapperInfo | null {
+  if (explicit) return explicit;
+  if (!mainEl) return null;
+
+  if (proseAncestorChains.length === 0) {
+    return { tagName: 'main', className: mainEl.className };
+  }
+
+  // Tally classed-ancestor occurrences across all prose chains.
+  const scores = new Map<OpenTag, number>();
+  for (const chain of proseAncestorChains) {
+    for (const ancestor of chain) {
+      if (!ancestor.className) continue;
+      scores.set(ancestor, (scores.get(ancestor) ?? 0) + 1);
+    }
+  }
+
+  // Majority threshold rules out partial-coverage classed ancestors
+  // (single Cards holding one of many prose blocks).
+  const threshold = proseAncestorChains.length / 2;
+  const candidates = [...scores.entries()].filter(([, count]) => count > threshold);
+
+  if (candidates.length === 0) {
+    return { tagName: 'main', className: mainEl.className };
+  }
+
+  // Tie-break by depth: the candidate that appears deepest in any
+  // chain is the most specific (closest to the prose tags).
+  const maxChainIndex = (el: OpenTag) => Math.max(...proseAncestorChains.map((c) => c.indexOf(el)));
+  candidates.sort((a, b) => {
+    if (b[1] !== a[1]) return b[1] - a[1];
+    return maxChainIndex(b[0]) - maxChainIndex(a[0]);
+  });
+
+  const winner = candidates[0][0];
+  return { tagName: winner.tag, className: winner.className };
+}
+
+/**
+ * Derive the code-block wrapper chain from a representative `<pre>`'s
+ * ancestor chain. We strip everything at or above the content wrapper
+ * (its styles are already handled by the content-wrapper mirror) and
+ * return the remaining classed elements in nesting order, outermost
+ * first.
+ *
+ * Returning a chain (instead of one collapsed element) preserves the
+ * shape host CSS expects:
+ *
+ *   - Single-class selectors (`.frame { ... }`) hit on whichever link
+ *     carries that class.
+ *   - Descendant selectors (`.expressive-code .frame { ... }`,
+ *     `.frame .header > .title`) hit because the editor's renderer
+ *     materialises the chain as nested elements with the host's
+ *     expected tag names.
+ *
+ * The editor's code-block frame component (`code-block-frame.tsx` in
+ * `@conloca/mdx`) treats the LAST link as the "frame" element (where
+ * figcaption/pre/copy children render) and wraps it with the earlier
+ * links from inside out. This matches the host's authoring shape for
+ * libraries like ExpressiveCode (`.expressive-code > figure.frame >
+ * figcaption + pre + .copy`).
+ */
+function resolveCodeBlockWrapper(
+  content: ContentWrapperInfo | null,
+  preAncestorChains: OpenTag[][],
+): ContentWrapperInfo[] | null {
+  if (preAncestorChains.length === 0) return null;
+
+  // Pick the first <pre>'s chain as representative. Code blocks on a
+  // single page are uniformly wrapped, so chains are interchangeable.
+  const chain = preAncestorChains[0];
+
+  // Strip everything at-or-above the content wrapper; the rest is
+  // code-block-specific chrome that this endpoint is responsible for.
+  const contentIdx = content
+    ? chain.findIndex((el) => el.tag === content.tagName && el.className === content.className)
+    : -1;
+  const codeBlockChain = chain.slice(contentIdx + 1);
+
+  const classedAncestors = codeBlockChain.filter((el) => el.className);
+  if (classedAncestors.length === 0) return null;
+
+  return classedAncestors.map((el) => ({ tagName: el.tag, className: el.className }));
 }
 
 /**
