@@ -158,6 +158,46 @@ function parse4KBMDX(
  * - Full content is loaded on demand
  * - ETags are calculated using streaming for efficiency
  */
+/**
+ * Read and validate `<contentRoot>/sites.json`. Returns a safe default
+ * (`{ sites: {}, globalLocales: ['en'] }`) when the file is missing or
+ * has invalid structure, with a warning logged in each case.
+ *
+ * Exported standalone so the Astro integration (and any other tooling
+ * that needs to inspect per-site config at startup time) can read the
+ * config without spinning up a full content-api instance.
+ */
+export async function readSitesConfig(contentRoot: string): Promise<SitesConfig> {
+  const absoluteContentRoot = resolve(contentRoot);
+  const sitesPath = join(absoluteContentRoot, 'sites.json');
+  try {
+    const content = await readFile(sitesPath, 'utf-8');
+    const parsed = JSON.parse(content);
+
+    // Validate the structure
+    if (!parsed.sites || typeof parsed.sites !== 'object') {
+      console.warn(
+        `Warning: sites.json has invalid structure at ${sitesPath}. Expected 'sites' property. Using default configuration.`,
+      );
+      return { sites: {}, globalLocales: ['en'] };
+    }
+    if (!parsed.globalLocales || !Array.isArray(parsed.globalLocales)) {
+      console.warn(
+        `Warning: sites.json is missing 'globalLocales' array at ${sitesPath}. Using default global locales.`,
+      );
+      return {
+        sites: parsed.sites,
+        globalLocales: ['en'],
+      };
+    }
+    return parsed;
+  } catch {
+    // Handle missing sites.json gracefully
+    console.warn(`Warning: sites.json is missing at ${sitesPath}. Using empty configuration.`);
+    return { sites: {}, globalLocales: ['en'] };
+  }
+}
+
 export class FileSystemContentAPI implements ContentAPI {
   private contentRoot: string;
   private absoluteContentRoot: string;
@@ -168,7 +208,9 @@ export class FileSystemContentAPI implements ContentAPI {
   private readonly sites: Record<string, Site>;
 
   // mdx-page support: optional second filesystem root for kind:'page'+type:'mdx'.
-  // See ContentAPIOptions.mdxPagesRoot for the design rationale.
+  // Canonical source is the resolved site's `mdxPages` in sites.json; the
+  // ContentAPIOptions.mdxPagesRoot option exists as a test/programmatic
+  // override. See ContentAPIOptions.mdxPagesRoot for the design rationale.
   private absoluteMdxPagesRoot?: string;
   private mdxPagesDefaultLocale = 'en';
   private mdxPagesSite = 'default';
@@ -218,17 +260,26 @@ export class FileSystemContentAPI implements ContentAPI {
     this.sitesConfig = sitesConfig;
     this.contentIndex = contentIndex;
 
-    // Resolve mdx-pages options. When `root` is omitted, mdx-page support
-    // is dormant and getFilePath/parseFilePath/scan never look at a second root.
-    if (mdxPagesOptions?.root) {
-      const normalizedMdxRoot = mdxPagesOptions.root.startsWith('./')
-        ? mdxPagesOptions.root.slice(2)
-        : mdxPagesOptions.root;
-      this.absoluteMdxPagesRoot = resolve(normalizedMdxRoot);
+    // Resolve which site owns mdx-type pages. Resolution order:
+    //   1. Explicit `mdxPagesOptions.site` (test / programmatic override)
+    //   2. First site in sites.json that declares an `mdxPages` path
+    //   3. First configured site (any)
+    //   4. Literal 'default'
+    const siteNames = Object.keys(sitesConfig.sites);
+    const firstSiteName = siteNames[0];
+    const firstSiteWithMdxPages = siteNames.find((name) => sitesConfig.sites[name]?.mdxPages);
+    this.mdxPagesSite = mdxPagesOptions?.site ?? firstSiteWithMdxPages ?? firstSiteName ?? 'default';
+
+    // Resolve the mdx-pages path. Option wins over sites.json so tests and
+    // programmatic callers can supply a path without writing a sites.json
+    // file. When neither is set, .mdx files fall back to living alongside
+    // Puck pages under `{contentRoot}/{site}/pages/`.
+    const sitesJsonMdxPages = sitesConfig.sites[this.mdxPagesSite]?.mdxPages;
+    const resolvedMdxPages = mdxPagesOptions?.root ?? sitesJsonMdxPages;
+    if (resolvedMdxPages) {
+      const normalizedMdxPages = resolvedMdxPages.startsWith('./') ? resolvedMdxPages.slice(2) : resolvedMdxPages;
+      this.absoluteMdxPagesRoot = resolve(normalizedMdxPages);
     }
-    // Default site: explicit option > first configured site > 'default'
-    const firstSiteName = Object.keys(sitesConfig.sites)[0];
-    this.mdxPagesSite = mdxPagesOptions?.site ?? firstSiteName ?? 'default';
     // Default locale: top-level option > mdxPages option > resolved-site's
     // defaultLocale > first global locale > 'en'. The top-level option wins
     // because it represents an explicit framework-level declaration (e.g.
@@ -278,38 +329,8 @@ export class FileSystemContentAPI implements ContentAPI {
     // Keep contentRoot as provided (will be normalized in constructor)
     const contentRoot = options.contentRoot;
 
-    // For file operations, we need the absolute path
-    const absoluteContentRoot = resolve(contentRoot);
-
-    // Load sites config
-    const sitesPath = join(absoluteContentRoot, 'sites.json');
-    let sitesConfig: SitesConfig;
-    try {
-      const content = await readFile(sitesPath, 'utf-8');
-      const parsed = JSON.parse(content);
-
-      // Validate the structure
-      if (!parsed.sites || typeof parsed.sites !== 'object') {
-        console.warn(
-          `Warning: sites.json has invalid structure at ${sitesPath}. Expected 'sites' property. Using default configuration.`,
-        );
-        sitesConfig = { sites: {}, globalLocales: ['en'] };
-      } else if (!parsed.globalLocales || !Array.isArray(parsed.globalLocales)) {
-        console.warn(
-          `Warning: sites.json is missing 'globalLocales' array at ${sitesPath}. Using default global locales.`,
-        );
-        sitesConfig = {
-          sites: parsed.sites,
-          globalLocales: ['en'],
-        };
-      } else {
-        sitesConfig = parsed;
-      }
-    } catch (error) {
-      // Handle missing sites.json gracefully
-      console.warn(`Warning: sites.json is missing at ${sitesPath}. Using empty configuration.`);
-      sitesConfig = { sites: {}, globalLocales: ['en'] };
-    }
+    // Load sites config (canonical home for per-site fields including mdxPages).
+    let sitesConfig = await readSitesConfig(contentRoot);
 
     // Apply the top-level locales option as the authoritative source.
     // We expand sitesConfig so that the BlockIndex (which keys on
@@ -317,6 +338,9 @@ export class FileSystemContentAPI implements ContentAPI {
     // site's locales array) both have slots for every option-declared
     // locale. Without this, the parser would correctly identify a file's
     // locale but `addContent` would crash on a missing index bucket.
+    // We preserve the resolved site's existing `mdxPages` and `domains`
+    // through the rewrite so the locale-override doesn't clobber the
+    // per-site content config.
     if (options.availableLocales && options.availableLocales.length > 0) {
       const optionDefaultLocale = options.defaultLocale ?? options.availableLocales[0];
       const optionSite = options.mdxPagesSite ?? Object.keys(sitesConfig.sites)[0] ?? 'default';
@@ -328,6 +352,7 @@ export class FileSystemContentAPI implements ContentAPI {
             locales: options.availableLocales,
             defaultLocale: optionDefaultLocale,
             ...(existingSite?.domains && { domains: existingSite.domains }),
+            ...(existingSite?.mdxPages && { mdxPages: existingSite.mdxPages }),
           },
         },
         globalLocales: Array.from(new Set([...sitesConfig.globalLocales, ...options.availableLocales])),
@@ -660,10 +685,16 @@ export class FileSystemContentAPI implements ContentAPI {
         site = parts[0];
         collection = parts[1];
 
-        // Build pathname from file path: pages/products/widget.en.vxjson -> /products/widget
+        // Build pathname from file path. Accepts both .vxjson (Puck pages) and
+        // .mdx (mdx-type pages) so consumers without a separate `mdxPages`
+        // path can colocate .mdx docs alongside Puck pages under
+        // `{contentRoot}/{site}/{collection}/...`. When `mdxPages` IS set
+        // on a site in sites.json, .mdx files are served from that
+        // separate path (handled in the `absoluteMdxPagesRoot` branch
+        // above) and won't reach this branch.
         const pathParts = parts.slice(2); // Remove site/collection
         const filename = pathParts[pathParts.length - 1];
-        const match = filename.match(/^(.+)\.(\w+)\.vxjson$/);
+        const match = filename.match(/^(.+)\.(\w+)\.(vxjson|mdx)$/);
         if (match) {
           locale = match[2];
           // Replace filename with basename
@@ -675,8 +706,13 @@ export class FileSystemContentAPI implements ContentAPI {
               : '/' + pathParts.join('/');
         }
 
-        // Parse JSON to get ID and metadata
-        parsedData = VXJSON.parse4KB(buffer, bytesRead);
+        // Parse format-appropriately. parse4KBMDX reads frontmatter from the
+        // MDX header; VXJSON.parse4KB reads the leading JSON metadata.
+        if (filePath.endsWith('.mdx')) {
+          parsedData = parse4KBMDX(buffer, bytesRead);
+        } else {
+          parsedData = VXJSON.parse4KB(buffer, bytesRead);
+        }
       }
 
       // Check if the file is missing required fields
@@ -1005,9 +1041,13 @@ export class FileSystemContentAPI implements ContentAPI {
           : join(this.absoluteMdxPagesRoot, locale, `${basePath}.mdx`);
       }
 
-      // Existing behavior: type:'puck' pages live under contentRoot/{site}/{collection}.
+      // Pages live under contentRoot/{site}/{collection}. When type:'mdx'
+      // and no `mdxPages` path is configured for the site, the .mdx files
+      // sit here alongside the .vxjson Puck pages — the layout chosen
+      // when sites.json doesn't declare a separate `mdxPages` path.
       if (manifest.site) {
-        return join(this.absoluteContentRoot, manifest.site, manifest.collection, `${basePath}.${locale}.vxjson`);
+        const ext = manifest.type === 'mdx' ? 'mdx' : 'vxjson';
+        return join(this.absoluteContentRoot, manifest.site, manifest.collection, `${basePath}.${locale}.${ext}`);
       }
     }
     throw new Error(`Invalid manifest: ${JSON.stringify(manifest, null, 2)}`);
