@@ -82,8 +82,8 @@ export interface CardProps extends ComponentProps<'div'> {
 /**
  * Generic card surface primitive.
  *
- * Hosted shells (the host shell's pre-auth screens, account menus,
- * banner panels, etc.) compose this rather than restating
+ * Hosted shells (pre-auth screens, account menus, banner panels,
+ * etc.) compose this rather than restating
  * `bg-white dark:bg-grey-02 border border-grey-09 ... rounded-md
  * shadow-sm` at every call site. Centralising the surface here:
  *

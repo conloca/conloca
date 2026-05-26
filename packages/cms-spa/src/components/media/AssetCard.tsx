@@ -24,14 +24,14 @@ export function AssetCard({
   onDoubleClick,
   assetsBasePath = '/__cms/api/assets/serve',
 }: AssetCardProps) {
-  // hosted-only: ask the host shell whether this asset is branch-only
+  // Hosted-only: ask the host shell whether this asset is branch-only
   // or published. Returns null when no `mediaBridge` is installed —
   // the AssetScopePill skips rendering, so astro-cms / local dev see
   // the card unchanged.
   const scope = useAssetScope(asset.filename);
-  // hosted-only: oversized / blocked status the passthrough scanner
-  // or quota tracker flags. Returns null when the host has no
-  // opinion — surfaces degrade exactly like the scope pill in
+  // Hosted-only: oversized / blocked status the host's media
+  // scanner or quota tracker flags. Returns null when the host has
+  // no opinion — surfaces degrade exactly like the scope pill in
   // standalone mounts.
   const issue = useMediaIssue(asset.filename);
 

@@ -40,11 +40,11 @@ export function AssetDetailSidebar({
   const [tagsInput, setTagsInput] = useState(asset.tags?.join(', ') || '');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showMoveDialog, setShowMoveDialog] = useState(false);
-  // hosted-only: branch vs published scope. Returns null when no
+  // Hosted-only: branch vs published scope. Returns null when no
   // host bridge is installed, so the pill is naturally hidden in
   // astro-cms / local dev.
   const scope = useAssetScope(asset.filename);
-  // hosted-only: passthrough-scanner / quota-tracker issue, if any.
+  // Hosted-only: media-scanner / quota-tracker issue, if any.
   // Returns null when the host has no opinion or the asset is
   // healthy; the badge collapses to nothing in either case.
   const issue = useMediaIssue(asset.filename);
@@ -146,7 +146,7 @@ export function AssetDetailSidebar({
               {asset.originalName}
             </h3>
             {/* Scope pill — `md` variant here (vs `sm` on AssetCard
-                corners). Sits below the filename so the hosted-only
+                corners). Sits below the filename so the hosted-mode
                 context is visible at a glance without competing
                 with the asset name itself. Renders nothing when no
                 host bridge is installed. */}

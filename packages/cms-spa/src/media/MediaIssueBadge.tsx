@@ -27,7 +27,7 @@ function formatOversizedDetail(sizeBytes: number, limitBytes: number): string {
 }
 
 /**
- * Badge rendering a hosted-only `MediaIssue` ("Oversized" /
+ * Badge rendering a hosted-mode `MediaIssue` ("Oversized" /
  * "Blocked"). When `issue` is `null`, renders nothing — callers
  * can mount this unconditionally and let it disappear when the
  * host has no bridge or the asset is healthy.

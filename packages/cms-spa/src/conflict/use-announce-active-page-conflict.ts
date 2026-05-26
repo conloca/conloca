@@ -8,7 +8,7 @@ import { useSessionConflictsByPage } from './use-conflict-session';
  * shell's strip listens and renders a "Needs review" chip.
  *
  * The string value is the cross-package contract — the host shell's
- * `CurrentPageConflictSlot` listens for this exact name. Keep it
+ * page-conflict surface listens for this exact name. Keep it
  * stable.
  */
 export const ACTIVE_PAGE_CONFLICT_EVENT = 'conloca:active-page-conflict';

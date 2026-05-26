@@ -117,12 +117,10 @@ function SidebarContent() {
       </nav>
 
       {/* GitStatusPanel is VPS-ONLY. In hosted mode the host shell
-          owns the four-layer sync status surface ( in
-          the host shell — see `targets/the host shell/src/app/slots/
-          sync-status/SyncStatusSlot.tsx`). The two flows are NOT
-          interchangeable: VPS assumes a single-tenant filesystem
+          owns the four-layer sync status surface. The two flows are
+          NOT interchangeable: VPS assumes a single-tenant filesystem
           repo with synchronous git ops; hosted goes through the
-          Branch DO with layered server-side state. Do NOT try to
+          backend with layered server-side state. Do NOT try to
           unify them via shared hooks — the `hosted` flag is the
           deployment-mode seam, and it stays the seam. */}
       {!hosted && (

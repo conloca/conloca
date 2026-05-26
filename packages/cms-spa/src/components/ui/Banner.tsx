@@ -83,8 +83,8 @@ export interface BannerProps extends Omit<ComponentProps<'div'>, 'title'> {
  * Replaces the per-component restating of the
  * `flex items-start gap-3 px-6 py-3 text-sm border-b bg-{color}-11
  * ... border-{color}-08 ... text-{color}-02 ...` pattern that hosts
- * (the host shell, the editor) had been hand-rolling at every banner /
- * alert site. Centralising the surface:
+ * had been hand-rolling at every banner / alert site. Centralising
+ * the surface:
  *
  * - locks the variant palette (one place to change yellow / green /
  *   red treatments across every host)

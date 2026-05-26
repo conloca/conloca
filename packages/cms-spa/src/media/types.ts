@@ -1,5 +1,5 @@
 /**
- * Lifecycle scope of a media asset in a hosted hosted branch service
+ * Lifecycle scope of a media asset in a hosted-mode (branch-aware)
  * context. cms-spa's renderer-neutral `AssetEntry` (in
  * `content-api/asset-types.ts`) doesn't model this — branch vs
  * published is meaningful only when an asset lives in a working
@@ -27,7 +27,7 @@ export type AssetScope = 'branch' | 'published';
  *
  * cms-spa's renderer-neutral asset model doesn't carry these
  * fields because the local-Astro case has no notion of upload
- * limits or passthrough scanning — they're hosted-only state the
+ * limits or media scanning — they're hosted-mode state the
  * host exposes through `UIConfig.mediaBridge.getMediaIssue`.
  *
  * - `oversized` — file exceeds the inline-blob limit. The asset
@@ -56,8 +56,8 @@ export type MediaIssue =
  * The bridge is optional in `UIConfig` — absence means "no host
  * wiring," in which case cms-spa surfaces degrade cleanly (no
  * scope pill, no host-side hooks fire). Mirrors the
- * `ConflictBridge` pattern that GL-208 established for the
- * conflict-resolution session.
+ * `ConflictBridge` pattern used for the conflict-resolution
+ * session.
  */
 export interface MediaBridge {
   /**
@@ -71,7 +71,7 @@ export interface MediaBridge {
    * The host is responsible for caching: cms-spa calls this
    * synchronously-from-the-surface's-POV via TanStack so
    * repeated renders don't refetch. The bridge implementation
-   * (in the host shell) wraps the HostClient's `getAssetScope`
+   * (in the host shell) wraps its client's `getAssetScope`
    * call in a `useQuery` so the resolved scope is memoised.
    */
   getAssetScope(input: { filename: string }): Promise<AssetScope | null>;

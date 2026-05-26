@@ -2,16 +2,16 @@
  * Conflict-resolution session types — the cms-spa side of the
  * boundary contract.
  *
- * These mirror the shape of `ConflictResolutionSession` (and its
- * supporting types) in the hosted service host shell. The host shell
- * fetches the session from the Branch DO via its HostClient and
- * passes it into cms-spa through `UIConfig.conflictBridge`. The
- * shapes here intentionally use TypeScript structural typing — the
- * host shell's types align by structure, not by name, so we never
- * have to import across the host-shell ↔ cms-spa boundary.
+ * These mirror the shape of the conflict-resolution session a
+ * hosted shell exposes. The host shell fetches the session through
+ * its own client and passes it into cms-spa through
+ * `UIConfig.conflictBridge`. The shapes here intentionally use
+ * TypeScript structural typing — the host shell's types align by
+ * structure, not by name, so we never have to import across the
+ * host-shell ↔ cms-spa boundary.
  *
- * When the backend ships the Branch DO conflict-resolution document,
- * its wire shape MUST match this set; the host contract's
+ * When a hosted backend ships its conflict-resolution document,
+ * its wire shape MUST match this set; the host spec's
  * "Marketing-Friendly Conflict Resolution" section is the source of
  * truth. Renaming these locally without updating the spec breaks the
  * host's bridge wiring.
@@ -49,10 +49,10 @@ export interface BlockConflict {
 }
 
 /**
- * One page held back by the Branch DO's semantic merge. Always one
+ * One page held back by the backend's semantic merge. Always one
  * of `vxjson` (structured content with field-level conflicts) or
  * `mdx` (prose with block-level conflicts) — mixed pages are
- * deferred per the host contract.
+ * deferred per the host spec.
  */
 export type ConflictPage =
   | {
@@ -97,7 +97,7 @@ export type ConflictDecisionMap = Record<string, ResolutionDecision>;
  * - `pages` — every held-back page in the session. Non-empty when the
  *   session exists; the bridge reports `null` for "no session".
  * - `decisions` — persisted per-page decision maps, keyed by
- *   `<pageId>:<locale>`. The Branch DO holds the canonical copy;
+ *   `<pageId>:<locale>`. The backend holds the canonical copy;
  *   cms-spa syncs on entry and on each decision.
  * - `createdAt` — ISO-8601 timestamp the session opened.
  */

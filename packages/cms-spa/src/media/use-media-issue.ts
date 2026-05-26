@@ -11,7 +11,7 @@ import type { MediaIssue } from './types';
 const MEDIA_ISSUE_QUERY_KEY_PREFIX = ['media-issue'] as const;
 
 /**
- * Resolve the hosted-only standing media issue for a single asset.
+ * Resolve the hosted-mode standing media issue for a single asset.
  *
  * Returns `null` when:
  *

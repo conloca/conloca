@@ -50,12 +50,12 @@ export interface UIConfig {
    * the sidebar shows a "Conflicts" entry with a count when a
    * session is active. When absent (local dev / astro-cms standalone),
    * `/conflicts` reports "All clear" and submit/abandon disable —
-   * conflict resolution is a hosted-service-only surface and there's
+   * conflict resolution is a hosted-mode surface and there's
    * no plausible mock for it without a host shell.
    */
   conflictBridge?: ConflictBridge;
   /**
-   * Bridge the host shell installs to surface hosted-only media
+   * Bridge the host shell installs to surface hosted-mode media
    * metadata (e.g. branch-vs-published scope) in cms-spa's media
    * surfaces. cms-spa's renderer-neutral `AssetEntry` does NOT
    * carry scope because the local-Astro case has no notion of

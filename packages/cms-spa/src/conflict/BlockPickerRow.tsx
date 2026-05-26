@@ -16,7 +16,7 @@ interface BlockPickerRowProps {
  * the VXJSON `FieldPickerRow` uses — "Use yours" / "Use <author>'s"
  * / custom edit.
  *
- * MDX values are always strings on the wire (the Branch DO ships
+ * MDX values are always strings on the wire (the backend ships
  * the serialized source per the spec). For Phase 1 the picker
  * renders the source verbatim in a styled prose block — non-techie
  * users still recognize the rough shape ("# Heading", paragraphs)

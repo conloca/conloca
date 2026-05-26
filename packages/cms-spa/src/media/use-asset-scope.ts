@@ -15,7 +15,7 @@ import type { AssetScope } from './types';
 const ASSET_SCOPE_QUERY_KEY_PREFIX = ['asset-scope'] as const;
 
 /**
- * Resolve the hosted-only lifecycle scope of a single asset.
+ * Resolve the hosted-mode lifecycle scope of a single asset.
  *
  * Returns `null` when:
  *
@@ -30,8 +30,8 @@ const ASSET_SCOPE_QUERY_KEY_PREFIX = ['asset-scope'] as const;
  * caller's purposes — a flashing pill on first paint reads worse
  * than no pill, and the scope is metadata, not primary content.
  *
- * The bridge implementation (in the host shell) wraps
- * `HostClient.getAssetScope` so the actual fetch is mocked + cached
+ * The bridge implementation (in the host shell) wraps its
+ * client's `getAssetScope` so the actual fetch is mocked + cached
  * one level deeper. From cms-spa's POV this is just a lookup; the
  * TanStack wrapper here is so repeat AssetCard renders don't re-call
  * the bridge for the same filename.

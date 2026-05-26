@@ -12,7 +12,7 @@ interface AssetScopePillProps {
 }
 
 /**
- * Pill rendering the hosted-only `AssetScope` ("Branch only" /
+ * Pill rendering the hosted-mode `AssetScope` ("Branch only" /
  * "Published"). When `scope` is `null`, renders nothing — callers
  * can safely render this unconditionally and let it disappear when
  * no bridge is installed (the local-Astro case).

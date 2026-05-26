@@ -11,15 +11,14 @@ import { cn } from '../utils/cn';
  * `configureUI({ hosted: false })` — see `Sidebar.tsx`, which
  * gates the mount on `getUIConfig.hosted !== true`.
  *
- * In hosted mode (hosted service), the host shell owns the
- * equivalent surface — a four-layer status pill plus popover for
- * editor save / commit / push / deploy. The hosted impl lives at
- * the host shell's status slot
- * and is driven by `HostClient.subscribeStatus`, not by
- * the content-api git endpoints. The two flows are NOT
- * interchangeable: hosted goes through the Branch DO (the backend)
- * which mediates commits and pushes server-side; VPS assumes the
- * caller IS the git user with direct filesystem access.
+ * In hosted mode, the host shell owns the equivalent surface — a
+ * four-layer status pill plus popover for editor save / commit /
+ * push / deploy. The hosted impl lives in the host shell package
+ * and is driven by its own status subscription, not by the
+ * content-api git endpoints. The two flows are NOT
+ * interchangeable: hosted goes through the backend, which mediates
+ * commits and pushes server-side; VPS assumes the caller IS the
+ * git user with direct filesystem access.
  *
  * Do not refactor this component to "support hosted mode" — the
  * deployment-mode seam at `Sidebar.tsx` is intentional. If
