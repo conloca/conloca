@@ -1,19 +1,16 @@
 /* Cascade layer ordering.
  * `cms-admin` is declared LAST so all CMS SPA styles win over any
- * stylesheet injected into /__cms/* via `siteStyles` (notably the
- * host site's Tailwind global.css, which Puck's CopyHostStyles
- * mirrors into the editor iframe but which also lands in our <head>).
- * Without this, the website's base utilities (.fixed, .w-full, etc.)
- * clobber our responsive variants (.md:static, .md:w-80, etc.) because
- * they load later in source order. Layers override source order.
+ * stylesheet injected into /__cms/* via host-style routes. Without
+ * this, host base utilities (.fixed, .w-full, etc.) clobber our
+ * responsive variants (.md:static, .md:w-80, etc.) because they
+ * load later in source order. Layers override source order.
  *
- * The `starlight` slot is pre-declared because Starlight ships its own
- * `@layer starlight {}` declarations and they need a slot in the ordering
- * — otherwise an unrelated host-site cascade layer (anything not in this
- * list) would land BEFORE `base` and lose every cms-admin override.
- * The name is renderer-named on purpose: this is the slot for a known
- * downstream integration. Other renderers don't need a slot of their own
- * because their CSS lives inside iframe-isolated `siteStyles`.
+ * Host CSS lands in the SPA <head> ONLY through `useInjectHostStyles`,
+ * which wraps each stylesheet in `@layer conloca-host-preview { ... }`.
+ * Any inner `@layer foo, bar;` declaration from the host (eg
+ * Starlight's `@layer starlight.base, starlight.reset, ...;`) becomes
+ * a SUB-layer under `conloca-host-preview` and never pollutes the
+ * top-level cascade order. No per-framework slot needed here.
  *
  * `conloca-host-preview` is the slot for host CSS injected directly into
  * the main admin document while an MDX editor is mounted (see
@@ -63,7 +60,7 @@
    compiled cascade, so the grabbed host CSS (the "real" styling) wins
    on tie-breaks and the probe acts as a fallback for elements the
    host's CSS doesn't reach. */
-@layer base, starlight, theme, components, utilities, cms-admin, conloca-host-defaults, conloca-host-preview;
+@layer base, theme, components, utilities, cms-admin, conloca-host-defaults, conloca-host-preview;
 
 @import "@puckeditor/core/puck.css" layer(cms-admin);
 @import "tailwindcss" layer(cms-admin);
