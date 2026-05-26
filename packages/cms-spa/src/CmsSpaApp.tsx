@@ -2,7 +2,6 @@ import { ContentAPIClient, setContentAPIClient } from '@conloca/content-api-clie
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { useMemo } from 'react';
-import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import { CanvasThemeProvider } from './hooks/useCanvasTheme';
 import { ThemeProvider } from './hooks/useTheme';
@@ -37,9 +36,7 @@ export function CmsSpaApp() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <CanvasThemeProvider>
-          <BrowserRouter basename={config.basename}>
-            <App />
-          </BrowserRouter>
+          <App basename={config.basename} />
         </CanvasThemeProvider>
       </ThemeProvider>
       {config.enableDevtools && <ReactQueryDevtools initialIsOpen={false} />}
