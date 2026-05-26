@@ -12,7 +12,7 @@
       "content": [
         {
           "props": {
-            "badgeText": "Open source · MIT Licensed",
+            "badgeText": "Open source · FSL-1.1-ALv2",
             "buttons": [
               {
                 "href": "#quickstart",

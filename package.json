@@ -1,7 +1,7 @@
 {
   "name": "@conloca/source",
   "version": "0.0.0",
-  "license": "FSL-1.1-Apache-2.0",
+  "license": "FSL-1.1-ALv2",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/conloca/conloca.git"

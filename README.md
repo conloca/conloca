@@ -25,6 +25,6 @@ Coming soon.
 ## License
 
 This software is licensed under the
-[Functional Source License, Version 1.1, Apache 2.0 Future License (FSL-1.1-Apache-2.0)](https://fsl.software/FSL-1.1-Apache-2.0.template.md).
+[Functional Source License, Version 1.1, Apache 2.0 Future License (FSL-1.1-ALv2)](https://fsl.software/FSL-1.1-ALv2.template.md).
 
 See [LICENSE](./LICENSE) for the full license text.

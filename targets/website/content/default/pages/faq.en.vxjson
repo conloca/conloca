@@ -35,7 +35,7 @@
                 "question": "What is Conloca?"
               },
               {
-                "answer": "Yes, Conloca is completely free and open source under the MIT License. You can use it in personal and commercial projects without any cost. An optional hosted version (Conloca Cloud) with managed deployment and team features is coming soon.",
+                "answer": "Yes, Conloca is free to use under the Functional Source License (FSL-1.1-ALv2). You can use, modify, and self-host it for personal and commercial projects, and it automatically becomes Apache 2.0 after two years. An optional hosted version (Conloca Cloud) with managed deployment and team features is coming soon.",
                 "id": "faq-2",
                 "question": "Is Conloca free?"
               },
