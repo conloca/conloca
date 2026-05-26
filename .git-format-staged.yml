@@ -44,6 +44,10 @@ formatters:
       - '!*.nix'
       # Bun lockfiles are generated and should not be rewritten by Prettier
       - '!bun.lock'
+      # Binary artifacts: Prettier reads them as UTF-8 and can corrupt them
+      # by replacing invalid byte sequences.
+      - '!*.wasm'
+      - '!*.wasm.sha256'
 
   # Alejandra for Nix files
   alejandra:
