@@ -388,11 +388,14 @@ export function MdxPageEditor() {
             // from the initial prop and doesn't reactively swap it).
             key={`${id}-${currentLocale}`}
             value={content}
-            // Pull the host's real CSS for this page's route. The page id
-            // is the slug; the host renders it at `/<slug>/` for typical
-            // content-collection setups, with the trailing slash matching
-            // common defaults.
-            previewRouteUrl={id ? `/${id}/` : undefined}
+            // Pull the host's real CSS for this page's published route.
+            // The id (`vx-…`) is Conloca's storage key, not a URL — the
+            // host renders the page at `loadedContent.localized.pathname`
+            // (frontmatter `pathname`), which may differ from the id
+            // entirely. Using the id here used to feed the content-wrapper
+            // endpoint a 404 URL, making it discover the 404 page's
+            // wrapper instead of the real one.
+            previewRouteUrl={publishedPathname || undefined}
             onChange={(next, initialNormalize) => {
               setContent(next);
               // First parse pass round-trips the on-disk markdown through the
