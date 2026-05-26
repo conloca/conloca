@@ -1,9 +1,24 @@
-/* Conloca prose typography for the editor contenteditable. Same rules
-   that style the published site, so authoring and publishing match.
-   Inlined via tsdown's CSS pipeline into `dist/style.css`, then pulled
-   into the CMS SPA bundle via the side-effect `import './style.css'`
-   at the top of `dist/index.mjs`. */
-@import "./prose.css";
+/* Editor chrome styles only. Prose typography is intentionally NOT
+   shipped from this package — the host's own prose CSS (Starlight's
+   `.sl-markdown-content`, Tailwind Typography's `.prose`, etc.) reaches
+   the editor's content via the cascade, because the host-wrapper plugin
+   wraps the contenteditable in a clone of the host's content-root
+   element. Shipping our own typography here was a drift source — every
+   Starlight update misaligned the mirror. Removed.
+
+   Code-block chrome (borders, backgrounds, header bar styling, CodeMirror
+   surface overrides, design tokens, font sizing) is ALSO intentionally
+   NOT shipped from this package. Same reason: the host's code-block CSS
+   reaches the editor's `.conloca-code-block` element via the wrapper
+   auto-copy (which adds `expressive-code frame has-title not-content`
+   classes from the discovered host wrapper). Conloca shipping a parallel
+   chrome was a hand-maintained mirror that drifted on every host update.
+
+   The only rules retained here are layout primitives MDXEditor itself
+   needs to function inside a flex-column shell: toolbar wrap behavior,
+   flex layout on the editor root, the diff/source wrapper's scroll
+   container, and the responsive breakpoint adjustments. Nothing visual,
+   nothing decorative, nothing host-mirrored. */
 
 /* Workaround for mdx-editor/editor#908: the toolbar root is flex-row by
    default and overflows horizontally on narrow viewports. Wrapping is the
@@ -72,257 +87,136 @@
   }
 }
 
-/* Code-block frame chrome — header bar + body wrapper that hosts the
-   library's CodeMirror instance. Tokens come from the host's `code-blocks.css`
-   (`--conloca-code-*`); fallbacks keep the editor readable when no host
-   defines them. The frame's visual job is to match what ExpressiveCode draws
-   on the published page; syntax colors inside CodeMirror are not themed here
-   (Pattern A — see plan).
+/* Library neutralization — purely transparency / zero overrides for
+   bundled third-party libraries (MDXEditor, CodeMirror) so they don't
+   visually fight the host's cascade. No colors, no borders, no fonts,
+   no opinions shipped from Conloca — these rules ONLY silence library
+   defaults that would otherwise leak through.
 
-   Token defaults are declared here so the CMS SPA admin parent document
-   (where the MDXEditor mounts) gets working colors in both light and dark
-   without the host's `code-blocks.css` needing to be injected into the
-   admin shell. The host's file overrides these for brand customization
-   on the iframe + published surfaces. Two dark-mode selectors are
-   covered: `:root.dark` (the CMS SPA convention) and
-   `:root[data-theme="dark"]` (a common attribute-driven convention,
-   used by Astro Starlight among others).
+   A developer integrating Conloca expects the editor to be a transparent
+   shell: the host's CSS flows in via the wrapper auto-copy, and library
+   internals (which the developer can't easily reach) don't paint over
+   it. Without these neutralizations, MDXEditor's bundled gray border
+   and CodeMirror's white background end up looking like Conloca's
+   opinions about how a code block should appear. They aren't — they're
+   the third-party libraries asserting themselves.
 
-   Radius is small on purpose — EC paints a 1px radius, basically sharp.
-   We bump to 0.25rem (4px) so the editor still reads as a softened
-   "code frame" but doesn't sit visibly rounder than the published page. */
-:root {
-  --conloca-code-bg: #f8fafc;
-  --conloca-code-border: #e2e8f0;
-  --conloca-code-radius: 0.25rem;
-  --conloca-code-padding: 0.75rem 1rem;
-  --conloca-code-shadow: 1.6px 1.6px 3.2px rgb(0 0 0 / 0.08);
-  --conloca-code-fg: #334155;
-  /* Dark bar that wraps the tab — EC paints `rgb(1, 22, 39)` on the
-     figcaption in dark mode; light mode uses a slate-200-ish stripe. */
-  --conloca-code-header-bg: #e2e8f0;
-  --conloca-code-header-fg: #475569;
-  --conloca-code-header-font-family: "Inter", system-ui, -apple-system, sans-serif;
-  --conloca-code-header-font-size: 0.9rem;
-  /* Tab chip — the colored "file tab" sitting inside the header bar.
-     EC's tab in dark mode is `rgb(11, 41, 66)`; in light mode it's
-     `rgb(246, 246, 246)` sitting on a slightly lighter bar. */
-  --conloca-code-tab-bg: #ffffff;
-  --conloca-code-tab-radius: 1px 1px 0 0;
-  --conloca-code-tab-padding: 5px 16px;
-  --conloca-code-lang-bg: transparent;
-  --conloca-code-lang-fg: #64748b;
-  --conloca-code-copy-bg: transparent;
-  --conloca-code-copy-fg: #64748b;
-  --conloca-code-copy-bg-hover: #e2e8f0;
-  --conloca-code-copy-fg-hover: #0f172a;
-  --conloca-code-font-family: "JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, Menlo, monospace;
-  --conloca-code-font-size: 0.875rem;
-  --conloca-code-line-height: 1.75;
-}
-:root.dark,
-:root[data-theme="dark"] {
-  --conloca-code-bg: #0f172a;
-  --conloca-code-border: #334155;
-  /* EC's figcaption bg in dark mode — the near-black bar that wraps
-     the tab. Measured `rgb(1, 22, 39)`. */
-  --conloca-code-header-bg: #011627;
-  --conloca-code-header-fg: #d2dee7;
-  /* EC's tab inside the bar — `rgb(11, 41, 66)`. */
-  --conloca-code-tab-bg: #0b2942;
-  /* Default text colour for non-tokenised characters in the code body.
-     Matches the `<code>` element on EC's published page (rgb(214,222,235)). */
-  --conloca-code-fg: #d6deeb;
-  --conloca-code-shadow: 1.6px 1.6px 3.2px rgb(1 22 39 / 0.6);
-  --conloca-code-lang-fg: #94a3b8;
-  --conloca-code-copy-fg: #94a3b8;
-  --conloca-code-copy-bg-hover: #1e293b;
-  --conloca-code-copy-fg-hover: #f8fafc;
+   These selectors are scoped to `.conloca-code-block` so they only
+   touch the editor's code-block frame, not unrelated CodeMirror or
+   MDXEditor instances elsewhere on the page. */
+
+/* MDXEditor's `._editorRoot_*` rule sets `font-family: var(--font-body)`
+   and `color: var(--baseText)`; its `._contentEditable_*` rule sets
+   `color: var(--baseTextContrast)`. Both inherit / apply through the
+   host-wrapper auto-copy and override what would otherwise inherit
+   from the host's body typography. Wire the host's actual typography
+   (computed by the iframe probe in cms-spa, published as
+   `--conloca-host-*` custom properties on `:root`) into MDXEditor's
+   contenteditable so the editing surface matches the published page.
+
+   `inherit` fallback: when the probe hasn't resolved yet OR no host
+   context is available, fall through to whatever the surrounding
+   chrome would normally pass down — better than `initial` (which gives
+   white-on-white text in a dark editor) and better than MDXEditor's
+   own tokens (which fight the host's tokens). Layered after
+   `@mdxeditor/editor/style.css` in `editor-core.tsx`, BUT MDXEditor
+   injects its CSS-module styles dynamically at component-mount time,
+   placing them later in the document. Source-order tiebreaks give
+   MDXEditor the win on equal-specificity rules. Chain with
+   `.conloca-prose` (the static base class we apply alongside
+   `conloca-prose--editor`) to push our specificity to (0,2,0), beating
+   MDXEditor's bare `._contentEditable_*` (0,1,0). */
+[class*="_contentEditable_"].conloca-prose {
+  font-family: var(--conloca-host-font-family, inherit);
+  font-size: var(--conloca-host-font-size, inherit);
+  font-weight: var(--conloca-host-font-weight, inherit);
+  font-style: var(--conloca-host-font-style, inherit);
+  line-height: var(--conloca-host-line-height, inherit);
+  letter-spacing: var(--conloca-host-letter-spacing, inherit);
+  color: var(--conloca-host-color, inherit);
 }
 
-.conloca-code-block {
-  background: var(--conloca-code-bg, #f8fafc);
-  border: 1px solid var(--conloca-code-border, #e2e8f0);
-  border-radius: var(--conloca-code-radius, 0.25rem);
-  /* Subtle drop shadow — EC paints `rgb(1,22,39) 1.6px 1.6px 3.2px 0px`
-     on the figure (`<.frame>`). Same depth here so the frame doesn't
-     read flatter than the rendered page next to it. Tokenised so a
-     host with a different surface can override. */
-  box-shadow: var(--conloca-code-shadow, 1.6px 1.6px 3.2px rgb(0 0 0 / 0.15));
-  margin-block: 1.25rem;
-  overflow: hidden;
-}
-
-.conloca-code-block__header {
-  display: flex;
-  align-items: stretch;
-  justify-content: space-between;
-  gap: 0.5rem;
-  /* Header BAR uses the darker bg — `--conloca-code-header-bg` is the
-     dark row colour (EC's figcaption: `rgb(1, 22, 39)`). The filename
-     input renders as a `--conloca-code-tab-bg` chip ON the bar,
-     matching EC's "dark bar with a colored tab on top" silhouette
-     instead of a single lighter strip.
-
-     Bottom 1px of the bar is overlaid with the tab colour — EC paints
-     a `linear-gradient(to top, tab-bg 1px, transparent 1px)` accent
-     stripe that the tab visually "sits on". Replicated via the same
-     gradient stack so the editor reads with the same subtle accent
-     line as the page. */
-  background:
-    linear-gradient(to top, var(--conloca-code-tab-bg, #ffffff) 1px, transparent 1px),
-    var(--conloca-code-header-bg, #f1f5f9);
-  color: var(--conloca-code-header-fg, #475569);
-  /* Header reads as a UI label, not as code — EC's tab uses the host's
-     UI font (Inter) at 14.4px, so the title looks like a "file tab"
-     rather than another stretch of monospace. Falls back through Inter
-     to system stacks so a host without the brand font still gets
-     sans-serif. */
-  font-family: var(--conloca-code-header-font-family, "Inter", system-ui, -apple-system, sans-serif);
-  font-size: var(--conloca-code-header-font-size, 0.9rem);
-  /* No horizontal padding — EC's tab hugs the left edge of the
-     figcaption. Right-side controls sit flush against the right edge
-     too (EC's copy button has offsetRight: 0). Padding inside the
-     tab chip itself handles breathing room for the title text. */
-  padding: 0;
-}
-
-/* Filename slot renders as a `--conloca-code-tab-bg` chip sitting in
-   the darker `--conloca-code-header-bg` bar — matches EC's tab-on-bar
-   silhouette. The intrinsic-width box (`flex: 0 0 auto`) keeps the chip
-   sized to the title text instead of spanning the bar; max-width caps
-   it on narrow frames so long filenames truncate inside the chip. */
-.conloca-code-block__filename {
-  background: var(--conloca-code-tab-bg, #ffffff);
-  border: 0;
-  border-radius: var(--conloca-code-tab-radius, 1px 1px 0 0);
-  color: inherit;
-  font: inherit;
-  flex: 0 1 auto;
-  align-self: flex-end;
-  min-width: 0;
-  max-width: 100%;
-  outline: 0;
-  overflow: hidden;
-  padding: var(--conloca-code-tab-padding, 5px 16px);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-input.conloca-code-block__filename::placeholder {
-  color: color-mix(in srgb, currentColor 50%, transparent);
-}
-input.conloca-code-block__filename:hover {
-  background: color-mix(in srgb, var(--conloca-code-tab-bg, #ffffff) 88%, white 12%);
-}
-:root.dark input.conloca-code-block__filename:hover,
-:root[data-theme="dark"] input.conloca-code-block__filename:hover {
-  background: color-mix(in srgb, var(--conloca-code-tab-bg, #ffffff) 88%, white 12%);
-}
-input.conloca-code-block__filename:focus {
-  background: color-mix(in srgb, var(--conloca-code-tab-bg, #ffffff) 80%, white 20%);
-}
-
-.conloca-code-block__header-right {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-shrink: 0;
-}
-
-.conloca-code-block__lang {
-  background: var(--conloca-code-lang-bg, transparent);
-  border-radius: 999px;
-  color: var(--conloca-code-lang-fg, #64748b);
-  font-size: 0.75rem;
-  letter-spacing: 0.04em;
-  padding: 0.05rem 0.45rem;
-  text-transform: lowercase;
-}
-
-.conloca-code-copy {
-  align-items: center;
-  background: var(--conloca-code-copy-bg, transparent);
-  border: 0;
-  border-radius: 0.3rem;
-  color: var(--conloca-code-copy-fg, #64748b);
-  cursor: pointer;
-  display: inline-flex;
-  height: 1.5rem;
-  justify-content: center;
-  padding: 0;
-  transition:
-    background-color 120ms ease,
-    color 120ms ease;
-  width: 1.5rem;
-}
-.conloca-code-copy:hover {
-  background: var(--conloca-code-copy-bg-hover, #e2e8f0);
-  color: var(--conloca-code-copy-fg-hover, #0f172a);
-}
-
-.conloca-code-block__body {
-  background: var(--conloca-code-bg, #f8fafc);
+/* MDXEditor's `._listitem_*` rule adds `margin: 8px 0` to every list
+   item it generates inside the contenteditable. Hosts (Starlight,
+   Tailwind Typography, etc.) typically collapse list-item margins to 0
+   and rely on the parent `<ul>`/`<ol>` for vertical rhythm. The 8px
+   gap pushes editor lists out of parity with the published page.
+   Zero it out under `.conloca-prose` so the host's list spacing rules
+   (or the editor's probe-emitted li defaults) reach the element
+   unobstructed. Specificity (0,2,0) beats MDXEditor's bare `._listitem_*`
+   (0,1,0) so we win regardless of source order (MDXEditor's CSS
+   module is injected at component-mount time, AFTER editor-styles.css). */
+.conloca-prose [class*="_listitem_"] {
+  margin-block: 0;
 }
 
 /* MDXEditor wraps CodeMirror in a hash-suffixed `_codeMirrorWrapper_*`
-   div that ships with its own `padding: 12.8px`, `margin: 0 0 20px`,
-   AND a `1px solid rgb(54,58,63)` border with `border-radius: 6px` —
-   visible as a second concentric ring inside our frame. Inside our
-   frame all of those have to go: layout becomes wrapper-flush-with-body,
-   visual chrome stays single-frame. Attribute selector covers the hash
-   rotation across library upgrades. */
-.conloca-code-block__body > [class*="codeMirrorWrapper"] {
+   div that ships with `margin`, `padding`, `border`, `border-radius`,
+   `background`, AND `position: relative` of its own. Attribute selector
+   covers hash rotations across library upgrades.
+   `position: static` is the key piece for toolbar placement: MDXEditor
+   absolutely-positions its `_codeMirrorToolbar_*` (language combobox +
+   delete button) at `top:0; right:0` relative to its nearest positioned
+   ancestor. With the wrapper relative, that ancestor IS the wrapper —
+   so the toolbar lands ON TOP OF the first line of code. Making the
+   wrapper static promotes the toolbar's containing block to the next
+   positioned ancestor (our `.conloca-code-block` figure, see rule
+   below), where it sits in the title-bar region instead. */
+.conloca-code-block [class*="codeMirrorWrapper"] {
   margin: 0;
   padding: 0;
   border: 0;
   border-radius: 0;
   background: transparent;
+  position: static;
 }
 
-/* Override the library's default CodeMirror surface so the frame's bg + radius
-   show through. MDXEditor doesn't expose a theme prop on `codeMirrorPlugin`
-   (see plan §7), so selector-based styling is the supported integration
-   point. Background is set transparent — the frame's `__body` paints the
-   surface. The padding rule beats `@mdxeditor/editor`'s own
-   `.mdxeditor .cm-editor { padding: var(--sp-space-4) 0; }` (which would
-   otherwise win as the later-declared rule at equal specificity, and
-   resolves to 0 anyway because `--sp-space-4` isn't defined in our
-   non-Radix-themed SPA shell) by stacking three class selectors. */
-.conloca-code-block .conloca-code-block__body .cm-editor,
-.conloca-code-block .conloca-code-block__body .cm-editor .cm-scroller,
-.conloca-code-block .conloca-code-block__body .cm-editor .cm-gutters {
+/* The frame element (figure) becomes the containing block for
+   MDXEditor's absolutely-positioned code-block toolbar. Paired with the
+   `position: static` override above so the toolbar lands at the
+   figure's top-right (alongside the editable filename) instead of
+   overlapping code. */
+.conloca-code-block {
+  position: relative;
+}
+
+/* The filename slot sits inside `<span class="title">`, so the host's
+   `.frame .title` styling (expressive-code's tab background, padding,
+   font) paints the SPAN. The `<input>` we render inside must visually
+   disappear into that styled span — otherwise its UA chrome (border,
+   background, padding, monospace fallback) leaves a smaller-looking
+   field nested inside the larger tab.
+   `all: unset` neutralizes the UA defaults; then we set just the
+   typography handoff (`inherit` font/color from the span) and a width
+   so it spans the tab's editable area. `min-width: 0` prevents
+   intrinsic width from forcing the tab wider than the host expects on
+   long filenames. */
+.conloca-code-block__filename {
+  all: unset;
+  font: inherit;
+  color: inherit;
+  width: 100%;
+  min-width: 0;
+  cursor: text;
+  box-sizing: border-box;
+}
+/* Subtle focus indicator so the input is discoverable as editable —
+   the published page renders a static span, so we don't have prior
+   art here. A 1px underline matches the rhythm of the title tab and
+   doesn't add chrome the host wasn't expecting. */
+.conloca-code-block__filename:focus {
+  outline: 1px dashed currentColor;
+  outline-offset: 2px;
+}
+
+/* CodeMirror's default theme paints the editor surface white. Override
+   to transparent so the host's parent background flows through — which
+   matches the published page where every code-block wrapper is also
+   transparent and the body bg supplies the visible color. */
+.conloca-code-block .cm-editor,
+.conloca-code-block .cm-editor .cm-scroller,
+.conloca-code-block .cm-editor .cm-gutters,
+.conloca-code-block .cm-editor .cm-content,
+.conloca-code-block .cm-editor .cm-line {
   background: transparent;
-}
-.conloca-code-block .conloca-code-block__body .cm-editor {
-  border-radius: 0;
-  /* Default text colour for tokens that the syntax highlighter doesn't
-     cover (plain text, identifiers in rarely-tokenised positions).
-     EC paints `rgb(214, 222, 235)` here — without this the cm-content
-     default (very dark grey ~rgb(46,52,64)) is unreadable on the dark
-     body. */
-  color: var(--conloca-code-fg, #d6deeb);
-  font-family: var(--conloca-code-font-family, "JetBrains Mono", "Fira Code", ui-monospace, monospace);
-  font-size: var(--conloca-code-font-size, 0.875rem);
-  line-height: var(--conloca-code-line-height, 1.75);
-  padding: var(--conloca-code-padding, 0.75rem 1rem);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-/* CodeMirror declares font-family / line-height / colour again on the
-   inner `.cm-scroller`, `.cm-content`, and `.cm-line` elements, and
-   those win over the `.cm-editor` rule above — so without re-asserting
-   here the text actually rendered to the screen falls back to generic
-   `monospace` at line-height 19.6px and a dark fg. That mismatch is the
-   "texture feels different" effect: same colour tokens around the code,
-   but the glyph rendering, line spacing, and stroke contrast differ
-   from what EC paints on the published `.ec-line`. */
-.conloca-code-block .conloca-code-block__body .cm-editor .cm-scroller,
-.conloca-code-block .conloca-code-block__body .cm-editor .cm-content,
-.conloca-code-block .conloca-code-block__body .cm-editor .cm-line {
-  color: var(--conloca-code-fg, #d6deeb);
-  font-family: var(--conloca-code-font-family, "JetBrains Mono", "Fira Code", ui-monospace, monospace);
-  font-size: var(--conloca-code-font-size, 0.875rem);
-  line-height: var(--conloca-code-line-height, 1.75);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
