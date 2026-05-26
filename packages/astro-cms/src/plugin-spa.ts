@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { UIConfig } from '@conloca/cms-spa';
+import { readSitesConfig } from '@conloca/content-api/node';
 import viteReact from '@vitejs/plugin-react';
 import type { AstroIntegration } from 'astro';
 import { searchForWorkspaceRoot } from 'vite';
@@ -209,38 +210,6 @@ export interface ConlocaCMSOptions extends Omit<UIConfig, 'basename'> {
    * `
    */
   editorCSS?: string;
-
-  /**
-   * Optional configuration enabling `type: 'mdx'` page support.
-   *
-   * When set, Conloca's CMS surfaces `.mdx` files at `mdxPages.root` as
-   * pages alongside puck (`.vxjson`) pages in the same Pages list. The
-   * MDX editor edits them in place; the project's own Astro content
-   * loader (Starlight's stock `docsLoader()` is a common example, but
-   * it can equally be a plain `glob()` loader, MDX-as-pages via Astro
-   * Content Collections, etc.) renders them — Conloca's core has no
-   * hard dependency on any specific renderer.
-   *
-   * Omit to keep mdx-page support dormant.
-   */
-  mdxPages?: {
-    /** Filesystem root for mdx-type pages (e.g. './src/content/docs'). */
-    root: string;
-
-    /**
-     * Default locale name. Files for the default locale live at
-     * `{root}/{slug}.mdx` (no locale prefix); other locales live at
-     * `{root}/{locale}/{slug}.mdx`. Defaults to the first configured
-     * site's `defaultLocale`, or `'en'`.
-     */
-    defaultLocale?: string;
-
-    /**
-     * Site name to associate mdx pages with for pathname collision checking.
-     * Defaults to the first configured site, or `'default'`.
-     */
-    site?: string;
-  };
 
   /**
    * The site's supported locales and default locale.
@@ -491,7 +460,23 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
 
   // SPA config passed to route handler via virtual module
   // This is only served in dev mode (CMS admin is dev-only), so enableDevtools defaults to true
-  const spaConfig = {
+  // `mdxPagesEnabled` and `resolvedMdxPages` start uninitialized; the
+  // `astro:config:setup` hook reads sites.json (the canonical home for
+  // per-site `mdxPages` paths) and mutates them before any virtual
+  // module load fires — `load(id)` runs at request time, after the
+  // hook completes.
+  const spaConfig: {
+    basename: string;
+    apiBaseUrl: string;
+    siteBaseUrl?: string;
+    enableDevtools: boolean;
+    queryClientOptions: unknown;
+    schemasPath?: string;
+    projectRoot: string;
+    templates?: unknown;
+    mdxPagesEnabled: boolean;
+    locales?: { list: string[]; defaultLocale: string };
+  } = {
     basename: cmsRoute,
     apiBaseUrl: `${cmsRoute}/api`,
     siteBaseUrl: options.siteBaseUrl,
@@ -500,10 +485,10 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
     schemasPath: options.schemasPath,
     projectRoot: process.cwd(),
     templates: options.templates,
-    // True when the integration is configured to surface MDX files
-    // (Starlight docs, etc.) in the CMS. Drives the "Document page"
-    // option in the create-page dialog.
-    mdxPagesEnabled: Boolean(options.mdxPages?.root),
+    // True when at least one site in sites.json declares an `mdxPages`
+    // path. Drives the "Document page" option in the create-page dialog.
+    // Initialized in the `astro:config:setup` hook below.
+    mdxPagesEnabled: false,
     // Forward the locale list so the SPA stops hardcoding en/nl/fr in
     // the create-page dialog. The integration receives this from the
     // top-level `locales` option, which can in turn be produced by
@@ -511,12 +496,32 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
     locales: options.locales ? { list: options.locales.list, defaultLocale: options.locales.defaultLocale } : undefined,
   };
 
+  // Resolved mdxPages path, populated from sites.json in the
+  // config:setup hook. Used by the registry endpoint and content
+  // watcher. `null` means no site declares an `mdxPages` path — .mdx
+  // files (if any) fall back to living alongside Puck pages.
+  let resolvedMdxPages: string | null = null;
+
   let refreshConlocaContent: (() => Promise<void>) | undefined;
 
   return {
     name: '@conloca/astro-cms',
     hooks: {
-      'astro:config:setup': ({ updateConfig, injectRoute, command, logger }) => {
+      'astro:config:setup': async ({ updateConfig, injectRoute, command, logger }) => {
+        // Read sites.json — the canonical home for per-site config
+        // including the optional `mdxPages` field. Reading it here (once,
+        // at integration setup) gives us a single source of truth for
+        // the rest of the hook. `readSitesConfig` returns a safe default
+        // when the file is missing or malformed.
+        const sitesConfig = await readSitesConfig(options.contentRoot);
+        // Pick the first site that declares an `mdxPages` path. Today's
+        // integration supports a single `mdxPages` per project;
+        // multi-site `mdxPages` is a future expansion (would require
+        // fanning the watcher and registry scanner across all roots).
+        const firstSiteWithMdxPages = Object.values(sitesConfig.sites).find((s) => s?.mdxPages);
+        resolvedMdxPages = firstSiteWithMdxPages?.mdxPages ?? null;
+        spaConfig.mdxPagesEnabled = Boolean(resolvedMdxPages);
+
         // Auto-inject fs.allow for external contentRoot (dev mode only)
         const astroRoot = process.cwd();
         const contentAbsolute = resolve(options.contentRoot);
@@ -682,9 +687,10 @@ initHydration(componentRegistry)
               'import.meta.env.CONLOCA_CANVAS_DIR': JSON.stringify(options.canvasDir || './canvas'),
               'import.meta.env.CONLOCA_PUCK_CONFIG_PATH': JSON.stringify(options.puckConfigPath),
               'import.meta.env.CONLOCA_ASSETS_PATH': JSON.stringify(options.assetsPath || ''),
-              'import.meta.env.CONLOCA_MDX_PAGES_ROOT': JSON.stringify(options.mdxPages?.root || ''),
-              'import.meta.env.CONLOCA_MDX_PAGES_DEFAULT_LOCALE': JSON.stringify(options.mdxPages?.defaultLocale || ''),
-              'import.meta.env.CONLOCA_MDX_PAGES_SITE': JSON.stringify(options.mdxPages?.site || ''),
+              // mdxPages / mdxPagesSite / mdxPagesDefaultLocale are no
+              // longer surfaced as env vars — the content-api reads them
+              // directly from sites.json under `contentRoot` at request
+              // time. See `readSitesConfig()` and `SitesConfig.sites[name].mdxPages`.
               // Default route URL the block editor uses for style /
               // wrapper discovery. See `blockPreviewRoute` option doc
               // above. `/` is a sane fallback for most layouts.
@@ -945,7 +951,7 @@ if (import.meta.hot) {
                 apply: 'serve' as const,
                 configureServer(server) {
                   const registry = createRegistryEndpoint(server, {
-                    contentRoot: options.mdxPages?.root ?? options.contentRoot,
+                    contentRoot: resolvedMdxPages ?? options.contentRoot,
                     componentFolders: options.mdxComponentFolders ?? ['src/components/mdx'],
                     projectRoot: process.cwd(),
                   });
@@ -974,18 +980,16 @@ if (import.meta.hot) {
                 async configureServer(server) {
                   const { createContentAPI, createContentWatchHandlers } = await loadContentApiNode();
 
-                  // Initialize content API using the extracted function
+                  // Initialize content API using the extracted function.
+                  // mdxPages / mdxPagesSite / mdxPagesDefaultLocale are
+                  // read from sites.json by the content-api itself; we
+                  // don't pass them here.
                   const contentApi = await createContentAPI({
                     contentRoot: options.contentRoot,
                     canvasDir: options.canvasDir || './canvas',
                     ...(options.locales && {
                       availableLocales: options.locales.list,
                       defaultLocale: options.locales.defaultLocale,
-                    }),
-                    ...(options.mdxPages?.root && {
-                      mdxPagesRoot: options.mdxPages.root,
-                      mdxPagesDefaultLocale: options.mdxPages.defaultLocale,
-                      mdxPagesSite: options.mdxPages.site,
                     }),
                   });
 
@@ -1023,13 +1027,16 @@ if (import.meta.hot) {
                     server.watcher.add(foldersToWatch);
                   }
 
-                  // Set up HMR for content changes using extracted handlers
+                  // Set up HMR for content changes using extracted handlers.
+                  // The watcher uses `mdxPagesRoot` to flag events under
+                  // the mdx tree (so docs-loader can refresh). The value
+                  // comes from sites.json via `resolvedMdxPages`.
                   const handlers = createContentWatchHandlers(
                     contentApi,
                     {
                       contentRoot: options.contentRoot,
                       canvasDir: options.canvasDir || './canvas',
-                      ...(options.mdxPages?.root && { mdxPagesRoot: options.mdxPages.root }),
+                      ...(resolvedMdxPages && { mdxPagesRoot: resolvedMdxPages }),
                     },
                     server.ws,
                     async (event) => {

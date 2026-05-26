@@ -44,7 +44,7 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
   const [locale, setLocale] = useState(defaultLocale);
   // Format: 'puck' (visual editor) or 'mdx' (document page). Default to
   // 'puck' to match prior behavior; the MDX option only renders when
-  // the integration was configured with `mdxPages.root`.
+  // at least one site in `sites.json` declares an `mdxPages` path.
   const [format, setFormat] = useState<'puck' | 'mdx'>('puck');
   // Only collected/shown for MDX pages. Optional — leaving it empty is
   // valid; renderers that surface a description use it when present.

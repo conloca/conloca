@@ -22,11 +22,6 @@ import type { DataCollectionEntry, DataContext, PageReference, ResolvedRoutingCo
 export { SPA_MIME_TYPES } from './mime-types.js';
 
 /**
- * Read mdxPages-related options from build-time env vars. Empty/missing
- * values yield no field at all (so the spread is a no-op when mdxPages is
- * not configured), which keeps mdx-page support dormant.
- */
-/**
  * Read the top-level locales options from build-time env vars.
  * `CONLOCA_LOCALES` is inlined as a JS array (or `null`) by Vite's
  * `define`; `CONLOCA_DEFAULT_LOCALE` is a string (or `''`). When neither
@@ -42,21 +37,10 @@ function localesFromEnv(): { availableLocales?: string[]; defaultLocale?: string
   };
 }
 
-function mdxPagesOptionsFromEnv(): {
-  mdxPagesRoot?: string;
-  mdxPagesDefaultLocale?: string;
-  mdxPagesSite?: string;
-} {
-  const root = import.meta.env.CONLOCA_MDX_PAGES_ROOT;
-  if (!root) return {};
-  const defaultLocale = import.meta.env.CONLOCA_MDX_PAGES_DEFAULT_LOCALE;
-  const site = import.meta.env.CONLOCA_MDX_PAGES_SITE;
-  return {
-    mdxPagesRoot: root,
-    ...(defaultLocale ? { mdxPagesDefaultLocale: defaultLocale } : {}),
-    ...(site ? { mdxPagesSite: site } : {}),
-  };
-}
+// mdxPages config (root / site / defaultLocale) is no longer passed as
+// env vars — the content-api reads sites.json directly from disk under
+// `contentRoot`, so handlers below don't need to spread mdx-options at
+// all. See `readSitesConfig()` in @conloca/content-api/node.
 
 // Get the path to the cms-spa package by resolving its package.json
 const require = createRequire(import.meta.url);
@@ -260,7 +244,6 @@ async function handleDataContext(request: Request): Promise<Response> {
       contentRoot: contentOptions.contentRoot,
       canvasDir: contentOptions.canvasDir,
       ...localesFromEnv(),
-      ...mdxPagesOptionsFromEnv(),
     });
 
     const locale = contentOptions.locale;
@@ -347,12 +330,12 @@ async function handleContentApi(request: Request, cfResult: CFAccessResult): Pro
   const contentRoot = import.meta.env.CONLOCA_CONTENT_ROOT || './content';
   const canvasDir = import.meta.env.CONLOCA_CANVAS_DIR || './canvas';
 
-  // FileSystemContentAPI.create() handles caching internally
+  // FileSystemContentAPI.create() handles caching internally.
+  // mdxPages is read from sites.json by the content-api itself.
   const contentApi = await FileSystemContentAPI.create({
     contentRoot,
     canvasDir,
     ...localesFromEnv(),
-    ...mdxPagesOptionsFromEnv(),
   });
 
   // Create the Hono router with assets and content root for git operations

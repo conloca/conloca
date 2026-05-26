@@ -20,10 +20,10 @@ export interface UIConfig {
   /** Page creation templates */
   templates?: Record<string, TemplateConfig>;
   /**
-   * True when the integration was configured with `mdxPages.root`.
-   * Drives whether the create-page dialog exposes the "Document page"
-   * (MDX) option. When absent or false, the dialog only creates Puck
-   * pages — the historical behavior.
+   * True when at least one site in `sites.json` declares an `mdxPages`
+   * path. Drives whether the create-page dialog exposes the "Document
+   * page" (MDX) option. When absent or false, the dialog only creates
+   * Puck pages — the historical behavior.
    */
   mdxPagesEnabled?: boolean;
   /**

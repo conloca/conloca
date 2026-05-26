@@ -23,7 +23,7 @@ export * from './content-utils';
 export type { ContentWatcherOptions, WebSocketSender } from './content-watcher';
 export { createContentAPI, createContentWatchHandlers } from './content-watcher';
 // Node.js specific implementations (require fs, xxhash, etc.)
-export { FileSystemContentAPI } from './filesystem-content-api';
+export { FileSystemContentAPI, readSitesConfig } from './filesystem-content-api';
 export { InMemoryContentAPI } from './in-memory-content-api';
 export { createContentAPIRouter, createContentMiddleware } from './middleware';
 export { Site } from './site';

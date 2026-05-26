@@ -3,14 +3,20 @@ export interface ContentAPIOptions {
   canvasDir?: string;
 
   /**
-   * Optional second filesystem root for mdx-type pages (kind: 'page', type: 'mdx').
+   * Optional override for the mdx-type pages path. The canonical home for
+   * this value is the resolved site's `mdxPages` field in `sites.json`.
+   * This option, when present, wins over the sites.json value — useful
+   * for tests and programmatic content-api setups that don't want to
+   * round-trip through a sites.json file on disk.
    *
    * Decouples the storage location of mdx pages from Conloca's main content
    * tree so projects can host them wherever their renderer expects to read
    * from. The rendering pipeline is the project's own choice — Conloca only
    * owns CRUD on the file bytes.
    *
-   * When omitted, mdx-page support is dormant.
+   * When omitted AND no site in sites.json has `mdxPages`, .mdx files
+   * fall back to living alongside Puck pages at
+   * `{contentRoot}/{site}/pages/`.
    */
   mdxPagesRoot?: string;
 
@@ -316,6 +322,20 @@ export interface SitesConfig {
       domains?: {
         [locale: string]: string;
       };
+      /**
+       * Optional filesystem path for this site's mdx-type pages.
+       * When set, .mdx files under this path are surfaced in the CMS
+       * as `kind: 'page'` + `type: 'mdx'` content owned by this site.
+       *
+       * Path is interpreted relative to the project root (the same
+       * cwd Astro uses), not the content root, so it can live anywhere
+       * the renderer expects (e.g. `./src/content/docs` for Starlight).
+       *
+       * When omitted, .mdx files for this site are expected to live
+       * alongside Puck (`.vxjson`) pages at `{contentRoot}/{site}/pages/`
+       * — the file extension determines the page type.
+       */
+      mdxPages?: string;
     };
   };
   globalLocales: string[];
