@@ -126,7 +126,8 @@
         ],
         "outputs": [
           "{projectRoot}/dist/**/*.mjs",
-          "{projectRoot}/dist/**/*.js"
+          "{projectRoot}/dist/**/*.js",
+          "{projectRoot}/dist/**/*.d.mts"
         ],
         "options": {
           "command": "tsdown",
