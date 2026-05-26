@@ -513,19 +513,6 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
 
   let refreshConlocaContent: (() => Promise<void>) | undefined;
 
-  // Captured at `astro:routes:resolved`. Used by the per-page styles endpoint
-  // to translate a public URL (eg `/foo/`) into the filesystem entrypoint
-  // that Vite's module graph walker can start from.
-  let routeManifest: Array<{ pattern: RegExp; entrypoint?: string }> = [];
-
-  const resolveRouteEntrypoint = (routeUrl: string): string | null => {
-    for (const route of routeManifest) {
-      if (!route.entrypoint) continue;
-      if (route.pattern.test(routeUrl)) return route.entrypoint;
-    }
-    return null;
-  };
-
   return {
     name: '@conloca/astro-cms',
     hooks: {
@@ -911,16 +898,14 @@ if (import.meta.hot) {
                 },
               },
               {
-                // Per-page styles endpoint. Walks Vite's module graph from a
-                // route URL and returns the concatenated CSS the editor needs
-                // for that page.
+                // Per-page styles endpoint. Fetches the live HTML for the
+                // route and returns every `<style>` block and `<link
+                // rel="stylesheet">` it lists — the same set of stylesheets
+                // the browser paints with.
                 name: 'conloca-styles-endpoint',
                 apply: 'serve' as const,
                 configureServer(server) {
-                  server.middlewares.use(
-                    `${cmsRoute}/api/styles`,
-                    createStylesEndpoint(server, resolveRouteEntrypoint),
-                  );
+                  server.middlewares.use(`${cmsRoute}/api/styles`, createStylesEndpoint());
                 },
               },
               {
@@ -1202,11 +1187,6 @@ if (import.meta.hot) {
       },
 
       'astro:routes:resolved': ({ routes, logger }) => {
-        // Capture every route so the styles endpoint can translate a public
-        // URL into its filesystem entrypoint. Done before any early-return
-        // so it works even when routing config is disabled.
-        routeManifest = routes.map((r) => ({ pattern: r.patternRegex, entrypoint: r.entrypoint }));
-
         // Check for route conflicts when routing is enabled
         if (!resolvedRoutingConfig?.enabled) return;
 
