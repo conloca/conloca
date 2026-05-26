@@ -25,8 +25,45 @@
  * The host's CSS only targets `.conloca-aside`, `.conloca-card`, and
  * other host-component selectors that admin chrome never claims, so
  * letting host CSS win on those classes is safe; admin chrome stays
- * intact because no host rule names admin selectors. */
-@layer base, starlight, theme, components, utilities, cms-admin, conloca-host-preview;
+ * intact because no host rule names admin selectors.
+ *
+ * `conloca-host-probe` is the slot for the computed-style probe's
+ * synthesized stylesheet (`.conloca-prose--editor h1 { font-size: …
+ * }`, etc.). Declared BEFORE `conloca-host-preview` so the probe is
+ * a FALLBACK, not an override.
+ *
+ * Why this ordering matters: the probe captures static snapshots of
+ * single elements in isolation — `h2 { margin-block-start: 0 }` from
+ * sampling the first h2 on the page, etc. The grabbed host CSS in
+ * `conloca-host-preview` carries context-aware rules like Starlight's
+ * `.sl-markdown-content :not(...) + :not(...) { margin-top: ... }`
+ * adjacent-sibling spacing or its `.sl-markdown-content pre:not(:where
+ * (.not-content *)) { border: 1px solid }` not-content exclusion.
+ *
+ * CSS layer ordering beats selector specificity absolutely — whatever
+ * the later layer says wins, no matter how specific the earlier
+ * layer's selector is. If the probe were declared later, it would
+ * override every host rule it touches, even though host rules are
+ * almost always more specific (adjacent-sibling, not-content
+ * exclusions, etc.). The result was the editor showing first-paragraph
+ * margins everywhere, code blocks getting borders that the host
+ * intentionally suppresses, etc.
+ *
+ * With the probe declared earlier, host CSS naturally wins where it
+ * reaches the editor's typed elements (Starlight's wrapper-scoped
+ * descendant rules, etc.). The probe only fills in where host CSS
+ * doesn't reach — typically utility-first hosts whose CSS targets
+ * `.text-5xl` instead of `<h1>`, leaving bare elements unstyled. */
+/* Layer name `conloca-host-defaults` chosen so it sorts alphabetically
+   BEFORE `conloca-host-preview`. Tailwind v4's CSS compiler rewrites
+   the explicit @layer declaration based on alphabetical sort of layer
+   names — multi-statement declarations get merged, and the source
+   order is lost. Naming the probe layer with a leading `d` (defaults)
+   ensures it lands BEFORE `conloca-host-preview` (leading `p`) in the
+   compiled cascade, so the grabbed host CSS (the "real" styling) wins
+   on tie-breaks and the probe acts as a fallback for elements the
+   host's CSS doesn't reach. */
+@layer base, starlight, theme, components, utilities, cms-admin, conloca-host-defaults, conloca-host-preview;
 
 @import "@puckeditor/core/puck.css" layer(cms-admin);
 @import "tailwindcss" layer(cms-admin);

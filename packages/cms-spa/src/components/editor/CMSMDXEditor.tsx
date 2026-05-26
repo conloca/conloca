@@ -2,12 +2,14 @@ import { useUploadAsset } from '@conloca/content-api-client';
 import { BaseMDXEditor, type BaseMDXEditorProps } from '@conloca/mdx';
 import type { JsxComponentDescriptor, MDXEditorMethods, RealmPlugin } from '@mdxeditor/editor';
 import { forwardRef, useCallback, useMemo, useRef } from 'react';
+import { useTheme } from '../../hooks/useTheme';
 import { buildUploadFormData } from '../../hooks/useUpload';
+import { useProbedHostStyles } from '../../host-style-probe';
 import { isJsxDescriptor, toJsxComponentDescriptor, useMdxComponents } from '../../mdx-components';
 import {
   type SiteStyles,
   useEditorStyles,
-  useFetchedContentWrapper,
+  useFetchedHostWrappers,
   useFetchedSiteStyles,
   useInjectHostStyles,
 } from '../../site-styles';
@@ -75,18 +77,55 @@ export const CMSMDXEditor = forwardRef<MDXEditorMethods, CMSMDXEditorProps>(({ p
     [activeStyles, editorCSS],
   );
   useInjectHostStyles('conloca-host-preview', styleStack);
+  // Probe the host's computed styles for each prose tag from the
+  // actual live page and synthesize a stylesheet scoped to the
+  // editor's contenteditable. This catches what the wrapper auto-
+  // copy misses: utility-class-styled elements (Tailwind utility-
+  // first), inline `style` attributes, and any other styling that
+  // resolves to computed values but isn't reachable via a wrapper-
+  // and-descendant cascade. See `host-style-probe.ts` for the
+  // walk-the-iframe approach. Empty string when the probe hasn't
+  // resolved yet or the page had nothing to probe.
   // Discover the host page's content-root shape (eg `<article class="card">`
-  // on Starlight). The editor wraps its contenteditable in a clone of that
-  // element via `hostWrapperPlugin`, so host CSS paints the editor's
-  // content surface naturally — no per-color JS bridging needed.
-  const hostWrapper = useFetchedContentWrapper(previewRouteUrl);
-  // Recompose the plugins list whenever the wrapper changes so the plugin
+  // on Starlight) AND its code-block chrome wrapper (eg `<div class=
+  // "expressive-code">`). The editor wraps its contenteditable in a clone
+  // of `content` via `hostWrapperPlugin`, so host CSS paints the prose
+  // surface naturally. It also threads `codeBlock` through to the
+  // code-block frame component (in @conloca/mdx) so it can carry the host's
+  // code-block classes and inherit the host's code-block CSS the same way.
+  const hostWrappers = useFetchedHostWrappers(previewRouteUrl);
+  // Probe the host's computed styles for each prose tag from the
+  // actual live page and synthesize a stylesheet scoped to the
+  // editor's contenteditable. This catches what the wrapper auto-
+  // copy misses: utility-class-styled elements (Tailwind utility-
+  // first), inline `style` attributes, and any other styling that
+  // resolves to computed values but isn't reachable via a wrapper-
+  // and-descendant cascade. The probe takes the discovered wrapper
+  // class so it queries the same element inside the iframe — avoids
+  // duplicate find-wrapper logic. Empty string while the probe is in
+  // flight or when the page has nothing probable.
+  // Editor and published page maintain independent theme preferences
+  // (CMS SPA → `conloca-theme`; Starlight → `starlight-theme`). The
+  // probe needs to capture styles in the EDITOR's current scheme, not
+  // the published page's, so we pass our resolved theme through. When
+  // the user toggles theme inside the editor, the hook's dep on
+  // `theme` re-runs the probe and the new computed values land.
+  const { resolvedTheme } = useTheme();
+  const probedStyles = useProbedHostStyles(previewRouteUrl, hostWrappers.content?.className ?? null, {
+    theme: resolvedTheme,
+  });
+  const probedStack = useMemo<SiteStyles>(() => (probedStyles ? [probedStyles] : []), [probedStyles]);
+  useInjectHostStyles('conloca-host-defaults', probedStack);
+  // Recompose the plugins list whenever the wrappers change so the plugin
   // re-runs its `update` and the wrapper component refreshes inside the
-  // editor. The hostWrapperPlugin's renderer also reads reactively from its
-  // own Cell, so we DON'T need to remount the entire editor for this.
+  // editor. The hostWrapperPlugin's renderers read reactively from their
+  // own Cells, so we DON'T need to remount the entire editor for this.
   const extraPlugins = useMemo<RealmPlugin[]>(
-    () => [mdxComponentsPlugin(), hostWrapperPlugin({ wrapper: hostWrapper })],
-    [hostWrapper],
+    () => [
+      mdxComponentsPlugin(),
+      hostWrapperPlugin({ wrapper: hostWrappers.content, codeBlockWrapper: hostWrappers.codeBlock }),
+    ],
+    [hostWrappers],
   );
   const jsxComponentDescriptors = useMemo<JsxComponentDescriptor[]>(
     // Filter to JSX flavors before translating — snippets live in the same
