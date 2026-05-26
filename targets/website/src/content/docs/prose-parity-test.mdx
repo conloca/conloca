@@ -1,0 +1,80 @@
+---
+title: Prose Parity Test
+description: Throwaway page to compare CMS editor typography against the published rendering.
+id: vx-prose-parity-test
+created: '2026-05-26T00:00:00.000Z'
+modified: '2026-05-26T17:45:11.981Z'
+---
+
+import { Aside, CardGrid, Card, LinkCard, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
+
+This page exists only to compare typography between the **CMS editor surface** and the **published page**. Same MDX, two
+renderers — the heading sizes, body text, code chrome, callouts, and Starlight components should look identical in both
+contexts.
+
+## Plain prose
+
+A paragraph with **bold**, _italic_, and `inline code`. Followed by a [link to nothing](#) and another paragraph to test
+the spacing rhythm between blocks.
+
+- First list item with a short line
+- Second item with a longer line that wraps so we can see how line-height and bullet alignment behave at the second line
+- Third item with `code` inside
+
+1. Ordered first
+2. Ordered second
+3. Ordered third
+
+> Blockquote: a short, sharp pull-quote with a [link](#) inside. Used to test the indent, border, and italic treatment
+> that prose styles tend to override.
+
+### Subheading (h3)
+
+A code fence with a filename header — exercises the code-block chrome that the editor and the published page both
+consume from the shared CSS.
+
+```ts title="example.ts"
+export function greet(name: string) {
+  return `hello ${name}`;
+}
+```
+
+## Starlight components
+
+<Aside type="note">
+  An informational callout. The editor should render this with the same border, background, and icon as the published
+  page.
+</Aside>
+
+<Aside type="tip" title="Custom title">
+  Tip-flavored callout to see the colour variant.
+</Aside>
+
+<CardGrid>
+  <Card title="Card A" icon="rocket">
+    Cards have their own padding, border, and heading scale.
+  </Card>
+
+  <Card title="Card B" icon="setting">
+    The body text inside a card uses the same prose rules.
+  </Card>
+</CardGrid>
+
+<LinkCard
+  title="LinkCard example"
+  description="A LinkCard styles its title, description, and chevron together."
+  href="#"
+/>
+
+<Steps>
+  1. First step in a Steps block 2. Second step with `code` and a [link](#) 3. Third step to confirm the numbered chrome
+</Steps>
+
+<Tabs>
+  <TabItem label="One">Tab one body text.</TabItem>
+  <TabItem label="Two">Tab two body text with `inline code`.</TabItem>
+</Tabs>
+
+## Trailing prose
+
+One last paragraph after the components to confirm spacing returns to normal prose rhythm.

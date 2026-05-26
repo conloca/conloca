@@ -4,19 +4,6 @@
 @import "@astrojs/starlight-tailwind";
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
-/* Conloca prose typography — shared with the CMS editor surface via the
-   `@conloca/mdx` package, so authoring (`.conloca-prose--editor`) and
-   publishing (`.conloca-prose`) use the same type scale. */
-@import "@conloca/mdx/prose.css" layer(components);
-/* Code-block chrome tokens — frame + header look that the MDX editor and
-   the published page share. Loaded here so the existing `siteStyles`
-   pipeline carries it into the Puck preview iframe (the option points at
-   global.css). The Starlight `<head>` also picks it up via `customCss`. */
-@import "./code-blocks.css" layer(components);
-/* Card / CardGrid / LinkCard / TabItem / Steps chrome. Loaded here so the
-   Puck iframe via siteStyles + Starlight `<head>` via customCss both see
-   the tokens. */
-@import "./starlight-components.css" layer(components);
 
 /* Remove underline from all links */
 @layer base {
@@ -197,7 +184,3 @@
 .faq-details[open] .faq-chevron {
   transform: rotate(180deg);
 }
-
-/* `.conloca-prose` and `.conloca-prose--editor` typography moved to
- * `@conloca/mdx/prose.css` and imported at the top of this file so the CMS
- * editor surface and the published site share one source of truth. */
