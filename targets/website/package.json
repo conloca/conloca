@@ -56,6 +56,9 @@
         "configurations": {
           "staging": {
             "command": "wrangler d1 migrations apply DB --remote --env staging"
+          },
+          "production": {
+            "command": "wrangler d1 migrations apply DB --remote --env=\"\""
           }
         }
       },
@@ -76,6 +79,9 @@
         "configurations": {
           "staging": {
             "command": "wrangler deploy --env staging"
+          },
+          "production": {
+            "command": "wrangler deploy --env=\"\""
           }
         }
       },
