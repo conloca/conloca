@@ -1,10 +1,12 @@
 #!/usr/bin/env bun
+import { existsSync } from 'node:fs';
 import { mkdir, rmdir } from 'node:fs/promises';
 import path from 'node:path';
 import { $ } from 'bun';
 
 const devenvRoot = process.env.DEVENV_ROOT;
 const projectRoot = path.resolve(`${devenvRoot}/../..`);
+const startedWithoutNodeModules = !existsSync(path.join(projectRoot, 'node_modules'));
 
 class CapturedCommandError extends Error {
   constructor(
@@ -37,11 +39,13 @@ try {
     await installLocalDependencies();
   }
 
-  // Make sure Biome is executable
-  await runSetupCommand(
-    `chmod +x ${projectRoot}/node_modules/@biomejs/biome/bin/biome`,
-    $`chmod +x ${projectRoot}/node_modules/@biomejs/biome/bin/biome`,
-  );
+  // Bun selects its resolver mode at process startup. If this process started
+  // before node_modules existed, imports below can stay in auto-install mode
+  // even after bun install succeeds, so restart once into the real workspace.
+  if (startedWithoutNodeModules) {
+    await runSetupCommand('restart setup-environment.ts', $`bun --no-install ${import.meta.path}`, { quiet: false });
+    process.exit(0);
+  }
 
   if (!process.env.CI) {
     const { syncRootRuntimeVersions } = await import('@smoothbricks/cli/monorepo/runtime');
@@ -63,6 +67,9 @@ try {
 }
 
 async function installLocalDependencies(): Promise<void> {
+  // bun install runs the root prepare script, which patches TypeScript with
+  // ts-patch. Multiple concurrent direnv activations can otherwise race while
+  // mutating the same files under node_modules.
   await withSetupLock(async () => {
     await runSetupCommand('bun install --no-summary', $`bun install --no-summary`);
   });

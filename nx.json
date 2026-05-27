@@ -57,6 +57,10 @@
     }
   },
   "targetDefaults": {
+    "clean": {
+      "executor": "@smoothbricks/nx-plugin:clean-outputs",
+      "cache": false
+    },
     "lint": {
       "executor": "nx:run-commands",
       "cache": true,
