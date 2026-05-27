@@ -1,3 +1,4 @@
+import type { ContentAPIClient } from '@conloca/content-api-client';
 import type { QueryClientConfig } from '@tanstack/react-query';
 import type { ConflictBridge } from './conflict/types';
 import type { MediaBridge } from './media/types';
@@ -15,6 +16,11 @@ export interface UIConfig {
   siteBaseUrl?: string; // Base URL for the site (e.g., '/docs' or 'https://example.com/docs')
   enableDevtools?: boolean;
   queryClientOptions?: QueryClientConfig;
+  /**
+   * Optional content client supplied by an embedding host. When absent,
+   * CmsSpaApp creates the default ContentAPIClient from `apiBaseUrl`.
+   */
+  contentClient?: ContentAPIClient;
   /** Absolute path to project root (for "Open in Editor" links) */
   projectRoot?: string;
   /** Relative path to schemas file (e.g., './src/schemas.ts') */

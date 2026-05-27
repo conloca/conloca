@@ -29,8 +29,8 @@ export function CmsSpaApp() {
   }, [config.queryClientOptions]);
 
   useMemo(() => {
-    setContentAPIClient(new ContentAPIClient({ baseUrl: config.apiBaseUrl }));
-  }, [config.apiBaseUrl]);
+    setContentAPIClient(config.contentClient ?? new ContentAPIClient({ baseUrl: config.apiBaseUrl }));
+  }, [config.apiBaseUrl, config.contentClient]);
 
   return (
     <QueryClientProvider client={queryClient}>

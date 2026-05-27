@@ -95,6 +95,16 @@ describe('API Configuration', () => {
     expect(mockFetch.mock.calls[1][0]).toBe('/__custom/api/sites');
   });
 
+  test('custom content client is opt-in and does not change the default client path', () => {
+    expect(getUIConfig().contentClient).toBeUndefined();
+
+    const client = new ContentAPIClient({ baseUrl: '/__saas/api' });
+    configureUI({ contentClient: client });
+
+    expect(getUIConfig().contentClient).toBe(client);
+    expect(getUIConfig().apiBaseUrl).toBe('/__cms/api');
+  });
+
   test('ContentAPIClient handles different API endpoints correctly', async () => {
     const client = new ContentAPIClient({ baseUrl: '/__cms/api' });
 
