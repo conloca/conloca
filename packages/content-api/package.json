@@ -38,6 +38,11 @@
       "import": "./dist/node.mjs",
       "default": "./dist/node.mjs"
     },
+    "./indexing": {
+      "types": "./dist/indexing.d.mts",
+      "import": "./dist/indexing.mjs",
+      "default": "./dist/indexing.mjs"
+    },
     "./reader": {
       "types": "./dist/reader.d.mts",
       "import": "./dist/reader.mjs",

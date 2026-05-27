@@ -3,6 +3,7 @@ import { defineConfig } from 'tsdown';
 export default defineConfig({
   entry: {
     index: 'src/index.ts',
+    indexing: 'src/indexing.ts',
     node: 'src/node.ts',
     reader: 'src/reader.ts',
     'schemas/index': 'src/schemas/index.ts',
