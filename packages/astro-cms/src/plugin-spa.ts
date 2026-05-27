@@ -576,6 +576,18 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
             },
             // Virtual modules for routing - needed in both dev and build
             plugins: [
+              // Public page rendering should use Puck's server entry, not the full editor.
+              // The full editor pulls client-only store code into Astro prerendering.
+              {
+                name: 'conloca-puck-ssr-render-alias',
+                enforce: 'pre' as const,
+                async resolveId(id, importer, options) {
+                  if (id === '@puckeditor/core' && options?.ssr) {
+                    return this.resolve('@puckeditor/core/rsc', importer, { ...options, skipSelf: true });
+                  }
+                  return null;
+                },
+              },
               // Alias acorn to a CJS shim only during SSR (static page builds).
               // Must NOT apply to the browser bundle — the shim uses createRequire
               // which is Node.js-only and crashes in the browser.

@@ -1,5 +1,5 @@
 import type { Config, Data } from '@puckeditor/core';
-import { Render } from '@puckeditor/core';
+import { Render } from '@puckeditor/core/rsc';
 import { isHydratable } from '../lib/hydration-utils.js';
 import { HydrationWrapper } from './HydrationWrapper.js';
 

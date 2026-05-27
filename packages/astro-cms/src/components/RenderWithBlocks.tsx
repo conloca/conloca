@@ -1,6 +1,6 @@
 import type { MDXBlockEvaluationResult } from '@conloca/mdx/node';
 import type { ComponentConfig, Config, Data } from '@puckeditor/core';
-import { Render } from '@puckeditor/core';
+import { Render } from '@puckeditor/core/rsc';
 import cn from 'clsx';
 import type { ComponentType } from 'react';
 import { hasHydratableComponents } from '../lib/hydration-utils.js';
