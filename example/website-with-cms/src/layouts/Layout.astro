@@ -4,6 +4,7 @@ interface Props {
   description?: string;
 }
 
+// biome-ignore lint/correctness/noUnusedVariables: Astro template expressions consume these props below, but Biome only sees frontmatter scope.
 const { title, description } = Astro.props;
 ---
 
