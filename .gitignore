@@ -70,3 +70,8 @@ privpkgs/example/.tamagui/tamagui.config.json
 
 # Jcode temporary nested worktrees
 .jcode-worktrees/
+
+# Agent tooling (ralphex, haft, MCP config)
+/.ralphex
+/.haft
+.mcp.json
