@@ -75,3 +75,6 @@ privpkgs/example/.tamagui/tamagui.config.json
 /.ralphex
 /.haft
 .mcp.json
+
+# Private keys must never enter the repo (GitHub App etc.)
+*.pem
