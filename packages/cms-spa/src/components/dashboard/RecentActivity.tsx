@@ -3,20 +3,7 @@ import { AlertCircle, Clock, FileText, Loader2 } from 'lucide-react';
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { cn } from '../../utils/cn';
-
-function relativeTime(date: Date): string {
-  const now = Date.now();
-  const diff = now - date.getTime();
-  if (diff < 0) return 'just now';
-  const minutes = Math.floor(diff / 60000);
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
-  return date.toLocaleDateString();
-}
+import { relativeTime } from '../../utils/format-date';
 
 interface RecentPage {
   id: string;

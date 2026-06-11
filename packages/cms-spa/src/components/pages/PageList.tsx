@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { useErrorModal, useSiteBaseUrl } from '../../hooks';
 import type { CreatePageData, Page } from '../../types';
 import { getUIConfig } from '../../ui-config';
+import { formatDate } from '../../utils/format-date';
 import { CreatePageDialog } from '../dialogs/CreatePageDialog';
 import { DeleteConfirmDialog } from '../dialogs/DeleteConfirmDialog';
 import { ErrorModal } from '../dialogs/ErrorModal';
@@ -547,7 +548,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
                   <td className="hidden md:table-cell p-4 text-grey-04 dark:text-grey-07">
                     <div className="flex items-center gap-2">
                       <Clock className="h-4 w-4" />
-                      {page.modified.toLocaleDateString()}
+                      {formatDate(page.modified)}
                     </div>
                   </td>
                   {isMultiLocale && (
