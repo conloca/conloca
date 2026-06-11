@@ -105,13 +105,42 @@ const contentBlockToneClasses: Record<NonNullable<ContentBlockSectionProps['tone
  * useDataContext, resolveAllData) out of the mdx-page render path so
  * Rules of Hooks aren't violated by an early return.
  */
+/**
+ * Terminal load-failure screen for the page editors. Mirrors
+ * BlockEditor's failure state: say what happened and offer a way back —
+ * a dead end here strands the user on a full-screen editor route with
+ * no navigation chrome.
+ */
+function PageLoadFailure({ message }: { message?: string }) {
+  const navigate = useNavigate();
+  return (
+    <div className="flex flex-col items-center justify-center h-screen gap-4">
+      <div className="text-red-04">Failed to load page: {message || 'Not found'}</div>
+      <button
+        type="button"
+        onClick={() => navigate('/pages')}
+        className="px-4 py-2 bg-azure-04 text-white rounded-md hover:bg-azure-03 transition-colors"
+      >
+        Back to Pages
+      </button>
+    </div>
+  );
+}
+
 export function PageEditorWrapper({ puckConfig }: PageEditorWrapperProps) {
   const { id } = useParams();
   // Use the kind-level hook so dispatch works regardless of which locales
   // exist for the page (a previous `useLocalizedContent(id, 'en')` would
   // stall on the loading branch for any page that exists only in non-en
   // locales — the headline use case for `mdxPagesDefaultLocale`).
-  const { data: content, isLoading } = useContent(id || '');
+  const { data: content, isLoading, error } = useContent(id || '');
+
+  // Failure first: a failed load never produces content, so checking
+  // the loading state first would spin forever with no error and no
+  // way back (observed live with entries the backend can't serve).
+  if (error || (!isLoading && !content)) {
+    return <PageLoadFailure message={error?.message} />;
+  }
 
   if (isLoading || !content) {
     return <div className="flex items-center justify-center h-screen">Loading...</div>;
@@ -317,17 +346,22 @@ function PuckPageEditorInner({ puckConfig }: PageEditorWrapperProps) {
 
   const pageMetadata = useMemo(() => (content?.localized ? extractPageMetadata(content) : null), [content]);
 
+  // Failure first: a failed localized fetch (entry the backend can't
+  // serve, or a locale with no variant after a switch) never produces
+  // content, so the loading guard below would otherwise win forever.
+  // Guarded on !isLoadingContent so the normal first render (content
+  // still undefined) keeps showing the splash, not a flash of error.
+  if (error || (!isLoadingContent && (!content || !content.localized))) {
+    return <PageLoadFailure message={error?.message} />;
+  }
+
   // Show loading while fetching or resolving
   if (isLoadingContent || isLoadingDataContext || isResolving || !resolvedPuckData) {
     return <div className="flex items-center justify-center h-screen">Loading...</div>;
   }
 
-  if (error || !content || !content.localized) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-red-04">Failed to load page: {error?.message || 'Not found'}</div>
-      </div>
-    );
+  if (!content || !content.localized) {
+    return <PageLoadFailure />;
   }
 
   // Build entry with resolved puckData

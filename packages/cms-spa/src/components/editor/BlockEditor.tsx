@@ -220,21 +220,12 @@ export function BlockEditor() {
     setPendingLocaleSwitch(null);
   };
 
-  // Render the loading splash until we have the initial markdown — MDXEditorLib
-  // only reads `markdown` once on mount, so we can't safely render the editor
-  // with a placeholder empty string and update it later.
-  if (isLoading || !isContentLoaded) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-page">
-        <div className="flex items-center gap-3 text-muted">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-azure-04" />
-          <span>Loading block…</span>
-        </div>
-      </div>
-    );
-  }
-
-  if (error && !loadedContent && !savedContentRef.current) {
+  // The failure branch must come BEFORE the loading splash: a failed
+  // load never produces content, so a splash-first ordering spins
+  // forever and the user gets no error and no way back (observed live).
+  // `getLocalized` resolves null (no error) for a missing entry, so a
+  // settled query with nothing loaded is a failure too, not "loading".
+  if ((error || !isLoading) && !loadedContent && !savedContentRef.current) {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-page gap-4">
         <div className="text-red-04">Failed to load block: {error?.message || 'Not found'}</div>
@@ -245,6 +236,20 @@ export function BlockEditor() {
         >
           Back to Blocks
         </button>
+      </div>
+    );
+  }
+
+  // Render the loading splash until we have the initial markdown — MDXEditorLib
+  // only reads `markdown` once on mount, so we can't safely render the editor
+  // with a placeholder empty string and update it later.
+  if (isLoading || !isContentLoaded) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-page">
+        <div className="flex items-center gap-3 text-muted">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-azure-04" />
+          <span>Loading block…</span>
+        </div>
       </div>
     );
   }
