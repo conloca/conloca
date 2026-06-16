@@ -24,7 +24,7 @@ export function CmsSpaApp() {
   const queryClient = useMemo(() => {
     const client = new QueryClient(config.queryClientOptions);
     // Exposed globally for the content change listener (see astro-cms).
-    (window as any).__QUERY_CLIENT__ = client;
+    (window as Window & { __QUERY_CLIENT__?: QueryClient }).__QUERY_CLIENT__ = client;
     return client;
   }, [config.queryClientOptions]);
 

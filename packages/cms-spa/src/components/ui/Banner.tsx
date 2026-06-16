@@ -25,28 +25,11 @@ import { cn } from '../../utils/cn';
  */
 export type BannerVariant = 'info' | 'warning' | 'error' | 'success';
 
-/**
- * Layout treatment.
- *
- * - `strip` — full-width bar with `border-b` only, no rounded
- *   corners. Hosts that stack banners above the editor body use
- *   this (e.g. an offline / support / divergence stack).
- * - `inline` — boxed surface with full border and rounded corners.
- *   For alerts that sit in a content flow (form errors, missing
- *   data warnings, etc.).
- */
-export type BannerAppearance = 'strip' | 'inline';
-
 const VARIANT_CLASS: Record<BannerVariant, string> = {
   info: 'bg-azure-11 dark:bg-azure-02 border-azure-08 dark:border-azure-03 text-azure-02 dark:text-azure-09',
   warning: 'bg-yellow-11 dark:bg-yellow-02 border-yellow-08 dark:border-yellow-03 text-yellow-02 dark:text-yellow-09',
   error: 'bg-red-11 dark:bg-red-02 border-red-08 dark:border-red-03 text-red-04 dark:text-red-08',
   success: 'bg-green-11 dark:bg-green-02 border-green-08 dark:border-green-03 text-green-02 dark:text-green-09',
-};
-
-const APPEARANCE_CLASS: Record<BannerAppearance, string> = {
-  strip: 'border-b px-6 py-3',
-  inline: 'border rounded-md px-3 py-2',
 };
 
 const DEFAULT_ROLE: Record<BannerVariant, 'status' | 'alert'> = {
@@ -60,8 +43,6 @@ export interface BannerProps extends Omit<ComponentProps<'div'>, 'title'> {
   /** Visual palette. Required — there's no neutral default that
    * would make sense across the four uses. */
   variant: BannerVariant;
-  /** Layout treatment. Default `strip` (the hosted-shell case). */
-  appearance?: BannerAppearance;
   /** Leading icon. Conventionally a lucide icon at `h-4 w-4`;
    * Banner wraps it in a `flex-shrink-0` so a long description
    * doesn't squeeze it. Pass `<Loader2 className="animate-spin" />`
@@ -109,21 +90,11 @@ export interface BannerProps extends Omit<ComponentProps<'div'>, 'title'> {
  * wrong (e.g. a non-error loading variant that should still be
  * announced assertively).
  */
-export function Banner({
-  variant,
-  appearance = 'strip',
-  icon,
-  title,
-  actions,
-  className,
-  role,
-  children,
-  ...rest
-}: BannerProps) {
+export function Banner({ variant, icon, title, actions, className, role, children, ...rest }: BannerProps) {
   return (
     <div
       role={role ?? DEFAULT_ROLE[variant]}
-      className={cn('flex items-center gap-3 text-sm', APPEARANCE_CLASS[appearance], VARIANT_CLASS[variant], className)}
+      className={cn('flex items-center gap-3 text-sm border-b px-6 py-3', VARIANT_CLASS[variant], className)}
       {...rest}
     >
       {icon ? <span className="flex-shrink-0 inline-flex items-center h-5">{icon}</span> : null}
