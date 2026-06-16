@@ -45,6 +45,9 @@ Thumbs.db
 # Nx
 .nx/cache
 .nx/workspace-data
+# Transient esbuild bundles for the workerd test harnesses
+.nx/conformance
+.nx/auth-e2e
 .cursor/rules/nx-rules.mdc
 .github/instructions/nx.instructions.md
 .github/instructions/copilot-instructions.md
