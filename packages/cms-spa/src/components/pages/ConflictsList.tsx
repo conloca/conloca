@@ -19,10 +19,6 @@ import { getUIConfig } from '../../ui-config';
  * running standalone outside the hosted service — conflict resolution
  * doesn't apply there). Both lead to the same "nothing to review"
  * outcome, so distinguishing them in copy would be noise.
- *
- * The per-page resolver itself ships in a follow-up commit; for now
- * the rows are visible but the navigation target is the same
- * `/conflicts/:pageId/:locale` route stub (renders a placeholder).
  */
 export function ConflictsList() {
   const { data: session, isLoading, error } = useConflictSession();

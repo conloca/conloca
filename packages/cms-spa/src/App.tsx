@@ -1,6 +1,6 @@
 import type { Config } from '@puckeditor/core';
 import { useMemo } from 'react';
-import { createBrowserRouter, createRoutesFromElements, Route, RouterProvider, Routes } from 'react-router-dom';
+import { createBrowserRouter, createRoutesFromElements, Outlet, Route, RouterProvider, Routes } from 'react-router-dom';
 import { CMSDashboard } from './components/CMSDashboard';
 import { CMSLayout } from './components/CMSLayout';
 import { BlockEditor } from './components/editor/BlockEditor';
@@ -11,6 +11,8 @@ import { ConflictsResolverPage } from './components/pages/ConflictsResolverPage'
 import { DataList } from './components/pages/DataList';
 import { MediaPage } from './components/pages/MediaPage';
 import { PageList } from './components/pages/PageList';
+import { useAnnounceActivePageConflict } from './conflict/use-announce-active-page-conflict';
+import { useConflictReviewOpenNavigator } from './conflict/use-conflict-review-open-navigator';
 import { type DataSchemas, useDataSchemas } from './data-schemas';
 import { usePuckConfig } from './puck-config';
 
@@ -35,7 +37,7 @@ export interface RouteDeps {
  */
 export function routeElements({ puckConfig, dataSchemas }: RouteDeps) {
   return (
-    <>
+    <Route element={<ConflictReviewEffects />}>
       <Route path="/" element={<CMSLayout />}>
         <Route index element={<CMSDashboard />} />
         <Route path="pages" element={<PageList />} />
@@ -47,8 +49,23 @@ export function routeElements({ puckConfig, dataSchemas }: RouteDeps) {
       </Route>
       <Route path="/pages/:id" element={<PageEditorWrapper puckConfig={puckConfig} />} />
       <Route path="/blocks/:id" element={<BlockEditor />} />
-    </>
+    </Route>
   );
+}
+
+/**
+ * Pathless layout route that activates the cross-shell conflict-review
+ * contract with the host. `useAnnounceActivePageConflict` emits
+ * `conloca:active-page-conflict` so the host strip's "Needs review" chip
+ * appears while the user edits a conflicted page;
+ * `useConflictReviewOpenNavigator` listens for the host's
+ * `conloca:open-conflict-review` and routes into the resolver. Renders
+ * its routed children unchanged via `<Outlet/>`.
+ */
+function ConflictReviewEffects() {
+  useAnnounceActivePageConflict();
+  useConflictReviewOpenNavigator();
+  return <Outlet />;
 }
 
 /**

@@ -148,16 +148,6 @@ export function useSessionConflictsByPage(): Map<string, Set<string>> {
 const EMPTY_CONFLICT_MAP: Map<string, Set<string>> = new Map();
 
 /**
- * Aggregate count of held-back pages across the active session.
- * Used by the page list's banner ("3 pages need review") so the
- * count is glanceable without scrolling.
- */
-export function useSessionConflictCount(): number {
-  const { data: session } = useConflictSession();
-  return session?.pages.length ?? 0;
-}
-
-/**
  * Pure helper: how many of a page's conflicts are resolved in the
  * current decision map. Lets the page list paint "12 of 18 fields
  * resolved" without re-deriving counts at every render site.
