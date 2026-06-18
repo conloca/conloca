@@ -1,9 +1,9 @@
-import { defineConfig } from 'astro/config';
-import react from '@astrojs/react';
 import mdx from '@astrojs/mdx';
+import react from '@astrojs/react';
 import starlight from '@astrojs/starlight';
 import { conlocaCMS } from '@conloca/astro-cms/node';
 import tailwindcss from '@tailwindcss/vite';
+import { defineConfig } from 'astro/config';
 
 export default defineConfig({
   site: 'https://conloca.com',
@@ -55,7 +55,7 @@ export default defineConfig({
       ],
     }),
     // Starlight inserts Expressive Code immediately after itself; explicit MDX must follow so code blocks register first.
-        mdx({ optimize: true, extendMarkdownConfig: false, remarkPlugins: [], rehypePlugins: [] }),
+    mdx({ optimize: true, extendMarkdownConfig: false }),
     conlocaCMS({
       contentRoot: './content',
       puckConfigPath: './src/puck.config.tsx',
