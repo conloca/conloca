@@ -17,7 +17,7 @@ import { useCallback, useState } from 'react';
  * openDeleteDialog({ entryId: '123', entryTitle: 'My Entry' });
  *
  * // Close (resets to initial state)
- * closeDeleteDialog;
+ * closeDeleteDialog();
  */
 export function useDialogState<T extends Record<string, unknown>>(
   initialData: T,
