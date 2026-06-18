@@ -1,6 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import {
-  AlertTriangle,
   Database,
   FileText,
   ImageIcon,
@@ -12,7 +11,6 @@ import {
   X,
 } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
-import { useConflictSession } from '../conflict/use-conflict-session';
 import { useTheme } from '../hooks/useTheme';
 import { getUIConfig } from '../ui-config';
 import { cn } from '../utils/cn';
@@ -55,19 +53,6 @@ function NavItem({ to, icon: Icon, label, end, badge }: NavItemProps) {
       ) : null}
     </NavLink>
   );
-}
-
-/**
- * Conditional sidebar entry for the conflict-resolution surface.
- * Renders only when a session is active — no need to occupy real
- * estate when there's nothing to review. The badge shows the page
- * count so the user knows the size of what's ahead without
- * clicking through.
- */
-function ConflictsNavItem() {
-  const { data: session } = useConflictSession();
-  if (!session || session.pages.length === 0) return null;
-  return <NavItem to="/conflicts" icon={AlertTriangle} label="Review changes" badge={session.pages.length} />;
 }
 
 const themeOrder = ['system', 'light', 'dark'] as const;
@@ -113,7 +98,6 @@ function SidebarContent() {
         <NavItem to="/media" icon={ImageIcon} label="Media" />
         <NavItem to="/blocks" icon={Package} label="Blocks" />
         <NavItem to="/data" icon={Database} label="Data" />
-        <ConflictsNavItem />
       </nav>
 
       {/* GitStatusPanel is VPS-ONLY. In hosted mode the host shell

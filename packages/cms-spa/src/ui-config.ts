@@ -1,6 +1,5 @@
 import type { ContentAPIClient } from '@conloca/content-api-client';
 import type { QueryClientConfig } from '@tanstack/react-query';
-import type { ConflictBridge } from './conflict/types';
 import type { MediaBridge } from './media/types';
 
 export interface TemplateConfig {
@@ -50,16 +49,6 @@ export interface UIConfig {
    * false: cms-spa runs as the whole page (astro-cms, dev-entry).
    */
   hosted?: boolean;
-  /**
-   * Bridge for the host shell's conflict-resolution session. When
-   * present, the `/conflicts` route reads and writes through this;
-   * the sidebar shows a "Conflicts" entry with a count when a
-   * session is active. When absent (local dev / astro-cms standalone),
-   * `/conflicts` reports "All clear" and submit/abandon disable —
-   * conflict resolution is a hosted-mode surface and there's
-   * no plausible mock for it without a host shell.
-   */
-  conflictBridge?: ConflictBridge;
   /**
    * Bridge the host shell installs to surface hosted-mode media
    * metadata (e.g. branch-vs-published scope) in cms-spa's media

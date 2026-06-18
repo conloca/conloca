@@ -55,9 +55,7 @@ export type MediaIssue =
  *
  * The bridge is optional in `UIConfig` — absence means "no host
  * wiring," in which case cms-spa surfaces degrade cleanly (no
- * scope pill, no host-side hooks fire). Mirrors the
- * `ConflictBridge` pattern used for the conflict-resolution
- * session.
+ * scope pill, no host-side hooks fire).
  */
 export interface MediaBridge {
   /**
