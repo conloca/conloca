@@ -23,7 +23,6 @@ export function formatDate(date: Date): string {
 export function relativeTime(date: Date): string {
   if (isInvalid(date)) return '—';
   const diff = Date.now() - date.getTime();
-  if (diff < 0) return 'just now';
   const minutes = Math.floor(diff / 60000);
   if (minutes < 1) return 'just now';
   if (minutes < 60) return `${minutes}m ago`;
