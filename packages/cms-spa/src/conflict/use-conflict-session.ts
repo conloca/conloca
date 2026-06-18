@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { getUIConfig } from '../ui-config';
 import type { ConflictDecisionMap, ConflictResolutionSession } from './types';
 
@@ -135,14 +135,16 @@ export function usePatchPageDecisions() {
  */
 export function useSessionConflictsByPage(): Map<string, Set<string>> {
   const { data: session } = useConflictSession();
-  if (!session) return EMPTY_CONFLICT_MAP;
-  const map = new Map<string, Set<string>>();
-  for (const page of session.pages) {
-    const set = map.get(page.pageId) ?? new Set<string>();
-    set.add(page.locale);
-    map.set(page.pageId, set);
-  }
-  return map;
+  return useMemo(() => {
+    if (!session) return EMPTY_CONFLICT_MAP;
+    const map = new Map<string, Set<string>>();
+    for (const page of session.pages) {
+      const set = map.get(page.pageId) ?? new Set<string>();
+      set.add(page.locale);
+      map.set(page.pageId, set);
+    }
+    return map;
+  }, [session]);
 }
 
 const EMPTY_CONFLICT_MAP: Map<string, Set<string>> = new Map();
