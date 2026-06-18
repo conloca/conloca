@@ -125,7 +125,7 @@ function SidebarContent() {
           deployment-mode seam, and it stays the seam. */}
       {!hosted && (
         <div className="px-3 py-3 border-t border-grey-09 dark:border-grey-03">
-          <GitStatusPanel variant="sidebar" />
+          <GitStatusPanel />
         </div>
       )}
 

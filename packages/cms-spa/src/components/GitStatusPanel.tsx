@@ -26,12 +26,7 @@ import { cn } from '../utils/cn';
  * component; don't extend this one.
  */
 
-interface GitStatusPanelProps {
-  variant?: 'header' | 'sidebar';
-}
-
-export function GitStatusPanel({ variant = 'header' }: GitStatusPanelProps) {
-  const isSidebar = variant === 'sidebar';
+export function GitStatusPanel() {
   const { data: status, isLoading, error } = useGitStatus();
   const commitMutation = useCommitChanges();
   const pullMutation = usePullChanges();
@@ -88,7 +83,7 @@ export function GitStatusPanel({ variant = 'header' }: GitStatusPanelProps) {
   }
 
   const btnBase = 'flex items-center justify-center gap-1.5 rounded-md text-xs font-medium transition-colors';
-  const btnSize = isSidebar ? 'flex-1 px-2 py-1.5' : 'px-3 py-1.5';
+  const btnSize = 'flex-1 px-2 py-1.5';
 
   // Subtle (ghost) styling for non-actionable states — keeps the toolbar from
   // looking like 3 chunky colored bars. Color only when the action is meaningful.
@@ -96,7 +91,7 @@ export function GitStatusPanel({ variant = 'header' }: GitStatusPanelProps) {
     'bg-grey-11 dark:bg-grey-03 text-grey-05 dark:text-grey-06 hover:bg-grey-10 dark:hover:bg-grey-02';
 
   return (
-    <div className={isSidebar ? 'space-y-2' : 'flex items-center gap-3'}>
+    <div className="space-y-2">
       {/* Branch name */}
       <div className="flex items-center gap-1.5 text-grey-05 dark:text-grey-06 text-xs min-w-0">
         <GitBranch className="h-3.5 w-3.5 flex-shrink-0" />
@@ -107,7 +102,7 @@ export function GitStatusPanel({ variant = 'header' }: GitStatusPanelProps) {
       </div>
 
       {/* 2-row grid in sidebar: Pull/Commit on row 1, Push spans row 2 (matches git workflow) */}
-      <div className={isSidebar ? 'grid grid-cols-2 gap-1' : 'flex gap-3'}>
+      <div className="grid grid-cols-2 gap-1">
         {/* Pull button — color only when behind */}
         <button
           type="button"
@@ -168,7 +163,7 @@ export function GitStatusPanel({ variant = 'header' }: GitStatusPanelProps) {
           className={cn(
             btnBase,
             btnSize,
-            isSidebar && 'col-span-2',
+            'col-span-2',
             status && status.ahead > 0
               ? 'bg-green-05 text-white hover:bg-green-04'
               : 'bg-grey-11 dark:bg-grey-03 text-grey-06 dark:text-grey-05 cursor-not-allowed',
@@ -185,14 +180,6 @@ export function GitStatusPanel({ variant = 'header' }: GitStatusPanelProps) {
           ) : null}
         </button>
       </div>
-
-      {/* Behind remote warning (separate line in header variant) */}
-      {!isSidebar && status && status.behind > 0 ? (
-        <div className="flex items-center gap-1 text-yellow-05 text-sm">
-          <AlertCircle className="h-4 w-4" />
-          <span>{status.behind} behind</span>
-        </div>
-      ) : null}
 
       {/* Error feedback */}
       {commitMutation.isError ? <span className="text-red-04 text-xs">Commit failed</span> : null}
