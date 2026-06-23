@@ -14,7 +14,7 @@
         "@nx/react": "22.7.1",
         "@nx/web": "22.7.1",
         "@nx/workspace": "22.7.1",
-        "@smoothbricks/nx-plugin": "^0.2.2",
+        "@smoothbricks/nx-plugin": "^0.2.5",
         "@swc-node/register": "~1.11.1",
         "@swc/core": "~1.15.32",
         "@swc/helpers": "~0.5.21",
@@ -1376,7 +1376,7 @@
 
     "@smoothbricks/cli": ["@smoothbricks/cli@0.4.3", "", { "dependencies": { "@arethetypeswrong/core": "^0.18.2", "@smoothbricks/nx-plugin": "0.2.5", "@smoothbricks/validation": "0.1.1", "commander": "^14.0.3", "publint": "^0.3.18", "semver": "^7.7.4", "sherif": "^1.11.1", "tslib": "^2.8.1" }, "bin": { "smoo": "bin/smoo" } }, "sha512-Uu3wgDbRm4X2Exa+EAxxaPkfMh9MwBtNSMwmdCzPF1kS/iEDqpP8EfQB4z65PQNLy8p6XTaX/gBD1v8momPF/w=="],
 
-    "@smoothbricks/nx-plugin": ["@smoothbricks/nx-plugin@0.2.2", "", { "dependencies": { "@nx/js": "22.7.1", "nx": "22.7.1", "tslib": "^2.8.1" } }, "sha512-AjW2GaX0JPbhb2tBf8pydTlSYnQX1BpQyfioOeAq+rtHuyPZJ2KeyrA163ICWlIi4aaKWtk1bzZHkTn5sd2WUQ=="],
+    "@smoothbricks/nx-plugin": ["@smoothbricks/nx-plugin@0.2.5", "", { "dependencies": { "@nx/js": "22.7.1", "nx": "22.7.1", "tslib": "^2.8.1" } }, "sha512-YQVqzJ4QWdsvGyVhYIPtvvu7D0N49VKcevAw1Cmw8Hu5pE+i8TbKI8YftziWftX7Iu9ObEHoNpC2WTYB2gJ4qw=="],
 
     "@smoothbricks/validation": ["@smoothbricks/validation@0.1.1", "", { "dependencies": { "tslib": "^2.8.1", "typia": "^12.0.1" } }, "sha512-9AMr0B1wv9C7SIhqcPYPKupoGKXDtfN5DvSa+JbB8fS/otR+5fi14LHw0F348EGByPCOUqyT50yZQNkGXMUDYA=="],
 
@@ -3827,8 +3827,6 @@
     "@rspack/binding-wasm32-wasi/@napi-rs/wasm-runtime": ["@napi-rs/wasm-runtime@1.0.7", "", { "dependencies": { "@emnapi/core": "^1.5.0", "@emnapi/runtime": "^1.5.0", "@tybys/wasm-util": "^0.10.1" } }, "sha512-SeDnOO0Tk7Okiq6DbXmmBODgOAb9dp9gjlphokTUxmt8U3liIP1ZsozBahH69j/RJv+Rfs6IwUKHTgQYJ/HBAw=="],
 
     "@rspack/core/@module-federation/runtime-tools": ["@module-federation/runtime-tools@0.21.6", "", { "dependencies": { "@module-federation/runtime": "0.21.6", "@module-federation/webpack-bundler-runtime": "0.21.6" } }, "sha512-fnP+ZOZTFeBGiTAnxve+axGmiYn2D60h86nUISXjXClK3LUY1krUfPgf6MaD4YDJ4i51OGXZWPekeMe16pkd8Q=="],
-
-    "@smoothbricks/cli/@smoothbricks/nx-plugin": ["@smoothbricks/nx-plugin@0.2.5", "", { "dependencies": { "@nx/js": "22.7.1", "nx": "22.7.1", "tslib": "^2.8.1" } }, "sha512-YQVqzJ4QWdsvGyVhYIPtvvu7D0N49VKcevAw1Cmw8Hu5pE+i8TbKI8YftziWftX7Iu9ObEHoNpC2WTYB2gJ4qw=="],
 
     "@smoothbricks/cli/semver": ["semver@7.7.4", "", { "bin": { "semver": "bin/semver.js" } }, "sha512-vFKC2IEtQnVhpT78h1Yp8wzwrf8CM+MzKMHGJZfBtzhZNycRFnXsHk6E5TxIkkMsgNS7mdX3AGB7x2QM2di4lA=="],
 
