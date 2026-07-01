@@ -25,6 +25,7 @@
     "yaml": "^2.8.3",
     "zod": "^4.4.1"
   },
+
   "exports": {
     "./package.json": "./package.json",
     ".": {
