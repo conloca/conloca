@@ -20,3 +20,11 @@
 
 [rebase]
 	autoStash = true
+
+[merge "nvfetcher-newer"]
+	# Keep the newer runtime version pins (nvfetcher output) on any merge so
+	# parallel updates never stall on a version conflict. Mapped in
+	# .gitattributes. Local-dev `devenv shell` then regenerates package.json
+	# engine/packageManager from the newer runtime.
+	name = keep the newer nvfetcher runtime version pins
+	driver = bash tooling/direnv/nixpkgs-overlay/merge-newer.sh %O %A %B %P
