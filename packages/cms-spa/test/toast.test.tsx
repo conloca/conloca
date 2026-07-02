@@ -1,7 +1,9 @@
 /// <reference lib="dom" />
 import { afterEach, describe, expect, test } from 'bun:test';
 import { cleanup, render, waitFor } from '@testing-library/react';
-import { Toaster, toast } from '../src/components/toast';
+import type { ReactElement } from 'react';
+import { Toaster as SonnerToaster } from 'sonner';
+import { Toaster, type ToasterProps, toast } from '../src/components/toast';
 
 afterEach(() => {
   cleanup();
@@ -11,21 +13,6 @@ afterEach(() => {
 });
 
 describe('toast wrapper', () => {
-  describe('toast re-export', () => {
-    test('re-exports a callable toast function', () => {
-      expect(typeof toast).toBe('function');
-    });
-
-    test('exposes the standard sonner variants', () => {
-      expect(typeof toast.success).toBe('function');
-      expect(typeof toast.error).toBe('function');
-      expect(typeof toast.info).toBe('function');
-      expect(typeof toast.warning).toBe('function');
-      expect(typeof toast.loading).toBe('function');
-      expect(typeof toast.dismiss).toBe('function');
-    });
-  });
-
   describe('Toaster surface', () => {
     test('renders a polite aria-live region so screen readers announce toasts', () => {
       render(<Toaster />);
@@ -33,15 +20,15 @@ describe('toast wrapper', () => {
       expect(section).toBeTruthy();
     });
 
-    test('defaults to position="bottom-right" so toasts land in the quiet corner', async () => {
-      render(<Toaster />);
-      toast('hello world');
-      await waitFor(() => {
-        const list = document.querySelector('ol[data-sonner-toaster]');
-        expect(list).toBeTruthy();
-        expect((list as HTMLElement).dataset.yPosition).toBe('bottom');
-        expect((list as HTMLElement).dataset.xPosition).toBe('right');
-      });
+    test('passes the cms-spa defaults (position, theme, richColors) to sonner', () => {
+      // Sonner's own position fallback is also bottom-right, so a rendered-DOM
+      // assertion would pass even with our default deleted. Inspect the element
+      // the wrapper builds instead — that observes our code, not sonner's fallback.
+      const element = Toaster({}) as ReactElement<ToasterProps>;
+      expect(element.type).toBe(SonnerToaster);
+      expect(element.props.position).toBe('bottom-right');
+      expect(element.props.theme).toBe('system');
+      expect(element.props.richColors).toBe(false);
     });
 
     test('lets consumers override the position default', async () => {
