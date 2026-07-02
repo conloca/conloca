@@ -25,7 +25,9 @@
     "yaml": "^2.8.3",
     "zod": "^4.4.1"
   },
-
+  "devDependencies": {
+    "fast-check": "^4.4.0"
+  },
   "exports": {
     "./package.json": "./package.json",
     ".": {

@@ -4,29 +4,67 @@
 
 # Save the current working directory
 ORIGINAL_PWD="$(pwd)"
+SELF_PATH="$(realpath "$0")"
 
 # Find the root of the git repository
-GIT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
-
-if [ -z "$GIT_ROOT" ]; then
-    echo "Error: Not in a git repository" >&2
+TOOLING_DIR="$(dirname "$SELF_PATH")"
+DEVENV_DIR="$TOOLING_DIR/direnv"
+if [ ! -d "$DEVENV_DIR" ]; then
+    echo "Error: Could not find devenv directory at $DEVENV_DIR" >&2
     exit 1
+fi
+
+# Find the actual Nix-built devenv binary, skipping every wrapper script.
+# WHY: PATH routinely holds more than one of these wrappers at once — this
+# repo's tooling/devenv, sibling repos' wrappers, and direnv-stacked parent
+# environments. A plain "not equal to SELF_PATH" check happily selects a
+# *different* wrapper and exec's it, so `devenv` bounces into the wrong repo
+# (or self-execs forever on cheap checks like `devenv version`). The real devenv
+# is always the Nix-managed executable under /nix/store, so match that and ignore
+# every wrapper regardless of PATH ordering. (Matching the store path is also more
+# robust than a "is it a binary" test: Nix sometimes ships tools as makeWrapper
+# shell scripts, which are still the correct entry point.)
+DEVENV_BIN=""
+while IFS= read -r candidate; do
+    candidate_path="$(realpath "$candidate")"
+    case "$candidate_path" in
+        /nix/store/*)
+            if [ -f "$candidate_path" ] && [ -x "$candidate_path" ]; then
+                DEVENV_BIN="$candidate_path"
+                break
+            fi
+            ;;
+    esac
+done < <(which -a devenv 2>/dev/null)
+
+if [ -z "$DEVENV_BIN" ]; then
+    echo "Error: Could not find the Nix-built devenv binary (under /nix/store) in PATH" >&2
+    exit 1
+fi
+
+# If we're in a project, just run devenv
+if [ -f devenv.nix ]; then
+  exec "$DEVENV_BIN" "$@"
 fi
 
 # Change to the tooling/direnv directory where devenv files are located
-cd "$GIT_ROOT/tooling/direnv" || exit 1
-
-# Find the actual devenv binary from Nix (not this wrapper)
-# Since our wrapper is first in PATH, the second entry will be the real devenv
-DEVENV_BIN=$(which -a devenv 2>/dev/null | sed -n 2p)
-
-if [ -z "$DEVENV_BIN" ]; then
-    echo "Error: Could not find devenv binary" >&2
-    exit 1
-fi
+cd "$DEVENV_DIR" || exit 1
 
 # Export the original directory so enterShell can use it
 export DEVENV_SHELL_PWD="$ORIGINAL_PWD"
 
-# Run the actual devenv command with all arguments passed through
+# Run the actual devenv command with all arguments passed through.
+# For updates, refresh nvfetcher-managed overlay sources first.
+if [ "${1:-}" = "update" ]; then
+    if [ -f "$DEVENV_DIR/nixpkgs-overlay/nvfetcher.toml" ]; then
+      echo "Running nvfetcher for nixpkgs-overlay/..."
+      (cd "$DEVENV_DIR/nixpkgs-overlay" && echo "
+[keys]
+github = \"$(gh auth token)\"
+" > .gh-auth && (nvfetcher -k .gh-auth -o _sources || true) && rm .gh-auth)
+    fi
+
+    exec "$DEVENV_BIN" "$@"
+fi
+
 exec "$DEVENV_BIN" "$@"

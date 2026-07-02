@@ -1,11 +1,6 @@
-name = "conloca-website"
+name = "conloca-website-dev"
 main = "src/worker.ts"
 compatibility_date = "2026-03-15"
-workers_dev = false
-
-[[routes]]
-pattern = "conloca.com"
-custom_domain = true
 
 [assets]
 directory = "./dist"
@@ -13,11 +8,7 @@ binding = "ASSETS"
 not_found_handling = "404-page"
 run_worker_first = ["/api/*"]
 
-[[d1_databases]]
-binding = "DB"
-database_name = "conloca-website-db"
-migrations_dir = "migrations"
-
+#--- Staging
 [env.staging]
 name = "conloca-website-staging"
 workers_dev = false
