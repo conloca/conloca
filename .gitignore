@@ -84,3 +84,6 @@ privpkgs/example/.tamagui/tamagui.config.json
 
 # CodeGraph local index — per-machine, not shared
 .codegraph/
+
+# wrangler dev local state — per-machine, not shared
+.wrangler/
