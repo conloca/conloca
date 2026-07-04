@@ -9,7 +9,7 @@ if [ -f "tsconfig.lib.json" ] && [ -f "tsconfig.spec.json" ]; then
   TYPECHECK_RESULT=$?
 elif [ -f "tsconfig.lib.json" ]; then
   # Otherwise create a temporary tsconfig for tests
-  TEMP_SPEC_CREATED=true
+  trap 'rm -f tsconfig.spec.json' EXIT
   cat > tsconfig.spec.json << EOF
 {
   "extends": "./tsconfig.lib.json",
@@ -28,11 +28,6 @@ elif [ -f "tsconfig.lib.json" ]; then
 EOF
   tsc --build tsconfig.lib.json tsconfig.spec.json
   TYPECHECK_RESULT=$?
-  
-  # Clean up temporary file
-  if [ "$TEMP_SPEC_CREATED" = true ]; then
-    rm -f tsconfig.spec.json
-  fi
 else
   # Fallback to just tsc with all files
   echo "No tsconfig.lib.json found, using default TypeScript settings"
