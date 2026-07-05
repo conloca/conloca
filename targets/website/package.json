@@ -107,6 +107,21 @@
           "command": "astro preview",
           "cwd": "{projectRoot}"
         }
+      },
+      "wrangler-types": {
+        "executor": "nx:run-commands",
+        "cache": true,
+        "inputs": [
+          "{projectRoot}/wrangler.toml",
+          "{projectRoot}/.dev.vars.example"
+        ],
+        "outputs": [
+          "{projectRoot}/worker-configuration.d.ts"
+        ],
+        "options": {
+          "command": "wrangler types --env staging --env-file .dev.vars.example --include-runtime false",
+          "cwd": "{projectRoot}"
+        }
       }
     },
     "name": "conloca-website"
