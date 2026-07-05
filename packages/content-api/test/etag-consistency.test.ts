@@ -148,11 +148,11 @@ describe('ETag consistency between implementations', () => {
 
       // SNAPSHOT: These are the expected hash values for this exact content structure
       // If these change, it indicates a breaking change in the hash algorithm
-      expect(canonicalEtags.metaEtag).toBe('2HlMmGEIj94'); // Expected meta hash
+      expect(canonicalEtags.metaEtag).toBe('0cDiMunqz68'); // Expected meta hash (XXH64)
       expect(canonicalEtags.contentEtag).toBe('NrU1TQUcL3OR1tJLqvbjAXdgCRAr9TZ7BYnQ8d0D7_A'); // Expected content hash
 
       const expectedCombinedEtag = `${canonicalEtags.metaEtag}.${canonicalEtags.contentEtag}`;
-      expect(expectedCombinedEtag).toBe('2HlMmGEIj94.NrU1TQUcL3OR1tJLqvbjAXdgCRAr9TZ7BYnQ8d0D7_A');
+      expect(expectedCombinedEtag).toBe('0cDiMunqz68.NrU1TQUcL3OR1tJLqvbjAXdgCRAr9TZ7BYnQ8d0D7_A');
     } finally {
       await cleanup();
     }
@@ -230,11 +230,11 @@ describe('ETag consistency between implementations', () => {
 
       // SNAPSHOT: These are the expected hash values for this exact MDX structure
       // If these change, it indicates a breaking change in the hash algorithm
-      expect(canonicalMdxEtags.metaEtag).toBe('haXLFA6Pmic'); // Expected MDX meta hash
+      expect(canonicalMdxEtags.metaEtag).toBe('GbIHOO-EI8w'); // Expected MDX meta hash (XXH64)
       expect(canonicalMdxEtags.contentEtag).toBe('-A7yGGK2RUwmdzBEDL1Td-qux11ZB8skY6EdbvxmnAU'); // Expected MDX content hash
 
       const expectedMdxEtag = `${canonicalMdxEtags.metaEtag}.${canonicalMdxEtags.contentEtag}`;
-      expect(expectedMdxEtag).toBe('haXLFA6Pmic.-A7yGGK2RUwmdzBEDL1Td-qux11ZB8skY6EdbvxmnAU');
+      expect(expectedMdxEtag).toBe('GbIHOO-EI8w.-A7yGGK2RUwmdzBEDL1Td-qux11ZB8skY6EdbvxmnAU');
     } finally {
       await cleanup();
     }
@@ -300,8 +300,8 @@ describe('ETag consistency between implementations', () => {
     expect(withContentEtags.contentEtag).not.toBe(withoutContentEtags.contentEtag);
 
     // SNAPSHOT: This is the expected meta ETag for this specific metadata structure
-    expect(withContentEtags.metaEtag).toBe('lro81UC-OWI'); // Expected meta hash for this metadata
-    expect(withoutContentEtags.metaEtag).toBe('lro81UC-OWI'); // Should be the same
+    expect(withContentEtags.metaEtag).toBe('UhxkoFKbyls'); // Expected meta hash for this metadata (XXH64)
+    expect(withoutContentEtags.metaEtag).toBe('UhxkoFKbyls'); // Should be the same
 
     // SNAPSHOT: These are the expected content ETags
     expect(withContentEtags.contentEtag).toBe('aYDdywhfsMlDjE6uzmYAbsY3MCuUBfCWu0CJ2s0JY2w'); // With large content

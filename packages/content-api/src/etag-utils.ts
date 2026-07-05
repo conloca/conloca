@@ -1,32 +1,32 @@
-import { xxh3 } from '@node-rs/xxhash';
 import { createHash } from 'crypto';
 import { JsonWhitespaceSkippingView } from './json-whitespace-view';
 import { bigintToUrlSafeBase64, toUrlSafeBase64 } from './url-safe-base64';
+import { createXxh64 } from './xxhash';
 
 /**
  * Dual ETag system for content API
- * - Meta ETag: Based on non-derived LocaleManifest fields (using xxHash)
+ * - Meta ETag: Based on non-derived LocaleManifest fields (using XXH64)
  * - Content ETag: Based on ContentProp.content (using SHA256)
  * Both skip whitespace to allow pretty-printing without affecting hashes
  *
  * Format: "metaEtag.contentEtag" in query strings
  */
 
+
 /**
- * Calculate metadata ETag using xxHash from buffer view
+ * Calculate metadata ETag (XXH64) from buffer view
  * @param buffer - The file buffer view
  * @param start - Start position (inclusive)
  * @param end - End position (exclusive), or -1 for entire buffer
  */
 export function calculateMetaEtagFromBuffer(buffer: Uint8Array, start = 0, end = -1): string {
   const actualEnd = end === -1 ? buffer.length : end;
-  const hasher = xxh3.Xxh3.withSeed(0n);
+  const hasher = createXxh64();
   const jsonView = new JsonWhitespaceSkippingView(hasher);
 
   jsonView.updateBuffer(buffer, start, actualEnd);
 
-  const hashValue = hasher.digest();
-  return bigintToUrlSafeBase64(hashValue);
+  return bigintToUrlSafeBase64(hasher.digest());
 }
 
 /**
@@ -118,10 +118,9 @@ export function calculateEtagsFromMdxBuffer(
 } {
   if (contentStartPos === -1) {
     // No content, only frontmatter - hash entire buffer as metadata
-    const hasher = xxh3.Xxh3.withSeed(0n);
+    const hasher = createXxh64();
     hasher.update(buffer);
-    const hashBigInt = hasher.digest();
-    const metaEtag = bigintToUrlSafeBase64(hashBigInt);
+    const metaEtag = bigintToUrlSafeBase64(hasher.digest());
 
     return {
       metaEtag,
@@ -131,10 +130,9 @@ export function calculateEtagsFromMdxBuffer(
 
   // For MDX, we hash the YAML frontmatter as-is (including the --- markers)
   // This is different from JSON where we need to parse and validate structure
-  const metaHasher = xxh3.Xxh3.withSeed(0n);
+  const metaHasher = createXxh64();
   metaHasher.update(buffer.subarray(0, contentStartPos));
-  const metaHashBigInt = metaHasher.digest();
-  const metaEtag = bigintToUrlSafeBase64(metaHashBigInt);
+  const metaEtag = bigintToUrlSafeBase64(metaHasher.digest());
 
   // Content is everything after the second ---
   const contentHasher = createHash('sha256');

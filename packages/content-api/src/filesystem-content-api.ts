@@ -1,5 +1,5 @@
 import { type FileHandle, mkdir, open, readdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
-import { xxh3 } from '@node-rs/xxhash';
+import { xxh64 } from './xxhash';
 import matter from 'gray-matter';
 import { dirname, join, resolve } from 'path';
 import sortKeys from 'sort-keys';
@@ -2274,7 +2274,7 @@ export class FileSystemContentAPI implements ContentAPI {
                 : etagResult.metaEtag;
             } else if (filePath.endsWith('.json')) {
               // For JSON data files, use content hash as etag
-              currentEtag = xxh3.xxh64(buffer).toString(16);
+              currentEtag = xxh64(buffer).toString(16);
             } else {
               // Unknown file type, skip
               filesSkipped++;

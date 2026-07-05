@@ -1,9 +1,9 @@
-import { xxh3 } from '@node-rs/xxhash';
 import { createHash } from 'crypto';
 import sortKeys from 'sort-keys';
 import { JsonWhitespaceSkippingView } from './json-whitespace-view';
 import type { ContentData, ContentMeta, VXJSONFile } from './types';
 import { bigintToUrlSafeBase64, toUrlSafeBase64 } from './url-safe-base64';
+import { createXxh64 } from './xxhash';
 
 // Reusable TextDecoder instance - safe to reuse as it's stateless
 const textDecoder = new TextDecoder();
@@ -19,13 +19,12 @@ const CONTENT_MARKER = new TextEncoder().encode('"content":');
  */
 function calculateMetaEtagFromBuffer(buffer: Uint8Array, start = 0, end = -1): string {
   const actualEnd = end === -1 ? buffer.length : end;
-  const hasher = xxh3.Xxh3.withSeed(0n);
+  const hasher = createXxh64();
   const jsonView = new JsonWhitespaceSkippingView(hasher);
 
   jsonView.updateBuffer(buffer, start, actualEnd);
 
-  const hashValue = hasher.digest();
-  return bigintToUrlSafeBase64(hashValue);
+  return bigintToUrlSafeBase64(hasher.digest());
 }
 
 /**
@@ -210,7 +209,7 @@ function calculateEtagsFromVXJSONBuffer(
   }
 
   // Hash metadata section: wrap in { } and exclude content field
-  const metaHasher = xxh3.Xxh3.withSeed(0n);
+  const metaHasher = createXxh64();
   const metaView = new JsonWhitespaceSkippingView(metaHasher);
   const openBrace = new Uint8Array([0x7b]); // {
   const closeBrace = new Uint8Array([0x7d]); // }
@@ -219,8 +218,7 @@ function calculateEtagsFromVXJSONBuffer(
   metaView.updateBuffer(buffer, 1, metaEnd); // Skip opening brace, stop before content
   metaHasher.update(closeBrace);
 
-  const metaHashValue = metaHasher.digest();
-  const metaEtag = bigintToUrlSafeBase64(metaHashValue);
+  const metaEtag = bigintToUrlSafeBase64(metaHasher.digest());
 
   // Hash content section: wrap as {"content": ... }
   const contentHasher = createHash('sha256');
