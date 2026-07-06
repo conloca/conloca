@@ -80,6 +80,7 @@ describe('createGitOperations', () => {
    */
   async function initGitRepo(): Promise<void> {
     execSync('git init', { cwd: tempDir, stdio: 'ignore' });
+    execSync('git config core.fsync none', { cwd: tempDir, stdio: 'ignore' });
     execSync('git config user.email "test@test.com"', { cwd: tempDir, stdio: 'ignore' });
     execSync('git config user.name "Test User"', { cwd: tempDir, stdio: 'ignore' });
     // Create content directory (simulates contentPath inside repo)
