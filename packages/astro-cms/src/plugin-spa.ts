@@ -543,7 +543,14 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
           });
         }
 
-        const devSsrNoExternal = [/^@conloca\//, '@puckeditor/core'];
+        // @puckeditor/core (and its zustand dependency) must always go through Vite's
+        // SSR resolver, in dev AND build. SSR-external modules are require()'d directly
+        // by Node, bypassing Vite's resolver — and `resolve.dedupe` below — entirely,
+        // which risks pulling in a stray React copy from outside the workspace.
+        const alwaysSsrNoExternal = ['@puckeditor/core'];
+        // In dev, linked workspace packages also need to be bundled so React resolves
+        // through Vite and HMR works from source (build mode uses their compiled dist output).
+        const devOnlySsrNoExternal = [/^@conloca\//];
         const serverOnlyExternal = [
           '@conloca/content-api',
           '@conloca/content-api/node',
@@ -558,21 +565,19 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
         updateConfig({
           vite: {
             ssr: {
-              // In dev, linked workspace packages need to be bundled so React resolves
-              // through Vite and HMR works from source.
-              noExternal: command === 'dev' ? devSsrNoExternal : [],
-              // Keep Node-only content processing packages external so SSR builds do not
-              // try to bundle native dependencies like xxhash.
+              noExternal: command === 'dev' ? [...devOnlySsrNoExternal, ...alwaysSsrNoExternal] : alwaysSsrNoExternal,
+              // Keep Node-only content packages (content-api, mdx) external so SSR
+              // builds do not try to bundle their server-only surfaces.
               external: serverOnlyExternal,
             },
-            build: {
-              rollupOptions: {
-                external: [
-                  '@node-rs/xxhash',
-                  '@node-rs/xxhash-linux-x64-gnu',
-                  '@node-rs/xxhash-linux-x64-gnu/xxhash.linux-x64-gnu.node',
-                ],
-              },
+            resolve: {
+              // Dedupe React to avoid multiple instances when CMS SPA source is
+              // loaded from a workspace sibling package. Only list packages the
+              // consumer project declares directly — with bun's isolated linker,
+              // transitive deps (e.g. @tanstack/react-query) live in the owning
+              // package's node_modules and must NOT be forced to resolve from the
+              // consumer root (which would fail).
+              dedupe: ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
             },
             // Virtual modules for routing - needed in both dev and build
             plugins: [
@@ -716,15 +721,6 @@ initHydration(componentRegistry)
               // The runtime handler reads it as-is — no JSON.parse needed.
               'import.meta.env.CONLOCA_LOCALES': JSON.stringify(options.locales?.list ?? null),
               'import.meta.env.CONLOCA_DEFAULT_LOCALE': JSON.stringify(options.locales?.defaultLocale || ''),
-            },
-            resolve: {
-              // Dedupe React to avoid multiple instances when CMS SPA source is
-              // loaded from a workspace sibling package. Only list packages the
-              // consumer project declares directly — with bun's isolated linker,
-              // transitive deps (e.g. @tanstack/react-query) live in the owning
-              // package's node_modules and must NOT be forced to resolve from the
-              // consumer root (which would fail).
-              dedupe: ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
             },
             optimizeDeps: {
               // Exclude the puck config from optimization to avoid the outdated dep error
