@@ -26,7 +26,10 @@
     "zod": "^4.4.1"
   },
   "devDependencies": {
-    "fast-check": "^4.4.0"
+    "@stryker-mutator/core": "^9.6.1",
+    "@stryker-mutator/vitest-runner": "^9.6.1",
+    "fast-check": "^4.4.0",
+    "vitest": "^4.1.5"
   },
   "exports": {
     "./package.json": "./package.json",
@@ -94,6 +97,14 @@
           "cwd": "{projectRoot}",
           "timeoutMs": 120000,
           "killAfterMs": 10000
+        }
+      },
+      "mutation": {
+        "executor": "nx:run-commands",
+        "cache": false,
+        "options": {
+          "command": "stryker run stryker.pilot.config.mjs",
+          "cwd": "{projectRoot}"
         }
       }
     },

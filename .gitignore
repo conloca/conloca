@@ -29,6 +29,8 @@ node_modules
 /.sass-cache
 /connect.lock
 /coverage
+.stryker-tmp
+stryker-report.html
 /libpeerconnection.log
 npm-debug.log
 yarn-error.log
