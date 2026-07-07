@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022", "WebWorker"],
+    "types": ["@cloudflare/workers-types"],
+    "declaration": false,
+    "outDir": "./dist-worker",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
+    "plugins": [{ "transform": "typia/lib/transform" }]
+  },
+  "include": ["src/worker.ts"],
+  "exclude": ["node_modules", "dist", "dist-worker", "src/**/*.test.ts"]
+}
