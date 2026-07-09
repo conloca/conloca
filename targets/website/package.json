@@ -67,7 +67,7 @@
           "{projectRoot}/dist-worker"
         ],
         "options": {
-          "command": "tspc -p tsconfig.worker.json",
+          "command": "ttsc -p tsconfig.worker.json",
           "cwd": "{projectRoot}"
         }
       },
@@ -152,8 +152,12 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260504.0",
-    "ts-patch": "^4.0.1",
-    "typia": "^12.1.1",
-    "wrangler": "^4.95.0"
+    "typia": "^13.0.0",
+    "wrangler": "^4.95.0",
+    "ttsc": "^0.18.0",
+    "@typescript/typescript-darwin-arm64": "7.0.2",
+    "@typescript/typescript-darwin-x64": "7.0.2",
+    "@typescript/typescript-linux-x64": "7.0.2",
+    "@typescript/typescript-linux-arm64": "7.0.2"
   }
 }

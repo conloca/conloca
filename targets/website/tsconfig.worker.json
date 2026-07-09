@@ -13,8 +13,7 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "allowSyntheticDefaultImports": true,
-    "plugins": [{ "transform": "typia/lib/transform" }]
+    "allowSyntheticDefaultImports": true
   },
   "include": ["src/worker.ts"],
   "exclude": ["node_modules", "dist", "dist-worker", "src/**/*.test.ts"]
