@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import * as mdxPackage from '../index';
 import { MDXEditor } from '../index';
 

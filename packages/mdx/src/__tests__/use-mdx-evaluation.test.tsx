@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, test } from 'bun:test';
 import { cleanup, renderHook, waitFor } from '@testing-library/react';
+import { afterEach, describe, expect, test } from 'vitest';
 import { useMDXEvaluation } from '../hooks/useMDXEvaluation';
 
 afterEach(() => {
