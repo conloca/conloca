@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import { safeJsonStringify } from '../src/safe-json-stringify';
 
 describe('safeJsonStringify', () => {

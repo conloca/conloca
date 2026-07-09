@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import { localesFromAstroI18n, localesFromStarlight } from '../src/locales-helpers';
 
 describe('localesFromAstroI18n', () => {

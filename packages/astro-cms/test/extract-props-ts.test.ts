@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import { extractAstroFrontmatter } from '../src/discovery/astro-frontmatter.js';
 import { createScanProject, extractPropsViaTs } from '../src/discovery/extract-props-ts.js';
 
