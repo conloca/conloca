@@ -1,10 +1,10 @@
 /// <reference lib="dom" />
 
-import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import type { ContentEntry, LocalizedEntry } from '@conloca/content-api';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ContentAPIClient } from '../src/client';
 import {
   setContentAPIClient,
@@ -47,30 +47,30 @@ describe('Content API Hooks', () => {
     );
 
     mockClient = {
-      getContent: mock(() => Promise.resolve(null)),
-      getLocalized: mock(() => Promise.resolve(null)),
-      createContent: mock(() => Promise.resolve({ success: true, id: 'new-id', etag: 'metaHash.contentHash' })),
-      updateLocalized: mock(() =>
+      getContent: vi.fn(() => Promise.resolve(null)),
+      getLocalized: vi.fn(() => Promise.resolve(null)),
+      createContent: vi.fn(() => Promise.resolve({ success: true, id: 'new-id', etag: 'metaHash.contentHash' })),
+      updateLocalized: vi.fn(() =>
         Promise.resolve({ success: true, etag: 'updatedMeta.updatedContent', modified: new Date() }),
       ),
-      deleteContent: mock(() => Promise.resolve({ success: true })),
-      getSitePages: mock(() => Promise.resolve({ items: [], total: 0 })),
-      getPageByPathname: mock(() => Promise.resolve(null)),
-      isPathnameAvailable: mock(() => Promise.resolve(true)),
-      movePage: mock(() => Promise.resolve({ moved: true })),
-      getBlocks: mock(() => Promise.resolve({ items: [], total: 0 })),
-      getBlockByName: mock(() => Promise.resolve(null)),
-      compileMDX: mock(() =>
+      deleteContent: vi.fn(() => Promise.resolve({ success: true })),
+      getSitePages: vi.fn(() => Promise.resolve({ items: [], total: 0 })),
+      getPageByPathname: vi.fn(() => Promise.resolve(null)),
+      isPathnameAvailable: vi.fn(() => Promise.resolve(true)),
+      movePage: vi.fn(() => Promise.resolve({ moved: true })),
+      getBlocks: vi.fn(() => Promise.resolve({ items: [], total: 0 })),
+      getBlockByName: vi.fn(() => Promise.resolve(null)),
+      compileMDX: vi.fn(() =>
         Promise.resolve({ code: 'return { default: function Test() { return null } }', metadata: {} }),
       ),
-      getData: mock(() => Promise.resolve({ items: [], total: 0 })),
-      getDataByName: mock(() => Promise.resolve(null)),
-      isDataNameAvailable: mock(() => Promise.resolve(true)),
-      getDataCollections: mock(() => Promise.resolve([])),
-      listAllContent: mock(() => Promise.resolve({ items: [], total: 0 })),
-      findUntranslatedContent: mock(() => Promise.resolve({ items: [], total: 0 })),
-      getSitesConfig: mock(() => Promise.resolve({ sites: {} })),
-      batchUpdate: mock(() => Promise.resolve({ success: true, updated: 0, failed: 0, operations: [] })),
+      getData: vi.fn(() => Promise.resolve({ items: [], total: 0 })),
+      getDataByName: vi.fn(() => Promise.resolve(null)),
+      isDataNameAvailable: vi.fn(() => Promise.resolve(true)),
+      getDataCollections: vi.fn(() => Promise.resolve([])),
+      listAllContent: vi.fn(() => Promise.resolve({ items: [], total: 0 })),
+      findUntranslatedContent: vi.fn(() => Promise.resolve({ items: [], total: 0 })),
+      getSitesConfig: vi.fn(() => Promise.resolve({ sites: {} })),
+      batchUpdate: vi.fn(() => Promise.resolve({ success: true, updated: 0, failed: 0, operations: [] })),
     } as any;
 
     setContentAPIClient(mockClient);
@@ -99,7 +99,7 @@ describe('Content API Hooks', () => {
         },
       };
 
-      mockClient.getContent = mock(() => Promise.resolve(mockContent));
+      mockClient.getContent = vi.fn(() => Promise.resolve(mockContent));
 
       const { result } = renderHook(() => useContent('test-id'), { wrapper });
 
@@ -117,7 +117,7 @@ describe('Content API Hooks', () => {
 
     it('should handle errors', async () => {
       const error = new Error('Failed to fetch');
-      mockClient.getContent = mock(() => Promise.reject(error));
+      mockClient.getContent = vi.fn(() => Promise.reject(error));
 
       const { result } = renderHook(() => useContent('test-id'), { wrapper });
 
@@ -160,7 +160,7 @@ describe('Content API Hooks', () => {
         },
       };
 
-      mockClient.getLocalized = mock(() => Promise.resolve(mockContent));
+      mockClient.getLocalized = vi.fn(() => Promise.resolve(mockContent));
 
       const { result } = renderHook(() => useLocalizedContent('test-id', 'en'), { wrapper });
 
@@ -187,7 +187,7 @@ describe('Content API Hooks', () => {
         metadata: { title: 'Test' },
       };
 
-      mockClient.compileMDX = mock(() => Promise.resolve(compileResult));
+      mockClient.compileMDX = vi.fn(() => Promise.resolve(compileResult));
 
       const { result } = renderHook(() => useCompileMDX({ mdxContent: '# Test', cacheKey: 'etag-1' }), { wrapper });
 
@@ -237,7 +237,7 @@ describe('Content API Hooks', () => {
           },
         },
       };
-      mockClient.getContent = mock(() => Promise.resolve(createdContent));
+      mockClient.getContent = vi.fn(() => Promise.resolve(createdContent));
 
       const { result } = renderHook(() => useCreateContent(), { wrapper });
 
@@ -256,7 +256,7 @@ describe('Content API Hooks', () => {
 
     it('should handle errors', async () => {
       const error = new Error('Create failed');
-      mockClient.createContent = mock(() => Promise.reject(error));
+      mockClient.createContent = vi.fn(() => Promise.reject(error));
 
       const { result } = renderHook(() => useCreateContent(), { wrapper });
 
@@ -298,7 +298,7 @@ describe('Content API Hooks', () => {
           content: { puckData: {} },
         },
       };
-      mockClient.getLocalized = mock(() => Promise.resolve(updatedContent));
+      mockClient.getLocalized = vi.fn(() => Promise.resolve(updatedContent));
 
       const { result } = renderHook(() => useUpdateLocalized(), { wrapper });
 
@@ -356,7 +356,7 @@ describe('Content API Hooks', () => {
         total: 2,
       };
 
-      mockClient.getSitePages = mock(() => Promise.resolve(mockPages));
+      mockClient.getSitePages = vi.fn(() => Promise.resolve(mockPages));
 
       const { result } = renderHook(() => useSitePages('test-site', 'en'), { wrapper });
 
@@ -414,7 +414,7 @@ describe('Content API Hooks', () => {
         total: 1,
       };
 
-      mockClient.getData = mock(() => Promise.resolve(mockData));
+      mockClient.getData = vi.fn(() => Promise.resolve(mockData));
 
       const { result } = renderHook(() => useData('authors', 'en'), { wrapper });
 
@@ -429,7 +429,7 @@ describe('Content API Hooks', () => {
     it('should fetch all data when no filters', async () => {
       const mockData = { items: [], total: 0 };
 
-      mockClient.getData = mock(() => Promise.resolve(mockData));
+      mockClient.getData = vi.fn(() => Promise.resolve(mockData));
 
       const { result } = renderHook(() => useData(), { wrapper });
 
@@ -460,7 +460,7 @@ describe('Content API Hooks', () => {
         },
       };
 
-      mockClient.getDataByName = mock(() => Promise.resolve(mockEntry));
+      mockClient.getDataByName = vi.fn(() => Promise.resolve(mockEntry));
 
       const { result } = renderHook(() => useDataByName('john-doe', 'authors', 'en'), { wrapper });
 
@@ -489,7 +489,7 @@ describe('Content API Hooks', () => {
 
   describe('useDataNameAvailability', () => {
     it('should check data name availability', async () => {
-      mockClient.isDataNameAvailable = mock(() => Promise.resolve(true));
+      mockClient.isDataNameAvailable = vi.fn(() => Promise.resolve(true));
 
       const { result } = renderHook(() => useDataNameAvailability('new-name', 'authors', 'exclude-id'), { wrapper });
 
@@ -502,7 +502,7 @@ describe('Content API Hooks', () => {
     });
 
     it('should return available: false for taken name', async () => {
-      mockClient.isDataNameAvailable = mock(() => Promise.resolve(false));
+      mockClient.isDataNameAvailable = vi.fn(() => Promise.resolve(false));
 
       const { result } = renderHook(() => useDataNameAvailability('taken-name', 'authors'), { wrapper });
 
@@ -532,7 +532,7 @@ describe('Content API Hooks', () => {
     it('should fetch data collections', async () => {
       const mockCollections = ['authors', 'testimonials', 'settings'];
 
-      mockClient.getDataCollections = mock(() => Promise.resolve(mockCollections));
+      mockClient.getDataCollections = vi.fn(() => Promise.resolve(mockCollections));
 
       const { result } = renderHook(() => useDataCollections(), { wrapper });
 

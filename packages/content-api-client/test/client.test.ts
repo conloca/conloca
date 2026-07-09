@@ -1,13 +1,13 @@
-import { beforeEach, describe, expect, it, mock } from 'bun:test';
 import type { ContentEntry, CreateContentInput, CreateResult, UpdateLocaleInput } from '@conloca/content-api';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ContentAPIClient, StaleWriteError } from '../src/client';
 
 describe('ContentAPIClient', () => {
   let client: ContentAPIClient;
-  let fetchMock: ReturnType<typeof mock>;
+  let fetchMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    fetchMock = mock(() => Promise.resolve(new Response()));
+    fetchMock = vi.fn(() => Promise.resolve(new Response()));
     global.fetch = fetchMock as any;
     client = new ContentAPIClient();
   });
