@@ -11,7 +11,6 @@ Run all commands from `private/targets/website`.
 | `bun run dev`              | Start the docs site locally at `http://localhost:4321` |
 | `bun run build`            | Build the static site into `dist/`                     |
 | `bun run preview`          | Preview the production build locally                   |
-| `bun run deploy:dry`       | Validate the Worker bundle without deploying           |
 | `bun run deploy`           | Deploy the website Worker and provision bindings       |
 | `bun run db:migrate:local` | Apply D1 migrations to the local database              |
 

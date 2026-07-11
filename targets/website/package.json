@@ -9,7 +9,6 @@
     "preview": "nx run conloca-website:preview --outputStyle=stream",
     "astro": "astro",
     "deploy": "nx run conloca-website:deploy:production --outputStyle=stream",
-    "deploy:dry": "wrangler deploy --env production --dry-run",
     "db:migrate:local": "wrangler d1 migrations apply DB --local --env staging",
     "prepare-env": "bun ../../tooling/prepare-env-website.ts"
   },
