@@ -16,6 +16,7 @@
   "include": [
     "src/**/*.test.ts",
     "src/**/*.spec.ts",
+    "src/**/*.stories.tsx",
     "src/**/__tests__/**/*.ts",
     "src/**/__tests__/**/*.tsx",
     "src/test-suite-tracer.ts"

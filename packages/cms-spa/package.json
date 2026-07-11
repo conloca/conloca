@@ -118,17 +118,24 @@
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "20.6.1",
+    "@storybook/addon-vitest": "^10.5.0",
+    "@storybook/react-vite": "^10.5.0",
     "@tailwindcss/cli": "4.2.4",
     "@tailwindcss/typography": "^0.5.19",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
+    "@vitejs/plugin-react": "^5.2.0",
+    "@vitest/browser-playwright": "^4.1.7",
     "bun-tailwindcss": "^0.0.9",
     "hono": "^4.12.23",
+    "playwright": "^1.61.1",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-refresh-typescript": "^2.0.12",
+    "storybook": "^10.5.0",
     "tailwindcss": "^4.1.16",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7"
   },
   "nx": {
     "targets": {
@@ -196,6 +203,18 @@
           "command": "bun --conditions=production test",
           "cwd": "{projectRoot}",
           "timeoutMs": 120000,
+          "killAfterMs": 10000
+        }
+      },
+      "test-storybook": {
+        "executor": "@smoothbricks/nx-plugin:bounded-exec",
+        "dependsOn": [
+          "^build"
+        ],
+        "options": {
+          "command": "vitest run --config .storybook/vitest.config.ts",
+          "cwd": "{projectRoot}",
+          "timeoutMs": 300000,
           "killAfterMs": 10000
         }
       }

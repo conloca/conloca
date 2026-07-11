@@ -56,6 +56,9 @@ vite.config.*.timestamp*
 vitest.config.*.timestamp*
 /.playwright-mcp
 
+# Storybook build output (spec 14 §Storybook adoption — stories run as tests; a static build is never committed)
+storybook-static/
+
 # Example
 privpkgs/example/.tamagui/tamagui.config.cjs
 privpkgs/example/.tamagui/tamagui.config.json
