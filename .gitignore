@@ -29,6 +29,8 @@ node_modules
 /.sass-cache
 /connect.lock
 /coverage
+# per-package Vitest coverage output (A91 shell gate runs)
+coverage/
 .stryker-tmp
 stryker-report.html
 /libpeerconnection.log
@@ -47,6 +49,9 @@ Thumbs.db
 # Nx
 .nx/cache
 .nx/workspace-data
+# Transient esbuild bundles for the workerd test harnesses
+.nx/conformance
+.nx/auth-e2e
 .cursor/rules/nx-rules.mdc
 .github/instructions/nx.instructions.md
 .github/instructions/copilot-instructions.md
@@ -56,15 +61,29 @@ vite.config.*.timestamp*
 vitest.config.*.timestamp*
 /.playwright-mcp
 
-# Storybook build output (spec 14 §Storybook adoption — stories run as tests; a static build is never committed)
-storybook-static/
-
 # Example
 privpkgs/example/.tamagui/tamagui.config.cjs
 privpkgs/example/.tamagui/tamagui.config.json
 
+# Agents & MCPs
+.claude/worktrees
+.serena/
+.token-savior-cache.json
 
-# Private keys must never enter the repo
+
+# MCP server artifacts (never commit)
+.serena/
+.token-savior-cache.json
+
+# Jcode temporary nested worktrees
+.jcode-worktrees/
+
+# Agent tooling (ralphex, haft, MCP config)
+/.ralphex
+/.haft
+.mcp.json
+
+# Private keys must never enter the repo (GitHub App etc.)
 *.pem
 
 # CodeGraph local index — per-machine, not shared
@@ -72,3 +91,15 @@ privpkgs/example/.tamagui/tamagui.config.json
 
 # wrangler dev local state — per-machine, not shared
 .wrangler/
+# E2E harness env — contains the App webhook secret; never commit
+e2e/.env.staging
+e2e/.env.*
+
+# git-crypt symmetric key for e2e/secrets (export via `git-crypt export-key`; never commit)
+e2e-git-crypt.key
+**/e2e-git-crypt.key
+
+# wrangler: local secret values (names live in .dev.vars.example, committed)
+.dev.vars
+!.dev.vars.example
+worker-configuration.d.ts

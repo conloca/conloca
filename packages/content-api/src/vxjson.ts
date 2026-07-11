@@ -1,8 +1,8 @@
 import { createHash } from 'crypto';
-import sortKeys from 'sort-keys';
 import { JsonWhitespaceSkippingView } from './json-whitespace-view';
 import type { ContentData, ContentMeta, VXJSONFile } from './types';
 import { bigintToUrlSafeBase64, toUrlSafeBase64 } from './url-safe-base64';
+import { serializeVxjson } from './vxjson-serialize';
 import { createXxh64 } from './xxhash';
 
 // Reusable TextDecoder instance - safe to reuse as it's stateless
@@ -446,57 +446,11 @@ export class VXJSON {
   }
 
   /**
-   * Serialize a VXJSONFile to VXJSON format string
-   * Ensures content field is last and enforces 4KB constraint efficiently
+   * Serialize a VXJSONFile to VXJSON format string. Delegates to the pure
+   * vxjson-serialize module — kept apart so spec-14 cores can import the
+   * serializer without this module's crypto/WASM ETag imports.
    */
   static serialize(data: VXJSONFile): string {
-    // Extract content to add it last
-    const { content, ...metadataFields } = data;
-
-    // Ensure content field exists (required for VXJSON format)
-    if (content === undefined || content === null) {
-      throw new Error('VXJSON format requires a "content" field');
-    }
-
-    // Sort all metadata fields alphabetically and serialize with tab indentation
-    // Use a replacer function to filter out empty strings
-    const sortedMetadata = sortKeys(metadataFields, { deep: true });
-    const metadataJson = JSON.stringify(
-      sortedMetadata,
-      (_key, value) => {
-        // Filter out empty strings at any level
-        if (value === '') {
-          return undefined;
-        }
-        return value;
-      },
-      '\t',
-    );
-
-    // Serialize content wrapped in an object to get proper indentation
-    const wrappedContent = JSON.stringify({ c: sortKeys(content, { deep: true }) }, null, '\t');
-    // Extract just the content part, removing the wrapper
-    // This transforms: '{\n "c": {\n  "puckData": ...\n }\n}'
-    // Into: '{\n  "puckData": ...\n }'
-    const contentJson = wrappedContent.slice(wrappedContent.indexOf(': ') + 2, -2);
-
-    // Remove the closing } and newline from metadata
-    const metadataWithoutClosing = metadataJson.slice(0, -2); // Remove \n}
-    const contentFieldPrefix = ',\n\t"content": ';
-    const contentKeyPosition = metadataWithoutClosing.length + 1 + '\n\t'.length; // Position of "content":
-
-    // VXJSON constraint: "content": must appear within first 4KB
-    const maxContentKeyPosition = 4096 - '"content":'.length; // 4086
-    if (contentKeyPosition > maxContentKeyPosition) {
-      throw new Error(
-        'VXJSON format violation: metadata too large. ' +
-          `"content" field would start at position ${contentKeyPosition}, ` +
-          `but must start within ${maxContentKeyPosition} bytes. ` +
-          `Reduce metadata size by ${contentKeyPosition - maxContentKeyPosition} bytes.`,
-      );
-    }
-
-    // Build final JSON string efficiently
-    return `${metadataWithoutClosing}${contentFieldPrefix}${contentJson}\n}`;
+    return serializeVxjson(data);
   }
 }

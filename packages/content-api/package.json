@@ -43,6 +43,16 @@
       "import": "./dist/node.mjs",
       "default": "./dist/node.mjs"
     },
+    "./indexing": {
+      "types": "./dist/indexing.d.mts",
+      "import": "./dist/indexing.mjs",
+      "default": "./dist/indexing.mjs"
+    },
+    "./vxjson-serialize": {
+      "types": "./dist/vxjson-serialize.d.mts",
+      "import": "./dist/vxjson-serialize.mjs",
+      "default": "./dist/vxjson-serialize.mjs"
+    },
     "./reader": {
       "types": "./dist/reader.d.mts",
       "import": "./dist/reader.mjs",
@@ -65,6 +75,7 @@
   ],
   "nx": {
     "targets": {
+      "clean": {},
       "lint": {},
       "tsdown-js": {
         "executor": "nx:run-commands",
@@ -80,6 +91,7 @@
         ],
         "outputs": [
           "{projectRoot}/dist/**/*.mjs",
+          "{projectRoot}/dist/**/*.js",
           "{projectRoot}/dist/**/*.d.mts"
         ],
         "options": {
@@ -93,7 +105,7 @@
           "typecheck-tests"
         ],
         "options": {
-          "command": "bun --conditions=production test",
+          "command": "bun test --timeout=30000",
           "cwd": "{projectRoot}",
           "timeoutMs": 120000,
           "killAfterMs": 10000
