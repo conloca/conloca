@@ -233,4 +233,49 @@ describe('VXJSON read-repair functionality', () => {
     const keys = Object.keys(repairedJson);
     expect(keys[keys.length - 1]).toBe('content');
   });
+
+  test('repairs an MDX file whose body collides with an Object.prototype key', async () => {
+    // Regression: matter.stringify(bodyString, data) re-parses the string
+    // through gray-matter's plain-object memo cache, so a body of exactly
+    // 'toString' (or 'valueOf', …) read the prototype function back and
+    // crashed the repair — the file was skipped and never repaired.
+    await mkdir(join(tempDir, 'blocks/general'), { recursive: true });
+    const filePath = join(tempDir, 'blocks/general/proto.en.mdx');
+    await writeFile(filePath, '---\ntitle: Proto\n---\ntoString');
+
+    // Recreate API to trigger indexing and repair (missing id/created/modified)
+    api = await FileSystemContentAPI.create({
+      contentRoot: tempDir,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    const repaired = await readFile(filePath, 'utf-8');
+    expect(repaired).toContain('id:');
+    expect(repaired).toContain('created:');
+    expect(repaired).toContain('modified:');
+    expect(repaired).toContain('toString');
+  });
+
+  test('repair preserves a body that itself starts with a frontmatter block', async () => {
+    // Passing the parsed file object to matter.stringify (instead of the
+    // body string) also stops the repair from RE-PARSING the body: the old
+    // string path hoisted a body-leading '---' block into the file's
+    // frontmatter, silently rewriting the author's document. Pin the
+    // preserved-verbatim behavior.
+    await mkdir(join(tempDir, 'blocks/general'), { recursive: true });
+    const filePath = join(tempDir, 'blocks/general/nested.en.mdx');
+    await writeFile(filePath, '---\ntitle: Outer\n---\n---\ninner: kept\n---\nBody text');
+
+    api = await FileSystemContentAPI.create({
+      contentRoot: tempDir,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    const repaired = await readFile(filePath, 'utf-8');
+    expect(repaired).toContain('id:');
+    // The inner block stays in the BODY: its key must not surface as a
+    // top-level frontmatter field, and the delimiters must survive.
+    expect(repaired).toContain('---\ninner: kept\n---\nBody text');
+    expect(repaired.indexOf('inner: kept')).toBeGreaterThan(repaired.indexOf('modified:'));
+  });
 });

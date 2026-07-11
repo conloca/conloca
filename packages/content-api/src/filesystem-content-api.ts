@@ -865,8 +865,13 @@ export class FileSystemContentAPI implements ContentAPI {
         }
 
         if (needsWrite) {
-          // Write back with updated frontmatter
-          const updatedContent = matter.stringify(parsed.content, parsed.data);
+          // Write back with updated frontmatter. Pass the parsed file
+          // object, not the body string: stringify re-parses string inputs
+          // through gray-matter's memo cache, which is a plain object — a
+          // body equal to an Object.prototype member name ('toString',
+          // 'valueOf', …) reads the prototype function back and crashes.
+          // Same cache-opt-out rule as the matter(..., {}) calls above.
+          const updatedContent = matter.stringify(parsed, parsed.data);
           await writeFile(filePath, updatedContent);
           console.log(`Repaired MDX file: ${filePath} (added missing fields)`);
 
