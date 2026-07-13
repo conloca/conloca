@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractSlugFromPathname, pathnameFromSlug } from '../lib/route-utils.js';
+import { extractSlugFromPathname, pathnameFromSlug } from '../src/lib/route-utils.js';
 
 describe('extractSlugFromPathname', () => {
   it('extracts slug from catch-all pattern', () => {
