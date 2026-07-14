@@ -111,7 +111,7 @@
  * Uses :is() (not :where()) so dark variants beat the conloca.com
  * website Tailwind that gets injected into /__cms — its plain .bg-white
  * etc. has spec (0,1,0) and would override a :where()-wrapped variant. */
-@variant dark 
+@variant dark
 (
 &:is(.dark, .dark *));
 
