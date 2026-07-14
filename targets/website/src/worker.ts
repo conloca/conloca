@@ -175,12 +175,6 @@ const worker = {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
-    // Canonical host: 301 www.<host> -> apex, preserving path + query.
-    if (url.hostname.startsWith('www.')) {
-      url.hostname = url.hostname.slice(4);
-      return Response.redirect(url.toString(), 301);
-    }
-
     if (url.pathname === '/api/subscribe') {
       return handleSubscribe(request, env);
     }

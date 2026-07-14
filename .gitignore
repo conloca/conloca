@@ -45,9 +45,6 @@ Thumbs.db
 # Nx
 .nx/cache
 .nx/workspace-data
-# Transient esbuild bundles for the workerd test harnesses
-.nx/conformance
-.nx/auth-e2e
 .cursor/rules/nx-rules.mdc
 .github/instructions/nx.instructions.md
 .github/instructions/copilot-instructions.md
@@ -61,25 +58,8 @@ vitest.config.*.timestamp*
 privpkgs/example/.tamagui/tamagui.config.cjs
 privpkgs/example/.tamagui/tamagui.config.json
 
-# Agents & MCPs
-.claude/worktrees
-.serena/
-.token-savior-cache.json
 
-
-# MCP server artifacts (never commit)
-.serena/
-.token-savior-cache.json
-
-# Jcode temporary nested worktrees
-.jcode-worktrees/
-
-# Agent tooling (ralphex, haft, MCP config)
-/.ralphex
-/.haft
-.mcp.json
-
-# Private keys must never enter the repo (GitHub App etc.)
+# Private keys must never enter the repo
 *.pem
 
 # CodeGraph local index — per-machine, not shared

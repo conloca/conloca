@@ -157,15 +157,15 @@
       "version": "0.1.15",
       "dependencies": {
         "@hono/node-server": "^1.19.14",
-        "@node-rs/xxhash": "^1.7.6",
         "fast-glob": "^3.3.2",
         "gray-matter": "^4.0.3",
-        "hono": "^4.12.16",
+        "hono": "^4.12.23",
         "image-size": "^2.0.2",
         "jose": "^6.2.3",
         "nanoid": "^5.1.10",
         "sort-keys": "^6.0.0",
         "tslib": "^2.8.1",
+        "xxhash-wasm": "^1.1.0",
         "yaml": "^2.8.3",
         "zod": "^4.4.1",
       },
@@ -2463,7 +2463,7 @@
 
     "homedir-polyfill": ["homedir-polyfill@1.0.3", "", { "dependencies": { "parse-passwd": "^1.0.0" } }, "sha512-eSmmWE5bZTK2Nou4g0AI3zZ9rswp7GRKoKXS1BLUkvPviOqs4YTN1djQIqrXy9k5gEtdLPy86JjRwsNM9tnDcA=="],
 
-    "hono": ["hono@4.12.16", "", {}, "sha512-jN0ZewiNAWSe5khM3EyCmBb250+b40wWbwNILNfEvq84VREWwOIkuUsFONk/3i3nqkz7Oe1PcpM2mwQEK2L9Kg=="],
+    "hono": ["hono@4.12.30", "", {}, "sha512-emn+JoJjrN9YTpRDS5it/UI2SO9BAE37T6I3d963RxcZ81G9A4pr2SZTEiiaiKbzx+NKRg5BZ89fCL7gCJCUog=="],
 
     "hookable": ["hookable@6.1.1", "", {}, "sha512-U9LYDy1CwhMCnprUfeAZWZGByVbhd54hwepegYTK7Pi5NvqEj63ifz5z+xukznehT7i6NIZRu89Ay1AZmRsLEQ=="],
 
