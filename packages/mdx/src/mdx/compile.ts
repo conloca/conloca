@@ -7,7 +7,7 @@ import type { MDXCompileResult } from '../types.js';
 
 export async function compileMDX(content: string): Promise<MDXCompileResult> {
   try {
-    const { data: metadata } = matter(content);
+    const { data: metadata } = matter(content, {});
 
     const compiled = await mdxCompile(content, {
       outputFormat: 'function-body',

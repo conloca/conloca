@@ -89,7 +89,7 @@ function parse4KBMDX(
 } {
   // Only convert to string what we need
   const partialContent = textDecoder.decode(buffer.subarray(0, bytesRead));
-  const { data: frontmatter } = matter(partialContent);
+  const { data: frontmatter } = matter(partialContent, {});
 
   // Find where content starts (after second ---)
   const delimiter = new TextEncoder().encode('---');
@@ -773,7 +773,7 @@ export class FileSystemContentAPI implements ContentAPI {
         // We have the full content
         if (filePath.endsWith('.mdx')) {
           const fullContent = textDecoder.decode(buffer.subarray(0, bytesRead));
-          const { content: mdx } = matter(fullContent);
+          const { content: mdx } = matter(fullContent, {});
           content = { mdx };
         } else if (filePath.endsWith('.json')) {
           // Data collection JSON file
@@ -848,7 +848,7 @@ export class FileSystemContentAPI implements ContentAPI {
       if (manifest.type === 'mdx') {
         // Read the full MDX file
         const content = await readFile(filePath, 'utf-8');
-        const parsed = matter(content);
+        const parsed = matter(content, {});
 
         // Check for missing fields
         if (!parsed.data.id) {
@@ -1250,7 +1250,7 @@ export class FileSystemContentAPI implements ContentAPI {
       const content = textDecoder.decode(buffer);
 
       if (filePath.endsWith('.mdx')) {
-        const { data: frontmatter, content: rawBody } = matter(content);
+        const { data: frontmatter, content: rawBody } = matter(content, {});
         // gray-matter leaves the blank line after the closing `---` on
         // the body. Strip leading newlines so the round-trip matches the
         // body the author wrote.
@@ -1788,7 +1788,7 @@ export class FileSystemContentAPI implements ContentAPI {
         let mdxContentPart = newContent.mdx || '';
         if (mdxContentPart.startsWith('---')) {
           // Remove frontmatter if it exists
-          const { content: contentOnly } = matter(mdxContentPart);
+          const { content: contentOnly } = matter(mdxContentPart, {});
           mdxContentPart = contentOnly;
         }
 
