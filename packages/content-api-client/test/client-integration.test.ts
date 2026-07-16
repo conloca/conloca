@@ -1,5 +1,5 @@
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { createContentAPIRouter, InMemoryContentAPI } from '@conloca/content-api/node';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ContentAPIClient, StaleWriteError } from '../src/client';
 
 describe('ContentAPIClient Integration Tests with InMemoryContentAPI', () => {

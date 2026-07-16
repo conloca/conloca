@@ -44,11 +44,10 @@
     "react-dom": "^19.2.5"
   },
   "devDependencies": {
+    "@happy-dom/global-registrator": "20.6.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
-    "@types/react": "19.2.14",
-    "vitest": "^4.1.5",
-    "happy-dom": "^18.0.0"
+    "@types/react": "19.2.14"
   },
   "nx": {
     "targets": {
@@ -83,7 +82,7 @@
           "^build"
         ],
         "options": {
-          "command": "bun x vitest run --config vitest.config.ts",
+          "command": "bun test --timeout=30000",
           "cwd": "{projectRoot}",
           "timeoutMs": 120000,
           "killAfterMs": 10000

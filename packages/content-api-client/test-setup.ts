@@ -1,3 +1,13 @@
-// jest-dom matchers for Vitest. The DOM is provided by vitest.config.ts
-// (`environment: 'happy-dom'`), so no GlobalRegistrator preload.
-import '@testing-library/jest-dom/vitest';
+// Register Happy-DOM globals
+import { GlobalRegistrator } from '@happy-dom/global-registrator';
+
+GlobalRegistrator.register();
+
+// Add jest-dom matchers
+import { expect } from 'bun:test';
+import * as matchers from '@testing-library/jest-dom/matchers';
+
+expect.extend(matchers);
+
+// NOTE: Don't add afterEach(cleanup) here due to Bun issue with screen export
+// See: https://github.com/testing-library/react-testing-library/issues/1348
