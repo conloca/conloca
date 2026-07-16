@@ -1,6 +1,5 @@
 #!/usr/bin/env bun
 import { existsSync } from 'node:fs';
-import { mkdir, rmdir } from 'node:fs/promises';
 import { mkdir, rmdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { $ } from 'bun';
