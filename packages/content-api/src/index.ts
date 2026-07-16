@@ -18,6 +18,7 @@ export type {
 export { Blocks } from './blocks';
 export * from './component-registry.types';
 export type { ContentAPI } from './content-api.interface';
+export { ContentIndex } from './content-index';
 export * from './content-operations';
 export * from './content-utils';
 // Git types (browser-safe, pure interfaces - no Node.js dependencies)
