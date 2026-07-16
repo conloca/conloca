@@ -50,7 +50,9 @@ in {
   enterShell = ''
     cd "$DEVENV_ROOT/../.."
     export PATH="$PWD/tooling:$PWD/node_modules/.bin:$PATH"
-    bun ${./setup-environment.ts}
+    # Keep the entrypoint in the worktree so Bun resolves tooling/node_modules.
+    # Nix path interpolation copies it to /nix/store, outside the workspace.
+    bun "$DEVENV_ROOT/setup-environment.ts"
 
     if [ -n "$DEVENV_SHELL_PWD" ]; then
       cd "$DEVENV_SHELL_PWD"
