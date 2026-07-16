@@ -2,7 +2,6 @@ import type { JsxComponentDescriptor, JsxEditorProps } from '@mdxeditor/editor';
 import type { MdxJsxAttribute, MdxJsxFlowElement, MdxJsxTextElement } from 'mdast-util-mdx-jsx';
 import type { ComponentType } from 'react';
 import { useEffect, useState } from 'react';
-import { GenericBlock } from './components/editor/GenericBlock';
 
 /**
  * Plugin API for registering insertable content for the CMS editor.
@@ -295,10 +294,17 @@ export function writeAttribute<T extends MdxJsxFlowElement | MdxJsxTextElement>(
  * Booleans surface as expressions (`{true}`) because the upstream
  * `JsxPropertyDescriptor.type` is `'string' | 'number' | 'expression'`.
  *
+ * The fallback editor is injected by the CMS editor entrypoint. Keeping that
+ * dependency one-way prevents the registry module from importing GenericBlock,
+ * which itself consumes this registry.
+ *
  * Snippet descriptors are not JSX — call sites filter them out before
  * dispatching here. Passing one throws to surface the misuse loudly.
  */
-export function toJsxComponentDescriptor(d: MdxComponentDescriptor): JsxComponentDescriptor {
+export function toJsxComponentDescriptor(
+  d: MdxComponentDescriptor,
+  fallbackEditor: ComponentType<JsxEditorProps>,
+): JsxComponentDescriptor {
   if (!isJsxDescriptor(d)) {
     throw new Error(`toJsxComponentDescriptor: '${d.name}' is a snippet, not a JSX component.`);
   }
@@ -311,7 +317,7 @@ export function toJsxComponentDescriptor(d: MdxComponentDescriptor): JsxComponen
       required: p.required,
     })),
     hasChildren: d.hasChildren,
-    Editor: d.Editor ?? GenericBlock,
+    Editor: d.Editor ?? fallbackEditor,
     ...(d.import ? { source: d.import.from, defaultExport: d.import.default ?? false } : {}),
   };
 }

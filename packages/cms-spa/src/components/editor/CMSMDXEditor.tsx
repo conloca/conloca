@@ -13,6 +13,7 @@ import {
   useFetchedSiteStyles,
   useInjectHostStyles,
 } from '../../site-styles';
+import { GenericBlock } from './GenericBlock';
 import { hostWrapperPlugin } from './host-wrapper-plugin';
 import { ImagePickerDialog } from './ImagePickerDialog';
 import { InsertMdxComponentButton } from './insert-menu/InsertMdxComponentButton';
@@ -131,7 +132,10 @@ export const CMSMDXEditor = forwardRef<MDXEditorMethods, CMSMDXEditorProps>(({ p
     // Filter to JSX flavors before translating — snippets live in the same
     // registry but aren't valid input for @mdxeditor/editor's jsxPlugin, and
     // toJsxComponentDescriptor throws if handed one to surface the misuse.
-    () => registeredMdxComponents.filter(isJsxDescriptor).map(toJsxComponentDescriptor),
+    () =>
+      registeredMdxComponents
+        .filter(isJsxDescriptor)
+        .map((descriptor) => toJsxComponentDescriptor(descriptor, GenericBlock)),
     [registeredMdxComponents],
   );
 
