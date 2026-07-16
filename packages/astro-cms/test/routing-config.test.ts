@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 import { normalizeRoutingConfig, resolveRouteConfig, validateRoutePattern } from '../src/lib/routing-config.js';
 
 describe('normalizeRoutingConfig', () => {

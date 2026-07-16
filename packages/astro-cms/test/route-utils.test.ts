@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 import { extractSlugFromPathname, pathnameFromSlug } from '../src/lib/route-utils.js';
 
 describe('extractSlugFromPathname', () => {

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 import packageJson from '../package.json';
 
 describe('@conloca/astro-cms', () => {

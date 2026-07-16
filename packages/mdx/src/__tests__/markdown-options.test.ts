@@ -1,8 +1,8 @@
+import { describe, expect, test } from 'bun:test';
 import { fromMarkdown } from 'mdast-util-from-markdown';
 import { gfmFromMarkdown, gfmToMarkdown } from 'mdast-util-gfm';
 import { toMarkdown } from 'mdast-util-to-markdown';
 import { gfm } from 'micromark-extension-gfm';
-import { describe, expect, test } from 'vitest';
 import { TO_MARKDOWN_OPTIONS } from '../markdown-options';
 
 // Exercise the same library that runs inside MDXEditor on every save. If a
