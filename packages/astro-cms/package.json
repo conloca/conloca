@@ -142,10 +142,10 @@
           "^build"
         ],
         "options": {
-          "command": "bun test",
+          "command": "bun --conditions=production test",
           "cwd": "{projectRoot}",
           "timeoutMs": 120000,
-          "killAfterMs": 1e4
+          "killAfterMs": 10000
         }
       }
     },

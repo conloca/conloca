@@ -8,8 +8,9 @@
   },
   "scripts": {
     "build:all": "nx run-many -t build",
+    "clean": "nx run-many -t clean; nx reset",
     "clean:ignored": "git clean -dfX -- packages/* targets/* && find packages targets -depth -mindepth 1 -type d -empty -delete",
-    "clean:node_modules": "find e* t* p* -type d -name node_modules -print0 |xargs -0 rm -rvf",
+    "clean:node_modules": "rm -rf node_modules && find e* t* p* -type d -name node_modules -print0 | xargs -0 rm -rvf",
     "dev:conloca": "nx run website-with-cms:dev",
     "dev:website": "nx run conloca-website:dev",
     "format:changed": "git-format-staged --config tooling/git-hooks/git-format-staged.yml --also-unstaged",
@@ -49,7 +50,7 @@
     "@nx/react": "22.7.1",
     "@nx/web": "22.7.1",
     "@nx/workspace": "22.7.1",
-    "@smoothbricks/nx-plugin": "^0.2.5",
+    "@smoothbricks/nx-plugin": "^0.3.0",
     "@swc-node/register": "~1.11.1",
     "@swc/core": "~1.15.32",
     "@swc/helpers": "~0.5.21",
@@ -81,7 +82,6 @@
   },
   "workspaces": [
     "packages/*",
-    "privpkgs/*",
     "example/*",
     "targets/*",
     "tooling"

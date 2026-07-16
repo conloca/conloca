@@ -66,7 +66,7 @@
         ],
         "executor": "@smoothbricks/nx-plugin:bounded-exec",
         "options": {
-          "command": "bun test --conditions=development",
+          "command": "bun --conditions=production test",
           "cwd": "{projectRoot}",
           "timeoutMs": 120000,
           "killAfterMs": 10000

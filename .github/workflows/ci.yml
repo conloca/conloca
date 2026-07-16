@@ -3,7 +3,7 @@ name: CI
 on:
   push:
     branches:
-      - '**'
+      - main
   pull_request:
 
 permissions:
@@ -67,7 +67,7 @@ jobs:
       # Step 9
       # Nx's database cache needs artifact files and .nx/workspace-data DB
       # metadata restored together; GitHub Actions cache is only the archive
-      # transport. Save runs only after build/lint/test succeed on the default
+      # transport. Save runs only after prior required steps succeed on the default
       # branch, so PRs may restore shared cache but cannot publish it.
       - name: 💾 Save Nx cache
         if:

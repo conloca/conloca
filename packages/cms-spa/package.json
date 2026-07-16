@@ -51,12 +51,12 @@
       "default": "./dist/mock-puck-config.mjs"
     },
     "./ui": {
-      "types": "./dist/ui.d.ts",
+      "types": "./dist/ui.d.mts",
       "import": "./dist/ui.mjs",
       "default": "./dist/ui.mjs"
     },
     "./dialog": {
-      "types": "./dist/dialog.d.ts",
+      "types": "./dist/dialog.d.mts",
       "import": "./dist/dialog.mjs",
       "default": "./dist/dialog.mjs"
     },
@@ -69,8 +69,14 @@
       "import": "./dist/main.mjs",
       "default": "./dist/main.mjs"
     },
-    "./tailwind-theme.css": "./styles/tailwind-theme.css",
-    "./styles.css": "./dist/spa/main.css",
+    "./tailwind-theme.css": {
+      "types": "./styles/tailwind-theme.css.d.ts",
+      "default": "./styles/tailwind-theme.css"
+    },
+    "./styles.css": {
+      "types": "./styles/styles.css.d.ts",
+      "default": "./dist/spa/main.css"
+    },
     "./dist/spa/*": "./dist/spa/*"
   },
   "files": [
@@ -117,7 +123,7 @@
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "bun-tailwindcss": "^0.0.9",
-    "hono": "^4.12.16",
+    "hono": "^4.12.23",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-refresh-typescript": "^2.0.12",

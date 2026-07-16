@@ -8,8 +8,6 @@
     "build": "nx run conloca-website:build",
     "preview": "nx run conloca-website:preview --outputStyle=stream",
     "astro": "astro",
-    "deploy": "nx run conloca-website:deploy:production --outputStyle=stream",
-    "deploy:dry": "wrangler deploy --env production --dry-run",
     "db:migrate:local": "wrangler d1 migrations apply DB --local"
   },
   "dependencies": {
@@ -46,44 +44,6 @@
         "options": {
           "command": "astro build",
           "cwd": "{projectRoot}"
-        }
-      },
-      "migrate": {
-        "executor": "nx:run-commands",
-        "options": {
-          "command": "wrangler d1 migrations apply DB --remote --env production",
-          "cwd": "{projectRoot}"
-        },
-        "configurations": {
-          "staging": {
-            "command": "wrangler d1 migrations apply DB --remote --env staging"
-          },
-          "production": {
-            "command": "wrangler d1 migrations apply DB --remote --env production"
-          }
-        }
-      },
-      "deploy": {
-        "dependsOn": [
-          "build",
-          {
-            "target": "migrate",
-            "projects": "self",
-            "params": "forward"
-          }
-        ],
-        "executor": "nx:run-commands",
-        "options": {
-          "command": "wrangler deploy --env production",
-          "cwd": "{projectRoot}"
-        },
-        "configurations": {
-          "staging": {
-            "command": "wrangler deploy --env staging"
-          },
-          "production": {
-            "command": "wrangler deploy --env production"
-          }
         }
       },
       "dev": {
