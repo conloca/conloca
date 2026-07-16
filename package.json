@@ -8,6 +8,7 @@
   },
   "scripts": {
     "build:all": "nx run-many -t build",
+    "clean:ignored": "git clean -dfX -- packages/* targets/* && find packages targets -depth -mindepth 1 -type d -empty -delete",
     "clean:node_modules": "find e* t* p* -type d -name node_modules -print0 |xargs -0 rm -rvf",
     "dev:conloca": "nx run website-with-cms:dev",
     "dev:website": "nx run conloca-website:dev",
