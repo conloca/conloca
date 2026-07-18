@@ -18,6 +18,7 @@
     "@mdxeditor/editor": "^3.55.0",
     "gray-matter": "^4.0.3",
     "lucide-react": "^0.564.0",
+    "mdast-util-to-markdown": "^2.1.2",
     "remark-frontmatter": "^5.0.0",
     "remark-gfm": "^4.0.0",
     "remark-mdx-frontmatter": "^5.2.0",
