@@ -1,4 +1,3 @@
-import { $ } from 'bun';
 import index from './src/dev.html';
 import { processTailwindCSS, TAILWIND_CONFIG } from './tailwind-config';
 
@@ -43,7 +42,9 @@ if (!globalThis.__watchersStarted) {
         const color = hasError ? colors.red : colors.green;
         const lines = trimmed.split('\n');
         console.log(`${color}[${processName}]${colors.reset} ${lines[0]}`);
-        lines.slice(1).forEach((line) => console.log(line));
+        for (const line of lines.slice(1)) {
+          console.log(line);
+        }
         console.log(`${colors.dim}${'─'.repeat(80)}${colors.reset}`);
       }
     });

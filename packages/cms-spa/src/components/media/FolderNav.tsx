@@ -11,7 +11,7 @@ export function FolderNav({ currentFolder, onNavigate }: FolderNavProps) {
 
   // Build clickable breadcrumb items
   const breadcrumbs = segments.map((segment, index) => {
-    const path = '/' + segments.slice(0, index + 1).join('/');
+    const path = `/${segments.slice(0, index + 1).join('/')}`;
     return { name: segment, path };
   });
 

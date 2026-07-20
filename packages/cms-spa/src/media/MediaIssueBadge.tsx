@@ -22,8 +22,8 @@ interface MediaIssueBadgeProps {
  * vocabulary (`formatFileSize`).
  */
 function formatOversizedDetail(sizeBytes: number, limitBytes: number): string {
-  const mb = (bytes: number) => (bytes / 1_000_000).toFixed(1).replace(/\.0$/, '') + ' MB';
-  return mb(sizeBytes) + ' exceeds the ' + mb(limitBytes) + ' inline limit. Move to media storage.';
+  const mb = (bytes: number) => `${(bytes / 1_000_000).toFixed(1).replace(/\.0$/, '')} MB`;
+  return `${mb(sizeBytes)} exceeds the ${mb(limitBytes)} inline limit. Move to media storage.`;
 }
 
 /**
@@ -70,7 +70,7 @@ export function MediaIssueBadge({ issue, size = 'sm', className }: MediaIssueBad
   return (
     <span
       role="status"
-      aria-label={'Media issue: ' + shortLabel + (detail ? ' — ' + detail : '')}
+      aria-label={`Media issue: ${shortLabel}${detail ? ` — ${detail}` : ''}`}
       className={cn(
         'inline-flex items-center font-medium rounded border',
         size === 'sm' ? 'uppercase tracking-wide' : 'gap-2',

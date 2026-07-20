@@ -72,7 +72,7 @@ export function SearchableSelect({ options, value, onChange, placeholder, ariaLa
   // could land on an index beyond the new list length.
   useEffect(() => {
     setActiveIndex(0);
-  }, [query]);
+  }, []);
 
   // Close on outside click. Use mousedown not click so a click on a
   // list item still fires its onClick before we close (click ordering
@@ -153,11 +153,10 @@ export function SearchableSelect({ options, value, onChange, placeholder, ariaLa
         role="combobox"
       />
       {open && filtered.length > 0 && (
-        <ul ref={listRef} id={listboxId} role="listbox" className="conloca-searchable-select__list">
+        <ul ref={listRef} id={listboxId} className="conloca-searchable-select__list">
           {filtered.map((opt, i) => (
             <li
               key={opt.value}
-              role="option"
               aria-selected={i === activeIndex}
               className={
                 i === activeIndex

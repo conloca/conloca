@@ -7,6 +7,8 @@ export function CMSLayout() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const location = useLocation();
 
+  // Close the mobile drawer on route changes.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: pathname is the navigation signal
   useEffect(() => {
     setDrawerOpen(false);
   }, [location.pathname]);

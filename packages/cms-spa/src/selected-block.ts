@@ -91,7 +91,9 @@ function getState(): SharedState {
 export function setSelectedBlock(next: SelectedBlock | null): void {
   const state = getState();
   state.selected = next;
-  state.subscribers.forEach((fn) => fn(next));
+  for (const fn of state.subscribers) {
+    fn(next);
+  }
 }
 
 /** Read synchronously. */
@@ -113,7 +115,7 @@ export function useSelectedBlock(): SelectedBlock | null {
     return () => {
       state.subscribers.delete(setSelected);
     };
-  }, []);
+  }, [selected]);
 
   return selected;
 }

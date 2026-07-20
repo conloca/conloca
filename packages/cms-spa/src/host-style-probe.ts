@@ -143,7 +143,7 @@ function findWrapperByClass(doc: Document, className: string | null): HTMLElemen
   // Match an element carrying ALL the classes in the discovered name
   // (preserves Astro scoped-hash matching: `astro-xxxx` must be on the
   // same element). `.foo.bar` requires all listed classes.
-  const selector = '.' + className.split(/\s+/).filter(Boolean).join('.');
+  const selector = `.${className.split(/\s+/).filter(Boolean).join('.')}`;
   const found = doc.querySelector(selector);
   return (found as HTMLElement) ?? (doc.querySelector('main') as HTMLElement) ?? null;
 }

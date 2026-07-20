@@ -126,7 +126,7 @@ export function CreatePageDialog({ open, onOpenChange, onCreatePage, site = 'def
       return;
     }
 
-    const templateConfig = (getUIConfig().templates ?? {})[template];
+    const templateConfig = getUIConfig().templates?.[template];
     if (templateConfig?.pathPrefix) {
       const prefix = templateConfig.pathPrefix.endsWith('/')
         ? templateConfig.pathPrefix

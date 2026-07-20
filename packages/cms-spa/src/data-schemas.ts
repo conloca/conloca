@@ -39,7 +39,9 @@ const getSharedState = (): SharedDataState => {
 export function setDataSchemas(schemas: DataSchemas): void {
   const state = getSharedState();
   state.schemas = schemas;
-  state.subscribers.forEach((fn) => fn(schemas));
+  for (const fn of state.subscribers) {
+    fn(schemas);
+  }
 }
 
 /**
@@ -68,7 +70,7 @@ export function useDataSchemas(): DataSchemas {
     return () => {
       state.subscribers.delete(setSchemas);
     };
-  }, []);
+  }, [schemas]);
 
   return schemas;
 }

@@ -83,10 +83,10 @@ describe('CreateBlockDialog', () => {
     // listAllContent yields manifests (no content payload); fetch the full
     // localized entry to assert the new block's MDX scaffold contains the
     // title in its `# <title>` heading.
-    const fullEntry = await testApi.getLocalized(created!.id, 'en');
+    const fullEntry = await testApi.getLocalized(created?.id, 'en');
     expect(fullEntry).not.toBeNull();
-    expect(fullEntry!.localized.meta?.title).toBe('Hero Banner');
-    const mdx = (fullEntry!.localized.content as { mdx?: string } | undefined)?.mdx ?? '';
+    expect(fullEntry?.localized.meta?.title).toBe('Hero Banner');
+    const mdx = (fullEntry?.localized.content as { mdx?: string } | undefined)?.mdx ?? '';
     expect(mdx).toContain('Hero Banner');
   });
 

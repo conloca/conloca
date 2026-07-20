@@ -186,8 +186,6 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
           {description && <p className="mt-1 text-sm text-grey-04 dark:text-grey-07">{description}</p>}
         </div>
       );
-
-    case 'string':
     default: {
       // Use ImageFieldRender for image URL fields (but not imageDescription, etc.)
       const isImageField = name.toLowerCase().includes('image') && !name.toLowerCase().includes('description');

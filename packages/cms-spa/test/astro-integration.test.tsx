@@ -1,6 +1,5 @@
 /// <reference lib="dom" />
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
-import { ContentAPIClient, setContentAPIClient } from '@conloca/content-api-client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { createMemoryRouter, createRoutesFromElements, MemoryRouter, RouterProvider } from 'react-router-dom';

@@ -62,7 +62,9 @@ const getSharedState = (): SharedSiteStylesState => {
 export function setSiteStyles(styles: SiteStyles): void {
   const state = getSharedState();
   state.styles = styles;
-  state.subscribers.forEach((fn) => fn(styles));
+  for (const fn of state.subscribers) {
+    fn(styles);
+  }
 }
 
 /**
@@ -91,7 +93,7 @@ export function useSiteStyles(): SiteStyles {
     return () => {
       state.subscribers.delete(setStyles);
     };
-  }, []);
+  }, [styles]);
 
   return styles;
 }
@@ -115,7 +117,9 @@ const getEditorStylesState = (): SharedSiteStylesState => {
 export function setEditorStyles(styles: SiteStyles): void {
   const state = getEditorStylesState();
   state.styles = styles;
-  state.subscribers.forEach((fn) => fn(styles));
+  for (const fn of state.subscribers) {
+    fn(styles);
+  }
 }
 
 export function getEditorStyles(): SiteStyles {
@@ -132,7 +136,7 @@ export function useEditorStyles(): SiteStyles {
     return () => {
       state.subscribers.delete(setStyles);
     };
-  }, []);
+  }, [styles]);
 
   return styles;
 }

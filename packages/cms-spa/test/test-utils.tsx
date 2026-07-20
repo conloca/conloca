@@ -151,7 +151,7 @@ export function setupTestAPI(baseUrl = '/__cms/api', sitesConfig?: SitesConfig) 
 
       // console.log(`[MockFetch #${requestId}] app.request returned at ${afterRequest.toFixed(2)}ms`);
 
-      const fetchEnd = performance.now();
+      const _fetchEnd = performance.now();
       // console.log(
       //   `[MockFetch #${requestId}] Completed fetch at ${fetchEnd.toFixed(2)}ms (took ${(fetchEnd - fetchStart).toFixed(2)}ms): ${url}`,
       // );

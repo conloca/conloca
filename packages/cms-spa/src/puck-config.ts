@@ -40,7 +40,9 @@ const getSharedState = (): SharedPuckState => {
 export function setPuckConfig(config: PuckConfig): void {
   const state = getSharedState();
   state.config = config;
-  state.subscribers.forEach((fn) => fn(config));
+  for (const fn of state.subscribers) {
+    fn(config);
+  }
 }
 
 /**
@@ -69,7 +71,7 @@ export function usePuckConfig(): PuckConfig {
     return () => {
       state.subscribers.delete(setConfig);
     };
-  }, []);
+  }, [config]);
 
   return config;
 }

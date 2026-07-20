@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import {
   ContentAPIClient,
-  type ContentData,
   type LocalizedEntry,
   setContentAPIClient,
   type UpdateResult,
@@ -12,7 +11,7 @@ import type { ReactNode } from 'react';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { ConflictDialog } from '../src/components/dialogs/ConflictDialog';
 import { PageEditor } from '../src/components/editor/PageEditor';
-import { renderWithProviders, setupTestAPI, testApi } from './test-utils';
+import { setupTestAPI, testApi } from './test-utils';
 
 /**
  * PageEditor now uses `useUnsavedChangesGuard` which depends on react-router-dom's
@@ -84,7 +83,7 @@ describe('Conflict Resolution', () => {
 
       // Get the initial content to capture the current ETag
       const initialContent = await testApi.getLocalized(pageId, 'en');
-      const originalEtag = initialContent!.localized.etag;
+      const originalEtag = initialContent?.localized.etag;
 
       // Simulate another user updating the content (this will change the ETag)
       await testApi.updateLocalized({
@@ -97,7 +96,7 @@ describe('Conflict Resolution', () => {
       });
 
       // Now the PageEditor will try to save with the old ETag and should get a conflict
-      const onSave = mock(async (data: any, forceEtag?: string) => {
+      const onSave = mock(async (data: any, _forceEtag?: string) => {
         // When PageEditor tries to save, it will use the old ETag
         const result = await apiClient.updateLocalized({
           id: pageId,
@@ -487,7 +486,7 @@ describe('Conflict Resolution', () => {
               return {
                 success: false,
                 reason: 'stale_write',
-                currentEtag: serverContent!.localized.etag, // Fresh ETag from refetch
+                currentEtag: serverContent?.localized.etag, // Fresh ETag from refetch
                 conflictDetails: {
                   metaChanged: true,
                   contentChanged: true,

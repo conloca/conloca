@@ -1,4 +1,11 @@
-import { localesOf, useCreateContent, useDeleteContent, useSitePages } from '@conloca/content-api-client';
+import {
+  type CreateResult,
+  type DeleteResult,
+  localesOf,
+  useCreateContent,
+  useDeleteContent,
+  useSitePages,
+} from '@conloca/content-api-client';
 import { AlertCircle, Clock, Edit, FileCode, FileText, Loader2, Plus, Search, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -125,7 +132,11 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
   // Get all unique locales
   const availableLocales = useMemo(() => {
     const locales = new Set<string>();
-    pages.forEach((page) => page.locales.forEach((locale) => locales.add(locale)));
+    for (const page of pages) {
+      for (const locale of page.locales) {
+        locales.add(locale);
+      }
+    }
     return ['all', ...Array.from(locales).sort()];
   }, [pages]);
 
@@ -181,6 +192,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
           <h2 className="text-xl font-semibold text-grey-01 dark:text-grey-12 mb-2">Failed to load pages</h2>
           <p className="text-grey-04 dark:text-grey-07 mb-4">{error.message}</p>
           <button
+            type="button"
             onClick={() => window.location.reload()}
             className="px-4 py-2 bg-azure-04 text-white rounded-md hover:bg-azure-03 transition-colors"
           >
@@ -223,7 +235,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
         const prefix = templateConfig.pathPrefix.endsWith('/')
           ? templateConfig.pathPrefix.slice(0, -1)
           : templateConfig.pathPrefix;
-        finalPath = `${prefix}${data.path.startsWith('/') ? data.path : '/' + data.path}`;
+        finalPath = `${prefix}${data.path.startsWith('/') ? data.path : `/${data.path}`}`;
       }
 
       // Shared metadata. Description is only added when MDX picked it
@@ -237,7 +249,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
       // Build a type-specific content payload. MDX pages send an empty
       // body — the editor opens to a blank canvas. Puck pages keep the
       // existing template-driven payload.
-      let result;
+      let result: CreateResult;
       if (data.format === 'mdx') {
         result = await createContent.mutateAsync({
           kind: 'page',
@@ -297,7 +309,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
     }
   };
 
-  const handleEditPage = (pageId: string, locale: string) => {
+  const handleEditPage = (pageId: string, _locale: string) => {
     // Navigate with the actual content ID
     navigate(`/pages/${pageId}`);
   };
@@ -323,7 +335,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
     if (!deleteDialog.pageId) return;
 
     try {
-      let result;
+      let result: DeleteResult;
 
       if (deleteDialog.hasMultipleLocales) {
         // Delete only the specific locale
@@ -362,6 +374,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
       <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
         <h1 className="text-2xl font-semibold text-grey-01 dark:text-grey-12">Pages</h1>
         <button
+          type="button"
           onClick={handleNewPage}
           className="px-4 py-2 rounded-md bg-grey-01 text-grey-12 hover:bg-azure-04 hover:text-white dark:bg-grey-12 dark:text-grey-01 dark:hover:bg-azure-06 dark:hover:text-white transition-colors flex items-center gap-2 whitespace-nowrap"
           data-testid="new-page-button"
@@ -421,7 +434,6 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
             value={selectedLocale}
             onChange={(e) => setSelectedLocale(e.target.value)}
             className="px-3 py-2 border border-line rounded-md bg-panel dark:text-grey-12 text-sm hover:bg-hover transition-colors"
-            role="combobox"
             data-testid="locale-selector"
           >
             {availableLocales.map((locale) => (
@@ -442,6 +454,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
           </h2>
           <p className="text-grey-04 dark:text-grey-07 mb-4">Create your first page to get started</p>
           <button
+            type="button"
             onClick={handleNewPage}
             className="px-4 py-2 rounded-md bg-grey-01 text-grey-12 hover:bg-azure-04 hover:text-white dark:bg-grey-12 dark:text-grey-01 dark:hover:bg-azure-06 dark:hover:text-white transition-colors"
           >
@@ -571,6 +584,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
                       {page.locales.map((locale) =>
                         selectedLocale === 'all' || selectedLocale === locale ? (
                           <button
+                            type="button"
                             key={locale}
                             onClick={() => handleEditPage(page.id, locale)}
                             className="p-1 hover:bg-hover rounded-md transition-colors"
@@ -585,6 +599,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
                         page.locales.length === 1 ? (
                           <Tooltip content="This will delete the entire page">
                             <button
+                              type="button"
                               onClick={() => handleDeletePage(page.id, selectedLocale)}
                               className="p-1 hover:bg-hover rounded-md transition-colors"
                               title="Delete entire page"
@@ -596,6 +611,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
                           </Tooltip>
                         ) : (
                           <button
+                            type="button"
                             onClick={() => handleDeletePage(page.id, selectedLocale)}
                             className="p-1 hover:bg-hover rounded-md transition-colors"
                             title="Delete page"
@@ -611,6 +627,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
                           page.locales.length === 1 ? (
                             <Tooltip key={`delete-${locale}`} content="This will delete the entire page">
                               <button
+                                type="button"
                                 onClick={() => handleDeletePage(page.id, locale)}
                                 className="p-1 hover:bg-hover rounded-md transition-colors"
                                 title="Delete entire page"
@@ -623,6 +640,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
                           ) : (
                             <Tooltip key={`delete-${locale}`} content={`Delete only the ${locale} version`}>
                               <button
+                                type="button"
                                 onClick={() => handleDeletePage(page.id, locale)}
                                 className="p-1 hover:bg-hover rounded-md transition-colors"
                                 title={`Delete ${locale} version`}

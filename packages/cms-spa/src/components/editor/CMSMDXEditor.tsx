@@ -75,7 +75,7 @@ export const CMSMDXEditor = forwardRef<MDXEditorMethods, CMSMDXEditorProps>(({ p
   const editorCSS: string = import.meta.env.CONLOCA_EDITOR_CSS || '';
   const styleStack = useMemo<SiteStyles>(
     () => (editorCSS ? [...activeStyles, editorCSS] : activeStyles),
-    [activeStyles, editorCSS],
+    [activeStyles],
   );
   useInjectHostStyles('conloca-host-preview', styleStack);
   // Probe the host's computed styles for each prose tag from the

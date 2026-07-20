@@ -82,7 +82,7 @@ export function attrsToHtml(attrs: unknown): string {
       }
     }
   }
-  return parts.length ? ' ' + parts.join(' ') : '';
+  return parts.length ? ` ${parts.join(' ')}` : '';
 }
 
 export function mdastToHtml(node: unknown): string {

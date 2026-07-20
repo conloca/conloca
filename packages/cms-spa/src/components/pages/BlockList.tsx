@@ -110,7 +110,9 @@ export function BlockList() {
   // Get unique categories
   const categories = useMemo(() => {
     const cats = new Set<string>();
-    blocks.forEach((block) => cats.add(block.category));
+    for (const block of blocks) {
+      cats.add(block.category);
+    }
     return ['all', ...Array.from(cats).sort()];
   }, [blocks]);
 
@@ -145,6 +147,7 @@ export function BlockList() {
           <h2 className="text-xl font-semibold text-grey-01 dark:text-grey-12 mb-2">Failed to load blocks</h2>
           <p className="text-grey-04 dark:text-grey-07 mb-4">{error.message}</p>
           <button
+            type="button"
             onClick={() => window.location.reload()}
             className="px-4 py-2 bg-azure-04 text-white rounded-md hover:bg-azure-03 transition-colors"
           >
@@ -330,6 +333,7 @@ export function BlockList() {
             </Select>
           )}
           <button
+            type="button"
             onClick={handleNewBlock}
             className="px-4 py-2 rounded-md bg-grey-01 text-grey-12 hover:bg-azure-04 hover:text-white dark:bg-grey-12 dark:text-grey-01 dark:hover:bg-azure-06 dark:hover:text-white transition-colors flex items-center gap-2"
             data-testid="new-block-button"
@@ -349,6 +353,7 @@ export function BlockList() {
           </h2>
           <p className="text-grey-04 dark:text-grey-07 mb-4">Create reusable content blocks for your pages</p>
           <button
+            type="button"
             onClick={handleNewBlock}
             className="px-4 py-2 rounded-md bg-grey-01 text-grey-12 hover:bg-azure-04 hover:text-white dark:bg-grey-12 dark:text-grey-01 dark:hover:bg-azure-06 dark:hover:text-white transition-colors"
           >
@@ -401,6 +406,7 @@ export function BlockList() {
 
                 <div className="flex gap-2 relative">
                   <button
+                    type="button"
                     onClick={() => handleEditBlock(block.id)}
                     className="p-1 hover:bg-hover rounded-md transition-colors"
                     title="Edit block content"
@@ -408,6 +414,7 @@ export function BlockList() {
                     <Edit2 className="h-4 w-4 text-azure-04" />
                   </button>
                   <button
+                    type="button"
                     onClick={() => setOpenMenuId(openMenuId === block.id ? null : block.id)}
                     className="p-1 hover:bg-hover rounded-md transition-colors"
                     title="More actions"
@@ -423,6 +430,7 @@ export function BlockList() {
                       className="absolute right-0 top-8 w-48 bg-overlay border border-line rounded-md shadow-lg z-10"
                     >
                       <button
+                        type="button"
                         onClick={() => {
                           handleEditProperties(block.id);
                           setOpenMenuId(null);
@@ -433,6 +441,7 @@ export function BlockList() {
                         <span>Properties</span>
                       </button>
                       <button
+                        type="button"
                         onClick={() => {
                           handleRenameBlock(block.id);
                           setOpenMenuId(null);
@@ -444,6 +453,7 @@ export function BlockList() {
                       </button>
                       <div className="border-t border-line my-1" />
                       <button
+                        type="button"
                         onClick={() => {
                           handleDeleteBlock(block.id);
                           setOpenMenuId(null);

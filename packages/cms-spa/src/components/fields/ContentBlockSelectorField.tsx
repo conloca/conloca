@@ -108,7 +108,7 @@ export function ContentBlockSelectorField({ value, onChange, options }: ContentB
     if (recentOptions.includes(opt) && !query) continue; // Don't duplicate recently-used in "All" when not searching
     const cat = opt.category || 'Uncategorized';
     if (!categories.has(cat)) categories.set(cat, []);
-    categories.get(cat)!.push(opt);
+    categories.get(cat)?.push(opt);
   }
 
   return (

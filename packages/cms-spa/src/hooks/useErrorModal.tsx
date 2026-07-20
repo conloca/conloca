@@ -22,14 +22,14 @@ export function useErrorModal(): UseErrorModalReturn {
     actions?: ErrorModalProps['actions'];
   }>({ isOpen: false, message: '' });
 
-  const showError = (message: string, error?: unknown, actions?: ErrorModalProps['actions']) => {
+  const showError = useCallback((message: string, error?: unknown, actions?: ErrorModalProps['actions']) => {
     setErrorModal({
       isOpen: true,
       message,
       error,
       actions,
     });
-  };
+  }, []);
 
   const hideError = useCallback(() => {
     setErrorModal({ isOpen: false, message: '', error: undefined, actions: undefined });
@@ -42,7 +42,7 @@ export function useErrorModal(): UseErrorModalReturn {
         { label: 'Cancel', onClick: hideError, variant: 'secondary' },
       ]);
     },
-    [hideError],
+    [hideError, showError],
   );
 
   const errorModalProps: Omit<ErrorModalProps, 'title'> = {

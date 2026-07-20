@@ -201,9 +201,6 @@ function HintField({ name, hint, value, onChange }: HintFieldProps) {
           <VariantField name={name} variants={hint.variants} value={value} onChange={onChange} />
         </Wrapper>
       );
-    case 'markdown':
-    case 'code':
-    case 'text':
     default:
       return (
         <Wrapper label={label} required={required} description={description}>

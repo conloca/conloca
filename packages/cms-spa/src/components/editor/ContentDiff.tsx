@@ -59,6 +59,7 @@ function MDXDiff({ localMdx, serverMdx, onResolve }: MDXDiffProps) {
         <div className="flex gap-2">
           {!isEditing && onResolve && (
             <button
+              type="button"
               onClick={() => setEditableContent(conflictContent)}
               className="px-3 py-1 text-sm bg-azure-04 text-white rounded-md hover:bg-azure-03"
             >
@@ -68,6 +69,7 @@ function MDXDiff({ localMdx, serverMdx, onResolve }: MDXDiffProps) {
           {isEditing && (
             <>
               <button
+                type="button"
                 onClick={() => {
                   onResolve?.(displayContent);
                   setEditableContent(null);
@@ -77,6 +79,7 @@ function MDXDiff({ localMdx, serverMdx, onResolve }: MDXDiffProps) {
                 Accept Resolution
               </button>
               <button
+                type="button"
                 onClick={() => setEditableContent(null)}
                 className="px-3 py-1 text-sm bg-grey-05 text-white rounded-md hover:bg-grey-04"
               >
@@ -132,6 +135,7 @@ function PuckDiff({ localPuck, serverPuck, onResolve }: PuckDiffProps) {
         <h3 className="font-semibold">Puck Content Conflict</h3>
         {onResolve && selectedVersion && (
           <button
+            type="button"
             onClick={() => onResolve(selectedVersion === 'local' ? localPuck : serverPuck)}
             className="px-3 py-1 text-sm bg-green-05 text-white rounded-md hover:bg-green-04"
           >
@@ -188,7 +192,7 @@ function PuckDiff({ localPuck, serverPuck, onResolve }: PuckDiffProps) {
 
 // Helper component to show Puck component structure
 function ComponentStructure({ data }: { data: any }) {
-  if (!data || !data.content) {
+  if (!data?.content) {
     return <div className="text-grey-06 dark:text-grey-05">No content</div>;
   }
 

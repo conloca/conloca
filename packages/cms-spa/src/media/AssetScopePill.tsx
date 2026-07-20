@@ -42,7 +42,7 @@ export function AssetScopePill({ scope, size = 'sm', className }: AssetScopePill
   return (
     <span
       role="status"
-      aria-label={'Asset scope: ' + label}
+      aria-label={`Asset scope: ${label}`}
       className={cn(
         'inline-flex items-center font-medium rounded border uppercase tracking-wide',
         sizeClasses,

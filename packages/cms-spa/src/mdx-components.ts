@@ -349,7 +349,9 @@ const getSharedState = (): SharedMdxComponentsState => {
 export function setMdxComponents(components: MdxComponents): void {
   const state = getSharedState();
   state.components = components;
-  state.subscribers.forEach((fn) => fn(components));
+  for (const fn of state.subscribers) {
+    fn(components);
+  }
 }
 
 /** Read the current registry synchronously. */

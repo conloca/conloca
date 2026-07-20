@@ -13,7 +13,7 @@ export function ConflictDialog({ conflict, onReload, onForceSave, onCancel }: Co
 
   useEffect(() => {
     setShowReloadConfirm(false);
-  }, [conflict]);
+  }, []);
 
   // Escape key handler
   const handleKeyDown = useCallback(
@@ -91,6 +91,7 @@ export function ConflictDialog({ conflict, onReload, onForceSave, onCancel }: Co
             </p>
             <div className="flex gap-3">
               <button
+                type="button"
                 onClick={() => {
                   onReload();
                   setShowReloadConfirm(false);
@@ -100,6 +101,7 @@ export function ConflictDialog({ conflict, onReload, onForceSave, onCancel }: Co
                 Yes, Reload
               </button>
               <button
+                type="button"
                 onClick={() => setShowReloadConfirm(false)}
                 className="px-4 py-2 bg-grey-05 dark:bg-grey-04 text-white rounded-md hover:bg-grey-04 dark:hover:bg-grey-05"
               >
@@ -110,6 +112,7 @@ export function ConflictDialog({ conflict, onReload, onForceSave, onCancel }: Co
         ) : (
           <div className="flex gap-3">
             <button
+              type="button"
               onClick={() => setShowReloadConfirm(true)}
               className="px-4 py-2 bg-yellow-05 text-white rounded-md hover:bg-yellow-04"
             >
@@ -117,6 +120,7 @@ export function ConflictDialog({ conflict, onReload, onForceSave, onCancel }: Co
             </button>
             {conflict.currentEtag && (
               <button
+                type="button"
                 onClick={() => onForceSave(conflict.currentEtag!)}
                 className="px-4 py-2 bg-azure-04 text-white rounded-md hover:bg-azure-03"
               >
@@ -124,6 +128,7 @@ export function ConflictDialog({ conflict, onReload, onForceSave, onCancel }: Co
               </button>
             )}
             <button
+              type="button"
               onClick={onCancel}
               className="px-4 py-2 bg-grey-05 dark:bg-grey-04 text-white rounded-md hover:bg-grey-04 dark:hover:bg-grey-05"
             >

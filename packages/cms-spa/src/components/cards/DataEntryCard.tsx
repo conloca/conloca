@@ -78,6 +78,7 @@ export function DataEntryCard({
         </div>
         <div className="flex gap-2 relative">
           <button
+            type="button"
             onClick={onEditData}
             className="p-1 hover:bg-grey-11 dark:hover:bg-grey-03 rounded-md transition-colors"
             title="Edit data"
@@ -85,6 +86,7 @@ export function DataEntryCard({
             <Edit2 className="h-4 w-4 text-azure-04" />
           </button>
           <button
+            type="button"
             onClick={() => setIsMenuOpen(!isMenuOpen)}
             className="p-1 hover:bg-grey-11 dark:hover:bg-grey-03 rounded-md transition-colors"
             title="More actions"
@@ -100,6 +102,7 @@ export function DataEntryCard({
               className="absolute right-0 top-8 w-48 bg-white dark:bg-grey-03 border border-grey-09 dark:border-grey-03 rounded-md shadow-lg z-10"
             >
               <button
+                type="button"
                 onClick={() => {
                   onEditData();
                   setIsMenuOpen(false);
@@ -110,6 +113,7 @@ export function DataEntryCard({
                 <span>Edit Data</span>
               </button>
               <button
+                type="button"
                 onClick={() => {
                   onEditProperties();
                   setIsMenuOpen(false);
@@ -131,6 +135,7 @@ export function DataEntryCard({
               )}
               <div className="border-t border-grey-09 dark:border-grey-03 my-1" />
               <button
+                type="button"
                 onClick={() => {
                   onDelete();
                   setIsMenuOpen(false);

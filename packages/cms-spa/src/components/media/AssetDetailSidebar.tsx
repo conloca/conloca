@@ -55,7 +55,7 @@ export function AssetDetailSidebar({
     setTagsInput(asset.tags?.join(', ') || '');
     setConfirmDelete(false);
     setShowMoveDialog(false);
-  }, [asset.filename, asset.alt, asset.tags]);
+  }, [asset.alt, asset.tags]);
 
   // Hooks
   const updateMetadata = useUpdateAssetMetadata();
@@ -69,7 +69,7 @@ export function AssetDetailSidebar({
     // If folder field missing, derive from filename (e.g., "images/photo.jpg" -> "/images")
     const lastSlash = asset.filename.lastIndexOf('/');
     if (lastSlash > 0) {
-      return '/' + asset.filename.substring(0, lastSlash);
+      return `/${asset.filename.substring(0, lastSlash)}`;
     }
     return '/'; // Root folder
   }, [asset.folder, asset.filename]);

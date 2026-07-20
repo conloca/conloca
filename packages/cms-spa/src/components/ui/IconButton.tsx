@@ -28,6 +28,7 @@ export function IconButton({
 
   return (
     <button
+      type="button"
       onClick={onClick}
       className={cn(baseClasses, variantClasses[variant], className)}
       aria-label={ariaLabel}

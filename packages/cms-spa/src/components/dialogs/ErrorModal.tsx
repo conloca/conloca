@@ -83,7 +83,7 @@ export function ErrorModal({ isOpen, onClose, title = 'Error', message, error, a
           {actions.length > 0 ? (
             actions.map((action, index) => (
               <Button
-                key={index}
+                key={action.label}
                 variant={variantMap[action.variant || 'secondary']}
                 onClick={() => {
                   action.onClick();

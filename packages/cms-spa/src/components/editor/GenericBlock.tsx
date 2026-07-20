@@ -178,8 +178,8 @@ function wireInlinePropEditors(
     }
     const textMatches: Text[] = [];
     const walker = wrap.ownerDocument.createTreeWalker(wrap, NodeFilter.SHOW_TEXT);
-    let textNode: Node | null;
-    while ((textNode = walker.nextNode())) {
+    let textNode: Node | null = walker.nextNode();
+    while (textNode) {
       const t = textNode as Text;
       if (!t.parentElement) continue;
       // Don't double-count: a text node that is the sole content of a
@@ -189,6 +189,7 @@ function wireInlinePropEditors(
       // Skip text inside an already-wired inline editor.
       if (t.parentElement.closest('[data-conloca-prop]')) continue;
       if ((t.nodeValue ?? '').trim() === value) textMatches.push(t);
+      textNode = walker.nextNode();
     }
     if (elementMatches.length + textMatches.length !== 1) continue;
 
@@ -869,14 +870,14 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
     // structurally stable, so we use stableStringify in cacheKey to
     // dedupe identical requests. Recomputing the tree per render is
     // cheap.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // biome-ignore lint/correctness/useExhaustiveDependencies: descriptors identity changes every render
     [node, descriptors],
   );
 
   const propsJson = useMemo(() => stableStringify(attrs), [attrs]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: propsJson is the stable attrs signal
   const renderReq = useMemo<RenderRequest | null>(
     () => (tree ? { tree, documentIndex, ...(isInline ? { inline: true } : {}) } : null),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [tree, documentIndex, propsJson, isInline],
   );
 
@@ -928,6 +929,7 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
   // subtree via path resolution — so editing the body of a Card
   // inside a CardGrid works the same as editing the body of a
   // root-level Aside.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: attrs/onPropChange deliberately omitted — see comment in effect
   useEffect(() => {
     const wrap = wrapperRef.current;
     if (!wrap || html == null) return;
@@ -1011,7 +1013,6 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
     // updates after `propsJson` changes (via the renderReq fetch path),
     // so the closure captures the right `attrs`/`onPropChange` for the
     // commit that triggered the new render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [html, containerMode]);
 
   const slot = (
@@ -1047,6 +1048,7 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
   // `is-selected` className need to identify the active block.
   const blockKey = lexicalNode.getKey();
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: selection republish uses blockKey/propsJson signal
   useEffect(() => {
     if (!descriptor) return;
     const current = getSelectedBlock();
@@ -1098,7 +1100,6 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
     // closure identities change → re-publish → infinite loop. We capture
     // the latest closures via the `attrs`/`propsJson` change signal
     // instead, which is the moment the panel actually needs an update.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propsJson, descriptor, name, blockKey, containerMode]);
 
   const handleSelect = useCallback(

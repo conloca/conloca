@@ -342,7 +342,7 @@ function PuckPageEditorInner({ puckConfig }: PageEditorWrapperProps) {
     return () => {
       cancelled = true;
     };
-  }, [content?.localized?.etag, enhancedConfig, dataContextResponse]);
+  }, [enhancedConfig, dataContextResponse, content?.localized?.content?.puckData]);
 
   const pageMetadata = useMemo(() => (content?.localized ? extractPageMetadata(content) : null), [content]);
 
@@ -351,7 +351,7 @@ function PuckPageEditorInner({ puckConfig }: PageEditorWrapperProps) {
   // content, so the loading guard below would otherwise win forever.
   // Guarded on !isLoadingContent so the normal first render (content
   // still undefined) keeps showing the splash, not a flash of error.
-  if (error || (!isLoadingContent && (!content || !content.localized))) {
+  if (error || (!isLoadingContent && !content?.localized)) {
     return <PageLoadFailure message={error?.message} />;
   }
 
@@ -360,7 +360,7 @@ function PuckPageEditorInner({ puckConfig }: PageEditorWrapperProps) {
     return <div className="flex items-center justify-center h-screen">Loading...</div>;
   }
 
-  if (!content || !content.localized) {
+  if (!content?.localized) {
     return <PageLoadFailure />;
   }
 

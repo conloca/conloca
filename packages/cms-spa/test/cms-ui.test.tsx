@@ -8,7 +8,7 @@ import { LocaleSelector } from '../src/components/editor/LocaleSelector';
 import { BlockList } from '../src/components/pages/BlockList';
 import { PageList } from '../src/components/pages/PageList';
 import { SaveIndicator } from '../src/components/ui/SaveIndicator';
-import type { Block, Page, PageMetadata } from '../src/types';
+import type { PageMetadata } from '../src/types';
 import { renderWithProviders, setupTestAPI, testApi } from './test-utils';
 
 // Setup test API before all tests

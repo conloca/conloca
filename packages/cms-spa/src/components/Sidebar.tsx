@@ -1,15 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import {
-  Database,
-  FileText,
-  ImageIcon,
-  LayoutDashboard,
-  Monitor,
-  Moon,
-  Package,
-  Sun,
-  X,
-} from 'lucide-react';
+import { Database, FileText, ImageIcon, LayoutDashboard, Monitor, Moon, Package, Sun, X } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { useTheme } from '../hooks/useTheme';
 import { getUIConfig } from '../ui-config';
@@ -45,7 +35,7 @@ function NavItem({ to, icon: Icon, label, end, badge }: NavItemProps) {
       <span className="flex-1">{label}</span>
       {badge !== undefined && badge > 0 ? (
         <span
-          aria-label={badge + ' pages need review'}
+          aria-label={`${badge} pages need review`}
           className="ml-auto inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-semibold bg-red-04 text-white"
         >
           {badge}

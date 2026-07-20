@@ -13,7 +13,7 @@ import {
 } from './test-utils';
 
 // Set test timeout
-const TEST_TIMEOUT = 10000;
+const _TEST_TIMEOUT = 10000;
 
 // Setup before each test
 beforeEach(() => {

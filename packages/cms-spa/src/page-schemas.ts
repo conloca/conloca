@@ -166,7 +166,9 @@ const getSharedState = (): SharedPageSchemaState => {
 export function setPageSchemas(schemas: PageSchemas): void {
   const state = getSharedState();
   state.schemas = schemas;
-  state.subscribers.forEach((fn) => fn(schemas));
+  for (const fn of state.subscribers) {
+    fn(schemas);
+  }
 }
 
 /**
@@ -195,7 +197,7 @@ export function usePageSchemas(): PageSchemas {
     return () => {
       state.subscribers.delete(setSchemas);
     };
-  }, []);
+  }, [schemas]);
 
   return schemas;
 }
