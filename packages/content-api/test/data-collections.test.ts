@@ -780,7 +780,7 @@ describe('Data Collections - FileSystem Integration', () => {
     assertDefined(localized, 'Localized content should exist');
 
     expect(localized.localized.content?.data).toBeDefined();
-    expect((localized.localized.content?.data as any).email).toBe('john@example.com');
+    expect((localized.localized.content!.data as any).email).toBe('john@example.com');
   });
 
   test('creates new data entry with file', async () => {
@@ -881,7 +881,7 @@ describe('Data Collections - CRUD Operations', () => {
 
     const updated = await api.getLocalized(id, 'en');
     expect(updated?.localized.meta.title).toBe('John Doe Updated');
-    expect((updated?.localized.content?.data as any).email).toBe('john@updated.com');
+    expect((updated!.localized.content!.data as any).email).toBe('john@updated.com');
   });
 
   test('deletes data entry via deleteContent', async () => {

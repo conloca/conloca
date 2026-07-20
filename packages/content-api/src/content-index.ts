@@ -57,7 +57,9 @@ export class ContentIndex {
    * Clear all cached indexes
    */
   static clearCache(): void {
-    Object.keys(globalCache).forEach((key) => delete globalCache[key]);
+    for (const key of Object.keys(globalCache)) {
+      delete globalCache[key];
+    }
   }
 
   /**

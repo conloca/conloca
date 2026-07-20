@@ -4,7 +4,7 @@ import { type AssetConfig, AssetOperations } from './asset-operations';
 import type { ContentAPI } from './content-api.interface';
 import { localesOf, normalizeAndValidatePathname } from './content-utils';
 import { createGitOperations, type GitAuthor, type GitConfig } from './git-operations';
-import type { APIError, ContentManifest, ErrorCode, FindOptions, GlobalFilters } from './types';
+import type { APIError, ContentManifest, DeleteResult, ErrorCode, FindOptions, GlobalFilters } from './types';
 import { ErrorCodes } from './types';
 
 /**
@@ -71,14 +71,18 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
 
       // Get collections from blocks
       const blockCollections = api.blocks.collections;
-      blockCollections.forEach((c) => allCollections.add(c));
+      for (const collection of blockCollections) {
+        allCollections.add(collection);
+      }
 
       // Get collections from all sites
       for (const siteName of Object.keys(api.sitesConfig.sites)) {
         const site = api.getSite(siteName);
         if (site) {
           const siteCollections = site.collections;
-          siteCollections.forEach((c) => allCollections.add(c));
+          for (const collection of siteCollections) {
+            allCollections.add(collection);
+          }
         }
       }
 
@@ -333,7 +337,7 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
     const ifMatch = c.req.header('If-Match') || '';
 
     try {
-      let result;
+      let result: DeleteResult;
 
       if (locale) {
         // Delete specific locale

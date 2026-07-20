@@ -341,13 +341,11 @@ export class AssetOperations {
    */
   async getAsset(filename: string, folder = '/'): Promise<AssetEntry | undefined> {
     // Resolve actual folder from manifest when caller only provides filename
-    if (folder === '/') {
-      folder = await this.resolveFolder(filename);
-    }
+    const resolvedFolder = folder === '/' ? await this.resolveFolder(filename) : folder;
 
     // Compute relative path and full file path
-    const relativePath = folder === '/' ? filename : `${folder.slice(1)}/${filename}`;
-    const fullPath = this.getAssetPath(filename, folder);
+    const relativePath = resolvedFolder === '/' ? filename : `${resolvedFolder.slice(1)}/${filename}`;
+    const fullPath = this.getAssetPath(filename, resolvedFolder);
 
     // Check if file exists on disk
     let stats: Stats;
@@ -388,7 +386,7 @@ export class AssetOperations {
       alt: manifestEntry?.alt,
       uploadedAt: manifestEntry?.uploadedAt || stats.birthtime.toISOString(),
       uploadedBy: manifestEntry?.uploadedBy,
-      folder,
+      folder: resolvedFolder,
       tags: manifestEntry?.tags,
     };
   }
@@ -398,15 +396,13 @@ export class AssetOperations {
    */
   async delete(filename: string, folder = '/'): Promise<{ success: true } | { success: false; error: string }> {
     // Resolve actual folder from manifest when caller only provides filename
-    if (folder === '/') {
-      folder = await this.resolveFolder(filename);
-    }
+    const resolvedFolder = folder === '/' ? await this.resolveFolder(filename) : folder;
 
     // Compute relative path for manifest
-    const relativePath = folder === '/' ? filename : `${folder.slice(1)}/${filename}`;
+    const relativePath = resolvedFolder === '/' ? filename : `${resolvedFolder.slice(1)}/${filename}`;
 
     // Build full file path
-    const filePath = this.getAssetPath(filename, folder);
+    const filePath = this.getAssetPath(filename, resolvedFolder);
 
     // Delete file from disk (ignore if already gone)
     try {
@@ -563,15 +559,13 @@ export class AssetOperations {
     folder = '/',
   ): Promise<{ success: true; asset: AssetEntry } | { success: false; error: string }> {
     // Resolve actual folder from manifest when caller only provides filename
-    if (folder === '/') {
-      folder = await this.resolveFolder(filename);
-    }
+    const resolvedFolder = folder === '/' ? await this.resolveFolder(filename) : folder;
 
     // Compute relative path
-    const relativePath = folder === '/' ? filename : `${folder.slice(1)}/${filename}`;
+    const relativePath = resolvedFolder === '/' ? filename : `${resolvedFolder.slice(1)}/${filename}`;
 
     // Check if file exists on disk
-    const fullPath = this.getAssetPath(filename, folder);
+    const fullPath = this.getAssetPath(filename, resolvedFolder);
     try {
       await stat(fullPath);
     } catch {
@@ -589,7 +583,7 @@ export class AssetOperations {
     await this.manifest.add(relativePath, merged);
 
     // Return updated asset entry
-    const asset = await this.getAsset(filename, folder);
+    const asset = await this.getAsset(filename, resolvedFolder);
     if (!asset) {
       return { success: false, error: 'Failed to retrieve updated asset' };
     }

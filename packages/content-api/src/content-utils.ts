@@ -152,20 +152,22 @@ export function isValidPathname(pathname: string): boolean {
 export function normalizePathname(pathname: string): string {
   if (!pathname) return '/';
 
+  let normalized = pathname;
+
   // Ensure it starts with /
-  if (!pathname.startsWith('/')) {
-    pathname = '/' + pathname;
+  if (!normalized.startsWith('/')) {
+    normalized = `/${normalized}`;
   }
 
   // Collapse multiple slashes
-  pathname = pathname.replace(/\/+/g, '/');
+  normalized = normalized.replace(/\/+/g, '/');
 
   // Remove trailing slash unless it's the root
-  if (pathname !== '/' && pathname.endsWith('/')) {
-    pathname = pathname.slice(0, -1);
+  if (normalized !== '/' && normalized.endsWith('/')) {
+    normalized = normalized.slice(0, -1);
   }
 
-  return pathname;
+  return normalized;
 }
 
 /**
