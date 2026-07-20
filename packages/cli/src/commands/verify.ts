@@ -12,7 +12,7 @@ export async function verify(directory: string): Promise<void> {
       console.error('Directory not found');
       process.exit(1);
     }
-  } catch (error) {
+  } catch {
     console.error('Directory not found');
     process.exit(1);
   }
@@ -42,7 +42,7 @@ export async function verify(directory: string): Promise<void> {
           } else {
             console.log(`  Processed: ${manifest.id} (${locale})`);
           }
-        } catch (error) {
+        } catch (error: unknown) {
           errorCount++;
           errors.push(`Error loading ${manifest.id} (${locale}): ${error}`);
         }
@@ -51,7 +51,9 @@ export async function verify(directory: string): Promise<void> {
 
     if (errorCount > 0) {
       console.error('Content verification failed');
-      errors.forEach((error) => console.error(`  - ${error}`));
+      for (const error of errors) {
+        console.error(`  - ${error}`);
+      }
       process.exit(1);
     }
 
@@ -60,7 +62,7 @@ export async function verify(directory: string): Promise<void> {
     console.log(
       '\nNote: Files missing required fields (id, created, modified) are automatically repaired during loading.',
     );
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Content verification failed');
     console.error(`  ${error}`);
     process.exit(1);
