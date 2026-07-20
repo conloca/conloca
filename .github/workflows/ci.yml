@@ -7,7 +7,8 @@ on:
   pull_request:
 
 permissions:
-  actions: read
+  # actions:write lets the drift step dispatch the managed-files workflow.
+  actions: write
   contents: read
   statuses: write
 
@@ -65,6 +66,19 @@ jobs:
         run: smoo github-ci nx-smart --target test --name "Unit Tests" --step 8
 
       # Step 9
+      - name: 🩺 Check managed-file drift
+        id: managed-drift
+        if:
+          ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}',
+          github.event.repository.default_branch) }}
+        run: smoo monorepo check --warn
+
+      # Step 10
+      - name: 🔁 Dispatch managed-file drift healing
+        if: ${{ steps.managed-drift.outputs.drifted != '' && steps.managed-drift.outputs.drifted != '0' }}
+        run: gh workflow run managed-files.yml --ref "$GITHUB_REF_NAME"
+
+      # Step 11
       # Nx's database cache needs artifact files and .nx/workspace-data DB
       # metadata restored together; GitHub Actions cache is only the archive
       # transport. Save runs only after prior required steps succeed on the default
@@ -78,9 +92,9 @@ jobs:
           path: |
             .nx/cache
             .nx/workspace-data/*.db*
-          key: ${{ runner.os }}-nx-db-v1-${{ github.sha }}
+          key: ${{ runner.os }}-${{ runner.arch }}-nx-db-v1-${{ github.sha }}
 
-      # Step 10
+      # Step 12
       - name: 📎 Upload trace DBs
         if: ${{ always() }}
         uses: actions/upload-artifact@v7.0.1
@@ -93,7 +107,7 @@ jobs:
 
       # --- Cleanup ------------------------------------------------------------
 
-      # Step 11
+      # Step 13
       - name: 🧹 Cleanup and cache Nix/devenv
         if: ${{ always() }}
         uses: ./.github/actions/save-nix-devenv

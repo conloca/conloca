@@ -1,0 +1,19 @@
+name: Cache ttsc plugins
+description: >
+  Restore/save compiled ttsc native plugin binaries (typia, etc.). These are content-keyed under TTSC_CACHE_DIR/plugins
+  and skip the multi-minute `go build` when the cache key matches. The Go object cache (go-build/) is NOT cached — it is
+  multi-GB and only helps when the plugin key misses.
+
+runs:
+  using: composite
+  steps:
+    - name: Cache ttsc plugin binaries
+      uses: actions/cache@v5.0.5
+      with:
+        # Only the compiled plugin binaries (~30MB each). Path is relative to the
+        # workspace; devenv sets TTSC_CACHE_DIR to <repo>/.cache/ttsc.
+        path: .cache/ttsc/plugins
+        # prettier-ignore
+        key: ${{ runner.os }}-${{ runner.arch }}-ttsc-plugins-v1-${{ hashFiles('bun.lock', 'package.json', 'patches/ttsc@*.patch', 'tooling/direnv/devenv.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ runner.arch }}-ttsc-plugins-v1-

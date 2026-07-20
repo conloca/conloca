@@ -33,10 +33,10 @@ runs:
           ~/.local/state/nix/profiles
           ~/.cache/nix
         key:
-          ${{ runner.os }}-nix-v3-${{ hashFiles('tooling/direnv/devenv.yaml', 'tooling/direnv/devenv.nix',
-          'tooling/direnv/devenv.lock') }}
+          ${{ runner.os }}-${{ runner.arch }}-nix-v3-${{ hashFiles('tooling/direnv/devenv.yaml',
+          'tooling/direnv/devenv.nix', 'tooling/direnv/devenv.lock') }}
         restore-keys: |
-          ${{ runner.os }}-nix-v3-
+          ${{ runner.os }}-${{ runner.arch }}-nix-v3-
 
     - name: Save Nix profiles and store NAR
       if: ${{ inputs.segment == 'nix' && inputs.mode == 'save' }}
@@ -48,8 +48,8 @@ runs:
           ~/.local/state/nix/profiles
           ~/.cache/nix
         key:
-          ${{ runner.os }}-nix-v3-${{ hashFiles('tooling/direnv/devenv.yaml', 'tooling/direnv/devenv.nix',
-          'tooling/direnv/devenv.lock') }}
+          ${{ runner.os }}-${{ runner.arch }}-nix-v3-${{ hashFiles('tooling/direnv/devenv.yaml',
+          'tooling/direnv/devenv.nix', 'tooling/direnv/devenv.lock') }}
 
     # .devenv/.direnv are small, but they contain absolute /nix/store pointers.
     # Workflows restore this segment only after an exact Nix cache hit.
@@ -62,10 +62,11 @@ runs:
           ${{ github.workspace }}/tooling/direnv/.devenv
           ${{ github.workspace }}/tooling/direnv/.direnv
         key:
-          ${{ runner.os }}-devenv-v3-${{ hashFiles('tooling/direnv/devenv.yaml', 'tooling/direnv/devenv.nix',
-          'tooling/direnv/devenv.lock', 'tooling/direnv/envrc.sh', 'tooling/direnv/setup-environment.ts') }}
+          ${{ runner.os }}-${{ runner.arch }}-devenv-v3-${{ hashFiles('tooling/direnv/devenv.yaml',
+          'tooling/direnv/devenv.nix', 'tooling/direnv/devenv.lock', 'tooling/direnv/envrc.sh',
+          'tooling/direnv/setup-environment.ts') }}
         restore-keys: |
-          ${{ runner.os }}-devenv-v3-
+          ${{ runner.os }}-${{ runner.arch }}-devenv-v3-
 
     - name: Save devenv and direnv state
       if: ${{ inputs.segment == 'devenv' && inputs.mode == 'save' }}
@@ -75,5 +76,6 @@ runs:
           ${{ github.workspace }}/tooling/direnv/.devenv
           ${{ github.workspace }}/tooling/direnv/.direnv
         key:
-          ${{ runner.os }}-devenv-v3-${{ hashFiles('tooling/direnv/devenv.yaml', 'tooling/direnv/devenv.nix',
-          'tooling/direnv/devenv.lock', 'tooling/direnv/envrc.sh', 'tooling/direnv/setup-environment.ts') }}
+          ${{ runner.os }}-${{ runner.arch }}-devenv-v3-${{ hashFiles('tooling/direnv/devenv.yaml',
+          'tooling/direnv/devenv.nix', 'tooling/direnv/devenv.lock', 'tooling/direnv/envrc.sh',
+          'tooling/direnv/setup-environment.ts') }}

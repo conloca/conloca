@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "dependencies": {
-    "@smoothbricks/cli": "^0.10.2"
+    "@smoothbricks/cli": "^0.10.5"
   },
   "nx": {
     "targets": {

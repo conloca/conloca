@@ -1,0 +1,80 @@
+# Managed by @smoothbricks/cli (smoo monorepo update) - do not edit by hand.
+#
+# Self-healing loop for smoo-managed files: ci.yml runs the authoritative
+# `smoo monorepo check` on every default-branch push (devenv is already up
+# there, so the check is ~free) and dispatches THIS workflow only when real
+# drift exists - typically after a @smoothbricks/cli pin bump. It runs
+# `smoo monorepo update` and pushes the result to ONE persistent review branch
+# (chore/managed-files) with ONE PR. The PR is NEVER auto-merged: a template
+# change is upstream code that deserves a human look before it lands. Re-runs
+# refresh the same branch in place.
+#
+# NOTE: managed files include .github/workflows/*, and the default GITHUB_TOKEN
+# is server-side forbidden to push workflow-file changes. Configure a GitHub App
+# or PAT token with contents:write + workflows:write as MANAGED_FILES_TOKEN;
+# without it, runs that touch workflow files fail at push with a clear error.
+name: Managed files
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: managed-files
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: tooling/direnv
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v6.0.2
+        with:
+          filter: blob:none
+          fetch-depth: 0
+          persist-credentials: true
+          token: ${{ secrets.MANAGED_FILES_TOKEN || github.token }}
+
+      - name: 🧱 Setup Nix/devenv
+        id: setup
+        uses: ./.github/actions/setup-devenv
+
+      - name: 🔄 Regenerate managed files
+        run: smoo monorepo update
+
+      - name: 📤 Push review branch and open PR
+        env:
+          GH_TOKEN: ${{ secrets.MANAGED_FILES_TOKEN || github.token }}
+        run: |
+          cd "$(git rev-parse --show-toplevel)"
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "Managed files are in sync; nothing to do."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -C chore/managed-files
+          git add -A
+          git commit -m "chore: regenerate smoo-managed files"
+          git push --force origin chore/managed-files
+          gh pr create \
+            --head chore/managed-files \
+            --base "${GITHUB_REF_NAME}" \
+            --title "chore: regenerate smoo-managed files" \
+            --body "Automated refresh of smoo-managed files after drift (usually a @smoothbricks/cli pin bump). One persistent PR; re-runs force-push this branch in place. Review the template changes - do NOT enable auto-merge." \
+            2>/dev/null || echo "PR already open; branch refreshed in place."
+
+      - name: 🧹 Cleanup and cache Nix/devenv
+        if: ${{ always() }}
+        uses: ./.github/actions/save-nix-devenv
+        with:
+          nix-cache-hit: ${{ steps.setup.outputs.nix-cache-hit }}
+          devenv-cache-hit: ${{ steps.setup.outputs.devenv-cache-hit }}

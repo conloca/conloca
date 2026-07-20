@@ -1,12 +1,12 @@
 #!/usr/bin/env bun
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, readlinkSync, rmSync, symlinkSync } from 'node:fs';
 import { mkdir, rmdir, stat } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { $ } from 'bun';
 
 const devenvRoot = process.env.DEVENV_ROOT;
 const projectRoot = path.resolve(`${devenvRoot}/../..`);
-const startedWithoutNodeModules = !existsSync(path.join(projectRoot, 'node_modules'));
 
 // A legitimate concurrent setup finishes well within this; anything older is a
 // leftover from an interrupted run (CTRL-C/kill before the finally-cleanup) and
@@ -14,6 +14,13 @@ const startedWithoutNodeModules = !existsSync(path.join(projectRoot, 'node_modul
 // NOTE: must be declared ABOVE the top-level setup block below — module consts
 // are not hoisted, and the lock loop runs during that block.
 const STALE_LOCK_MS = 10 * 60_000;
+// Unscoped require("typescript") must expose the TS6 compiler API for Nx.
+// @typescript/native installs another package also named "typescript" (TS7). Bun's
+// isolated linker often points node_modules/.bun/node_modules/typescript at TS7,
+// so packages resolved from the .bun store (nx) get version.cjs without readConfigFile.
+// After every install, force both unscoped typescript slots onto typescript@6.0.3.
+// Keep @typescript/native for ttsc via TTSC_TSGO_BINARY. See https://github.com/oven-sh/bun/issues/33834.
+const TYPESCRIPT_API_VERSION = '6.0.3';
 
 class CapturedCommandError extends Error {
   constructor(
@@ -30,7 +37,9 @@ class CapturedCommandError extends Error {
 process.chdir(projectRoot);
 
 try {
-  // Install dependencies first so node_modules/.bin tools are available
+  // Bootstrap only: install deps + wire local git hooks/config.
+  // Do not import workspace packages here — this script is what installs them,
+  // and package resolution/Typia transforms are not available yet.
   if (process.env.CI) {
     try {
       await runSetupCommand('bun install --frozen-lockfile', $`bun install --frozen-lockfile`, { quiet: false });
@@ -46,20 +55,9 @@ try {
     await installLocalDependencies();
   }
 
-  // Bun selects its resolver mode at process startup. If this process started
-  // before node_modules existed, imports below can stay in auto-install mode
-  // even after bun install succeeds, so restart once into the real workspace.
-  if (startedWithoutNodeModules) {
-    await runSetupCommand('restart setup-environment.ts', $`bun --no-install ${import.meta.path}`, { quiet: false });
-    process.exit(0);
-  }
+  // Pin unscoped typescript → API 6 for root and Bun's shared .bun hoist (Nx).
+  ensureTypeScriptApiPackage(projectRoot);
 
-  if (!process.env.CI) {
-    const { syncRootRuntimeVersions } = await import('@smoothbricks/cli/monorepo/runtime');
-    await syncRootRuntimeVersions(projectRoot);
-  }
-
-  const { applyWorkspaceGitConfig } = await import('@smoothbricks/cli/monorepo/git-config');
   await applyWorkspaceGitConfig(projectRoot);
 } catch (error) {
   if (error instanceof CapturedCommandError) {
@@ -74,11 +72,165 @@ try {
 }
 
 async function installLocalDependencies(): Promise<void> {
-  // bun install can race across concurrent direnv activations that mutate the
-  // same files under node_modules — serialize with the setup lock.
+  // bun install runs the root prepare script. Multiple concurrent direnv
+  // activations can otherwise race while mutating the same files under
+  // node_modules.
   await withSetupLock(async () => {
     await runSetupCommand('bun install --no-summary', $`bun install --no-summary`);
   });
+}
+
+function ensureTypeScriptApiPackage(root: string): void {
+  const apiPackageRoot = findInstalledTypeScriptApiPackage(root);
+  if (!apiPackageRoot) {
+    throw new Error(
+      `typescript@${TYPESCRIPT_API_VERSION} was not installed under node_modules/.bun. ` +
+        `Keep root devDependency typescript@^${TYPESCRIPT_API_VERSION} (compiler API for Nx).`,
+    );
+  }
+
+  // Root bare require("typescript") and Bun store-local requires (nx lives under
+  // node_modules/.bun/...) must both see the API package — not @typescript/native's TS7.
+  forceSymlink(path.join(root, 'node_modules', 'typescript'), apiPackageRoot);
+  forceSymlink(path.join(root, 'node_modules', '.bun', 'node_modules', 'typescript'), apiPackageRoot);
+
+  assertTypescriptApiAt(path.join(root, 'node_modules', 'typescript'), apiPackageRoot);
+  assertTypescriptApiAt(path.join(root, 'node_modules', '.bun', 'node_modules', 'typescript'), apiPackageRoot);
+
+  const nativeBin = path.join(root, 'node_modules', '@typescript', 'native', 'bin', 'tsc');
+  const rootPackageJson = path.join(root, 'package.json');
+  const declaresNative =
+    existsSync(rootPackageJson) &&
+    (() => {
+      try {
+        const pkg = JSON.parse(readFileSync(rootPackageJson, 'utf8')) as {
+          devDependencies?: Record<string, string>;
+          dependencies?: Record<string, string>;
+        };
+        return (
+          typeof pkg.devDependencies?.['@typescript/native'] === 'string' ||
+          typeof pkg.dependencies?.['@typescript/native'] === 'string'
+        );
+      } catch {
+        return false;
+      }
+    })();
+  if (declaresNative && !existsSync(nativeBin)) {
+    throw new Error(
+      `Missing ${nativeBin}. package.json declares @typescript/native but it is not installed. ` +
+        'Run bun install (or direnv reload). @typescript/native is the TypeScript 7 native compiler for ttsc.',
+    );
+  }
+}
+
+function findInstalledTypeScriptApiPackage(root: string): string | null {
+  const bunStore = path.join(root, 'node_modules', '.bun');
+  if (!existsSync(bunStore)) {
+    return null;
+  }
+  const exact = `typescript@${TYPESCRIPT_API_VERSION}`;
+  const names = readdirSync(bunStore)
+    .filter((name) => name === exact || name.startsWith(`${exact}+`) || name.startsWith('typescript@6.'))
+    .sort((a, b) => {
+      const aExact = a === exact || a.startsWith(`${exact}+`) ? 0 : 1;
+      const bExact = b === exact || b.startsWith(`${exact}+`) ? 0 : 1;
+      return aExact - bExact || a.localeCompare(b);
+    });
+  for (const name of names) {
+    const candidate = path.join(bunStore, name, 'node_modules', 'typescript');
+    if (existsSync(path.join(candidate, 'package.json'))) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+function forceSymlink(linkPath: string, targetPath: string): void {
+  mkdirSync(path.dirname(linkPath), { recursive: true });
+  const relativeTarget = path.relative(path.dirname(linkPath), targetPath);
+  let current: string | null = null;
+  try {
+    current = readlinkSync(linkPath);
+  } catch {
+    current = null;
+  }
+  if (
+    current === relativeTarget ||
+    (current !== null && path.resolve(path.dirname(linkPath), current) === targetPath)
+  ) {
+    return;
+  }
+  rmSync(linkPath, { recursive: true, force: true });
+  symlinkSync(relativeTarget, linkPath);
+}
+
+function assertTypescriptApiAt(typescriptRoot: string, expectedTarget: string): void {
+  if (!existsSync(typescriptRoot)) {
+    throw new Error(`Missing ${typescriptRoot} after linking TypeScript ${TYPESCRIPT_API_VERSION} API package`);
+  }
+  const requireFromInstall = createRequire(path.join(typescriptRoot, 'package.json'));
+  const typed = requireFromInstall(typescriptRoot) as { version?: string; readConfigFile?: unknown };
+  if (typeof typed.readConfigFile !== 'function' || typed.version !== TYPESCRIPT_API_VERSION) {
+    throw new Error(
+      `${typescriptRoot} must export TypeScript ${TYPESCRIPT_API_VERSION} compiler API (readConfigFile). ` +
+        `Resolved version ${typed.version ?? 'unknown'} (expected link target ${expectedTarget}). ` +
+        'Bun isolated linking often points .bun/node_modules/typescript at @typescript/native (TS7). ' +
+        'See https://github.com/oven-sh/bun/issues/33834.',
+    );
+  }
+}
+
+/**
+ * Keep git hook wiring local to bootstrap. Runtime pin sync
+ * (`syncRootRuntimeVersions`) belongs to explicit monorepo tooling after the
+ * package graph exists — not the installer.
+ */
+async function applyWorkspaceGitConfig(root: string): Promise<void> {
+  const gitDirResult = await $`git rev-parse --git-dir`.cwd(root).quiet().nothrow();
+  if (gitDirResult.exitCode !== 0) {
+    throw new Error('Not in a git repository');
+  }
+
+  const gitDir = path.resolve(root, new TextDecoder().decode(gitDirResult.stdout).trim());
+  const tooling = path.join(root, 'tooling');
+
+  await $`git config --local include.path ${path.join(tooling, 'workspace.gitconfig')}`.cwd(root);
+
+  // Keep the newer runtime version pins on any merge (nvfetcher overlay +
+  // devenv.lock) so a mirror sync's `git am --3way` never stalls on a version
+  // conflict. Mapped by the managed .gitattributes (merge=smoo-newer-pins);
+  // implemented in tooling/direnv/merge-newer-pins.sh.
+  await $`git config --local merge.smoo-newer-pins.name ${'keep the newer devenv/nvfetcher runtime pins'}`.cwd(root);
+  await $`git config --local merge.smoo-newer-pins.driver ${'bash tooling/direnv/merge-newer-pins.sh %O %A %B %P'}`.cwd(
+    root,
+  );
+  linkHook(gitDir, tooling, 'pre-commit');
+  linkHook(gitDir, tooling, 'commit-msg');
+}
+
+function linkHook(gitDir: string, tooling: string, name: string): void {
+  const source = path.join(tooling, 'git-hooks', `${name}.sh`);
+  if (!existsSync(source)) {
+    throw new Error(`Missing ${name} hook source: ${source}`);
+  }
+
+  const target = path.join(gitDir, 'hooks', name);
+  if (readLinkOrNull(target) === source) {
+    return;
+  }
+
+  console.log(`[!] Linking ${name} hook in ${gitDir}`);
+  mkdirSync(path.dirname(target), { recursive: true });
+  rmSync(target, { force: true });
+  symlinkSync(source, target);
+}
+
+function readLinkOrNull(hookPath: string): string | null {
+  try {
+    return readlinkSync(hookPath);
+  } catch {
+    return null;
+  }
 }
 
 async function runSetupCommand(

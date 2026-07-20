@@ -1,6 +1,8 @@
-# Runtime version pins (nvfetcher output). On any merge, keep whichever side
-# pins the NEWER version instead of stalling on a conflict. Driver:
-# tooling/direnv/nixpkgs-overlay/merge-newer.sh, defined in
-# tooling/workspace.gitconfig ([merge "nvfetcher-newer"]).
-tooling/direnv/nixpkgs-overlay/_sources/generated.json  merge=nvfetcher-newer
-tooling/direnv/nixpkgs-overlay/_sources/generated.nix   merge=nvfetcher-newer
+# smoo-managed. Keep the newer runtime version pins on any merge (especially a
+# mirror sync's `git am --3way`) instead of stalling on a conflict. The driver
+# `smoo-newer-pins` is defined by `smoo` (git config, installed at devenv setup)
+# and implemented in tooling/direnv/merge-newer-pins.sh. Files not present in a
+# given repo are simply ignored.
+tooling/direnv/nixpkgs-overlay/_sources/generated.json  merge=smoo-newer-pins
+tooling/direnv/nixpkgs-overlay/_sources/generated.nix   merge=smoo-newer-pins
+tooling/direnv/devenv.lock                              merge=smoo-newer-pins

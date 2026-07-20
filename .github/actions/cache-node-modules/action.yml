@@ -7,7 +7,11 @@ runs:
     - name: Cache node_modules
       uses: actions/cache@v5.0.5
       with:
+        # Dependencies only. ttsc plugin/GOCACHE live under $TTSC_CACHE_DIR
+        # (.cache/ttsc), not inside node_modules.
+        # v2 isolates restore-keys from older Darwin caches with a broken TS dual-package hoist.
         path: node_modules
-        key: ${{ runner.os }}-node-${{ hashFiles('bun.lock', 'package.json', 'packages/*/package.json') }}
+        # prettier-ignore
+        key: ${{ runner.os }}-${{ runner.arch }}-node-v2-${{ hashFiles('bun.lock', 'package.json', 'packages/*/package.json') }}
         restore-keys: |
-          ${{ runner.os }}-node-
+          ${{ runner.os }}-${{ runner.arch }}-node-v2-

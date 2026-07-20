@@ -8,12 +8,16 @@ formatters:
       - '*.astro'
       - '!.*' # Exclude hidden files
 
-  # Biome for JS/TS/JSX/TSX/JSON/HTML/CSS/GraphQL files
+  # Biome for JS/TS family (including CommonJS/CTS and ESM .mjs/.mts)
   biome:
     command: "biome check --files-ignore-unknown=true --use-editorconfig=true '--stdin-file-path={}' --fix"
     patterns:
       - '*.js'
+      - '*.cjs'
+      - '*.mjs'
       - '*.ts'
+      - '*.cts'
+      - '*.mts'
       - '*.jsx'
       - '*.tsx'
       - '*.json'
@@ -30,7 +34,11 @@ formatters:
       - '*'
       # Exclude files handled by Biome
       - '!*.js'
+      - '!*.cjs'
+      - '!*.mjs'
       - '!*.ts'
+      - '!*.cts'
+      - '!*.mts'
       - '!*.jsx'
       - '!*.tsx'
       - '!*.json'
@@ -38,14 +46,24 @@ formatters:
       - '!*.html'
       - '!*.css'
       - '!*.graphql'
+      # Exclude files handled by rustfmt
+      - '!*.rs'
       # Exclude files handled by Alejandra
       - '!*.nix'
       # Bun lockfiles are generated and should not be rewritten by Prettier
       - '!bun.lock'
+      # Cargo lockfiles are generated and should not be rewritten by Prettier
+      - '!Cargo.lock'
       # Binary artifacts: Prettier reads them as UTF-8 and can corrupt them
       # by replacing invalid byte sequences.
       - '!*.wasm'
       - '!*.wasm.sha256'
+
+  # rustfmt for Rust files
+  rustfmt:
+    command: 'rustfmt --edition 2024'
+    patterns:
+      - '*.rs'
 
   # Alejandra for Nix files
   alejandra:

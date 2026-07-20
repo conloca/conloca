@@ -51,6 +51,11 @@ runs:
     - name: 📦 Cache node_modules
       uses: ./.github/actions/cache-node-modules
 
+    # Restores compiled ttsc native plugins into .cache/ttsc/plugins. TTSC_CACHE_DIR
+    # is set by devenv enterShell (+ bootstrap GITHUB_ENV for later steps).
+    - name: 🧊 Cache ttsc plugins
+      uses: ./.github/actions/cache-ttsc-plugins
+
     - name: 🐚 Build devenv shell
       shell: bash
       working-directory: tooling/direnv

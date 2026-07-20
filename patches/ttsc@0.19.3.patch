@@ -1,0 +1,67 @@
+--- a/driver/emit_plugin.go
++++ b/driver/emit_plugin.go
+@@ -163,6 +163,32 @@
+   }
+   host := &pluginEmitHost{program: p.TSProgram, emitResolver: p.Checker.GetEmitResolver()}
+   options := p.TSProgram.Options()
++  // Declaration emit must observe the original program before plugin transforms
++  // can mutate source-file nodes while assembling JavaScript output.
++  if options.GetEmitDeclarations() {
++    var wfMu sync.Mutex
++    result := p.TSProgram.Emit(context.Background(), shimcompiler.EmitOptions{
++      EmitOnly: shimcompiler.EmitOnlyDts,
++      WriteFile: func(fileName string, text string, data *shimcompiler.WriteFileData) error {
++        wfMu.Lock()
++        defer wfMu.Unlock()
++        if p.outputEscapesOutDir(fileName) {
++          if data != nil {
++            data.SkippedDtsWrite = true
++          }
++          return nil
++        }
++        if writeFile != nil {
++          return writeFile(fileName, text, data)
++        }
++        return DefaultWriteFile(fileName, text)
++      },
++    })
++    if result != nil && len(result.Diagnostics) != 0 {
++      return convertDiagnostics(result.Diagnostics), nil
++    }
++  }
++
+   for _, sf := range shimcompiler.GetSourceFilesToEmit(host, nil, false) {
+     paths := shimcompiler.GetOutputPathsFor(sf, options, host, false)
+     if paths.JsFilePath() != "" && !p.outputEscapesOutDir(paths.JsFilePath()) {
+@@ -212,31 +238,6 @@
+       }
+     }
+   }
+-  if !options.GetEmitDeclarations() {
+-    return nil, nil
+-  }
+-
+-  var wfMu sync.Mutex
+-  result := p.TSProgram.Emit(context.Background(), shimcompiler.EmitOptions{
+-    EmitOnly: shimcompiler.EmitOnlyDts,
+-    WriteFile: func(fileName string, text string, data *shimcompiler.WriteFileData) error {
+-      wfMu.Lock()
+-      defer wfMu.Unlock()
+-      if p.outputEscapesOutDir(fileName) {
+-        if data != nil {
+-          data.SkippedDtsWrite = true
+-        }
+-        return nil
+-      }
+-      if writeFile != nil {
+-        return writeFile(fileName, text, data)
+-      }
+-      return DefaultWriteFile(fileName, text)
+-    },
+-  })
+-  if result != nil && len(result.Diagnostics) != 0 {
+-    return convertDiagnostics(result.Diagnostics), nil
+-  }
+   return nil, nil
+ }
+ 

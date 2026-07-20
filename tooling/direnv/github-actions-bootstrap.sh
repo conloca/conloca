@@ -46,6 +46,12 @@ install_devenv() {
 
 build_devenv_shell() {
   devenv shell --verbose -- date
+  # enterShell exports these for the bootstrap itself; persist them for the
+  # independent workflow step shells that run after this composite action.
+  if [ -n "${GITHUB_ENV:-}" ]; then
+    echo "TTSC_TSGO_BINARY=$repo_root/node_modules/@typescript/native/bin/tsc" >> "$GITHUB_ENV"
+    echo "TTSC_CACHE_DIR=$repo_root/.cache/ttsc" >> "$GITHUB_ENV"
+  fi
   # Add repo-local tools only after the shell exists; cleanup steps use an
   # explicit PATH because failures before this point must still refresh caches.
   add_repo_paths

@@ -46,20 +46,18 @@
     "@biomejs/biome": "^2.4.13",
     "@conloca/content-api": "workspace:*",
     "@conloca/tooling": "workspace:*",
-    "@nx/js": "22.7.1",
-    "@nx/react": "22.7.1",
-    "@nx/web": "22.7.1",
-    "@nx/workspace": "22.7.1",
-    "@smoothbricks/nx-plugin": "^0.3.0",
-    "@swc-node/register": "~1.11.1",
-    "@swc/core": "~1.15.32",
-    "@swc/helpers": "~0.5.21",
+    "@nx/js": "23.1.0",
+    "@nx/react": "23.1.0",
+    "@nx/web": "23.1.0",
+    "@nx/workspace": "23.1.0",
+    "@smoothbricks/nx-plugin": "^0.3.3",
     "@testing-library/dom": "10.4.1",
     "@testing-library/react": "^16.3.2",
     "@types/bun": "1.3.14",
     "@types/node": "~26.0.0",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
+    "@typescript/native": "npm:typescript@^7.0.2",
     "@vitejs/plugin-react": "^5.2.0",
     "@vitest/coverage-v8": "^4.1.5",
     "@vitest/ui": "^4.1.5",
@@ -68,17 +66,18 @@
     "eslint-stdout": "^1.1.2",
     "jiti": "2.6.1",
     "jsdom": "^28.1.0",
-    "nx": "22.7.1",
+    "nx": "23.1.0",
     "prettier": "^3.8.3",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-router-dom": "^7.14.2",
-    "tsdown": "^0.21.10",
+    "tsdown": "^0.22.12",
     "tslib": "^2.8.1",
     "typescript": "^6.0.3",
     "verdaccio": "6.5.2",
-    "vite": "^7.3.1",
-    "vitest": "^4.1.5"
+    "vite": "^8.1.5",
+    "vitest": "^4.1.5",
+    "ttsc": "0.19.3"
   },
   "workspaces": [
     "packages/*",
@@ -102,6 +101,7 @@
   },
   "patchedDependencies": {
     "acorn@8.15.0": "patches/acorn@8.15.0.patch",
-    "happy-dom@20.9.0": "patches/happy-dom@20.9.0.patch"
+    "happy-dom@20.9.0": "patches/happy-dom@20.9.0.patch",
+    "ttsc@0.19.3": "patches/ttsc@0.19.3.patch"
   }
 }

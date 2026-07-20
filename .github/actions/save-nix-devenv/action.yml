@@ -14,13 +14,21 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: 🧹 Cleanup and cache Nix store
+    - name: 🧹 Prepare Nix/devenv cache save
       id: cleanup-cache
       shell: bash
       working-directory: tooling/direnv
-      # build-shell normally adds repo paths to GITHUB_PATH, but this cleanup
-      # must still run when build-shell fails before that happens.
+      env:
+        NIX_CACHE_HIT: ${{ inputs.nix-cache-hit }}
+      # An exact Nix cache hit is immutable and cannot be overwritten by
+      # actions/cache. Avoid rebuilding its ~2 GB NAR just to discard it.
+      # build-shell normally adds repo paths to GITHUB_PATH, but cleanup must
+      # still run after a cache miss when build-shell fails before that happens.
       run: |
+        if [[ "$NIX_CACHE_HIT" == 'true' ]]; then
+          echo 'cache-ready=true' >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
         export PATH="$(../../tooling/direnv/repo-path)"
         smoo github-ci cleanup-cache
 
