@@ -1,9 +1,12 @@
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import { resolve } from 'node:path';
-import type { Connect, ViteDevServer } from 'vite';
 import { type DiscoveredComponent, mergeRegistry } from './merge-registry';
 import { scanExternalComponents, scanLocalComponents } from './scan-components';
 import { scanMdxFiles } from './scan-mdx';
 import { loadCmsOverrides } from './scan-overrides';
+
+/** Connect-compatible middleware handler — see render-endpoint.ts. */
+type NextHandleFunction = (req: IncomingMessage, res: ServerResponse, next: (err?: unknown) => void) => void;
 
 /**
  * Vite middleware that returns the auto-discovered MDX component
@@ -38,11 +41,8 @@ export interface RegistryEndpointOptions {
   projectRoot?: string;
 }
 
-export function createRegistryEndpoint(
-  _server: ViteDevServer,
-  options: RegistryEndpointOptions,
-): {
-  handler: Connect.NextHandleFunction;
+export function createRegistryEndpoint(options: RegistryEndpointOptions): {
+  handler: NextHandleFunction;
   invalidate: () => void;
   getAllowedSources: () => Promise<Set<string>>;
 } {
@@ -76,7 +76,7 @@ export function createRegistryEndpoint(
     return cached;
   };
 
-  const handler: Connect.NextHandleFunction = async (req, res, _next) => {
+  const handler: NextHandleFunction = async (req, res, _next) => {
     try {
       const components = await compute();
       res.statusCode = 200;

@@ -1,4 +1,7 @@
-import type { Connect } from 'vite';
+import type { IncomingMessage, ServerResponse } from 'node:http';
+
+/** Connect-compatible middleware handler — see render-endpoint.ts. */
+type NextHandleFunction = (req: IncomingMessage, res: ServerResponse, next: (err?: unknown) => void) => void;
 
 /**
  * Vite middleware that returns the concatenated CSS for a route URL.
@@ -40,7 +43,7 @@ import type { Connect } from 'vite';
  *   - Cross-origin stylesheets the dev server can't reach get logged
  *     and skipped (graceful degradation, not silent failure).
  */
-export function createStylesEndpoint(): Connect.NextHandleFunction {
+export function createStylesEndpoint(): NextHandleFunction {
   return async (req, res, _next) => {
     try {
       const parsed = new URL(req.url ?? '', 'http://localhost');
@@ -123,6 +126,7 @@ export async function collectStylesFromHtml(
 
   const styleRe = /<style\b([^>]*)>([\s\S]*?)<\/style>/gi;
   let match: RegExpExecArray | null;
+  // biome-ignore lint/suspicious/noAssignInExpressions: regex exec iterator
   while ((match = styleRe.exec(cleaned)) !== null) {
     const attrs = match[1];
     if (/media\s*=\s*["']?print/i.test(attrs)) continue;
@@ -134,6 +138,7 @@ export async function collectStylesFromHtml(
   }
 
   const linkRe = /<link\b([^>]*)\/?>/gi;
+  // biome-ignore lint/suspicious/noAssignInExpressions: regex exec iterator
   while ((match = linkRe.exec(cleaned)) !== null) {
     const attrs = match[1];
     if (!/rel\s*=\s*["']?stylesheet["']?/i.test(attrs)) continue;

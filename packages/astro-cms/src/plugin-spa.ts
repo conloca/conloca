@@ -930,7 +930,7 @@ if (import.meta.hot) {
                 name: 'conloca-content-wrapper-endpoint',
                 apply: 'serve' as const,
                 configureServer(server) {
-                  server.middlewares.use(`${cmsRoute}/api/content-wrapper`, createContentWrapperEndpoint(server));
+                  server.middlewares.use(`${cmsRoute}/api/content-wrapper`, createContentWrapperEndpoint());
                 },
               },
               {
@@ -955,7 +955,7 @@ if (import.meta.hot) {
                 name: 'conloca-registry-and-render-endpoints',
                 apply: 'serve' as const,
                 configureServer(server) {
-                  const registry = createRegistryEndpoint(server, {
+                  const registry = createRegistryEndpoint({
                     contentRoot: resolvedMdxPages ?? options.contentRoot,
                     componentFolders: options.mdxComponentFolders ?? ['src/components/mdx'],
                     projectRoot: process.cwd(),

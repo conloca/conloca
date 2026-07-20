@@ -1,4 +1,7 @@
-import type { Connect, ViteDevServer } from 'vite';
+import type { IncomingMessage, ServerResponse } from 'node:http';
+
+/** Connect-compatible middleware handler — see render-endpoint.ts. */
+type NextHandleFunction = (req: IncomingMessage, res: ServerResponse, next: (err?: unknown) => void) => void;
 
 /**
  * Per-route content-wrapper discovery endpoint.
@@ -64,7 +67,7 @@ export interface DiscoveredWrappers {
   codeBlock: ContentWrapperInfo[] | null;
 }
 
-export function createContentWrapperEndpoint(_server: ViteDevServer): Connect.NextHandleFunction {
+export function createContentWrapperEndpoint(): NextHandleFunction {
   return async (req, res, _next) => {
     try {
       const parsed = new URL(req.url ?? '', 'http://localhost');
@@ -158,6 +161,7 @@ export function findContentWrapper(html: string): DiscoveredWrappers {
   const preAncestorChains: OpenTag[][] = [];
 
   let match: RegExpExecArray | null;
+  // biome-ignore lint/suspicious/noAssignInExpressions: regex exec iterator
   while ((match = tagRe.exec(cleaned)) !== null) {
     const isClose = match[1] === '/';
     const tagName = match[2].toLowerCase();
@@ -320,6 +324,7 @@ function parseAttributes(s: string): Record<string, string> {
   const out: Record<string, string> = {};
   const re = /([a-zA-Z_:][-a-zA-Z0-9_:.]*)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|(\S+)))?/g;
   let m: RegExpExecArray | null;
+  // biome-ignore lint/suspicious/noAssignInExpressions: regex exec iterator
   while ((m = re.exec(s)) !== null) {
     const name = m[1];
     const value = m[2] ?? m[3] ?? m[4] ?? '';
