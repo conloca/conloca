@@ -59,8 +59,8 @@
     "@types/react-dom": "19.2.3",
     "@typescript/native": "npm:typescript@^7.0.2",
     "@vitejs/plugin-react": "^5.2.0",
-    "@vitest/coverage-v8": "^4.1.5",
-    "@vitest/ui": "^4.1.5",
+    "@vitest/coverage-v8": "^4.1.7",
+    "@vitest/ui": "^4.1.7",
     "ajv": "^8.20.0",
     "eslint": "^9.39.4",
     "eslint-stdout": "^1.1.2",
@@ -73,11 +73,11 @@
     "react-router-dom": "^7.14.2",
     "tsdown": "^0.22.12",
     "tslib": "^2.8.1",
+    "ttsc": "0.19.3",
     "typescript": "^6.0.3",
     "verdaccio": "6.5.2",
     "vite": "^8.1.5",
-    "vitest": "^4.1.5",
-    "ttsc": "0.19.3"
+    "vitest": "^4.1.7"
   },
   "workspaces": [
     "packages/*",

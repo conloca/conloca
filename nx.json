@@ -30,20 +30,6 @@
         "typecheckTargetName": "typecheck"
       }
     },
-    {
-      "plugin": "@nx/js/typescript",
-      "options": {
-        "typecheck": {
-          "targetName": "typecheck"
-        },
-        "build": {
-          "targetName": "tsc-js",
-          "configName": "tsconfig.lib.json",
-          "buildDepsName": "build-deps",
-          "watchDepsName": "watch-deps"
-        }
-      }
-    },
     "@smoothbricks/nx-plugin"
   ],
   "tasksRunnerOptions": {

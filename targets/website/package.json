@@ -112,12 +112,12 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260504.0",
-    "typia": "^13.1.19",
-    "wrangler": "^4.112.0",
-    "ttsc": "^0.19.3",
     "@typescript/typescript-darwin-arm64": "7.0.2",
     "@typescript/typescript-darwin-x64": "7.0.2",
+    "@typescript/typescript-linux-arm64": "7.0.2",
     "@typescript/typescript-linux-x64": "7.0.2",
-    "@typescript/typescript-linux-arm64": "7.0.2"
+    "ttsc": "0.19.3",
+    "typia": "^13.1.19",
+    "wrangler": "^4.112.0"
   }
 }
