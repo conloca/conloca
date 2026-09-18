@@ -13,6 +13,7 @@ import { resolveEditorDescriptors } from './descriptors.js';
 import type { DiscoveredStyleContext } from './discovery.js';
 import { discoverStyleContext } from './discovery.js';
 import { gitOutput, resolveBuildRef, resolveRepositoryUri } from './git.js';
+import { packageVersion } from './package-version.js';
 import { spawnPreviewBuild } from './preview-build.js';
 import { postRegistration } from './register.js';
 import { resolveBuildSiteId } from './site-id.js';
@@ -564,6 +565,7 @@ async function registerBuild(
         }),
     deploymentUrl,
     buildId: commits.buildId,
+    clientVersion: packageVersion(),
   });
   logger.info(`registration complete (gitSha=${gitSha}, branch=${branch}, buildId=${commits.buildId})`);
   return { previewSecret };

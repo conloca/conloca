@@ -595,6 +595,7 @@ describe('conlocaCloud — astro:build:done registration pipeline', () => {
     expect(body.editorBundleUrl).toMatch(/^https:\/\/site\.example\.test\/_conloca\/editor-bundle\.[0-9a-f]{16}\.js$/);
     expect(body.bundleHash).toMatch(/^[0-9a-f]{64}$/);
     expect(body.deploymentUrl).toBe('https://site.example.test');
+    expect(body.clientVersion).toMatch(/^\d+\.\d+\.\d+/);
     expect(logger.messages.some((m) => m.level === 'warn')).toBe(false);
     expect(logger.messages.some((m) => m.msg.includes('registration complete'))).toBe(true);
   });

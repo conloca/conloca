@@ -47,6 +47,11 @@ export interface RegistrationInput {
    * latest commit.
    */
   buildId?: string;
+  /**
+   * The `@conloca/cloud-astro` version that produced this build, so the endpoint and the doctor can say which
+   * package version built the editor bundle.
+   */
+  clientVersion?: string;
 }
 
 export interface RegistrationResult {
@@ -138,6 +143,7 @@ export async function _postRegistrationWith(
       deploymentUrl: input.deploymentUrl,
       deploymentProvider: input.deploymentProvider,
       buildId: input.buildId,
+      clientVersion: input.clientVersion,
     }),
   };
 

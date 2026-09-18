@@ -103,6 +103,12 @@ describe('postRegistration — request shape', () => {
     });
   });
 
+  it('forwards the client version when present', async () => {
+    const { fetchFn, calls } = makeFetch([okResponse()]);
+    await _postRegistrationWith(fetchFn, validInput({ clientVersion: '0.1.0' }), NO_DELAYS);
+    expect(JSON.parse(calls[0].init.body)).toMatchObject({ clientVersion: '0.1.0' });
+  });
+
   it('rejects a 2xx response that is missing previewSecret', async () => {
     const { fetchFn } = makeFetch([new Response(JSON.stringify({}), { status: 200 })]);
     await expect(_postRegistrationWith(fetchFn, validInput(), NO_DELAYS)).rejects.toThrow(/previewSecret/);
@@ -219,7 +225,7 @@ function randomValidInput(rng: () => number): RegistrationInput {
     return out;
   };
   // Each optional field is present roughly half the time, so the 50 runs span
-  // every present/absent combination of the three optionals.
+  // every present/absent combination of the four optionals.
   const maybe = (value: string): string | undefined => (rng() < 0.5 ? value : undefined);
   return {
     endpoint: `https://${word()}.example.test`,
@@ -233,6 +239,7 @@ function randomValidInput(rng: () => number): RegistrationInput {
     deploymentUrl: maybe(`https://${word()}.pages.test`),
     deploymentProvider: maybe('cloudflare-pages'),
     buildId: maybe(`b-${hex(8)}`),
+    clientVersion: maybe(`0.${hex(1)}.${hex(1)}`),
   };
 }
 
@@ -261,7 +268,7 @@ describe('postRegistration — body round-trip property', () => {
 
       // Each optional appears exactly when defined and is absent otherwise —
       // JSON.stringify drops undefined, matching the endpoint's "absent" reading.
-      for (const key of ['deploymentUrl', 'deploymentProvider', 'buildId'] as const) {
+      for (const key of ['deploymentUrl', 'deploymentProvider', 'buildId', 'clientVersion'] as const) {
         if (input[key] === undefined) {
           expect(key in parsed).toBe(false);
         } else {
