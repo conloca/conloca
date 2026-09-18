@@ -1,3 +1,4 @@
+import { PACKAGE_NAME } from '../constants.js';
 import { resolveBuildRef, resolveRepositoryUri } from '../git.js';
 import { messageOf } from '../message-of.js';
 import { resolveBuildSiteId } from '../site-id.js';
@@ -17,6 +18,13 @@ const LIVE_CHECK_IDS: readonly CheckId[] = ['CC5', 'CC6', 'CC7'];
 /** Every doctor request is bounded: a hanging host must never hang `conloca doctor` (the CLI seam has no timer of its own). */
 const REQUEST_TIMEOUT_MS = 10_000;
 
+/** Version strings come from whatever build registered; only a value shaped like a version reaches the terminal. */
+const VERSION_SHAPE = /^[0-9A-Za-z.+-]{1,64}$/;
+
+function builtWithNote(value: string | null | undefined): string {
+  return typeof value === 'string' && VERSION_SHAPE.test(value) ? ` (built with ${PACKAGE_NAME} ${value})` : '';
+}
+
 /** One row of the endpoint's status route (`GET /api/v1/registrations/status`). */
 interface StatusRegistration {
   /**
@@ -29,6 +37,8 @@ interface StatusRegistration {
   gitSha: string;
   registeredAt: number;
   editorBundleUrl: string;
+  /** Absent when the endpoint predates the field; null when the build that registered sent none. */
+  clientVersion?: string | null;
 }
 
 interface StatusResponse {
@@ -57,7 +67,8 @@ function isStatusRegistration(value: unknown): value is StatusRegistration {
     typeof row.editorBundleUrl === 'string' &&
     typeof row.registeredAt === 'number' &&
     (row.siteId === null || typeof row.siteId === 'string') &&
-    (row.parked === undefined || typeof row.parked === 'boolean')
+    (row.parked === undefined || typeof row.parked === 'boolean') &&
+    (row.clientVersion === undefined || row.clientVersion === null || typeof row.clientVersion === 'string')
   );
 }
 
@@ -180,7 +191,7 @@ function diagnoseRegistrations(
       : undefined;
   const details: string[] = [];
   if (own) {
-    details.push(`site "${siteId}": own registration ${own.gitSha}`);
+    details.push(`site "${siteId}": own registration ${own.gitSha}${builtWithNote(own.clientVersion)}`);
   } else if (inherited) {
     outcome.problems.push({
       check: 'CC6',

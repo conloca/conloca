@@ -248,6 +248,37 @@ describe('CC6 — three-state registration diagnosis', () => {
     expect(check('CC6').detail).toBe('site "marketing": own registration feat-sha');
   });
 
+  it('own row: names the package version that built it when the endpoint reports one', async () => {
+    const { check } = await runLive({
+      [STATUS_URL]: () => statusBody([registration('feat/x', BUNDLE, 'feat-sha', { clientVersion: '0.1.0' })]),
+      [BUNDLE]: () => new Response(null, { status: 200 }),
+    });
+    expect(check('CC6').detail).toBe(
+      'site "marketing": own registration feat-sha (built with @conloca/cloud-astro 0.1.0)',
+    );
+  });
+
+  it('own row: a null version (the build sent none) leaves the detail unchanged', async () => {
+    const { check } = await runLive({
+      [STATUS_URL]: () => statusBody([registration('feat/x', BUNDLE, 'feat-sha', { clientVersion: null })]),
+      [BUNDLE]: () => new Response(null, { status: 200 }),
+    });
+    expect(check('CC6').problems).toEqual([]);
+    expect(check('CC6').detail).toBe('site "marketing": own registration feat-sha');
+  });
+
+  it('own row: a version carrying an escape sequence is not printed', async () => {
+    const { check } = await runLive({
+      [STATUS_URL]: () =>
+        statusBody([
+          registration('feat/x', BUNDLE, 'feat-sha', { clientVersion: `0.1.0${String.fromCharCode(27)}[31m` }),
+        ]),
+      [BUNDLE]: () => new Response(null, { status: 200 }),
+    });
+    expect(check('CC6').problems).toEqual([]);
+    expect(check('CC6').detail).toBe('site "marketing": own registration feat-sha');
+  });
+
   it('no own row but the default branch has one: warn, preview degraded, CC7 probes the inherited bundle', async () => {
     const { messages, calls } = await runLive({
       [STATUS_URL]: () => statusBody([registration('main', DEFAULT_BUNDLE, 'main-sha')]),
