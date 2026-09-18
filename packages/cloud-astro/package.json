@@ -1,0 +1,179 @@
+{
+  "name": "@conloca/cloud-astro",
+  "version": "0.1.17-next.0",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/conloca/conloca.git",
+    "directory": "packages/cloud-astro"
+  },
+  "license": "FSL-1.1-ALv2",
+  "description": "Astro integration that registers each build's editor bundle at an editor endpoint",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/src/index.js",
+  "module": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js",
+      "default": "./dist/src/index.js"
+    },
+    "./node": {
+      "types": "./dist/src/node.d.ts",
+      "import": "./dist/src/node.js",
+      "default": "./dist/src/node.js"
+    },
+    "./preview": {
+      "types": "./dist/src/preview.d.ts",
+      "import": "./dist/src/preview.js",
+      "default": "./dist/src/preview.js"
+    },
+    "./site-middleware": {
+      "types": "./dist/src/site-middleware.d.ts",
+      "import": "./dist/src/site-middleware.js",
+      "default": "./dist/src/site-middleware.js"
+    },
+    "./bundle": {
+      "types": "./dist/src/bundle.d.ts",
+      "import": "./dist/src/bundle.js",
+      "default": "./dist/src/bundle.js"
+    },
+    "./doctor": {
+      "types": "./dist/src/doctor.d.ts",
+      "import": "./dist/src/doctor.js",
+      "default": "./dist/src/doctor.js"
+    },
+    "./satteri-workerd": {
+      "types": "./dist/src/preview/satteri-workerd.d.ts",
+      "import": "./dist/src/preview/satteri-workerd.js",
+      "default": "./dist/src/preview/satteri-workerd.js"
+    },
+    "./preview-handler": {
+      "types": "./src/preview-handler.d.ts",
+      "default": "./src/preview-handler.astro"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "!src/__tests__",
+    "!**/*.tsbuildinfo"
+  ],
+  "scripts": {
+    "test": "nx run cloud-astro:test --outputStyle=stream"
+  },
+  "peerDependencies": {
+    "@astrojs/react": "^6.0.5",
+    "@conloca/astro-cms": "workspace:*",
+    "astro": "^7.3.1",
+    "vite": "^8.2.2"
+  },
+  "dependencies": {
+    "@conloca/content-api": "workspace:*",
+    "esbuild": "^0.28.2",
+    "hast-util-from-html": "^2.0.3",
+    "jose": "^6.2.10",
+    "sass": "^1.103.1",
+    "tslib": "^2.8.1"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.10",
+    "@conloca/astro-cms": "workspace:*",
+    "astro": "^7.3.1",
+    "typescript": "^6.0.3",
+    "vite": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "conloca": {
+    "doctor": "./dist/src/doctor.js"
+  },
+  "nx": {
+    "name": "cloud-astro",
+    "tags": [
+      "npm:public"
+    ],
+    "targets": {
+      "clean": {},
+      "lint": {},
+      "typecheck": {
+        "dependsOn": [
+          "^*-js",
+          "typecheck-astro"
+        ]
+      },
+      "typecheck-astro": {
+        "executor": "nx:run-commands",
+        "cache": true,
+        "dependsOn": [
+          "^*-js"
+        ],
+        "inputs": [
+          "versionlessProduction",
+          "^production",
+          "{workspaceRoot}/tsconfig.base.json",
+          {
+            "json": "{workspaceRoot}/package.json",
+            "excludeFields": [
+              "version"
+            ]
+          },
+          {
+            "json": "{workspaceRoot}/bun.lock",
+            "excludeFields": [
+              "workspaces"
+            ]
+          },
+          "{projectRoot}/tsconfig.astro.json"
+        ],
+        "outputs": [],
+        "options": {
+          "command": "astro check --noSync --tsconfig tsconfig.astro.json --minimumSeverity warning --minimumFailingSeverity warning",
+          "cwd": "{projectRoot}"
+        }
+      },
+      "test": {
+        "executor": "@smoothbricks/nx-plugin:bounded-exec",
+        "dependsOn": [
+          "typecheck-tests",
+          "build",
+          "test-packed"
+        ],
+        "options": {
+          "command": "bun test --timeout=30000 ./src",
+          "cwd": "{projectRoot}",
+          "timeoutMs": 120000,
+          "killAfterMs": 10000.0
+        }
+      },
+      "test-packed": {
+        "//": "The packed shape is a function of the built outputs, the manifest and the locked dependency closure; cached on exactly those.",
+        "executor": "nx:run-commands",
+        "cache": true,
+        "inputs": [
+          {
+            "dependentTasksOutputFiles": "**/*",
+            "transitive": true
+          },
+          "{projectRoot}/package.json",
+          "{workspaceRoot}/bun.lock",
+          "{workspaceRoot}/tooling/packaging/**/*"
+        ],
+        "dependsOn": [
+          "build",
+          "^build"
+        ],
+        "options": {
+          "command": "bun tooling/packaging/test-packed.ts cloud-astro",
+          "cwd": "{workspaceRoot}"
+        }
+      }
+    }
+  }
+}

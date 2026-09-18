@@ -1,0 +1,55 @@
+---
+import bakedPreviewOpts from 'virtual:conloca-preview-opts';
+import { resolveEndpointFetch, resolveFromBaked } from './preview/_resolve-opts.js';
+import { stripPreviewPrefix } from './preview/preview-path.js';
+/**
+ * Secret-prefixed entry route injected by the recursive preview build at
+ * `/conloca_preview_${SECRET}/[...path]`. The secret in the path is a
+ * load guard — JWT validation is the actual auth boundary.
+ *
+ * This route is the ENTRY DOOR only; the site-wide middleware
+ * (`./site-middleware.ts`) is the serving surface. Three verdicts:
+ *
+ *   1. `response` — the query-token init hop (302 that sets the preview
+ *      cookie and points at the clean path) or the no-preview landing page.
+ *   2. `preview` — a valid cookie on the literal prefixed URL: canonicalize
+ *      with a 302 to the clean path. Rendering under the prefix is never
+ *      correct (links/assets assume clean paths), and after the redirect the
+ *      middleware serves the draft. Normally the middleware canonicalizes
+ *      before this route runs — this branch is the defense-in-depth for an
+ *      inert (unconfigured) middleware.
+ *   3. `pass-through` — only reachable through the request-runtime wrapper;
+ *      here it means the preview route was hit without any preview marker,
+ *      so 404 is the safe answer.
+ */
+import { handlePreviewRequest } from './preview.js';
+
+// Same baked-then-env resolution the middleware uses, so the entry route and
+// the serving surface can never disagree about the secret. Throws loudly on a
+// missing var: reaching this route means someone explicitly asked to preview.
+const opts = resolveFromBaked(bakedPreviewOpts, (name) => process.env[name]);
+const verdict = await handlePreviewRequest(Astro.request, {
+  ...opts,
+  fetchFn: await resolveEndpointFetch(),
+});
+
+if (verdict.kind === 'response') {
+  // Bound instead of returned directly: TypeScript skips the expression of a
+  // `return` outside a function body, so every response this file produces
+  // names its type to get checked.
+  const response: Response = verdict.response;
+  return response;
+}
+if (verdict.kind === 'pass-through') {
+  const notPreview: Response = new Response('not a preview request', { status: 404 });
+  return notPreview;
+}
+
+// verdict.kind === 'preview' — canonicalize to the clean site path.
+const cleanPath = stripPreviewPrefix(Astro.originPathname ?? Astro.url.pathname);
+const canonical: Response = new Response(null, {
+  status: 302,
+  headers: { location: cleanPath, 'cache-control': 'private, no-store' },
+});
+return canonical;
+---

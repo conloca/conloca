@@ -20,6 +20,9 @@
     },
     {
       "path": "./packages/mdx"
+    },
+    {
+      "path": "./packages/cloud-astro"
     }
   ]
 }

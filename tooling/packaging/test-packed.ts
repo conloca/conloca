@@ -57,6 +57,11 @@ const NODE_ENTRIES: Record<string, string[] | 'all'> = {
   // blocks call as they render on the server.
   'cms-spa': ['./mdx-components-define', './page-schema-define', './page-setting-attributes', './theme'],
   cli: [],
+  // `./site-middleware` imports Astro's `astro:content` and this package's own
+  // `virtual:*` modules, and `./preview-handler` is an Astro component; both
+  // exist only inside an Astro dev/build process, so the site builds cover
+  // them.
+  'cloud-astro': ['.', './node', './preview', './bundle', './doctor', './satteri-workerd'],
 };
 
 const SCOPE = '@conloca/';
@@ -120,7 +125,9 @@ const assertPublishableExports = (packageName: string, exportsMap: Record<string
 
 // Every workspace package the consumer will need, this one included: a release
 // publishes them together, so the throwaway project resolves them all from
-// tarballs rather than from the workspace.
+// tarballs rather than from the workspace. A workspace peer is one of them —
+// the consumer installs it next to the package, and the release closes over
+// peers as it does over dependencies.
 const packClosure = (rootProject: string) => {
   const found = new Map<string, PackageManifest>();
   const queue = [rootProject];
@@ -131,7 +138,7 @@ const packClosure = (rootProject: string) => {
     }
     const packageManifest = readManifest(project);
     found.set(project, packageManifest);
-    for (const dependency of Object.keys(packageManifest.dependencies ?? {})) {
+    for (const dependency of Object.keys({ ...packageManifest.dependencies, ...packageManifest.peerDependencies })) {
       if (!dependency.startsWith(SCOPE)) {
         continue;
       }
@@ -161,6 +168,14 @@ const typesTargetsOf = (target: ExportTarget): string[] => {
   );
 };
 
+// Whether what an export hands runtimes is JavaScript. A stylesheet, or an
+// Astro component an integration injects as a route, is a file to ship rather
+// than a module to import: it must resolve, but nothing loads or typechecks it.
+const isScript = (target: ExportTarget): boolean =>
+  typeof target === 'string'
+    ? /\.[mc]?js$/.test(target)
+    : target !== null && isScript(target.import ?? target.default ?? null);
+
 // `./package.json` is not a shape under test and `*` patterns have no single
 // target to resolve; everything else must resolve, stylesheets included.
 const exportEntries = Object.entries(manifest.exports ?? {}).filter(
@@ -168,13 +183,15 @@ const exportEntries = Object.entries(manifest.exports ?? {}).filter(
 );
 const runtimeEntries = exportEntries.filter(([, target]) => isLoadable(target));
 const typesOnlyEntries = exportEntries.filter(([, target]) => !isLoadable(target));
-const typecheckSubpaths = exportEntries.filter(([subpath]) => !subpath.endsWith('.css')).map(([subpath]) => subpath);
+const typecheckSubpaths = exportEntries
+  .filter(([, target]) => !isLoadable(target) || isScript(target))
+  .map(([subpath]) => subpath);
 // A stylesheet that declares types promises a TypeScript consumer can import
 // it for its side effect without a module shim of its own.
 const typedStylesheets = exportEntries
   .filter(([subpath, target]) => subpath.endsWith('.css') && typesTargetsOf(target).length > 0)
   .map(([subpath]) => subpath);
-const nodeLoadable = runtimeEntries.filter(([subpath]) => !subpath.endsWith('.css')).map(([subpath]) => subpath);
+const nodeLoadable = runtimeEntries.filter(([, target]) => isScript(target)).map(([subpath]) => subpath);
 const specifierFor = (subpath: string) => (subpath === '.' ? manifest.name : `${manifest.name}/${subpath.slice(2)}`);
 const binaries = typeof manifest.bin === 'string' ? { [unscoped(manifest.name)]: manifest.bin } : (manifest.bin ?? {});
 const binaryNames = Object.keys(binaries);
@@ -307,23 +324,27 @@ try {
   }
 
   // Peers are the consumer's job to install, and the closure's peers are as
-  // much the consumer's job as the packed package's own.
-  const peers = new Set<string>();
+  // much the consumer's job as the packed package's own. Workspace peers are
+  // closure members, installed from their tarballs above.
+  const peerRanges = new Map<string, string[]>();
   for (const packageManifest of closure.values()) {
-    for (const peer of Object.keys(packageManifest.peerDependencies ?? {})) {
+    for (const [peer, range] of Object.entries(packageManifest.peerDependencies ?? {})) {
       if (!peer.startsWith(SCOPE)) {
-        peers.add(peer);
+        peerRanges.set(peer, [...(peerRanges.get(peer) ?? []), range]);
       }
     }
   }
   // Pin peers and the typechecker to the repository's install. A peer is
   // installed for whichever closure member declares it, not necessarily for the
-  // package under test, so every member is a place to look.
+  // package under test, so every member is a place to look. The workspace can
+  // hold several versions of one peer, and the first one found need not be one
+  // the closure accepts, so a peer takes the first install that satisfies every
+  // range the closure declares for it.
   const searchPaths = [
     join(repoRoot, 'package.json'),
     ...[...closure.keys()].map((project) => join(packageDirOf(project), 'package.json')),
   ].map((from) => createRequire(from));
-  const manifestOf = (dependency: string) => {
+  const manifestOf = (dependency: string, ranges: string[] = []) => {
     for (const searchPath of searchPaths) {
       let manifestPath: string;
       try {
@@ -335,15 +356,21 @@ try {
         version: string;
         main?: unknown;
       };
-      return { directory: dirname(manifestPath), manifest: dependencyManifest };
+      if (ranges.every((range) => Bun.semver.satisfies(dependencyManifest.version, range))) {
+        return { directory: dirname(manifestPath), manifest: dependencyManifest };
+      }
     }
-    throw new Error(`${dependency}: not installed anywhere in the workspace, so the consumer cannot pin it`);
+    const wanted = ranges.length > 0 ? ` at ${ranges.join(' and ')}` : '';
+    throw new Error(`${dependency}: not installed${wanted} anywhere in the workspace, so the consumer cannot pin it`);
   };
   // The typechecker is resolved on its own because the check below needs where
   // it landed as well as its version.
   const typescript = manifestOf('typescript');
   dependencies.typescript = typescript.manifest.version;
-  for (const dependency of [...peers, '@types/node', '@types/react', '@types/react-dom']) {
+  for (const [peer, ranges] of peerRanges) {
+    dependencies[peer] = manifestOf(peer, ranges).manifest.version;
+  }
+  for (const dependency of ['@types/node', '@types/react', '@types/react-dom']) {
     dependencies[dependency] = manifestOf(dependency).manifest.version;
   }
   // The repository installs a second TypeScript under an alias — a native
