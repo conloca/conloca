@@ -108,6 +108,9 @@
     "@ttsc/unplugin@0.30.4": "patches/@ttsc%2Funplugin@0.30.4.patch"
   },
   "sherif": {
+    "ignoreDependency": [
+      "vite@^8.2.2"
+    ],
     "ignorePackage": [
       "conloca-website"
     ]
