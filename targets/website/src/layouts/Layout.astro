@@ -1,7 +1,7 @@
 ---
-import '../styles/global.css'
-import StructuredData from '../components/StructuredData.astro'
-import { DEFAULT_OG_IMAGE_URL, DEFAULT_ROBOTS, SITE_DESCRIPTION } from '../seo'
+import '../styles/global.css';
+import StructuredData from '../components/StructuredData.astro';
+import { DEFAULT_OG_IMAGE_URL, DEFAULT_ROBOTS, SITE_DESCRIPTION } from '../seo';
 
 // biome-ignore lint/correctness/noUnusedVariables: Props type is used by Astro
 interface Props {
@@ -23,8 +23,8 @@ const {
   robots = DEFAULT_ROBOTS,
 } = Astro.props;
 
-const resolvedCanonical = canonicalUrl || Astro.url.href
-const resolvedOgImage = ogImage || DEFAULT_OG_IMAGE_URL
+const resolvedCanonical = canonicalUrl || Astro.url.href;
+const resolvedOgImage = ogImage || DEFAULT_OG_IMAGE_URL;
 ---
 
 <!doctype html>

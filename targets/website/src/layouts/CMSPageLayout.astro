@@ -1,45 +1,43 @@
 ---
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
-import Footer from '../components/Footer.astro'
-import Navbar from '../components/Navbar.astro'
-import { createComparePageSchema, createFAQPageSchema } from '../seo'
-import Layout from './Layout.astro'
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import Footer from '../components/Footer.astro';
+import Navbar from '../components/Navbar.astro';
+import { createComparePageSchema, createFAQPageSchema } from '../seo';
+import Layout from './Layout.astro';
 
 interface Props {
-  title?: string
-  description?: string
+  title?: string;
+  description?: string;
 }
 
-const { title, description } = Astro.props
-const pathname = Astro.url.pathname
-const isLandingPage = pathname === '/' || pathname === ''
+const { title, description } = Astro.props;
+const pathname = Astro.url.pathname;
+const isLandingPage = pathname === '/' || pathname === '';
 
 const schemaType = (() => {
-  if (isLandingPage) return 'landing'
-  if (pathname === '/faq/' || pathname === '/faq') return 'faq'
-  if (pathname === '/compare/' || pathname === '/compare') return 'compare'
-  if (pathname === '/vxjson/' || pathname === '/vxjson') return 'techArticle'
-  return 'page'
-})() as 'landing' | 'page' | 'techArticle' | 'faq' | 'compare'
+  if (isLandingPage) return 'landing';
+  if (pathname === '/faq/' || pathname === '/faq') return 'faq';
+  if (pathname === '/compare/' || pathname === '/compare') return 'compare';
+  if (pathname === '/vxjson/' || pathname === '/vxjson') return 'techArticle';
+  return 'page';
+})() as 'landing' | 'page' | 'techArticle' | 'faq' | 'compare';
 
 // For StructuredData.astro, map faq/compare to 'page' (extra schemas injected separately in body)
-const structuredDataType = schemaType === 'faq' || schemaType === 'compare' ? 'page' : schemaType
+const structuredDataType = schemaType === 'faq' || schemaType === 'compare' ? 'page' : schemaType;
 
-let faqItems: { question: string; answer: string }[] | undefined
+let faqItems: { question: string; answer: string }[] | undefined;
 
 if (schemaType === 'faq') {
   try {
-    const faqPath = join(process.cwd(), 'content/default/pages/faq.en.vxjson')
-    const faqData = JSON.parse(readFileSync(faqPath, 'utf-8'))
-    const faqComponent = faqData.content?.puckData?.content?.find(
-      (c: { type: string }) => c.type === 'FAQ'
-    )
+    const faqPath = join(process.cwd(), 'content/default/pages/faq.en.vxjson');
+    const faqData = JSON.parse(readFileSync(faqPath, 'utf-8'));
+    const faqComponent = faqData.content?.puckData?.content?.find((c: { type: string }) => c.type === 'FAQ');
     if (faqComponent?.props?.items) {
       faqItems = faqComponent.props.items.map((item: { question: string; answer: string }) => ({
         question: item.question,
         answer: item.answer.replace(/<[^>]*>/g, ''),
-      }))
+      }));
     }
   } catch {
     // FAQ schema will be omitted if file read fails
