@@ -22,10 +22,10 @@ conloca create <directory> [--site <site>] [--pm <manager>] [--no-install] [--no
 
 This writes a complete project — `package.json`, `astro.config.mjs` with `conlocaCMS()` wired, `tsconfig.json`,
 `src/content.config.ts`, the starter components and Puck config, a first page at `/`, the agent skill, and a GitHub
-Actions workflow whose build step carries a `CONLOCA_BUILD_TOKEN` slot wired to the repository secrets. Nothing in this
-scaffold reads that secret; the slot is there for an integration that builds with a token. Then it installs
-dependencies, runs `git init`, and runs `conloca doctor` on the result. It refuses a non-empty directory; for an
-existing site use `conloca astro setup`.
+Actions workflow that passes a `CONLOCA_BUILD_TOKEN` secret from the repository to the doctor and build steps (never to
+dependency install scripts) and builds a pull request's own commit. Nothing in this scaffold reads that secret; the slot
+is there for an integration that builds with a token. Then it installs dependencies, runs `git init`, and runs
+`conloca doctor` on the result. It refuses a non-empty directory; for an existing site use `conloca astro setup`.
 
 `--site` defaults to `default`. `--pm` takes `bun`, `npm`, `pnpm` or `yarn` and defaults to the package manager that
 launched the CLI — `bunx` selects bun, `npx` npm, `pnpm dlx` pnpm — falling back to `npm`. Installing and `git init` are

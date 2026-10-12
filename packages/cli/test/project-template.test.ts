@@ -103,12 +103,13 @@ describe('packageNameOf', () => {
 
 describe('renderWorkflow', () => {
   test.each<PackageManager>([...PACKAGE_MANAGERS])(
-    'renders a parseable workflow for %s with the build-token slot',
+    'renders a parseable workflow for %s with the build token on doctor and build only and a pull request built from its own commit',
     (pm) => {
       const workflow = Bun.YAML.parse(renderWorkflow(pm)) as {
         on: unknown;
         jobs: {
           build: {
+            env?: Record<string, string>;
             steps: {
               name?: string;
               run?: string;
@@ -120,12 +121,23 @@ describe('renderWorkflow', () => {
         };
       };
       expect(workflow.on).toEqual(['push', 'pull_request']);
-      const steps = workflow.jobs.build.steps;
+      const job = workflow.jobs.build;
+      const steps = job.steps;
+      const doctor = steps.find((step) => step.run?.endsWith('run doctor') || step.run === 'yarn doctor');
       const build = steps.find((step) => step.run?.endsWith('run build') || step.run === 'yarn build');
+      const install = steps.find((step) => step.run === packageManagerCommands(pm).frozenInstall);
+      expect(install).toBeDefined();
+      // Doctor checks the token and the build uses it; dependency install scripts must never see it.
       // biome-ignore lint/suspicious/noTemplateCurlyInString: a GitHub Actions expression the workflow must carry literally
-      expect(build?.env?.CONLOCA_BUILD_TOKEN).toBe('${{ secrets.CONLOCA_BUILD_TOKEN }}');
-      expect(steps.some((step) => step.run?.endsWith('run doctor') || step.run === 'yarn doctor')).toBe(true);
-      expect(steps.some((step) => step.run === packageManagerCommands(pm).frozenInstall)).toBe(true);
+      const token = '${{ secrets.CONLOCA_BUILD_TOKEN }}';
+      expect(doctor?.env?.CONLOCA_BUILD_TOKEN).toBe(token);
+      expect(build?.env?.CONLOCA_BUILD_TOKEN).toBe(token);
+      expect(install?.env).toBeUndefined();
+      expect(job.env).toBeUndefined();
+      const checkout = steps.find((step) => step.uses?.startsWith('actions/checkout@'));
+      // A pull request builds the branch's own commit, not GitHub's temporary merge commit.
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: a GitHub Actions expression the workflow must carry literally
+      expect(checkout?.with?.ref).toBe('${{ github.event.pull_request.head.sha || github.sha }}');
       if (pm === 'bun') expect(steps.some((step) => step.uses?.startsWith('oven-sh/setup-bun@'))).toBe(true);
       if (pm === 'pnpm') {
         // action-setup fails the job when no pnpm version is pinned and the project declares none.

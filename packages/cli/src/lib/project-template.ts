@@ -120,7 +120,7 @@ const SETUP_STEPS: Record<PackageManager, string> = {
 `,
 };
 
-/** GitHub Actions workflow: doctor + build, with a build-token slot pre-wired but inert. */
+/** GitHub Actions workflow: doctor + build, both with the build-token slot (unused until a site adds an integration that reads it). */
 export function renderWorkflow(pm: PackageManager): string {
   const commands = packageManagerCommands(pm);
   return `name: Conloca
@@ -132,12 +132,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # On a pull request, build the branch's own commit rather than GitHub's
+          # temporary merge commit, so a build that reports its commit names a real one.
+          ref: \${{ github.event.pull_request.head.sha || github.sha }}
 ${SETUP_STEPS[pm]}      - run: ${commands.frozenInstall}
+      # Slot for a build integration that is not part of this scaffold; nothing reads
+      # this secret until you add one. Given to doctor and the build only, never to
+      # dependency install scripts.
       - run: ${commands.run} doctor
+        env:
+          CONLOCA_BUILD_TOKEN: \${{ secrets.CONLOCA_BUILD_TOKEN }}
       - run: ${commands.run} build
         env:
-          # Inert slot for a build integration that is not part of this scaffold;
-          # nothing reads this secret until you add one.
           CONLOCA_BUILD_TOKEN: \${{ secrets.CONLOCA_BUILD_TOKEN }}
 `;
 }
