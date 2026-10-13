@@ -11,6 +11,9 @@ to `conlocaCMS` to:
    and serves draft pages.
 4. Expose `PreviewContentAPI` for `.astro` pages to fetch draft content.
 
+Items 2 to 4 serve draft previews, which are not available on your own deployment yet. The setup below keeps them off
+with `previewBuild: false` (see [Draft previews](#draft-previews)).
+
 ## Setup
 
 Before you start you need:
@@ -70,9 +73,9 @@ export default defineConfig({
   there. The integration does **not** read Astro's `site` option, so set `publicBaseUrl` even when `site` holds the same
   address. Its only fallback is `CF_PAGES_URL`, which Cloudflare Pages sets when it runs the build itself. Without
   either, the build succeeds but does not register, and the editor never updates.
-- `previewBuild: false` turns off the second build that serves draft previews. Keep it off while you connect: that build
-  needs an SSR adapter (the project's own, or `previewBuild.adapter`), so on a static site without one it fails the
-  build, and what it produces is a separate app you deploy and route yourself (see [Draft previews](#draft-previews)).
+- `previewBuild: false` keeps off the second build, the one that serves draft previews. Draft previews on your own
+  deployment are not available yet, so keep this line: without it, every build that registers also runs that second
+  build, which fails on a static site that has no SSR adapter.
 
 ### 3. Give the build a token
 
@@ -243,8 +246,8 @@ Then reload the editor: it opens your site instead of **Connect this site**, and
 | `siteStyles`           | no       | Site CSS compiled into the canvas stylesheet, as in `conlocaCMS`.                                                                    |
 | `fragmentPreviewRoute` | no       | Content route for build-time style discovery, as in `conlocaCMS`.                                                                    |
 | `previewDomain`        | no       | Dedicated preview domain. When set, switches to `preview-domain` mode and is used instead of `publicBaseUrl`.                        |
-| `previewBuild`         | no       | `PreviewBuildOptions` or `false`. On by default; needs the project's SSR adapter or `previewBuild.adapter`, else set `false`.        |
-| `saasIssuer`           | no       | JWT `iss` the preview middleware pins (the endpoint's token issuer). Baked in; else set at runtime.                                  |
+| `previewBuild`         | no       | `PreviewBuildOptions` or `false`. On by default; set `false`, since draft previews on your own deployment are not available yet.     |
+| `saasIssuer`           | no       | Draft previews only. JWT `iss` the preview middleware pins (the endpoint's token issuer). Baked in; else set at runtime.             |
 | `requireRegistration`  | no       | Fail the build when registration is skipped for a missing prerequisite. Recommended in CI once setup is done.                        |
 
 The `conlocaCMS` options `schemasPath` and `mdxComponentFolders` reach the editor at `endpoint` automatically: the CMS
@@ -261,36 +264,10 @@ they did before.
 
 ## Draft previews
 
-This is the part that is easy to miss: **`astro build` produces the preview app, but it does not deploy it.** Until you
-deploy and route it, preview links resolve to nothing and the editor's Preview button appears to do nothing.
+Draft previews on your own deployment are not available yet. Keep `previewBuild: false` in your config: the preview
+build stays off, and a build produces only your normal site.
 
-What a build that registers produces when `previewBuild` is not `false`:
-
-1. Your normal site in `dist/` — unchanged.
-2. A second, SSR app in `.conloca/preview-server/` — this is the preview app. It is built with the project's own
-   adapter, or with `previewBuild.adapter` when the project has none (a project with its own adapter must not set one:
-   Astro allows one adapter per build). A static project without either fails the build. The preview app lives OUTSIDE
-   `dist/` because it bakes the preview secret: a wholesale static upload of `dist/` must never be able to publish it.
-   Add `.conloca/` to `.gitignore`.
-
-To make preview work you must:
-
-1. **Deploy `.conloca/preview-server/` as its own app**, alongside your site.
-2. **Route `/conloca_preview_*` on your site's domain to it.** Everything else stays on your normal site. Preview must
-   be reachable on the SAME origin as the site — the preview cookie is origin-scoped, and a different origin cannot read
-   it.
-3. **Set `CONLOCA_SAAS_ISSUER`** on that deployment (the `iss` of the JWTs the endpoint signs). Everything else — the
-   preview secret, the endpoint, the audience — is baked into the artifact at build time. Set `saasIssuer` in
-   `conlocaCloud()` and the deployment needs no environment variables at all.
-
-Any of `CONLOCA_PREVIEW_SECRET`, `CONLOCA_SAAS_ENDPOINT`, `CONLOCA_SAAS_AUDIENCE`, `CONLOCA_SAAS_ISSUER` set on the
-deployment overrides the baked value, so one artifact can be promoted across environments without a rebuild.
-
-**A fully static site cannot preview drafts.** A draft does not exist at build time, so rendering it requires something
-running at request time. This is not a Conloca limitation — Next.js Draft Mode is likewise unsupported with static
-export, and every CMS with a comparable feature requires a runtime.
-
-### When registration is skipped
+## When registration is skipped
 
 A build that lacks a prerequisite — no `CONLOCA_BUILD_TOKEN`, no repository identity, no git sha/branch, or no public
 base URL — completes without registering and ends with one summary block:
@@ -304,22 +281,6 @@ base URL — completes without registering and ends with one summary block:
 
 Set `requireRegistration: true` in CI to turn that into a build failure. An attempted registration that the endpoint
 rejects always fails the build; there is no switch for that.
-
-### Checking draft previews
-
-Open a preview link. The first request carries the token in the query string and should answer `302` with a
-`Set-Cookie: conloca_preview_<secret>=…` and a `Location` pointing at the **clean** path (no secret prefix). After that
-the cookie carries the preview across internal links.
-
-If preview pages render as ordinary published pages, the preview app is running but unconfigured — it logs once at
-startup:
-
-```plain
-[@conloca/cloud-astro] draft preview is INERT — <reason>
-```
-
-It deliberately fails open (serving the published site) rather than erroring, so a misconfigured preview never takes the
-site down.
 
 ## Doctor
 
