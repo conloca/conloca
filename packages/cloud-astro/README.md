@@ -215,8 +215,8 @@ Then reload the editor: it opens your site instead of **Connect this site**, and
 
 ### Troubleshooting
 
-- **The build log ends with `editor at … NOT updated by this build`.** A prerequisite was missing, and the `missing:`
-  line names it: `public base URL` means `publicBaseUrl` is not set (step 2), `build token` means the
+- **The build log ends with `editor at … NOT updated by this build`.** Prerequisites were missing, and each `missing:`
+  line names one: `public base URL` means `publicBaseUrl` is not set (step 2), `build token` means the
   `CONLOCA_BUILD_TOKEN` secret does not reach the build (step 3). See
   [When registration is skipped](#when-registration-is-skipped).
 - **Doctor says the build token value starts with `"CONLOCA_BUILD_TOKEN="`, or the build fails with
@@ -270,7 +270,8 @@ build stays off, and a build produces only your normal site.
 ## When registration is skipped
 
 A build that lacks a prerequisite — no `CONLOCA_BUILD_TOKEN`, no repository identity, no git sha/branch, or no public
-base URL — completes without registering and ends with one summary block:
+base URL — completes without registering and ends with one summary block, with a `missing:` line for each prerequisite
+it lacks:
 
 ```plain
 [@conloca/cloud-astro] editor at https://cms.example.com NOT updated by this build

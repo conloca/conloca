@@ -951,6 +951,31 @@ describe('conlocaCloud — skipped-registration summary and requireRegistration'
     );
   });
 
+  it('names every missing prerequisite, not only the first, so one build shows all that setup still lacks', async () => {
+    // A GIT_DIR that does not exist fails every git lookup wherever the test runs, as a build outside a checkout does.
+    const restoreGit = snapshotEnv(['GIT_DIR']);
+    process.env.GIT_DIR = join(build.root, 'no-git');
+    try {
+      const logger = makeLogger();
+      await buildDoneHook(validOptions({ repoUri: undefined, puckConfigPath: build.entry, previewBuild: false }))({
+        dir: build.dist,
+        logger,
+      });
+      const summary = logger.messages.find((m) => m.msg.includes('NOT updated by this build'));
+      expect(summary?.msg).toContain(
+        [
+          `  missing: build token (set buildToken or ${BUILD_TOKEN_ENV_VAR})`,
+          '  missing: repository identity (build in a supported CI environment or Git checkout, or set repoUri)',
+          '  missing: git sha/branch (set CF_PAGES_COMMIT_SHA and CF_PAGES_BRANCH, or build inside a git checkout)',
+          '  missing: public base URL for the editor bundle (set previewDomain, publicBaseUrl, or CF_PAGES_URL)',
+          '  consequence:',
+        ].join('\n'),
+      );
+    } finally {
+      restoreGit();
+    }
+  });
+
   it('requireRegistration turns a soft skip into a build failure carrying the same summary', async () => {
     const logger = makeLogger();
     await expect(

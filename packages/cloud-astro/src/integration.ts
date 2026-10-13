@@ -370,7 +370,7 @@ export function conlocaCloud(options: ConlocaCloudOptions): AstroIntegration {
           componentManifest,
         });
         let registeredSecret: string | undefined;
-        if ('skipped' in registration) reportSkippedRegistration(registration.skipped, options, logger);
+        if ('missing' in registration) reportSkippedRegistration(registration.missing, options, logger);
         else registeredSecret = registration.previewSecret;
 
         if (options.previewBuild === false) {
@@ -433,14 +433,18 @@ function resolveDeploymentUrl(options: ConlocaCloudOptions): string | undefined 
 }
 
 /**
- * ONE end-of-build block for a skipped registration — the prerequisite that
+ * ONE end-of-build block for a skipped registration — every prerequisite that
  * was missing and what it costs — the last thing the integration prints.
  * With `requireRegistration` it fails the build instead.
  */
-function reportSkippedRegistration(reason: string, options: ConlocaCloudOptions, logger: AstroIntegrationLogger): void {
+function reportSkippedRegistration(
+  missing: string[],
+  options: ConlocaCloudOptions,
+  logger: AstroIntegrationLogger,
+): void {
   const summary = [
     `editor at ${options.endpoint} NOT updated by this build`,
-    `  missing: ${reason}`,
+    ...missing.map((prerequisite) => `  missing: ${prerequisite}`),
     "  consequence: registration was skipped, so the editor keeps serving the previous build of this branch (or the default branch's, or nothing, if neither was ever registered)",
     '  check: conloca doctor --live',
   ].join('\n');
@@ -450,15 +454,16 @@ function reportSkippedRegistration(reason: string, options: ConlocaCloudOptions,
   logger.warn(summary);
 }
 
-/** What `registerBuild` ended with: the preview secret, or the prerequisite whose absence made it skip. */
-type RegistrationOutcome = { previewSecret: string } | { skipped: string };
+/** What `registerBuild` ended with: the preview secret, or every prerequisite whose absence made it skip. */
+type RegistrationOutcome = { previewSecret: string } | { missing: string[] };
 
 /**
  * Registers the freshly built editor bundle at the endpoint. Soft-skip ONLY
  * when registration was never attempted: the pre-request guards (no build
- * token, no repo identity, no sha/branch, no base URL) warn and return the
- * missing prerequisite so an unregistered deploy still completes — the hook
- * turns that into one end-of-build summary (or a failure under
+ * token, no repo identity, no sha/branch, no base URL) each warn, and every
+ * missing prerequisite is returned at once, so one build names all that setup
+ * still lacks and an unregistered deploy still completes — the hook turns
+ * that into one end-of-build summary (or a failure under
  * `requireRegistration`). Once a registration IS attempted, its failure
  * FAILS THE BUILD: postRegistration throws on any
  * deterministic 4xx and after exhausting the ≥500 retry backoff, and that
@@ -477,10 +482,11 @@ async function registerBuild(
     componentManifest?: ComponentManifestArtifact;
   } = {},
 ): Promise<RegistrationOutcome> {
+  const missing: string[] = [];
   const buildToken = options.buildToken ?? process.env[BUILD_TOKEN_ENV_VAR];
   if (!buildToken) {
     logger.warn(`skipping registration: no build token (set buildToken or ${BUILD_TOKEN_ENV_VAR})`);
-    return { skipped: `build token (set buildToken or ${BUILD_TOKEN_ENV_VAR})` };
+    missing.push(`build token (set buildToken or ${BUILD_TOKEN_ENV_VAR})`);
   }
 
   if (!repoUri) {
@@ -488,7 +494,7 @@ async function registerBuild(
       'skipping registration: could not determine repository identity ' +
         '(build in a supported CI environment or Git checkout, or set repoUri)',
     );
-    return { skipped: 'repository identity (build in a supported CI environment or Git checkout, or set repoUri)' };
+    missing.push('repository identity (build in a supported CI environment or Git checkout, or set repoUri)');
   }
 
   const { branch } = resolveBuildRef();
@@ -503,7 +509,7 @@ async function registerBuild(
       'skipping registration: could not resolve the git sha/branch ' +
         '(set CF_PAGES_COMMIT_SHA and CF_PAGES_BRANCH, or build inside a git checkout)',
     );
-    return { skipped: 'git sha/branch (set CF_PAGES_COMMIT_SHA and CF_PAGES_BRANCH, or build inside a git checkout)' };
+    missing.push('git sha/branch (set CF_PAGES_COMMIT_SHA and CF_PAGES_BRANCH, or build inside a git checkout)');
   }
 
   const deploymentUrl = resolveDeploymentUrl(options);
@@ -512,8 +518,10 @@ async function registerBuild(
     logger.warn(
       'skipping registration: no public base URL for the editor bundle (set previewDomain, publicBaseUrl, or CF_PAGES_URL)',
     );
-    return { skipped: 'public base URL for the editor bundle (set previewDomain, publicBaseUrl, or CF_PAGES_URL)' };
+    missing.push('public base URL for the editor bundle (set previewDomain, publicBaseUrl, or CF_PAGES_URL)');
   }
+  // Restates the guards above, so the values below are typed as set.
+  if (!buildToken || !repoUri || !gitSha || !branch || !baseUrl) return { missing };
 
   // Resolve the deployable-site id (STRICT): a throw here FAILS THE BUILD —
   // after the soft skip guards above, so only a build that is actually
