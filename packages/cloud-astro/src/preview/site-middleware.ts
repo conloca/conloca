@@ -203,7 +203,7 @@ function warnUnconfiguredOnce(error: unknown): void {
   console.warn(
     `[@conloca/cloud-astro] draft preview is INERT — ${detail}\n` +
       '  Requests are being served as the ordinary published site.\n' +
-      '  Set the preview env vars on this deployment to enable it; see the ' +
-      'cloud-astro README "Deploying the preview build".',
+      '  Draft previews on your own deployment are not available yet: keep previewBuild: false ' +
+      '(see the cloud-astro README "Draft previews").',
   );
 }

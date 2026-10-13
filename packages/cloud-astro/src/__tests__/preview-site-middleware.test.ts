@@ -1,4 +1,5 @@
-import { beforeAll, describe, expect, it } from 'bun:test';
+import { beforeAll, describe, expect, it, spyOn } from 'bun:test';
+import { readFile } from 'node:fs/promises';
 import type { ContentAPI } from '@conloca/content-api';
 import { generateKeyPair, type JWTVerifyGetKey, SignJWT } from 'jose';
 import type { PreviewMiddlewareOptions } from '../preview/middleware.js';
@@ -342,10 +343,17 @@ describe('createPreviewSiteMiddleware — unconfigured runtime', () => {
       throw new Error('missing required env var CONLOCA_SAAS_ENDPOINT');
     }, seams());
     const context = contextFor('https://site.test/blog');
+    const warn = spyOn(console, 'warn').mockImplementation(() => undefined);
 
     const response = await onRequest(context, next);
+    const warning = warn.mock.calls.map((args) => String(args[0])).join('\n');
+    warn.mockRestore();
 
     expect(await response.text()).toBe(NEXT_BODY);
     expect(context.locals.conlocaPreview).toBeUndefined();
+    // The warning sends the reader to a README section, which has to exist.
+    const section = /README "([^"]+)"/.exec(warning)?.[1];
+    const readme = await readFile(new URL('../../README.md', import.meta.url), 'utf8');
+    expect(readme.split('\n').filter((line) => line.startsWith('## '))).toContain(`## ${section}`);
   });
 });
