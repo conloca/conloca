@@ -169,6 +169,51 @@ runs:
       id: devenv-cache
       if: steps.runner-kind.outputs.host != 'true'
       uses: ./.github/actions/cache-nix-devenv
+    # smoo-local-begin
+
+    # Temporary copy of the step a coming smoo release adds to this managed
+    # action. Delete this block when that release is adopted.
+
+    # GitHub's hosted Ubuntu images promise only 14 GB free and fill the rest of
+    # the disk with toolchains a Nix-built shell never uses. The store can need
+    # more: the largest measured is 17.1 GB unpacked, and a restore or save also
+    # holds its 4.9 GB archive in RUNNER_TEMP. A 2-vCPU runner ran out of disk
+    # with about 15 GB of store on it, and nothing had printed free space.
+    # Delete those trees, most GiB per second first, until / has 32 GiB free.
+    # That is an estimate: the store at its peak with its archive, node_modules
+    # and build scratch, plus a few GiB of margin; the df lines record what a
+    # run really had. A runner that already has it deletes nothing, and the
+    # Android SDK, which alone takes minutes to delete, goes only when the rest
+    # was not enough.
+    # What goes stays gone for the rest of the job: a later actions/setup-*
+    # step downloads its runtime instead of finding it in the tool cache, a
+    # pwsh step loses the image's PowerShell modules (pwsh itself stays), and
+    # a step that runs the image's .NET, GHCup, Swift or Android SDK directly
+    # fails. Only a runner that started short of space deletes anything, so
+    # such a step would fail on some runs and pass on others.
+    # Synchronous on purpose: a background rm would race the store extraction
+    # for space and disk I/O. A failed delete warns and the job goes on: this
+    # is an optimisation, never a gate. Self-hosted machines keep everything.
+    - name: 🧹 Free runner disk
+      if: steps.runner-kind.outputs.host != 'true' && runner.os == 'Linux' && runner.environment == 'github-hosted'
+      shell: bash
+      run: |
+        want_kib=$((32 * 1024 * 1024))
+        free_kib() { df -k --output=avail / | tail -n 1 | tr -d ' '; }
+        df -h /
+        for dir in /usr/share/swift /usr/local/share/powershell /usr/local/.ghcup \
+          /usr/share/dotnet "${AGENT_TOOLSDIRECTORY:-}" /usr/local/lib/android; do
+          [ "$(free_kib)" -lt "$want_kib" ] || break
+          [ -n "$dir" ] && [ -d "$dir" ] || continue
+          start=$SECONDS
+          if sudo rm -rf "$dir"; then
+            echo "removed $dir in $((SECONDS - start)) s"
+          else
+            echo "::warning::could not remove $dir; going on without its space"
+          fi
+        done
+        df -h /
+    # smoo-local-end
 
     # Single-user Nix unpacked into /nix in seconds: no installer volume, no
     # daemon, no sudo. keep-outputs/keep-derivations make the garbage collection
