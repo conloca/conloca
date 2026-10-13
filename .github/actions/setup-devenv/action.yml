@@ -1,62 +1,257 @@
 name: Setup Nix/devenv
-description: Restore caches and build the SmoothBricks devenv shell after checkout.
+description: >
+  Build the SmoothBricks devenv shell after checkout. Restores the small devenv/direnv actions/cache segment on every
+  runner (eval SQLite + shell scripts). On host-nix runners (NIX_REMOTE=daemon + /var/cache/ci) skips Nix install and
+  the store cache (host store). On ephemeral runners installs a single-user Nix and restores /nix itself from the
+  actions cache: store paths and the Nix database come back as files, so no NAR is imported and no daemon is needed.
 
 outputs:
-  nix-cache-hit:
-    description: Whether the Nix profile/store cache restored from the exact primary key.
-    value: ${{ steps.nix-cache.outputs.cache-hit }}
   devenv-cache-hit:
     description: Whether the devenv/direnv cache restored from the exact primary key.
-    value: ${{ steps.devenv-cache.outputs.cache-hit }}
+    value: ${{ steps.runner-kind.outputs.host == 'true' || steps.devenv-cache.outputs.cache-hit || 'false' }}
+  host-runner:
+    description: Whether this job is on a host-nix runner with shared store/caches.
+    value: ${{ steps.runner-kind.outputs.host }}
 
 runs:
   using: composite
   steps:
     # This action is intentionally post-checkout only. Repo-local actions do not
     # exist before actions/checkout has populated the working tree.
-    - name: ❄️ Install Nix
-      uses: DeterminateSystems/determinate-nix-action@v3
 
-    - name: 🧊 Cache Nix profiles and store NAR
-      id: nix-cache
-      uses: ./.github/actions/cache-nix-devenv
-      with:
-        segment: nix
-
-    - name: ♻️ Restore Nix store from NAR
+    # Runner image/profile owns paths (NIX_REMOTE, /var/cache/ci/*). Detect here
+    # so every workflow can `uses: setup-devenv` without forking step graphs.
+    - name: 🔎 Runner kind
+      id: runner-kind
       shell: bash
-      working-directory: tooling/direnv
-      run: ./github-actions-bootstrap.sh restore-store
+      run: |
+        if [ "${NIX_REMOTE:-}" = daemon ] && [ -d /var/cache/ci ]; then
+          echo "host=true" >> "$GITHUB_OUTPUT"
+          echo "host-nix runner (shared store + /var/cache/ci)"
+        else
+          echo "host=false" >> "$GITHUB_OUTPUT"
+          echo "ephemeral runner (install Nix + GH caches)"
+        fi
 
-    # Restore direnv state only when the Nix cache key is exact. Partial Nix
-    # restores can contain a NAR for a different shell closure, and .direnv
-    # points directly at derivations inside that closure.
+    # Nx names its cache metadata DB after the machine identity
+    # (.nx/workspace-data/<machine-id>-v3.db) and refuses artifacts written by a
+    # different machine. Each Linux runner instance is a fresh clone that
+    # generates its own id on first boot, so a restored DB is never the file Nx
+    # opens: measured, every artifact came back unrecognized and the transfer
+    # was wasted. GitHub's hosted images ship one baked id, which is why the
+    # same wiring works there.
+    #
+    # Pin the id on Linux, then keep the cache on the shared mutable bind
+    # instead of shipping it through the Actions cache. One host is then one
+    # cache with one identity, which is the only arrangement Nx trusts.
+    # Artifacts AND metadata must move together: the DB alone is where "Nx
+    # recognizes this" lives. Darwin has a stable native identity and no
+    # /etc/machine-id, so it skips the pin (and the sudo) entirely — the
+    # Linux-only gate below is on runner.os, not on host detection, because
+    # Darwin host jobs take the same host branch.
+    #
+    # /etc/machine-id is a plain writable file on the Linux hosts, not a mount
+    # point. The durable home for this is the runner image; doing it per job
+    # keeps the fix in one managed place until then.
+    - name: 🧠 Pin the machine id (Linux hosts only)
+      if: steps.runner-kind.outputs.host == 'true' && runner.os == 'Linux'
+      shell: bash
+      env:
+        # Any valid 32-char lowercase hex; only its stability across instances
+        # matters. Shared fleet-wide on purpose — see the cache trust model in
+        # the CI workflow's save step.
+        FLEET_MACHINE_ID: 5cbb1f9a4d2e4f0f8b6a3c7d9e150246
+      run: |
+        printf '%s\n' "$FLEET_MACHINE_ID" | sudo tee /etc/machine-id >/dev/null
+        echo "machine id : $(cat /etc/machine-id)"
+
+    # Nx cache location on the shared bind: common to every host runner.
+    # Scoped per workflow, and it has to be. workspace-data is not a cache:
+    # it holds project-graph.json, file-map.json and nx_files for ONE
+    # checkout. It cannot be split from the artifacts either -- Nx rejects
+    # cache artifacts it has no DB row for ("Unrecognized Cache Artifacts"),
+    # and that DB lives in workspace-data. Since CI and Publish sit in
+    # different concurrency groups they run simultaneously on one host, so a
+    # repository-wide tree let one workflow rewrite the other's graph state
+    # mid-read. Per workflow alone is not enough either: CI's concurrency
+    # group is per pull request (by number), or per ref for pushes, so
+    # separate PRs and jobs run at once and must never share mutable graph
+    # or eval state. The scope hashes that same identity, not github.ref: a
+    # merged close carries the base branch's ref, so two pull requests'
+    # cleanups merged a minute apart would share one scope while running in
+    # different concurrency groups.
+    # Hash the exact identity (not a lossy path slug); keep cache artifacts
+    # and their metadata DB together, warm across runs of the same pull
+    # request or ref and job.
+    - name: 📂 Locate the Nx cache on the shared bind
+      if: steps.runner-kind.outputs.host == 'true'
+      shell: bash
+      env:
+        NX_CACHE_REPO: ${{ github.repository }}
+        NX_CACHE_LANE: ${{ github.workflow }}
+        SCOPE_REF: ${{ github.event.pull_request.number || github.ref }}
+      run: |
+        lane=$(printf '%s' "$NX_CACHE_LANE" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9._-' '-')
+        scope=$(printf '%s\0%s\0%s\0%s\0%s' "$GITHUB_WORKFLOW" "$SCOPE_REF" "$GITHUB_JOB" "$RUNNER_OS" "$RUNNER_ARCH" | git hash-object --stdin)
+        NX_CACHE_ROOT="/var/cache/ci/nx/$NX_CACHE_REPO/${lane:-default}/$scope"
+        mkdir -p "$NX_CACHE_ROOT/cache" "$NX_CACHE_ROOT/workspace-data"
+        {
+          echo "NX_CACHE_DIRECTORY=$NX_CACHE_ROOT/cache"
+          echo "NX_WORKSPACE_DATA_DIRECTORY=$NX_CACHE_ROOT/workspace-data"
+          # Nx's own eviction. It drops artifacts and their DB rows together, so
+          # never age this tree out with tmpfiles: deleting artifacts alone is a
+          # silent miss, but deleting the DB orphans every artifact.
+          echo "NX_MAX_CACHE_SIZE=20GB"
+        } >> "$GITHUB_ENV"
+        echo "nx cache   : $NX_CACHE_ROOT"
+
+    # Host runners keep devenv's state on the shared bind, next to the Nx cache:
+    # .devenv (eval SQLite, gc roots, profile) and .direnv survive the job, so
+    # the next job on this host evaluates nothing and downloads nothing. The
+    # Actions cache segment below is the ephemeral runners' substitute for this.
+    # Scoped per workflow, pull request (by number) or ref for pushes, job and
+    # platform, like Nx: separate PR runs and jobs can overlap, and one
+    # eval-cache.db must have only one writer. Not per github.ref: a merged
+    # close carries the base branch's ref, so two pull requests' cleanups
+    # would share this state and the second's bind mount below would shadow
+    # the first's workspace.
+    #
+    # The eval cache keys on canonical absolute paths, and act's host executor
+    # checks out under <cache>/<random 8 chars>/hostexecutor - a new path every
+    # job by design (act/runner/run_context.go: MustRandName), so a restored
+    # cache could never match. The workspace is therefore bind-mounted at a
+    # stable path (a symlink would not do: Nix canonicalises) and devenv is
+    # evaluated from there; every later step still runs in the checkout, which
+    # is the same tree. DEVENV_WORKDIR names the path the devenv steps use.
+    # The mount target is the instance's own /work, not the shared bind: only
+    # the path's spelling must be stable, and a bind onto the idmapped cache
+    # dataset failed inside the job (move_mount: ENOENT) where a container-fs
+    # target does not. If the mount is refused the job goes on from the
+    # checkout and pays the evaluation: this is an optimisation, never a gate.
+    - name: 📂 Locate devenv state on the shared bind
+      if: steps.runner-kind.outputs.host == 'true'
+      shell: bash
+      env:
+        DEVENV_STATE_REPO: ${{ github.repository }}
+        DEVENV_STATE_LANE: ${{ github.workflow }}
+        DEVENV_STATE_JOB: ${{ github.job }}
+        SCOPE_REF: ${{ github.event.pull_request.number || github.ref }}
+      run: |
+        lane=$(printf '%s' "$DEVENV_STATE_LANE" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9._-' '-')
+        scope=$(printf '%s\0%s\0%s\0%s\0%s' "$GITHUB_WORKFLOW" "$SCOPE_REF" "$GITHUB_JOB" "$RUNNER_OS" "$RUNNER_ARCH" | git hash-object --stdin)
+        root="/var/cache/ci/devenv/$DEVENV_STATE_REPO/${lane:-default}/$DEVENV_STATE_JOB/$scope"
+        mkdir -p "$root/.devenv" "$root/.direnv"
+        rm -rf tooling/direnv/.devenv tooling/direnv/.direnv
+        ln -s "$root/.devenv" tooling/direnv/.devenv
+        ln -s "$root/.direnv" tooling/direnv/.direnv
+        stable="/work/$DEVENV_STATE_REPO/${lane:-default}/$DEVENV_STATE_JOB/$scope"
+        if mkdir -p "$stable" && sudo mount --bind "$GITHUB_WORKSPACE" "$stable"; then
+          echo "DEVENV_WORKDIR=$stable" >> "$GITHUB_ENV"
+          echo "devenv state: $root (workspace bind-mounted at $stable)"
+        else
+          echo "DEVENV_WORKDIR=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
+          echo "::warning::stable devenv path unavailable (bind mount refused); evaluating from the checkout"
+          echo "devenv state: $root (workspace at $GITHUB_WORKSPACE)"
+        fi
+
+    - name: 📂 Devenv runs in the checkout
+      if: steps.runner-kind.outputs.host != 'true'
+      shell: bash
+      run: echo "DEVENV_WORKDIR=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
+
+    # Devenv segment (own key): tooling/direnv/.devenv + .direnv — includes
+    # nix-eval-cache.db. Independent of the store cache; restored on ephemeral
+    # runners whether or not the store cache hit. Missing store paths are fine:
+    # devenv verifies shell drv/out exist on eval-cache hit and invalidates +
+    # re-evals / realizes when GC removed them. Packages still come from host
+    # store, the store cache, or Cachix — this blob only skips evaluation.
     - name: 🧊 Cache devenv and direnv
       id: devenv-cache
-      if: ${{ steps.nix-cache.outputs.cache-hit == 'true' }}
+      if: steps.runner-kind.outputs.host != 'true'
       uses: ./.github/actions/cache-nix-devenv
+
+    # Single-user Nix unpacked into /nix in seconds: no installer volume, no
+    # daemon, no sudo. keep-outputs/keep-derivations make the garbage collection
+    # before a cache save keep the shell's derivations, so a restored eval cache
+    # still finds them.
+    - name: ❄️ Install Nix
+      if: steps.runner-kind.outputs.host != 'true'
+      uses: nixbuild/nix-quick-install-action@v35
       with:
-        segment: devenv
+        nix_conf: |
+          keep-outputs = true
+          keep-derivations = true
+          keep-env-derivations = true
+
+    # The store itself, restored as files: /nix/store plus the Nix database,
+    # merged into the fresh install. The post phase collects garbage down to the
+    # live closure and saves when the primary key missed.
+    #
+    # CONTENT ONLY — never the Nix profiles. `~/.nix-profile` and
+    # ~/.local/state/nix/profiles are mutable places whose whole job is to be
+    # gcroots, and restoring a previous run's copies over a freshly installed
+    # single-user Nix de-roots the Nix binary that is currently running. The post
+    # phase then garbage-collects it and cache-nix-action's own `nix --version`
+    # probe fails, at which point it skips the upload and still reports the step
+    # as a success — so the store cache silently stops being written and every
+    # later run pays a cold shell. Measured exactly that way: run 34371205556
+    # logged `nix (Nix) 2.34.7`, freed 2.7 GiB, then `nix: command not found`,
+    # and no `Cache saved` line for this key ever appeared.
+    #
+    # It only surfaced now because it needs a restore-prefix fallback rather than
+    # a cold store or an exact hit: a matching key restores profiles consistent
+    # with the store, while the diet rotated the key and pulled the previous
+    # store's profiles onto a different Nix.
+    #
+    # Dropping them costs nothing and buys determinism. devenv's closure still
+    # arrives inside /nix, so install-devenv's `nix profile add` of the locked
+    # rev is a link rather than a download, and the devenv in play is the one
+    # devenv.lock names instead of whichever run last populated the prefix.
+    - name: 🧊 Cache Nix store
+      id: nix-cache
+      if: steps.runner-kind.outputs.host != 'true'
+      uses: nix-community/cache-nix-action@v7
+      with:
+        paths: |
+          /nix
+          ~/.cache/nix
+        # prettier-ignore
+        primary-key: ${{ runner.os }}-${{ runner.arch }}-nix-v6-${{ hashFiles('tooling/direnv/devenv.yaml', 'tooling/direnv/devenv.nix', 'tooling/direnv/devenv.smoo.nix', 'tooling/direnv/devenv.lock') }}
+        restore-prefixes-first-match: ${{ runner.os }}-${{ runner.arch }}-nix-v6-
+        gc-max-store-size: 1G
 
     - name: ⚡ Enable Cachix
+      if: steps.runner-kind.outputs.host != 'true'
       uses: cachix/cachix-action@v17
       with:
         name: devenv
 
+    # A host runner's devenv belongs to its image, so install-devenv accepts
+    # whatever is on PATH there. On an ephemeral runner the devenv came out of a
+    # cache this workflow wrote, so it is held to devenv.lock's rev: the store
+    # cache restores ~/.nix-profile wholesale and a prefix match hands the job
+    # the CLI of whichever run last populated the key, which outlived a lock bump
+    # until the check existed.
     - name: 🧰 Install devenv
       shell: bash
-      working-directory: tooling/direnv
+      working-directory: ${{ env.DEVENV_WORKDIR }}/tooling/direnv
+      env:
+        SMOO_HOST_RUNNER: ${{ steps.runner-kind.outputs.host }}
       run: ./github-actions-bootstrap.sh install-devenv
 
+    # node_modules + ttsc plugin binaries: GH Actions cache on ephemeral runners.
+    # Host runners keep those under the /var/cache/ci bind (bun / ttsc env).
     - name: 📦 Cache node_modules
+      if: steps.runner-kind.outputs.host != 'true'
       uses: ./.github/actions/cache-node-modules
 
-    # Restores compiled ttsc native plugins into .cache/ttsc/plugins. TTSC_CACHE_DIR
-    # is set by devenv enterShell (+ bootstrap GITHUB_ENV for later steps).
     - name: 🧊 Cache ttsc plugins
+      if: steps.runner-kind.outputs.host != 'true'
       uses: ./.github/actions/cache-ttsc-plugins
 
     - name: 🐚 Build devenv shell
       shell: bash
-      working-directory: tooling/direnv
+      working-directory: ${{ env.DEVENV_WORKDIR }}/tooling/direnv
+      env:
+        SMOO_ROOT_BUILD_INPUTS: ${{ steps.runner-kind.outputs.host != 'true' }}
       run: ./github-actions-bootstrap.sh build-shell

@@ -1,26 +1,32 @@
 #!/usr/bin/env bun
-import { existsSync, mkdirSync, readdirSync, readFileSync, readlinkSync, rmSync, symlinkSync } from 'node:fs';
-import { mkdir, rmdir, stat } from 'node:fs/promises';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  readlinkSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { $ } from 'bun';
+import {
+  type DeferredSecret,
+  dependentGroups,
+  maskSecretValues,
+  resolveSecretEnvironment,
+  SHELL_GROUP,
+} from './secret-references.ts';
 
+// DEVENV_ROOT is set by the devenv shell, which is how this script normally
+// runs. CI jobs that install dependencies without building that shell (the
+// publishing job installs Bun and Node directly) have no such variable, so fall
+// back to the git top level rather than resolving "undefined/../.." two levels
+// above the repository and failing with "could not find a package.json".
 const devenvRoot = process.env.DEVENV_ROOT;
-const projectRoot = path.resolve(`${devenvRoot}/../..`);
-
-// A legitimate concurrent setup finishes well within this; anything older is a
-// leftover from an interrupted run (CTRL-C/kill before the finally-cleanup) and
-// would otherwise wedge every future shell load behind the 120s spin + EEXIST.
-// NOTE: must be declared ABOVE the top-level setup block below — module consts
-// are not hoisted, and the lock loop runs during that block.
-const STALE_LOCK_MS = 10 * 60_000;
-// Unscoped require("typescript") must expose the TS6 compiler API for Nx.
-// @typescript/native installs another package also named "typescript" (TS7). Bun's
-// isolated linker often points node_modules/.bun/node_modules/typescript at TS7,
-// so packages resolved from the .bun store (nx) get version.cjs without readConfigFile.
-// After every install, force both unscoped typescript slots onto typescript@6.0.3.
-// Keep @typescript/native for ttsc via TTSC_TSGO_BINARY. See https://github.com/oven-sh/bun/issues/33834.
-const TYPESCRIPT_API_VERSION = '6.0.3';
 
 class CapturedCommandError extends Error {
   constructor(
@@ -33,6 +39,75 @@ class CapturedCommandError extends Error {
   }
 }
 
+// Every value resolved out of smoo.secrets below. The install inherits them,
+// so whatever a failing child echoed is redacted before its captured output
+// is replayed. Declared above the first replay site (resolveProjectRoot's own
+// failure) because module consts are not hoisted: a reference from there to a
+// const declared further down would report a temporal-dead-zone error instead
+// of the failure it was called to report.
+const resolvedSecretValues: string[] = [];
+
+// The declared secrets shell entry deliberately did NOT resolve — see THE
+// RULE in secret-references.ts: shell entry resolves the `shell` group and
+// nothing else. Nonempty only when this repository declares a secret in
+// another group that is absent from this environment. An installed checkout
+// contacts no registry and Nx needs no cache to run, so this stays silent;
+// it is printed by reportDegradedSetup, where an install has already failed
+// and a 401 is one of the things it might have been.
+const deferredSecrets: DeferredSecret[] = [];
+
+async function resolveProjectRoot(): Promise<string> {
+  if (devenvRoot) {
+    return path.resolve(`${devenvRoot}/../..`);
+  }
+
+  const result = await $`git rev-parse --show-toplevel`.quiet().nothrow();
+  if (result.exitCode !== 0) {
+    const error = new CapturedCommandError(
+      'git rev-parse --show-toplevel',
+      result.exitCode,
+      result.stdout,
+      result.stderr,
+    );
+    replayCapturedOutput(error);
+    throw error;
+  }
+  return new TextDecoder().decode(result.stdout).trim();
+}
+
+const projectRoot = await resolveProjectRoot();
+
+// Unscoped require("typescript") must expose the TS6 compiler API for Nx.
+// @typescript/native installs another package also named "typescript" (TS7). Bun's
+// isolated linker RACES the node_modules/.bun/node_modules/typescript fallback link
+// between the two versions on every install (verified nondeterministic on bun 1.3.14
+// AND 1.4.0 — the #33834 alias-resolution fix did not cover it), so packages resolved
+// from the .bun store (nx) sometimes get version.cjs without readConfigFile.
+// After every install, force both unscoped typescript slots onto typescript@6.0.3.
+// Keep @typescript/native for ttsc via TTSC_TSGO_BINARY. Do not retire this on a bun
+// bump until https://github.com/oven-sh/bun/issues/40355 is fixed and re-verified.
+const TYPESCRIPT_API_VERSION = '6.0.3';
+
+// post-commit is the one hook slot smoo shares. Tools that nudge a backup or a
+// mirror after every commit (git-backup, git-auto-remote) install themselves by
+// appending a fenced block to whatever hook file is already there, so a symlink
+// is doubly wrong here: it would delete their block, and their next install
+// would write through the link into the managed template. Own a fenced block
+// that calls the managed script instead, which is the convention they document.
+// Declared above the bootstrap block below, which installs the hook: module
+// consts are not hoisted, so declaring them beside installPostCommitHook would
+// report a temporal-dead-zone error instead of installing anything.
+const POST_COMMIT_BEGIN = '# >>> smoo post-commit >>>';
+const POST_COMMIT_END = '# <<< smoo post-commit <<<';
+const POST_COMMIT_BLOCK = [
+  POST_COMMIT_BEGIN,
+  '# Restore the index for the paths the commit just wrote: a partial commit',
+  '# (git commit --only -- <paths>) builds its tree from the worktree, so the',
+  '# pre-commit formatter never reaches the real index. Mechanism in the script.',
+  '"$(git rev-parse --show-toplevel)/tooling/git-hooks/post-commit.sh"',
+  POST_COMMIT_END,
+].join('\n');
+
 // Go to project root
 process.chdir(projectRoot);
 
@@ -41,43 +116,102 @@ try {
   // Do not import workspace packages here — this script is what installs them,
   // and package resolution/Typia transforms are not available yet.
   if (process.env.CI) {
+    await resolveSecrets();
+    // Failures are captured and reported below. Exiting in the catch would
+    // skip the git-diff diagnostic that follows a frozen-lockfile miss.
+    // bun install already races concurrent installs with an atomic cache
+    // rename; this script does not add a second mutex around it.
+    let frozenError: unknown;
+    let fallbackError: unknown;
     try {
       await runSetupCommand('bun install --frozen-lockfile', $`bun install --frozen-lockfile`, { quiet: false });
     } catch (error) {
+      frozenError = error;
       console.error('! Failed to install dependencies with frozen lockfile');
       replayCapturedOutput(error);
-      await runSetupCommand('bun install', $`bun install`, { quiet: false });
+      try {
+        await runSetupCommand('bun install', $`bun install`, { quiet: false });
+      } catch (fallback) {
+        fallbackError = fallback;
+      }
+    }
+    if (fallbackError !== undefined) {
+      reportSetupFailure(fallbackError);
+    }
+    if (frozenError !== undefined) {
       console.error('git diff after install:');
-      await runSetupCommand('git diff', $`git diff`, { quiet: false, allowNonzero: true });
+      try {
+        await runSetupCommand('git diff', $`git diff`, { quiet: false });
+      } catch (diffError) {
+        // This diff is diagnostics for the install failure we are already
+        // reporting, so it must never become the failure: say it broke and keep
+        // the original exit path. Plain `git diff` exits 0 even when the
+        // lockfile drifted, so a non-zero here means git itself failed.
+        console.error(`! git diff failed: ${diffError instanceof Error ? diffError.message : String(diffError)}`);
+      }
       process.exit(1);
     }
   } else {
-    await installLocalDependencies();
+    // A local secret-resolution or install failure (a provider that is not
+    // signed in, an unpublished private package, a missing registry
+    // credential, a lockfile that needs `devenv update`) must not take the
+    // shell down with it: direnv drops the whole environment on a non-zero
+    // exit, and then bun, nx, op and every other tool needed to repair the
+    // install are gone too. Report it, finish what does not depend on the
+    // install, and load the shell. CI above stays strict.
+    const installError = await installLocalDependencies();
+    if (installError === undefined) {
+      // Pin unscoped typescript → API 6 for root and Bun's shared .bun hoist (Nx).
+      ensureTypeScriptApiPackage(projectRoot);
+    }
+    await applyWorkspaceGitConfig(projectRoot);
+    if (installError !== undefined) {
+      reportDegradedSetup(installError);
+    }
   }
-
-  // Pin unscoped typescript → API 6 for root and Bun's shared .bun hoist (Nx).
-  ensureTypeScriptApiPackage(projectRoot);
-
-  await applyWorkspaceGitConfig(projectRoot);
 } catch (error) {
-  if (error instanceof CapturedCommandError) {
-    console.error(`--- ERROR: setup-environment.ts failed while running: ${error.command}`);
-    console.error(`exit code: ${error.exitCode}`);
-  } else {
-    console.error(`--- ERROR: setup-environment.ts failed: ${error}`);
-  }
-  replayCapturedOutput(error);
-  console.error('\n---');
-  process.exit(1);
+  reportSetupFailure(error);
 }
 
-async function installLocalDependencies(): Promise<void> {
-  // bun install runs the root prepare script. Multiple concurrent direnv
-  // activations can otherwise race while mutating the same files under
-  // node_modules.
-  await withSetupLock(async () => {
+/**
+ * Provider-declared secrets (smoo.secrets) resolve before any install. The
+ * values land in THIS process environment only — bun install, the prepare
+ * scripts it runs, and every later child of this script inherit them (for
+ * example .npmrc `${VAR}` auth); the direnv shell itself does not, which is
+ * the point: this script must never act as a global shell export.
+ *
+ * `shell` is the group, and it is what keeps a credential only a deliberate
+ * command needs — a registry token, the Nx cache token — from running its
+ * provider command on every direnv reload. Such a variable comes back
+ * deferred instead of resolved, and an install proceeds without it — which
+ * is the normal case, because an installed checkout contacts no registry.
+ * The install that does need one fails, and reportDegradedSetup then names
+ * the variable and the exact command that supplies it.
+ */
+async function resolveSecrets(): Promise<void> {
+  const resolution = await resolveSecretEnvironment({ root: projectRoot, group: SHELL_GROUP });
+  for (const [name, value] of Object.entries(resolution.values)) {
+    process.env[name] = value;
+    resolvedSecretValues.push(value);
+  }
+  deferredSecrets.push(...resolution.deferred);
+}
+
+async function installLocalDependencies(): Promise<unknown> {
+  try {
+    await resolveSecrets();
+  } catch (error) {
+    return error;
+  }
+  // Returned, not thrown: the caller still wires git config, then reports a
+  // degraded shell. Same reason as the CI branch — bun install's own rename
+  // is the concurrency control, not a lock in this script.
+  try {
     await runSetupCommand('bun install --no-summary', $`bun install --no-summary`);
-  });
+  } catch (error) {
+    return error;
+  }
+  return undefined;
 }
 
 function ensureTypeScriptApiPackage(root: string): void {
@@ -174,8 +308,8 @@ function assertTypescriptApiAt(typescriptRoot: string, expectedTarget: string): 
     throw new Error(
       `${typescriptRoot} must export TypeScript ${TYPESCRIPT_API_VERSION} compiler API (readConfigFile). ` +
         `Resolved version ${typed.version ?? 'unknown'} (expected link target ${expectedTarget}). ` +
-        'Bun isolated linking often points .bun/node_modules/typescript at @typescript/native (TS7). ' +
-        'See https://github.com/oven-sh/bun/issues/33834.',
+        'Bun isolated linking races .bun/node_modules/typescript between typescript@6 and ' +
+        "@typescript/native's TS7. See https://github.com/oven-sh/bun/issues/40355.",
     );
   }
 }
@@ -188,24 +322,41 @@ function assertTypescriptApiAt(typescriptRoot: string, expectedTarget: string): 
 async function applyWorkspaceGitConfig(root: string): Promise<void> {
   const gitDirResult = await $`git rev-parse --git-dir`.cwd(root).quiet().nothrow();
   if (gitDirResult.exitCode !== 0) {
-    throw new Error('Not in a git repository');
+    throw new CapturedCommandError(
+      'git rev-parse --git-dir',
+      gitDirResult.exitCode,
+      gitDirResult.stdout,
+      gitDirResult.stderr,
+    );
   }
 
   const gitDir = path.resolve(root, new TextDecoder().decode(gitDirResult.stdout).trim());
   const tooling = path.join(root, 'tooling');
 
-  await $`git config --local include.path ${path.join(tooling, 'workspace.gitconfig')}`.cwd(root);
+  await runSetupCommand(
+    `git config --local include.path ${path.join(tooling, 'workspace.gitconfig')}`,
+    $`git config --local include.path ${path.join(tooling, 'workspace.gitconfig')}`,
+    { quiet: false },
+  );
 
   // Keep the newer runtime version pins on any merge (nvfetcher overlay +
   // devenv.lock) so a mirror sync's `git am --3way` never stalls on a version
   // conflict. Mapped by the managed .gitattributes (merge=smoo-newer-pins);
   // implemented in tooling/direnv/merge-newer-pins.sh.
-  await $`git config --local merge.smoo-newer-pins.name ${'keep the newer devenv/nvfetcher runtime pins'}`.cwd(root);
-  await $`git config --local merge.smoo-newer-pins.driver ${'bash tooling/direnv/merge-newer-pins.sh %O %A %B %P'}`.cwd(
-    root,
+  await runSetupCommand(
+    'git config --local merge.smoo-newer-pins.name keep the newer devenv/nvfetcher runtime pins',
+    $`git config --local merge.smoo-newer-pins.name ${'keep the newer devenv/nvfetcher runtime pins'}`,
+    { quiet: false },
+  );
+  await runSetupCommand(
+    'git config --local merge.smoo-newer-pins.driver bash tooling/direnv/merge-newer-pins.sh %O %A %B %P',
+    $`git config --local merge.smoo-newer-pins.driver ${'bash tooling/direnv/merge-newer-pins.sh %O %A %B %P'}`,
+    { quiet: false },
   );
   linkHook(gitDir, tooling, 'pre-commit');
+  installPostCommitHook(gitDir, tooling);
   linkHook(gitDir, tooling, 'commit-msg');
+  linkHook(gitDir, tooling, 'pre-push');
 }
 
 function linkHook(gitDir: string, tooling: string, name: string): void {
@@ -219,10 +370,54 @@ function linkHook(gitDir: string, tooling: string, name: string): void {
     return;
   }
 
-  console.log(`[!] Linking ${name} hook in ${gitDir}`);
   mkdirSync(path.dirname(target), { recursive: true });
   rmSync(target, { force: true });
   symlinkSync(source, target);
+}
+
+function installPostCommitHook(gitDir: string, tooling: string): void {
+  const source = path.join(tooling, 'git-hooks', 'post-commit.sh');
+  if (!existsSync(source)) {
+    throw new Error(`Missing post-commit hook source: ${source}`);
+  }
+
+  const target = path.join(gitDir, 'hooks', 'post-commit');
+  const link = readLinkOrNull(target);
+  if (link !== null) {
+    // Never append through a symlink: that writes into whatever it points at.
+    // Say which link went, so a hook belonging to something else can be put
+    // back as a block beside ours instead of vanishing silently.
+    console.warn(`Replaced symlinked post-commit hook (was ${link}) with a chainable block`);
+  }
+
+  // Every foreign block is preserved, ours is replaced rather than repeated,
+  // and the shebang is only ours to choose when the file did not exist.
+  const existing = link === null && existsSync(target) ? readFileSync(target, 'utf8') : '';
+  const kept = stripPostCommitBlock(existing).replace(/\s+$/, '');
+  const next = `${kept === '' ? '#!/usr/bin/env bash' : kept}\n\n${POST_COMMIT_BLOCK}\n`;
+  if (existing === next) {
+    // A hook that is not executable is a hook git silently skips.
+    chmodSync(target, 0o755);
+    return;
+  }
+
+  mkdirSync(path.dirname(target), { recursive: true });
+  rmSync(target, { force: true });
+  writeFileSync(target, next, { mode: 0o755 });
+}
+
+function stripPostCommitBlock(content: string): string {
+  const lines = content.split('\n');
+  const start = lines.findIndex((line) => line.trim() === POST_COMMIT_BEGIN);
+  if (start === -1) {
+    return content;
+  }
+
+  // A block whose end marker was lost runs to the end of the file: it is ours
+  // to replace either way, and leaving half of it behind would double it.
+  const offset = lines.slice(start + 1).findIndex((line) => line.trim() === POST_COMMIT_END);
+  const resume = offset === -1 ? lines.length : start + offset + 2;
+  return [...lines.slice(0, start), ...lines.slice(resume)].join('\n');
 }
 
 function readLinkOrNull(hookPath: string): string | null {
@@ -236,78 +431,87 @@ function readLinkOrNull(hookPath: string): string | null {
 async function runSetupCommand(
   command: string,
   shell: ReturnType<typeof $>,
-  options: { quiet?: boolean; allowNonzero?: boolean } = {},
+  options: { quiet?: boolean } = {},
 ): Promise<void> {
   const result = await shell
     .quiet(options.quiet ?? true)
     .nothrow()
     .cwd(projectRoot);
-  if (result.exitCode !== 0 && options.allowNonzero !== true) {
+  if (result.exitCode !== 0) {
     throw new CapturedCommandError(command, result.exitCode, result.stdout, result.stderr);
   }
 }
 
-async function withSetupLock<T>(fn: () => Promise<T>): Promise<T> {
-  const lockDir = path.join(projectRoot, 'tooling/direnv/.devenv/setup-environment.lock');
-  await acquireLock(lockDir);
-  try {
-    return await fn();
-  } finally {
-    await rmdir(lockDir).catch(() => undefined);
-  }
+function reportSetupFailure(error: unknown): never {
+  describeFailure('ERROR', error);
+  process.exit(1);
 }
 
-async function acquireLock(lockDir: string): Promise<void> {
-  const deadline = Date.now() + 120_000;
-  while (true) {
-    try {
-      await mkdir(lockDir, { recursive: false });
-      return;
-    } catch (error) {
-      if (!isFileExistsError(error) || Date.now() > deadline) {
-        throw error;
-      }
-      if (await isStaleLock(lockDir)) {
-        // Surface the self-heal so an interrupted-run leftover is visible in
-        // the direnv log rather than silently absorbed.
-        console.error(`! Breaking stale setup lock (${lockDir}) left by an interrupted run`);
-        // Best-effort: if a concurrent process breaks it first, the rmdir
-        // fails silently and the next mkdir attempt settles the race.
-        await rmdir(lockDir).catch(() => undefined);
-        continue;
-      }
-      await Bun.sleep(100);
+function reportDegradedSetup(error: unknown): void {
+  describeFailure('WARNING', error);
+  reportDeferredSecrets();
+  console.error(
+    'The shell is loaded WITHOUT installed dependencies so the tools to repair this stay available.\n' +
+      'Fix the cause above (missing registry credential, unpublished package, stale lockfile → `devenv update`),\n' +
+      'then run `bun install` or `direnv reload`.',
+  );
+  console.error('---');
+}
+
+/**
+ * The declared secrets this shell entry deliberately did not resolve, named
+ * now that an install has actually failed. Printing them on a healthy shell
+ * entry would be noise on every reload — an installed checkout contacts no
+ * registry and needs none of them — while an install that failed may be
+ * exactly the 401 they explain, and then the useful output is the variable
+ * and the command that supplies it.
+ */
+function reportDeferredSecrets(): void {
+  if (deferredSecrets.length === 0) {
+    return;
+  }
+  console.error('Secrets outside the `shell` group are not resolved at shell entry, by design:');
+  for (const secret of deferredSecrets) {
+    console.error(`- ${secret.name} (${secret.group}): ${secret.guidance}`);
+  }
+  // Only a group the install itself reads can explain this failure, and only
+  // for those is re-running the install the command worth printing. A group
+  // nothing here consumes — the Nx cache token — is listed above and left
+  // alone: it did not cause this and re-running the install with it would
+  // not fix it.
+  for (const group of dependentGroups(SHELL_GROUP)) {
+    if (!deferredSecrets.some((secret) => secret.group === group)) {
+      continue;
     }
+    console.error(`The install reads group \`${group}\`; supply it to exactly that one command with:`);
+    console.error(`  smoo secrets run ${group} bun install`);
   }
 }
 
-async function isStaleLock(lockDir: string): Promise<boolean> {
-  try {
-    const info = await stat(lockDir);
-    return Date.now() - info.mtimeMs > STALE_LOCK_MS;
-  } catch (error) {
-    // Only "lock vanished" is expected here (a concurrent process released
-    // it); anything else must surface — a swallowed ReferenceError in this
-    // exact spot once disabled stale detection entirely.
-    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-      return false; // gone — let the mkdir retry acquire it
-    }
-    throw error;
+function describeFailure(level: 'ERROR' | 'WARNING', error: unknown): void {
+  if (error instanceof CapturedCommandError) {
+    console.error(`--- ${level}: setup-environment.ts failed while running: ${error.command}`);
+    console.error(`exit code: ${error.exitCode}`);
+  } else {
+    console.error(`--- ${level}: setup-environment.ts failed: ${error}`);
   }
-}
-
-function isFileExistsError(error: unknown): boolean {
-  return error instanceof Error && 'code' in error && error.code === 'EEXIST';
+  replayCapturedOutput(error);
+  console.error('\n---');
 }
 
 function replayCapturedOutput(error: unknown): void {
   if (!(error instanceof CapturedCommandError)) {
     return;
   }
-  if (error.stdout.length > 0) {
-    process.stdout.write(error.stdout);
+  // The install ran with every resolved secret in its environment, so its
+  // output is redacted before replay. Masking is same-length, which keeps the
+  // failure this replay exists to show intact.
+  const stdout = maskSecretValues(error.stdout, resolvedSecretValues);
+  const stderr = maskSecretValues(error.stderr, resolvedSecretValues);
+  if (stdout.length > 0) {
+    process.stdout.write(stdout);
   }
-  if (error.stderr.length > 0) {
-    process.stderr.write(error.stderr);
+  if (stderr.length > 0) {
+    process.stderr.write(stderr);
   }
 }

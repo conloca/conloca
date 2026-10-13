@@ -12,6 +12,6 @@ runs:
         # v2 isolates restore-keys from older Darwin caches with a broken TS dual-package hoist.
         path: node_modules
         # prettier-ignore
-        key: ${{ runner.os }}-${{ runner.arch }}-node-v2-${{ hashFiles('bun.lock', 'package.json', 'packages/*/package.json') }}
+        key: ${{ runner.os }}-${{ runner.arch }}-node-v2-${{ hashFiles('.npmrc', 'bun.lock', 'package.json', 'packages/*/package.json') }}
         restore-keys: |
           ${{ runner.os }}-${{ runner.arch }}-node-v2-

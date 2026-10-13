@@ -54,10 +54,16 @@ formatters:
       - '!bun.lock'
       # Cargo lockfiles are generated and should not be rewritten by Prettier
       - '!Cargo.lock'
-      # Binary artifacts: Prettier reads them as UTF-8 and can corrupt them
-      # by replacing invalid byte sequences.
+      # Binary artifacts: not text, nothing for Prettier to do.
       - '!*.wasm'
       - '!*.wasm.sha256'
+      # Prettier has no parser for these; --ignore-unknown swallows stdin and
+      # emits nothing, so formatting them would truncate the file.
+      - '!*.jsonl'
+      - '!*.tsv'
+      # Workflow templates carry __SMOO_*__ placeholders in key position and are
+      # not YAML until rendered; the rendered copies are formatted on write.
+      - '!packages/nx-plugin/managed/templates/github/workflows/*.yml'
 
   # rustfmt for Rust files
   rustfmt:

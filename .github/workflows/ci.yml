@@ -12,6 +12,15 @@ permissions:
   contents: read
   statuses: write
 
+concurrency:
+  # This workflow validates and never deploys, so there is no in-flight
+  # deployment for a newer push to protect: every pull request, and every ref
+  # for pushes, cancels its superseded runs. Queuing them instead serializes
+  # the staging branch, and a burst of pushes then reports the newest commit
+  # one full run per queued push late.
+  group: CI-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 defaults:
   run:
     working-directory: tooling/direnv
@@ -22,7 +31,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      NIX_STORE_NAR: ${{ github.workspace }}/nix-store.nar
       GH_TOKEN: ${{ github.token }}
     steps:
       # Step 1: GitHub adds "Set up job" automatically
@@ -44,6 +52,7 @@ jobs:
       # Step 4
       # Sets the base and head SHAs required for the nx affected commands
       - name: 🧭 Set Nx SHAs
+        if: github.server_url == 'https://github.com' || endsWith(github.api_url, '/api/v3')
         uses: nrwl/nx-set-shas@v5.0.1
         with:
           workflow-id: ci.yml
@@ -51,6 +60,7 @@ jobs:
       # Step 5
       - name: 🧠 Restore Nx cache
         id: nx-cache
+        if: steps.setup.outputs.host-runner != 'true'
         uses: ./.github/actions/cache-nx
 
       # Step 6
@@ -66,6 +76,10 @@ jobs:
         run: smoo github-ci nx-smart --target test --name "Unit Tests" --step 8
 
       # Step 9
+      - name: 🌐 Browser Tests
+        run: smoo github-ci nx-smart --target test-browser --name "Browser Tests" --step 9
+
+      # Step 10
       - name: 🩺 Check managed-file drift
         id: managed-drift
         if:
@@ -73,20 +87,26 @@ jobs:
           github.event.repository.default_branch) }}
         run: smoo monorepo check --warn
 
-      # Step 10
-      - name: 🔁 Dispatch managed-file drift healing
-        if: ${{ steps.managed-drift.outputs.drifted != '' && steps.managed-drift.outputs.drifted != '0' }}
-        run: gh workflow run managed-files.yml --ref "$GITHUB_REF_NAME"
-
       # Step 11
+      - name: 🔁 Dispatch managed-file drift healing
+        if: steps.managed-drift.outputs.drifted != '' && steps.managed-drift.outputs.drifted != '0'
+        run: smoo github-ci dispatch-workflow --workflow managed-files.yml --ref "$GITHUB_REF_NAME"
+
+      # Step 12
       # Nx's database cache needs artifact files and .nx/workspace-data DB
       # metadata restored together; GitHub Actions cache is only the archive
       # transport. Save runs only after prior required steps succeed on the default
       # branch, so PRs may restore shared cache but cannot publish it.
+      #
+      # Host-nix runners skip the transport entirely: setup-devenv puts their
+      # Nx cache on the shared /var/cache/ci bind, which already survives the
+      # job, so shipping it through the Actions cache would upload a copy of a
+      # cache the next job reads directly.
       - name: 💾 Save Nx cache
         if:
-          ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}',
-          github.event.repository.default_branch) && steps.nx-cache.outputs.cache-hit != 'true' }}
+          ${{ steps.setup.outputs.host-runner != 'true' && github.event_name == 'push' && github.ref ==
+          format('refs/heads/{0}', github.event.repository.default_branch) && steps.nx-cache.outputs.cache-hit != 'true'
+          }}
         uses: actions/cache/save@v5.0.5
         with:
           path: |
@@ -94,23 +114,24 @@ jobs:
             .nx/workspace-data/*.db*
           key: ${{ runner.os }}-${{ runner.arch }}-nx-db-v1-${{ github.sha }}
 
-      # Step 12
+      # Step 13
       - name: 📎 Upload trace DBs
-        if: ${{ always() }}
+        if: always()
         uses: actions/upload-artifact@v7.0.1
         with:
           name: trace-results-${{ github.run_id }}
-          path: packages/*/.trace-results.db
+          path: packages/*/.cache/trace-results.db*
           if-no-files-found: ignore
           retention-days: 14
           include-hidden-files: true
 
       # --- Cleanup ------------------------------------------------------------
 
-      # Step 13
+      # Step 14
       - name: 🧹 Cleanup and cache Nix/devenv
-        if: ${{ always() }}
+        # always() still saves after a red job. Nix NAR is ephemeral-only;
+        # devenv eval-cache also saves on host-nix when setup missed.
+        if: always()
         uses: ./.github/actions/save-nix-devenv
         with:
-          nix-cache-hit: ${{ steps.setup.outputs.nix-cache-hit }}
           devenv-cache-hit: ${{ steps.setup.outputs.devenv-cache-hit }}

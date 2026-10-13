@@ -20,11 +20,11 @@ theirs="$3"
 # Flake locks are ordered by lastModified (unix seconds); nvfetcher outputs by
 # the semver in their version fields. A given file is one kind or the other.
 max_last_modified() {
-  grep -oE '"lastModified"[[:space:]]*:[[:space:]]*[0-9]+' "$1" 2>/dev/null \
+  grep -oE '"lastModified"[[:space:]]*:[[:space:]]*[0-9]+' "$1" \
     | grep -oE '[0-9]+' | sort -n | tail -1
 }
 max_semver() {
-  grep -oE 'version[[:space:]":=]*[0-9]+\.[0-9]+\.[0-9]+' "$1" 2>/dev/null \
+  grep -oE 'version[[:space:]":=]*[0-9]+\.[0-9]+\.[0-9]+' "$1" \
     | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | sort -V | tail -1
 }
 

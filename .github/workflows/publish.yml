@@ -10,6 +10,12 @@ on:
           latest.
         options: [auto, patch, minor, major, prerelease]
         default: auto
+      projects:
+        type: string
+        description:
+          Comma-separated Nx projects to release, or all for every owned release package. Blank releases package-local
+          changes since the last release, whatever the bump mode is.
+        default: ''
       dry_run:
         type: boolean
         description: Run release commands without writing versions, tags, publishes, or GitHub Releases.
@@ -31,7 +37,6 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     env:
-      NIX_STORE_NAR: ${{ github.workspace }}/nix-store.nar
       GH_TOKEN: ${{ github.token }}
     steps:
       # --- Setup --------------------------------------------------------------
@@ -61,11 +66,11 @@ jobs:
         run: smoo release repair-pending --dry-run "${{ inputs.dry_run }}"
 
       # Step 6
-      - name: 🏷️ Version release
-        id: version
+      - name: 🧭 Plan release
+        id: plan
         run:
-          smoo release version --bump "${{ inputs.bump }}" --dry-run "${{ inputs.dry_run }}" --github-output
-          "$GITHUB_OUTPUT"
+          smoo release version --bump "${{ inputs.bump }}" --projects "${{ inputs.projects }}" --dry-run "true"
+          --github-output "$GITHUB_OUTPUT"
 
       # --- Validation ---------------------------------------------------------
 
@@ -75,44 +80,57 @@ jobs:
       # validation so the commit completed below is the commit that was checked.
 
       # Step 7
-      - name: ✅ Check managed monorepo files (${{ steps.version.outputs.mode }})
-        if: ${{ steps.version.outputs.mode != 'none' }}
+      - name: ✅ Check managed monorepo files (${{ steps.plan.outputs.mode }})
+        if: steps.plan.outputs.mode != 'none'
         run: smoo monorepo check --warn
 
       # Step 8
-      - name: 🔨 Build (${{ steps.version.outputs.mode }})
-        if: ${{ steps.version.outputs.mode != 'none' }}
-        run: smoo github-ci nx-run-many --targets build --projects "${{ steps.version.outputs.projects }}"
+      - name: 🔍 Lint (${{ steps.plan.outputs.mode }})
+        if: steps.plan.outputs.mode != 'none'
+        run: smoo github-ci nx-run-many --targets lint --projects "${{ steps.plan.outputs.projects }}"
 
       # Step 9
-      - name: 🔍 Lint (${{ steps.version.outputs.mode }})
-        if: ${{ steps.version.outputs.mode != 'none' }}
-        run: smoo github-ci nx-run-many --targets lint --projects "${{ steps.version.outputs.projects }}"
+      - name: 🧪 Unit Tests (${{ steps.plan.outputs.mode }})
+        if: steps.plan.outputs.mode != 'none'
+        run: smoo github-ci nx-run-many --targets test --projects "${{ steps.plan.outputs.projects }}"
 
       # Step 10
-      - name: 🧪 Unit Tests (${{ steps.version.outputs.mode }})
-        if: ${{ steps.version.outputs.mode != 'none' }}
-        run: smoo github-ci nx-run-many --targets test --projects "${{ steps.version.outputs.projects }}"
+      - name: 🔢 Version release
+        id: version
+        run:
+          smoo release version --bump "${{ inputs.bump }}" --projects "${{ inputs.projects }}" --dry-run "${{
+          inputs.dry_run }}" --github-output "$GITHUB_OUTPUT"
 
       # Step 11
+      - name: 🔨 Build (${{ steps.version.outputs.mode }})
+        if: steps.version.outputs.mode != 'none'
+        run: smoo github-ci nx-run-many --targets build --projects "${{ steps.version.outputs.projects }}"
+
+      # Step 12
       - name: 📎 Upload trace DBs
-        if: ${{ failure() }}
+        if: failure()
         uses: actions/upload-artifact@v7.0.1
         with:
           name: trace-results-${{ github.run_id }}
-          path: packages/*/.trace-results.db
+          path: packages/*/.cache/trace-results.db*
           if-no-files-found: ignore
           retention-days: 14
           include-hidden-files: true
 
-      # Step 12
+      # Step 13
       - name: ✅ Validate monorepo config (${{ steps.version.outputs.mode }})
-        if: ${{ steps.version.outputs.mode != 'none' }}
-        run: smoo monorepo validate
+        if: steps.version.outputs.mode != 'none'
+        run: smoo monorepo validate --projects "${{ steps.version.outputs.projects }}"
 
       # --- Release ------------------------------------------------------------
 
-      # Step 13
+      # Step 14
+      - name: 🏷️ Tag release
+        # Ordered before the publish below so an interrupted release stays
+        # detectable by the repair step at the top of this job on a later run.
+        run: smoo release tag --dry-run "${{ inputs.dry_run }}"
+
+      # Step 15
       - name: 📦 Publish release (${{ steps.version.outputs.mode }})
         # smoo packs with Bun, then publishes tarballs with npm. Existing
         # packages must already exist on npm and use trusted publishing/OIDC.
@@ -121,10 +139,10 @@ jobs:
 
       # --- Cleanup ------------------------------------------------------------
 
-      # Step 14
+      # Step 16
       - name: 🧹 Cleanup and cache Nix/devenv
-        if: ${{ always() }}
+        # success() is default; always() still saves GH Nix cache after a red job.
+        if: always()
         uses: ./.github/actions/save-nix-devenv
         with:
-          nix-cache-hit: ${{ steps.setup.outputs.nix-cache-hit }}
           devenv-cache-hit: ${{ steps.setup.outputs.devenv-cache-hit }}

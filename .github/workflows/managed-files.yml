@@ -9,10 +9,17 @@
 # change is upstream code that deserves a human look before it lands. Re-runs
 # refresh the same branch in place.
 #
-# NOTE: managed files include .github/workflows/*, and the default GITHUB_TOKEN
-# is server-side forbidden to push workflow-file changes. Configure a GitHub App
-# or PAT token with contents:write + workflows:write as MANAGED_FILES_TOKEN;
-# without it, runs that touch workflow files fail at push with a clear error.
+# REQUIRED SECRET: MANAGED_FILES_TOKEN
+# Managed files include .github/workflows/*. The default GITHUB_TOKEN is
+# server-side forbidden to create/update workflow files, even with
+# contents:write. Configure a GitHub App installation token or classic/fine-
+# grained PAT with:
+#   - contents: write
+#   - pull-requests: write
+#   - workflows: write
+# as repository secret MANAGED_FILES_TOKEN. Without it, any update that
+# touches workflow YAML fails at push (this is the usual "managed files
+# workflow isn't doing anything" failure mode).
 name: Managed files
 
 on:
@@ -41,6 +48,7 @@ jobs:
           filter: blob:none
           fetch-depth: 0
           persist-credentials: true
+          # Prefer MANAGED_FILES_TOKEN so push can update workflow files.
           token: ${{ secrets.MANAGED_FILES_TOKEN || github.token }}
 
       - name: 🧱 Setup Nix/devenv
@@ -53,28 +61,67 @@ jobs:
       - name: 📤 Push review branch and open PR
         env:
           GH_TOKEN: ${{ secrets.MANAGED_FILES_TOKEN || github.token }}
+          # secrets.* is empty when unset — used to fail before a useless push.
+          MANAGED_FILES_TOKEN_CONFIGURED: ${{ secrets.MANAGED_FILES_TOKEN != '' }}
         run: |
+          set -euo pipefail
           cd "$(git rev-parse --show-toplevel)"
+
           if [ -z "$(git status --porcelain)" ]; then
             echo "Managed files are in sync; nothing to do."
             exit 0
           fi
+
+          echo "Pending managed-file changes:"
+          git status --porcelain
+
+          workflow_changes="$(git status --porcelain -- .github/workflows || true)"
+          if [ -n "$workflow_changes" ] && [ "${GITHUB_SERVER_URL}" = "https://github.com" ] && [ "${MANAGED_FILES_TOKEN_CONFIGURED}" != "true" ]; then
+            {
+              echo "::error title=MANAGED_FILES_TOKEN required::Managed update touches .github/workflows/* but repository secret MANAGED_FILES_TOKEN is not set."
+              echo ""
+              echo "GitHub refuses pushes that create/update workflow files when the credentials are the default GITHUB_TOKEN / a GitHub App without the workflows permission:"
+              echo "  refusing to allow a GitHub App to create or update workflow ... without \`workflows\` permission"
+              echo ""
+              echo "Fix:"
+              echo "  1. Create a GitHub App (or PAT) with contents:write, pull-requests:write, workflows:write"
+              echo "  2. Install it on this repo"
+              echo "  3. Store an installation token or PAT as repository secret MANAGED_FILES_TOKEN"
+              echo "  4. Re-run this workflow"
+              echo ""
+              echo "Workflow files that would be updated:"
+              echo "$workflow_changes"
+            } >&2
+            exit 1
+          fi
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git switch -C chore/managed-files
           git add -A
           git commit -m "chore: regenerate smoo-managed files"
-          git push --force origin chore/managed-files
-          gh pr create \
+
+          if ! git push --force origin chore/managed-files 2> /tmp/managed-files-push.err; then
+            cat /tmp/managed-files-push.err >&2
+            if grep -q 'workflows' /tmp/managed-files-push.err; then
+              {
+                echo ""
+                echo "::error title=workflows permission missing::Push rejected because the token cannot update GitHub Actions workflow files."
+                echo "Set repository secret MANAGED_FILES_TOKEN to a GitHub App/PAT with contents:write + pull-requests:write + workflows:write, then re-run."
+              } >&2
+            fi
+            exit 1
+          fi
+
+          smoo github-ci ensure-pull-request \
             --head chore/managed-files \
             --base "${GITHUB_REF_NAME}" \
             --title "chore: regenerate smoo-managed files" \
-            --body "Automated refresh of smoo-managed files after drift (usually a @smoothbricks/cli pin bump). One persistent PR; re-runs force-push this branch in place. Review the template changes - do NOT enable auto-merge." \
-            2>/dev/null || echo "PR already open; branch refreshed in place."
+            --body "Automated refresh of smoo-managed files after drift (usually a \`@smoothbricks/cli\` pin bump). One persistent PR; re-runs force-push this branch in place. Review the template changes — do NOT enable auto-merge."
 
       - name: 🧹 Cleanup and cache Nix/devenv
-        if: ${{ always() }}
+        # success() is default; always() still saves GH Nix cache after a red job.
+        if: always()
         uses: ./.github/actions/save-nix-devenv
         with:
-          nix-cache-hit: ${{ steps.setup.outputs.nix-cache-hit }}
           devenv-cache-hit: ${{ steps.setup.outputs.devenv-cache-hit }}

@@ -2,9 +2,23 @@ allowUnfree: true
 inputs:
   nixpkgs:
     url: github:cachix/devenv-nixpkgs/rolling
+  # Leaf package source for the Go patch release matched to ttsc's vendored SDK
+  # (devenv.smoo.nix takes Go from it).
+  nixpkgs-go:
+    url: github:NixOS/nixpkgs/c27cdad491a991b11ed731760aa2ef8db0cb0410
+    flake: true
   nixpkgs-overlay:
     url: path:../../tooling/direnv/nixpkgs-overlay
     flake: true
+    overlays:
+      - default
+  # The Rust toolchain channel devenv.smoo.nix asks for.
+  rust-overlay:
+    url: github:oxalica/rust-overlay
+    flake: true
+    inputs:
+      nixpkgs:
+        follows: nixpkgs
     overlays:
       - default
   git-format-staged:
