@@ -1,5 +1,11 @@
 allowUnfree: true
 inputs:
+  # devenv's own modules, locked at a release. CI installs the devenv CLI at
+  # the commit this input locks, and devenv's binary cache keeps release
+  # builds for good but drops other builds after some weeks, after which
+  # every fresh runner compiles the CLI from source.
+  devenv:
+    url: github:cachix/devenv/v2.3.1?dir=src/modules
   nixpkgs:
     url: github:cachix/devenv-nixpkgs/rolling
   # Leaf package source for the Go patch release matched to ttsc's vendored SDK
