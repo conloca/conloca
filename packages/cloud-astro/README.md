@@ -112,6 +112,12 @@ If you also build pull requests on GitHub Actions, give `actions/checkout` the p
 (`ref: ${{ github.event.pull_request.head.sha || github.sha }}`). By default it checks out a merge commit that GitHub
 makes for the pull request and never pushes, so the endpoint never receives it and the registration fails.
 
+A pull-request build deployed somewhere other than `publicBaseUrl`, such as a host's preview deploy, must set
+`publicBaseUrl` to the address that build is served from, for example from your host's deploy-URL variable (a full
+`https://` address). The editor on that branch loads the build's editor files from `publicBaseUrl`, and your production
+site does not serve the files only a pull request's build produced, so the editor would report that the bundle could not
+be loaded or verified.
+
 ### 5. Deploy, and serve `/_conloca/*` cross-origin
 
 The build writes the editor files under `_conloca/` in its output: `dist/_conloca/` for a static site, or the client
