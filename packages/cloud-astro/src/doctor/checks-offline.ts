@@ -1,6 +1,6 @@
 import { BUILD_TOKEN_ENV_VAR } from '../constants.js';
 import type { RepositoryEnvironment } from '../repository.js';
-import { type ConfigScan, hasOption, optionLiteral, type ReadScan } from './config-scan.js';
+import { type ConfigScan, hasOption, optionLiteral, previewBuildSetting, type ReadScan } from './config-scan.js';
 import { type CheckOutcome, outcomeOf, skipped } from './types.js';
 
 /** Doctor-only override for an endpoint the config computes (e.g. from an env var). */
@@ -289,6 +289,37 @@ export function checkInertCmsOptions(scan: ConfigScan): CheckOutcome {
         path: scan.config.path,
       });
     }
+  }
+  return outcome;
+}
+
+/**
+ * CC8 — unless previewBuild is false, every build that registers also runs the preview build, which needs an SSR
+ * adapter: the project's own or previewBuild.adapter. A static project with neither stays green until its first
+ * registering build, which then fails. Only what the config text shows is judged.
+ */
+export function checkPreviewBuildAdapter(scan: ConfigScan): CheckOutcome {
+  if (scan.kind !== 'read') {
+    return skipped('CC8', scan.kind === 'none' ? 'no astro.config found' : 'astro config could not be read');
+  }
+  if (scan.config.conlocaCloud === 'absent') return skipped('CC8', INTEGRATION_NOT_CALLED);
+  const outcome = outcomeOf('CC8');
+  const previewBuild = previewBuildSetting(scan);
+  const { output, adapter } = scan.config.site;
+  if (previewBuild === 'off') {
+    outcome.detail = 'previewBuild: false — no preview build runs';
+  } else if (previewBuild === 'adapter' || adapter) {
+    outcome.detail = 'the preview build has an SSR adapter';
+  } else if (previewBuild === 'unknown' || output !== 'static') {
+    outcome.detail = 'not verified — doctor cannot read previewBuild, output or the adapter from the config text';
+  } else {
+    outcome.problems.push({
+      check: 'CC8',
+      level: 'error',
+      message:
+        'previewBuild is on, but the project is static and has no SSR adapter, so every build that registers fails when it runs the preview build — set previewBuild: false in conlocaCloud(...)',
+      path: scan.config.path,
+    });
   }
   return outcome;
 }

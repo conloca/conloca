@@ -296,6 +296,7 @@ depends on it runs this package's checks after the CMS ones, offline by default.
 | CC5   | `--live`: the endpoint accepts the token (a 401 means a replaced token — put the new one in the CI secret — or an endpoint without the status route)                                                                          |
 | CC6   | `--live`: a registration serves this branch and site — own row, inherited from the default branch, or none                                                                                                                    |
 | CC7   | `--live`: the editor bundle the registration names is still deployed (catches a later deploy deleting it) and how stale it is; it does not check the cross-origin header                                                      |
+| CC8   | `previewBuild` is `false`, or the preview build has an SSR adapter (the project's own or `previewBuild.adapter`); a static project with neither is an error, because every build that registers would fail                    |
 
 `conloca doctor --live` sends the build token ONLY to the configured endpoint. When the config computes `endpoint` (for
 example from an environment variable), set `CONLOCA_ENDPOINT` so doctor can read it.

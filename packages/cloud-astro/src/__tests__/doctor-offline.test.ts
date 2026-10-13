@@ -76,12 +76,12 @@ function check(result: { checks: CheckOutcome[] }, id: string): CheckOutcome {
 const messages = (outcome: CheckOutcome) => outcome.problems.map((p) => `${p.level}: ${p.message}`);
 
 describe('doctor extension — contract', () => {
-  it('answers contract 1 with CC1–CC7 in order and skips the live trio without --live', async () => {
+  it('answers contract 1 with CC1–CC8 in order and skips the live trio without --live', async () => {
     const result = await run({
       [CONFIG]: config("{ endpoint: 'https://cms.example.com', puckConfigPath: './src/puck.config.tsx' }"),
     });
     expect(result.contractVersion).toBe(1);
-    expect(result.checks.map((c) => c.id)).toEqual(['CC1', 'CC2', 'CC3', 'CC4', 'CC5', 'CC6', 'CC7']);
+    expect(result.checks.map((c) => c.id)).toEqual(['CC1', 'CC2', 'CC3', 'CC4', 'CC5', 'CC6', 'CC7', 'CC8']);
     for (const id of ['CC5', 'CC6', 'CC7']) expect(check(result, id).skipped).toBe('live checks run only with --live');
   });
 
@@ -341,6 +341,78 @@ describe("CC4 — conlocaCMS options the endpoint's editor ignores", () => {
     expect(check(await runWith(unreadableFs, {}), 'CC4').skipped).toBe('astro config could not be read');
     expect(check(await run({ [CONFIG]: WITHOUT_CMS }), 'CC4').skipped).toBe(
       'conlocaCMS is not called in the astro config',
+    );
+  });
+});
+
+describe('CC8 — the preview build has an SSR adapter, or is off', () => {
+  const STATIC_ERROR =
+    'error: previewBuild is on, but the project is static and has no SSR adapter, so every build that registers fails when it runs the preview build — set previewBuild: false in conlocaCloud(...)';
+  const NOT_VERIFIED = 'not verified — doctor cannot read previewBuild, output or the adapter from the config text';
+
+  /** A config with the site's own settings (output, adapter, ...) ahead of the integrations. */
+  function siteConfig(settings: string, options: string): string {
+    return [
+      "import node from '@astrojs/node';",
+      "import { conlocaCMS } from '@conloca/astro-cms/node';",
+      "import { conlocaCloud } from '@conloca/cloud-astro';",
+      `export default { ${settings} integrations: [react(), conlocaCMS({}), conlocaCloud(${options})] };`,
+    ].join('\n');
+  }
+
+  it('errors on a static project without an adapter when previewBuild is left on', async () => {
+    for (const text of [
+      config("{ endpoint: 'https://x.test' }"),
+      config("{ endpoint: 'https://x.test', previewBuild: { outDir: '.preview' } }"),
+      siteConfig("output: 'static',", "{ endpoint: 'https://x.test' }"),
+    ]) {
+      const outcome = check(await run({ [CONFIG]: text }), 'CC8');
+      expect(messages(outcome)).toEqual([STATIC_ERROR]);
+      expect(outcome.problems[0].path).toBe(CONFIG);
+    }
+  });
+
+  it('passes when previewBuild is false', async () => {
+    const outcome = check(
+      await run({ [CONFIG]: config("{ endpoint: 'https://x.test', previewBuild: false }") }),
+      'CC8',
+    );
+    expect(outcome.problems).toEqual([]);
+    expect(outcome.detail).toBe('previewBuild: false — no preview build runs');
+  });
+
+  it('passes when the project or previewBuild names an adapter', async () => {
+    for (const text of [
+      siteConfig("output: 'server', adapter: node({ mode: 'standalone' }),", "{ endpoint: 'https://x.test' }"),
+      config("{ endpoint: 'https://x.test', previewBuild: { adapter: cloudflare() } }"),
+      config("{ endpoint: 'https://x.test', previewBuild: { adapter } }"),
+    ]) {
+      const outcome = check(await run({ [CONFIG]: text }), 'CC8');
+      expect(outcome.problems).toEqual([]);
+      expect(outcome.detail).toBe('the preview build has an SSR adapter');
+    }
+  });
+
+  it('leaves unjudged what the config text cannot show', async () => {
+    for (const text of [
+      config('options'),
+      config("{ ...shared, endpoint: 'https://x.test' }"),
+      config("{ endpoint: 'https://x.test', previewBuild: process.env.CI ? {} : false }"),
+      config("{ endpoint: 'https://x.test', previewBuild }"),
+      siteConfig('output: mode,', "{ endpoint: 'https://x.test' }"),
+      siteConfig('...base,', "{ endpoint: 'https://x.test' }"),
+    ]) {
+      const outcome = check(await run({ [CONFIG]: text }), 'CC8');
+      expect(outcome.problems).toEqual([]);
+      expect(outcome.detail).toBe(NOT_VERIFIED);
+    }
+  });
+
+  it('skips without a config, on an unreadable one, and when conlocaCloud is not called', async () => {
+    expect(check(await run({}), 'CC8').skipped).toBe('no astro.config found');
+    expect(check(await runWith(unreadableFs, {}), 'CC8').skipped).toBe('astro config could not be read');
+    expect(check(await run({ [CONFIG]: CMS_ONLY }), 'CC8').skipped).toBe(
+      'conlocaCloud(...) is not called in the astro config',
     );
   });
 });

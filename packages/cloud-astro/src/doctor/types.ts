@@ -56,6 +56,7 @@ const CHECK_LABELS = {
   CC5: 'the endpoint answers the build token',
   CC6: 'a registration serves this branch and site',
   CC7: 'the registered editor assets are still deployed',
+  CC8: 'the preview build has an SSR adapter, or is off',
 } as const;
 
 /** A typo in a check id fails tsc here; the CLI would otherwise drop a label-less outcome silently. */

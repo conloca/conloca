@@ -19,10 +19,10 @@ CONLOCA_BUILD_TOKEN=cbt_... conloca doctor --live     # add CONLOCA_ENDPOINT=htt
 conloca doctor                                        # offline: config, token, endpoint, inert options
 ```
 
-This package's checks are `CC1`–`CC7`. Offline: the wiring, the build token, the endpoint and public base URL, and
-`conlocaCMS` options the endpoint's editor ignores. With `--live` (the token goes only to the configured endpoint): the
-endpoint answers the token, a registration serves this branch and site, and the editor bundle that registration names is
-still deployed.
+This package's checks are `CC1`–`CC8`. Offline: the wiring, the build token, the endpoint and public base URL,
+`conlocaCMS` options the endpoint's editor ignores, and (CC8) whether a static project keeps the preview build off. With
+`--live` (the token goes only to the configured endpoint): the endpoint answers the token, a registration serves this
+branch and site, and the editor bundle that registration names is still deployed.
 
 ## The one secret: the build token
 
