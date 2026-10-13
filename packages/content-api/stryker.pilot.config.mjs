@@ -1,13 +1,13 @@
 // @ts-check
 /**
- * A93 Stryker mutation pilot config (spec 14 §Conformance tests, §Why these
- * decisions: "Pilot on content-api before rollout"). Run manually via
+ * Stryker mutation pilot config.
+ * Piloted on content-api before any wider rollout. Run manually via
  * `nx run content-api:mutation` — deliberately OUTSIDE the default
- * build/lint/test pipelines (spec 14 §What runs when: "Nightly: Stryker on
- * scoped modules; ... off the loop").
+ * build/lint/test pipelines: mutation testing runs nightly on scoped modules,
+ * off the normal development loop.
  *
- * Scope: `src/vxjson.ts` only, per spec 14's own example of the mutation
- * scope ("VxJSON/content-write path"). content-api/src is ~11k lines; a
+ * Scope: `src/vxjson.ts` only — the VxJSON/content-write path is the
+ * highest-value module to mutate first. content-api/src is ~11k lines; a
  * full-package run would plausibly exceed the ~20min budget this task set,
  * so the pilot narrows to one meaningful, already-well-tested module rather
  * than running (and timing out) across the whole package.

@@ -4,8 +4,10 @@
     "rootDir": "src",
     "outDir": "dist",
     "tsBuildInfoFile": "dist/tsconfig.lib.tsbuildinfo",
-    "module": "esnext",
-    "moduleResolution": "bundler",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "verbatimModuleSyntax": true,
+    "sourceMap": true,
     "forceConsistentCasingInFileNames": true,
     "types": ["node", "@types/react", "@types/react-dom"],
     "jsx": "react-jsx",
@@ -13,9 +15,5 @@
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"],
   "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/**/*.spec.ts", "src/**/*.spec.tsx"],
-  "references": [
-    {
-      "path": "../content-api/tsconfig.lib.json"
-    }
-  ]
+  "references": [{ "path": "../content-api/tsconfig.lib.json" }]
 }

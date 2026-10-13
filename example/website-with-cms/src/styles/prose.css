@@ -1,0 +1,40 @@
+/* Prose fixture for checking editor-to-page style parity.
+ *
+ * Deliberately DISTINCTIVE values — nothing here matches a UA default or an
+ * editor floor, so if any of the editor's style pipelines stops delivering
+ * this sheet to its surface, a parity check fails on a visible number
+ * instead of passing by coincidence.
+ *
+ * Scoped exactly like a real site's blog prose sheet: `.conloca-prose` is the
+ * documented scope class carried by every prose surface — the published
+ * fragment wrapper, the sandbox chip root, and the MDX editor's
+ * contenteditable. `:where()` keeps specificity at (0,1,0) so component
+ * classes still win their own elements. */
+
+.conloca-prose :where(h1) {
+  font-family: ui-serif, Georgia, serif;
+  font-size: 34px;
+  line-height: 42px;
+  font-weight: 600;
+  color: #14283c;
+  margin: 42px 0 21px 0;
+}
+
+.conloca-prose :where(p) {
+  font-family: ui-serif, Georgia, serif;
+  font-size: 17px;
+  line-height: 27px;
+  font-weight: 400;
+  color: #656d76;
+  margin: 0 0 17px 0;
+}
+
+.conloca-prose :where(ul) {
+  font-family: ui-serif, Georgia, serif;
+  font-size: 17px;
+  line-height: 27px;
+  color: #656d76;
+  margin: 0 0 17px 0;
+  padding-left: 22px;
+  list-style: disc;
+}

@@ -12,6 +12,9 @@
   "exclude": ["src/**/*.test.ts"],
   "references": [
     {
+      "path": "../astro-cms"
+    },
+    {
       "path": "../content-api"
     }
   ]

@@ -1,5 +1,5 @@
 import type { ComponentProps, ReactNode } from 'react';
-import { cn } from '../../utils/cn';
+import { cn } from '../../utils/cn.js';
 
 /**
  * Visual palette. The names are semantic ("what is the user being
@@ -19,7 +19,7 @@ import { cn } from '../../utils/cn';
  *
  * Colors are sourced from the cms-spa Tailwind theme tokens
  * (`{color}-{02..11}`) so dark mode is automatic. Matches the
- * inline-alert palette already used by `BlockWrappers`,
+ * inline-alert palette already used by `FragmentWrappers`,
  * `MDXEditField`, `DataEditor`, and `MDXContent` so any host that
  * mixes inline alerts and strip banners reads as one design system.
  */
@@ -70,7 +70,7 @@ export interface BannerProps extends Omit<ComponentProps<'div'>, 'title'> {
  * - locks the variant palette (one place to change yellow / green /
  *   red treatments across every host)
  * - aligns with the inline-alert vocabulary already used inside
- *   cms-spa (`BlockWrappers`, `MDXEditField`, etc.) so a "strip"
+ *   cms-spa (`FragmentWrappers`, `MDXEditField`, etc.) so a "strip"
  *   banner at the top of the shell and an "inline" alert inside an
  *   editor block read as one design system
  * - dodges the CSS cascade-layer fight on raw atomic classes (see

@@ -1,5 +1,5 @@
 import type { InputHTMLAttributes, Ref } from 'react';
-import { cn } from '../../utils/cn';
+import { cn } from '../../utils/cn.js';
 
 interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'size'> {
   /**
@@ -17,7 +17,7 @@ interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'size'>
    *   panel-tone surfaces (cms-spa dialogs and side panels) where
    *   the input should read recessed against the panel.
    * - `elevated` — `bg-white dark:bg-grey-01`, explicit grey border.
-   *   Use inside chrome surfaces (host strips, panel-toned dialogs)
+   *   Use inside chrome surfaces (host app top bars, panel-toned dialogs)
    *   where `bg-panel` (which collapses to `grey-02` in dark mode)
    *   would blend with the surface itself. The elevated bg is
    *   blacker than the strip's grey-02 in dark mode, restoring the

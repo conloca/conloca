@@ -1,6 +1,6 @@
 import * as Select from '@radix-ui/react-select';
 import { ChevronDown } from 'lucide-react';
-import { cn } from '../../utils/cn';
+import { cn } from '../../utils/cn.js';
 
 interface LocaleSelectorProps {
   currentLocale: string;
@@ -19,7 +19,10 @@ export function LocaleSelector({
 
   return (
     <Select.Root value={currentLocale} onValueChange={onChange}>
-      <Select.Trigger className="flex items-center gap-1.5 px-3 py-1.5 rounded text-sm border border-line text-foreground hover:bg-hover transition-colors cursor-pointer">
+      <Select.Trigger
+        aria-label="Locale"
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded text-sm border border-line text-foreground hover:bg-hover transition-colors cursor-pointer"
+      >
         <Select.Value />
         <Select.Icon>
           <ChevronDown className="h-4 w-4 opacity-60" />

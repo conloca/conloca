@@ -1,6 +1,6 @@
 import { normalize, resolve } from 'node:path';
-import { FileSystemContentAPI } from './filesystem-content-api';
-import type { ContentAPIOptions } from './types';
+import { FileSystemContentAPI } from './filesystem-content-api.js';
+import type { ContentAPIOptions } from './types.js';
 
 export type ContentWatcherOptions = ContentAPIOptions;
 
@@ -17,7 +17,7 @@ export interface ContentWatchEvent {
 
 interface ReindexResultLike {
   updated: unknown[];
-  deleted?: { id: string; locale: string; kind: 'page' | 'block' | 'data' }[];
+  deleted?: { id: string; locale: string; kind: 'page' | 'fragment' | 'data' }[];
 }
 
 interface ReindexableContentAPI {
@@ -44,28 +44,30 @@ export function createContentWatchHandlers(
   onReindexed?: (event: ContentWatchEvent) => void | Promise<void>,
 ) {
   const handleFileChange = async (file: string, action: 'update' | 'create' | 'delete') => {
-    // Only process content files (.mdx, .vxjson, and .json in data/ directory)
-    const isContentFile = file.endsWith('.mdx') || file.endsWith('.vxjson');
-    const isDataFile = file.endsWith('.json') && file.includes('/data/');
-    if (!isContentFile && !isDataFile) {
-      return;
-    }
-
     // Normalize paths for consistent comparison
     const normalizedFile = normalize(resolve(file));
     const normalizedRoot = normalize(resolve(options.contentRoot));
     const normalizedMdxRoot = options.mdxPagesRoot ? normalize(resolve(options.mdxPagesRoot)) : null;
 
+    // Only the files the content scanner indexes: .mdx and .vxjson, and .json
+    // only under the content root's data/ directory. Other .json files under
+    // the content root, such as asset metadata records, are not content.
+    const isContentFile = normalizedFile.endsWith('.mdx') || normalizedFile.endsWith('.vxjson');
+    const isDataFile = normalizedFile.endsWith('.json') && normalizedFile.startsWith(`${normalizedRoot}/data/`);
+    if (!isContentFile && !isDataFile) {
+      return;
+    }
+
     // Trailing-slash guard avoids prefix collisions
     // (e.g. `/foo/content-extra/...` matching root `/foo/content`).
-    const inContentRoot = normalizedFile === normalizedRoot || normalizedFile.startsWith(normalizedRoot + '/');
+    const inContentRoot = normalizedFile === normalizedRoot || normalizedFile.startsWith(`${normalizedRoot}/`);
     const inMdxRoot =
       !!normalizedMdxRoot &&
-      (normalizedFile === normalizedMdxRoot || normalizedFile.startsWith(normalizedMdxRoot + '/'));
+      (normalizedFile === normalizedMdxRoot || normalizedFile.startsWith(`${normalizedMdxRoot}/`));
 
     if (inContentRoot || inMdxRoot) {
       const matchedRoot = inContentRoot ? normalizedRoot : (normalizedMdxRoot as string);
-      const relativePath = normalizedFile.replace(matchedRoot + '/', '');
+      const relativePath = normalizedFile.replace(`${matchedRoot}/`, '');
       console.log(`[Content] ${action}: ${relativePath}`);
 
       try {

@@ -1,5 +1,6 @@
-import { mockPuckConfig } from './mock-puck-config';
-import { configureUI } from './ui-config';
+import { mockPuckConfig } from './mock-puck-config.js';
+import { setPuckConfig } from './puck-config.js';
+import { configureUI } from './ui-config.js';
 
 // Configure UI for development - this must happen before main.tsx runs
 configureUI({
@@ -15,8 +16,10 @@ configureUI({
   },
 });
 
-// Set Puck config
-(window as any).__PUCK_CONFIG__ = mockPuckConfig;
+// Install the mock components. The editor reads its config through
+// `getPuckConfig()`, so assigning a bare `window.__PUCK_CONFIG__` here — as this
+// did — left the dev palette empty.
+setPuckConfig(mockPuckConfig);
 
 // Import main synchronously
-import './main';
+import './main.js';

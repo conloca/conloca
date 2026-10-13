@@ -264,9 +264,7 @@ await client.updateLocalized({
   locale: 'en',
   data: {
     content: {
-      puckData: {
-        /* ... */
-      },
+      puckData: {/* ... */},
     },
   },
   etag: 'newMeta.oldContent', // Will succeed!
@@ -355,7 +353,7 @@ new ContentAPIClient(options?: { baseUrl?: string })
 - `deleteContent(id: string, etag: string): Promise<DeleteResult>`
 - `listAllContent(filters?: ContentFilters): Promise<ListResult>`
 - `batchUpdate(operations: UpdateLocaleInput[]): Promise<BatchResult>`
-- `isPathnameAvailable(site: string, pathname: string, excludeId?: string): Promise<boolean>`
+- `isPathnameAvailable(site: string, pathname: string, excludeId?: string, locale?: string): Promise<boolean>`
 
 ### React Hooks
 
@@ -365,7 +363,7 @@ new ContentAPIClient(options?: { baseUrl?: string })
 - `useUpdateContent()` - Update content mutation
 - `useDeleteContent()` - Delete content mutation
 - `useSitePages(site: string, locale?: string)` - List site pages
-- `useBlocks(collection?: string, locale?: string)` - List blocks
+- `useFragments(collection?: string, locale?: string)` - List fragments
 
 ## Building
 

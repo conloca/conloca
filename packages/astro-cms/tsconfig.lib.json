@@ -2,31 +2,22 @@
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "rootDir": ".",
-    "outDir": "dist",
-    "tsBuildInfoFile": "dist/tsconfig.lib.tsbuildinfo",
-    "module": "esnext",
-    "moduleResolution": "bundler",
+    "outDir": "dist/ts",
+    "tsBuildInfoFile": "dist/ts/tsconfig.lib.tsbuildinfo",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "verbatimModuleSyntax": true,
+    "sourceMap": true,
     "forceConsistentCasingInFileNames": true,
     "jsx": "react-jsx",
     "types": ["node"],
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
-    "paths": {
-      "virtual:conloca-page-api": ["./src/virtual-modules.d.ts"],
-      "virtual:conloca-routing-config": ["./src/virtual-modules.d.ts"],
-      "virtual:conloca-config": ["./src/env.d.ts"]
-    }
+    "lib": ["ES2020", "DOM", "DOM.Iterable"]
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.d.ts", "node/**/*.ts"],
   "exclude": ["src/**/*.test.ts", "src/__tests__/**/*"],
   "references": [
-    {
-      "path": "../mdx/tsconfig.lib.json"
-    },
-    {
-      "path": "../content-api/tsconfig.lib.json"
-    },
-    {
-      "path": "../cms-spa/tsconfig.lib.json"
-    }
+    { "path": "../mdx/tsconfig.lib.json" },
+    { "path": "../content-api/tsconfig.lib.json" },
+    { "path": "../cms-spa/tsconfig.lib.json" }
   ]
 }

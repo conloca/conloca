@@ -1,7 +1,7 @@
 /// <reference lib="dom" />
 import { afterEach, describe, expect, test } from 'bun:test';
 import { cleanup, render, screen } from '@testing-library/react';
-import { Input } from '../src/components/ui/Input';
+import { Input } from '../src/components/ui/Input.js';
 
 afterEach(() => {
   cleanup();

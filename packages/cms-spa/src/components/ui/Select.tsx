@@ -1,5 +1,5 @@
 import type { Ref, SelectHTMLAttributes } from 'react';
-import { cn } from '../../utils/cn';
+import { cn } from '../../utils/cn.js';
 
 interface SelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'size'> {
   size?: 'default' | 'sm';

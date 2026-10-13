@@ -7,7 +7,7 @@ import {
   type MdxComponentDescriptor,
   type MdxComponentProp,
   type MdxJsxComponentDescriptor,
-} from '../../../mdx-components';
+} from '../../../mdx-components.js';
 
 type InsertJsxAttrValue = string | { type: 'expression'; value: string };
 

@@ -1,7 +1,7 @@
-import type { ContentAPI } from './content-api.interface';
-import { localesOf } from './content-utils';
-import type { SiteIndex } from './site-index';
-import type { ContentManifest, CreatePageInput, CreateResult, MoveResult, SiteFilters } from './types';
+import type { ContentAPI } from './content-api.interface.js';
+import { localesOf } from './content-utils.js';
+import type { SiteIndex } from './site-index.js';
+import type { ContentManifest, CreatePageInput, CreateResult, MoveResult, SiteFilters } from './types.js';
 
 export class Site {
   constructor(
@@ -58,6 +58,11 @@ export class Site {
     return this.siteIndex.collections;
   }
 
+  /** The languages this site's pages are in. */
+  get locales(): readonly string[] {
+    return this.siteIndex.locales;
+  }
+
   // Pathname operations (returns null if available, ContentManifest if taken)
   getByPathname(pathname: string, locale?: string): ContentManifest | null {
     return this.siteIndex.getByPathname(pathname, locale);
@@ -100,9 +105,17 @@ export class Site {
     });
 
     if (!updateResult.success) {
+      const { reason } = updateResult;
       return {
         moved: false,
-        reason: updateResult.reason,
+        // A move reports anything already taken as `already_exists`, as the check above does. It
+        // sends no name, so a malformed one is no fault of the move's: `write_error`.
+        reason:
+          reason === 'pathname_taken' || reason === 'pathname_in_redirects' || reason === 'name_taken'
+            ? 'already_exists'
+            : reason === 'invalid_name'
+              ? 'write_error'
+              : reason,
         error: updateResult.error,
       };
     }

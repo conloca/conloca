@@ -1,5 +1,5 @@
-import { cn } from '../utils/cn';
-import type { AssetScope } from './types';
+import { cn } from '../utils/cn.js';
+import type { AssetScope } from './types.js';
 
 interface AssetScopePillProps {
   scope: AssetScope | null;
@@ -12,7 +12,7 @@ interface AssetScopePillProps {
 }
 
 /**
- * Pill rendering the hosted-mode `AssetScope` ("Branch only" /
+ * Pill rendering a host-supplied `AssetScope` ("Branch only" /
  * "Published"). When `scope` is `null`, renders nothing — callers
  * can safely render this unconditionally and let it disappear when
  * no bridge is installed (the local-Astro case).
@@ -23,10 +23,10 @@ interface AssetScopePillProps {
  *   "this is what your site is serving").
  * - `branch` → amber (matches the "work in flight" idiom from
  *   git-status / divergence banners — "yours alone for now,
- *   needs promotion before anyone else sees it").
+ *   needs publishing before anyone else sees it").
  *
  * The pill itself is purely presentational; the bridge wiring and
- * promotion gate live in the host shell.
+ * the publishing rules live in the host app.
  */
 export function AssetScopePill({ scope, size = 'sm', className }: AssetScopePillProps) {
   if (!scope) return null;

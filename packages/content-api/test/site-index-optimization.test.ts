@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import { SiteIndex } from '../src/site-index';
-import type { ContentManifest } from '../src/types';
+import { SiteIndex } from '../src/site-index.js';
+import type { ContentManifest } from '../src/types.js';
 
 describe('SiteIndex optimization', () => {
   test('pathname lookups should be fast with many entries', () => {
-    const siteIndex = new SiteIndex('shop', ['en', 'nl', 'de']);
+    const siteIndex = new SiteIndex(['en', 'nl', 'de']);
 
     // Add many pages
     const manifests: ContentManifest[] = [];
@@ -63,7 +63,7 @@ describe('SiteIndex optimization', () => {
   });
 
   test('pathname updates should maintain consistency', () => {
-    const siteIndex = new SiteIndex('shop', ['en']);
+    const siteIndex = new SiteIndex(['en']);
 
     const manifest: ContentManifest = {
       id: 'test-page',

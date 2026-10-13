@@ -1,6 +1,6 @@
 import {
-  type CreateResult,
-  type DeleteResult,
+  APIClientError,
+  isContentPublished,
   localesOf,
   useCreateContent,
   useDeleteContent,
@@ -9,14 +9,15 @@ import {
 import { AlertCircle, Clock, Edit, FileCode, FileText, Loader2, Plus, Search, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useErrorModal, useSiteBaseUrl } from '../../hooks';
-import type { CreatePageData, Page } from '../../types';
-import { getUIConfig } from '../../ui-config';
-import { formatDate } from '../../utils/format-date';
-import { CreatePageDialog } from '../dialogs/CreatePageDialog';
-import { DeleteConfirmDialog } from '../dialogs/DeleteConfirmDialog';
-import { ErrorModal } from '../dialogs/ErrorModal';
-import { Tooltip } from '../ui/Tooltip';
+import { useErrorModal, useSiteBaseUrl } from '../../hooks/index.js';
+import type { CreatePageData, Page } from '../../types.js';
+import { getUIConfig } from '../../ui-config.js';
+import { contentFailureMessage, isStaleWrite } from '../../utils/content-failure.js';
+import { formatDate } from '../../utils/format-date.js';
+import { CreatePageDialog } from '../dialogs/CreatePageDialog.js';
+import { DeleteConfirmDialog } from '../dialogs/DeleteConfirmDialog.js';
+import { ErrorModal } from '../dialogs/ErrorModal.js';
+import { Tooltip } from '../ui/Tooltip.js';
 
 interface PageListProps {
   selectedSite?: string;
@@ -39,7 +40,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
     hasMultipleLocales: boolean;
   }>({ isOpen: false, pageId: '', pageTitle: '', locale: '', etag: '', hasMultipleLocales: false });
 
-  const { showError, errorModalProps } = useErrorModal();
+  const { showError, showStaleWriteError, errorModalProps } = useErrorModal();
   const { buildUrl } = useSiteBaseUrl();
 
   const navigate = useNavigate();
@@ -104,11 +105,10 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
 
         const now = new Date();
         const publishAt = localeData.publishAt ? new Date(localeData.publishAt) : null;
-        const unpublishAt = localeData.unpublishAt ? new Date(localeData.unpublishAt) : null;
 
         if (publishAt && publishAt > now) {
           page.status = 'scheduled';
-        } else if (unpublishAt && unpublishAt < now) {
+        } else if (!isContentPublished(localeData, now)) {
           page.status = 'draft';
         }
 
@@ -132,11 +132,11 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
   // Get all unique locales
   const availableLocales = useMemo(() => {
     const locales = new Set<string>();
-    for (const page of pages) {
-      for (const locale of page.locales) {
+    pages.forEach((page) => {
+      page.locales.forEach((locale) => {
         locales.add(locale);
-      }
-    }
+      });
+    });
     return ['all', ...Array.from(locales).sort()];
   }, [pages]);
 
@@ -176,7 +176,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
     return (
       <div className="p-6 flex items-center justify-center min-h-[400px]">
         <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin text-azure-04 mx-auto mb-4" />
+          <Loader2 className="h-8 w-8 animate-spin text-azure-04 dark:text-azure-08 mx-auto mb-4" />
           <p className="text-grey-04 dark:text-grey-07">Loading pages...</p>
         </div>
       </div>
@@ -188,7 +188,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
     return (
       <div className="p-6 flex items-center justify-center min-h-[400px]" data-testid="page-list-error">
         <div className="text-center max-w-md">
-          <AlertCircle className="h-12 w-12 text-red-04 mx-auto mb-4" />
+          <AlertCircle className="h-12 w-12 text-red-04 dark:text-red-08 mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-grey-01 dark:text-grey-12 mb-2">Failed to load pages</h2>
           <p className="text-grey-04 dark:text-grey-07 mb-4">{error.message}</p>
           <button
@@ -227,17 +227,6 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
       const config = getUIConfig();
       const templateConfig = config.templates?.[data.template];
 
-      // Apply path prefix if template has one. Only meaningful for Puck
-      // pages — MDX pages don't carry a template.
-      let finalPath = data.path;
-      if (data.format !== 'mdx' && templateConfig?.pathPrefix && !data.path.startsWith(templateConfig.pathPrefix)) {
-        // Ensure proper path joining (avoid double slashes)
-        const prefix = templateConfig.pathPrefix.endsWith('/')
-          ? templateConfig.pathPrefix.slice(0, -1)
-          : templateConfig.pathPrefix;
-        finalPath = `${prefix}${data.path.startsWith('/') ? data.path : `/${data.path}`}`;
-      }
-
       // Shared metadata. Description is only added when MDX picked it
       // up — Puck pages don't render it today, so the manifest stays
       // clean for them.
@@ -249,51 +238,47 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
       // Build a type-specific content payload. MDX pages send an empty
       // body — the editor opens to a blank canvas. Puck pages keep the
       // existing template-driven payload.
-      let result: CreateResult;
-      if (data.format === 'mdx') {
-        result = await createContent.mutateAsync({
-          kind: 'page',
-          site: currentSite,
-          collection: 'pages',
-          type: 'mdx',
-          meta,
-          locales: {
-            [data.locale]: {
-              meta,
-              pathname: finalPath,
-              // Empty body — backend stamps id/created/modified into
-              // frontmatter automatically (see
-              // filesystem-content-api.ts createContent, type === 'mdx'
-              // branch).
-              content: { mdx: '' },
+      const templateContent =
+        data.format !== 'mdx' && templateConfig?.component ? createTemplateContent(templateConfig.component) : [];
+      const result = await (data.format === 'mdx'
+        ? createContent.mutateAsync({
+            kind: 'page',
+            site: currentSite,
+            collection: 'pages',
+            type: 'mdx',
+            meta,
+            locales: {
+              [data.locale]: {
+                meta,
+                pathname: data.path,
+                // Empty body — backend stamps id/created/modified into
+                // frontmatter automatically (see
+                // filesystem-content-api.ts createContent, type === 'mdx'
+                // branch).
+                content: { mdx: '' },
+              },
             },
-          },
-        });
-      } else {
-        // Generate template content if template has a component
-        const templateContent = templateConfig?.component ? createTemplateContent(templateConfig.component) : [];
-
-        result = await createContent.mutateAsync({
-          kind: 'page',
-          site: currentSite,
-          collection: 'pages',
-          type: 'puck',
-          meta,
-          locales: {
-            [data.locale]: {
-              meta,
-              pathname: finalPath,
-              content: {
-                puckData: {
-                  root: {},
-                  content: templateContent,
-                  zones: {},
+          })
+        : createContent.mutateAsync({
+            kind: 'page',
+            site: currentSite,
+            collection: 'pages',
+            type: 'puck',
+            meta,
+            locales: {
+              [data.locale]: {
+                meta,
+                pathname: data.path,
+                content: {
+                  puckData: {
+                    root: {},
+                    content: templateContent,
+                    zones: {},
+                  },
                 },
               },
             },
-          },
-        });
-      }
+          }));
 
       if (result.success && result.id) {
         // Navigate to the new page editor with the actual ID.
@@ -301,15 +286,19 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
         // land on MdxPageEditor and Puck pages on the Puck canvas.
         navigate(`/pages/${result.id}`);
       } else {
-        throw new Error(`Failed to create page: ${result.reason}`);
+        // The dialog has already closed, so this is the author's only answer:
+        // say why (a path taken since the check), not just "try again".
+        showError(contentFailureMessage(result, 'Failed to create page. Please try again.'), result.error);
       }
     } catch (error) {
       console.error('Failed to create page:', error);
-      showError('Failed to create page. Please try again.', error);
+      // The content-API router answers a refusal, such as a path another page took since the check,
+      // with an error status, which the client throws: say why, as for a refusal the result carries.
+      showError(error instanceof APIClientError ? error.message : 'Failed to create page. Please try again.', error);
     }
   };
 
-  const handleEditPage = (pageId: string, _locale: string) => {
+  const handleEditPage = (pageId: string) => {
     // Navigate with the actual content ID
     navigate(`/pages/${pageId}`);
   };
@@ -335,31 +324,31 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
     if (!deleteDialog.pageId) return;
 
     try {
-      let result: DeleteResult;
-
-      if (deleteDialog.hasMultipleLocales) {
-        // Delete only the specific locale
-        result = await deleteContent.mutateAsync({
-          id: deleteDialog.pageId,
-          locale: deleteDialog.locale,
-          etag: deleteDialog.etag,
-        });
-      } else {
-        // Delete the entire page (last locale)
-        result = await deleteContent.mutateAsync({
-          id: deleteDialog.pageId,
-          etag: deleteDialog.etag,
-        });
-      }
+      const result = await (deleteDialog.hasMultipleLocales
+        ? deleteContent.mutateAsync({
+            // Delete only the requested locale.
+            id: deleteDialog.pageId,
+            locale: deleteDialog.locale,
+            etag: deleteDialog.etag,
+          })
+        : deleteContent.mutateAsync({
+            // Delete the entire page when this is its last locale.
+            id: deleteDialog.pageId,
+            etag: deleteDialog.etag,
+          }));
 
       if (result.success) {
         setDeleteDialog({ isOpen: false, pageId: '', pageTitle: '', locale: '', etag: '', hasMultipleLocales: false });
       } else {
         // Handle delete failure
-        const errorMessage = result.error?.message || 'Failed to delete page';
+        const errorMessage = contentFailureMessage(result, 'Failed to delete page');
         console.error('Delete failed:', errorMessage);
         setDeleteDialog({ isOpen: false, pageId: '', pageTitle: '', locale: '', etag: '', hasMultipleLocales: false });
-        showError(errorMessage, result.error);
+        if (isStaleWrite(result)) {
+          showStaleWriteError(result.error);
+        } else {
+          showError(errorMessage, result.error);
+        }
       }
     } catch (error) {
       console.error('Failed to delete page:', error);
@@ -586,7 +575,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
                           <button
                             type="button"
                             key={locale}
-                            onClick={() => handleEditPage(page.id, locale)}
+                            onClick={() => handleEditPage(page.id)}
                             className="p-1 hover:bg-hover rounded-md transition-colors"
                             title={`Edit ${locale} version`}
                             data-testid={`edit-${page.id}.${locale}`}
@@ -606,7 +595,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
                               aria-label="Delete"
                               data-testid={`delete-${page.id}`}
                             >
-                              <Trash2 className="h-4 w-4 text-red-04" />
+                              <Trash2 className="h-4 w-4 text-red-04 dark:text-red-08" />
                             </button>
                           </Tooltip>
                         ) : (
@@ -618,7 +607,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
                             aria-label="Delete"
                             data-testid={`delete-${page.id}.${selectedLocale}`}
                           >
-                            <Trash2 className="h-4 w-4 text-red-04" />
+                            <Trash2 className="h-4 w-4 text-red-04 dark:text-red-08" />
                           </button>
                         )
                       ) : (
@@ -634,7 +623,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
                                 aria-label="Delete"
                                 data-testid={`delete-${page.id}.${locale}`}
                               >
-                                <Trash2 className="h-4 w-4 text-red-04" />
+                                <Trash2 className="h-4 w-4 text-red-04 dark:text-red-08" />
                               </button>
                             </Tooltip>
                           ) : (
@@ -647,7 +636,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
                                 aria-label="Delete"
                                 data-testid={`delete-${page.id}.${locale}`}
                               >
-                                <Trash2 className="h-4 w-4 text-red-04" />
+                                <Trash2 className="h-4 w-4 text-red-04 dark:text-red-08" />
                               </button>
                             </Tooltip>
                           ),

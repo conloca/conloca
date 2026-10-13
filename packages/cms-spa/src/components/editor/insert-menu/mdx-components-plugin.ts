@@ -1,5 +1,5 @@
 import { addComposerChild$, realmPlugin } from '@mdxeditor/editor';
-import { SlashMenuPlugin } from './SlashMenuPlugin';
+import { SlashMenuPlugin } from './SlashMenuPlugin.js';
 
 /**
  * Realm plugin that wires the slash menu into @mdxeditor/editor's Lexical

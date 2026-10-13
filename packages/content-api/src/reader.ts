@@ -5,11 +5,11 @@
  * without importing the full server barrel.
  */
 
-export { Blocks } from './blocks';
-export type { ContentAPI } from './content-api.interface';
-export * from './content-operations';
-export { createContentAPI } from './content-reader';
-export * from './content-utils';
-export { Data } from './data';
-export { Site } from './site';
-export * from './types';
+export type { ContentAPI } from './content-api.interface.js';
+export * from './content-operations.js';
+export { createContentAPI } from './content-reader.js';
+export * from './content-utils.js';
+export { Data } from './data.js';
+export { Fragments } from './fragments.js';
+export { Site } from './site.js';
+export * from './types.js';

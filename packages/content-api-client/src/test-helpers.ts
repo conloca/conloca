@@ -22,11 +22,10 @@ export const API_ROUTES = {
   CONTENT_BY_ID: (id: string) => `/content/${id}`,
   LOCALIZED_CONTENT: (id: string, locale: string) => `/content/${id}/${locale}`,
   SITE_PAGES: (site: string) => `/${site}/pages`,
-  BLOCKS: '/blocks',
+  FRAGMENTS: '/fragments',
   COLLECTIONS: '/content/collections',
   BATCH_UPDATE: '/content/batch',
   FIND_UNTRANSLATED: (locale: string) => `/untranslated/${locale}`,
-  DATA_CONTEXT: '/data-context',
 } as const;
 
 export interface MockResponse {
@@ -275,7 +274,7 @@ export class MockAPIResponses {
  */
 export function setupFetchMock(mockFn: (impl?: any) => any) {
   const fetchMock = createMockFetch(mockFn);
-  global.fetch = fetchMock as any;
+  global.fetch = fetchMock;
   return {
     fetchMock,
     responses: new MockAPIResponses(fetchMock),

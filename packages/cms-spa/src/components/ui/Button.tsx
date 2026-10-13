@@ -1,5 +1,5 @@
 import type { ButtonHTMLAttributes, Ref } from 'react';
-import { cn } from '../../utils/cn';
+import { cn } from '../../utils/cn.js';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'outline' | 'ghost' | 'destructive' | 'tonal';
@@ -15,7 +15,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
  *   panel surfaces.
  * - `ghost` — no resting fill, grey text. Tertiary on panel surfaces.
  * - `tonal` — soft grey fill (grey-11 / dark:grey-03), grey text. The
- *   "soft secondary" used on chrome surfaces (host shells, toolbars)
+ *   "soft secondary" used on chrome surfaces (host app chrome, toolbars)
  *   where `outline` would compete with the surface border and `ghost`
  *   would visually disappear against the chrome's own grey wash.
  *   Sized for compact toolbar usage; pairs naturally with
@@ -31,7 +31,8 @@ export function Button({
   ref,
   ...props
 }: ButtonProps) {
-  const base = 'rounded-md transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed';
+  const base =
+    'inline-flex items-center justify-center rounded-md transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed';
   const sizes = {
     default: 'px-4 py-2',
     sm: 'px-3 py-1.5 text-sm',

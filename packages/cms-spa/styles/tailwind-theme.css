@@ -108,12 +108,14 @@
 }
 
 /* Dark mode: selector strategy for manual toggle + system preference.
- * Uses :is() (not :where()) so dark variants beat the conloca.com
- * website Tailwind that gets injected into /__cms — its plain .bg-white
+ * Uses :is() (not :where()) so dark variants beat any host site's
+ * Tailwind that gets injected into /__cms — its plain .bg-white
  * etc. has spec (0,1,0) and would override a :where()-wrapped variant. */
-@variant dark
-(
-&:is(.dark, .dark *));
+@custom-variant dark {
+  &:is(.dark, .dark *) {
+    @slot;
+  }
+}
 
 /* Public UI primitive surface. Consumers that import this theme contract
  * get cms-spa's exported UI primitive utility classes generated

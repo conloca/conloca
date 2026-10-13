@@ -1,6 +1,9 @@
 /// <reference types="astro/client" />
 
 interface ImportMetaEnv {
+  // Dev-only Vite define for API routes. The same name also travels through
+  // process.env (set in the config:setup hook, raw option value) so the
+  // collection factories can default to it — two channels, one value.
   readonly CONLOCA_CONTENT_ROOT: string;
   readonly CONLOCA_CANVAS_DIR: string;
   readonly CONLOCA_CMS_ROUTE: string;

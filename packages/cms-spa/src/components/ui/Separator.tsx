@@ -1,4 +1,4 @@
-import { cn } from '../../utils/cn';
+import { cn } from '../../utils/cn.js';
 
 interface SeparatorProps {
   className?: string;
@@ -7,20 +7,8 @@ interface SeparatorProps {
 
 export function Separator({ className, orientation = 'vertical' }: SeparatorProps) {
   if (orientation === 'horizontal') {
-    return (
-      <div
-        className={cn('w-full h-px bg-grey-09 dark:bg-grey-04', className)}
-        role="separator"
-        aria-orientation="horizontal"
-      />
-    );
+    return <hr className={cn('w-full h-px border-0 bg-grey-09 dark:bg-grey-04', className)} />;
   }
 
-  return (
-    <div
-      className={cn('h-5 w-px bg-grey-09 dark:bg-grey-04', className)}
-      role="separator"
-      aria-orientation="vertical"
-    />
-  );
+  return <hr aria-orientation="vertical" className={cn('h-5 w-px border-0 bg-grey-09 dark:bg-grey-04', className)} />;
 }

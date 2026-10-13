@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { normalizeAndValidatePathname } from '../src/content-utils';
+import { normalizeAndValidatePathname } from '../src/content-utils.js';
 
 describe('normalizeAndValidatePathname', () => {
   describe('silent normalization', () => {
@@ -141,6 +141,22 @@ describe('normalizeAndValidatePathname', () => {
       const r = normalizeAndValidatePathname('/foo/..');
       expect(r.valid).toBe(false);
       expect(r.reason).toBe('traversal_segment');
+    });
+
+    test('rejects a last segment `index`, which names the file of the folder above it', () => {
+      for (const input of ['/index', 'index', '/blog/index', '/blog/index/']) {
+        const r = normalizeAndValidatePathname(input);
+        expect(r.valid).toBe(false);
+        expect(r.reason).toBe('index_segment');
+        // Right whether the path is the home page's file or another page's.
+        expect(r.message).toBe('Path cannot end in `/index`: `/index` is the home page and `/blog/index` is `/blog`');
+      }
+    });
+
+    test('accepts `index` as an inner segment or part of a segment', () => {
+      for (const input of ['/index/post', '/indexes', '/blog/reindex']) {
+        expect(normalizeAndValidatePathname(input)).toEqual({ value: input, valid: true });
+      }
     });
 
     test('rejects stray dot inside segment', () => {

@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
-import { mkdir, readFile, rm, writeFile } from 'fs/promises';
-import { join } from 'path';
-import { parseDualEtag } from '../src/etag-utils';
-import { FileSystemContentAPI } from '../src/filesystem-content-api';
-import type { ContentAPIOptions, CreateContentInput } from '../src/types';
-import { getCreatedId } from './test-helpers';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { parseDualEtag } from '../src/etag-utils.js';
+import { FileSystemContentAPI } from '../src/filesystem-content-api.js';
+import type { ContentAPIOptions, CreateContentInput } from '../src/types.js';
+import { getCreatedId } from './test-helpers.js';
 
 describe('Dual ETag System', () => {
   const testDir = join(import.meta.dir, 'test-content-dual-etag');
@@ -115,7 +115,7 @@ describe('Dual ETag System', () => {
     const original = await api.getContent(id);
     expect(original).toBeTruthy();
 
-    if (original && original.locales.en) {
+    if (original?.locales.en) {
       const originalEtag = original.locales.en.etag;
       const originalParsed = parseDualEtag(originalEtag);
       expect(originalParsed).toBeTruthy();
@@ -136,7 +136,7 @@ describe('Dual ETag System', () => {
       const updated = await api.getContent(id);
       expect(updated).toBeTruthy();
 
-      if (updated && updated.locales.en && originalParsed) {
+      if (updated?.locales.en && originalParsed) {
         const updatedEtag = updated.locales.en.etag;
         const updatedParsed = parseDualEtag(updatedEtag);
         expect(updatedParsed).toBeTruthy();
@@ -174,7 +174,7 @@ describe('Dual ETag System', () => {
     const original = await api.getContent(id);
     expect(original).toBeTruthy();
 
-    if (original && original.locales.en) {
+    if (original?.locales.en) {
       const originalEtag = original.locales.en.etag;
       const originalParsed = parseDualEtag(originalEtag);
       expect(originalParsed).toBeTruthy();
@@ -196,7 +196,7 @@ describe('Dual ETag System', () => {
       const updated = await api.getContent(id);
       expect(updated).toBeTruthy();
 
-      if (updated && updated.locales.en && originalParsed) {
+      if (updated?.locales.en && originalParsed) {
         const updatedEtag = updated.locales.en.etag;
         const updatedParsed = parseDualEtag(updatedEtag);
         expect(updatedParsed).toBeTruthy();
@@ -379,7 +379,7 @@ describe('Dual ETag System', () => {
     const original = await api.getContent(id);
     expect(original).toBeTruthy();
 
-    if (original && original.locales.en) {
+    if (original?.locales.en) {
       const originalModified = original.locales.en.modified;
       const originalEtag = original.locales.en.etag;
 
@@ -402,7 +402,7 @@ describe('Dual ETag System', () => {
       const updated = await api.getContent(id);
       expect(updated).toBeTruthy();
 
-      if (updated && updated.locales.en) {
+      if (updated?.locales.en) {
         const updatedModified = updated.locales.en.modified;
 
         // Modified timestamp should have changed
@@ -436,7 +436,7 @@ describe('Dual ETag System', () => {
     const original = await api.getContent(id);
     expect(original).toBeTruthy();
 
-    if (original && original.locales.en) {
+    if (original?.locales.en) {
       const originalModified = original.locales.en.modified;
       const originalEtag = original.locales.en.etag;
 
@@ -459,7 +459,7 @@ describe('Dual ETag System', () => {
       const updated = await api.getContent(id);
       expect(updated).toBeTruthy();
 
-      if (updated && updated.locales.en) {
+      if (updated?.locales.en) {
         const updatedModified = updated.locales.en.modified;
 
         // Modified timestamp SHOULD have changed for content updates
@@ -472,7 +472,7 @@ describe('Dual ETag System', () => {
   it('should update modified timestamp when MDX metadata changes', async () => {
     // Create MDX content
     const createData: CreateContentInput = {
-      kind: 'block',
+      kind: 'fragment',
       collection: 'components',
       type: 'mdx',
       name: 'test-mdx-modified',
@@ -492,7 +492,7 @@ describe('Dual ETag System', () => {
     const original = await api.getContent(id);
     expect(original).toBeTruthy();
 
-    if (original && original.locales.en) {
+    if (original?.locales.en) {
       const originalModified = original.locales.en.modified;
       const originalEtag = original.locales.en.etag;
 
@@ -515,7 +515,7 @@ describe('Dual ETag System', () => {
       const updated = await api.getContent(id);
       expect(updated).toBeTruthy();
 
-      if (updated && updated.locales.en) {
+      if (updated?.locales.en) {
         const updatedModified = updated.locales.en.modified;
 
         // Modified timestamp should have changed
@@ -583,7 +583,7 @@ describe('Dual ETag System', () => {
   it('should update modified timestamp when MDX content changes', async () => {
     // Create MDX content
     const createData: CreateContentInput = {
-      kind: 'block',
+      kind: 'fragment',
       collection: 'components',
       type: 'mdx',
       name: 'test-mdx-content-only',
@@ -603,7 +603,7 @@ describe('Dual ETag System', () => {
     const original = await api.getContent(id);
     expect(original).toBeTruthy();
 
-    if (original && original.locales.en) {
+    if (original?.locales.en) {
       const originalModified = original.locales.en.modified;
       const originalEtag = original.locales.en.etag;
 
@@ -626,7 +626,7 @@ describe('Dual ETag System', () => {
       const updated = await api.getContent(id);
       expect(updated).toBeTruthy();
 
-      if (updated && updated.locales.en) {
+      if (updated?.locales.en) {
         const updatedModified = updated.locales.en.modified;
 
         // Modified timestamp SHOULD have changed for content updates
@@ -643,7 +643,7 @@ describe('Dual ETag System', () => {
 
   it('should calculate correct dual ETags for MDX files', async () => {
     const createData: CreateContentInput = {
-      kind: 'block',
+      kind: 'fragment',
       collection: 'components',
       type: 'mdx',
       name: 'test-mdx-etags',
@@ -662,7 +662,7 @@ describe('Dual ETag System', () => {
     const content = await api.getContent(id);
     expect(content).toBeTruthy();
 
-    if (content && content.locales.en) {
+    if (content?.locales.en) {
       const etag = content.locales.en.etag;
       const parsed = parseDualEtag(etag);
 

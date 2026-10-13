@@ -1,7 +1,7 @@
-import { mkdtemp, readdir, rm } from 'fs/promises';
-import { tmpdir } from 'os';
-import { join } from 'path';
-import { FileSystemContentAPI } from '../src/filesystem-content-api';
+import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { FileSystemContentAPI } from '../src/filesystem-content-api.js';
 
 async function debug() {
   const tempDir = await mkdtemp(join(tmpdir(), 'conloca-debug-'));

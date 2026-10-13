@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdir, rm, writeFile } from 'fs/promises';
-import { join } from 'path';
-import { FileSystemContentAPI } from '../src/filesystem-content-api';
-import type { SitesConfig } from '../src/types';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { FileSystemContentAPI } from '../src/filesystem-content-api.js';
+import type { SitesConfig } from '../src/types.js';
+import { testTempDir } from './test-temp-dir.js';
 
 describe('FileSystemContentAPI reindex', () => {
   let tempDir: string;
@@ -19,10 +20,10 @@ describe('FileSystemContentAPI reindex', () => {
   };
 
   beforeEach(async () => {
-    tempDir = `/tmp/content-api-reindex-test-${Date.now()}`;
+    tempDir = testTempDir('content-api-reindex-test');
     await mkdir(tempDir, { recursive: true });
     await mkdir(join(tempDir, 'testsite/pages'), { recursive: true });
-    await mkdir(join(tempDir, 'blocks/components'), { recursive: true });
+    await mkdir(join(tempDir, 'fragments/components'), { recursive: true });
 
     // Create sites.json
     await writeFile(join(tempDir, 'sites.json'), JSON.stringify(sitesConfig));
@@ -137,33 +138,33 @@ describe('FileSystemContentAPI reindex', () => {
     expect(content2?.localized.meta.title).toBe('New Page 2');
   });
 
-  test('should handle blocks added after initial creation', async () => {
+  test('should handle fragments added after initial creation', async () => {
     // Create API
     api = await FileSystemContentAPI.create({
       contentRoot: tempDir,
     });
 
-    // Add a new block
-    const newBlockData = {
-      id: 'new-block',
+    // Add a new fragment
+    const newFragmentData = {
+      id: 'new-fragment',
       collection: 'components',
       type: 'mdx',
       created: '2024-01-01T00:00:00.000Z',
       modified: '2024-01-01T00:00:00.000Z',
       name: 'hero',
-      meta: { title: 'Hero Block' },
+      meta: { title: 'Hero Fragment' },
       content: { mdx: '# Hero' },
     };
 
-    await writeFile(join(tempDir, 'blocks/components/hero.en.vxjson'), JSON.stringify(newBlockData, null, 2));
+    await writeFile(join(tempDir, 'fragments/components/hero.en.vxjson'), JSON.stringify(newFragmentData, null, 2));
 
     // Call reindex
     await api.reindex();
 
     // Should be found
-    const block = await api.getLocalized('new-block', 'en');
-    expect(block).toBeTruthy();
-    expect(block?.localized.meta.title).toBe('Hero Block');
+    const fragment = await api.getLocalized('new-fragment', 'en');
+    expect(fragment).toBeTruthy();
+    expect(fragment?.localized.meta.title).toBe('Hero Fragment');
   });
 
   test('should handle MDX files', async () => {
@@ -174,23 +175,23 @@ describe('FileSystemContentAPI reindex', () => {
 
     // Add an MDX file with flat frontmatter structure
     const mdxContent = `---
-id: mdx-block
+id: mdx-fragment
 created: 2024-01-01T00:00:00.000Z
 modified: 2024-01-01T00:00:00.000Z
-title: MDX Block
+title: MDX Fragment
 ---
 
 # Hello MDX`;
 
-    await writeFile(join(tempDir, 'blocks/components/hello.en.mdx'), mdxContent);
+    await writeFile(join(tempDir, 'fragments/components/hello.en.mdx'), mdxContent);
 
     // Call reindex
     await api.reindex();
 
     // Should be found
-    const block = await api.getLocalized('mdx-block', 'en');
-    expect(block).toBeTruthy();
-    expect(block?.localized.meta.title).toBe('MDX Block');
+    const fragment = await api.getLocalized('mdx-fragment', 'en');
+    expect(fragment).toBeTruthy();
+    expect(fragment?.localized.meta.title).toBe('MDX Fragment');
   });
 
   test('should return empty stats when no new files', async () => {

@@ -1,10 +1,10 @@
 import { $, build } from 'bun';
-import { processTailwindCSS, TAILWIND_CONFIG } from './tailwind-config';
+import { processTailwindCSS, TAILWIND_CONFIG } from './tailwind-config.js';
 
 const isDev = process.env.NODE_ENV !== 'production';
 console.log(`Building CMS SPA (${isDev ? 'dev' : 'production'})...`);
 
-// Step 1: Clean only SPA assets; tsc-js owns declarations in dist.
+// Step 1: Clean only SPA assets; tsc-js owns dist/ts (JavaScript and declarations).
 await $`rm -rf ./dist/spa`;
 await $`mkdir -p ./dist/spa`;
 

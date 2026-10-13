@@ -1,21 +1,21 @@
 import { useQuery } from '@tanstack/react-query';
-import { getUIConfig } from '../ui-config';
-import type { AssetScope } from './types';
+import { getUIConfig } from '../ui-config.js';
+import type { AssetScope } from './types.js';
 
 /**
  * Cache-key namespace for per-asset scope lookups. Keyed by
- * filename — the host shell owns the (orgId, branchName) scoping
- * behind the bridge, so cms-spa sees a flat "which filename?"
- * surface and the bridge resolves it against the active workspace.
+ * filename — the host app owns the branch scoping behind the
+ * bridge, so cms-spa sees a flat "which filename?" surface and the
+ * bridge resolves it for the current site and branch.
  *
- * When the user switches branches, the host shell invalidates this
+ * When the user switches branches, the host app invalidates this
  * whole prefix (`['asset-scope']`) so stale scope answers don't
  * leak across the boundary.
  */
 const ASSET_SCOPE_QUERY_KEY_PREFIX = ['asset-scope'] as const;
 
 /**
- * Resolve the hosted-mode lifecycle scope of a single asset.
+ * Resolve the host-supplied lifecycle scope of a single asset.
  *
  * Returns `null` when:
  *
@@ -30,25 +30,27 @@ const ASSET_SCOPE_QUERY_KEY_PREFIX = ['asset-scope'] as const;
  * caller's purposes — a flashing pill on first paint reads worse
  * than no pill, and the scope is metadata, not primary content.
  *
- * The bridge implementation (in the host shell) wraps its
- * client's `getAssetScope` so the actual fetch is mocked + cached
- * one level deeper. From cms-spa's POV this is just a lookup; the
- * TanStack wrapper here is so repeat AssetCard renders don't re-call
- * the bridge for the same filename.
+ * A host app's bridge typically wraps its own lookup so the actual
+ * fetch is cached one level deeper. From cms-spa's POV this is just
+ * a lookup; the TanStack wrapper here is so repeat AssetCard renders
+ * don't re-call the bridge for the same filename.
  */
-export function useAssetScope(filename: string | undefined): AssetScope | null {
+export function useAssetScope(filename: string | undefined, folder?: string): AssetScope | null {
   const query = useQuery<AssetScope | null>({
-    queryKey: [...ASSET_SCOPE_QUERY_KEY_PREFIX, filename ?? ''],
+    // Folder is part of the key so same-named assets in different folders
+    // cache (and invalidate) independently; the `['asset-scope']` prefix
+    // invalidation still catches every entry.
+    queryKey: [...ASSET_SCOPE_QUERY_KEY_PREFIX, filename ?? '', folder ?? ''],
     queryFn: async () => {
       const bridge = getUIConfig().mediaBridge;
       if (!bridge || !filename) return null;
-      return bridge.getAssetScope({ filename });
+      return bridge.getAssetScope({ filename, folder });
     },
     // Per-filename scope is stable for the lifetime of a branch
-    // session — only a promote mutation changes it, and the host
-    // shell invalidates the prefix on success. 5 minutes matches
-    // the cms-spa default staleTime so the surface doesn't have to
-    // think about cache windows.
+    // session — only publishing the asset changes it, and the host
+    // app invalidates the prefix when that succeeds. 5 minutes
+    // matches the cms-spa default staleTime so the surface doesn't
+    // have to think about cache windows.
     staleTime: 1000 * 60 * 5,
     enabled: Boolean(filename),
   });

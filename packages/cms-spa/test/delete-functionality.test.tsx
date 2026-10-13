@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor, waitForElementToBeRemoved } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { BlockList } from '../src/components/pages/BlockList';
-import { PageList } from '../src/components/pages/PageList';
-import { API_ROUTES, mockAPIError, setupTestAPI, testApi } from './test-utils';
+import { FragmentList } from '../src/components/pages/FragmentList.js';
+import { PageList } from '../src/components/pages/PageList.js';
+import { API_ROUTES, mockAPIError, setupTestAPI, testApi } from './test-utils.js';
 
 // Clean up after each test
 afterEach(() => {
@@ -41,33 +41,33 @@ describe('Delete Functionality', () => {
     setupTestAPI('/__conloca/api');
   });
 
-  describe('BlockList Delete', () => {
-    it('should show more actions button for each block', async () => {
-      // Create test blocks using real API
+  describe('FragmentList Delete', () => {
+    it('should show more actions button for each fragment', async () => {
+      // Create test fragments using real API
       await testApi.createContent({
         type: 'mdx',
-        kind: 'block',
+        kind: 'fragment',
         collection: 'shared',
-        name: 'hero-block',
-        meta: { title: 'Hero Block' },
+        name: 'hero-fragment',
+        meta: { title: 'Hero Fragment' },
         locales: {
           en: {
-            meta: { title: 'Hero Block' },
-            content: { mdx: '# Hero Block' },
+            meta: { title: 'Hero Fragment' },
+            content: { mdx: '# Hero Fragment' },
           },
         },
       });
 
       await testApi.createContent({
         type: 'mdx',
-        kind: 'block',
+        kind: 'fragment',
         collection: 'shared',
-        name: 'feature-block',
-        meta: { title: 'Feature Block' },
+        name: 'feature-fragment',
+        meta: { title: 'Feature Fragment' },
         locales: {
           en: {
-            meta: { title: 'Feature Block' },
-            content: { mdx: '# Feature Block' },
+            meta: { title: 'Feature Fragment' },
+            content: { mdx: '# Feature Fragment' },
           },
         },
       });
@@ -75,33 +75,33 @@ describe('Delete Functionality', () => {
       render(
         <MemoryRouter>
           <QueryClientProvider client={queryClient}>
-            <BlockList />
+            <FragmentList />
           </QueryClientProvider>
         </MemoryRouter>,
       );
 
       await waitFor(() => {
-        expect(screen.getByText('Hero Block')).toBeDefined();
-        expect(screen.getByText('Feature Block')).toBeDefined();
+        expect(screen.getByText('Hero Fragment')).toBeDefined();
+        expect(screen.getByText('Feature Fragment')).toBeDefined();
       });
 
-      // Should have "More actions" buttons for each block
+      // Should have "More actions" buttons for each fragment
       const moreActionsButtons = screen.getAllByRole('button', { name: /more actions/i });
       expect(moreActionsButtons).toHaveLength(2);
     });
 
     it('should show confirmation dialog when delete is clicked', async () => {
-      // Create a test block
+      // Create a test fragment
       await testApi.createContent({
         type: 'mdx',
-        kind: 'block',
+        kind: 'fragment',
         collection: 'shared',
-        name: 'hero-block',
-        meta: { title: 'Hero Block' },
+        name: 'hero-fragment',
+        meta: { title: 'Hero Fragment' },
         locales: {
           en: {
-            meta: { title: 'Hero Block' },
-            content: { mdx: '# Hero Block' },
+            meta: { title: 'Hero Fragment' },
+            content: { mdx: '# Hero Fragment' },
           },
         },
       });
@@ -109,12 +109,12 @@ describe('Delete Functionality', () => {
       render(
         <MemoryRouter>
           <QueryClientProvider client={queryClient}>
-            <BlockList />
+            <FragmentList />
           </QueryClientProvider>
         </MemoryRouter>,
       );
 
-      await screen.findByText('Hero Block');
+      await screen.findByText('Hero Fragment');
 
       // Click "More actions" button and then delete option
       await clickDeleteInActionsMenu();
@@ -131,17 +131,17 @@ describe('Delete Functionality', () => {
     });
 
     it('should call deleteContent when confirmed', async () => {
-      // Create a test block
+      // Create a test fragment
       await testApi.createContent({
         type: 'mdx',
-        kind: 'block',
+        kind: 'fragment',
         collection: 'shared',
-        name: 'hero-block',
-        meta: { title: 'Hero Block' },
+        name: 'hero-fragment',
+        meta: { title: 'Hero Fragment' },
         locales: {
           en: {
-            meta: { title: 'Hero Block' },
-            content: { mdx: '# Hero Block' },
+            meta: { title: 'Hero Fragment' },
+            content: { mdx: '# Hero Fragment' },
           },
         },
       });
@@ -149,12 +149,12 @@ describe('Delete Functionality', () => {
       render(
         <MemoryRouter>
           <QueryClientProvider client={queryClient}>
-            <BlockList />
+            <FragmentList />
           </QueryClientProvider>
         </MemoryRouter>,
       );
 
-      await screen.findByText('Hero Block');
+      await screen.findByText('Hero Fragment');
 
       // Click "More actions" button and then delete option
       await clickDeleteInActionsMenu();
@@ -163,46 +163,46 @@ describe('Delete Functionality', () => {
       const confirmButton = await screen.findByRole('button', { name: /confirm delete/i });
       fireEvent.click(confirmButton);
 
-      // Wait for the block to be removed from the UI
-      await waitForElementToBeRemoved(() => screen.queryByText('Hero Block'));
+      // Wait for the fragment to be removed from the UI
+      await waitForElementToBeRemoved(() => screen.queryByText('Hero Fragment'));
 
-      // Verify the block was actually deleted from the API
+      // Verify the fragment was actually deleted from the API
       const allContent = Array.from(testApi.listAllContent());
       expect(allContent).toHaveLength(0);
     });
 
     it('should handle delete errors gracefully', async () => {
-      // Create a test block
+      // Create a test fragment
       const createResult = await testApi.createContent({
         type: 'mdx',
-        kind: 'block',
+        kind: 'fragment',
         collection: 'shared',
-        name: 'hero-block',
-        meta: { title: 'Hero Block' },
+        name: 'hero-fragment',
+        meta: { title: 'Hero Fragment' },
         locales: {
           en: {
-            meta: { title: 'Hero Block' },
-            content: { mdx: '# Hero Block' },
+            meta: { title: 'Hero Fragment' },
+            content: { mdx: '# Hero Fragment' },
           },
         },
       });
 
-      const blockId = createResult.id!;
+      const fragmentId = createResult.id!;
 
       // Mock a stale write error for the delete request
-      mockAPIError(API_ROUTES.CONTENT_BY_ID(blockId), 409, 'STALE_WRITE', 'Content has been modified', {
+      mockAPIError(API_ROUTES.CONTENT_BY_ID(fragmentId), 409, 'STALE_WRITE', 'Content has been modified', {
         currentEtag: 'newer-etag',
       });
 
       render(
         <MemoryRouter>
           <QueryClientProvider client={queryClient}>
-            <BlockList />
+            <FragmentList />
           </QueryClientProvider>
         </MemoryRouter>,
       );
 
-      await screen.findByText('Hero Block');
+      await screen.findByText('Hero Fragment');
 
       // Delete and confirm via "More actions" menu
       await clickDeleteInActionsMenu();
@@ -215,32 +215,32 @@ describe('Delete Functionality', () => {
       });
     });
 
-    it('should remove block from list after successful deletion', async () => {
-      // Create multiple test blocks
+    it('should remove fragment from list after successful deletion', async () => {
+      // Create multiple test fragments
       await testApi.createContent({
         type: 'mdx',
-        kind: 'block',
+        kind: 'fragment',
         collection: 'shared',
-        name: 'hero-block',
-        meta: { title: 'Hero Block' },
+        name: 'hero-fragment',
+        meta: { title: 'Hero Fragment' },
         locales: {
           en: {
-            meta: { title: 'Hero Block' },
-            content: { mdx: '# Hero Block' },
+            meta: { title: 'Hero Fragment' },
+            content: { mdx: '# Hero Fragment' },
           },
         },
       });
 
       await testApi.createContent({
         type: 'mdx',
-        kind: 'block',
+        kind: 'fragment',
         collection: 'shared',
-        name: 'feature-block',
-        meta: { title: 'Feature Block' },
+        name: 'feature-fragment',
+        meta: { title: 'Feature Fragment' },
         locales: {
           en: {
-            meta: { title: 'Feature Block' },
-            content: { mdx: '# Feature Block' },
+            meta: { title: 'Feature Fragment' },
+            content: { mdx: '# Feature Fragment' },
           },
         },
       });
@@ -248,25 +248,25 @@ describe('Delete Functionality', () => {
       render(
         <MemoryRouter>
           <QueryClientProvider client={queryClient}>
-            <BlockList />
+            <FragmentList />
           </QueryClientProvider>
         </MemoryRouter>,
       );
 
       await waitFor(() => {
-        expect(screen.getByText('Hero Block')).toBeDefined();
-        expect(screen.getByText('Feature Block')).toBeDefined();
+        expect(screen.getByText('Hero Fragment')).toBeDefined();
+        expect(screen.getByText('Feature Fragment')).toBeDefined();
       });
 
-      // Delete first block via "More actions" menu (index 0 for first block)
+      // Delete first fragment via "More actions" menu (index 0 for first fragment)
       await clickDeleteInActionsMenu(0);
 
       const confirmButton = await screen.findByRole('button', { name: /confirm delete/i });
       fireEvent.click(confirmButton);
 
-      // Hero Block should be removed, Feature Block should remain
-      await waitForElementToBeRemoved(() => screen.queryByText('Hero Block'));
-      expect(screen.getByText('Feature Block')).toBeDefined();
+      // Hero Fragment should be removed, Feature Fragment should remain
+      await waitForElementToBeRemoved(() => screen.queryByText('Hero Fragment'));
+      expect(screen.getByText('Feature Fragment')).toBeDefined();
     });
   });
 

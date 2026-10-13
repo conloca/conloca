@@ -1,6 +1,6 @@
 import type { ContentData } from '@conloca/content-api-client';
 import { useState } from 'react';
-import { Textarea } from '../ui';
+import { Textarea } from '../ui/index.js';
 
 interface ContentDiffProps {
   localContent: ContentData;
@@ -145,39 +145,47 @@ function PuckDiff({ localPuck, serverPuck, onResolve }: PuckDiffProps) {
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <div
+        <label
           className={`p-4 rounded-md border-2 cursor-pointer transition-colors ${
             selectedVersion === 'local'
               ? 'border-green-05 bg-green-11 dark:bg-green-02'
               : 'border-line bg-grey-12 dark:bg-grey-02 hover:border-grey-08 dark:hover:border-grey-06'
           }`}
-          onClick={() => setSelectedVersion('local')}
         >
           <h4 className="font-semibold mb-2 flex items-center gap-2">
-            <input type="radio" checked={selectedVersion === 'local'} onChange={() => setSelectedVersion('local')} />
+            <input
+              type="radio"
+              name="conflict-version"
+              checked={selectedVersion === 'local'}
+              onChange={() => setSelectedVersion('local')}
+            />
             <span data-testid="conflict-comparison-yours">Your Version</span>
           </h4>
           <div className="text-sm">
             <ComponentStructure data={localPuck} />
           </div>
-        </div>
+        </label>
 
-        <div
+        <label
           className={`p-4 rounded-md border-2 cursor-pointer transition-colors ${
             selectedVersion === 'server'
               ? 'border-red-04 bg-red-11 dark:bg-red-02'
               : 'border-line bg-grey-12 dark:bg-grey-02 hover:border-grey-08 dark:hover:border-grey-06'
           }`}
-          onClick={() => setSelectedVersion('server')}
         >
           <h4 className="font-semibold mb-2 flex items-center gap-2">
-            <input type="radio" checked={selectedVersion === 'server'} onChange={() => setSelectedVersion('server')} />
+            <input
+              type="radio"
+              name="conflict-version"
+              checked={selectedVersion === 'server'}
+              onChange={() => setSelectedVersion('server')}
+            />
             <span data-testid="conflict-comparison-server">Server Version</span>
           </h4>
           <div className="text-sm">
             <ComponentStructure data={serverPuck} />
           </div>
-        </div>
+        </label>
       </div>
 
       <div className="text-sm text-grey-04 dark:text-grey-07">
@@ -219,8 +227,8 @@ function ComponentStructure({ data }: { data: any }) {
         <details className="cursor-pointer">
           <summary className="font-medium">Components</summary>
           <div className="mt-1 space-y-1">
-            {data.content.map((component: any, i: number) => (
-              <div key={i} className="text-xs p-2 bg-white dark:bg-grey-02 rounded-md">
+            {data.content.map((component: any) => (
+              <div key={component.props.id} className="text-xs p-2 bg-white dark:bg-grey-02 rounded-md">
                 <strong>{component.type || 'Unknown'}</strong>
                 {component.props?.title && ` - ${component.props.title}`}
               </div>

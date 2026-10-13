@@ -1,7 +1,7 @@
 /// <reference lib="dom" />
 import { afterEach, describe, expect, test } from 'bun:test';
 import { cleanup, render, screen } from '@testing-library/react';
-import { FieldError } from '../src/components/ui/FieldError';
+import { FieldError } from '../src/components/ui/FieldError.js';
 
 afterEach(() => {
   cleanup();
@@ -31,6 +31,11 @@ describe('FieldError', () => {
     expect(alert.className).toContain('inline-flex');
     expect(alert.className).toContain('items-center');
     expect(alert.className).toContain('gap-2');
+  });
+
+  test('switches to the light red in dark mode so the message stays readable on dark surfaces', () => {
+    render(<FieldError>boom</FieldError>);
+    expect(screen.getByRole('alert').className).toContain('dark:text-red-08');
   });
 
   test('exposes id so the field can wire aria-describedby', () => {

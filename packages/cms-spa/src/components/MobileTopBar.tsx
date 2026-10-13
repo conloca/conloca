@@ -1,5 +1,5 @@
 import { Menu } from 'lucide-react';
-import { ConlocaLogo } from './ConlocaLogo';
+import { ConlocaLogo } from './ConlocaLogo.js';
 
 interface MobileTopBarProps {
   onMenuClick: () => void;

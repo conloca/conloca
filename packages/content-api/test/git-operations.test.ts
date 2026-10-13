@@ -4,7 +4,7 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { createGitOperations, setupGitLfsAttributes } from '../src/git-operations';
+import { createGitOperations, setupGitLfsAttributes } from '../src/git-operations.js';
 
 describe('setupGitLfsAttributes', () => {
   let tempDir: string;
@@ -158,6 +158,30 @@ describe('createGitOperations', () => {
       const status2 = await ops.getStatus();
       expect(status2.hasChanges).toBe(true);
       expect(status2.changedFiles).toBe(1);
+    });
+
+    test('sees changes when the repo root is above the directory that holds contentPath', async () => {
+      // Production shape: the server's cwd is the site directory, contentPath is relative to it
+      // (`./content`), and the git repo root is a parent of the site directory.
+      await initGitRepo();
+      await createInitialCommit();
+      const siteDir = join(tempDir, 'site');
+      await mkdir(join(siteDir, 'content'), { recursive: true });
+      await writeFile(join(siteDir, 'content', 'about.vxjson'), '{}');
+      const originalCwd = process.cwd();
+      process.chdir(siteDir);
+      try {
+        const ops = createGitOperations({ contentPath: './content' });
+        const status = await ops.getStatus();
+        expect(status.hasChanges).toBe(true);
+        expect(status.changedFiles).toBe(1);
+        const result = await ops.commitAll('test: nested site');
+        expect(result.success).toBe(true);
+        const showOutput = execSync('git show --stat HEAD', { cwd: tempDir }).toString();
+        expect(showOutput).toContain('site/content/about.vxjson');
+      } finally {
+        process.chdir(originalCwd);
+      }
     });
 
     test('returns isRepo:false when contentPath is not in a git repo', async () => {

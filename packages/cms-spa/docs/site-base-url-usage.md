@@ -8,7 +8,7 @@ different domain.
 ### In Astro
 
 ```typescript
-import { conlocaCMS } from '@conloca/astro-cms';
+import { conlocaCMS } from '@conloca/astro-cms/node';
 
 export default defineConfig({
   integrations: [

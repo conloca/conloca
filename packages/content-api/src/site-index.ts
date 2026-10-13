@@ -1,5 +1,5 @@
-import { isContentPublished, localesOf, mapLocales } from './content-utils';
-import type { ContentData, ContentIdentity, ContentManifest, LocaleVersion } from './types';
+import { isContentPublished, localesOf, mapLocales } from './content-utils.js';
+import type { ContentData, ContentIdentity, ContentManifest, LocaleVersion } from './types.js';
 
 /**
  * V8-optimized index for a single site
@@ -23,10 +23,7 @@ export class SiteIndex {
   // Collections used by this site
   readonly collections: Set<string> = new Set();
 
-  constructor(
-    siteName: string,
-    private locales: string[],
-  ) {
+  constructor(readonly locales: string[]) {
     // Initialize pathname indexes - V8-optimized record for locales, Maps for pathnames
     this.pathnameIndex = mapLocales(locales, () => new Map());
     this.previousPathnameIndex = mapLocales(locales, () => new Map());
@@ -178,7 +175,7 @@ export class SiteIndex {
    */
   removeLocale(id: string, locale: string): void {
     const manifest = this.index.get(id);
-    if (!manifest || !manifest.locales[locale]) return;
+    if (!manifest?.locales[locale]) return;
 
     const localeVersion = manifest.locales[locale];
 
@@ -201,8 +198,11 @@ export class SiteIndex {
       delete contentCache[locale];
     }
 
-    // If no locales left, remove the entire entry
-    if (Object.keys(manifest.locales).length === 0) {
+    // If no DEFINED locales left, remove the entire entry. Count values, not
+    // keys — the removal above assigns `undefined` (keeping the key), so the
+    // key count never reaches zero (BaseContentIndex.removeLocale already
+    // counts defined values; this mirrored it incorrectly).
+    if (Object.values(manifest.locales).every((lv) => lv === undefined)) {
       this.removeEntry(id);
     }
   }

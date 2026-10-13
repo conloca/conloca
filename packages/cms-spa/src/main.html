@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -7,8 +7,35 @@
     <link rel="stylesheet" href="./main.compiled.css" />
   </head>
   <body>
+    <!--
+      Paint the theme on <html> before React mounts so the editor's first
+      frame already carries the user's scheme — including the `data-theme`
+      attribute host CSS keys its dark tokens off.
+
+      This is one of the inline copies of the theme write we cannot delete —
+      each runs before any module exists, so none can import `applyTheme`
+      from `./theme`. The canonical text lives there as
+      `PRE_PAINT_THEME_SCRIPT`; `src/pre-paint-theme.test.ts` discovers every
+      html entry by glob, checks each against that string, and executes it to
+      prove the `<html>` write still matches the theme core.
+      The key matches `THEME_STORAGE_KEY` there, so when the theme core later
+      hydrates it reads the same value and is a no-op.
+    -->
     <script>
-      (()=> {var t=localStorage.getItem('conloca-theme');if(t==='dark'||(t!=='light'&&matchMedia('(prefers-color-scheme:dark)').matches))document.documentElement.classList.add('dark')})();
+      (() => {
+        try {
+          const stored = localStorage.getItem('conloca-theme');
+          const pref = stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'system';
+          const resolved =
+            pref === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : pref;
+          if (resolved === 'dark') document.documentElement.classList.add('dark');
+          document.documentElement.setAttribute('data-theme', resolved);
+          document.documentElement.style.colorScheme = resolved;
+        } catch (_e) {
+          // localStorage / matchMedia unavailable (private mode,
+          // ancient browser) — fall back to the light default.
+        }
+      })();
     </script>
     <div id="root"></div>
     <script type="module" src="./main.tsx"></script>

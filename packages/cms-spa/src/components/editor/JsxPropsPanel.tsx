@@ -1,8 +1,8 @@
 import { Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { containsMarkdownMarkers, type MdxComponentProp } from '../../mdx-components';
-import { useSelectedBlock } from '../../selected-block';
-import { SearchableSelect } from './SearchableSelect';
+import { containsMarkdownMarkers, type MdxComponentProp } from '../../mdx-components.js';
+import { useSelectedBlock } from '../../selected-block.js';
+import { SearchableSelect } from './SearchableSelect.js';
 
 /**
  * Above this many options, swap the native `<select>` for the
@@ -125,7 +125,7 @@ function PropField({ prop, rawValue, onChange }: PropFieldProps) {
 
   if (prop.type === 'number') {
     return (
-      <label className="conloca-jsx-props-panel__field">
+      <div className="conloca-jsx-props-panel__field">
         <span className="conloca-jsx-props-panel__label">
           {display}
           {prop.required && <em aria-hidden> *</em>}
@@ -136,7 +136,7 @@ function PropField({ prop, rawValue, onChange }: PropFieldProps) {
           ariaLabel={display}
         />
         {help && <small className="conloca-jsx-props-panel__help">{help}</small>}
-      </label>
+      </div>
     );
   }
 
@@ -149,7 +149,7 @@ function PropField({ prop, rawValue, onChange }: PropFieldProps) {
   // them why the inline affordance isn't lighting up for this prop.
   const isMarkdown = containsMarkdownMarkers(stringValue);
   return (
-    <label className="conloca-jsx-props-panel__field">
+    <div className="conloca-jsx-props-panel__field">
       <span className="conloca-jsx-props-panel__label">
         {display}
         {prop.required && <em aria-hidden> *</em>}
@@ -182,7 +182,7 @@ function PropField({ prop, rawValue, onChange }: PropFieldProps) {
         </small>
       )}
       {help && <small className="conloca-jsx-props-panel__help">{help}</small>}
-    </label>
+    </div>
   );
 }
 

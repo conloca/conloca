@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdir, mkdtemp, readdir, rm, writeFile } from 'fs/promises';
-import { tmpdir } from 'os';
-import { join } from 'path';
-import { FileSystemContentAPI } from '../src/filesystem-content-api';
-import type { CreateContentInput } from '../src/types';
-import { assertDefined, getCreatedId } from './test-helpers';
+import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { FileSystemContentAPI } from '../src/filesystem-content-api.js';
+import type { CreateContentInput } from '../src/types.js';
+import { assertDefined, getCreatedId } from './test-helpers.js';
 
 describe('Pathname update with in-place manifest modification', () => {
   let tempDir: string;
@@ -248,21 +248,13 @@ describe('Pathname update with in-place manifest modification', () => {
     // Mock addContent to throw an error during update
     const contentIndex = (contentApi as any).contentIndex;
     const originalAddContent = contentIndex.addContent.bind(contentIndex);
-    let updateCallCount = 0;
-
-    // We need to track which manifest is being updated to only throw on the update call
     const createdManifestId = id;
 
-    contentIndex.addContent = function (manifest: any, content: any) {
-      // Only count calls for our test manifest during updates
-      if (manifest.id === createdManifestId && manifest.locales.en?.pathname === '/should-not-be-set') {
-        updateCallCount++;
-        console.log(`Mock addContent called for update, count: ${updateCallCount}`);
-        console.log('Throwing simulated error');
+    contentIndex.addContent = function (identity: any, localeVersion: any, content: any) {
+      if (identity.id === createdManifestId && localeVersion.pathname === '/should-not-be-set') {
         throw new Error('Simulated index error');
       }
-      // Call original for all other cases
-      return originalAddContent.call(this, manifest, content);
+      return originalAddContent.call(this, identity, localeVersion, content);
     };
 
     // Try to update - should fail
@@ -301,10 +293,10 @@ describe('Pathname update with in-place manifest modification', () => {
     expect(site.getByPathname('/should-not-be-set', 'en')).toBeNull();
 
     // Verify the file on disk - if the error happened before file write,
-    // the original file should still exist
+    // the original file should still exist. ENOENT is acceptable here: it
+    // means the update failed before the directory was even created.
     try {
       const filesInDir = await readdir(join(tempDir, 'content', 'shop', 'pages', id, 'en'));
-      console.log('Files after error:', filesInDir);
 
       // The file should still exist with original pathname-based name
       const expectedFileName = 'original.json';
@@ -312,9 +304,8 @@ describe('Pathname update with in-place manifest modification', () => {
 
       // And the new pathname file should not exist
       expect(filesInDir).not.toContain('should-not-be-set.json');
-    } catch (error) {
-      // If directory doesn't exist, that's also fine - it means the update failed early
-      console.log('Directory check failed (expected if error occurred early):', error);
+    } catch {
+      // ENOENT — update failed before creating the directory; nothing to verify.
     }
   });
 });

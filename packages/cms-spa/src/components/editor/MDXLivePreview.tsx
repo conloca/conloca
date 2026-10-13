@@ -1,6 +1,7 @@
 import { useCompileMDX } from '@conloca/content-api-client';
-import { useMDXEvaluation } from '@conloca/mdx';
 import React, { useEffect, useState } from 'react';
+import { useSandboxPreviewStyles } from '../../sandbox-preview-styles.js';
+import { ContentSandbox } from '../sandbox/ContentSandbox.js';
 
 interface MDXLivePreviewProps {
   /** The raw MDX source the editor is currently holding. */
@@ -18,7 +19,7 @@ interface MDXLivePreviewProps {
  * Render an MDX string side-by-side with the editor.
  *
  * Reuses the same compile + evaluate chain that powers `MDXContent.tsx`
- * (which renders saved blocks inside the Puck preview). Three differences:
+ * (which renders saved fragments inside the Puck preview). Three differences:
  *
  * 1. Source is the editor's live `markdown` value rather than a saved
  *    `LocalizedEntry`, so we debounce updates to keep the compile
@@ -78,23 +79,25 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
 }
 
 /**
- * Detect ESM `import` / `export` statements at the top level. The server-side
- * `compileMDX` runs with `outputFormat: 'function-body'`, which can't resolve
- * those without a `baseUrl`. Rather than letting MDX bubble up a cryptic
- * "missing options.baseUrl" error, we short-circuit with a friendly message
- * — the editor itself still works fine.
+ * Detect ESM `import` / `export` statements at the top level. `compileMDX`
+ * rejects them outright: `remarkRestrictExpressions` throws on `mdxjsEsm`
+ * nodes, and it runs early enough that compilation never reaches a stage
+ * where the import could resolve. Rather than surfacing that as a failed
+ * request, we short-circuit with a friendly message — the editor itself
+ * still works fine.
  *
  * Page-level content (which may `import` JSX components scoped by the host
  * site's MDX provider) no longer reaches this component — the page editor
- * renders without a preview pane. The guard remains for blocks, where a
+ * renders without a preview pane. The guard remains for fragments, where a
  * user might paste in a stray import while drafting; the message below is
- * block-appropriate.
+ * fragment-appropriate.
  */
 function hasTopLevelImportsOrExports(source: string): boolean {
   return /^[ \t]*(?:import|export)\s/m.test(source);
 }
 
 function MDXLivePreviewInner({ markdown, debounceMs }: { markdown: string; debounceMs: number }) {
+  const sandboxStyles = useSandboxPreviewStyles();
   const debouncedMarkdown = useDebouncedValue(markdown, debounceMs);
   const mdxContent = debouncedMarkdown.length > 0 ? debouncedMarkdown : null;
   const hasImports = mdxContent ? hasTopLevelImportsOrExports(mdxContent) : false;
@@ -104,22 +107,22 @@ function MDXLivePreviewInner({ markdown, debounceMs }: { markdown: string; debou
   const cacheKey = `live:${debouncedMarkdown.length}:${debouncedMarkdown.slice(0, 64)}`;
 
   // Skip the server compile call when we know it'll fail (top-level imports
-  // need a baseUrl that `function-body` output doesn't get) — keeps the
-  // network panel clean and shows the friendly message immediately below.
+  // are rejected before compilation) — keeps the network panel clean and
+  // shows the friendly message immediately below.
   const {
     data: compiledResult,
     error: compileError,
     isLoading: isCompiling,
   } = useCompileMDX({ mdxContent: hasImports ? null : mdxContent, cacheKey });
 
-  const {
-    Component,
-    error: evaluationError,
-    isLoading: isEvaluating,
-  } = useMDXEvaluation({
-    compiledCode: compiledResult?.code ?? null,
-    cacheKey,
-  });
+  // The MDX eval + render happens inside the sandbox iframe, not in this
+  // privileged document; a render failure comes back as an error message.
+  const [evaluationError, setEvaluationError] = useState<Error | null>(null);
+  const compiledCode = compiledResult?.code ?? null;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: A new compiled artifact invalidates the prior render error.
+  useEffect(() => {
+    setEvaluationError(null);
+  }, [compiledCode]);
 
   if (!mdxContent) {
     return (
@@ -134,8 +137,8 @@ function MDXLivePreviewInner({ markdown, debounceMs }: { markdown: string; debou
       <div className="m-4 p-3 rounded-md border border-yellow-08 bg-yellow-11 dark:bg-yellow-02 dark:border-yellow-03 text-sm text-yellow-02 dark:text-yellow-09">
         <p className="font-semibold mb-1">Preview unavailable</p>
         <p className="text-xs">
-          The preview can&apos;t compile <code>import</code> / <code>export</code> statements. Remove them so this block
-          stays previewable.
+          The preview can&apos;t compile <code>import</code> / <code>export</code> statements. Remove them so this
+          fragment stays previewable.
         </p>
       </div>
     );
@@ -151,7 +154,7 @@ function MDXLivePreviewInner({ markdown, debounceMs }: { markdown: string; debou
     );
   }
 
-  if (isCompiling || isEvaluating || !Component) {
+  if (isCompiling || !compiledCode) {
     return (
       <div className="p-6 text-sm text-grey-05 dark:text-grey-07 flex items-center gap-2">
         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-azure-04" />
@@ -162,7 +165,7 @@ function MDXLivePreviewInner({ markdown, debounceMs }: { markdown: string; debou
 
   return (
     <div className="mdx-content conloca-prose max-w-none p-6">
-      <Component />
+      <ContentSandbox mode="mdx" content={compiledCode} styles={sandboxStyles} onError={setEvaluationError} />
     </div>
   );
 }

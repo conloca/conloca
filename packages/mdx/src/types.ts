@@ -1,19 +1,23 @@
 import type { ComponentType } from 'react';
 
-export type { MDXCompileResponse as MDXCompileResult } from '@conloca/content-api';
+export type { MDXCompileResponse as MDXCompileResult, MDXHeading } from '@conloca/content-api';
 
-export interface EvaluatedMDXBlock {
+import type { MDXHeading as Heading } from '@conloca/content-api';
+
+export interface EvaluatedMDXFragment {
   ok: true;
   id: string;
   title: string;
   Component: ComponentType;
+  /** The fragment's headings, for a host block that shows a contents list. */
+  outline: readonly Heading[];
 }
 
-export interface FailedMDXBlockEvaluation {
+export interface FailedMDXFragmentEvaluation {
   ok: false;
   id: string;
   title: string;
   error: Error;
 }
 
-export type MDXBlockEvaluationResult = EvaluatedMDXBlock | FailedMDXBlockEvaluation;
+export type MDXFragmentEvaluationResult = EvaluatedMDXFragment | FailedMDXFragmentEvaluation;

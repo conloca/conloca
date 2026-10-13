@@ -2,12 +2,26 @@ import { createContentAPI } from '@conloca/content-api/reader';
 import type { Loader, LoaderContext } from 'astro/loaders';
 
 export interface ConlocaLoaderOptions {
+  /** Must equal the content.config key this loader is mounted under — load() asserts it. */
   collection?: string;
   contentRoot: string;
   site?: string;
-  /** Collection kind. If not provided, defaults to 'block' for 'blocks' collection, 'page' otherwise. */
-  kind?: 'page' | 'block' | 'data';
+  /** Collection kind. If not provided, defaults to 'fragment' for 'fragments' collection, 'page' otherwise. */
+  kind?: 'page' | 'fragment' | 'data';
 }
+
+/**
+ * Entry fields this loader owns, written into every entry's data in load().
+ *
+ * None of them belong to `pageMetaSchema`, so under a page collection's schema
+ * they survive only through the loose index signature. A host page-meta field
+ * of the same name would replace the loader's value — a host `puckData` shape
+ * would empty the page tree of every page in the built site.
+ * `buildPageCollectionSchema` refuses those names with an error.
+ *
+ * Adding a field to the record built in load() also means reserving it here.
+ */
+export const LOADER_RESERVED_FIELDS = ['created', 'modified', 'name', 'data', 'mdx', 'puckData'] as const;
 
 /**
  * Custom Astro content loader for Conloca CMS.
@@ -19,14 +33,24 @@ export function conlocaLoader(options: ConlocaLoaderOptions): Loader {
     async load(context: LoaderContext): Promise<void> {
       const { store, parseData, generateDigest, logger } = context;
 
+      // The config key IS the name Astro types and queries; a mismatched
+      // mount (`landing: conlocaPages(...)`) would silently serve another
+      // collection's content under the wrong name.
+      if (options.collection && context.collection !== options.collection) {
+        throw new Error(
+          `[conloca] collection mismatch: this loader is mounted under "${context.collection}" ` +
+            `but loads "${options.collection}". The content.config key must match the Conloca collection name.`,
+        );
+      }
+
       // Create content API instance
       const api = await createContentAPI({ contentRoot: options.contentRoot });
 
       // Use provided kind, or fall back to inferring from collection name
-      const kind = options.kind ?? (options.collection === 'blocks' ? 'block' : 'page');
+      const kind = options.kind ?? (options.collection === 'fragments' ? 'fragment' : 'page');
 
       // List all content for this collection
-      // Note: blocks and data don't have a site, so only pass site for pages
+      // Note: fragments and data don't have a site, so only pass site for pages
       const content = Array.from(
         api.listAllContent({
           collection: options.collection,
@@ -59,7 +83,7 @@ export function conlocaLoader(options: ConlocaLoaderOptions): Loader {
             if (fullContent?.localized.content?.data) {
               dataContent = fullContent.localized.content.data;
             }
-          } else if (kind === 'block') {
+          } else if (kind === 'fragment') {
             const fullContent = await api.getLocalized(manifest.id, locale);
             if (fullContent?.localized.content?.mdx) {
               mdxContent = fullContent.localized.content.mdx;
@@ -73,6 +97,9 @@ export function conlocaLoader(options: ConlocaLoaderOptions): Loader {
             }
           }
 
+          // Any key added here that is not part of pageMetaSchema must also be
+          // listed in LOADER_RESERVED_FIELDS, or a host page-meta field of the
+          // same name will replace it on every page.
           const data: Record<string, unknown> = {
             id: manifest.id,
             locale,
@@ -96,7 +123,13 @@ export function conlocaLoader(options: ConlocaLoaderOptions): Loader {
             data.puckData = puckData;
           }
 
-          const parsedData = await parseData({ id: entryId, data });
+          // filePath feeds Astro's error location: without it a validation
+          // failure names only the opaque content id, not a file to open.
+          const parsedData = await parseData({
+            id: entryId,
+            data,
+            ...(localeVersion.sourcePath ? { filePath: localeVersion.sourcePath } : {}),
+          });
 
           store.set({
             id: entryId,

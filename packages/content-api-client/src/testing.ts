@@ -5,4 +5,4 @@
  * This keeps test utilities separate from production code for better tree-shaking.
  */
 
-export * from './test-helpers';
+export * from './test-helpers.js';

@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
-import { mkdir, rm, writeFile } from 'fs/promises';
-import { join } from 'path';
-import { FileSystemContentAPI } from '../src/filesystem-content-api';
-import type { SitesConfig, VXJSONFile } from '../src/types';
-import { VXJSON } from '../src/vxjson';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { FileSystemContentAPI } from '../src/filesystem-content-api.js';
+import type { SitesConfig, VXJSONFile } from '../src/types.js';
+import { VXJSON } from '../src/vxjson.js';
+import { testTempDir } from './test-temp-dir.js';
 
 describe('FileSystemContentAPI - File Watching Support', () => {
-  const testDir = '/tmp/test-file-watching';
+  const testDir = testTempDir('test-file-watching');
   const contentRoot = join(testDir, 'content');
 
   const sitesConfig: SitesConfig = {
@@ -23,7 +24,7 @@ describe('FileSystemContentAPI - File Watching Support', () => {
     // Create test directory structure
     await mkdir(contentRoot, { recursive: true });
     await mkdir(join(contentRoot, 'test-site', 'pages'), { recursive: true });
-    await mkdir(join(contentRoot, 'blocks', 'shared'), { recursive: true });
+    await mkdir(join(contentRoot, 'fragments', 'shared'), { recursive: true });
 
     // Write sites.json
     await writeFile(join(contentRoot, 'sites.json'), JSON.stringify(sitesConfig));
@@ -75,7 +76,7 @@ describe('FileSystemContentAPI - File Watching Support', () => {
     // Add multiple new files
     const file1Path = join(contentRoot, 'test-site', 'pages', 'page1.en.vxjson');
     const file2Path = join(contentRoot, 'test-site', 'pages', 'page2.en.vxjson');
-    const file3Path = join(contentRoot, 'blocks', 'shared', 'block1.en.mdx');
+    const file3Path = join(contentRoot, 'fragments', 'shared', 'fragment1.en.mdx');
 
     const page1Data: VXJSONFile = {
       id: 'page1-id',
@@ -95,35 +96,35 @@ describe('FileSystemContentAPI - File Watching Support', () => {
       content: { puckData: { root: {} } },
     };
 
-    const block1Content = `---
-id: block1-id
+    const fragment1Content = `---
+id: fragment1-id
 created: ${new Date().toISOString()}
 modified: ${new Date().toISOString()}
-title: Block 1
+title: Fragment 1
 ---
 
-# Block Content
+# Fragment Content
 `;
 
     await writeFile(file1Path, VXJSON.serialize(page1Data));
     await writeFile(file2Path, VXJSON.serialize(page2Data));
-    await writeFile(file3Path, block1Content);
+    await writeFile(file3Path, fragment1Content);
 
     // Reindex only file1 and file3
     const result = await api.reindex([file1Path, file3Path]);
     expect(result.filesProcessed).toBe(2);
     expect(result.filesSkipped).toBe(0);
     expect(result.updated).toHaveLength(2);
-    expect(result.updated.map((u: any) => u.id).sort()).toEqual(['block1-id', 'page1-id']);
+    expect(result.updated.map((u: any) => u.id).sort()).toEqual(['fragment1-id', 'page1-id']);
 
-    // Check that page1 and block1 are indexed
+    // Check that page1 and fragment1 are indexed
     const page1 = await api.getLocalized('page1-id', 'en');
     expect(page1).not.toBeNull();
     expect(page1?.localized.meta.title).toBe('Page 1');
 
-    const block1 = await api.getLocalized('block1-id', 'en');
-    expect(block1).not.toBeNull();
-    expect(block1?.localized.meta.title).toBe('Block 1');
+    const fragment1 = await api.getLocalized('fragment1-id', 'en');
+    expect(fragment1).not.toBeNull();
+    expect(fragment1?.localized.meta.title).toBe('Fragment 1');
 
     // But page2 should not be indexed - check cache directly
     const page2Cached = await api.readFromCache('page2-id', 'en');

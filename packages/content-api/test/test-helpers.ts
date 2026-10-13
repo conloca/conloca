@@ -6,7 +6,7 @@ import type {
   DeleteResult,
   LocalizedEntry,
   UpdateResult,
-} from '../src/types';
+} from '../src/types.js';
 
 // Type guard functions for test assertions
 
@@ -240,4 +240,22 @@ export function getUpdateEtag(result: UpdateResult): string {
     throw new Error(`Update failed: ${result.reason || 'unknown error'}`);
   }
   return result.etag;
+}
+
+/**
+ * Fail with what was waiting rather than hanging. A lock that waits on itself
+ * never settles, so a test for one has to bring its own deadline.
+ */
+export async function withTimeout<T>(work: Promise<T> | T, what: string, ms = 2000): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      Promise.resolve(work),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${what} never finished within ${ms}ms`)), ms);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }

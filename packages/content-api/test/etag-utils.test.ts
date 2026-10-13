@@ -4,10 +4,8 @@ import {
   calculateEtagsFromMdxBuffer,
   calculateMetaEtagFromBuffer,
   parseDualEtag,
-} from '../src/etag-utils';
-import { VXJSON } from '../src/vxjson';
-
-const textDecoder = new TextDecoder();
+} from '../src/etag-utils.js';
+import { VXJSON } from '../src/vxjson.js';
 
 describe('etag-utils', () => {
   describe('calculateMetaEtag', () => {
@@ -128,6 +126,16 @@ describe('etag-utils', () => {
       const buffer = new TextEncoder().encode(json);
 
       const result = VXJSON.calculateETags(buffer);
+
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+
+      expect(result.metaEtag).toBeTruthy();
+      expect(result.contentEtag).toBeTruthy();
+      // The offset locates `content` in the byte stream, which is what lets a
+      // reader take metadata from the first 4KB without parsing the document.
+      expect(result.contentStartPos).toBeGreaterThan(0);
+      expect(result.contentStartPos).toBeLessThan(buffer.length);
     });
 
     it('should calculate etags for JSON without content field', () => {
@@ -164,6 +172,19 @@ describe('etag-utils', () => {
 
       const result1 = VXJSON.calculateETags(buffer1);
       const result2 = VXJSON.calculateETags(buffer2);
+
+      expect(result1.success).toBe(true);
+      expect(result2.success).toBe(true);
+      if (!result1.success || !result2.success) return;
+
+      // The whole point: same data, different formatting, same identity — so
+      // reformatting a file must not invalidate a client's cached copy.
+      expect(result1.metaEtag).toBe(result2.metaEtag);
+      expect(result1.contentEtag).toBe(result2.contentEtag);
+
+      // The byte offset legitimately differs; it is a position, not an
+      // identity, and pretty-printing pushes `content` further into the file.
+      expect(result2.contentStartPos).toBeGreaterThan(result1.contentStartPos);
     });
 
     it('should handle real-world JSON with content not last', () => {
@@ -307,13 +328,17 @@ nested:
       expect(result.metaEtag).toBeDefined();
       expect(result.contentEtag).toBeDefined();
 
-      // The metaEtag should be based on the exact YAML bytes
-      // Let's verify by hashing the frontmatter manually
-      const frontmatterEnd = mdxContent.indexOf('---\n\n', 4) + 3; // Include the closing ---
-      const frontmatterBytes = buffer.slice(0, frontmatterEnd);
+      // The metaEtag is the exact YAML bytes, hashed as-is. Prove it by
+      // re-hashing the same document with one extra space in the frontmatter:
+      // a JSON-style normalizing hash would ignore it, so a differing etag is
+      // what shows the YAML is taken verbatim.
+      const spacedContent = mdxContent.replace('title: Test Document', 'title:  Test Document');
+      const spacedBuffer = new TextEncoder().encode(spacedContent);
+      const spacedResult = calculateEtagsFromMdxBuffer(spacedBuffer, spacedContent.indexOf('---\n\n', 4) + 5);
 
-      // If it was using JSON parsing, this would fail because the YAML is not valid JSON
-      expect(result.metaEtag.length).toBeGreaterThan(0);
+      expect(spacedResult.metaEtag).not.toBe(result.metaEtag);
+      // Only the frontmatter changed, so the body's etag must be untouched.
+      expect(spacedResult.contentEtag).toBe(result.contentEtag);
     });
 
     it('should handle MDX with no content after frontmatter', () => {

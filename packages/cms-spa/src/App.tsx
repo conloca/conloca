@@ -1,16 +1,16 @@
 import type { Config } from '@puckeditor/core';
 import { useMemo } from 'react';
 import { createBrowserRouter, createRoutesFromElements, Route, RouterProvider, Routes } from 'react-router-dom';
-import { CMSDashboard } from './components/CMSDashboard';
-import { CMSLayout } from './components/CMSLayout';
-import { BlockEditor } from './components/editor/BlockEditor';
-import { PageEditorWrapper } from './components/editor/PageEditorWrapper';
-import { BlockList } from './components/pages/BlockList';
-import { DataList } from './components/pages/DataList';
-import { MediaPage } from './components/pages/MediaPage';
-import { PageList } from './components/pages/PageList';
-import { type DataSchemas, useDataSchemas } from './data-schemas';
-import { usePuckConfig } from './puck-config';
+import { CMSDashboard } from './components/CMSDashboard.js';
+import { CMSLayout } from './components/CMSLayout.js';
+import { FragmentEditor } from './components/editor/FragmentEditor.js';
+import { PageEditorWrapper } from './components/editor/PageEditorWrapper.js';
+import { DataList } from './components/pages/DataList.js';
+import { FragmentList } from './components/pages/FragmentList.js';
+import { MediaPage } from './components/pages/MediaPage.js';
+import { PageList } from './components/pages/PageList.js';
+import { type DataSchemas, useDataSchemas } from './data-schemas.js';
+import { usePuckConfig } from './puck-config.js';
 
 export interface RouteDeps {
   puckConfig: Config;
@@ -22,12 +22,12 @@ export interface RouteDeps {
  * production Data Router (default export) and tests rendering through
  * `<AppRoutes>` inside a legacy `<MemoryRouter>`.
  *
- * `/pages/:id` and `/blocks/:id` sit OUTSIDE the CMSLayout shell so the
+ * `/pages/:id` and `/fragments/:id` sit OUTSIDE the CMSLayout shell so the
  * editors occupy the full viewport — the page-route equivalent of "modal
  * takes over the screen".
  *
  * Exported so tests that need `useBlocker` (the unsaved-changes guard hooks
- * inside the page/block editors) can plug the same routes into
+ * inside the page/fragment editors) can plug the same routes into
  * `createMemoryRouter` + `<RouterProvider>` instead of the legacy
  * `<MemoryRouter>` element.
  */
@@ -37,12 +37,12 @@ export function routeElements({ puckConfig, dataSchemas }: RouteDeps) {
       <Route path="/" element={<CMSLayout />}>
         <Route index element={<CMSDashboard />} />
         <Route path="pages" element={<PageList />} />
-        <Route path="blocks" element={<BlockList />} />
+        <Route path="fragments" element={<FragmentList />} />
         <Route path="data" element={<DataList dataSchemas={dataSchemas} />} />
         <Route path="media" element={<MediaPage />} />
       </Route>
       <Route path="/pages/:id" element={<PageEditorWrapper puckConfig={puckConfig} />} />
-      <Route path="/blocks/:id" element={<BlockEditor />} />
+      <Route path="/fragments/:id" element={<FragmentEditor />} />
     </>
   );
 }
@@ -60,7 +60,7 @@ export function AppRoutes() {
 
 /**
  * Production app entry. Uses the Data Router API so v7's `useBlocker` works
- * for the unsaved-changes navigation guard in MdxPageEditor / BlockEditor.
+ * for the unsaved-changes navigation guard in MdxPageEditor / FragmentEditor.
  */
 export default function App({ basename }: { basename?: string } = {}) {
   const puckConfig = usePuckConfig();

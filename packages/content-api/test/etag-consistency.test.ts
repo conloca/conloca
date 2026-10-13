@@ -1,13 +1,13 @@
 import { describe, expect, test } from 'bun:test';
-import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises';
-import { tmpdir } from 'os';
-import { join } from 'path';
-import { serializeMdxWithFrontmatter } from '../src/content-utils';
-import { calculateEtagsFromMdxBuffer, findMdxContentStartPosition } from '../src/etag-utils';
-import { FileSystemContentAPI } from '../src/filesystem-content-api';
-import { InMemoryContentAPI } from '../src/in-memory-content-api';
-import type { SitesConfig, VXJSONFile } from '../src/types';
-import { VXJSON } from '../src/vxjson';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { serializeMdxWithFrontmatter } from '../src/content-utils.js';
+import { calculateEtagsFromMdxBuffer, findMdxContentStartPosition } from '../src/etag-utils.js';
+import { FileSystemContentAPI } from '../src/filesystem-content-api.js';
+import { InMemoryContentAPI } from '../src/in-memory-content-api.js';
+import type { SitesConfig, VXJSONFile } from '../src/types.js';
+import { VXJSON } from '../src/vxjson.js';
 
 describe('ETag consistency between implementations', () => {
   const sitesConfig: SitesConfig = {
@@ -28,7 +28,7 @@ describe('ETag consistency between implementations', () => {
 
     // Create content directories
     await mkdir(join(tempDir, 'shop', 'pages'), { recursive: true });
-    await mkdir(join(tempDir, 'blocks', 'test'), { recursive: true });
+    await mkdir(join(tempDir, 'fragments', 'test'), { recursive: true });
 
     fsApi = await FileSystemContentAPI.create({ contentRoot: tempDir });
   }
@@ -166,18 +166,18 @@ describe('ETag consistency between implementations', () => {
 
       // Test MDX content
       const mdxContent = {
-        kind: 'block' as const,
+        kind: 'fragment' as const,
         collection: 'test',
         type: 'mdx' as const,
         name: 'test-mdx-etag',
         meta: {
-          title: 'Test MDX Block',
+          title: 'Test MDX Fragment',
           category: 'testing',
         },
         locales: {
           en: {
             meta: {
-              description: 'A test MDX block for ETag verification',
+              description: 'A test MDX fragment for ETag verification',
             },
             content: {
               mdx: '# Test Content\n\nThis is test MDX content.',
@@ -187,8 +187,8 @@ describe('ETag consistency between implementations', () => {
       };
 
       // Create content in both implementations
-      const memoryResult = await memoryApi.blocks.create(mdxContent);
-      const fsResult = await fsApi.blocks.create(mdxContent);
+      const memoryResult = await memoryApi.fragments.create(mdxContent);
+      const fsResult = await fsApi.fragments.create(mdxContent);
 
       expect(memoryResult.success).toBe(true);
       expect(fsResult.success).toBe(true);
@@ -214,9 +214,9 @@ describe('ETag consistency between implementations', () => {
         created: '2024-01-01T00:00:00.000Z',
         modified: '2024-01-01T00:00:00.000Z',
         name: 'test-mdx-etag',
-        title: 'Test MDX Block',
+        title: 'Test MDX Fragment',
         category: 'testing',
-        description: 'A test MDX block for ETag verification',
+        description: 'A test MDX fragment for ETag verification',
       };
 
       const canonicalMdx = serializeMdxWithFrontmatter(
@@ -230,11 +230,11 @@ describe('ETag consistency between implementations', () => {
 
       // SNAPSHOT: These are the expected hash values for this exact MDX structure
       // If these change, it indicates a breaking change in the hash algorithm
-      expect(canonicalMdxEtags.metaEtag).toBe('GbIHOO-EI8w'); // Expected MDX meta hash (XXH64)
+      expect(canonicalMdxEtags.metaEtag).toBe('Olc4DmFO0qE'); // Expected MDX meta hash (XXH64)
       expect(canonicalMdxEtags.contentEtag).toBe('-A7yGGK2RUwmdzBEDL1Td-qux11ZB8skY6EdbvxmnAU'); // Expected MDX content hash
 
       const expectedMdxEtag = `${canonicalMdxEtags.metaEtag}.${canonicalMdxEtags.contentEtag}`;
-      expect(expectedMdxEtag).toBe('GbIHOO-EI8w.-A7yGGK2RUwmdzBEDL1Td-qux11ZB8skY6EdbvxmnAU');
+      expect(expectedMdxEtag).toBe('Olc4DmFO0qE.-A7yGGK2RUwmdzBEDL1Td-qux11ZB8skY6EdbvxmnAU');
     } finally {
       await cleanup();
     }

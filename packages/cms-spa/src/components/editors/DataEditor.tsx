@@ -2,16 +2,16 @@ import { getContentAPIClient, useLocalizedContent, useUpdateLocalized } from '@c
 import { AlertCircle, Code2, Loader2, Save } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { z } from 'zod';
-import { UnsavedChangesDialog } from '../dialogs/UnsavedChangesDialog';
-import { LocaleSelector } from '../editor/LocaleSelector';
-import { SchemaForm } from '../forms/SchemaForm';
+import { contentFailureMessage } from '../../utils/content-failure.js';
+import { UnsavedChangesDialog } from '../dialogs/UnsavedChangesDialog.js';
+import { LocaleSelector } from '../editor/LocaleSelector.js';
+import { SchemaForm } from '../forms/SchemaForm.js';
 
 interface DataEditorProps {
   id: string;
   collection: string;
   initialLocale: string;
   existingLocales: string[];
-  name: string;
   schema: z.ZodObject<z.ZodRawShape> | null;
   onSave?: () => void;
   onCancel?: () => void;
@@ -20,14 +20,13 @@ interface DataEditorProps {
 /**
  * Editor for data entry content.
  * Uses collection-specific schema for form generation if available.
- * Supports locale switching similar to BlockEditor.
+ * Supports locale switching similar to FragmentEditor.
  */
 export function DataEditor({
   id,
   collection,
   initialLocale,
   existingLocales,
-  name,
   schema,
   onSave,
   onCancel,
@@ -89,8 +88,7 @@ export function DataEditor({
       }
       onSave?.();
     } else {
-      const errorMessage = result.error?.message || 'Failed to save data';
-      setSaveError(errorMessage);
+      setSaveError(contentFailureMessage(result, 'Failed to save data'));
     }
   };
 
@@ -161,7 +159,7 @@ export function DataEditor({
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin text-azure-04" />
+        <Loader2 className="h-6 w-6 animate-spin text-azure-04 dark:text-azure-08" />
       </div>
     );
   }
@@ -169,7 +167,7 @@ export function DataEditor({
   // Error state - show if we have an error and no entry loaded
   if (error && !entry) {
     return (
-      <div className="text-center py-8 text-red-04">
+      <div className="text-center py-8 text-red-04 dark:text-red-08">
         <p>Failed to load entry: {error.message}</p>
       </div>
     );

@@ -1,8 +1,9 @@
-import { mkdir, rm } from 'fs/promises';
-import { tmpdir } from 'os';
-import { join } from 'path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { FileSystemContentAPI } from '../src/filesystem-content-api';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { FileSystemContentAPI, readSitesConfig } from '../src/filesystem-content-api.js';
+import type { ContentManifest, SitesConfig } from '../src/types.js';
 
 describe('FileSystemContentAPI - Missing sites.json handling', () => {
   let tempDir: string;
@@ -47,7 +48,7 @@ describe('FileSystemContentAPI - Missing sites.json handling', () => {
     // Mock console.warn to capture the warning
     const warnings: string[] = [];
     const originalWarn = console.warn;
-    console.warn = (...args: any[]) => {
+    console.warn = (...args: unknown[]) => {
       warnings.push(args.join(' '));
     };
 
@@ -75,7 +76,7 @@ describe('FileSystemContentAPI - Missing sites.json handling', () => {
     expect(api.sitesConfig).toEqual({ sites: {}, globalLocales: ['en'] });
 
     // Should return empty results for content queries
-    const contents: any[] = [];
+    const contents: ContentManifest[] = [];
     for (const content of api.listAllContent()) {
       contents.push(content);
     }
@@ -92,12 +93,54 @@ describe('FileSystemContentAPI - Missing sites.json handling', () => {
     expect(site).toBeNull();
   });
 
-  it('should not throw error when accessing blocks (special case)', async () => {
+  it('reports a malformed sites.json as malformed, not as missing', async () => {
+    // Tolerating a malformed file is deliberate ("Handle invalid sites.json gracefully") and is left
+    // alone. The diagnosis was not: one catch covered both reading and
+    // parsing, so a trailing comma warned that the file was MISSING while
+    // naming a path where it plainly sits — and every page silently
+    // disappeared from every site.
+    await writeFile(join(contentRoot, 'sites.json'), '{ "sites": {}, "globalLocales": ["en"], }');
+
+    const warnings: string[] = [];
+    const originalWarn = console.warn;
+    console.warn = (msg: string) => warnings.push(String(msg));
+    try {
+      await readSitesConfig(contentRoot);
+    } finally {
+      console.warn = originalWarn;
+    }
+
+    expect(warnings.some((w) => w.includes('not valid JSON'))).toBe(true);
+    expect(warnings.some((w) => w.includes('is missing at'))).toBe(false);
+  });
+
+  it('degrades to the default config when sites.json parses to null', async () => {
+    // `null` is valid JSON, so it sails past the parse catch — and the
+    // structure checks then read `.sites` off it and threw, breaking the
+    // safe-default contract this function has always kept for a file it
+    // cannot use (plugin-spa relies on readSitesConfig never throwing).
+    await writeFile(join(contentRoot, 'sites.json'), 'null');
+
+    const warnings: string[] = [];
+    const originalWarn = console.warn;
+    console.warn = (msg: string) => warnings.push(String(msg));
+    let config: SitesConfig;
+    try {
+      config = await readSitesConfig(contentRoot);
+    } finally {
+      console.warn = originalWarn;
+    }
+
+    expect(config).toEqual({ sites: {}, globalLocales: ['en'] });
+    expect(warnings.some((w) => w.includes('invalid structure'))).toBe(true);
+  });
+
+  it('should not throw error when accessing fragments (special case)', async () => {
     // Do not create sites.json - it should be missing
 
     const api = await FileSystemContentAPI.create({ contentRoot, canvasDir });
 
-    // blocks is a special case and should work even with empty config
-    expect(api.blocks).toBeDefined();
+    // fragments are a special case and should work even with empty config
+    expect(api.fragments).toBeDefined();
   });
 });

@@ -1,7 +1,7 @@
 /// <reference lib="dom" />
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { ContentAPIClient, setContentAPIClient } from '@conloca/content-api-client';
-import { configureUI, getUIConfig } from '../src/ui-config';
+import { configureUI, getUIConfig } from '../src/ui-config.js';
 
 // Mock fetch globally
 const mockFetch = mock();
@@ -12,7 +12,7 @@ global.fetch = mockFetch as any;
 describe('API Configuration', () => {
   beforeEach(() => {
     // Reset window config
-    delete (window as any).__UI_CONFIG__;
+    delete window.__UI_CONFIG__;
     delete (window as any).location;
     window.location = {
       pathname: '/__cms/',
@@ -98,7 +98,7 @@ describe('API Configuration', () => {
   test('custom content client is opt-in and does not change the default client path', () => {
     expect(getUIConfig().contentClient).toBeUndefined();
 
-    const client = new ContentAPIClient({ baseUrl: '/__saas/api' });
+    const client = new ContentAPIClient({ baseUrl: '/__other/api' });
     configureUI({ contentClient: client });
 
     expect(getUIConfig().contentClient).toBe(client);
@@ -117,7 +117,7 @@ describe('API Configuration', () => {
           if (url.includes('/sites/')) {
             return { items: [], total: 0 };
           }
-          if (url.includes('/blocks')) {
+          if (url.includes('/fragments')) {
             return { items: [], total: 0 };
           }
           if (url.includes('/content/')) {
@@ -130,19 +130,19 @@ describe('API Configuration', () => {
 
     // Test various API methods
     await client.getSitePages('default', 'en');
-    await client.getBlocks('shared', 'en');
+    await client.getFragments('shared', 'en');
     await client.isPathnameAvailable('default', '/test-page');
 
     // Verify URLs include the correct base path
     const calls = mockFetch.mock.calls.map((call) => call[0]);
     expect(calls[0]).toBe('/__cms/api/default/pages?locale=en');
-    expect(calls[1]).toBe('/__cms/api/blocks?collection=shared&locale=en');
+    expect(calls[1]).toBe('/__cms/api/fragments?collection=shared&locale=en');
     expect(calls[2]).toBe('/__cms/api/default/pathname-available?pathname=%2Ftest-page');
   });
 
   test('development mode configuration', () => {
     // Clear the global config to test the auto-configuration logic
-    delete (window as any).__UI_CONFIG__;
+    delete window.__UI_CONFIG__;
     window.location.pathname = '/';
 
     const config = getUIConfig();

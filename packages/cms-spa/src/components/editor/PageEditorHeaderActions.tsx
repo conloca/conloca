@@ -1,10 +1,11 @@
 import { AlertTriangle, Check, Eye, Moon, Save, Settings, Sun, X } from 'lucide-react';
-import { useCanvasTheme } from '../../hooks/useCanvasTheme';
-import type { SaveState } from '../../types';
-import { cn } from '../../utils/cn';
-import { IconButton } from '../ui/IconButton';
-import { Separator } from '../ui/Separator';
-import { LocaleSelector } from './LocaleSelector';
+import { useCanvasTheme } from '../../hooks/useCanvasTheme.js';
+import type { SaveState } from '../../types.js';
+import { getUIConfig } from '../../ui-config.js';
+import { cn } from '../../utils/cn.js';
+import { IconButton } from '../ui/IconButton.js';
+import { Separator } from '../ui/Separator.js';
+import { LocaleSelector } from './LocaleSelector.js';
 
 function CanvasThemeToggle() {
   const { canvasTheme, toggleCanvasTheme } = useCanvasTheme();
@@ -23,6 +24,12 @@ function CanvasThemeToggle() {
 interface PageEditorHeaderActionsProps {
   onPublish?: () => void;
   onPreview: () => void;
+  /**
+   * Plain-English reason the site cannot show a preview. When set,
+   * the control is disabled and carries the reason — a disabled button that
+   * says why beats a hidden one, and both beat a link that 404s.
+   */
+  previewDisabledReason?: string;
   currentLocale: string;
   availableLocales: string[];
   onLocaleChange?: (locale: string) => void;
@@ -36,6 +43,7 @@ interface PageEditorHeaderActionsProps {
 export function PageEditorHeaderActions({
   onPublish,
   onPreview,
+  previewDisabledReason,
   currentLocale,
   availableLocales,
   onLocaleChange,
@@ -45,6 +53,7 @@ export function PageEditorHeaderActions({
   onOpenMetadata,
   onBack,
 }: PageEditorHeaderActionsProps) {
+  const hideSave = getUIConfig().hideEditorSave === true;
   return (
     <div className="flex items-center gap-2">
       {/* Primary Actions Group */}
@@ -62,7 +71,20 @@ export function PageEditorHeaderActions({
         <button
           type="button"
           onClick={onPreview}
-          className="px-4 py-2 rounded-md text-sm text-foreground hover:bg-hover transition-all duration-150 flex items-center gap-1 cursor-pointer"
+          // NOT the `disabled` attribute: that suppresses onClick, so the
+          // handler's explanation would never fire, and browsers do not show
+          // a `title` on a disabled control — leaving a greyed button with no
+          // reason anywhere. `aria-disabled` keeps the semantics for screen
+          // readers while the click still surfaces WHY.
+          aria-disabled={previewDisabledReason !== undefined}
+          title={previewDisabledReason}
+          aria-label={previewDisabledReason === undefined ? 'Preview' : `Preview unavailable. ${previewDisabledReason}`}
+          className={cn(
+            'px-4 py-2 rounded-md text-sm transition-all duration-150 flex items-center gap-1',
+            previewDisabledReason === undefined
+              ? 'text-foreground hover:bg-hover cursor-pointer'
+              : 'text-muted cursor-not-allowed opacity-60',
+          )}
           data-testid="preview-button"
         >
           <Eye className="h-3.5 w-3.5" />
@@ -81,46 +103,48 @@ export function PageEditorHeaderActions({
           availableLocales={availableLocales}
           onChange={onLocaleChange || (() => {})}
         />
-        <button
-          type="button"
-          onClick={onSave}
-          disabled={!isDirty && saveState !== 'error' && saveState !== 'conflict'}
-          className={cn(
-            'w-[100px] px-4 py-2 rounded-md text-sm transition-all duration-150 flex items-center justify-center gap-1 whitespace-nowrap font-medium',
-            saveState === 'saved' && 'bg-green-10 text-green-06 cursor-pointer',
-            saveState === 'error' && 'bg-red-10 text-red-06 hover:bg-red-09 cursor-pointer',
-            saveState === 'conflict' && 'bg-yellow-10 text-yellow-06 hover:bg-yellow-09 cursor-pointer',
-            (saveState === 'idle' || saveState === 'saving' || !saveState) &&
-              (isDirty
-                ? 'bg-azure-10 text-azure-06 hover:bg-azure-09 cursor-pointer'
-                : 'bg-selected text-muted cursor-not-allowed opacity-60'),
-          )}
-        >
-          {saveState === 'saved' && (
-            <>
-              <Check className="h-4 w-4" />
-              <span>Saved</span>
-            </>
-          )}
-          {saveState === 'error' && (
-            <>
-              <X className="h-4 w-4" />
-              <span>Error</span>
-            </>
-          )}
-          {saveState === 'conflict' && (
-            <>
-              <AlertTriangle className="h-4 w-4" />
-              <span>Conflict</span>
-            </>
-          )}
-          {(saveState === 'idle' || saveState === 'saving' || !saveState) && (
-            <>
-              <Save className="h-4 w-4" />
-              <span>Save</span>
-            </>
-          )}
-        </button>
+        {!hideSave && (
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={!isDirty && saveState !== 'error' && saveState !== 'conflict'}
+            className={cn(
+              'w-[100px] px-4 py-2 rounded-md text-sm transition-all duration-150 flex items-center justify-center gap-1 whitespace-nowrap font-medium',
+              saveState === 'saved' && 'bg-green-10 text-green-06 cursor-pointer',
+              saveState === 'error' && 'bg-red-10 text-red-06 hover:bg-red-09 cursor-pointer',
+              saveState === 'conflict' && 'bg-yellow-10 text-yellow-06 hover:bg-yellow-09 cursor-pointer',
+              (saveState === 'idle' || saveState === 'saving' || !saveState) &&
+                (isDirty
+                  ? 'bg-azure-10 text-azure-06 hover:bg-azure-09 cursor-pointer'
+                  : 'bg-selected text-muted cursor-not-allowed opacity-60'),
+            )}
+          >
+            {saveState === 'saved' && (
+              <>
+                <Check className="h-4 w-4" />
+                <span>Saved</span>
+              </>
+            )}
+            {saveState === 'error' && (
+              <>
+                <X className="h-4 w-4" />
+                <span>Error</span>
+              </>
+            )}
+            {saveState === 'conflict' && (
+              <>
+                <AlertTriangle className="h-4 w-4" />
+                <span>Conflict</span>
+              </>
+            )}
+            {(saveState === 'idle' || saveState === 'saving' || !saveState) && (
+              <>
+                <Save className="h-4 w-4" />
+                <span>Save</span>
+              </>
+            )}
+          </button>
+        )}
       </div>
 
       {/* Separator */}

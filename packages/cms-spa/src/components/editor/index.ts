@@ -1,8 +1,8 @@
-export type { CMSMDXEditorProps } from './CMSMDXEditor';
-export { CMSMDXEditor } from './CMSMDXEditor';
-export { ContentDiff } from './ContentDiff';
-export { CreateBlockDialog } from './CreateBlockDialog';
-export { ImagePickerDialog } from './ImagePickerDialog';
-export { LocaleSelector } from './LocaleSelector';
-export { PageEditor } from './PageEditor';
-export { PageEditorHeaderActions } from './PageEditorHeaderActions';
+export type { CMSMDXEditorProps } from './CMSMDXEditor.js';
+export { CMSMDXEditor } from './CMSMDXEditor.js';
+export { ContentDiff } from './ContentDiff.js';
+export { CreateFragmentDialog } from './CreateFragmentDialog.js';
+export { ImagePickerDialog } from './ImagePickerDialog.js';
+export { LocaleSelector } from './LocaleSelector.js';
+export { PageEditor } from './PageEditor.js';
+export { PageEditorHeaderActions } from './PageEditorHeaderActions.js';

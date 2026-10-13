@@ -3,11 +3,11 @@ import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { createMemoryRouter, createRoutesFromElements, MemoryRouter, RouterProvider } from 'react-router-dom';
-import { AppRoutes, routeElements } from '../src/App';
-import { useDataSchemas } from '../src/data-schemas';
-import { ThemeProvider } from '../src/hooks/useTheme';
-import { usePuckConfig } from '../src/puck-config';
-import { setupTestAPI, testApi } from './test-utils';
+import { AppRoutes, routeElements } from '../src/App.js';
+import { useDataSchemas } from '../src/data-schemas.js';
+import { ThemeProvider } from '../src/hooks/useTheme.js';
+import { usePuckConfig } from '../src/puck-config.js';
+import { setupTestAPI, testApi } from './test-utils.js';
 
 // Cleanup after each test
 afterEach(() => {
@@ -38,7 +38,7 @@ describe('Astro CMS Integration', () => {
     } as any;
 
     // Mock __UI_CONFIG__ as if set by Astro
-    (window as any).__UI_CONFIG__ = {
+    window.__UI_CONFIG__ = {
       basename: '/__cms',
       apiBaseUrl: '/__cms/api',
       enableDevtools: false,
@@ -65,15 +65,15 @@ describe('Astro CMS Integration', () => {
     });
 
     await testApi.createContent({
-      kind: 'block',
-      collection: 'blocks',
+      kind: 'fragment',
+      collection: 'fragments',
       type: 'mdx',
-      name: 'block1',
-      meta: { title: 'Block 1' },
+      name: 'fragment1',
+      meta: { title: 'Fragment 1' },
       locales: {
         en: {
-          meta: { title: 'Block 1' },
-          content: { mdx: '# Block 1' },
+          meta: { title: 'Fragment 1' },
+          content: { mdx: '# Fragment 1' },
         },
       },
     });
@@ -101,9 +101,9 @@ describe('Astro CMS Integration', () => {
       const pagesCard = screen.getByTestId('section-card-pages');
       expect(pagesCard).toHaveTextContent('1');
 
-      // Verify the blocks count
-      const blocksCard = screen.getByTestId('section-card-blocks');
-      expect(blocksCard).toHaveTextContent('1');
+      // Verify the fragments count
+      const fragmentsCard = screen.getByTestId('section-card-fragments');
+      expect(fragmentsCard).toHaveTextContent('1');
     });
 
     // Verify the content is displayed correctly

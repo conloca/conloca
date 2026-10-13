@@ -1,6 +1,6 @@
 import { AlertTriangle, Check, Loader2, X } from 'lucide-react';
-import type { SaveState } from '../../types';
-import { cn } from '../../utils/cn';
+import type { SaveState } from '../../types.js';
+import { cn } from '../../utils/cn.js';
 
 interface SaveIndicatorProps {
   state: SaveState;
@@ -23,7 +23,7 @@ export function SaveIndicator({ state, className }: SaveIndicatorProps) {
     error: {
       icon: <X className="lucide lucide-x h-4 w-4" />,
       text: 'Error',
-      className: 'text-red-04',
+      className: 'text-red-04 dark:text-red-08',
     },
     conflict: {
       icon: <AlertTriangle className="lucide lucide-alert-triangle h-4 w-4" />,

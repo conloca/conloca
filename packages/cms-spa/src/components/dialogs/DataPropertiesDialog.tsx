@@ -1,7 +1,7 @@
 import { type DataEditable, dataEditableSchema } from '@conloca/content-api-client';
 import { useEffect, useMemo, useState } from 'react';
-import { SchemaForm } from '../forms/SchemaForm';
-import { Button } from '../ui';
+import { SchemaForm } from '../forms/SchemaForm.js';
+import { Button } from '../ui/index.js';
 
 interface DataPropertiesDialogProps {
   initialMeta: DataEditable;

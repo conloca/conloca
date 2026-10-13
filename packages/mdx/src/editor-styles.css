@@ -1,3 +1,63 @@
+/* MDXEditor's own stylesheet comes in here, so a host imports this one
+   file and never has to know the editor sits on MDXEditor. Order between
+   the two is irrelevant: MDXEditor injects its CSS-module rules at mount
+   time, so the rules below win on specificity, never on position. */
+@import "@mdxeditor/editor/style.css";
+
+/* L0 Conloca prose baseline — used when host probe vars are unset.
+   Never fall through to admin chrome body font via bare `inherit`.
+   Host match (--conloca-host-*) and consumer editorCSS still override. */
+:root {
+  --conloca-prose-font-family:
+    ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --conloca-prose-font-size: 1rem;
+  --conloca-prose-font-weight: 400;
+  --conloca-prose-font-style: normal;
+  --conloca-prose-line-height: 1.7;
+  --conloca-prose-letter-spacing: normal;
+  --conloca-prose-color: #181818;
+}
+.dark,
+:root[data-theme="dark"] {
+  --conloca-prose-color: #fafafa;
+}
+
+/* L0 heading scale. Tailwind preflight sets `h1..h6 { font-size: inherit;
+   font-weight: inherit }`, so BlockType → Heading looks identical to a
+   paragraph unless something restores real sizes. Use :where() so specificity
+   stays (0,0,1) and later host-probe rules (also unlayered, same specificity)
+   can override when auto-match lands. */
+:where(.conloca-prose--editor) h1 {
+  font-size: 2.25em;
+  font-weight: 700;
+  line-height: 1.2;
+}
+:where(.conloca-prose--editor) h2 {
+  font-size: 1.75em;
+  font-weight: 700;
+  line-height: 1.25;
+}
+:where(.conloca-prose--editor) h3 {
+  font-size: 1.375em;
+  font-weight: 600;
+  line-height: 1.3;
+}
+:where(.conloca-prose--editor) h4 {
+  font-size: 1.125em;
+  font-weight: 600;
+  line-height: 1.35;
+}
+:where(.conloca-prose--editor) h5 {
+  font-size: 1em;
+  font-weight: 600;
+  line-height: 1.4;
+}
+:where(.conloca-prose--editor) h6 {
+  font-size: 0.875em;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
 /* Editor chrome styles only. Prose typography is intentionally NOT
    shipped from this package — the host's own prose CSS (Starlight's
    `.sl-markdown-content`, Tailwind Typography's `.prose`, etc.) reaches
@@ -33,7 +93,7 @@
   flex-shrink: 0;
 }
 
-/* Editor layout for page-route mounts (CMS `/pages/:id`, `/blocks/:id`).
+/* Editor layout for page-route mounts (CMS `/pages/:id`, `/fragments/:id`).
    MDXEditor's root defaults to `display: block`, so when the consumer
    parks it in a fixed-height column, the toolbar floats on top and the
    tall content has no scroll container. Turn the root into a flex
@@ -114,26 +174,26 @@
    `--conloca-host-*` custom properties on `:root`) into MDXEditor's
    contenteditable so the editing surface matches the published page.
 
-   `inherit` fallback: when the probe hasn't resolved yet OR no host
-   context is available, fall through to whatever the surrounding
-   chrome would normally pass down — better than `initial` (which gives
-   white-on-white text in a dark editor) and better than MDXEditor's
-   own tokens (which fight the host's tokens). Layered after
-   `@mdxeditor/editor/style.css` in `editor-core.tsx`, BUT MDXEditor
-   injects its CSS-module styles dynamically at component-mount time,
-   placing them later in the document. Source-order tiebreaks give
+   Fallback chain (L1 host → L0 Conloca prose baseline → last-ditch
+   system stack). Do NOT fall back to bare `inherit` — that silently
+   picks up the admin shell body font (`--puck-font-family`), which is
+   product chrome, not content typography.
+
+   This sheet pulls `@mdxeditor/editor/style.css` in ahead of its own
+   rules, BUT MDXEditor injects its CSS-module styles dynamically at mount
+   time, placing them later in the document. Source-order tiebreaks give
    MDXEditor the win on equal-specificity rules. Chain with
    `.conloca-prose` (the static base class we apply alongside
    `conloca-prose--editor`) to push our specificity to (0,2,0), beating
    MDXEditor's bare `._contentEditable_*` (0,1,0). */
 [class*="_contentEditable_"].conloca-prose {
-  font-family: var(--conloca-host-font-family, inherit);
-  font-size: var(--conloca-host-font-size, inherit);
-  font-weight: var(--conloca-host-font-weight, inherit);
-  font-style: var(--conloca-host-font-style, inherit);
-  line-height: var(--conloca-host-line-height, inherit);
-  letter-spacing: var(--conloca-host-letter-spacing, inherit);
-  color: var(--conloca-host-color, inherit);
+  font-family: var(--conloca-host-font-family, var(--conloca-prose-font-family, ui-sans-serif, system-ui, sans-serif));
+  font-size: var(--conloca-host-font-size, var(--conloca-prose-font-size, 1rem));
+  font-weight: var(--conloca-host-font-weight, var(--conloca-prose-font-weight, 400));
+  font-style: var(--conloca-host-font-style, var(--conloca-prose-font-style, normal));
+  line-height: var(--conloca-host-line-height, var(--conloca-prose-line-height, 1.7));
+  letter-spacing: var(--conloca-host-letter-spacing, var(--conloca-prose-letter-spacing, normal));
+  color: var(--conloca-host-color, var(--conloca-prose-color, CanvasText));
 }
 
 /* MDXEditor's `._listitem_*` rule adds `margin: 8px 0` to every list

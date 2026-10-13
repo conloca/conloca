@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'bun:test';
-import { extractSlugFromPathname, pathnameFromSlug } from '../src/lib/route-utils.js';
+import {
+  entryIdFromPath,
+  extractSlugFromPathname,
+  pathnameFromSlug,
+  staticPathParams,
+} from '../src/lib/route-utils.js';
 
 describe('extractSlugFromPathname', () => {
   it('extracts slug from catch-all pattern', () => {
@@ -39,6 +44,30 @@ describe('extractSlugFromPathname', () => {
   });
 });
 
+describe('staticPathParams', () => {
+  it('keys the slug by the parameter name inside the pattern', () => {
+    // Astro matches getStaticPaths params by name, so a /[...page] route
+    // needs { page }, not { slug }.
+    expect(staticPathParams('/about', '/[...page]')).toEqual({ page: 'about' });
+  });
+
+  it('keeps the conventional slug name for /[...slug]', () => {
+    expect(staticPathParams('/a/b', '/[...slug]')).toEqual({ slug: 'a/b' });
+  });
+
+  it('maps the root path to an undefined rest parameter', () => {
+    expect(staticPathParams('/', '/[...page]')).toEqual({ page: undefined });
+  });
+
+  it('handles single-segment parameters behind a prefix', () => {
+    expect(staticPathParams('/blog/post-1', '/blog/[post]')).toEqual({ post: 'post-1' });
+  });
+
+  it('returns no params for a static pattern', () => {
+    expect(staticPathParams('/about', '/about')).toEqual({});
+  });
+});
+
 describe('pathnameFromSlug', () => {
   it('converts undefined slug to root path', () => {
     // undefined + /[...slug] -> '/'
@@ -74,5 +103,22 @@ describe('pathnameFromSlug', () => {
     // 'guide/getting-started' + /docs/[...path] -> '/docs/guide/getting-started'
     const result = pathnameFromSlug('guide/getting-started', '/docs/[...path]');
     expect(result).toBe('/docs/guide/getting-started');
+  });
+});
+
+describe('entryIdFromPath', () => {
+  // Conloca read-repair writes `id: vx-*` into managed frontmatter, and
+  // Astro glob-style loaders prefer a frontmatter id over the file path —
+  // which silently breaks filename-based slugs (Starlight sidebars stop
+  // resolving). This helper pins the entry id to the path so sites do not
+  // each rediscover and hand-write the same generateId workaround.
+  it('derives the id from the file path, dropping the markdown extension', () => {
+    expect(entryIdFromPath({ entry: 'getting-started.mdx' })).toBe('getting-started');
+    expect(entryIdFromPath({ entry: 'guides/deploy/vps-systemd.md' })).toBe('guides/deploy/vps-systemd');
+    expect(entryIdFromPath({ entry: 'notes.markdown' })).toBe('notes');
+  });
+
+  it('leaves non-markdown paths untouched', () => {
+    expect(entryIdFromPath({ entry: 'data/config.yaml' })).toBe('data/config.yaml');
   });
 });

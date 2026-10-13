@@ -1,2 +1,2 @@
-export { BlockList } from './BlockList';
-export { PageList } from './PageList';
+export { FragmentList } from './FragmentList.js';
+export { PageList } from './PageList.js';

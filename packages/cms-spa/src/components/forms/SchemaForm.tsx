@@ -1,9 +1,11 @@
 import { Loader2 } from 'lucide-react';
+import { useId } from 'react';
 import type { z } from 'zod';
-import { type FieldInfo, getZodShape } from '../../utils/zodIntrospect';
-import { ImageFieldRender } from '../fields/ImageField';
-import { Input, Select, Textarea } from '../ui';
-import { ChipArrayField } from './ChipArrayField';
+import { toDatetimeLocalValue } from '../../utils/pageMetadata.js';
+import { type FieldInfo, getZodShape } from '../../utils/zodIntrospect.js';
+import { ImageFieldRender } from '../fields/ImageField.js';
+import { Input, Select, Textarea } from '../ui/index.js';
+import { ChipArrayField } from './ChipArrayField.js';
 
 interface SchemaFormProps {
   schema: z.ZodObject<z.ZodRawShape> | null;
@@ -25,7 +27,7 @@ export function SchemaForm({ schema, values, onChange, isLoading, className }: S
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <Loader2 className="h-6 w-6 animate-spin text-azure-04" />
+        <Loader2 className="h-6 w-6 animate-spin text-azure-04 dark:text-azure-08" />
       </div>
     );
   }
@@ -44,13 +46,15 @@ export function SchemaForm({ schema, values, onChange, isLoading, className }: S
     <div className={className}>
       <div className="space-y-6">
         {Object.entries(fields).map(([fieldName, fieldInfo]) => (
-          <SchemaField
-            key={fieldName}
-            name={fieldName}
-            fieldInfo={fieldInfo}
-            value={values[fieldName]}
-            onChange={(value) => handleFieldChange(fieldName, value)}
-          />
+          // Names the field, so a dialog can open at it (see PageMetadataDialog's focusField).
+          <div key={fieldName} data-field-name={fieldName}>
+            <SchemaField
+              name={fieldName}
+              fieldInfo={fieldInfo}
+              value={values[fieldName]}
+              onChange={(value) => handleFieldChange(fieldName, value)}
+            />
+          </div>
         ))}
       </div>
     </div>
@@ -66,6 +70,7 @@ interface SchemaFieldProps {
 
 function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
   const label = formatFieldLabel(name);
+  const inputId = useId();
   const description = fieldInfo.description;
   const required = !fieldInfo.isOptional;
 
@@ -73,11 +78,12 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
   if (fieldInfo.type === 'date' || fieldInfo.format === 'date-time') {
     return (
       <div>
-        <label className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
+        <label htmlFor={inputId} className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
           {label}
-          {required && <span className="text-red-04 ml-1">*</span>}
+          {required && <span className="text-red-04 dark:text-red-08 ml-1">*</span>}
         </label>
         <Input
+          id={inputId}
           type="datetime-local"
           value={formatDateValue(value)}
           onChange={(e) => onChange(e.target.value || undefined)}
@@ -91,11 +97,16 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
   if (fieldInfo.format === 'url') {
     return (
       <div>
-        <label className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
+        <label htmlFor={inputId} className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
           {label}
-          {required && <span className="text-red-04 ml-1">*</span>}
+          {required && <span className="text-red-04 dark:text-red-08 ml-1">*</span>}
         </label>
-        <Input type="url" value={(value as string) || ''} onChange={(e) => onChange(e.target.value || undefined)} />
+        <Input
+          id={inputId}
+          type="url"
+          value={(value as string) || ''}
+          onChange={(e) => onChange(e.target.value || undefined)}
+        />
         {description && <p className="mt-1 text-sm text-grey-04 dark:text-grey-07">{description}</p>}
       </div>
     );
@@ -105,11 +116,16 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
   if (fieldInfo.format === 'email') {
     return (
       <div>
-        <label className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
+        <label htmlFor={inputId} className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
           {label}
-          {required && <span className="text-red-04 ml-1">*</span>}
+          {required && <span className="text-red-04 dark:text-red-08 ml-1">*</span>}
         </label>
-        <Input type="email" value={(value as string) || ''} onChange={(e) => onChange(e.target.value || undefined)} />
+        <Input
+          id={inputId}
+          type="email"
+          value={(value as string) || ''}
+          onChange={(e) => onChange(e.target.value || undefined)}
+        />
         {description && <p className="mt-1 text-sm text-grey-04 dark:text-grey-07">{description}</p>}
       </div>
     );
@@ -120,11 +136,11 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
     case 'enum':
       return (
         <div>
-          <label className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
+          <label htmlFor={inputId} className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
             {label}
-            {required && <span className="text-red-04 ml-1">*</span>}
+            {required && <span className="text-red-04 dark:text-red-08 ml-1">*</span>}
           </label>
-          <Select value={(value as string) || ''} onChange={(e) => onChange(e.target.value || undefined)}>
+          <Select id={inputId} value={(value as string) || ''} onChange={(e) => onChange(e.target.value || undefined)}>
             {!required && <option value="">Select...</option>}
             {fieldInfo.enumValues?.map((enumValue) => (
               <option key={enumValue} value={enumValue}>
@@ -139,11 +155,12 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
     case 'number':
       return (
         <div>
-          <label className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
+          <label htmlFor={inputId} className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
             {label}
-            {required && <span className="text-red-04 ml-1">*</span>}
+            {required && <span className="text-red-04 dark:text-red-08 ml-1">*</span>}
           </label>
           <Input
+            id={inputId}
             type="number"
             value={(value as number) ?? ''}
             onChange={(e) => onChange(e.target.value ? Number(e.target.value) : undefined)}
@@ -164,7 +181,7 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
             />
             <span className="text-sm font-medium text-grey-01 dark:text-grey-12">
               {label}
-              {required && <span className="text-red-04 ml-1">*</span>}
+              {required && <span className="text-red-04 dark:text-red-08 ml-1">*</span>}
             </span>
           </label>
           {description && <p className="mt-1 text-sm text-grey-04 dark:text-grey-07 ml-6">{description}</p>}
@@ -174,29 +191,31 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
     case 'array':
       return (
         <div>
-          <label className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
+          <label htmlFor={inputId} className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
             {label}
-            {required && <span className="text-red-04 ml-1">*</span>}
+            {required && <span className="text-red-04 dark:text-red-08 ml-1">*</span>}
           </label>
           <ChipArrayField
+            inputId={inputId}
             value={Array.isArray(value) ? (value as string[]) : []}
             onChange={(newValue) => onChange(newValue)}
-            placeholder={description || 'Type and press Enter to add'}
           />
           {description && <p className="mt-1 text-sm text-grey-04 dark:text-grey-07">{description}</p>}
         </div>
       );
+
     default: {
       // Use ImageFieldRender for image URL fields (but not imageDescription, etc.)
       const isImageField = name.toLowerCase().includes('image') && !name.toLowerCase().includes('description');
       if (isImageField) {
         return (
           <div>
-            <label className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
+            <label htmlFor={inputId} className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
               {label}
-              {required && <span className="text-red-04 ml-1">*</span>}
+              {required && <span className="text-red-04 dark:text-red-08 ml-1">*</span>}
             </label>
             <ImageFieldRender
+              inputId={inputId}
               value={(value as string) || ''}
               onChange={(newValue) => onChange(newValue || undefined)}
             />
@@ -214,11 +233,12 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
       if (isTextarea) {
         return (
           <div>
-            <label className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
+            <label htmlFor={inputId} className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
               {label}
-              {required && <span className="text-red-04 ml-1">*</span>}
+              {required && <span className="text-red-04 dark:text-red-08 ml-1">*</span>}
             </label>
             <Textarea
+              id={inputId}
               value={(value as string) || ''}
               onChange={(e) => onChange(e.target.value || undefined)}
               rows={3}
@@ -231,11 +251,16 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
       // Default text input
       return (
         <div>
-          <label className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
+          <label htmlFor={inputId} className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
             {label}
-            {required && <span className="text-red-04 ml-1">*</span>}
+            {required && <span className="text-red-04 dark:text-red-08 ml-1">*</span>}
           </label>
-          <Input type="text" value={(value as string) || ''} onChange={(e) => onChange(e.target.value || undefined)} />
+          <Input
+            id={inputId}
+            type="text"
+            value={(value as string) || ''}
+            onChange={(e) => onChange(e.target.value || undefined)}
+          />
           {description && <p className="mt-1 text-sm text-grey-04 dark:text-grey-07">{description}</p>}
           {fieldInfo.maxLength && (
             <p className="mt-1 text-xs text-grey-06 dark:text-grey-05">
@@ -271,18 +296,12 @@ function formatEnumLabel(value: string): string {
 function formatDateValue(value: unknown): string {
   if (!value) return '';
   if (typeof value === 'string') {
-    // If already in datetime-local format, return as-is
+    // Page settings already stores wall-clock digits. Leave them alone.
     if (value.includes('T') && !value.includes('Z')) return value;
-    // Convert ISO string to datetime-local format
-    try {
-      const date = new Date(value);
-      return date.toISOString().slice(0, 16);
-    } catch {
-      return '';
-    }
+    return toDatetimeLocalValue(new Date(value));
   }
   if (value instanceof Date) {
-    return value.toISOString().slice(0, 16);
+    return toDatetimeLocalValue(value);
   }
   return '';
 }

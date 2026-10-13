@@ -2,7 +2,9 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { ErrorCodes } from '@conloca/content-api-client';
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
-import { AppRoutes } from '../src/App';
+import { AppRoutes } from '../src/App.js';
+import { PREVIEW_UNAVAILABLE_DETAIL } from '../src/components/editor/preview-availability.js';
+import { configureUI, type OpenPreviewResult } from '../src/ui-config.js';
 import {
   API_ROUTES,
   mockAPIError,
@@ -10,10 +12,9 @@ import {
   renderWithProviders,
   setupTestAPI,
   testApi,
-} from './test-utils';
+} from './test-utils.js';
 
 // Set test timeout
-const _TEST_TIMEOUT = 10000;
 
 // Setup before each test
 beforeEach(() => {
@@ -24,6 +25,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   testApi?.clear();
+  configureUI({});
 });
 
 // Helper to render app with router and providers
@@ -70,14 +72,14 @@ describe('CMS Integration Tests', () => {
       });
 
       await testApi.createContent({
-        kind: 'block',
+        kind: 'fragment',
         collection: 'shared',
         type: 'mdx',
-        name: 'hero-block',
-        meta: { title: 'Hero Block' },
+        name: 'hero-fragment',
+        meta: { title: 'Hero Fragment' },
         locales: {
           en: {
-            meta: { title: 'Hero Block' },
+            meta: { title: 'Hero Fragment' },
             content: { mdx: '# Hero' },
           },
         },
@@ -103,10 +105,10 @@ describe('CMS Integration Tests', () => {
         const pagesCard = screen.getByTestId('section-card-pages');
         expect(pagesCard).toBeInTheDocument();
         expect(pagesCard.textContent).toContain('2');
-        // Check the blocks stat card specifically
-        const blocksCard = screen.getByTestId('section-card-blocks');
-        expect(blocksCard).toBeInTheDocument();
-        expect(blocksCard.textContent).toContain('1');
+        // Check the fragments stat card specifically
+        const fragmentsCard = screen.getByTestId('section-card-fragments');
+        expect(fragmentsCard).toBeInTheDocument();
+        expect(fragmentsCard.textContent).toContain('1');
       });
 
       console.log('[Integration Test] Dashboard test complete');
@@ -251,7 +253,10 @@ describe('CMS Integration Tests', () => {
           const createButton = screen.getByTestId('create-page-submit') as HTMLButtonElement;
           const checkTime = performance.now() - startTime;
           console.log(`[Timing] Check #${checkCount} at ${checkTime.toFixed(2)}ms: disabled=${createButton.disabled}`);
-          expect(createButton).not.toBeDisabled();
+          // Create stays disabled until the path check answers, so this polls.
+          // A plain boolean keeps each miss cheap: toBeDisabled() prints the
+          // whole element tree on every miss, seconds per poll under Happy DOM.
+          expect(createButton.disabled).toBe(false);
         },
         { timeout: 5000 },
       );
@@ -284,42 +289,42 @@ describe('CMS Integration Tests', () => {
     // Removed - duplicate test covered in conflict-resolution.test.tsx
   });
 
-  describe('Block Management', () => {
-    test('creates new block dialog flow', async () => {
+  describe('Fragment Management', () => {
+    test('creates new fragment dialog flow', async () => {
       renderApp();
 
-      // Navigate to blocks - use getAllByRole and select nav link (first one)
-      const blocksLinks = screen.getAllByRole('link', { name: /blocks/i });
-      fireEvent.click(blocksLinks[0]);
+      // Navigate to fragments - use getAllByRole and select nav link (first one)
+      const fragmentsLinks = screen.getAllByRole('link', { name: /fragments/i });
+      fireEvent.click(fragmentsLinks[0]);
 
       await waitFor(() => {
-        expect(screen.getByTestId('new-block-button')).toBeInTheDocument();
+        expect(screen.getByTestId('new-fragment-button')).toBeInTheDocument();
       });
 
-      // Verify we're on blocks page (empty state)
-      expect(screen.getByTestId('no-blocks-message')).toBeInTheDocument();
+      // Verify we're on fragments page (empty state)
+      expect(screen.getByTestId('no-fragments-message')).toBeInTheDocument();
 
-      // Click new block button
-      fireEvent.click(screen.getByTestId('new-block-button'));
+      // Click new fragment button
+      fireEvent.click(screen.getByTestId('new-fragment-button'));
 
       // Dialog should open
       await waitFor(() => {
-        expect(screen.getByTestId('create-block-dialog')).toBeInTheDocument();
-        expect(screen.getByTestId('block-title-input')).toBeInTheDocument();
+        expect(screen.getByTestId('create-fragment-dialog')).toBeInTheDocument();
+        expect(screen.getByTestId('fragment-title-input')).toBeInTheDocument();
       });
 
       // Verify the input is focused
-      const titleInput = screen.getByTestId('block-title-input');
+      const titleInput = screen.getByTestId('fragment-title-input');
       expect(document.activeElement).toBe(titleInput);
 
       // Verify submit button is disabled when empty
-      expect(screen.getByTestId('create-block-submit')).toBeDisabled();
+      expect(screen.getByTestId('create-fragment-submit')).toBeDisabled();
 
       // Fill in form
-      fireEvent.change(titleInput, { target: { value: 'Test Hero Block' } });
+      fireEvent.change(titleInput, { target: { value: 'Test Hero Fragment' } });
 
       // Verify the submit button is now enabled
-      const submitButton = screen.getByTestId('create-block-submit');
+      const submitButton = screen.getByTestId('create-fragment-submit');
       expect(submitButton).not.toBeDisabled();
 
       // Test cancel button
@@ -328,11 +333,11 @@ describe('CMS Integration Tests', () => {
 
       // Dialog should close
       await waitFor(() => {
-        expect(screen.queryByTestId('create-block-dialog')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('create-fragment-dialog')).not.toBeInTheDocument();
       });
 
-      // Should still be on blocks page
-      expect(screen.getByTestId('new-block-button')).toBeInTheDocument();
+      // Should still be on fragments page
+      expect(screen.getByTestId('new-fragment-button')).toBeInTheDocument();
 
       // Note: MDX editor integration is tested separately in MDX editor package
     });
@@ -384,6 +389,246 @@ describe('CMS Integration Tests', () => {
       } finally {
         window.open = originalOpen;
       }
+    });
+
+    test('opens a blank tab synchronously and navigates it once openPreview returns the draft preview URL', async () => {
+      let resolvePreview!: (result: OpenPreviewResult) => void;
+      const previewPromise = new Promise<OpenPreviewResult>((resolve) => {
+        resolvePreview = resolve;
+      });
+      let previewInput: { path: string } | undefined;
+      configureUI({
+        apiBaseUrl: '/__cms/api',
+        openPreview: (input) => {
+          previewInput = input;
+          return previewPromise;
+        },
+      });
+      const previewTab = { location: { href: 'about:blank' }, close: mock(() => {}), opener: window };
+      const mockOpen = mock(() => previewTab);
+      const originalOpen = window.open;
+      window.open = mockOpen as any;
+
+      try {
+        const result = await testApi.createContent({
+          kind: 'page',
+          site: 'default',
+          collection: 'pages',
+          type: 'puck',
+          meta: { title: 'Draft Preview Page' },
+          locales: {
+            en: {
+              pathname: '/draft-preview',
+              meta: { title: 'Draft Preview Page' },
+              content: { puckData: { content: [], root: {}, zones: {} } },
+            },
+          },
+        });
+        renderAppWithDataRouter([`/pages/${result.id!}`], undefined, false);
+        fireEvent.click(await screen.findByTestId('preview-button'));
+
+        expect(mockOpen).toHaveBeenCalledTimes(1);
+        expect(mockOpen).toHaveBeenCalledWith('', '_blank');
+        expect(previewInput).toEqual({ path: '/draft-preview' });
+        expect(previewTab.location.href).toBe('about:blank');
+
+        resolvePreview({ ok: true, url: 'https://preview.example.test/draft-preview' });
+        await waitFor(() => expect(previewTab.location.href).toBe('https://preview.example.test/draft-preview'));
+        expect(previewTab.close).not.toHaveBeenCalled();
+      } finally {
+        window.open = originalOpen;
+      }
+    });
+
+    test('closes the blank tab and reports the existing error when openPreview fails', async () => {
+      let rejectPreview!: (error: unknown) => void;
+      const previewPromise = new Promise<OpenPreviewResult>((_resolve, reject) => {
+        rejectPreview = reject;
+      });
+      configureUI({ apiBaseUrl: '/__cms/api', openPreview: () => previewPromise });
+      const previewTab = { location: { href: 'about:blank' }, close: mock(() => {}), opener: window };
+      const mockOpen = mock(() => previewTab);
+      const originalOpen = window.open;
+      const originalConsoleError = console.error;
+      const loggedErrors: unknown[][] = [];
+      window.open = mockOpen as any;
+      console.error = (...args: unknown[]) => loggedErrors.push(args);
+
+      try {
+        const result = await testApi.createContent({
+          kind: 'page',
+          site: 'default',
+          collection: 'pages',
+          type: 'puck',
+          meta: { title: 'Broken Draft Preview' },
+          locales: {
+            en: {
+              pathname: '/broken-draft-preview',
+              meta: { title: 'Broken Draft Preview' },
+              content: { puckData: { content: [], root: {}, zones: {} } },
+            },
+          },
+        });
+        renderAppWithDataRouter([`/pages/${result.id!}`], undefined, false);
+        fireEvent.click(await screen.findByTestId('preview-button'));
+        expect(mockOpen).toHaveBeenCalledWith('', '_blank');
+
+        rejectPreview(new Error('preview failed'));
+        await waitFor(() => expect(previewTab.close).toHaveBeenCalledTimes(1));
+        expect(loggedErrors.some(([message]) => message === '[PageEditor] openPreview failed:')).toBe(true);
+      } finally {
+        window.open = originalOpen;
+        console.error = originalConsoleError;
+      }
+    });
+
+    // ------------------------------------------------------------------
+    // No dead links. A site that does not serve draft preview has no URL
+    // that could work, so the user would land on a 404 on their OWN site.
+    // These fail if the editor navigates there.
+    // ------------------------------------------------------------------
+
+    test('explains instead of navigating when the site does not serve draft preview', async () => {
+      const message = 'example.com does not serve draft preview, so a preview link would open a 404 there.';
+      configureUI({
+        apiBaseUrl: '/__cms/api',
+        openPreview: async () => ({ ok: false as const, reason: 'not-deployed' as const, message }),
+      });
+      const previewTab = { location: { href: 'about:blank' }, close: mock(() => {}), opener: window };
+      const mockOpen = mock(() => previewTab);
+      const originalOpen = window.open;
+      window.open = mockOpen as any;
+
+      try {
+        const result = await testApi.createContent({
+          kind: 'page',
+          site: 'default',
+          collection: 'pages',
+          type: 'puck',
+          meta: { title: 'Undeployed Preview' },
+          locales: {
+            en: {
+              pathname: '/undeployed',
+              meta: { title: 'Undeployed Preview' },
+              content: { puckData: { content: [], root: {}, zones: {} } },
+            },
+          },
+        });
+        renderAppWithDataRouter([`/pages/${result.id!}`], undefined, false);
+        const button = await screen.findByTestId('preview-button');
+        fireEvent.click(button);
+
+        // The reserved tab is closed and NEVER navigated — no dead link.
+        await waitFor(() => expect(previewTab.close).toHaveBeenCalledTimes(1));
+        expect(previewTab.location.href).toBe('about:blank');
+
+        // The control now carries the reason, so the user is told why rather
+        // than left to click again.
+        await waitFor(() => expect(button.getAttribute('aria-disabled')).toBe('true'));
+        expect(button.getAttribute('title')).toBe(message);
+        expect(button.getAttribute('aria-label')).toContain(message);
+      } finally {
+        window.open = originalOpen;
+      }
+    });
+
+    test('does not flash a blank tab on a second click once the site is known to have no preview', async () => {
+      configureUI({
+        apiBaseUrl: '/__cms/api',
+        openPreview: async () => ({ ok: false as const, reason: 'not-deployed' as const, message: 'no preview here' }),
+      });
+      const previewTab = { location: { href: 'about:blank' }, close: mock(() => {}), opener: window };
+      const mockOpen = mock(() => previewTab);
+      const originalOpen = window.open;
+      window.open = mockOpen as any;
+
+      try {
+        const result = await testApi.createContent({
+          kind: 'page',
+          site: 'default',
+          collection: 'pages',
+          type: 'puck',
+          meta: { title: 'Second Click' },
+          locales: {
+            en: {
+              pathname: '/second-click',
+              meta: { title: 'Second Click' },
+              content: { puckData: { content: [], root: {}, zones: {} } },
+            },
+          },
+        });
+        renderAppWithDataRouter([`/pages/${result.id!}`], undefined, false);
+        const button = await screen.findByTestId('preview-button');
+
+        fireEvent.click(button);
+        await waitFor(() => expect(button.getAttribute('aria-disabled')).toBe('true'));
+        expect(mockOpen).toHaveBeenCalledTimes(1);
+
+        // Second click must explain, not open-and-close a tab, which reads as
+        // a bug even when the behaviour is correct.
+        fireEvent.click(button);
+        await waitFor(() => expect(previewTab.close).toHaveBeenCalledTimes(1));
+        expect(mockOpen).toHaveBeenCalledTimes(1);
+      } finally {
+        window.open = originalOpen;
+      }
+    });
+
+    test('renders Preview disabled with a reason when the host reports up front that the site has no preview', async () => {
+      configureUI({
+        apiBaseUrl: '/__cms/api',
+        openPreview: async () => ({ ok: true as const, url: 'https://should-not-be-reached.test/' }),
+        previewCapability: 'unavailable',
+      });
+      const result = await testApi.createContent({
+        kind: 'page',
+        site: 'default',
+        collection: 'pages',
+        type: 'puck',
+        meta: { title: 'Known Undeployed' },
+        locales: {
+          en: {
+            pathname: '/known-undeployed',
+            meta: { title: 'Known Undeployed' },
+            content: { puckData: { content: [], root: {}, zones: {} } },
+          },
+        },
+      });
+      renderAppWithDataRouter([`/pages/${result.id!}`], undefined, false);
+      const button = await screen.findByTestId('preview-button');
+
+      expect(button.getAttribute('aria-disabled')).toBe('true');
+      // Plain English, states the fact about the site, never blames the user.
+      expect(button.getAttribute('title')).toBe(PREVIEW_UNAVAILABLE_DETAIL);
+      // Still clickable on purpose: a `disabled` button shows no tooltip and
+      // fires no handler, which would hide the reason entirely.
+      expect(button.hasAttribute('disabled')).toBe(false);
+    });
+
+    test('leaves Preview enabled when capability is unknown, so a working site never loses it', async () => {
+      configureUI({
+        apiBaseUrl: '/__cms/api',
+        openPreview: async () => ({ ok: true as const, url: 'https://preview.example.test/ok' }),
+      });
+      const result = await testApi.createContent({
+        kind: 'page',
+        site: 'default',
+        collection: 'pages',
+        type: 'puck',
+        meta: { title: 'Unknown Capability' },
+        locales: {
+          en: {
+            pathname: '/unknown-capability',
+            meta: { title: 'Unknown Capability' },
+            content: { puckData: { content: [], root: {}, zones: {} } },
+          },
+        },
+      });
+      renderAppWithDataRouter([`/pages/${result.id!}`], undefined, false);
+      const button = await screen.findByTestId('preview-button');
+
+      expect(button.getAttribute('aria-disabled')).toBe('false');
+      expect(button.getAttribute('aria-label')).toBe('Preview');
     });
   });
 

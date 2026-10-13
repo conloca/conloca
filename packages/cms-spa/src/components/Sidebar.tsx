@@ -1,12 +1,12 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { Database, FileText, ImageIcon, LayoutDashboard, Monitor, Moon, Package, Sun, X } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
-import { useTheme } from '../hooks/useTheme';
-import { getUIConfig } from '../ui-config';
-import { cn } from '../utils/cn';
-import { ConlocaLogo } from './ConlocaLogo';
-import { GitStatusPanel } from './GitStatusPanel';
-import { UserAvatar } from './UserAvatar';
+import { useTheme } from '../hooks/useTheme.js';
+import { getUIConfig } from '../ui-config.js';
+import { cn } from '../utils/cn.js';
+import { ConlocaLogo } from './ConlocaLogo.js';
+import { GitStatusPanel } from './GitStatusPanel.js';
+import { UserAvatar } from './UserAvatar.js';
 
 interface NavItemProps {
   to: string;
@@ -34,11 +34,9 @@ function NavItem({ to, icon: Icon, label, end, badge }: NavItemProps) {
       <Icon className="h-4 w-4 flex-shrink-0" />
       <span className="flex-1">{label}</span>
       {badge !== undefined && badge > 0 ? (
-        <span
-          aria-label={`${badge} pages need review`}
-          className="ml-auto inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-semibold bg-red-04 text-white"
-        >
-          {badge}
+        <span className="ml-auto inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-semibold bg-red-04 text-white">
+          <span aria-hidden="true">{badge}</span>
+          <span className="sr-only">{badge} pages need review</span>
         </span>
       ) : null}
     </NavLink>
@@ -72,9 +70,9 @@ function ThemeToggle() {
 }
 
 function SidebarContent() {
-  // In hosted mode the host shell owns workspace identity/account/state UI,
-  // so cms-spa hides its standalone widgets to avoid duplication. Branding
-  // and theme remain because cms-spa is the only chrome in hosted mode too.
+  // When `hosted` is set, the host app owns identity, account, status and
+  // theme controls. The embedded SPA only renders those controls when it is
+  // the standalone shell.
   const hosted = getUIConfig().hosted === true;
   return (
     <>
@@ -86,34 +84,34 @@ function SidebarContent() {
         <NavItem to="/" icon={LayoutDashboard} label="Dashboard" end />
         <NavItem to="/pages" icon={FileText} label="Pages" />
         <NavItem to="/media" icon={ImageIcon} label="Media" />
-        <NavItem to="/blocks" icon={Package} label="Blocks" />
+        <NavItem to="/fragments" icon={Package} label="Fragments" />
         <NavItem to="/data" icon={Database} label="Data" />
       </nav>
 
-      {/* GitStatusPanel is VPS-ONLY. In hosted mode the host shell
-          owns the four-layer sync status surface. The two flows are
-          NOT interchangeable: VPS assumes a single-tenant filesystem
-          repo with synchronous git ops; hosted goes through the
-          backend with layered server-side state. Do NOT try to
-          unify them via shared hooks — the `hosted` flag is the
-          deployment-mode seam, and it stays the seam. */}
+      {/* GitStatusPanel is standalone-only: it talks to the local
+          content-api git endpoints on a filesystem repo with synchronous
+          git ops. When `hosted` is set, the host app brings its own sync
+          status surface. Do NOT try to unify them via shared hooks — the
+          `hosted` flag is the seam, and it stays the seam. */}
       {!hosted && (
         <div className="px-3 py-3 border-t border-grey-09 dark:border-grey-03">
           <GitStatusPanel />
         </div>
       )}
 
-      <div className="px-3 py-3 border-t border-grey-09 dark:border-grey-03 flex items-center justify-between">
-        {hosted ? <span /> : <UserAvatar />}
-        <ThemeToggle />
-      </div>
+      {!hosted && (
+        <div className="px-3 py-3 border-t border-grey-09 dark:border-grey-03 flex items-center justify-between">
+          <UserAvatar />
+          <ThemeToggle />
+        </div>
+      )}
     </>
   );
 }
 
 export function Sidebar() {
   return (
-    <aside className="hidden md:flex w-60 flex-shrink-0 h-screen flex-col border-r border-grey-09 bg-white dark:border-grey-03 dark:bg-grey-02">
+    <aside className="hidden md:flex w-60 flex-shrink-0 h-full min-h-0 flex-col border-r border-grey-09 bg-white dark:border-grey-03 dark:bg-grey-02">
       <SidebarContent />
     </aside>
   );

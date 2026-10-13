@@ -1,7 +1,7 @@
 import { dataEditableSchema } from '@conloca/content-api-client';
 import { useState } from 'react';
-import { SchemaForm } from '../forms/SchemaForm';
-import { Button, Select } from '../ui';
+import { SchemaForm } from '../forms/SchemaForm.js';
+import { Button, Select } from '../ui/index.js';
 
 interface CreateDataDialogProps {
   collections: string[];

@@ -1,6 +1,6 @@
 import { AlertCircle } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { cn } from '../../utils/cn';
+import { cn } from '../../utils/cn.js';
 
 interface FieldErrorProps {
   /**
@@ -21,11 +21,15 @@ interface FieldErrorProps {
  *
  * Layout: `inline-flex items-center gap-2`. Drop-in replacement for the
  * `<AlertCircle h-3 w-3 /> + text-xs text-red-04` pattern that was
- * being hand-rolled across hosted-shell form fields.
+ * being hand-rolled across host app form fields.
  */
 export function FieldError({ id, className, children }: FieldErrorProps) {
   return (
-    <span id={id} role="alert" className={cn('inline-flex items-center gap-2 text-xs text-red-04', className)}>
+    <span
+      id={id}
+      role="alert"
+      className={cn('inline-flex items-center gap-2 text-xs text-red-04 dark:text-red-08', className)}
+    >
       <AlertCircle aria-hidden className="h-3 w-3 flex-shrink-0" />
       <span>{children}</span>
     </span>

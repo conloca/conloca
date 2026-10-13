@@ -28,6 +28,32 @@ export function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+/** Script-bearing URL schemes browsers execute. `data:text/html` is included
+ * because it renders as an active document; `data:image/*` stays allowed. */
+const DANGEROUS_URL_SCHEME = /^(?:javascript|vbscript):|^data:text\/html/i;
+
+/** Empty out a URL whose scheme would execute script, else pass it through.
+ * Strips ASCII whitespace/control characters first so `java\tscript:` and
+ * leading-newline tricks can't smuggle a live scheme past the check. */
+function neutralizeUrl(url: string): string {
+  const normalized = url.replace(/[\p{Cc} ]+/gu, '');
+  return DANGEROUS_URL_SCHEME.test(normalized) ? '' : url;
+}
+
+/** Inline event-handler attribute names (`on*`) — dropped defensively so a
+ * serialized `<img onerror=…>` can't wire script into an innerHTML sink.
+ * URL-bearing attributes keep their name but get scheme-filtered; `style` is
+ * passed through (it carries no script in a modern browser, and the DOMPurify
+ * pass over this serializer's output at every call site keeps it either way). */
+function isEventHandlerAttr(name: string): boolean {
+  return /^on/i.test(name);
+}
+
+/** Attribute names whose value is a URL and must be scheme-filtered. */
+function isUrlAttr(name: string): boolean {
+  return /^(?:href|src|xlink:href|formaction|action|poster|background)$/i.test(name);
+}
+
 /** True when a JSX tag name is a standard HTML element (lowercase-
  * first per the React/Astro convention). Used to render raw HTML
  * inline rather than routing it through the Astro Container API. */
@@ -58,11 +84,15 @@ export function attrsToHtml(attrs: unknown): string {
   const parts: string[] = [];
   for (const a of attrs as Array<{ type?: string; name?: string; value?: unknown }>) {
     if (a?.type !== 'mdxJsxAttribute' || typeof a.name !== 'string') continue;
+    // Never serialize an inline event handler into an innerHTML sink.
+    if (isEventHandlerAttr(a.name)) continue;
+    const urlAttr = isUrlAttr(a.name);
     const v = a.value;
     if (v == null) {
       parts.push(a.name); // shorthand boolean
     } else if (typeof v === 'string') {
-      parts.push(`${a.name}="${escapeHtml(v)}"`);
+      const value = urlAttr ? neutralizeUrl(v) : v;
+      parts.push(`${a.name}="${escapeHtml(value)}"`);
     } else if (typeof v === 'object' && v && 'value' in v && typeof (v as { value: unknown }).value === 'string') {
       // Expression — serialize the source. JSON-literal expressions
       // (`{42}`, `{true}`) round-trip; non-literal ones fall through
@@ -78,7 +108,8 @@ export function attrsToHtml(attrs: unknown): string {
       if (typeof parsed === 'boolean') {
         if (parsed) parts.push(a.name);
       } else if (parsed != null) {
-        parts.push(`${a.name}="${escapeHtml(String(parsed))}"`);
+        const value = urlAttr ? neutralizeUrl(String(parsed)) : String(parsed);
+        parts.push(`${a.name}="${escapeHtml(value)}"`);
       }
     }
   }
@@ -110,9 +141,9 @@ export function mdastToHtml(node: unknown): string {
     case 'delete':
       return `<del>${(n.children ?? []).map(mdastToHtml).join('')}</del>`;
     case 'link':
-      return `<a href="${escapeHtml(typeof n.url === 'string' ? n.url : '')}">${(n.children ?? []).map(mdastToHtml).join('')}</a>`;
+      return `<a href="${escapeHtml(neutralizeUrl(typeof n.url === 'string' ? n.url : ''))}">${(n.children ?? []).map(mdastToHtml).join('')}</a>`;
     case 'image':
-      return `<img src="${escapeHtml(typeof n.url === 'string' ? n.url : '')}" alt="${escapeHtml(typeof (n as { alt?: unknown }).alt === 'string' ? (n as { alt: string }).alt : '')}" />`;
+      return `<img src="${escapeHtml(neutralizeUrl(typeof n.url === 'string' ? n.url : ''))}" alt="${escapeHtml(typeof (n as { alt?: unknown }).alt === 'string' ? (n as { alt: string }).alt : '')}" />`;
     case 'paragraph':
       return `<p>${(n.children ?? []).map(mdastToHtml).join('')}</p>`;
     case 'heading': {

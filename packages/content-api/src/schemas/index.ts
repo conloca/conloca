@@ -30,33 +30,33 @@ export const pageMetaSchema = pageEditableSchema.extend({
 
 export type PageMeta = z.infer<typeof pageMetaSchema>;
 
-// ===== Block Schemas =====
+// ===== Fragment Schemas =====
 
 /**
- * Base schema for block metadata - editable fields only.
+ * Base schema for fragment metadata - editable fields only.
  * Used by CMS forms for dynamic form generation.
  * Add .describe() for form field labels/hints.
  */
-export const blockEditableSchema = z.object({
-  title: z.string().describe('Display name for the block'),
-  description: z.string().optional().describe('Brief description of this block'),
-  category: z.string().optional().describe('Category for organizing blocks (e.g., headers, cta, content)'),
+export const fragmentEditableSchema = z.object({
+  title: z.string().describe('Display name for the fragment'),
+  description: z.string().optional().describe('Brief description of this fragment'),
+  category: z.string().optional().describe('Category for organizing fragments (e.g., headers, cta, content)'),
   tags: z.array(z.string()).optional().describe('Tags for filtering and organization'),
 });
 
-export type BlockEditable = z.infer<typeof blockEditableSchema>;
+export type FragmentEditable = z.infer<typeof fragmentEditableSchema>;
 
 /**
- * Full block schema with system fields.
+ * Full fragment schema with system fields.
  * Used by Astro Content Collections for validation.
  */
-export const blockMetaSchema = blockEditableSchema.extend({
+export const fragmentMetaSchema = fragmentEditableSchema.extend({
   id: z.string(),
   locale: z.string(),
   name: z.string(),
 });
 
-export type BlockMeta = z.infer<typeof blockMetaSchema>;
+export type FragmentMeta = z.infer<typeof fragmentMetaSchema>;
 
 // ===== MDX Page Schemas =====
 

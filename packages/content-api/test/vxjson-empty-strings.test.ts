@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import type { VXJSONFile } from '../src/types';
-import { VXJSON } from '../src/vxjson';
+import type { VXJSONFile } from '../src/types.js';
+import { VXJSON } from '../src/vxjson.js';
 
 describe('VXJSON empty string handling', () => {
   test('should remove empty strings from metadata during serialization', () => {
@@ -143,8 +143,13 @@ describe('VXJSON empty string handling', () => {
     const serialized = VXJSON.serialize(data);
     const parsed = JSON.parse(serialized);
 
-    // Empty strings within arrays are converted to null by JSON.stringify replacer
-    expect(parsed.meta.tags).toEqual(['tag1', null, 'tag2', null]);
+    // Empty strings inside an array are kept as-is. A JSON.stringify replacer
+    // returning undefined drops an object KEY but emits null in an ARRAY, so
+    // these used to reach disk as ['tag1', null, 'tag2', null] and crash
+    // whatever walked the list later. Dropping empty FIELDS is the intent
+    // (see the tests above); punching nulls into a list never was.
+    expect(parsed.meta.tags).toEqual(['tag1', '', 'tag2', '']);
+    expect(parsed.meta.tags).not.toContain(null);
     expect(parsed.meta.keywords).toEqual([]);
   });
 });

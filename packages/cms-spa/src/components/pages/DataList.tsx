@@ -1,6 +1,9 @@
 import type { DataEditable } from '@conloca/content-api-client';
 import {
+  APIClientError,
   type ContentManifest,
+  ErrorCodes,
+  getContentAPIClient,
   localesOf,
   useCreateContent,
   useData,
@@ -10,18 +13,21 @@ import {
 } from '@conloca/content-api-client';
 import { AlertCircle, Code, Database, Loader2, Plus } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import type { DataSchemas } from '../../data-schemas';
-import { useDialogState, useErrorModal } from '../../hooks';
-import type { DataEntry } from '../../types';
-import { getUIConfig } from '../../ui-config';
-import { slugify } from '../../utils/slugify';
-import { DataEntryCard } from '../cards/DataEntryCard';
-import { CreateDataDialog } from '../dialogs/CreateDataDialog';
-import { DataPropertiesDialog } from '../dialogs/DataPropertiesDialog';
-import { DeleteConfirmDialog } from '../dialogs/DeleteConfirmDialog';
-import { ErrorModal } from '../dialogs/ErrorModal';
-import { DataEditor } from '../editors/DataEditor';
-import { Select } from '../ui';
+import type { DataSchemas } from '../../data-schemas.js';
+import { useDialogState, useErrorModal } from '../../hooks/index.js';
+import type { DataEntry } from '../../types.js';
+import { getUIConfig } from '../../ui-config.js';
+import { contentFailureMessage, isStaleWrite } from '../../utils/content-failure.js';
+import { editableEntryMeta, entryMetaPatch } from '../../utils/entry-meta.js';
+import { untitledName, untitledNameNote } from '../../utils/entry-name.js';
+import { slugify } from '../../utils/slugify.js';
+import { DataEntryCard } from '../cards/DataEntryCard.js';
+import { CreateDataDialog } from '../dialogs/CreateDataDialog.js';
+import { DataPropertiesDialog } from '../dialogs/DataPropertiesDialog.js';
+import { DeleteConfirmDialog } from '../dialogs/DeleteConfirmDialog.js';
+import { ErrorModal } from '../dialogs/ErrorModal.js';
+import { DataEditor } from '../editors/DataEditor.js';
+import { Select } from '../ui/index.js';
 
 /**
  * Generates a VSCode URI to open the schemas file.
@@ -69,6 +75,9 @@ export function DataList({ dataSchemas }: DataListProps) {
   const { showError, showStaleWriteError, errorModalProps } = useErrorModal();
 
   const createContent = useCreateContent();
+  // From the Create click until the create answers, including while a title with no a–z or 0–9
+  // waits for the collection's names: a second click then would create a second entry.
+  const [creating, setCreating] = useState(false);
   const deleteContent = useDeleteContent();
   const updateLocalized = useUpdateLocalized();
 
@@ -110,12 +119,7 @@ export function DataList({ dataSchemas }: DataListProps) {
         locales: Array.from(localesOf(entry)).map((v) => v.locale),
         etag: firstLocale.etag,
         name: firstLocale.name,
-        meta: firstLocale.meta
-          ? {
-              title: firstLocale.meta.title || title,
-              description: firstLocale.meta.description,
-            }
-          : undefined,
+        meta: editableEntryMeta(firstLocale.meta, title),
       };
     });
   }, [data]);
@@ -131,7 +135,7 @@ export function DataList({ dataSchemas }: DataListProps) {
     return (
       <div className="p-6 flex items-center justify-center min-h-[400px]">
         <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin text-azure-04 mx-auto mb-4" />
+          <Loader2 className="h-8 w-8 animate-spin text-azure-04 dark:text-azure-08 mx-auto mb-4" />
           <p className="text-grey-04 dark:text-grey-07">Loading data entries...</p>
         </div>
       </div>
@@ -143,7 +147,7 @@ export function DataList({ dataSchemas }: DataListProps) {
     return (
       <div className="p-6 flex items-center justify-center min-h-[400px]">
         <div className="text-center max-w-md">
-          <AlertCircle className="h-12 w-12 text-red-04 mx-auto mb-4" />
+          <AlertCircle className="h-12 w-12 text-red-04 dark:text-red-08 mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-grey-01 dark:text-grey-12 mb-2">Failed to load data entries</h2>
           <p className="text-grey-04 dark:text-grey-07 mb-4">{error.message}</p>
           <button
@@ -162,31 +166,58 @@ export function DataList({ dataSchemas }: DataListProps) {
     const title = ((values.title as string) || '').trim();
     if (!title || !collection) return;
 
-    const name = slugify(title) || 'untitled';
+    const slug = slugify(title);
+    let name = slug;
     const description = ((values.description as string) || '').trim() || undefined;
+    // The author never typed a name made up for a title with none to give: when that name is refused
+    // as taken, say where it came from. Any other failure is not about the name.
+    const withNameNote = (message: string, nameTaken: boolean) =>
+      slug || !nameTaken ? message : `${untitledNameNote(name)} ${message}`;
 
-    const result = await createContent.mutateAsync({
-      kind: 'data',
-      collection,
-      type: 'json',
-      name,
-      meta: {
-        title,
-        description,
-      },
-      // Use 'en' as the default locale for new data entries
-      locales: {
-        en: {
-          meta: {
-            title,
-            description,
-          },
-          content: {
-            data: {},
+    let result: Awaited<ReturnType<typeof createContent.mutateAsync>>;
+    setCreating(true);
+    try {
+      // A title with no a–z or 0–9 (Фото, 照片) makes no name: take an untitled one no entry has.
+      name ||= untitledName((await getContentAPIClient().getData(collection)).items);
+      result = await createContent.mutateAsync({
+        kind: 'data',
+        collection,
+        type: 'json',
+        name,
+        meta: {
+          title,
+          description,
+        },
+        // Use 'en' as the default locale for new data entries
+        locales: {
+          en: {
+            meta: {
+              title,
+              description,
+            },
+            content: {
+              data: {},
+            },
           },
         },
-      },
-    });
+      });
+    } catch (error) {
+      // The content-API router answers a refusal, such as a name another entry has, with an error
+      // status, which the client throws: say why, as for a refusal the result carries.
+      const nameTaken =
+        error instanceof APIClientError &&
+        (error.code === ErrorCodes.NAME_TAKEN || error.code === ErrorCodes.ALREADY_EXISTS);
+      showError(
+        withNameNote(
+          error instanceof APIClientError ? error.message : 'Failed to create data entry. Please try again.',
+          nameTaken,
+        ),
+        error,
+      );
+      return;
+    } finally {
+      setCreating(false);
+    }
 
     if (result.success && result.id) {
       closeCreateDialog();
@@ -200,8 +231,8 @@ export function DataList({ dataSchemas }: DataListProps) {
         name,
       });
     } else if (!result.success) {
-      const errorMessage = result.error?.message || 'Failed to create data entry';
-      showError(errorMessage, result.error);
+      const nameTaken = result.reason === 'name_taken' || result.reason === 'already_exists';
+      showError(withNameNote(contentFailureMessage(result, 'Failed to create data entry'), nameTaken), result.error);
     }
   };
 
@@ -228,11 +259,10 @@ export function DataList({ dataSchemas }: DataListProps) {
       closeDeleteDialog();
 
       if (!result.success) {
-        const errorMessage = result.error?.message || 'Failed to delete entry';
-        if (errorMessage.includes('modified')) {
+        if (isStaleWrite(result)) {
           showStaleWriteError(result.error);
         } else {
-          showError(errorMessage, result.error);
+          showError(contentFailureMessage(result, 'Failed to delete entry'), result.error);
         }
       }
     } catch (err) {
@@ -260,18 +290,19 @@ export function DataList({ dataSchemas }: DataListProps) {
       const result = await updateLocalized.mutateAsync({
         id: propertiesDialog.entryId,
         locale: propertiesDialog.locale,
-        data: { meta },
+        // Cleared fields go over the wire as null: undefined is dropped by
+        // JSON.stringify and the server merge would keep the old value.
+        data: { meta: entryMetaPatch(meta) },
         etag: propertiesDialog.etag,
       });
 
       closePropertiesDialog();
 
       if (!result.success) {
-        const errorMessage = result.error?.message || 'Failed to save properties';
-        if (errorMessage.includes('modified') || result.reason === 'stale_write') {
+        if (isStaleWrite(result)) {
           showStaleWriteError(result.error);
         } else {
-          showError(errorMessage, result.error);
+          showError(contentFailureMessage(result, 'Failed to save properties'), result.error);
         }
       }
     } catch (err) {
@@ -388,7 +419,7 @@ export function DataList({ dataSchemas }: DataListProps) {
       {createDialog.isOpen && (
         <CreateDataDialog
           collections={collections}
-          isPending={createContent.isPending}
+          isPending={creating}
           onClose={closeCreateDialog}
           onCreate={handleCreateEntry}
         />
@@ -450,7 +481,6 @@ export function DataList({ dataSchemas }: DataListProps) {
               collection={editDataDialog.collection}
               initialLocale={editDataDialog.locale}
               existingLocales={editDataDialog.existingLocales}
-              name={editDataDialog.name}
               schema={dataSchemas[editDataDialog.collection] ?? null}
               onSave={closeEditDataDialog}
               onCancel={closeEditDataDialog}

@@ -1,12 +1,12 @@
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { basename, dirname, extname, relative, resolve } from 'node:path';
+import { basename, dirname, extname, resolve } from 'node:path';
 import fg from 'fast-glob';
 import type { Project } from 'ts-morph';
 import { extractAstroFrontmatter } from './astro-frontmatter.js';
 import { createScanProject, extractPropsViaTs } from './extract-props-ts.js';
-import type { MdxScanResult } from './scan-mdx';
+import type { MdxScanResult } from './scan-mdx.js';
 
 /**
  * Walks configured folder globs for `.astro` and `.tsx` files,
@@ -53,13 +53,9 @@ export interface LocalComponentScanResult {
   /** Component name (filename without extension). */
   name: string;
   /** Path to pass to `server.ssrLoadModule` — currently the absolute
-   * file path. The path the import statement should use in MDX is
-   * the project-relative form (so save serialization stays portable);
-   * we keep both. */
+   * file path. Build-time callers rewrite it to the project-relative
+   * form via `toPortableImports` (discover.ts) before serializing. */
   source: string;
-  /** Project-relative path used when emitting `import` statements
-   * for newly-inserted components. */
-  importSpecifier: string;
   /** All components from this scanner are treated as flow (block).
    * Inline-only components are rare in authored libraries; if any
    * surface as text-level usage they get classified at merge time
@@ -107,7 +103,7 @@ export async function scanLocalComponents(folders: string[], projectRoot: string
   const results: LocalComponentScanResult[] = [];
   for (const file of allFiles) {
     try {
-      const r = await scanFile(file, projectRoot, project);
+      const r = await scanFile(file, project);
       if (r) results.push(r);
     } catch (err) {
       console.warn(`[conloca:discovery] failed to scan ${file}:`, err instanceof Error ? err.message : err);
@@ -116,11 +112,7 @@ export async function scanLocalComponents(folders: string[], projectRoot: string
   return results;
 }
 
-async function scanFile(
-  filepath: string,
-  projectRoot: string,
-  project: Project,
-): Promise<LocalComponentScanResult | null> {
+async function scanFile(filepath: string, project: Project): Promise<LocalComponentScanResult | null> {
   const content = await readFile(filepath, 'utf8');
   const name = componentNameFromPath(filepath);
   // Components typically start with a capital. Lowercase-named files
@@ -128,12 +120,10 @@ async function scanFile(
   // we don't pollute the registry with `helpers.ts` and friends.
   if (!/^[A-Z]/.test(name)) return null;
   const props = extractPropsForFile(project, filepath, content, name);
-  const importSpecifier = `/${relative(projectRoot, filepath).replace(/\\/g, '/')}`;
   return {
     filepath,
     name,
     source: filepath,
-    importSpecifier,
     kind: 'flow',
     props,
   };
@@ -333,7 +323,6 @@ async function scanExternalFile(
     // joins this entry with MDX-usage entries that key on the same
     // specifier. See the merge logic at `byKey` in merge-registry.ts.
     source: specifier,
-    importSpecifier: specifier,
     kind: 'flow',
     props,
   };

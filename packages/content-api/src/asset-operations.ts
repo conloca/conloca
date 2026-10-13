@@ -1,46 +1,55 @@
 import type { Dirent, Stats } from 'node:fs';
-import { access, mkdir, readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
-import { extname, join, parse, resolve } from 'node:path';
-import { imageSize } from 'image-size';
-import {
-  type AssetEntry,
-  AssetManifest,
-  type AssetManifestData,
-  type AssetUsage,
-  type FolderListing,
-  type FolderTreeNode,
-  type ManifestEntryData,
-} from './asset-manifest';
-import { setupGitLfsAttributes } from './git-operations';
-import { validateFetchUrl } from './url-validation';
+import { lstat, mkdir, readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
+import { extname, join, parse, resolve, sep } from 'node:path';
+import { imageSizeFromFile } from 'image-size/fromFile';
+import { DEFAULT_ACCEPTED_FORMATS, DEFAULT_MAX_FILE_SIZE, IMAGE_EXTENSION_MIME } from './asset-constraints.js';
+import * as assetMetadata from './asset-metadata-store.js';
+import type {
+  AssetEntry,
+  AssetMetadata,
+  AssetMetadataPatch,
+  AssetUsage,
+  FolderListing,
+  FolderTreeNode,
+} from './asset-types.js';
+import { setupGitLfsAttributes } from './git-operations.js';
+import type { JsonValue } from './types.js';
+import { validateFetchUrl } from './url-validation.js';
 
 export interface AssetConfig {
   assetsPath: string;
   maxFileSize?: number;
   acceptedFormats?: string[];
-  /** Content root directory for usage tracking (scanning VXJSON files) */
-  contentRoot?: string;
+  /** The content root: it holds each asset's metadata record, and is scanned for the pages that use an asset */
+  contentRoot: string;
 }
 
-const DEFAULT_MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-const DEFAULT_ACCEPTED_FORMATS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'svg', 'ico'];
-
-const MIME_MAP: Record<string, string> = {
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  png: 'image/png',
-  gif: 'image/gif',
-  webp: 'image/webp',
-  avif: 'image/avif',
-  svg: 'image/svg+xml',
-  ico: 'image/x-icon',
-};
-
-/** Recognized web image extensions for filesystem scanning */
-const RECOGNIZED_IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'avif', 'ico']);
+/** Recognized web image extensions for filesystem scanning — the accepted upload formats */
+const RECOGNIZED_IMAGE_EXTENSIONS = new Set(DEFAULT_ACCEPTED_FORMATS);
 
 /** System files to skip during filesystem scanning */
 const SYSTEM_FILES = new Set(['.ds_store', 'thumbs.db', '.gitkeep', 'desktop.ini', '.asset-manifest.json']);
+
+/** Max redirect hops a URL import may follow (each re-validated before it is requested) */
+const MAX_IMPORT_REDIRECTS = 5;
+
+/** Recursively enumerate vxjson files without serial directory waits. */
+async function vxjsonFiles(dir: string): Promise<string[]> {
+  let entries: Dirent[];
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const nested = await Promise.all(
+    entries.map(async (entry): Promise<string[]> => {
+      const fullPath = join(dir, entry.name);
+      if (entry.isDirectory() && !entry.name.startsWith('.')) return vxjsonFiles(fullPath);
+      return entry.isFile() && entry.name.endsWith('.vxjson') ? [fullPath] : [];
+    }),
+  );
+  return nested.flat();
+}
 
 /** Check if filename has a recognized web image extension */
 function isRecognizedImageExtension(filename: string): boolean {
@@ -53,9 +62,18 @@ function isSystemFile(filename: string): boolean {
   return filename.startsWith('.') || SYSTEM_FILES.has(filename.toLowerCase());
 }
 
+/**
+ * Check that a name is one file in its folder, not a path that could step out of it. The names come
+ * straight from a request body, so anything that is not a string is refused too.
+ */
+function isBareFilename(filename: unknown): boolean {
+  return (
+    typeof filename === 'string' && filename !== '' && filename !== '.' && filename !== '..' && !/[/\\]/.test(filename)
+  );
+}
+
 export class AssetOperations {
-  private config: Required<Omit<AssetConfig, 'contentRoot'>> & Pick<AssetConfig, 'contentRoot'>;
-  private manifest: AssetManifest;
+  private config: Required<AssetConfig>;
   private dirEnsured = false;
   private lfsSetup = false;
 
@@ -63,20 +81,13 @@ export class AssetOperations {
     this.config = {
       assetsPath: config.assetsPath,
       maxFileSize: config.maxFileSize ?? DEFAULT_MAX_FILE_SIZE,
-      acceptedFormats: config.acceptedFormats ?? DEFAULT_ACCEPTED_FORMATS,
+      // Copy: the shared default is frozen, but AssetConfig stays a plain string[]
+      acceptedFormats: config.acceptedFormats ?? [...DEFAULT_ACCEPTED_FORMATS],
       contentRoot: config.contentRoot,
     };
-    this.manifest = new AssetManifest(config.assetsPath);
   }
 
-  /** Resolve folder from manifest when only filename is known */
-  private async resolveFolder(filename: string): Promise<string> {
-    const entry = await this.manifest.getByFilename(filename);
-    if (!entry) return '/';
-    const lastSlash = entry.relativePath.lastIndexOf('/');
-    return lastSlash > 0 ? `/${entry.relativePath.slice(0, lastSlash)}` : '/';
-  }
-
+  /** A bare filename always means the assets root; subfolder assets are addressed with their folder. */
   private async ensureDir(subpath?: string): Promise<void> {
     const targetPath = subpath ? join(this.config.assetsPath, subpath) : this.config.assetsPath;
     if (!subpath && this.dirEnsured) return;
@@ -95,8 +106,9 @@ export class AssetOperations {
     const assetsAbsolute = resolve(this.config.assetsPath);
     const fullPath = resolve(assetsAbsolute, normalizedSubpath);
 
-    // Security check: ensure resolved path is within assetsPath
-    if (!fullPath.startsWith(assetsAbsolute)) {
+    // Security check: ensure resolved path is assetsPath or inside it. The separator matters:
+    // a bare prefix check lets `../assets-evil` through as if it were inside `assets`.
+    if (fullPath !== assetsAbsolute && !fullPath.startsWith(`${assetsAbsolute}${sep}`)) {
       throw new Error('Path traversal detected');
     }
 
@@ -110,11 +122,14 @@ export class AssetOperations {
    */
   private async resolveFilename(originalName: string, folder?: string): Promise<string> {
     const { name, ext } = parse(originalName);
-    // Sanitize: lowercase, replace spaces with dashes, remove non-alphanumeric except dash/dot
-    const sanitized = name
+    // Normalize compatibility forms and accents before restricting the stored filename.
+    const cleaned = name
+      .normalize('NFKD')
       .toLowerCase()
       .replace(/\s+/g, '-')
-      .replace(/[^a-z0-9-]/g, '');
+      .replace(/[^a-z0-9-]/g, '')
+      .slice(0, 200);
+    const sanitized = /[a-z0-9]/.test(cleaned) ? cleaned : 'file';
     const safeExt = ext.toLowerCase();
 
     // Determine base directory (assetsPath or assetsPath/folder)
@@ -129,7 +144,8 @@ export class AssetOperations {
     // eslint-disable-next-line no-constant-condition
     while (true) {
       try {
-        await access(join(baseDir, candidate));
+        // lstat also reserves the name of a broken symlink.
+        await lstat(join(baseDir, candidate));
         counter++;
         candidate = `${sanitized}-${counter}${safeExt}`;
       } catch {
@@ -150,72 +166,61 @@ export class AssetOperations {
   }
 
   /**
-   * Get image dimensions from manifest cache or by reading file headers
+   * Measure an image by reading its header. Never cached: the image is the only
+   * honest source, and writing the numbers back turned every listing into a write.
    */
-  private async getDimensions(
-    filePath: string,
-    manifestEntry?: ManifestEntryData,
-  ): Promise<{ width?: number; height?: number; fromCache: boolean }> {
-    // Check manifest cache first
-    if (manifestEntry?.width && manifestEntry?.height) {
-      return { width: manifestEntry.width, height: manifestEntry.height, fromCache: true };
-    }
-
-    // Read from file headers
+  private async getDimensions(filePath: string): Promise<{ width?: number; height?: number }> {
     try {
-      const buffer = await readFile(filePath);
-      const result = imageSize(new Uint8Array(buffer));
-      return { width: result.width, height: result.height, fromCache: false };
+      const result = await imageSizeFromFile(filePath);
+      return { width: result.width, height: result.height };
     } catch {
-      // SVGs and some formats may fail - return undefined dimensions
-      return { width: undefined, height: undefined, fromCache: false };
+      // SVGs without intrinsic size and unsupported formats have no dimensions
+      return { width: undefined, height: undefined };
     }
   }
 
   /**
-   * Build an AssetEntry from a directory entry, enriching with manifest metadata
+   * One AssetEntry: the file as it is on disk, plus whatever a person has
+   * written about it. Shared by every read, so they cannot drift.
    */
-  private async buildAssetEntry(dirent: Dirent, folder: string, manifestData: AssetManifestData): Promise<AssetEntry> {
-    // Compute relative path for manifest lookup
-    const relativePath = folder === '/' ? dirent.name : `${folder.slice(1)}/${dirent.name}`;
-    const manifestEntry = manifestData[relativePath];
-
-    // Build full file path
-    const fullPath = this.getAssetPath(dirent.name, folder);
-
-    // Get file stats
-    const stats: Stats = await stat(fullPath);
-
-    // Get dimensions (from cache or file)
-    const { width, height, fromCache } = await this.getDimensions(fullPath, manifestEntry);
-
-    // Progressive caching: if dimensions were computed from file, cache them
-    if (!fromCache && width && height) {
-      this.manifest.add(relativePath, { ...manifestEntry, width, height }).catch(() => {});
-    }
-
-    // Derive mimeType from extension
-    const ext = extname(dirent.name).slice(1).toLowerCase();
-    const mimeType = MIME_MAP[ext] || `image/${ext}`;
+  private async assetEntry(
+    filename: string,
+    folder: string,
+    stats: Stats,
+    metadata: AssetMetadata | undefined,
+  ): Promise<AssetEntry> {
+    const { width, height } = await this.getDimensions(this.getAssetPath(filename, folder));
+    const ext = extname(filename).slice(1).toLowerCase();
 
     return {
-      filename: dirent.name,
-      originalName: manifestEntry?.originalName || dirent.name,
-      mimeType,
+      filename,
+      originalName: metadata?.originalName || filename,
+      mimeType: IMAGE_EXTENSION_MIME[ext] || `image/${ext}`,
       size: stats.size,
       width,
       height,
-      alt: manifestEntry?.alt,
-      uploadedAt: manifestEntry?.uploadedAt || stats.birthtime.toISOString(),
-      uploadedBy: manifestEntry?.uploadedBy,
+      alt: metadata?.alt,
+      uploadedAt: metadata?.uploadedAt || stats.birthtime.toISOString(),
+      uploadedBy: metadata?.uploadedBy,
       folder,
-      tags: manifestEntry?.tags,
+      tags: metadata?.tags,
     };
+  }
+
+  /** Build an AssetEntry from a directory entry and the records already read for its folder */
+  private async buildAssetEntry(
+    dirent: Dirent,
+    folder: string,
+    records: Map<string, AssetMetadata>,
+  ): Promise<AssetEntry> {
+    const relativePath = folder === '/' ? dirent.name : `${folder.slice(1)}/${dirent.name}`;
+    const stats: Stats = await stat(this.getAssetPath(dirent.name, folder));
+    return this.assetEntry(dirent.name, folder, stats, records.get(relativePath));
   }
 
   async upload(
     file: File,
-    metadata?: { alt?: string; uploadedBy?: string; width?: number; height?: number; folder?: string },
+    metadata?: { alt?: string; uploadedBy?: string; folder?: string },
   ): Promise<{ success: true; asset: AssetEntry } | { success: false; error: string }> {
     if (!this.validateFormat(file.name)) {
       const allowed = this.config.acceptedFormats.join(', ');
@@ -228,7 +233,7 @@ export class AssetOperations {
     }
 
     // Normalize folder path
-    const folder = metadata?.folder && metadata.folder !== '/' ? '/' + metadata.folder.replace(/^\/+|\/+$/g, '') : '/';
+    const folder = metadata?.folder && metadata.folder !== '/' ? `/${metadata.folder.replace(/^\/+|\/+$/g, '')}` : '/';
 
     // Validate folder path (prevent path traversal)
     if (folder !== '/') {
@@ -237,6 +242,12 @@ export class AssetOperations {
       } catch {
         return { success: false, error: 'Invalid folder path' };
       }
+    }
+
+    try {
+      await assetMetadata.migrateLegacyManifest(this.config);
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : 'Failed to migrate asset metadata' };
     }
 
     await this.ensureDir();
@@ -251,43 +262,49 @@ export class AssetOperations {
       this.lfsSetup = true;
     }
 
-    const filename = await this.resolveFilename(file.name, folder);
+    const data = new Uint8Array(await file.arrayBuffer());
+    let filename: string;
+    let filePath: string;
+    for (;;) {
+      filename = await this.resolveFilename(file.name, folder);
+      filePath = this.getAssetPath(filename, folder);
+      try {
+        // oxlint-disable-next-line no-await-in-loop -- each exclusive create depends on the filename collision found by the preceding attempt.
+        await writeFile(filePath, data, { flag: 'wx' });
+        break;
+      } catch (error) {
+        if (!(error instanceof Error) || !('code' in error) || error.code !== 'EEXIST') throw error;
+      }
+    }
 
-    // Determine file path (in folder if specified)
-    const filePath =
-      folder !== '/'
-        ? join(this.config.assetsPath, folder.replace(/^\//, ''), filename)
-        : join(this.config.assetsPath, filename);
-
-    const arrayBuffer = await file.arrayBuffer();
-    await writeFile(filePath, new Uint8Array(arrayBuffer));
-
-    // Compute relative path for manifest
     const relativePath = folder === '/' ? filename : `${folder.slice(1)}/${filename}`;
 
-    // Create manifest entry
-    const manifestEntry: ManifestEntryData = {
+    const uploadedAt = new Date().toISOString();
+    const uploaded: AssetMetadata = {
       alt: metadata?.alt,
-      width: metadata?.width,
-      height: metadata?.height,
-      uploadedAt: new Date().toISOString(),
+      uploadedAt,
       uploadedBy: metadata?.uploadedBy,
       originalName: file.name,
     };
 
-    await this.manifest.add(relativePath, manifestEntry);
+    // Replace, never merge: a new file landing on a freed filename must not
+    // inherit the alt text of the picture that used to be there.
+    await assetMetadata.write(this.config, relativePath, uploaded);
 
-    // Build full AssetEntry for return
+    // Measure the file that was just written, so URL imports and API clients
+    // that send no dimensions still get the real ones back
+    const { width, height } = await this.getDimensions(filePath);
+
     const ext = extname(filename).slice(1).toLowerCase();
     const entry: AssetEntry = {
       filename,
       originalName: file.name,
-      mimeType: MIME_MAP[ext] || `image/${ext}`,
+      mimeType: IMAGE_EXTENSION_MIME[ext] || `image/${ext}`,
       size: file.size,
-      width: metadata?.width,
-      height: metadata?.height,
+      width,
+      height,
       alt: metadata?.alt,
-      uploadedAt: manifestEntry.uploadedAt!,
+      uploadedAt,
       uploadedBy: metadata?.uploadedBy,
       folder,
     };
@@ -299,8 +316,6 @@ export class AssetOperations {
    * List all assets recursively from filesystem
    */
   async list(): Promise<AssetEntry[]> {
-    // Load manifest once for enrichment
-    const manifestData = await this.manifest.read();
     const assets: AssetEntry[] = [];
 
     // Recursive scanning helper
@@ -312,22 +327,24 @@ export class AssetOperations {
         return;
       }
 
-      for (const entry of entries) {
-        // Skip hidden files, system files, and symlinks
-        if (isSystemFile(entry.name) || entry.isSymbolicLink()) {
-          continue;
-        }
+      // Skip hidden files, system files, and symlinks
+      const visible = entries.filter((entry) => !isSystemFile(entry.name) && !entry.isSymbolicLink());
+      const imageFiles = visible.filter((entry) => entry.isFile() && isRecognizedImageExtension(entry.name));
 
-        const entryPath = join(folderPath, entry.name);
+      if (imageFiles.length > 0) {
+        // Records are gathered per folder: one folder's records say nothing
+        // about another's, so a single read of the root would blank every
+        // subfolder image's alt text.
+        const records = await assetMetadata.readFolder(this.config, folder);
+        const folderAssets = await Promise.all(imageFiles.map((entry) => this.buildAssetEntry(entry, folder, records)));
+        for (const asset of folderAssets) assets.push(asset);
+      }
 
+      for (const entry of visible) {
         if (entry.isDirectory()) {
-          // Recurse into subdirectories
           const subFolder = folder === '/' ? `/${entry.name}` : `${folder}/${entry.name}`;
-          await scanFolder(entryPath, subFolder);
-        } else if (entry.isFile() && isRecognizedImageExtension(entry.name)) {
-          // Build asset entry from filesystem + manifest
-          const assetEntry = await this.buildAssetEntry(entry, folder, manifestData);
-          assets.push(assetEntry);
+          // oxlint-disable-next-line no-await-in-loop -- preserve deterministic depth-first asset ordering across folders.
+          await scanFolder(join(folderPath, entry.name), subFolder);
         }
       }
     };
@@ -340,85 +357,54 @@ export class AssetOperations {
    * Get asset by filename and optional folder
    */
   async getAsset(filename: string, folder = '/'): Promise<AssetEntry | undefined> {
-    // Resolve actual folder from manifest when caller only provides filename
-    const resolvedFolder = folder === '/' ? await this.resolveFolder(filename) : folder;
-
-    // Compute relative path and full file path
-    const relativePath = resolvedFolder === '/' ? filename : `${resolvedFolder.slice(1)}/${filename}`;
-    const fullPath = this.getAssetPath(filename, resolvedFolder);
-
-    // Check if file exists on disk
+    const relativePath = folder === '/' ? filename : `${folder.slice(1)}/${filename}`;
     let stats: Stats;
     try {
-      stats = await stat(fullPath);
+      stats = await stat(this.getAssetPath(filename, folder));
     } catch {
-      // File doesn't exist
       return undefined;
     }
-
-    if (!stats.isFile()) {
-      return undefined;
-    }
-
-    // Load manifest for enrichment
-    const manifestData = await this.manifest.read();
-    const manifestEntry = manifestData[relativePath];
-
-    // Get dimensions
-    const { width, height, fromCache } = await this.getDimensions(fullPath, manifestEntry);
-
-    // Progressive caching
-    if (!fromCache && width && height) {
-      this.manifest.add(relativePath, { ...manifestEntry, width, height }).catch(() => {});
-    }
-
-    // Derive mimeType from extension
-    const ext = extname(filename).slice(1).toLowerCase();
-    const mimeType = MIME_MAP[ext] || `image/${ext}`;
-
-    return {
-      filename,
-      originalName: manifestEntry?.originalName || filename,
-      mimeType,
-      size: stats.size,
-      width,
-      height,
-      alt: manifestEntry?.alt,
-      uploadedAt: manifestEntry?.uploadedAt || stats.birthtime.toISOString(),
-      uploadedBy: manifestEntry?.uploadedBy,
-      folder: resolvedFolder,
-      tags: manifestEntry?.tags,
-    };
+    if (!stats.isFile()) return undefined;
+    const metadata = await assetMetadata.read(this.config, relativePath);
+    return this.assetEntry(filename, folder, stats, metadata);
   }
 
   /**
    * Delete asset file and manifest entry
    */
   async delete(filename: string, folder = '/'): Promise<{ success: true } | { success: false; error: string }> {
-    // Resolve actual folder from manifest when caller only provides filename
-    const resolvedFolder = folder === '/' ? await this.resolveFolder(filename) : folder;
+    // Resolve the path BEFORE the catch that forgives a missing file: a path
+    // that climbs out of the media library names nothing we may delete.
+    let assetPath: string;
+    try {
+      assetPath = this.getAssetPath(filename, folder);
+    } catch {
+      return { success: false, error: 'Asset not found' };
+    }
 
-    // Compute relative path for manifest
-    const relativePath = resolvedFolder === '/' ? filename : `${resolvedFolder.slice(1)}/${filename}`;
+    try {
+      await assetMetadata.migrateLegacyManifest(this.config);
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : 'Failed to migrate asset metadata' };
+    }
 
-    // Build full file path
-    const filePath = this.getAssetPath(filename, resolvedFolder);
+    const relativePath = folder === '/' ? filename : `${folder.slice(1)}/${filename}`;
 
     // Delete file from disk (ignore if already gone)
     try {
-      await unlink(filePath);
+      await unlink(assetPath);
     } catch {
-      // File may already be gone, continue with manifest cleanup
+      // File may already be gone, continue with metadata cleanup
     }
 
-    // Remove manifest entry
-    await this.manifest.remove(relativePath);
+    await assetMetadata.remove(this.config, relativePath);
     return { success: true };
   }
 
   /**
    * Import an image from a URL (server-side fetch, no CORS issues)
-   * Validates URL against SSRF, enforces 30s timeout, and checks response size.
+   * Validates the URL and every redirect hop against SSRF, enforces 30s timeout,
+   * and checks response size.
    */
   async importFromUrl(
     url: string,
@@ -431,16 +417,43 @@ export class AssetOperations {
       return { success: false, error: err instanceof Error ? err.message : 'Invalid URL' };
     }
 
-    // Fetch with 30-second timeout
+    // Fetch with 30-second timeout, following redirects MANUALLY so every hop's
+    // target runs through the SSRF guard BEFORE it is requested — otherwise a
+    // public URL can redirect into a loopback or link-local (cloud metadata)
+    // address that the initial check would have rejected.
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30_000);
-    let response: Response;
+    let response: Response | undefined;
+    let current = url;
     try {
-      response = await fetch(url, { signal: controller.signal });
+      for (let hop = 0; hop <= MAX_IMPORT_REDIRECTS; hop += 1) {
+        const hopResponse = await fetch(current, { signal: controller.signal, redirect: 'manual' });
+        if (hopResponse.status < 300 || hopResponse.status >= 400) {
+          response = hopResponse;
+          break;
+        }
+        const location = hopResponse.headers.get('location');
+        if (location === null) {
+          return { success: false, error: 'Redirect missing Location header' };
+        }
+        try {
+          // A relative Location is legal and common; resolve it against the URL
+          // that produced it, then validate the absolute result.
+          current = validateFetchUrl(new URL(location, current).toString()).toString();
+        } catch (err) {
+          return { success: false, error: `Redirect blocked: ${err instanceof Error ? err.message : 'Invalid URL'}` };
+        }
+      }
     } catch {
       return { success: false, error: 'Failed to fetch URL' };
     } finally {
       clearTimeout(timeout);
+    }
+
+    // Budget exhausted without a final response — fail closed rather than
+    // treating the last redirect as content
+    if (!response) {
+      return { success: false, error: 'Too many redirects' };
     }
 
     if (!response.ok) {
@@ -455,8 +468,14 @@ export class AssetOperations {
     }
 
     const contentType = response.headers.get('content-type') || '';
-    const urlPath = new URL(url).pathname;
-    const urlFilename = urlPath.split('/').pop() || 'imported-image.jpg';
+    const lastSegment = new URL(url).pathname.split('/').pop() || 'imported-image.jpg';
+    let urlFilename = lastSegment;
+    try {
+      const decoded = decodeURIComponent(lastSegment);
+      if (!/\p{Cc}/u.test(decoded)) urlFilename = decoded.split(/[/\\]/).pop() || lastSegment;
+    } catch {
+      // A malformed escape keeps the filename as written in the address.
+    }
 
     // Read response body and verify actual size
     const arrayBuffer = await response.arrayBuffer();
@@ -476,7 +495,7 @@ export class AssetOperations {
    */
   async listFolder(subpath = '/'): Promise<FolderListing> {
     // Normalize subpath
-    const normalizedSubpath = subpath === '/' ? '/' : '/' + subpath.replace(/^\/+|\/+$/g, '');
+    const normalizedSubpath = subpath === '/' ? '/' : `/${subpath.replace(/^\/+|\/+$/g, '')}`;
 
     // Validate path (prevent path traversal)
     let fullPath: string;
@@ -497,7 +516,7 @@ export class AssetOperations {
 
     // Get subfolders (exclude hidden, symlinks)
     const folders = entries
-      .filter((e) => e.isDirectory() && !e.name.startsWith('.') && !e.isSymbolicLink())
+      .filter((e) => e.isDirectory() && !isSystemFile(e.name) && !e.isSymbolicLink())
       .map((e) => ({
         name: e.name,
         path: normalizedSubpath === '/' ? `/${e.name}` : `${normalizedSubpath}/${e.name}`,
@@ -508,12 +527,11 @@ export class AssetOperations {
       (e) => e.isFile() && !isSystemFile(e.name) && !e.isSymbolicLink() && isRecognizedImageExtension(e.name),
     );
 
-    // Load manifest for enrichment
-    const manifestData = await this.manifest.read();
+    const records = await assetMetadata.readFolder(this.config, normalizedSubpath);
 
     // Build asset entries from filesystem
     const assets = await Promise.all(
-      imageFiles.map((dirent) => this.buildAssetEntry(dirent, normalizedSubpath, manifestData)),
+      imageFiles.map((dirent) => this.buildAssetEntry(dirent, normalizedSubpath, records)),
     );
 
     return { assets, folders };
@@ -524,7 +542,7 @@ export class AssetOperations {
    * @param subpath Folder path relative to assets root
    */
   async createFolder(subpath: string): Promise<{ success: true } | { success: false; error: string }> {
-    if (!subpath || subpath === '/') {
+    if (!subpath || /^\/+$/.test(subpath)) {
       return { success: false, error: 'Cannot create root folder' };
     }
 
@@ -534,6 +552,17 @@ export class AssetOperations {
       fullPath = this.validateSubpath(subpath);
     } catch {
       return { success: false, error: 'Invalid folder path' };
+    }
+
+    const folderSegments = subpath.split('/').filter(Boolean);
+    if (folderSegments.some(isSystemFile)) {
+      return { success: false, error: "Folder names can't start with a dot or be a system file name like Thumbs.db" };
+    }
+    if (/[#?%\\]/.test(subpath)) {
+      return { success: false, error: "Folder names can't contain #, ?, % or \\" };
+    }
+    if (/[\t\n\r]/.test(subpath)) {
+      return { success: false, error: "Folder names can't contain tabs or line breaks" };
     }
 
     try {
@@ -548,47 +577,43 @@ export class AssetOperations {
   }
 
   /**
-   * Update asset metadata (alt text, tags)
+   * Update asset metadata (alt text, tags). The merge happens inside the
+   * record's lock and the saved value is what comes back — the old re-read
+   * afterwards is how a success could report alt text another save had
+   * already written over.
    * @param filename Asset filename
    * @param updates Metadata updates (alt, tags)
    * @param folder Optional folder path (default '/')
    */
   async updateMetadata(
     filename: string,
-    updates: Partial<ManifestEntryData>,
+    updates: AssetMetadataPatch,
     folder = '/',
-  ): Promise<{ success: true; asset: AssetEntry } | { success: false; error: string }> {
-    // Resolve actual folder from manifest when caller only provides filename
-    const resolvedFolder = folder === '/' ? await this.resolveFolder(filename) : folder;
+  ): Promise<
+    { success: true; asset: AssetEntry } | { success: false; reason: 'not-found' | 'write-failed'; error: string }
+  > {
+    const relativePath = folder === '/' ? filename : `${folder.slice(1)}/${filename}`;
 
-    // Compute relative path
-    const relativePath = resolvedFolder === '/' ? filename : `${resolvedFolder.slice(1)}/${filename}`;
-
-    // Check if file exists on disk
-    const fullPath = this.getAssetPath(filename, resolvedFolder);
+    let stats: Stats;
     try {
-      await stat(fullPath);
+      stats = await stat(this.getAssetPath(filename, folder));
     } catch {
-      return { success: false, error: 'Asset not found' };
+      return { success: false, reason: 'not-found', error: 'Asset not found' };
     }
 
-    // Get existing manifest entry
-    const manifestData = await this.manifest.read();
-    const existing = manifestData[relativePath] || {};
-
-    // Merge updates
-    const merged: ManifestEntryData = { ...existing, ...updates };
-
-    // Write back to manifest
-    await this.manifest.add(relativePath, merged);
-
-    // Return updated asset entry
-    const asset = await this.getAsset(filename, resolvedFolder);
-    if (!asset) {
-      return { success: false, error: 'Failed to retrieve updated asset' };
+    let metadata: AssetMetadata;
+    try {
+      await assetMetadata.migrateLegacyManifest(this.config);
+      metadata = await assetMetadata.update(this.config, relativePath, updates);
+    } catch (err) {
+      return {
+        success: false,
+        reason: 'write-failed',
+        error: err instanceof Error ? err.message : 'Failed to save asset metadata',
+      };
     }
 
-    return { success: true, asset };
+    return { success: true, asset: await this.assetEntry(filename, folder, stats, metadata) };
   }
 
   /**
@@ -596,67 +621,38 @@ export class AssetOperations {
    * @param filename Asset filename
    */
   async getUsage(filename: string): Promise<AssetUsage[]> {
-    if (!this.config.contentRoot) {
-      return [];
-    }
-
     const usages: AssetUsage[] = [];
 
     // Search patterns for the asset
     const searchPatterns = [filename, `/assets/uploads/${filename}`, `assets/uploads/${filename}`];
 
-    // Recursively walk the content directory to find all .vxjson files
-    const walkDir = async (dir: string): Promise<string[]> => {
-      const files: string[] = [];
-      let entries: Dirent[];
-      try {
-        entries = await readdir(dir, { withFileTypes: true });
-      } catch {
-        return files;
-      }
-
-      for (const entry of entries) {
-        const fullPath = join(dir, entry.name);
-        if (entry.isDirectory() && !entry.name.startsWith('.')) {
-          files.push(...(await walkDir(fullPath)));
-        } else if (entry.isFile() && entry.name.endsWith('.vxjson')) {
-          files.push(fullPath);
+    const files = await vxjsonFiles(this.config.contentRoot);
+    // Promise.all preserves `files` order while avoiding serial disk reads.
+    const documents = await Promise.all(
+      files.map(async (filePath) => {
+        try {
+          return { filePath, content: await readFile(filePath, 'utf-8') };
+        } catch {
+          return null;
         }
-      }
+      }),
+    );
 
-      return files;
-    };
+    for (const document of documents) {
+      if (document === null) continue;
+      const { filePath, content } = document;
+      if (!searchPatterns.some((pattern) => content.includes(pattern))) continue;
 
-    const vxjsonFiles = await walkDir(this.config.contentRoot);
-
-    for (const filePath of vxjsonFiles) {
+      const relativePath = filePath.replace(this.config.contentRoot, '').replace(/^[/\\]/, '');
+      const pageName = relativePath.replace(/\.vxjson$/, '');
+      let field = 'content';
       try {
-        const content = await readFile(filePath, 'utf-8');
-
-        // Check if any search pattern is found in the file content
-        const found = searchPatterns.some((pattern) => content.includes(pattern));
-
-        if (found) {
-          // Extract page name from file path (remove .vxjson extension)
-          const relativePath = filePath.replace(this.config.contentRoot, '').replace(/^[/\\]/, '');
-          const pageName = relativePath.replace(/\.vxjson$/, '');
-
-          // Try to identify which field contains the reference
-          // Simple approach: look for the pattern in JSON structure
-          let field = 'unknown';
-          try {
-            const json = JSON.parse(content);
-            field = this.findFieldWithAsset(json, searchPatterns) || 'content';
-          } catch {
-            // If JSON parsing fails, just mark as content
-            field = 'content';
-          }
-
-          usages.push({ page: pageName, field });
-        }
+        const json: JsonValue = JSON.parse(content);
+        field = this.findFieldWithAsset(json, searchPatterns) || 'content';
       } catch {
-        // Skip files that can't be read
+        // An unreadable JSON document can still be reported by its text match.
       }
+      usages.push({ page: pageName, field });
     }
 
     return usages;
@@ -682,12 +678,18 @@ export class AssetOperations {
     filename: string,
     folder = '/',
   ): Promise<{ success: true; buffer: Buffer; mimeType: string } | { success: false; error: string }> {
+    // Serve images only: the metadata records live under the same tree and are
+    // nobody's business, and neither is any other file that lands in there.
+    if (!isRecognizedImageExtension(filename)) {
+      return { success: false, error: 'Asset not found' };
+    }
+
     // Build path from folder + filename
     const filePath = this.getAssetPath(filename, folder);
 
-    // Derive mimeType from extension (don't require manifest entry)
+    // Derive mimeType from extension (don't require a metadata record)
     const ext = extname(filename).slice(1).toLowerCase();
-    const mimeType = MIME_MAP[ext] || `image/${ext}`;
+    const mimeType = IMAGE_EXTENSION_MIME[ext] || `image/${ext}`;
 
     try {
       const buffer = await readFile(filePath);
@@ -700,7 +702,7 @@ export class AssetOperations {
   /**
    * Helper to find which field contains an asset reference
    */
-  private findFieldWithAsset(obj: unknown, patterns: string[], path = ''): string | null {
+  private findFieldWithAsset(obj: JsonValue, patterns: string[], path = ''): string | null {
     if (typeof obj === 'string') {
       if (patterns.some((p) => obj.includes(p))) {
         return path || 'root';
@@ -738,8 +740,8 @@ export class AssetOperations {
     targetFolder: string,
   ): Promise<{ success: true; moved: number } | { success: false; error: string }> {
     // Normalize folder paths
-    const normalizedSource = sourceFolder === '/' ? '/' : '/' + sourceFolder.replace(/^\/+|\/+$/g, '');
-    const normalizedTarget = targetFolder === '/' ? '/' : '/' + targetFolder.replace(/^\/+|\/+$/g, '');
+    const normalizedSource = sourceFolder === '/' ? '/' : `/${sourceFolder.replace(/^\/+|\/+$/g, '')}`;
+    const normalizedTarget = targetFolder === '/' ? '/' : `/${targetFolder.replace(/^\/+|\/+$/g, '')}`;
 
     // Validate both folders exist (for non-root folders)
     let sourcePath: string;
@@ -750,6 +752,15 @@ export class AssetOperations {
       targetPath = normalizedTarget === '/' ? this.config.assetsPath : this.validateSubpath(normalizedTarget);
     } catch {
       return { success: false, error: 'Invalid folder path' };
+    }
+
+    // Each name is joined onto both folders, so one with a separator or `..` would reach outside them
+    if (!filenames.every(isBareFilename)) {
+      return { success: false, error: 'Invalid filename' };
+    }
+    // The listing hides system files, and moving the folder's own manifest would drop every asset's metadata
+    if (filenames.some(isSystemFile)) {
+      return { success: false, error: 'Invalid filename' };
     }
 
     // Verify source folder exists
@@ -772,37 +783,57 @@ export class AssetOperations {
       return { success: false, error: 'Target folder does not exist' };
     }
 
-    // Move files on disk first, collect successful moves
-    const moves: { oldPath: string; newPath: string }[] = [];
+    if (normalizedSource === normalizedTarget) return { success: true, moved: 0 };
+
+    const found = await Promise.all(filenames.map((filename) => lstat(join(sourcePath, filename)).catch(() => null)));
+    const notFiles = filenames.filter((_, index) => found[index]?.isFile() === false);
+    if (notFiles.length > 0) return { success: false, error: `Not a file: ${notFiles.join(', ')}` };
+
+    const taken = new Set((await readdir(targetPath)).map((name) => name.toLowerCase()));
+    const conflicts = filenames.filter((filename) => taken.has(filename.toLowerCase()));
+    if (conflicts.length > 0) {
+      return { success: false, error: `Already in the target folder: ${conflicts.join(', ')}` };
+    }
+
+    try {
+      await assetMetadata.migrateLegacyManifest(this.config);
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : 'Failed to migrate asset metadata' };
+    }
+
+    // Move each file with its own record, so one failure cannot take the rest
+    // of the folder's metadata with it
+    let moved = 0;
     for (const filename of filenames) {
-      const sourceFile = join(sourcePath, filename);
-      const targetFile = join(targetPath, filename);
       const oldRelativePath = normalizedSource === '/' ? filename : `${normalizedSource.slice(1)}/${filename}`;
       const newRelativePath = normalizedTarget === '/' ? filename : `${normalizedTarget.slice(1)}/${filename}`;
 
+      // Both folders are checked above, but the names come straight off the
+      // request and a name is free to carry `../` of its own
+      let from: string;
+      let to: string;
       try {
-        await rename(sourceFile, targetFile);
-        moves.push({ oldPath: oldRelativePath, newPath: newRelativePath });
+        from = this.getAssetPath(filename, normalizedSource);
+        to = this.getAssetPath(filename, normalizedTarget);
+      } catch {
+        console.error(`[AssetOperations] Refusing to move ${filename}: it points outside the media library`);
+        continue;
+      }
+
+      try {
+        // oxlint-disable-next-line no-await-in-loop -- each move is committed before its metadata follows; partial failure stays attributable to one filename.
+        await rename(from, to);
       } catch (err) {
         console.error(`[AssetOperations] Failed to move ${filename}:`, err);
+        continue;
       }
+
+      // oxlint-disable-next-line no-await-in-loop -- metadata must follow the file that just moved before the next file starts.
+      await assetMetadata.move(this.config, oldRelativePath, newRelativePath);
+      moved += 1;
     }
 
-    // Single atomic manifest update for all moves (1 read + 1 write)
-    if (moves.length > 0) {
-      await this.manifest.withManifest((data) => {
-        for (const { oldPath, newPath } of moves) {
-          const entry = data[oldPath];
-          if (entry) {
-            delete data[oldPath];
-            data[newPath] = entry;
-          }
-        }
-        return data;
-      });
-    }
-
-    return { success: true, moved: moves.length };
+    return { success: true, moved };
   }
 
   /**

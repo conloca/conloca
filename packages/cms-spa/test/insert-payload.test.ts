@@ -3,8 +3,8 @@ import {
   buildInsertPayload,
   dispatchInsert,
   type InsertJsxPayload,
-} from '../src/components/editor/insert-menu/insert-payload';
-import type { MdxJsxComponentDescriptor, MdxSnippetDescriptor } from '../src/mdx-components';
+} from '../src/components/editor/insert-menu/insert-payload.js';
+import type { MdxJsxComponentDescriptor, MdxSnippetDescriptor } from '../src/mdx-components.js';
 
 describe('buildInsertPayload', () => {
   test('produces an empty payload for a propless flow descriptor', () => {

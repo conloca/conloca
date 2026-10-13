@@ -1,7 +1,7 @@
 /// <reference lib="dom" />
 import { afterEach, describe, expect, test } from 'bun:test';
 import { cleanup, render, screen } from '@testing-library/react';
-import { AssetScopePill } from '../src/media/AssetScopePill';
+import { AssetScopePill } from '../src/media/AssetScopePill.js';
 
 afterEach(() => {
   cleanup();

@@ -52,7 +52,7 @@ export function SearchableSelect({ options, value, onChange, placeholder, ariaLa
   const [activeIndex, setActiveIndex] = useState(0);
 
   const inputRef = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLUListElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const listboxId = useId();
 
@@ -67,13 +67,6 @@ export function SearchableSelect({ options, value, onChange, placeholder, ariaLa
     return matches.slice(0, MAX_VISIBLE);
   }, [options, query]);
 
-  // Reset active index whenever the filtered list changes — keeps the
-  // highlight on a row that actually exists. Without this, navigating
-  // could land on an index beyond the new list length.
-  useEffect(() => {
-    setActiveIndex(0);
-  }, []);
-
   // Close on outside click. Use mousedown not click so a click on a
   // list item still fires its onClick before we close (click ordering
   // would otherwise teardown the popover before the selection runs).
@@ -83,6 +76,7 @@ export function SearchableSelect({ options, value, onChange, placeholder, ariaLa
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
         setOpen(false);
         setQuery('');
+        setActiveIndex(0);
       }
     };
     document.addEventListener('mousedown', onDown);
@@ -103,6 +97,7 @@ export function SearchableSelect({ options, value, onChange, placeholder, ariaLa
     onChange(opt.value);
     setOpen(false);
     setQuery('');
+    setActiveIndex(0);
     inputRef.current?.blur();
   };
 
@@ -117,6 +112,7 @@ export function SearchableSelect({ options, value, onChange, placeholder, ariaLa
         value={open ? query : selectedLabel}
         onChange={(e) => {
           setQuery(e.target.value);
+          setActiveIndex(0);
           if (!open) setOpen(true);
         }}
         onFocus={() => {
@@ -125,6 +121,7 @@ export function SearchableSelect({ options, value, onChange, placeholder, ariaLa
           // can scroll or start typing fresh. The displayed label
           // restores on blur if nothing is committed.
           setQuery('');
+          setActiveIndex(0);
         }}
         onKeyDown={(e) => {
           if (e.key === 'ArrowDown') {
@@ -142,6 +139,7 @@ export function SearchableSelect({ options, value, onChange, placeholder, ariaLa
             e.preventDefault();
             setOpen(false);
             setQuery('');
+            setActiveIndex(0);
             inputRef.current?.blur();
           }
         }}
@@ -150,14 +148,18 @@ export function SearchableSelect({ options, value, onChange, placeholder, ariaLa
         aria-autocomplete="list"
         aria-expanded={open}
         aria-controls={listboxId}
+        aria-activedescendant={open && filtered[activeIndex] ? `${listboxId}-option-${activeIndex}` : undefined}
         role="combobox"
       />
       {open && filtered.length > 0 && (
-        <ul ref={listRef} id={listboxId} className="conloca-searchable-select__list">
+        <div ref={listRef} id={listboxId} role="listbox" className="conloca-searchable-select__list">
           {filtered.map((opt, i) => (
-            <li
+            <div
+              id={`${listboxId}-option-${i}`}
               key={opt.value}
+              role="option"
               aria-selected={i === activeIndex}
+              tabIndex={-1}
               className={
                 i === activeIndex
                   ? 'conloca-searchable-select__option conloca-searchable-select__option--active'
@@ -172,9 +174,9 @@ export function SearchableSelect({ options, value, onChange, placeholder, ariaLa
               onMouseEnter={() => setActiveIndex(i)}
             >
               {opt.label}
-            </li>
+            </div>
           ))}
-        </ul>
+        </div>
       )}
       {open && filtered.length === 0 && (
         <div className="conloca-searchable-select__empty">No matches{query ? ` for "${query}"` : ''}</div>

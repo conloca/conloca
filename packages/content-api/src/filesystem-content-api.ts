@@ -1,28 +1,38 @@
-import { type FileHandle, mkdir, open, readdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
-import { xxh64 } from './xxhash';
+import { access, mkdir, open, readdir, readFile, rename, rm, stat, unlink, writeFile } from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
 import matter from 'gray-matter';
-import { dirname, join, resolve } from 'path';
 import sortKeys from 'sort-keys';
-import { Blocks } from './blocks';
-import type { ContentAPI } from './content-api.interface';
-import { filterContentWithIndexes } from './content-filters';
-import { ContentIndex } from './content-index';
+import type { ContentAPI } from './content-api.interface.js';
+import { filterContentWithIndexes } from './content-filters.js';
+import { ContentIndex, duplicateIdMessage, type IndexProblem, unknownSiteMessage } from './content-index.js';
 import {
   analyzeUpdateScope,
   buildLocaleVersion,
   buildPathnameHistory,
+  checkEntryName,
+  checkMdxPagesPathname,
+  checkPagePathname,
   generateContentId,
   isContentPublished,
+  type PathnameRefusal,
   shouldUpdateModifiedTimestamp,
   UPDATE_SCOPE,
   updatePublishDates,
   validateAndPrepareMetadata,
   validateCreateContent,
-} from './content-operations';
-import { localesOf, mapSiteNames, resolvePublishDate, serializeMdxWithFrontmatter } from './content-utils';
-import { Data } from './data';
-import { calculateEtagsFromMdxBuffer, findMdxContentStartPosition, parseDualEtag } from './etag-utils';
-import { Site } from './site';
+} from './content-operations.js';
+import { type ContentPathLayout, parseContentPathLayout, parseLocaleFilename } from './content-path.js';
+import {
+  applyMetaPatch,
+  localesOf,
+  mapSiteNames,
+  resolvePublishDate,
+  serializeMdxWithFrontmatter,
+} from './content-utils.js';
+import { Data } from './data.js';
+import { calculateEtagsFromMdxBuffer, findMdxContentStartPosition, parseDualEtag } from './etag-utils.js';
+import { Fragments } from './fragments.js';
+import { Site } from './site.js';
 import type {
   BatchOperationResult,
   BatchResult,
@@ -33,6 +43,7 @@ import type {
   ContentManifest,
   ContentMeta,
   ContentProp,
+  ContentType,
   CreateContentInput,
   CreateResult,
   DeleteLocaleInput,
@@ -48,8 +59,9 @@ import type {
   UpdateLocaleInput,
   UpdateResult,
   VXJSONFile,
-} from './types';
-import { atomicWriteFile } from './utils/atomic-write';
+} from './types.js';
+import { atomicWriteFile } from './utils/atomic-write.js';
+import { xxh64 } from './xxhash.js';
 
 interface ReindexResult {
   filesProcessed: number;
@@ -58,10 +70,10 @@ interface ReindexResult {
   errors?: number;
   // Return manifests of updated locales (without content)
   updated: LocalizedManifest[];
-  deleted?: Array<{ id: string; locale: string; kind: 'page' | 'block' | 'data' }>;
+  deleted?: Array<{ id: string; locale: string; kind: 'page' | 'fragment' | 'data' }>;
 }
 
-import { VXJSON } from './vxjson';
+import { VXJSON } from './vxjson.js';
 
 // Helper to ensure we have an Error object
 function ensureError(error: unknown): Error {
@@ -73,6 +85,15 @@ function ensureError(error: unknown): Error {
 
 // Reusable TextDecoder instance - safe to reuse as it's stateless
 const textDecoder = new TextDecoder();
+
+async function readFilePrefix(filePath: string, buffer: Uint8Array): Promise<number> {
+  const handle = await open(filePath, 'r');
+  try {
+    return (await handle.read(buffer, 0, buffer.byteLength, 0)).bytesRead;
+  } finally {
+    await handle.close();
+  }
+}
 
 // Parse 4KB MDX content - extracts frontmatter from buffer
 function parse4KBMDX(
@@ -89,6 +110,10 @@ function parse4KBMDX(
 } {
   // Only convert to string what we need
   const partialContent = textDecoder.decode(buffer.subarray(0, bytesRead));
+  // Empty options opt out of gray-matter's module-level memo cache — a plain
+  // object keyed by the raw input, so inputs naming an Object.prototype member
+  // ('valueOf', 'toString', …) return the inherited member instead of a parse.
+  // Same at every matter() call below.
   const { data: frontmatter } = matter(partialContent, {});
 
   // Find where content starts (after second ---)
@@ -136,7 +161,7 @@ function parse4KBMDX(
  *
  * Stores content as files on disk in a git-friendly format:
  * - Pages: /{site}/pages/{filename}.{locale}.vxjson
- * - Blocks: /blocks/{collection}/{filename}.{locale}.{mdx|vxjson}
+ * - Fragments: /fragments/{collection}/{filename}.{locale}.{mdx|vxjson}
  *
  * ## Indexing
  *
@@ -170,32 +195,52 @@ function parse4KBMDX(
 export async function readSitesConfig(contentRoot: string): Promise<SitesConfig> {
   const absoluteContentRoot = resolve(contentRoot);
   const sitesPath = join(absoluteContentRoot, 'sites.json');
+  let content: string;
   try {
-    const content = await readFile(sitesPath, 'utf-8');
-    const parsed = JSON.parse(content);
-
-    // Validate the structure
-    if (!parsed.sites || typeof parsed.sites !== 'object') {
-      console.warn(
-        `Warning: sites.json has invalid structure at ${sitesPath}. Expected 'sites' property. Using default configuration.`,
-      );
-      return { sites: {}, globalLocales: ['en'] };
-    }
-    if (!parsed.globalLocales || !Array.isArray(parsed.globalLocales)) {
-      console.warn(
-        `Warning: sites.json is missing 'globalLocales' array at ${sitesPath}. Using default global locales.`,
-      );
-      return {
-        sites: parsed.sites,
-        globalLocales: ['en'],
-      };
-    }
-    return parsed;
+    content = await readFile(sitesPath, 'utf-8');
   } catch {
-    // Handle missing sites.json gracefully
+    // A genuinely absent sites.json is a normal starting state.
     console.warn(`Warning: sites.json is missing at ${sitesPath}. Using empty configuration.`);
     return { sites: {}, globalLocales: ['en'] };
   }
+
+  // Tolerating a malformed sites.json is deliberate ("Handle invalid sites.json gracefully"). What
+  // was not deliberate is the diagnosis: this used to share the catch above
+  // and report the file as MISSING, naming a path where it plainly sits,
+  // while every page silently dropped out of every site. Say what is
+  // actually wrong; the tolerance itself is unchanged.
+  let parsed: SitesConfig;
+  try {
+    parsed = JSON.parse(content);
+  } catch (error) {
+    console.warn(
+      `Warning: sites.json at ${sitesPath} is not valid JSON (${messageOf(error)}). ` +
+        'Using empty configuration — every site will be empty until this is fixed.',
+    );
+    return { sites: {}, globalLocales: ['en'] };
+  }
+  // Validate the structure. `null` is valid JSON, so `parsed` itself needs
+  // the null check before anything reads a property off it.
+  if (!parsed?.sites || typeof parsed.sites !== 'object') {
+    console.warn(
+      `Warning: sites.json has invalid structure at ${sitesPath}. Expected 'sites' property. Using default configuration.`,
+    );
+    return { sites: {}, globalLocales: ['en'] };
+  }
+  if (!parsed.globalLocales || !Array.isArray(parsed.globalLocales)) {
+    console.warn(`Warning: sites.json is missing 'globalLocales' array at ${sitesPath}. Using default global locales.`);
+    return {
+      sites: parsed.sites,
+      globalLocales: ['en'],
+    };
+  }
+  return parsed;
+}
+
+export type { IndexProblem } from './content-index.js';
+
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 export class FileSystemContentAPI implements ContentAPI {
@@ -203,7 +248,7 @@ export class FileSystemContentAPI implements ContentAPI {
   private absoluteContentRoot: string;
   private contentIndex: ContentIndex;
   readonly sitesConfig: SitesConfig;
-  readonly blocks: Blocks;
+  readonly fragments: Fragments;
   readonly data: Data;
   private readonly sites: Record<string, Site>;
 
@@ -229,7 +274,6 @@ export class FileSystemContentAPI implements ContentAPI {
 
   private constructor(
     contentRoot: string,
-    canvasDir: string | undefined,
     sitesConfig: SitesConfig,
     contentIndex: ContentIndex,
     mdxPagesOptions?: {
@@ -256,7 +300,6 @@ export class FileSystemContentAPI implements ContentAPI {
     // Store absolute path for file operations
     this.absoluteContentRoot = resolve(this.contentRoot);
 
-    // TODO: Use canvasDir for canvas/unlinked components
     this.sitesConfig = sitesConfig;
     this.contentIndex = contentIndex;
 
@@ -308,8 +351,8 @@ export class FileSystemContentAPI implements ContentAPI {
     merged.add(this.mdxPagesDefaultLocale);
     this.availableLocales = merged;
 
-    // Initialize blocks
-    this.blocks = new Blocks(this, this.contentIndex.getBlockIndex());
+    // Initialize fragments
+    this.fragments = new Fragments(this, this.contentIndex.getFragmentIndex());
 
     // Initialize data
     this.data = new Data(this, this.contentIndex.getDataIndex());
@@ -325,7 +368,6 @@ export class FileSystemContentAPI implements ContentAPI {
   }
 
   static async create(options: ContentAPIOptions): Promise<FileSystemContentAPI> {
-    const { canvasDir } = options;
     // Keep contentRoot as provided (will be normalized in constructor)
     const contentRoot = options.contentRoot;
 
@@ -333,7 +375,7 @@ export class FileSystemContentAPI implements ContentAPI {
     let sitesConfig = await readSitesConfig(contentRoot);
 
     // Apply the top-level locales option as the authoritative source.
-    // We expand sitesConfig so that the BlockIndex (which keys on
+    // We expand sitesConfig so that the FragmentIndex (which keys on
     // globalLocales) and the resolved SiteIndex (which keys on the
     // site's locales array) both have slots for every option-declared
     // locale. Without this, the parser would correctly identify a file's
@@ -367,7 +409,6 @@ export class FileSystemContentAPI implements ContentAPI {
     // Create instance (not cached)
     const api = new FileSystemContentAPI(
       contentRoot,
-      canvasDir,
       sitesConfig,
       contentIndex,
       {
@@ -381,7 +422,15 @@ export class FileSystemContentAPI implements ContentAPI {
       },
     );
 
-    // Index all content files (only if index is empty)
+    // Index all content files (only if index is empty).
+    //
+    // FileSystemContentAPI continues to hydrate via parseFileHeaderWithRepair
+    // (legacy path), which performs read-repair side effects on disk (renaming
+    // missing-locale files, rewriting non-canonical VXJSON, adding missing
+    // id/created/modified). ContentIndex.indexAll(backend) is the newer,
+    // backend-agnostic hydration path for content that is not on disk;
+    // FileSystemContentAPI's behavior must stay identical, so this call site
+    // keeps the legacy path until the repair side effects move behind a backend.
     if (contentIndex.entryCount === 0) {
       await api.indexAllContent();
     }
@@ -390,50 +439,103 @@ export class FileSystemContentAPI implements ContentAPI {
   }
 
   /**
+   * Hydrate the content index for this FileSystemContentAPI by scanning the
+   * content root and running parseFileHeaderWithRepair on each file. This is
+   * the legacy hydration path that preserves the filesystem read-repair
+   * behavior (file renames, canonical-form rewrites, id/timestamp backfill).
+   *
+   * ContentIndex.indexAll(backend) is the backend-agnostic replacement for
+   * content that is not on disk; this private method exists so FileSystemContentAPI
+   * can keep its repair-on-read side effects until they are lifted onto a
+   * dedicated FileSystemReaderBackend field.
+   */
+  private async indexAllContent(): Promise<void> {
+    // Also drops the previous problems: they describe an index that no longer exists.
+    this.contentIndex.clear();
+
+    const files = await this.scanContentFiles();
+    const OPTIMAL_BATCH_SIZE = 1000;
+    console.debug(`Indexing ${files.length} content files...`);
+
+    // Which file claimed each id+locale — same guard ContentIndex.indexAll
+    // carries. Without it a duplicated file merges into the first one's
+    // locale slot and a page silently stops existing, and this legacy path
+    // is the one every local dev server and Astro build hydrates through.
+    const claimedBy = new Map<string, string>();
+
+    // Reuse a small pool of 4KB buffers across the batch; matches the
+    // existing reindex() loop. parseFileHeaderWithRepair owns the buffer
+    // contract (reads up to 4096 bytes from offset 0).
+    const buffers = Array.from({ length: Math.min(files.length, 100) }, () => new Uint8Array(4096));
+
+    for (let i = 0; i < files.length; i += OPTIMAL_BATCH_SIZE) {
+      const batch = files.slice(i, i + OPTIMAL_BATCH_SIZE);
+      await Promise.all(
+        batch.map(async (filePath, batchIndex) => {
+          const buffer = buffers[(i + batchIndex) % buffers.length];
+          try {
+            const result = await this.parseFileHeaderWithRepair(filePath, buffer);
+            if (result) {
+              // Same reason as the shared indexAll loop: a page under a site
+              // sites.json does not declare would be filed nowhere and
+              // silently vanish from every lookup and build.
+              if (
+                result.manifest.kind === 'page' &&
+                result.manifest.site &&
+                !this.contentIndex.hasSite(result.manifest.site)
+              ) {
+                this.recordIndexProblem(filePath, 'unknown-site', unknownSiteMessage(result.manifest.site));
+                return;
+              }
+              const claim = `${result.manifest.id}::${result.localeVersion.locale}`;
+              const claimant = claimedBy.get(claim);
+              if (claimant !== undefined && claimant !== filePath) {
+                this.recordIndexProblem(
+                  filePath,
+                  'duplicate-id',
+                  duplicateIdMessage(result.manifest.id, result.localeVersion.locale, claimant),
+                );
+                return;
+              }
+              claimedBy.set(claim, filePath);
+              this.contentIndex.addContent(result.manifest, result.localeVersion, result.content);
+            }
+          } catch (error) {
+            console.error(`Failed to index ${filePath}: ${messageOf(error)}`);
+            this.recordIndexProblem(filePath, 'index-error', messageOf(error));
+          }
+        }),
+      );
+    }
+  }
+
+  /**
+   * Record a file the indexer could not read. Signature matches the `onError`
+   * callback of ContentIndex.indexAll so it can be handed over unchanged when
+   * this class migrates off the legacy repair-on-read hydration path. The
+   * problems live on the index itself, not on this instance: the index is
+   * cached per content root, and a later instance over the same root reuses it
+   * without re-indexing, so instance-local problems would vanish.
+   */
+  private recordIndexProblem(path: string, reason: string, message: string): void {
+    this.contentIndex.recordProblem(path, reason, message);
+  }
+
+  /**
+   * Files the indexer could not read. They are absent from listAllContent(),
+   * so any caller that treats that list as complete — `conloca doctor`, most
+   * of all — must consult this to avoid reporting success over broken content.
+   */
+  getIndexProblems(): readonly IndexProblem[] {
+    return this.contentIndex.getProblems();
+  }
+
+  /**
    * Clear all caches - useful for testing
    */
   static clearCaches(): void {
     ContentIndex.clearCache();
     // TODO: CanvasIndex.clearCache() when implemented
-  }
-
-  private async indexAllContent(): Promise<void> {
-    // Clear existing indexes
-    this.contentIndex.clear();
-
-    // Scan content directory
-    const files = await this.scanContentFiles();
-
-    // Use optimized batch size based on benchmarks
-    const OPTIMAL_BATCH_SIZE = 1000;
-
-    console.debug(`Indexing ${files.length} content files...`);
-
-    // Pre-allocate reusable buffers for the entire indexing operation
-    // Only allocate as many as we need (up to batch size)
-    const bufferCount = Math.min(files.length, OPTIMAL_BATCH_SIZE);
-    const buffers = Array.from({ length: bufferCount }, () => new Uint8Array(4096));
-
-    for (let i = 0; i < files.length; i += OPTIMAL_BATCH_SIZE) {
-      const batch = files.slice(i, i + OPTIMAL_BATCH_SIZE);
-
-      // Process batch in parallel - winner of benchmarks
-      await Promise.all(
-        batch.map(async (filePath, index) => {
-          try {
-            const result = await this.parseFileHeaderWithRepair(filePath, buffers[index]);
-            if (result) {
-              const { manifest, localeVersion, content } = result;
-
-              // Add to index with content if we have it
-              this.contentIndex.addContent(manifest, localeVersion, content);
-            }
-          } catch (error) {
-            console.error(`Failed to index ${filePath}:`, error);
-          }
-        }),
-      );
-    }
   }
 
   private async parseFileHeaderWithRepair(
@@ -446,25 +548,21 @@ export class FileSystemContentAPI implements ContentAPI {
     bytesRead: number;
     content?: ContentData;
   } | null> {
-    let handle: FileHandle | undefined;
     let bytesRead = 0;
     let filePath = originalFilePath; // Use a local variable that can be updated if file is renamed
 
     try {
-      handle = await open(filePath, 'r');
-      bytesRead = (await handle.read(buffer, 0, 4096, 0)).bytesRead;
+      bytesRead = await readFilePrefix(filePath, buffer);
     } catch (error) {
       console.error(`Error reading ${filePath}:`, error);
       throw error;
-    } finally {
-      await handle?.close();
     }
 
     try {
       // Now parse the buffer content
 
       // Parse file to extract metadata
-      let relativePath = filePath.replace(this.absoluteContentRoot + '/', '');
+      let relativePath = filePath.replace(`${this.absoluteContentRoot}/`, '');
       let parts = relativePath.split('/');
 
       // Determine site/collection structure
@@ -489,18 +587,18 @@ export class FileSystemContentAPI implements ContentAPI {
         data?: Record<string, unknown>; // For data collection entries
       }
       let parsedData: ParsedMetadata = {};
-      let kind: 'block' | 'page' | 'data';
+      let kind: 'fragment' | 'page' | 'data';
 
       // Files under the optional mdxPagesRoot are kind:'page' + type:'mdx',
       // independent of the directory tree rooted at absoluteContentRoot. The
       // leading prefix is stripped here; locale lives as a directory segment
       // ({locale}/{slug}.mdx for non-default locales, {slug}.mdx at the root
       // for the default locale).
-      if (this.absoluteMdxPagesRoot && filePath.startsWith(this.absoluteMdxPagesRoot + '/')) {
+      if (this.absoluteMdxPagesRoot && filePath.startsWith(`${this.absoluteMdxPagesRoot}/`)) {
         kind = 'page';
         site = this.mdxPagesSite;
         collection = this.mdxPagesCollection;
-        const mdxRelativePath = filePath.replace(this.absoluteMdxPagesRoot + '/', '');
+        const mdxRelativePath = filePath.replace(`${this.absoluteMdxPagesRoot}/`, '');
         const mdxParts = mdxRelativePath.split('/');
         const mdxFilename = mdxParts[mdxParts.length - 1];
 
@@ -516,31 +614,31 @@ export class FileSystemContentAPI implements ContentAPI {
           const slugParts = mdxParts.slice(1);
           pathname =
             slugParts[slugParts.length - 1] === 'index'
-              ? '/' + slugParts.slice(0, -1).join('/') || '/'
-              : '/' + slugParts.join('/');
+              ? `/${slugParts.slice(0, -1).join('/')}`
+              : `/${slugParts.join('/')}`;
         } else {
           locale = this.mdxPagesDefaultLocale;
           pathname =
             mdxParts[mdxParts.length - 1] === 'index'
-              ? '/' + mdxParts.slice(0, -1).join('/') || '/'
-              : '/' + mdxParts.join('/');
+              ? `/${mdxParts.slice(0, -1).join('/')}`
+              : `/${mdxParts.join('/')}`;
         }
 
         parsedData = parse4KBMDX(buffer, bytesRead);
-      } else if (parts[0] === 'blocks') {
-        kind = 'block';
+      } else if (parts[0] === 'fragments') {
+        kind = 'fragment';
 
-        // Check if block is directly in blocks/ directory (no collection subdirectory)
+        // Check if fragment is directly in fragments/ directory (no collection subdirectory)
         if (parts.length === 2) {
-          // Block is directly in blocks/ directory, needs to be moved to 'general' collection
-          collection = 'general';
+          // Keep the direct layout unless the repair move succeeds.
+          collection = '';
           const filename = parts[1];
 
           // Create the general directory if it doesn't exist
-          const generalDir = join(this.absoluteContentRoot, 'blocks', 'general');
+          const generalDir = join(this.absoluteContentRoot, 'fragments', 'general');
           try {
             await mkdir(generalDir, { recursive: true });
-          } catch (error) {
+          } catch {
             // Directory might already exist, that's fine
           }
 
@@ -548,50 +646,47 @@ export class FileSystemContentAPI implements ContentAPI {
           const newFilePath = join(generalDir, filename);
 
           try {
-            await handle?.close(); // Close the current file handle before moving
-            handle = undefined;
-
             // Check if target file already exists
             try {
-              const targetHandle = await open(newFilePath, 'r');
-              await targetHandle.close();
-              console.warn(`Cannot move ${filename} to blocks/general/: target file already exists`);
-            } catch (error) {
+              await access(newFilePath);
+              console.warn(`Cannot move ${filename} to fragments/general/: target file already exists`);
+            } catch {
               // Target doesn't exist, safe to move
               await rename(filePath, newFilePath);
-              console.log(`Repaired: Moved ${filename} to blocks/general/ collection`);
+              console.log(`Repaired: Moved ${filename} to fragments/general/ collection`);
 
-              // Update filePath to the new path for further processing
+              // The file now uses the repaired collection layout.
+              collection = 'general';
               filePath = newFilePath;
 
               // Update relativePath and parts for the new file path
-              relativePath = filePath.replace(this.absoluteContentRoot + '/', '');
+              relativePath = filePath.replace(`${this.absoluteContentRoot}/`, '');
               parts = relativePath.split('/');
 
-              // Re-open the file with the new path
-              handle = await open(filePath, 'r');
-              bytesRead = (await handle.read(buffer, 0, 4096, 0)).bytesRead;
+              bytesRead = await readFilePrefix(filePath, buffer);
             }
           } catch (moveError) {
             console.error(`Failed to move ${filename} to general collection:`, moveError);
             // Continue processing with original file
-            handle = await open(filePath, 'r');
-            bytesRead = (await handle.read(buffer, 0, 4096, 0)).bytesRead;
+            bytesRead = await readFilePrefix(filePath, buffer);
           }
         } else {
-          // Block is in a collection subdirectory
+          // Fragment is in a collection subdirectory
           collection = parts[1];
         }
 
         const filename = parts[parts.length - 1];
         // Extract name and locale from filename: hero.en.mdx -> name: hero, locale: en
-        // Also handle files without locale: hero.mdx -> name: hero, locale: default from sites.json
-        const matchWithLocale = filename.match(/^(.+)\.(\w+)\.(mdx|vxjson)$/);
+        // Also handle files without locale: hero.mdx -> name: hero, locale: default from sites.json.
+        // The locale grammar is the shared one (content-path.ts): a suffix that is not
+        // a locale ('hero.v2.mdx') takes the rename repair below instead of being
+        // indexed under a made-up locale.
+        const localeSuffix = parseLocaleFilename(filename);
         const matchWithoutLocale = filename.match(/^(.+)\.(mdx|vxjson)$/);
 
-        if (matchWithLocale) {
-          name = matchWithLocale[1];
-          locale = matchWithLocale[2];
+        if (localeSuffix && localeSuffix.extension !== 'json') {
+          name = localeSuffix.base;
+          locale = localeSuffix.locale;
         } else if (matchWithoutLocale) {
           name = matchWithoutLocale[1];
           // Use default locale from sites config instead of hardcoded 'en'
@@ -606,16 +701,11 @@ export class FileSystemContentAPI implements ContentAPI {
 
           // Check if target file already exists
           try {
-            await handle?.close(); // Close the current file handle before renaming
-            handle = undefined;
-
-            // Try to open the target file to check if it exists
-            const targetHandle = await open(newFilePath, 'r');
-            await targetHandle.close();
+            await access(newFilePath);
 
             // Target file exists, skip renaming to avoid conflict
             console.warn(`Cannot rename ${filename} to ${newFilename}: target file already exists`);
-          } catch (error) {
+          } catch {
             // Target file doesn't exist, safe to rename
             console.log(`Target file doesn't exist, proceeding with rename`);
             try {
@@ -626,17 +716,14 @@ export class FileSystemContentAPI implements ContentAPI {
               filePath = newFilePath;
 
               // Update relativePath and parts for the new file path
-              relativePath = filePath.replace(this.absoluteContentRoot + '/', '');
+              relativePath = filePath.replace(`${this.absoluteContentRoot}/`, '');
               parts = relativePath.split('/');
 
-              // Re-open the file with the new path
-              handle = await open(filePath, 'r');
-              bytesRead = (await handle.read(buffer, 0, 4096, 0)).bytesRead;
+              bytesRead = await readFilePrefix(filePath, buffer);
             } catch (renameError) {
               console.error(`Failed to rename ${filename}:`, renameError);
               // Continue processing with original file
-              handle = await open(filePath, 'r');
-              bytesRead = (await handle.read(buffer, 0, 4096, 0)).bytesRead;
+              bytesRead = await readFilePrefix(filePath, buffer);
             }
           }
         }
@@ -653,12 +740,12 @@ export class FileSystemContentAPI implements ContentAPI {
         collection = parts[1];
 
         const filename = parts[parts.length - 1];
-        // Extract name and locale from filename: testimonial.en.json -> name: testimonial, locale: en
-        // Use strict locale pattern matching blocks: 2-letter code with optional region (en, en-US)
-        const match = filename.match(/^(.+)\.([a-z]{2}(?:-[A-Z]{2})?)\.json$/);
-        if (match) {
-          name = match[1];
-          locale = match[2];
+        // Extract name and locale from filename: testimonial.en.json -> name: testimonial, locale: en.
+        // The locale grammar is the shared one (content-path.ts).
+        const localeSuffix = parseLocaleFilename(filename);
+        if (localeSuffix?.extension === 'json') {
+          name = localeSuffix.base;
+          locale = localeSuffix.locale;
         }
 
         // Parse JSON to get ID, metadata, and data
@@ -677,7 +764,8 @@ export class FileSystemContentAPI implements ContentAPI {
             name,
           };
         } catch (error) {
-          console.error(`Failed to parse JSON data file ${filePath}:`, error);
+          console.error(`Failed to parse JSON data file ${filePath}: ${messageOf(error)}`);
+          this.recordIndexProblem(filePath, 'malformed-json', messageOf(error));
           return null;
         }
       } else {
@@ -694,17 +782,24 @@ export class FileSystemContentAPI implements ContentAPI {
         // above) and won't reach this branch.
         const pathParts = parts.slice(2); // Remove site/collection
         const filename = pathParts[pathParts.length - 1];
-        const match = filename.match(/^(.+)\.(\w+)\.(vxjson|mdx)$/);
-        if (match) {
-          locale = match[2];
-          // Replace filename with basename
-          pathParts[pathParts.length - 1] = match[1];
-          // index files map to parent: /index -> /, /foo/index -> /foo
-          pathname =
-            pathParts[pathParts.length - 1] === 'index'
-              ? '/' + pathParts.slice(0, -1).join('/') || '/'
-              : '/' + pathParts.join('/');
+        // One grammar with the header parser and every other reader (content-path.ts).
+        // A page file with no parseable locale suffix is NOT content: indexing it
+        // under the fallback locale filed it with no pathname at all, invisible to
+        // every pathname lookup while still occupying that locale slot. parseFilePath
+        // (the reindex path) has always refused these — now both halves agree.
+        const localeSuffix = filename ? parseLocaleFilename(filename) : null;
+        if (!localeSuffix || localeSuffix.extension === 'json') {
+          console.warn(`Skipping page file without a locale suffix: ${filePath}`);
+          return null;
         }
+        locale = localeSuffix.locale;
+        // Replace filename with basename
+        pathParts[pathParts.length - 1] = localeSuffix.base;
+        // index files map to parent: /index -> /, /foo/index -> /foo
+        pathname =
+          pathParts[pathParts.length - 1] === 'index'
+            ? `/${pathParts.slice(0, -1).join('/')}`
+            : `/${pathParts.join('/')}`;
 
         // Parse format-appropriately. parse4KBMDX reads frontmatter from the
         // MDX header; VXJSON.parse4KB reads the leading JSON metadata.
@@ -733,6 +828,7 @@ export class FileSystemContentAPI implements ContentAPI {
         ...(parsedData.previousPathnames && { previousPathnames: parsedData.previousPathnames }),
         ...(name && { name }),
         meta: parsedData.meta || { title: name || 'Untitled' },
+        sourcePath: filePath,
       };
 
       // Build ContentManifest (without content)
@@ -753,7 +849,7 @@ export class FileSystemContentAPI implements ContentAPI {
       // Check if we need to repair the file first (missing required fields)
       if (needsRepair) {
         // Perform repair and get the repaired content
-        const repairedData = await this.performReadRepair(filePath, manifest, locale);
+        const repairedData = await this.performReadRepair(filePath, manifest);
         if (repairedData) {
           content = repairedData.content;
           localeVersion.etag = repairedData.etag;
@@ -762,6 +858,7 @@ export class FileSystemContentAPI implements ContentAPI {
         }
         // Repair failed, skip this file
         console.error(`Failed to repair ${filePath}, skipping`);
+        this.recordIndexProblem(filePath, 'repair-failed', 'Read-repair failed');
         return null;
       }
 
@@ -803,7 +900,7 @@ export class FileSystemContentAPI implements ContentAPI {
             // Content field is not last or invalid JSON - repair immediately
 
             // Perform repair and get the repaired content
-            const repairedData = await this.performReadRepair(filePath, manifest, locale);
+            const repairedData = await this.performReadRepair(filePath, manifest);
             if (repairedData) {
               content = repairedData.content;
               localeVersion.etag = repairedData.etag;
@@ -812,6 +909,7 @@ export class FileSystemContentAPI implements ContentAPI {
             }
             // Repair failed, skip this file
             console.error(`Failed to repair ${filePath}, skipping`);
+            this.recordIndexProblem(filePath, 'repair-failed', 'Read-repair failed');
             return null;
           }
           localeVersion.etag = etagResult.contentEtag
@@ -823,7 +921,8 @@ export class FileSystemContentAPI implements ContentAPI {
       // Return both for indexing
       return { manifest, locale, localeVersion, bytesRead, content };
     } catch (error) {
-      console.error(`Error indexing ${originalFilePath}:`, error);
+      console.error(`Error indexing ${originalFilePath}: ${messageOf(error)}`);
+      this.recordIndexProblem(originalFilePath, 'parse-failed', messageOf(error));
       return null;
     }
   }
@@ -835,7 +934,6 @@ export class FileSystemContentAPI implements ContentAPI {
   private async performReadRepair(
     filePath: string,
     manifest: ContentManifest,
-    locale: string,
   ): Promise<{
     content: ContentData;
     etag: string;
@@ -982,7 +1080,7 @@ export class FileSystemContentAPI implements ContentAPI {
             }
           }
         }
-      } catch (error) {
+      } catch {
         // Directory doesn't exist yet
       }
     }
@@ -1002,7 +1100,7 @@ export class FileSystemContentAPI implements ContentAPI {
     if (
       this.absoluteMdxPagesRoot &&
       this.absoluteMdxPagesRoot !== this.absoluteContentRoot &&
-      !this.absoluteMdxPagesRoot.startsWith(this.absoluteContentRoot + '/')
+      !this.absoluteMdxPagesRoot.startsWith(`${this.absoluteContentRoot}/`)
     ) {
       async function scanMdxPages(dir: string) {
         try {
@@ -1015,7 +1113,7 @@ export class FileSystemContentAPI implements ContentAPI {
               files.push(fullPath);
             }
           }
-        } catch (error) {
+        } catch {
           // Directory doesn't exist yet
         }
       }
@@ -1025,10 +1123,23 @@ export class FileSystemContentAPI implements ContentAPI {
     return files;
   }
 
+  /**
+   * Why a page of `type` cannot have `pathname` in `locale` where `getFilePath` puts it: an mdx
+   * page lives in the MDX pages folder when one is configured, where a default-language path may
+   * not start with a language folder (see `checkMdxPagesPathname`).
+   */
+  private mdxPagesPathnameRefusal(type: ContentType, pathname: string, locale: string): PathnameRefusal | null {
+    if (type !== 'mdx' || !this.absoluteMdxPagesRoot) return null;
+    return checkMdxPagesPathname(pathname, locale, {
+      defaultLocale: this.mdxPagesDefaultLocale,
+      locales: this.availableLocales,
+    });
+  }
+
   private getFilePath(manifest: ContentIdentity, { locale, name, pathname }: LocalePathData): string {
-    if (manifest.kind === 'block') {
+    if (manifest.kind === 'fragment') {
       const ext = manifest.type === 'mdx' ? 'mdx' : 'vxjson';
-      return join(this.absoluteContentRoot, 'blocks', manifest.collection, `${name}.${locale}.${ext}`);
+      return join(this.absoluteContentRoot, 'fragments', manifest.collection, `${name}.${locale}.${ext}`);
     }
     if (manifest.kind === 'data') {
       return join(this.absoluteContentRoot, 'data', manifest.collection, `${name}.${locale}.json`);
@@ -1062,20 +1173,13 @@ export class FileSystemContentAPI implements ContentAPI {
    * Parse a file path back into its components for checking against the path index
    * Returns null if the path doesn't match expected patterns
    */
-  parseFilePath(filePath: string): {
-    kind: 'page' | 'block' | 'data';
-    site?: string;
-    collection: string;
-    pathname?: string;
-    name?: string;
-    locale: string;
-  } | null {
+  parseFilePath(filePath: string): ContentPathLayout | null {
     // Files under mdxPagesRoot are kind:'page' + type:'mdx' regardless of
     // their position relative to absoluteContentRoot. Mirror the parsing
     // performed in parseFileHeaderWithRepair so both code paths agree on
     // the derived (pathname, locale) tuple.
-    if (this.absoluteMdxPagesRoot && filePath.startsWith(this.absoluteMdxPagesRoot + '/')) {
-      const mdxRelativePath = filePath.replace(this.absoluteMdxPagesRoot + '/', '');
+    if (this.absoluteMdxPagesRoot && filePath.startsWith(`${this.absoluteMdxPagesRoot}/`)) {
+      const mdxRelativePath = filePath.replace(`${this.absoluteMdxPagesRoot}/`, '');
       const mdxParts = mdxRelativePath.split('/');
       const mdxFilename = mdxParts[mdxParts.length - 1];
       let locale: string;
@@ -1092,14 +1196,12 @@ export class FileSystemContentAPI implements ContentAPI {
         const slugParts = mdxParts.slice(1);
         pathname =
           slugParts[slugParts.length - 1] === 'index'
-            ? '/' + slugParts.slice(0, -1).join('/') || '/'
-            : '/' + slugParts.join('/');
+            ? `/${slugParts.slice(0, -1).join('/')}`
+            : `/${slugParts.join('/')}`;
       } else {
         locale = this.mdxPagesDefaultLocale;
         pathname =
-          mdxParts[mdxParts.length - 1] === 'index'
-            ? '/' + mdxParts.slice(0, -1).join('/') || '/'
-            : '/' + mdxParts.join('/');
+          mdxParts[mdxParts.length - 1] === 'index' ? `/${mdxParts.slice(0, -1).join('/')}` : `/${mdxParts.join('/')}`;
       }
 
       return {
@@ -1111,60 +1213,12 @@ export class FileSystemContentAPI implements ContentAPI {
       };
     }
 
-    // Remove contentRoot prefix
-    const relativePath = filePath.replace(this.absoluteContentRoot + '/', '');
-    const parts = relativePath.split('/');
-
-    // Match locale.ext pattern at the end
-    const filename = parts[parts.length - 1];
-
-    // Handle data files: data/{collection}/{name}.{locale}.json
-    if (parts[0] === 'data' && parts.length === 3) {
-      const dataMatch = filename.match(/^(.+)\.([a-z]{2}(?:-[A-Z]{2})?)\.json$/);
-      if (!dataMatch) return null;
-      const [, name, locale] = dataMatch;
-      return {
-        kind: 'data',
-        collection: parts[1],
-        name,
-        locale,
-      };
-    }
-
-    // Match locale.ext pattern for non-data files (vxjson, mdx)
-    const match = filename.match(/^(.+)\.([a-z]{2}(?:-[A-Z]{2})?)\.(?:vxjson|mdx)$/);
-    if (!match) return null;
-
-    const [, nameOrPath, locale] = match;
-
-    if (parts[0] === 'blocks' && parts.length === 3) {
-      // blocks/collection/name.locale.ext
-      return {
-        kind: 'block',
-        collection: parts[1],
-        name: nameOrPath,
-        locale,
-      };
-    }
-    if (parts.length >= 3 && parts[0] !== 'blocks') {
-      // site/collection/pathname.locale.vxjson
-      const site = parts[0];
-      const collection = parts[1];
-      // Reconstruct pathname from remaining parts
-      const pathParts = parts.slice(2, -1); // All dirs between collection and filename
-      pathParts.push(nameOrPath); // Add the filename part (without locale.ext)
-      const pathname = '/' + pathParts.join('/');
-
-      return {
-        kind: 'page',
-        site,
-        collection,
-        pathname,
-        locale,
-      };
-    }
-
-    return null;
+    // Everything under the primary content root shares ONE grammar with the
+    // header parser and every other reader (content-path.ts) — including the
+    // `index` -> parent-pathname rule this method used to skip. Missing it made
+    // reindex look up `/index`, never find the entry the indexer had filed under
+    // `/`, and leave a deleted index page in the index forever.
+    return parseContentPathLayout(filePath.replace(`${this.absoluteContentRoot}/`, ''));
   }
 
   async getContent(id: string): Promise<ContentEntry | null> {
@@ -1214,7 +1268,7 @@ export class FileSystemContentAPI implements ContentAPI {
 
       // Try again with updated index
       const updatedManifest = this.contentIndex.getManifest(id);
-      if (!updatedManifest || !updatedManifest.locales[locale]) {
+      if (!updatedManifest?.locales[locale]) {
         return null;
       }
 
@@ -1403,21 +1457,31 @@ export class FileSystemContentAPI implements ContentAPI {
       }
 
       return result;
-    } catch (error) {
+    } catch {
       return null;
     }
   }
 
   async createContent(data: CreateContentInput): Promise<CreateResult> {
     // Use shared validation
-    const validation = validateCreateContent(data, this.sites, this.blocks, this.data);
+    const validation = validateCreateContent(data, this.sites, this.fragments, this.data);
     if (!validation.valid) {
       return {
         success: false,
         reason: validation.reason,
         error: validation.error ? new Error(validation.error) : undefined,
         existingId: validation.existingId,
+        field: validation.field,
       };
+    }
+
+    if (data.kind === 'page') {
+      for (const [locale, localeData] of Object.entries(data.locales)) {
+        const refused = this.mdxPagesPathnameRefusal(data.type, localeData.pathname ?? '', locale);
+        if (refused) {
+          return { success: false, reason: refused.reason, error: new Error(refused.error), field: 'pathname' };
+        }
+      }
     }
 
     const id = generateContentId();
@@ -1561,7 +1625,7 @@ export class FileSystemContentAPI implements ContentAPI {
           meta,
           kind: data.kind,
           pathname: data.kind === 'page' ? localeData.pathname : undefined,
-          name: data.kind === 'block' || data.kind === 'data' ? data.name : undefined,
+          name: data.kind === 'fragment' || data.kind === 'data' ? data.name : undefined,
           publishAt:
             localeData.publishAt && typeof localeData.publishAt === 'string' ? localeData.publishAt : undefined,
           unpublishAt:
@@ -1687,7 +1751,7 @@ export class FileSystemContentAPI implements ContentAPI {
       sortedMeta: newMeta,
       valid: metaValid,
       error: metaError,
-    } = validateAndPrepareMetadata({ ...current.meta, ...(data.meta ? data.meta : {}) });
+    } = validateAndPrepareMetadata(applyMetaPatch(current.meta, data.meta ?? {}));
 
     // Validate new metadata
     if (!newMeta || !metaValid) {
@@ -1701,48 +1765,51 @@ export class FileSystemContentAPI implements ContentAPI {
     // Merge updates
     const newContent = data.content ? { ...current.content, ...data.content } : current.content;
 
-    // Validate pathname change if updating pathname for pages
-    if (data.pathname && manifest.kind === 'page' && manifest.site) {
-      const site = this.sites[manifest.site];
-      if (site) {
-        // Check if new pathname is already taken by another content
-        const existingId = site.getPathnameConflict(data.pathname, locale, id);
-        if (existingId) {
-          return {
-            success: false,
-            reason: 'write_error',
-            error: new Error(`Pathname ${data.pathname} is already taken by content ${existingId}`),
-          };
-        }
+    // A page's new path is tidied, and refused when it is malformed or another page has it, as a
+    // create's is; the tidied form names the file and keys the page in the site index. An unchanged
+    // path is left alone, so a page keeps a path from before the checks.
+    let pathname = data.pathname;
+    if (pathname !== undefined && pathname !== localeVersion.pathname && manifest.kind === 'page') {
+      // Own-key only: the manifest's site name comes from the on-disk layout
+      // and is never checked against the configured sites, so an inherited key
+      // would reach the calls below.
+      const site = manifest.site && Object.hasOwn(this.sites, manifest.site) ? this.sites[manifest.site] : undefined;
+      const checked = checkPagePathname(site, pathname, locale, id);
+      if (!checked.valid) {
+        return { success: false, reason: checked.reason, error: new Error(checked.error) };
       }
+      const refused = this.mdxPagesPathnameRefusal(manifest.type, checked.pathname, locale);
+      if (refused) {
+        return { success: false, reason: refused.reason, error: new Error(refused.error) };
+      }
+      pathname = checked.pathname;
     }
 
-    // Validate name change if updating name for blocks or data
-    if (data.name && (manifest.kind === 'block' || manifest.kind === 'data')) {
-      // Check if new name is already taken by another entry in the same collection
-      const index = manifest.kind === 'block' ? this.contentIndex.getBlockIndex() : this.contentIndex.getDataIndex();
-      const existing = index.getByName(manifest.collection, data.name);
-
-      if (existing && existing.id !== id) {
-        // Get title from the existing entry for a better error message
-        const existingLocale = Object.values(existing.locales).find((lv) => lv !== undefined);
-        const existingTitle = existingLocale?.meta?.title;
-        const kindLabel = manifest.kind === 'block' ? 'Block' : 'Data';
-
-        return {
-          success: false,
-          reason: 'write_error',
-          error: new Error(
-            `${kindLabel} name "${data.name}" is already in use${existingTitle ? ` by "${existingTitle}"` : ''}`,
-          ),
-        };
+    // A new fragment or data name passes the create's checks. An unchanged name is left alone, so
+    // an entry keeps a name from before the checks.
+    if (
+      data.name !== undefined &&
+      data.name !== localeVersion.name &&
+      (manifest.kind === 'fragment' || manifest.kind === 'data')
+    ) {
+      const entries = manifest.kind === 'fragment' ? this.fragments : this.data;
+      const refused = checkEntryName(
+        manifest.kind,
+        manifest.collection,
+        data.name,
+        (name) =>
+          manifest.kind === 'fragment' ? this.fragments.isFragmentNameValid(name) : this.data.isDataNameValid(name),
+        (name) => entries.getNameConflict(manifest.collection, name, id),
+      );
+      if (refused) {
+        return { success: false, reason: refused.reason, error: new Error(refused.error) };
       }
     }
 
     // Handle pathname changes - track history only for published content
     const pathnameHistory = buildPathnameHistory(
       localeVersion.pathname,
-      data.pathname,
+      pathname,
       isContentPublished({
         publishAt: resolvePublishDate(data.publishAt, current.publishAt),
         unpublishAt: resolvePublishDate(data.unpublishAt, current.unpublishAt),
@@ -1753,18 +1820,23 @@ export class FileSystemContentAPI implements ContentAPI {
     try {
       // Determine the target file path (may be different if pathname or name changed)
       let targetFilePath = filePath;
-      if (data.pathname && localeVersion.pathname && data.pathname !== localeVersion.pathname && manifest.site) {
+      if (pathname && localeVersion.pathname && pathname !== localeVersion.pathname && manifest.site) {
         // For pages, calculate new file path based on new pathname
         const newLocaleVersion: LocaleVersion = {
           ...localeVersion,
-          pathname: data.pathname,
+          pathname,
         };
         targetFilePath = this.getFilePath(manifest, newLocaleVersion);
 
         // Ensure target directory exists
         await mkdir(dirname(targetFilePath), { recursive: true });
-      } else if (data.name && localeVersion.name && data.name !== localeVersion.name && manifest.kind === 'block') {
-        // For blocks, calculate new file path based on new name
+      } else if (
+        data.name &&
+        localeVersion.name &&
+        data.name !== localeVersion.name &&
+        (manifest.kind === 'fragment' || manifest.kind === 'data')
+      ) {
+        // A fragment's or data entry's name is part of its file path, so a rename moves the file
         const newLocaleVersion: LocaleVersion = {
           ...localeVersion,
           name: data.name,
@@ -1869,7 +1941,7 @@ export class FileSystemContentAPI implements ContentAPI {
         };
 
         // Handle pathname changes and track history
-        if (data.pathname && localeVersion.pathname && data.pathname !== localeVersion.pathname) {
+        if (pathname && localeVersion.pathname && pathname !== localeVersion.pathname) {
           // Only add to history if content is published
           if (isContentPublished(current)) {
             if (!updatedFile.previousPathnames) {
@@ -1946,7 +2018,7 @@ export class FileSystemContentAPI implements ContentAPI {
         etag: newEtag,
         modified,
         meta: newMeta,
-        ...(data.pathname && { pathname: data.pathname }),
+        ...(pathname && { pathname }),
         ...(data.name && { name: data.name }),
       };
 
@@ -1980,30 +2052,34 @@ export class FileSystemContentAPI implements ContentAPI {
       }
 
       // Store the old locale manifest for rollback if needed
-      const oldLocaleVersion = manifest.locales[locale];
+      const oldLocaleVersion = localeVersion;
 
       try {
-        // Update the locale in the existing manifest directly (avoids allocation)
-        manifest.locales[locale] = updatedLocaleVersion;
-
-        // Update index with the updated locale
+        // Replace the locale so its old path/name mappings are removed first.
+        this.contentIndex.removeLocale(id, locale);
         this.contentIndex.addContent(manifest, updatedLocaleVersion, newContent);
 
         // If pathname changed, delete the old file
         if (targetFilePath !== filePath) {
           try {
-            await unlink(filePath);
+            // A name changed only in letter case is the same file on a case-insensitive disk: the
+            // write went into it, so deleting the old path would delete the entry. Renaming it
+            // gives the file its new name's case.
+            if (await isSameFile(filePath, targetFilePath)) await rename(filePath, targetFilePath);
+            else await unlink(filePath);
           } catch (error) {
             // Log but don't fail if old file deletion fails
             console.warn(`Failed to delete old file ${filePath}:`, error);
           }
         }
       } catch (error) {
-        // Rollback on error to maintain consistency
-        manifest.locales[locale] = oldLocaleVersion;
+        // Rollback on error to maintain the original locale and name mapping.
+        this.contentIndex.removeLocale(id, locale);
+        this.contentIndex.addContent(manifest, oldLocaleVersion, current.content);
 
-        // If we wrote to a new file, try to clean it up
-        if (targetFilePath !== filePath) {
+        // If we wrote to a new file, try to clean it up. A name changed only in letter case wrote
+        // into the entry's own file on a case-insensitive disk, and that file is kept.
+        if (targetFilePath !== filePath && !(await isSameFile(filePath, targetFilePath))) {
           try {
             await unlink(targetFilePath);
           } catch {
@@ -2057,25 +2133,37 @@ export class FileSystemContentAPI implements ContentAPI {
       };
     }
 
-    try {
-      // Delete all locale files in parallel
-      const deletePromises = Array.from(localesOf(manifest)).map(async (localeVersion) => {
-        const filePath = this.getFilePath(manifest, localeVersion);
-        await unlink(filePath);
-      });
+    // Settled, not all: Promise.all let one rejection abandon the others
+    // AFTER they had already unlinked, so the caller was told the delete
+    // failed while the content was gone and the index still listed it. A file
+    // already absent (git checkout, a manual rm) is the common cause, and for
+    // a delete that is the desired end state, not an error.
+    const localeVersions = Array.from(localesOf(manifest));
+    const outcomes = await Promise.allSettled(
+      localeVersions.map(async (localeVersion) => {
+        await rm(this.getFilePath(manifest, localeVersion), { force: true });
+      }),
+    );
 
-      await Promise.all(deletePromises);
-
-      // Remove from index
+    const failures = outcomes.filter((outcome) => outcome.status === 'rejected');
+    if (failures.length === 0) {
       this.contentIndex.removeEntry(id);
-
       return { success: true };
-    } catch (error) {
-      return {
-        success: false,
-        error: ensureError(error),
-      };
     }
+
+    // Some files are gone and some are not. Drop exactly what was removed so
+    // the index still describes what is on disk; the survivors stay indexed
+    // rather than becoming unreachable orphans.
+    for (const [position, outcome] of outcomes.entries()) {
+      if (outcome.status === 'fulfilled') {
+        this.contentIndex.removeLocale(id, localeVersions[position].locale);
+      }
+    }
+
+    return {
+      success: false,
+      error: ensureError(failures[0].reason),
+    };
   }
 
   async deleteLocalized(input: DeleteLocaleInput): Promise<DeleteResult> {
@@ -2111,8 +2199,12 @@ export class FileSystemContentAPI implements ContentAPI {
       };
     }
 
-    // Don't allow deleting the last locale
-    if (Object.keys(manifest.locales).length === 1) {
+    // Don't allow deleting the last locale. Count actual locales, not
+    // manifest keys — removeLocale clears a locale by assigning undefined
+    // and keeping the key, so after an earlier translation delete the key
+    // count still includes the dead slot and the guard would wave the
+    // genuinely last locale through.
+    if (Array.from(localesOf(manifest)).length === 1) {
       return {
         success: false,
         error: new Error('Cannot delete the last locale. Use deleteContent to delete all content.'),
@@ -2120,12 +2212,16 @@ export class FileSystemContentAPI implements ContentAPI {
     }
 
     try {
-      // Delete the locale file
-      const filePath = this.getFilePath(manifest, localeVersion);
-      await unlink(filePath);
+      // Delete the locale file. A file already absent (git checkout, a
+      // manual rm) is the desired end state of a delete, not an error —
+      // same stance deleteContent takes. Failing on it left the deleted
+      // translation routable and cached while reporting failure.
+      await rm(this.getFilePath(manifest, localeVersion), { force: true });
 
-      // Remove locale from manifest and index
-      manifest.locales[locale] = undefined;
+      // Remove locale from manifest and index. removeLocale clears the
+      // manifest field itself, and returns early if it is already cleared —
+      // clearing it here first skipped the pathname-index and content-cache
+      // cleanup, leaving the deleted translation routable and cached.
       this.contentIndex.removeLocale(manifest.id, locale);
 
       return { success: true };
@@ -2138,12 +2234,13 @@ export class FileSystemContentAPI implements ContentAPI {
   }
 
   getSite(siteName: string): Site | null {
-    if (siteName === 'blocks') {
-      throw new Error('Use `blocks` property instead of getSite("blocks")');
+    if (siteName === 'fragments') {
+      throw new Error('Use `fragments` property instead of getSite("fragments")');
     }
 
-    const site = this.sites[siteName];
-    return site || null;
+    // Own-key only: the name is caller-supplied, and an inherited key like
+    // `constructor` would resolve to a truthy non-Site.
+    return Object.hasOwn(this.sites, siteName) ? this.sites[siteName] : null;
   }
 
   *listAllContent(filters?: GlobalFilters): Generator<ContentManifest> {
@@ -2174,7 +2271,7 @@ export class FileSystemContentAPI implements ContentAPI {
     let errors = 0;
     const filesToIndex: string[] = [];
     const updated: LocalizedManifest[] = [];
-    const deleted: Array<{ id: string; locale: string; kind: 'page' | 'block' | 'data' }> = [];
+    const deleted: Array<{ id: string; locale: string; kind: 'page' | 'fragment' | 'data' }> = [];
 
     // Check each file
     for (const filePath of filesToProcess) {
@@ -2182,18 +2279,24 @@ export class FileSystemContentAPI implements ContentAPI {
       if (options?.handleDeletions && paths) {
         try {
           await readFile(filePath);
-        } catch (error) {
+        } catch {
           // File doesn't exist - remove from index
           const parsed = this.parseFilePath(filePath);
           if (parsed) {
             // Find the content ID to remove
             let manifest: ContentManifest | null = null;
-            if (parsed.kind === 'block' && parsed.name) {
-              manifest = this.contentIndex.getBlockByName(parsed.collection, parsed.name, parsed.locale);
+            if (parsed.kind === 'fragment' && parsed.name) {
+              manifest = this.contentIndex.getFragmentByName(parsed.collection, parsed.name, parsed.locale);
             } else if (parsed.kind === 'data' && parsed.name) {
               manifest = this.contentIndex.getDataByName(parsed.collection, parsed.name, parsed.locale);
             } else if (parsed.kind === 'page' && parsed.site && parsed.pathname) {
               manifest = this.contentIndex.getByPathname(parsed.site, parsed.pathname, parsed.locale);
+            }
+            // A name finds an entry when any of its locales has it. A save that renames one locale
+            // writes its new file and then deletes the old one, whose name the other locales still
+            // carry: only a locale whose own name is the deleted file's has lost its file.
+            if (parsed.kind !== 'page' && manifest?.locales[parsed.locale]?.name !== parsed.name) {
+              manifest = null;
             }
 
             if (manifest) {
@@ -2208,8 +2311,8 @@ export class FileSystemContentAPI implements ContentAPI {
               if (Object.keys(manifest.locales).length === 1) {
                 this.contentIndex.removeEntry(manifest.id);
               } else {
-                // Remove just this locale
-                manifest.locales[parsed.locale] = undefined;
+                // Remove just this locale. removeLocale clears the manifest field itself and returns early
+                // if it is already cleared, so clearing it here first left the locale's name taken.
                 this.contentIndex.removeLocale(manifest.id, parsed.locale);
               }
               filesDeleted++;
@@ -2228,9 +2331,9 @@ export class FileSystemContentAPI implements ContentAPI {
 
       // Check if this path is already indexed
       let isIndexed = false;
-      if (parsed.kind === 'block' && parsed.name) {
-        // Check block index by name
-        const manifest = this.contentIndex.getBlockByName(parsed.collection, parsed.name, parsed.locale);
+      if (parsed.kind === 'fragment' && parsed.name) {
+        // Check fragment index by name
+        const manifest = this.contentIndex.getFragmentByName(parsed.collection, parsed.name, parsed.locale);
         isIndexed = !!manifest;
       } else if (parsed.kind === 'page' && parsed.site && parsed.pathname) {
         // Check site index by pathname
@@ -2250,8 +2353,8 @@ export class FileSystemContentAPI implements ContentAPI {
           // For specific paths, check if the file has changed
           const fileStats = await readFile(filePath);
           let currentManifest: ContentManifest | null = null;
-          if (parsed.kind === 'block' && parsed.name) {
-            currentManifest = this.contentIndex.getBlockByName(parsed.collection, parsed.name, parsed.locale);
+          if (parsed.kind === 'fragment' && parsed.name) {
+            currentManifest = this.contentIndex.getFragmentByName(parsed.collection, parsed.name, parsed.locale);
           } else if (parsed.kind === 'data' && parsed.name) {
             currentManifest = this.contentIndex.getDataByName(parsed.collection, parsed.name, parsed.locale);
           } else if (parsed.kind === 'page' && parsed.site && parsed.pathname) {
@@ -2290,7 +2393,7 @@ export class FileSystemContentAPI implements ContentAPI {
             const existingEtag = currentManifest.locales[parsed.locale]?.etag;
 
             if (existingEtag === currentEtag) {
-              const relativePath = filePath.replace(this.absoluteContentRoot + '/', '');
+              const relativePath = filePath.replace(`${this.absoluteContentRoot}/`, '');
               console.log(`[Content] skip ${relativePath} (unchanged)`);
               filesSkipped++;
             } else {
@@ -2310,6 +2413,16 @@ export class FileSystemContentAPI implements ContentAPI {
     // Index the files
     const buffers = Array.from({ length: Math.min(filesToIndex.length, 100) }, () => new Uint8Array(4096));
 
+    // Drop the previous verdicts for every file this pass re-examines, so
+    // problems do not pile up across reindexes. A full scan re-examines every
+    // file that is not already indexed — and a file with a problem is never
+    // indexed — so it can start from an empty slate.
+    if (paths) {
+      this.contentIndex.dropProblems(new Set(filesToIndex));
+    } else {
+      this.contentIndex.clearProblems();
+    }
+
     for (let i = 0; i < filesToIndex.length; i++) {
       const filePath = filesToIndex[i];
       const bufferIndex = i % buffers.length;
@@ -2318,6 +2431,30 @@ export class FileSystemContentAPI implements ContentAPI {
         const result = await this.parseFileHeaderWithRepair(filePath, buffers[bufferIndex]);
         if (result) {
           const { manifest, localeVersion, content } = result;
+
+          // A different file already claims this id+locale. Its file still
+          // being on disk is what tells a stray copy (refuse, or it merges
+          // over the original and a page silently stops existing) apart from
+          // an out-of-band rename (the old path is gone — this file is the
+          // entry's new home and must keep merging).
+          const claimant = this.contentIndex.getManifest(manifest.id);
+          const claimedLocale = claimant?.locales[localeVersion.locale];
+          if (claimant && claimedLocale) {
+            const claimantPath = this.getFilePath(claimant, claimedLocale);
+            const claimantOnDisk = await access(claimantPath).then(
+              () => true,
+              () => false,
+            );
+            if (claimantPath !== filePath && claimantOnDisk) {
+              this.recordIndexProblem(
+                filePath,
+                'duplicate-id',
+                duplicateIdMessage(manifest.id, localeVersion.locale, claimantPath),
+              );
+              filesSkipped++;
+              continue;
+            }
+          }
 
           // Add to index
           this.contentIndex.addContent(manifest, localeVersion, content);
@@ -2335,7 +2472,8 @@ export class FileSystemContentAPI implements ContentAPI {
           updated.push(localizedManifest);
         }
       } catch (error) {
-        console.error(`Failed to reindex ${filePath}:`, error);
+        console.error(`Failed to reindex ${filePath}: ${messageOf(error)}`);
+        this.recordIndexProblem(filePath, 'index-error', messageOf(error));
         errors++;
       }
     }
@@ -2375,7 +2513,7 @@ export class FileSystemContentAPI implements ContentAPI {
     contentType: 'application/json' | 'text/mdx';
   } | null> {
     const manifest = this.contentIndex.getManifest(id);
-    if (!manifest || !manifest.locales[locale]) {
+    if (!manifest?.locales[locale]) {
       return null;
     }
 
@@ -2496,7 +2634,7 @@ export class FileSystemContentAPI implements ContentAPI {
 
       // Validate metadata size if updating
       if (op.data.meta) {
-        const newMeta = { ...current.meta, ...op.data.meta };
+        const newMeta = applyMetaPatch(current.meta, op.data.meta);
         const validation = validateAndPrepareMetadata(newMeta);
         if (!validation.valid) {
           return {
@@ -2538,4 +2676,10 @@ export class FileSystemContentAPI implements ContentAPI {
       failed: operations.length - updated,
     };
   }
+}
+
+/** Whether two paths name one file, as 'hero.en.mdx' and 'Hero.en.mdx' do on a case-insensitive disk. */
+async function isSameFile(a: string, b: string): Promise<boolean> {
+  const [statA, statB] = await Promise.all([stat(a), stat(b)]).catch(() => [null, null]);
+  return statA !== null && statB !== null && statA.dev === statB.dev && statA.ino === statB.ino;
 }

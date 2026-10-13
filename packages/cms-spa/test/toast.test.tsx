@@ -3,7 +3,7 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { cleanup, render, waitFor } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { Toaster as SonnerToaster } from 'sonner';
-import { Toaster, type ToasterProps, toast } from '../src/components/toast';
+import { Toaster, type ToasterProps, toast } from '../src/components/toast.js';
 
 afterEach(() => {
   cleanup();

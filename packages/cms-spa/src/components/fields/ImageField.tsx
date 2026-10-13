@@ -1,10 +1,12 @@
 import { FolderOpen } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import type { AssetEntry } from '../../hooks';
-import { ImagePicker } from '../media/ImagePicker';
-import { Input } from '../ui';
+import type { AssetEntry } from '../../hooks/index.js';
+import { buildAssetRef } from '../../utils/asset-url.js';
+import { ImagePicker } from '../media/ImagePicker.js';
+import { Input } from '../ui/index.js';
 
 interface ImageFieldRenderProps {
+  inputId?: string;
   value: string;
   onChange: (value: string) => void;
 }
@@ -18,7 +20,7 @@ interface ImageFieldRenderProps {
  * - Uses local state + onBlur to prevent Puck re-render focus loss
  * - No thumbnail preview (canvas already shows the image in the component)
  */
-export function ImageFieldRender({ value, onChange }: ImageFieldRenderProps) {
+export function ImageFieldRender({ value, onChange, inputId }: ImageFieldRenderProps) {
   const [modalOpen, setModalOpen] = useState(false);
 
   // Local state for text input to prevent Puck re-render focus loss
@@ -31,9 +33,7 @@ export function ImageFieldRender({ value, onChange }: ImageFieldRenderProps) {
   }, [value]);
 
   const handleSelect = (asset: AssetEntry) => {
-    // Build asset path - use folder if present
-    const folder = asset.folder && asset.folder !== '/' ? asset.folder : '/uploads';
-    const assetPath = `/assets${folder}/${asset.filename}`;
+    const assetPath = buildAssetRef(asset.folder, asset.filename);
     onChange(assetPath);
     setLocalValue(assetPath);
     setModalOpen(false);
@@ -50,6 +50,7 @@ export function ImageFieldRender({ value, onChange }: ImageFieldRenderProps) {
     <div>
       <div className="flex">
         <Input
+          id={inputId}
           size="sm"
           type="text"
           value={localValue}

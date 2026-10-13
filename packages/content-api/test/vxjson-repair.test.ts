@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdir, readFile, rm, writeFile } from 'fs/promises';
-import { join } from 'path';
-import { FileSystemContentAPI } from '../src/filesystem-content-api';
-import type { SitesConfig } from '../src/types';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { FileSystemContentAPI } from '../src/filesystem-content-api.js';
+import type { SitesConfig } from '../src/types.js';
+import { testTempDir } from './test-temp-dir.js';
 
 describe('VXJSON read-repair functionality', () => {
   let tempDir: string;
@@ -19,7 +20,7 @@ describe('VXJSON read-repair functionality', () => {
   };
 
   beforeEach(async () => {
-    tempDir = `/tmp/content-api-repair-test-${Date.now()}`;
+    tempDir = testTempDir('content-api-repair-test');
     await mkdir(tempDir, { recursive: true });
     await mkdir(join(tempDir, 'testsite/pages'), { recursive: true });
 
@@ -239,8 +240,8 @@ describe('VXJSON read-repair functionality', () => {
     // through gray-matter's plain-object memo cache, so a body of exactly
     // 'toString' (or 'valueOf', …) read the prototype function back and
     // crashed the repair — the file was skipped and never repaired.
-    await mkdir(join(tempDir, 'blocks/general'), { recursive: true });
-    const filePath = join(tempDir, 'blocks/general/proto.en.mdx');
+    await mkdir(join(tempDir, 'fragments/general'), { recursive: true });
+    const filePath = join(tempDir, 'fragments/general/proto.en.mdx');
     await writeFile(filePath, '---\ntitle: Proto\n---\ntoString');
 
     // Recreate API to trigger indexing and repair (missing id/created/modified)
@@ -262,8 +263,8 @@ describe('VXJSON read-repair functionality', () => {
     // string path hoisted a body-leading '---' block into the file's
     // frontmatter, silently rewriting the author's document. Pin the
     // preserved-verbatim behavior.
-    await mkdir(join(tempDir, 'blocks/general'), { recursive: true });
-    const filePath = join(tempDir, 'blocks/general/nested.en.mdx');
+    await mkdir(join(tempDir, 'fragments/general'), { recursive: true });
+    const filePath = join(tempDir, 'fragments/general/nested.en.mdx');
     await writeFile(filePath, '---\ntitle: Outer\n---\n---\ninner: kept\n---\nBody text');
 
     api = await FileSystemContentAPI.create({

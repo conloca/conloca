@@ -1,14 +1,14 @@
-import type { SitesConfig } from '@conloca/content-api';
-import { mkdir, readFile, writeFile } from 'fs/promises';
-import { join, resolve } from 'path';
+import { mkdir } from 'node:fs/promises';
+import { join } from 'node:path';
+import { contentRootOf } from '../lib/content-root.js';
+import { ensureSiteInSitesConfig } from '../lib/sites-config.js';
 
 export async function init(directory: string, siteName: string): Promise<void> {
-  const resolvedPath = resolve(directory);
-  const contentPath = join(resolvedPath, 'content');
+  const contentPath = contentRootOf(directory);
 
   try {
     // Create the directory structure
-    const contentDirs = [contentPath, join(contentPath, siteName, 'pages'), join(contentPath, 'blocks', 'shared')];
+    const contentDirs = [contentPath, join(contentPath, siteName, 'pages'), join(contentPath, 'fragments', 'shared')];
 
     for (const dir of contentDirs) {
       await mkdir(dir, { recursive: true });
@@ -16,44 +16,21 @@ export async function init(directory: string, siteName: string): Promise<void> {
     }
 
     // Handle sites.json - either update existing or create new
-    const sitesJsonPath = join(contentPath, 'sites.json');
-    let sitesConfig: SitesConfig = {
-      sites: {},
-      globalLocales: ['en', 'nl', 'de', 'fr'],
-    };
-
-    try {
-      const existingContent = await readFile(sitesJsonPath, 'utf-8');
-      const parsed = JSON.parse(existingContent);
-      // Handle old format (direct site entries) or new format (with sites property)
-      if (parsed.sites) {
-        sitesConfig = parsed;
-      } else {
-        // Migrate old format to new format
-        sitesConfig.sites = parsed;
-      }
+    const sites = await ensureSiteInSitesConfig(contentPath, siteName);
+    if (sites.existed) {
       console.log('  Found existing sites.json');
-    } catch (error) {
-      // File doesn't exist or is invalid, start fresh
     }
-
-    // Add or update the site configuration
-    if (!sitesConfig.sites[siteName]) {
-      sitesConfig.sites[siteName] = {
-        locales: ['en', 'nl', 'de', 'fr'],
-        defaultLocale: 'en',
-      };
-      await writeFile(sitesJsonPath, JSON.stringify(sitesConfig, null, 2) + '\n', 'utf-8');
-      console.log(`  Updated: ${sitesJsonPath} (added site: ${siteName})`);
+    if (sites.added) {
+      console.log(`  Updated: ${sites.path} (added site: ${siteName})`);
     } else {
       console.log(`  Site '${siteName}' already exists in sites.json`);
     }
 
-    console.log(`\n✓ Initialized Conloca content structure for site '${siteName}' in ${resolvedPath}`);
+    console.log(`\n✓ Initialized Conloca content structure for site '${siteName}' in ${contentPath}`);
     console.log('\nNext steps:');
-    console.log(`  1. cd ${directory}`);
-    console.log(`  2. Create your first page in content/${siteName}/pages/`);
-    console.log(`  3. Run 'conloca verify content' to check your content`);
+    console.log(`  1. Create your first page in ${join(contentPath, siteName, 'pages')}`);
+    console.log(`  2. Run 'conloca doctor' to check the setup`);
+    console.log(`  3. Point the conlocaCMS() contentRoot option at ${contentPath}`);
   } catch (error) {
     console.error('Failed to initialize content structure');
     console.error(`  ${error}`);

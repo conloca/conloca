@@ -2,22 +2,17 @@ import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import spaConfig from 'virtual:conloca-config';
-import { contentOptions, getDataCollection, getPagesByPrefix } from 'virtual:conloca-page-api';
-import routingConfig from 'virtual:conloca-routing-config';
 import {
   type CFAccessResult,
-  createContentAPI,
   createContentAPIRouter,
-  ErrorCodes,
   FileSystemContentAPI,
   validateCFAccessRequest,
 } from '@conloca/content-api/node';
-import { compileMDX } from '@conloca/mdx/node';
+import { handleMDXCompileRequest } from '@conloca/mdx/node';
 import type { APIRoute } from 'astro';
 import { SPA_MIME_TYPES } from './mime-types.js';
 import { isPathWithinBase } from './path-validation.js';
 import { safeJsonStringify } from './safe-json-stringify.js';
-import type { DataCollectionEntry, DataContext, PageReference, ResolvedRoutingConfig } from './types.js';
 
 export { SPA_MIME_TYPES } from './mime-types.js';
 
@@ -52,7 +47,6 @@ const cmsSpaPath = dirname(require.resolve('@conloca/cms-spa/package.json'));
  * This handler:
  * 1. Validates CF Access authentication ONCE at the top
  * 2. Routes to appropriate sub-handler based on path:
- *    - /api/data-context -> handleDataContext()
  *    - /api/* -> handleContentApi()
  *    - /* -> handleSpa()
  *
@@ -76,15 +70,11 @@ export const ALL: APIRoute = async ({ params, request }) => {
   const path = Array.isArray(pathArray) ? pathArray.join('/') : pathArray || '';
 
   // Route to appropriate handler
-  if (path.startsWith('api/data-context')) {
-    return handleDataContext(request);
-  }
-
   if (path.startsWith('api/')) {
     return handleContentApi(request, cfResult);
   }
 
-  return handleSpa(params, request);
+  return handleSpa(params);
 };
 
 // ============================================================================
@@ -142,13 +132,13 @@ async function loadIndexHtml(): Promise<string> {
 /**
  * Handle SPA requests - serve CMS admin interface
  */
-async function handleSpa(params: { path?: string | string[] }, request: Request): Promise<Response> {
+async function handleSpa(params: { path?: string | string[] }): Promise<Response> {
   // The path parameter is an array for [...path] routes
   const pathArray = params.path;
   const path = Array.isArray(pathArray) ? pathArray.join('/') : pathArray || '';
 
   // For the root path or any path without an extension, serve the HTML
-  if (!path || !path.includes('.')) {
+  if (!path?.includes('.')) {
     try {
       let html: string;
 
@@ -218,108 +208,6 @@ async function handleSpa(params: { path?: string | string[] }, request: Request)
 }
 
 // ============================================================================
-// Data Context Handler (from data-context-handler.ts)
-// ============================================================================
-
-/**
- * Handle DataContext API requests - returns data bindings for CMS editor
- */
-async function handleDataContext(request: Request): Promise<Response> {
-  try {
-    const url = new URL(request.url);
-    const pageId = url.searchParams.get('pageId');
-
-    if (!pageId) {
-      return jsonResponse({});
-    }
-
-    const config = routingConfig as ResolvedRoutingConfig;
-    if (!config.enabled) {
-      return jsonResponse({});
-    }
-
-    // Find which route this page belongs to by loading the page manifest
-    // and matching its collection against route configs
-    const contentApi = await createContentAPI({
-      contentRoot: contentOptions.contentRoot,
-      canvasDir: contentOptions.canvasDir,
-      ...localesFromEnv(),
-    });
-
-    const locale = contentOptions.locale;
-
-    // Get the page manifest to determine its collection
-    const content = await contentApi.getContent(pageId);
-    if (!content) {
-      return jsonResponse({});
-    }
-    const pageCollection = content.collection || 'pages';
-
-    // Find the route whose collection matches this page
-    const routeEntry = Object.entries(config.routes).find(
-      ([, routeConfig]) => routeConfig.collection === pageCollection,
-    );
-
-    if (!routeEntry) {
-      return jsonResponse({});
-    }
-
-    const [, routeConfig] = routeEntry;
-    const hasCollections = routeConfig.dataBindings?.collections?.length;
-    const hasPages = routeConfig.dataBindings?.pages?.prefix;
-
-    if (!hasCollections && !hasPages) {
-      return jsonResponse({});
-    }
-
-    // Build DataContext using the same logic as page-handler.astro
-    const collections: Record<string, DataCollectionEntry[]> = {};
-    let pages: PageReference[] | undefined;
-
-    if (hasCollections && routeConfig.dataBindings?.collections) {
-      for (const collectionName of routeConfig.dataBindings.collections) {
-        try {
-          const bindingLocale = routeConfig.dataBindings.locale ?? locale;
-          collections[collectionName] = await getDataCollection(collectionName, bindingLocale);
-        } catch {
-          collections[collectionName] = [];
-        }
-      }
-    }
-
-    if (hasPages && routeConfig.dataBindings?.pages) {
-      try {
-        const pagesConfig = routeConfig.dataBindings.pages;
-        pages = await getPagesByPrefix(pagesConfig.prefix, {
-          sort: pagesConfig.sort,
-          limit: pagesConfig.limit,
-        });
-      } catch {
-        pages = [];
-      }
-    }
-
-    const dataContext: DataContext = {
-      collections,
-      pages,
-      locale: routeConfig.dataBindings.locale ?? locale,
-      siteName: contentOptions.siteName,
-    };
-
-    return jsonResponse({ dataContext });
-  } catch {
-    return jsonResponse({});
-  }
-}
-
-function jsonResponse(data: object): Response {
-  return new Response(JSON.stringify(data), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
-
-// ============================================================================
 // Content API Handler (from content-api-handler.ts)
 // ============================================================================
 
@@ -345,43 +233,9 @@ async function handleContentApi(request: Request, cfResult: CFAccessResult): Pro
     contentRoot,
   });
 
-  // POST /mdx/compile — server-side MDX compilation for the browser preview.
-  // The route lives here (not in @conloca/content-api) because compileMDX is
-  // a renderer concern; content-api is purely storage. The browser sends raw
-  // MDX, we return a JavaScript function body that @mdx-js/mdx's run() can
-  // execute.
-  app.post('/mdx/compile', async (c) => {
-    let body: unknown;
-    try {
-      body = await c.req.json();
-    } catch {
-      return c.json({ error: { code: ErrorCodes.INVALID_REQUEST, message: 'Invalid JSON body' } }, 400);
-    }
-
-    const mdxContent = typeof body === 'object' && body !== null ? (body as { mdxContent?: unknown }).mdxContent : null;
-
-    if (!mdxContent || typeof mdxContent !== 'string') {
-      return c.json(
-        {
-          error: {
-            code: ErrorCodes.MISSING_REQUIRED_FIELD,
-            message: 'mdxContent string required',
-            details: { field: 'mdxContent' },
-          },
-        },
-        400,
-      );
-    }
-
-    try {
-      const { code, metadata } = await compileMDX(mdxContent);
-      return c.json({ code, metadata });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to compile MDX';
-      console.error('[CMS] /mdx/compile failed:', error);
-      return c.json({ error: { code: ErrorCodes.MDX_COMPILE_FAILED, message } }, 422);
-    }
-  });
+  // Mounted here rather than in @conloca/content-api because compiling MDX is a
+  // renderer concern; content-api is purely storage.
+  app.post('/mdx/compile', (c) => handleMDXCompileRequest(c.req.raw));
 
   // Extract the path after the API base
   const url = new URL(request.url);
@@ -412,7 +266,7 @@ async function handleContentApi(request: Request, cfResult: CFAccessResult): Pro
     headers,
     body: request.body,
     ...(request.body && { duplex: 'half' }),
-  } as RequestInit);
+  });
 
   // Let Hono handle the request
   const response = await app.fetch(honoRequest);

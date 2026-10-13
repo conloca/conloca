@@ -17,15 +17,21 @@ interface SharedDataState {
   subscribers: Set<(schemas: DataSchemas) => void>;
 }
 
+declare global {
+  interface Window {
+    __DATA_SCHEMAS_STATE__?: SharedDataState;
+  }
+}
+
 const getSharedState = (): SharedDataState => {
   if (typeof window !== 'undefined') {
-    if (!(window as any).__DATA_SCHEMAS_STATE__) {
-      (window as any).__DATA_SCHEMAS_STATE__ = {
+    if (!window.__DATA_SCHEMAS_STATE__) {
+      window.__DATA_SCHEMAS_STATE__ = {
         schemas: {},
         subscribers: new Set(),
       };
     }
-    return (window as any).__DATA_SCHEMAS_STATE__;
+    return window.__DATA_SCHEMAS_STATE__;
   }
   // SSR fallback
   return { schemas: {}, subscribers: new Set() };
@@ -39,9 +45,9 @@ const getSharedState = (): SharedDataState => {
 export function setDataSchemas(schemas: DataSchemas): void {
   const state = getSharedState();
   state.schemas = schemas;
-  for (const fn of state.subscribers) {
+  state.subscribers.forEach((fn) => {
     fn(schemas);
-  }
+  });
 }
 
 /**

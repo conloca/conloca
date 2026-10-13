@@ -1,15 +1,12 @@
 import { useMemo, useState } from 'react';
-import { type AssetEntry, useAssetFolders, useCreateFolder } from '../../hooks';
-import { CreateFolderDialog } from '../dialogs/CreateFolderDialog';
-import { AssetCard } from './AssetCard';
-import type { FileTypeFilter, SortOption } from './MediaToolbar';
-import { MediaToolbar } from './MediaToolbar';
+import { type AssetEntry, useAssetFolders } from '../../hooks/index.js';
+import { AssetCard } from './AssetCard.js';
+import type { FileTypeFilter, SortOption } from './MediaToolbar.js';
+import { MediaToolbar } from './MediaToolbar.js';
 
 interface MediaLibraryProps {
   /** Initial folder path */
   folder?: string;
-  /** Called when folder changes */
-  onFolderChange?: (path: string) => void;
   /** Show toolbar with search, filter, sort */
   showToolbar?: boolean;
   /** Mode: 'page' for standalone page, 'picker' for modal selection */
@@ -18,8 +15,6 @@ interface MediaLibraryProps {
   assetsBasePath?: string;
   /** Set of selected asset filenames (multi-select) */
   selectedAssets?: Set<string>;
-  /** Called when asset selection is toggled (in select mode) */
-  onToggleSelect?: (filename: string) => void;
   /** Called when asset is single-clicked (receives full asset for view mode detail) */
   onAssetClick?: (asset: AssetEntry) => void;
   /** Called when asset is double-clicked (for detail view) */
@@ -38,12 +33,10 @@ interface MediaLibraryProps {
 
 export function MediaLibrary({
   folder: initialFolder = '/',
-  onFolderChange,
   showToolbar = true,
   mode = 'page',
   assetsBasePath,
   selectedAssets,
-  onToggleSelect,
   onAssetClick,
   onAssetDoubleClick,
   onSelect,
@@ -62,12 +55,8 @@ export function MediaLibrary({
   const fileType = externalFileType ?? internalFileType;
   const sort = externalSort ?? internalSort;
 
-  // Create folder dialog state (for picker mode only)
-  const [showCreateFolderDialog, setShowCreateFolderDialog] = useState(false);
-
-  // Queries and mutations
+  // Queries
   const { data, isLoading } = useAssetFolders(initialFolder);
-  const createFolder = useCreateFolder();
 
   const assets = data?.assets ?? [];
 
@@ -147,17 +136,6 @@ export function MediaLibrary({
     onAssetDoubleClick?.(asset);
   };
 
-  // Handle folder creation from dialog (picker mode only)
-  const handleCreateFolder = (name: string) => {
-    const folderPath = initialFolder === '/' ? `/${name}` : `${initialFolder}/${name}`;
-    createFolder.mutate(folderPath, {
-      onSuccess: () => {
-        setShowCreateFolderDialog(false);
-        onFolderChange?.(folderPath);
-      },
-    });
-  };
-
   return (
     <div className="flex flex-col gap-4">
       {/* Toolbar (only when using internal state) */}
@@ -174,12 +152,12 @@ export function MediaLibrary({
 
       {/* Loading state */}
       {isLoading ? (
-        <div className="text-center py-12 text-grey-04">Loading assets...</div>
+        <div className="text-center py-12 text-grey-04 dark:text-grey-07">Loading assets...</div>
       ) : (
         <>
           {/* Asset grid - medium thumbnails (120-150px) */}
           {sortedAssets.length === 0 ? (
-            <div className="text-center py-12 text-grey-04">
+            <div className="text-center py-12 text-grey-04 dark:text-grey-07">
               {assets.length === 0
                 ? 'No assets yet. Click Upload to add your first image.'
                 : 'No assets match your filter.'}
@@ -199,16 +177,6 @@ export function MediaLibrary({
             </div>
           )}
         </>
-      )}
-
-      {/* Create Folder Dialog (for picker mode) */}
-      {mode === 'picker' && (
-        <CreateFolderDialog
-          open={showCreateFolderDialog}
-          isPending={createFolder.isPending}
-          onClose={() => setShowCreateFolderDialog(false)}
-          onCreate={handleCreateFolder}
-        />
       )}
     </div>
   );

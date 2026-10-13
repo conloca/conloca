@@ -1,11 +1,20 @@
-import { Hono } from 'hono';
-import { cors } from 'hono/cors';
-import { type AssetConfig, AssetOperations } from './asset-operations';
-import type { ContentAPI } from './content-api.interface';
-import { localesOf, normalizeAndValidatePathname } from './content-utils';
-import { createGitOperations, type GitAuthor, type GitConfig } from './git-operations';
-import type { APIError, ContentManifest, DeleteResult, ErrorCode, FindOptions, GlobalFilters } from './types';
-import { ErrorCodes } from './types';
+import { type Context, Hono } from 'hono';
+import { type AssetConfig, AssetOperations } from './asset-operations.js';
+import { findAssetUsage } from './asset-usage.js';
+import type { ContentAPI } from './content-api.interface.js';
+import { localesOf, normalizeAndValidatePathname } from './content-utils.js';
+import { createGitOperations, type GitAuthor, type GitConfig } from './git-operations.js';
+import type {
+  APIError,
+  ContentManifest,
+  CreateResult,
+  DeleteResult,
+  ErrorCode,
+  FindOptions,
+  GlobalFilters,
+  UpdateResult,
+} from './types.js';
+import { ErrorCodes } from './types.js';
 
 /**
  * Helper to create standardized error responses
@@ -32,22 +41,80 @@ function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
 
+/** A reason a create or an update refuses, other than those each route answers itself. */
+type Refusal = Exclude<
+  NonNullable<CreateResult['reason'] | UpdateResult['reason']>,
+  'write_error' | 'stale_write' | 'not_found'
+>;
+
 /**
- * Create REST API router using Hono
- * Implements the ID-based API specification from implementation-plan.md
+ * How a refused create or update answers, by reason: the error code, the HTTP status and the
+ * message when the backend gave none. 409 when another entry has the path or name, or a page
+ * redirects from the path; 400 when the caller can fix the input. A caller that can fix it by
+ * changing one field is told which one (`details.field`), so none of these falls through to a 500
+ * whose only clue is a raw error string.
+ */
+const refusals: Record<Refusal, { code: ErrorCode; status: 400 | 409; message: string }> = {
+  already_exists: { code: ErrorCodes.ALREADY_EXISTS, status: 409, message: 'Content already exists' },
+  name_taken: { code: ErrorCodes.NAME_TAKEN, status: 409, message: 'A fragment with that name already exists' },
+  pathname_taken: { code: ErrorCodes.PATHNAME_TAKEN, status: 409, message: 'Pathname already taken' },
+  pathname_in_redirects: {
+    code: ErrorCodes.PATHNAME_TAKEN,
+    status: 409,
+    message: 'Pathname is already in use as a redirect',
+  },
+  invalid_name: { code: ErrorCodes.INVALID_REQUEST, status: 400, message: 'Invalid name' },
+  invalid_collection: { code: ErrorCodes.INVALID_REQUEST, status: 400, message: 'Invalid collection' },
+  invalid_locale: { code: ErrorCodes.INVALID_LOCALE, status: 400, message: 'Invalid locale' },
+  invalid_pathname: { code: ErrorCodes.INVALID_PATHNAME, status: 400, message: 'Invalid pathname' },
+  metadata_too_large: { code: ErrorCodes.METADATA_TOO_LARGE, status: 400, message: 'Metadata too large' },
+  missing_field: { code: ErrorCodes.MISSING_REQUIRED_FIELD, status: 400, message: 'Missing required field' },
+  // Site resolution failing, not a bad field: with no sites configured at all, no value the caller
+  // could send would satisfy it.
+  no_sites_configured: { code: ErrorCodes.INVALID_REQUEST, status: 400, message: 'Site not found' },
+  unknown_site: { code: ErrorCodes.INVALID_REQUEST, status: 400, message: 'Site not found' },
+};
+
+function refusalOf(reason: string | undefined) {
+  return reason !== undefined && Object.hasOwn(refusals, reason) ? refusals[reason as Refusal] : undefined;
+}
+
+/**
+ * Whether a request is a write another website made the browser send. The routes write into the
+ * project, and any page open in the browser can make it send a form post without asking the
+ * server first. The browser says where a request comes from: `Sec-Fetch-Site`, or in older
+ * browsers the `Origin` of the page, which for the editor is the address it sent the request to
+ * (the `Host`). A request with neither did not come from a web page.
+ */
+function isCrossSiteWrite(c: Context): boolean {
+  if (c.req.method === 'GET' || c.req.method === 'HEAD' || c.req.method === 'OPTIONS') return false;
+  const fetchSite = c.req.header('Sec-Fetch-Site');
+  if (fetchSite !== undefined) return fetchSite !== 'same-origin';
+  const origin = c.req.header('Origin');
+  if (origin === undefined) return false;
+  return !URL.canParse(origin) || new URL(origin).host !== c.req.header('Host');
+}
+
+/**
+ * Create REST API router using Hono. Routes address content by id rather than
+ * by file path, so storage layout stays an implementation detail.
  */
 export interface ContentAPIRouterOptions {
   assetsPath?: string;
-  assetConfig?: Omit<AssetConfig, 'assetsPath'>;
-  /** Content root directory for asset usage tracking */
+  assetConfig?: Omit<AssetConfig, 'assetsPath' | 'contentRoot'>;
+  /** Content root directory: holds asset metadata records, is scanned for asset usage, and is where git runs */
   contentRoot?: string;
 }
 
 export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRouterOptions) {
   const app = new Hono();
 
-  // Enable CORS for CMS access
-  app.use('/*', cors());
+  // The editor calls these routes from the page they are served with, so no other origin is
+  // granted access (no CORS headers), and a write another website sends is refused.
+  app.use('/*', async (c, next) => {
+    if (!isCrossSiteWrite(c)) return next();
+    return c.json(errorResponse(ErrorCodes.FORBIDDEN, 'Refused a write another website sent through the browser'), 403);
+  });
 
   // GET /auth/user - Get current authenticated user
   app.get('/auth/user', async (c) => {
@@ -69,9 +136,9 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
     try {
       const allCollections = new Set<string>();
 
-      // Get collections from blocks
-      const blockCollections = api.blocks.collections;
-      for (const collection of blockCollections) {
+      // Get collections from fragments
+      const fragmentCollections = api.fragments.collections;
+      for (const collection of fragmentCollections) {
         allCollections.add(collection);
       }
 
@@ -96,7 +163,7 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
 
   // GET /content - List all content with optional filters
   app.get('/content', async (c) => {
-    const kind = c.req.query('kind'); // 'block' or 'page'
+    const kind = c.req.query('kind'); // 'fragment' or 'page'
     const site = c.req.query('site');
     const collection = c.req.query('collection');
     const locales = c.req.query('locales'); // comma-separated
@@ -176,40 +243,12 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
         // back to a generic "API error: 500" string and inline error copy
         // like "already exists" never reaches the user.
         const errMessage = (result.error instanceof Error ? result.error.message : undefined) ?? '';
-        if (result.reason === 'already_exists') {
+        const fieldDetails = result.field ? { field: result.field } : undefined;
+        const refusal = refusalOf(result.reason);
+        if (refusal) {
           return c.json(
-            { ...result, ...errorResponse(ErrorCodes.ALREADY_EXISTS, errMessage || 'Content already exists') },
-            409,
-          );
-        }
-        if (result.reason === 'name_taken') {
-          return c.json(
-            {
-              ...result,
-              ...errorResponse(ErrorCodes.NAME_TAKEN, errMessage || 'A block with that name already exists'),
-            },
-            409,
-          );
-        }
-        if (result.reason === 'pathname_taken') {
-          return c.json(
-            { ...result, ...errorResponse(ErrorCodes.PATHNAME_TAKEN, errMessage || 'Pathname already taken') },
-            409,
-          );
-        }
-        if (result.reason === 'invalid_name') {
-          return c.json({ ...result, ...errorResponse(ErrorCodes.INVALID_REQUEST, errMessage || 'Invalid name') }, 400);
-        }
-        if (result.reason === 'invalid_pathname') {
-          return c.json(
-            { ...result, ...errorResponse(ErrorCodes.INVALID_PATHNAME, errMessage || 'Invalid pathname') },
-            400,
-          );
-        }
-        if (result.reason === 'metadata_too_large') {
-          return c.json(
-            { ...result, ...errorResponse(ErrorCodes.METADATA_TOO_LARGE, errMessage || 'Metadata too large') },
-            400,
+            { ...result, ...errorResponse(refusal.code, errMessage || refusal.message, fieldDetails) },
+            refusal.status,
           );
         }
         return c.json(
@@ -232,9 +271,9 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
     }
   });
 
-  // PUT /content/:id - Update content (full update)
-  app.put('/content/:id', async (c) => {
-    const id = c.req.param('id');
+  // PUT /content/:id - Update content (full update); PATCH /content/:id - Partial update
+  const updateContent = async (c: Context) => {
+    const id = c.req.param('id') ?? '';
     const locale = c.req.query('locale');
     const etag = c.req.query('etag') || '';
 
@@ -261,7 +300,22 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
         if (result.reason === 'not_found') {
           return c.json(errorResponse(ErrorCodes.CONTENT_NOT_FOUND, 'Content not found', { id }), 404);
         }
-        return c.json(result, 500);
+        const refusal = refusalOf(result.reason);
+        if (refusal) {
+          return c.json(
+            { ...result, ...errorResponse(refusal.code, errorMessage(result.error, refusal.message)) },
+            refusal.status,
+          );
+        }
+        // The backend's own refusals, such as an emptied title or metadata over 4 KB, carry their
+        // message in an Error, which serializes to `{}`: send it as a refused create does.
+        return c.json(
+          {
+            ...result,
+            ...errorResponse(ErrorCodes.WRITE_ERROR, errorMessage(result.error, 'Failed to update content')),
+          },
+          500,
+        );
       }
 
       // Set ETag header
@@ -274,61 +328,14 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
         {
           success: false,
           reason: 'write_error',
-          error: error instanceof Error ? error.message : 'Unknown error',
+          ...errorResponse(ErrorCodes.WRITE_ERROR, errorMessage(error, 'Failed to update content')),
         },
         500,
       );
     }
-  });
-
-  // PATCH /content/:id - Partial update
-  app.patch('/content/:id', async (c) => {
-    const id = c.req.param('id');
-    const locale = c.req.query('locale');
-    const etag = c.req.query('etag') || '';
-
-    if (!locale) {
-      return c.json(
-        errorResponse(ErrorCodes.MISSING_REQUIRED_FIELD, 'locale query parameter is required', { field: 'locale' }),
-        400,
-      );
-    }
-
-    try {
-      const data = await c.req.json();
-      const result = await api.updateLocalized({ id, locale, data, etag });
-
-      if (!result.success) {
-        if (result.reason === 'stale_write') {
-          return c.json(
-            errorResponse(ErrorCodes.STALE_WRITE, 'Content has been modified since you last loaded it', {
-              currentEtag: result.currentEtag,
-            }),
-            412,
-          );
-        }
-        if (result.reason === 'not_found') {
-          return c.json(errorResponse(ErrorCodes.CONTENT_NOT_FOUND, 'Content not found', { id }), 404);
-        }
-        return c.json(result, 500);
-      }
-
-      // Set ETag header
-      c.header('ETag', result.etag);
-
-      return c.json(result);
-    } catch (error) {
-      console.error('[Content API] Failed to patch content:', error);
-      return c.json(
-        {
-          success: false,
-          reason: 'write_error',
-          error: error instanceof Error ? error.message : 'Unknown error',
-        },
-        500,
-      );
-    }
-  });
+  };
+  app.put('/content/:id', updateContent);
+  app.patch('/content/:id', updateContent);
 
   // DELETE /content/:id - Delete content (entire entry or specific locale)
   app.delete('/content/:id', async (c) => {
@@ -430,10 +437,9 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
         return c.json({ available: true });
       }
 
-      const existing = api.data.getByName(collection, name);
       return c.json({
         available: false,
-        existingId: existing?.id,
+        existingId: api.data.getNameConflict(collection, name, excludeId),
       });
     } catch (error) {
       return c.json(
@@ -500,6 +506,11 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
   // Must be registered BEFORE /:site routes to avoid route conflicts (/:site would match "assets")
 
   if (options?.assetsPath) {
+    // Asset metadata records live under the content root. There is no falling
+    // back to the media folder: a site serves it, so a record there is published.
+    if (!options.contentRoot) {
+      throw new Error('The assetsPath option needs contentRoot as well: asset metadata is kept under the content root');
+    }
     const assetOps = new AssetOperations({
       assetsPath: options.assetsPath,
       contentRoot: options.contentRoot,
@@ -515,6 +526,12 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
         return { folder: `/${relativePath.slice(0, lastSlash)}`, filename: relativePath.slice(lastSlash + 1) };
       }
       return { folder: '/', filename: relativePath };
+    }
+
+    // The router decodes `%2F`, so a path in the address can climb out of the assets folder. The
+    // containment check refuses it, and that is the caller's mistake, not a server fault.
+    function isPathTraversal(error: unknown): boolean {
+      return error instanceof Error && error.message === 'Path traversal detected';
     }
 
     // POST /assets/move — move assets between folders
@@ -544,7 +561,7 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
 
         return c.json(result);
       } catch (error) {
-        if (error instanceof Error && error.message === 'Path traversal detected') {
+        if (isPathTraversal(error)) {
           return c.json(errorResponse(ErrorCodes.INVALID_REQUEST, 'Invalid folder path'), 400);
         }
         return c.json(logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to move assets'), 500);
@@ -561,12 +578,12 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
         }
 
         const alt = typeof body.alt === 'string' ? body.alt : undefined;
-        const uploadedBy = typeof body.uploadedBy === 'string' ? body.uploadedBy : undefined;
-        const width = typeof body.width === 'string' ? Number.parseInt(body.width, 10) : undefined;
-        const height = typeof body.height === 'string' ? Number.parseInt(body.height, 10) : undefined;
         const folder = typeof body.folder === 'string' ? body.folder : undefined;
 
-        const result = await assetOps.upload(file, { alt, uploadedBy, width, height, folder });
+        // The uploader is deliberately not read from the request: anyone who can
+        // reach this route could otherwise put any name on any picture, and an
+        // audit trail that anyone can write is worse than no audit trail.
+        const result = await assetOps.upload(file, { alt, folder });
 
         if (!result.success) {
           return c.json(errorResponse(ErrorCodes.ASSET_UPLOAD_FAILED, result.error), 400);
@@ -581,10 +598,9 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
     // POST /assets/import-url — import image from URL
     app.post('/assets/import-url', async (c) => {
       try {
-        const { url, alt, uploadedBy, folder } = await c.req.json<{
+        const { url, alt, folder } = await c.req.json<{
           url: string;
           alt?: string;
-          uploadedBy?: string;
           folder?: string;
         }>();
 
@@ -592,7 +608,8 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
           return c.json(errorResponse(ErrorCodes.INVALID_REQUEST, 'url is required'), 400);
         }
 
-        const result = await assetOps.importFromUrl(url, { alt, uploadedBy, folder });
+        // As with /assets/upload: the uploader never comes off the wire
+        const result = await assetOps.importFromUrl(url, { alt, folder });
 
         if (!result.success) {
           return c.json(errorResponse(ErrorCodes.ASSET_UPLOAD_FAILED, result.error), 400);
@@ -621,7 +638,7 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
         const result = await assetOps.listFolder(path);
         return c.json(result);
       } catch (error) {
-        if (error instanceof Error && error.message === 'Path traversal detected') {
+        if (isPathTraversal(error)) {
           return c.json(errorResponse(ErrorCodes.INVALID_REQUEST, 'Invalid folder path'), 400);
         }
         return c.json(logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to list folder'), 500);
@@ -659,11 +676,10 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
       }
     });
 
-    // GET /assets/usage/:path{.+} — get asset usage information (supports subfolders)
+    // GET /assets/usage/:path{.+} — content that links to the asset at this path from the assets root
     app.get('/assets/usage/:path{.+}', async (c) => {
       try {
-        const { filename } = splitAssetPath(c.req.param('path'));
-        const usage = await assetOps.getUsage(filename);
+        const usage = await findAssetUsage(api, c.req.param('path'));
         return c.json({ usage });
       } catch (error) {
         return c.json(logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to get asset usage'), 500);
@@ -674,6 +690,7 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
     app.get('/assets/serve/:path{.+}', async (c) => {
       try {
         const { folder, filename } = splitAssetPath(c.req.param('path'));
+        assetOps.getAssetPath(filename, folder);
         const result = await assetOps.readAssetFile(filename, folder);
 
         if (!result.success) {
@@ -687,6 +704,9 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
           },
         });
       } catch (error) {
+        if (isPathTraversal(error)) {
+          return c.json(errorResponse(ErrorCodes.INVALID_REQUEST, 'Invalid asset path'), 400);
+        }
         return c.json(logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to serve asset'), 500);
       }
     });
@@ -695,6 +715,7 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
     app.get('/assets/meta/:path{.+}', async (c) => {
       try {
         const { folder, filename } = splitAssetPath(c.req.param('path'));
+        assetOps.getAssetPath(filename, folder);
         const asset = await assetOps.getAsset(filename, folder);
 
         if (!asset) {
@@ -703,6 +724,9 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
 
         return c.json(asset);
       } catch (error) {
+        if (isPathTraversal(error)) {
+          return c.json(errorResponse(ErrorCodes.INVALID_REQUEST, 'Invalid asset path'), 400);
+        }
         return c.json(logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to get asset'), 500);
       }
     });
@@ -711,16 +735,24 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
     app.patch('/assets/meta/:path{.+}', async (c) => {
       try {
         const { folder, filename } = splitAssetPath(c.req.param('path'));
+        assetOps.getAssetPath(filename, folder);
         const { alt, tags } = await c.req.json<{ alt?: string; tags?: string[] }>();
 
         const result = await assetOps.updateMetadata(filename, { alt, tags }, folder);
 
         if (!result.success) {
-          return c.json(errorResponse(ErrorCodes.ASSET_NOT_FOUND, result.error), 404);
+          // A disk problem is not a missing picture: saying 404 sent the editor
+          // back to refetch a value it had just failed to store.
+          return result.reason === 'not-found'
+            ? c.json(errorResponse(ErrorCodes.ASSET_NOT_FOUND, result.error), 404)
+            : c.json(errorResponse(ErrorCodes.INTERNAL_ERROR, result.error), 500);
         }
 
         return c.json(result.asset);
       } catch (error) {
+        if (isPathTraversal(error)) {
+          return c.json(errorResponse(ErrorCodes.INVALID_REQUEST, 'Invalid asset path'), 400);
+        }
         return c.json(logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to update asset'), 500);
       }
     });
@@ -729,6 +761,7 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
     app.delete('/assets/meta/:path{.+}', async (c) => {
       try {
         const { folder, filename } = splitAssetPath(c.req.param('path'));
+        assetOps.getAssetPath(filename, folder);
         const result = await assetOps.delete(filename, folder);
 
         if (!result.success) {
@@ -737,6 +770,9 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
 
         return c.json({ success: true });
       } catch (error) {
+        if (isPathTraversal(error)) {
+          return c.json(errorResponse(ErrorCodes.INVALID_REQUEST, 'Invalid asset path'), 400);
+        }
         return c.json(logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to delete asset'), 500);
       }
     });
@@ -750,9 +786,9 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
     const site = c.req.param('site');
 
     try {
-      if (site === 'blocks') {
-        // Use the efficient collections getter for blocks
-        const collections = Array.from(api.blocks.collections).sort();
+      if (site === 'fragments') {
+        // Use the efficient collections getter for fragments
+        const collections = Array.from(api.fragments.collections).sort();
         return c.json({ collections });
       }
       // Use the efficient collections getter for sites
@@ -762,22 +798,22 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
       }
       const collections = Array.from(siteObj.collections).sort();
       return c.json({ collections });
-    } catch (error) {
+    } catch {
       return c.json(errorResponse(ErrorCodes.SITE_NOT_FOUND, `Site '${site}' not found`, { site }), 404);
     }
   });
 
-  // GET /:site/pages - Get pages for a site (not valid for blocks)
+  // GET /:site/pages - Get pages for a site (not valid for fragments)
   app.get('/:site/pages', async (c) => {
     const site = c.req.param('site');
     const locale = c.req.query('locale');
 
     try {
-      if (site === 'blocks') {
+      if (site === 'fragments') {
         return c.json(
           errorResponse(
             ErrorCodes.INVALID_REQUEST,
-            'Blocks do not have pages. Use /content?kind=block to list blocks.',
+            'Fragments do not have pages. Use /content?kind=fragment to list fragments.',
           ),
           400,
         );
@@ -817,11 +853,11 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
     }
 
     try {
-      if (site === 'blocks') {
+      if (site === 'fragments') {
         return c.json(
           errorResponse(
             ErrorCodes.INVALID_REQUEST,
-            'Blocks do not have pathnames. This endpoint is only for page content.',
+            'Fragments do not have pathnames. This endpoint is only for page content.',
           ),
           400,
         );
@@ -868,25 +904,25 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
     }
   });
 
-  // GET /blocks - Shorthand for all blocks
-  app.get('/blocks', async (c) => {
+  // GET /fragments - Shorthand for all fragments
+  app.get('/fragments', async (c) => {
     const collection = c.req.query('collection');
     const locale = c.req.query('locale');
 
     try {
-      const filters: GlobalFilters = { kind: 'block' };
+      const filters: GlobalFilters = { kind: 'fragment' };
       if (collection) filters.collection = collection;
       if (locale) filters.locales = [locale];
 
       const items = Array.from(api.listAllContent(filters));
       return c.json({ items, total: items.length });
     } catch (error) {
-      return c.json(logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to list blocks'), 500);
+      return c.json(logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to list fragments'), 500);
     }
   });
 
-  // GET /blocks/name-available - Check if block name is available
-  app.get('/blocks/name-available', async (c) => {
+  // GET /fragments/name-available - Check if fragment name is available
+  app.get('/fragments/name-available', async (c) => {
     const name = c.req.query('name');
     const collection = c.req.query('collection') || 'components';
     const locale = c.req.query('locale') || 'en';
@@ -900,10 +936,10 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
     }
 
     try {
-      // Check block name availability through listing
+      // Check fragment name availability through listing
       const existing = Array.from(
         api.listAllContent({
-          kind: 'block',
+          kind: 'fragment',
           collection: collection,
           locales: [locale],
         }),
@@ -919,13 +955,13 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
         }
       }
 
-      // If no existing block, name is available
+      // If no existing fragment, name is available
       if (!taken) {
         return c.json({ available: true });
       }
 
-      // If existing block has same ID as excludeId, name is available
-      // (useful when editing existing block)
+      // If existing fragment has same ID as excludeId, name is available
+      // (useful when editing existing fragment)
       if (excludeId && taken.id === excludeId) {
         return c.json({ available: true });
       }
@@ -937,36 +973,36 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
       });
     } catch (error) {
       return c.json(
-        logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to check block name availability'),
+        logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to check fragment name availability'),
         500,
       );
     }
   });
 
-  // GET /blocks/:name - Get block by name
-  app.get('/blocks/:name', async (c) => {
+  // GET /fragments/:name - Get fragment by name
+  app.get('/fragments/:name', async (c) => {
     const name = c.req.param('name');
     const collection = c.req.query('collection') || 'components';
     const locale = c.req.query('locale');
 
     try {
-      const block = api.blocks.getByName(collection, name, locale);
+      const fragment = api.fragments.getByName(collection, name, locale);
 
-      if (!block) {
-        return c.json(errorResponse(ErrorCodes.CONTENT_NOT_FOUND, 'Block not found', { name, collection }), 404);
+      if (!fragment) {
+        return c.json(errorResponse(ErrorCodes.CONTENT_NOT_FOUND, 'Fragment not found', { name, collection }), 404);
       }
 
       // If locale specified and provided, filter the response
-      if (locale && block.locales[locale]) {
+      if (locale && fragment.locales[locale]) {
         return c.json({
-          ...block,
-          locales: { [locale]: block.locales[locale] },
+          ...fragment,
+          locales: { [locale]: fragment.locales[locale] },
         });
       }
 
-      return c.json(block);
+      return c.json(fragment);
     } catch (error) {
-      return c.json(logAndCreateErrorResponse(error, ErrorCodes.FETCH_ERROR, 'Failed to fetch block'), 500);
+      return c.json(logAndCreateErrorResponse(error, ErrorCodes.FETCH_ERROR, 'Failed to fetch fragment'), 500);
     }
   });
 
@@ -1040,6 +1076,17 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
           return c.json(
             { moved: false, ...errorResponse(ErrorCodes.CONTENT_NOT_FOUND, 'Content not found', { id }) },
             404,
+          );
+        }
+        // The update checks the new path as a create does: a malformed one is invalid_pathname, and
+        // another page's path written loosely ('/team/') passes the check above but not the update.
+        // A move calls a taken path already_exists, as the check above does.
+        const refusal = refusalOf(updateResult.reason);
+        if (refusal) {
+          const reason = updateResult.reason === 'invalid_pathname' ? 'invalid_pathname' : 'already_exists';
+          return c.json(
+            { moved: false, reason, ...errorResponse(refusal.code, errorMessage(updateResult.error, 'Move refused')) },
+            refusal.status,
           );
         }
         return c.json({ moved: false, ...errorResponse(ErrorCodes.WRITE_ERROR, 'Update failed') }, 500);
@@ -1158,13 +1205,13 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
   // POST /git/commit - Commit all changes
   app.post('/git/commit', async (c) => {
     try {
-      const body = await c.req.json<{ message?: string }>().catch(() => ({}) as { message?: string });
+      const body = await c.req.json<{ message?: string }>().catch(() => undefined);
 
       // Auto-generate message if not provided
       const date = new Date();
       const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       const defaultMessage = `CMS changes - ${monthNames[date.getMonth()]} ${date.getDate()}`;
-      const message = body.message || defaultMessage;
+      const message = body?.message || defaultMessage;
 
       // Extract user email from CF Access header for commit attribution
       const userEmail = c.req.header('X-CF-User-Email');
@@ -1239,7 +1286,7 @@ export function createContentMiddleware(contentApi: ContentAPI, options?: Conten
 
   // Convert Hono app to Node.js middleware
   return async (req: any, res: any, next: () => void) => {
-    const url = new URL(req.url!, `http://${req.headers.host}`);
+    const url = new URL(req.url, `http://${req.headers.host}`);
 
     // Only handle API routes (base path depends on context)
     const basePath = url.pathname.startsWith('/__cms/api') ? '/__cms/api' : '/__conloca/api';
@@ -1254,7 +1301,7 @@ export function createContentMiddleware(contentApi: ContentAPI, options?: Conten
     const request = new Request(`http://localhost${path}${url.search}`, {
       method: req.method,
       headers: req.headers,
-      body: ['GET', 'HEAD'].includes(req.method!) ? undefined : await readBody(req),
+      body: ['GET', 'HEAD'].includes(req.method) ? undefined : await readBody(req),
     });
 
     // Handle with Hono

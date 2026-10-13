@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdir, rm, writeFile } from 'fs/promises';
-import { join } from 'path';
-import { FileSystemContentAPI } from '../src/filesystem-content-api';
-import type { SitesConfig } from '../src/types';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { FileSystemContentAPI } from '../src/filesystem-content-api.js';
+import type { SitesConfig } from '../src/types.js';
+import { testTempDir } from './test-temp-dir.js';
 
 describe('FileSystemContentAPI cache reading', () => {
   let tempDir: string;
@@ -19,7 +20,7 @@ describe('FileSystemContentAPI cache reading', () => {
   };
 
   beforeEach(async () => {
-    tempDir = `/tmp/content-api-cache-test-${Date.now()}`;
+    tempDir = testTempDir('content-api-cache-test');
     await mkdir(tempDir, { recursive: true });
     await mkdir(join(tempDir, 'testsite/pages'), { recursive: true });
 

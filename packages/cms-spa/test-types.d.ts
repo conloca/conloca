@@ -1,4 +1,5 @@
 // TypeScript declarations for jest-dom matchers with Bun
+
 import type { TestingLibraryMatchers } from '@testing-library/jest-dom/matchers';
 
 declare module 'bun:test' {

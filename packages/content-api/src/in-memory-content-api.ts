@@ -1,21 +1,30 @@
-import { Blocks } from './blocks';
-import type { ContentAPI } from './content-api.interface';
-import { filterContentWithIndexes } from './content-filters';
-import { ContentIndex } from './content-index';
+import type { ContentAPI } from './content-api.interface.js';
+import { filterContentWithIndexes } from './content-filters.js';
+import { ContentIndex } from './content-index.js';
 import {
   buildLocaleVersion,
   buildPathnameHistory,
+  checkEntryName,
+  checkPagePathname,
   generateContentId,
   isContentPublished,
   shouldUpdateModifiedTimestamp,
   updatePublishDates,
   validateAndPrepareMetadata,
   validateCreateContent,
-} from './content-operations';
-import { getCurrentISODate, localesOf, mapLocales, mapSiteNames, serializeMdxWithFrontmatter } from './content-utils';
-import { Data } from './data';
-import { calculateEtagsFromMdxBuffer, findMdxContentStartPosition } from './etag-utils';
-import { Site } from './site';
+} from './content-operations.js';
+import {
+  applyMetaPatch,
+  getCurrentISODate,
+  localesOf,
+  mapLocales,
+  mapSiteNames,
+  serializeMdxWithFrontmatter,
+} from './content-utils.js';
+import { Data } from './data.js';
+import { calculateEtagsFromMdxBuffer, findMdxContentStartPosition } from './etag-utils.js';
+import { Fragments } from './fragments.js';
+import { Site } from './site.js';
 import type {
   BatchResult,
   ContentData,
@@ -34,8 +43,8 @@ import type {
   UpdateLocaleInput,
   UpdateResult,
   VXJSONFile,
-} from './types';
-import { VXJSON } from './vxjson';
+} from './types.js';
+import { VXJSON } from './vxjson.js';
 
 /**
  * In-memory implementation of ContentAPI for testing
@@ -44,7 +53,7 @@ import { VXJSON } from './vxjson';
 export class InMemoryContentAPI implements ContentAPI {
   private contentIndex: ContentIndex;
   readonly sitesConfig: SitesConfig;
-  readonly blocks: Blocks;
+  readonly fragments: Fragments;
   readonly data: Data;
   private readonly sites: Record<string, Site>;
 
@@ -57,8 +66,8 @@ export class InMemoryContentAPI implements ContentAPI {
     // Initialize content index (not cached for in-memory)
     this.contentIndex = ContentIndex.createUncached(this.sitesConfig);
 
-    // Initialize blocks
-    this.blocks = new Blocks(this, this.contentIndex.getBlockIndex());
+    // Initialize fragments
+    this.fragments = new Fragments(this, this.contentIndex.getFragmentIndex());
 
     // Initialize data
     this.data = new Data(this, this.contentIndex.getDataIndex());
@@ -112,7 +121,7 @@ export class InMemoryContentAPI implements ContentAPI {
 
   async getLocalized(id: string, locale: string): Promise<LocalizedEntry | null> {
     const manifest = this.contentIndex.getManifest(id);
-    if (!manifest || !manifest.locales[locale]) {
+    if (!manifest?.locales[locale]) {
       return null;
     }
 
@@ -144,13 +153,14 @@ export class InMemoryContentAPI implements ContentAPI {
 
   async createContent(data: CreateContentInput): Promise<CreateResult> {
     // Use shared validation
-    const validation = validateCreateContent(data, this.sites, this.blocks);
+    const validation = validateCreateContent(data, this.sites, this.fragments, this.data);
     if (!validation.valid) {
       return {
         success: false,
         reason: validation.reason,
         error: validation.error ? new Error(validation.error) : undefined,
         existingId: validation.existingId,
+        field: validation.field,
       };
     }
 
@@ -228,7 +238,7 @@ export class InMemoryContentAPI implements ContentAPI {
           meta,
           kind: data.kind,
           pathname: data.kind === 'page' ? localeData.pathname : undefined,
-          name: data.kind === 'block' || data.kind === 'data' ? data.name : undefined,
+          name: data.kind === 'fragment' || data.kind === 'data' ? data.name : undefined,
           publishAt:
             localeData.publishAt && typeof localeData.publishAt === 'string' ? localeData.publishAt : undefined,
           unpublishAt:
@@ -304,32 +314,49 @@ export class InMemoryContentAPI implements ContentAPI {
       };
     }
 
-    // Validate metadata if updating
+    let nextMeta = localeVersion.meta;
+    // Validate the same metadata object that will be stored.
     if (data.meta) {
-      const newMeta = { ...localeVersion.meta, ...data.meta };
-      const validation = validateAndPrepareMetadata(newMeta);
-      if (!validation.valid) {
+      const validation = validateAndPrepareMetadata(applyMetaPatch(localeVersion.meta, data.meta));
+      if (!validation.valid || !validation.sortedMeta) {
         return {
           success: false,
           reason: 'write_error',
           error: new Error(validation.error!),
         };
       }
+      nextMeta = validation.sortedMeta;
     }
 
-    // Validate pathname change if updating pathname for pages
-    if (data.pathname && manifest.kind === 'page' && manifest.site) {
-      const site = this.sites[manifest.site];
-      if (site) {
-        // Check if new pathname is already taken by another content
-        const existingId = site.getPathnameConflict(data.pathname, locale, id);
-        if (existingId) {
-          return {
-            success: false,
-            reason: 'write_error',
-            error: new Error(`Pathname ${data.pathname} is already taken by content ${existingId}`),
-          };
-        }
+    // A page's new path is refused when malformed or taken and stored tidied, as on the filesystem.
+    // An unchanged path is left alone, so a page keeps a path from before the checks.
+    let pathname = data.pathname;
+    if (pathname !== undefined && pathname !== localeVersion.pathname && manifest.kind === 'page') {
+      // Own-key only: the manifest's site name is never checked against the
+      // configured sites, so an inherited key would reach the calls below.
+      const site = manifest.site && Object.hasOwn(this.sites, manifest.site) ? this.sites[manifest.site] : undefined;
+      const checked = checkPagePathname(site, pathname, locale, id);
+      if (!checked.valid) {
+        return { success: false, reason: checked.reason, error: new Error(checked.error) };
+      }
+      pathname = checked.pathname;
+    }
+
+    // A new fragment or data name passes the create's checks, as on the filesystem. An unchanged
+    // name is left alone, so an entry keeps a name from before the checks.
+    const { kind } = manifest;
+    const renamed = data.name !== undefined && data.name !== localeVersion.name && kind !== 'page';
+    if (renamed) {
+      const entries = kind === 'fragment' ? this.fragments : this.data;
+      const refused = checkEntryName(
+        kind,
+        manifest.collection,
+        data.name,
+        (name) => (kind === 'fragment' ? this.fragments.isFragmentNameValid(name) : this.data.isDataNameValid(name)),
+        (name) => entries.getNameConflict(manifest.collection, name, id),
+      );
+      if (refused) {
+        return { success: false, reason: refused.reason, error: new Error(refused.error) };
       }
     }
 
@@ -352,17 +379,12 @@ export class InMemoryContentAPI implements ContentAPI {
     }
 
     if (data.meta) {
-      updatedLocaleVersion.meta = { ...localeVersion.meta, ...data.meta };
+      updatedLocaleVersion.meta = nextMeta;
     }
 
-    if (data.pathname !== undefined && manifest.kind === 'page') {
+    if (pathname !== undefined && manifest.kind === 'page') {
       // Build pathname history for published content
-      const pathnameHistory = buildPathnameHistory(
-        oldPathname,
-        data.pathname,
-        isContentPublished(localeVersion),
-        nowStr,
-      );
+      const pathnameHistory = buildPathnameHistory(oldPathname, pathname, isContentPublished(localeVersion), nowStr);
 
       // Merge with existing pathname history
       if (Object.keys(pathnameHistory).length > 0) {
@@ -372,7 +394,11 @@ export class InMemoryContentAPI implements ContentAPI {
         };
       }
 
-      updatedLocaleVersion.pathname = data.pathname;
+      updatedLocaleVersion.pathname = pathname;
+    }
+
+    if (renamed) {
+      updatedLocaleVersion.name = data.name;
     }
 
     // Handle publish date updates using shared function
@@ -443,6 +469,10 @@ export class InMemoryContentAPI implements ContentAPI {
       },
     };
 
+    // A renamed locale is replaced, so the old name no longer finds the entry.
+    if (renamed) {
+      this.contentIndex.removeLocale(id, locale);
+    }
     // Update content in the index (this will handle pathname index updates)
     this.contentIndex.addContent(updatedManifest, updatedLocaleVersion, updatedContent);
 
@@ -489,14 +519,15 @@ export class InMemoryContentAPI implements ContentAPI {
     };
   }
 
-  // Site and blocks access
+  // Site and fragments access
   getSite(siteName: string): Site | null {
-    if (siteName === 'blocks') {
-      throw new Error('Use `blocks` property instead of getSite("blocks")');
+    if (siteName === 'fragments') {
+      throw new Error('Use `fragments` property instead of getSite("fragments")');
     }
 
-    const site = this.sites[siteName];
-    return site || null;
+    // Own-key only: the name is caller-supplied, and an inherited key like
+    // `constructor` would resolve to a truthy non-Site.
+    return Object.hasOwn(this.sites, siteName) ? this.sites[siteName] : null;
   }
 
   // Global operations
@@ -541,20 +572,19 @@ export class InMemoryContentAPI implements ContentAPI {
       };
     }
 
-    // If only one locale left, remove entire content
-    if (Object.keys(manifest.locales).length === 1) {
-      this.contentIndex.removeEntry(id);
-    } else {
-      // Build updated manifest without the deleted locale
-      const updatedManifest: ContentManifest = {
-        ...manifest,
-        locales: { ...manifest.locales },
+    // Refuse the last locale — deleting it here used to silently delete the
+    // whole page. Count actual locales, not manifest keys: removeLocale
+    // clears a locale by assigning undefined and keeping the key, so a key
+    // count still includes dead slots after earlier translation deletes.
+    // Matches FileSystemContentAPI's contract.
+    if (Array.from(localesOf(manifest)).length === 1) {
+      return {
+        success: false,
+        error: new Error('Cannot delete the last locale. Use deleteContent to delete all content.'),
       };
-      updatedManifest.locales[locale] = undefined;
-
-      // Remove locale from index
-      this.contentIndex.removeLocale(manifest.id, locale);
     }
+
+    this.contentIndex.removeLocale(manifest.id, locale);
 
     return {
       success: true,
@@ -596,7 +626,7 @@ export class InMemoryContentAPI implements ContentAPI {
   }
 
   // Test helper method to directly set content
-  setContent(id: string, content: ContentEntry): void {
+  setContent(content: ContentEntry): void {
     // Build manifest from ContentEntry
     const manifest: ContentManifest = {
       id: content.id,
@@ -656,7 +686,7 @@ export class InMemoryContentAPI implements ContentAPI {
     contentType: 'application/json' | 'text/mdx';
   } | null> {
     const manifest = this.contentIndex.getManifest(id);
-    if (!manifest || !manifest.locales[locale]) {
+    if (!manifest?.locales[locale]) {
       return null;
     }
 

@@ -1,3 +1,3 @@
-export { evaluateMDXBlocks } from '@conloca/mdx/node';
-export { createPageRendererWithBlocks } from './components/RenderWithBlocks';
-export { RenderWithHydration } from './components/RenderWithHydration';
+export { evaluateMDXFragments } from '@conloca/mdx/node';
+export { createPageRendererWithFragments } from './components/RenderWithFragments.js';
+export { RenderWithHydration } from './components/RenderWithHydration.js';

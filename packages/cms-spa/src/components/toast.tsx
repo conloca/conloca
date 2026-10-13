@@ -16,7 +16,7 @@ import { Toaster as SonnerToaster, type ToasterProps } from 'sonner';
  *   `toast.success(...)`, `toast.error(...)`, etc. directly.
  * - `Toaster` wraps `sonner`'s `Toaster` with cms-spa defaults:
  *     - `position="bottom-right"` — quiet corner that doesn't compete with
- *       the host strip / banner stack.
+ *       a host app's top bar / banner stack.
  *     - `theme="system"` — Sonner reads `prefers-color-scheme` for its
  *       internal `data-sonner-theme` attribute. cms-spa's manual `.dark`
  *       class drives any Tailwind classes consumers add via `className` /

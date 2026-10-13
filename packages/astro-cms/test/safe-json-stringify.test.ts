@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { safeJsonStringify } from '../src/safe-json-stringify';
+import { safeJsonStringify } from '../src/safe-json-stringify.js';
 
 describe('safeJsonStringify', () => {
   test('escapes </script> to use unicode escapes', () => {

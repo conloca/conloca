@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import matter from 'gray-matter';
-import { serializeMdxWithFrontmatter } from '../src/content-utils';
+import { serializeMdxWithFrontmatter } from '../src/content-utils.js';
 
 describe('serializeMdxWithFrontmatter', () => {
   test('emits keys in canonical order regardless of input order', () => {

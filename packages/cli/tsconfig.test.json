@@ -13,9 +13,14 @@
     "src/**/*.spec.ts",
     "src/**/__tests__/**/*.ts",
     "src/**/__tests__/**/*.tsx",
+    "test/**/*.ts",
+    "test/**/*.tsx",
     "src/test-suite-tracer.ts"
   ],
   "references": [
+    {
+      "path": "../astro-cms/tsconfig.lib.json"
+    },
     {
       "path": "../content-api/tsconfig.lib.json"
     }

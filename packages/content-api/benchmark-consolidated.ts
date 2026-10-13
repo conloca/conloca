@@ -11,11 +11,11 @@
  * 4. Bun.file() is 3.3x faster than stat() for file size detection
  */
 
-import { readFileSync, statSync } from 'fs';
-import { type FileHandle, mkdir, mkdtemp, open, readdir, readFile, rm, stat, writeFile } from 'fs/promises';
-import { cpus, tmpdir } from 'os';
-import { join } from 'path';
-import { performance } from 'perf_hooks';
+import { readFileSync } from 'node:fs';
+import { type FileHandle, mkdir, mkdtemp, open, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { cpus, tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { performance } from 'node:perf_hooks';
 
 // Runtime detection
 const IS_BUN = typeof Bun !== 'undefined';
@@ -28,14 +28,6 @@ async function getFileSize(path: string): Promise<number> {
   }
   const stats = await stat(path);
   return stats.size;
-}
-
-// Sync version for comparison
-function getFileSizeSync(path: string): number {
-  if (IS_BUN && typeof Bun.file === 'function') {
-    return Bun.file(path).size;
-  }
-  return statSync(path).size;
 }
 
 interface FileInfo {
@@ -67,7 +59,7 @@ function parseContent(content: string): any {
     if (truncated.includes('"id"') || truncated.includes('"meta"')) {
       return { valid: true, length: truncated.length };
     }
-  } catch (e) {
+  } catch {
     // Ignore
   }
   return { valid: false, length: truncated.length };
@@ -78,7 +70,7 @@ async function createTestFiles(count: number): Promise<string> {
   const tempDir = await mkdtemp(join(tmpdir(), 'bench-consolidated-'));
   const contentDir = join(tempDir, 'content');
 
-  const dirs = ['shop/pages', 'shop/blog', 'blocks/heroes', 'corporate/pages'];
+  const dirs = ['shop/pages', 'shop/blog', 'fragments/heroes', 'corporate/pages'];
 
   for (const dir of dirs) {
     await mkdir(join(contentDir, dir), { recursive: true });
@@ -208,7 +200,7 @@ async function benchmarkNaiveParallel(files: FileInfo[], batchSize: number): Pro
     const batch = files.slice(i, i + batchSize);
 
     await Promise.all(
-      batch.map(async ({ path, size }) => {
+      batch.map(async ({ path }) => {
         // Naive: allocate buffer for every file
         const buffer = Buffer.allocUnsafe(4096);
         buffersAllocated++;
@@ -263,8 +255,7 @@ async function benchmarkMinimalParallel(files: FileInfo[], batchSize: number): P
 
     try {
       await Promise.all(
-        batch.map(async ({ path, size }, index) => {
-          // console.log(`[Minimal] Processing file ${index}: ${path.substring(path.lastIndexOf('/') + 1)} (${size} bytes)`);
+        batch.map(async ({ path }, index) => {
           const buffer = buffers[index]; // Reuse buffer
 
           let handle: FileHandle | undefined;
@@ -307,65 +298,12 @@ async function benchmarkMinimalParallel(files: FileInfo[], batchSize: number): P
   };
 }
 
-// 4. Smart approach - full reads for small files, partial for large
-async function benchmarkSmartParallel(files: FileInfo[], batchSize: number): Promise<BenchmarkResult> {
-  const start = performance.now();
-
-  // Pre-allocate buffers for reuse
-  const buffers = Array.from({ length: batchSize }, () => Buffer.allocUnsafe(4096));
-  const buffersAllocated = buffers.length;
-
-  let fullReads = 0;
-  let partialReads = 0;
-
-  for (let i = 0; i < files.length; i += batchSize) {
-    const batch = files.slice(i, i + batchSize);
-    // console.log(`[Smart] Starting batch ${i}/${files.length} (${batch.length} files)`);
-
-    await Promise.all(
-      batch.map(async ({ path, size }, index) => {
-        if (size <= 4096) {
-          fullReads++;
-          const content = await readFile(path, 'utf-8');
-          return parseContent(content);
-        }
-        partialReads++;
-        const buffer = buffers[index];
-
-        const handle = await open(path, 'r');
-        const { bytesRead } = await handle.read(buffer, 0, 4096, 0);
-        await handle.close();
-
-        const content = buffer.toString('utf-8', 0, bytesRead);
-        return parseContent(content);
-      }),
-    );
-  }
-
-  const duration = performance.now() - start;
-  return {
-    method: `Smart parallel (batch ${batchSize})`,
-    duration,
-    filesPerMs: files.length / duration,
-    speedup: 0,
-    memory: {
-      buffersAllocated,
-      bytesUsed: buffersAllocated * 4096,
-      savedVsNaive: 0,
-    },
-    stats: {
-      fullReads,
-      partialReads,
-    },
-  };
-}
-
 // Get system file descriptor limit
 async function getFileDescriptorLimit(): Promise<number> {
   try {
-    const { execSync } = await import('child_process');
+    const { execSync } = await import('node:child_process');
     const limit = execSync('ulimit -n', { encoding: 'utf-8' }).trim();
-    return Number.parseInt(limit) || 1024;
+    return Number.parseInt(limit, 10) || 1024;
   } catch {
     return 1024; // Default assumption
   }
@@ -443,16 +381,6 @@ async function runBenchmark() {
       }
       results.push(minimal);
       console.log(`3. ${minimal.method}: ${minimal.duration.toFixed(2)}ms (${minimal.speedup.toFixed(2)}x speedup)`);
-
-      /*
-      const smart = await benchmarkSmartParallel(files, batchSize);
-      smart.speedup = baseline.duration / smart.duration;
-      if (smart.memory && naive.memory) {
-        smart.memory.savedVsNaive = naive.memory.bytesUsed - smart.memory.bytesUsed;
-      }
-      results.push(smart);
-      console.log(`4. ${smart.method}: ${smart.duration.toFixed(2)}ms (${smart.speedup.toFixed(2)}x speedup)`);
-      */
     }
 
     // Also test CPU-based batch size if not already included
@@ -471,7 +399,7 @@ async function runBenchmark() {
   }
 
   // Summary and analysis
-  console.log('\n' + '='.repeat(80));
+  console.log(`\n${'='.repeat(80)}`);
   console.log('SUMMARY AND ANALYSIS');
   console.log('='.repeat(80));
 
@@ -498,11 +426,11 @@ async function runBenchmark() {
 
   // Analyze batch sizes across all file counts
   for (const [count, results] of Object.entries(allResults)) {
-    const fileCount = Number.parseInt(count);
+    const fileCount = Number.parseInt(count, 10);
     for (const result of results) {
       const batchMatch = result.method.match(/batch (\d+)/);
       if (batchMatch) {
-        const batchSize = Number.parseInt(batchMatch[1]);
+        const batchSize = Number.parseInt(batchMatch[1], 10);
         const perf = batchPerformance.get(batchSize) || { totalSpeedup: 0, wins: 0, fileCount: [] };
         perf.totalSpeedup += result.speedup;
         perf.fileCount.push(fileCount);
@@ -579,7 +507,7 @@ async function runBenchmark() {
   }
 
   // Final recommendations based on actual results
-  console.log('\n' + '='.repeat(80));
+  console.log(`\n${'='.repeat(80)}`);
   console.log('RECOMMENDATIONS BASED ON RESULTS');
   console.log('='.repeat(80));
 
@@ -655,7 +583,7 @@ async function runBenchmark() {
     const bestInSet = results.reduce((a, b) => (a.speedup > b.speedup ? a : b));
     const batchMatch = bestInSet.method.match(/batch (\d+)/);
     if (batchMatch) {
-      const batchSize = Number.parseInt(batchMatch[1]);
+      const batchSize = Number.parseInt(batchMatch[1], 10);
       batchWins[batchSize] = (batchWins[batchSize] || 0) + 1;
     }
   }

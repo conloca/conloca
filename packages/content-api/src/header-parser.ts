@@ -1,7 +1,8 @@
 import matter from 'gray-matter';
-import { calculateEtagsFromMdxBuffer, findMdxContentStartPosition } from './etag-utils';
-import type { ContentData, ContentManifest, ContentMeta, LocaleVersion, VXJSONFile } from './types';
-import { VXJSON } from './vxjson';
+import { parseContentPathLayout } from './content-path.js';
+import { calculateEtagsFromMdxBuffer, findMdxContentStartPosition } from './etag-utils.js';
+import type { ContentData, ContentManifest, ContentMeta, LocaleVersion, VXJSONFile } from './types.js';
+import { VXJSON } from './vxjson.js';
 
 const textDecoder = new TextDecoder();
 const textEncoder = new TextEncoder();
@@ -11,7 +12,7 @@ const textEncoder = new TextEncoder();
  *
  * `repaired === true` means the bytes parsed but were not in canonical form;
  * the manifest reflects the canonical interpretation. The hydrator never
- * writes back; spec 03 may opt to rewrite the file via the FS API's own
+ * writes back; a caller may opt to rewrite the file via the FS API's own
  * write path, but that decision lives outside this pure parser.
  */
 export type ParseHeaderResult =
@@ -28,73 +29,6 @@ export type ParseHeaderResult =
       reason: 'unknown-format' | 'malformed-vxjson' | 'malformed-mdx' | 'unsupported-locale-path';
       message: string;
     };
-
-interface PathParseSuccess {
-  kind: 'block' | 'page' | 'data';
-  site?: string;
-  collection: string;
-  locale: string;
-  pathname?: string;
-  name?: string;
-}
-
-/**
- * Pure path → identity mapper. Returns null when the path doesn't match any
- * supported layout or lacks an explicit locale suffix; the caller maps null
- * to a `unsupported-locale-path` ParseHeaderResult.
- *
- * Layouts honoured here mirror filesystem-content-api.ts:137-144 and
- * 00-overview.md "Commit Flow":
- *
- *   - `blocks/<collection>/<name>.<locale>.{mdx,vxjson}` (collection required;
- *     `blocks/<name>.<locale>.ext` is a legacy form that FileSystemContentAPI
- *     repairs by renaming. The pure parser refuses it.)
- *   - `data/<collection>/<name>.<locale>.json`
- *   - `<site>/<collection>/<path...>/<file>.<locale>.vxjson` (pages; `index`
- *     basename maps to the parent path).
- */
-function parsePathLayout(path: string): PathParseSuccess | null {
-  const parts = path.split('/').filter(Boolean);
-  if (parts.length < 3) return null;
-
-  const filename = parts[parts.length - 1];
-
-  if (parts[0] === 'blocks') {
-    // blocks/<collection>/<name>.<locale>.<ext>
-    if (parts.length !== 3) return null;
-    const match = filename.match(/^(.+)\.([a-zA-Z]{2}(?:-[A-Z]{2})?)\.(mdx|vxjson)$/);
-    if (!match) return null;
-    return { kind: 'block', collection: parts[1], name: match[1], locale: match[2] };
-  }
-
-  if (parts[0] === 'data') {
-    // data/<collection>/<name>.<locale>.json
-    if (parts.length !== 3) return null;
-    const match = filename.match(/^(.+)\.([a-z]{2}(?:-[A-Z]{2})?)\.json$/);
-    if (!match) return null;
-    return { kind: 'data', collection: parts[1], name: match[1], locale: match[2] };
-  }
-
-  // <site>/<collection>/<path...>/<file>.<locale>.{vxjson,mdx}
-  // Reads accept .mdx pages even though the OSS filesystem writer emits
-  // main-layout pages as .vxjson only (its mdx pages live under the separate
-  // mdxPagesRoot): the SaaS commit pipeline derives the extension from the
-  // content type, so an mdx-typed page lands here as <site>/pages/<f>.<l>.mdx
-  // and must re-parse — dropping it made written pages unreadable.
-  const match = filename.match(/^(.+)\.([a-zA-Z]{2}(?:-[A-Z]{2})?)\.(mdx|vxjson)$/);
-  if (!match) return null;
-
-  const site = parts[0];
-  const collection = parts[1];
-  const pathParts = parts.slice(2);
-  pathParts[pathParts.length - 1] = match[1];
-  const pathname =
-    pathParts[pathParts.length - 1] === 'index'
-      ? `/${pathParts.slice(0, -1).join('/')}` || '/'
-      : `/${pathParts.join('/')}`;
-
-  return { kind: 'page', site, collection, locale: match[2], pathname };
-}
 
 interface ParsedHeaderMetadata {
   id?: string;
@@ -235,8 +169,8 @@ function etagFor(path: string, bytes: Uint8Array, contentStartPos?: number): str
  * Pure: no I/O, no clock, no FS. The `repaired` flag means "header bytes
  * were not canonical, so we computed the canonical manifest entry from a
  * repaired in-memory copy" — actual writes (e.g., FS rename) happen in
- * the caller, not here. The Branch DO never writes-on-read; it just records
- * the canonical form for the next commit.
+ * the caller, not here; a caller that cannot write keeps the canonical entry
+ * as it is.
  */
 export function parseContentHeader(input: {
   path: string;
@@ -246,7 +180,7 @@ export function parseContentHeader(input: {
 }): ParseHeaderResult {
   const { path, header, complete } = input;
 
-  const layout = parsePathLayout(path);
+  const layout = parseContentPathLayout(path);
   if (!layout) {
     return {
       ok: false,
@@ -314,6 +248,7 @@ export function parseContentHeader(input: {
     ...(parsedMeta.previousPathnames ? { previousPathnames: parsedMeta.previousPathnames } : {}),
     ...(layout.name ? { name: layout.name } : {}),
     meta: parsedMeta.meta || { title: layout.name || 'Untitled' },
+    sourcePath: path,
   };
 
   const manifest: ContentManifest = {

@@ -1,11 +1,13 @@
 import type {
   AssetEntry,
+  AssetMetadataPatch,
   AssetUsage,
   ContentEntry,
   ContentListResult,
   ContentManifest,
   CreateContentInput,
   DataContext,
+  EditorDataBindings,
   FolderListing,
   FolderTreeNode,
   GitCommitResult,
@@ -15,11 +17,14 @@ import type {
   GlobalFilters,
   LocalizedEntry,
   MDXCompileResponse,
+  PageReference,
   SitesConfig,
   UpdateLocaleInput,
 } from '@conloca/content-api';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { APIClientError, ContentAPIClient, StaleWriteError } from './client';
+import { useCallback } from 'react';
+import { APIClientError, ContentAPIClient, StaleWriteError } from './client.js';
+import { buildRouteData, type RouteData } from './data-bindings.js';
 
 // Global client instance
 let globalClient: ContentAPIClient | null = null;
@@ -66,24 +71,26 @@ const queryKeys = {
   sitePages: (site: string, locale?: string) => ['sites', site, 'pages', locale] as const,
   pageByPathname: (site: string, pathname: string, locale?: string) =>
     ['sites', site, 'pathname', pathname, locale] as const,
-  pathnameAvailability: (site: string, pathname: string, excludeId?: string) =>
-    ['sites', site, 'pathname-availability', pathname, excludeId] as const,
-  blocks: (collection?: string, locale?: string) => ['blocks', collection, locale] as const,
-  blockByName: (name: string, collection?: string, locale?: string) => ['blocks', name, collection, locale] as const,
+  pathnameAvailability: (site: string, pathname: string, excludeId?: string, locale?: string) =>
+    ['sites', site, 'pathname-availability', pathname, excludeId, locale] as const,
+  fragments: (collection?: string, locale?: string) => ['fragments', collection, locale] as const,
+  fragmentByName: (name: string, collection?: string, locale?: string) =>
+    ['fragments', name, collection, locale] as const,
   data: (collection?: string, locale?: string) => ['data', collection, locale] as const,
   dataByName: (name: string, collection: string, locale?: string) => ['data', name, collection, locale] as const,
   dataNameAvailability: (name: string, collection: string, excludeId?: string) =>
     ['data', 'name-availability', name, collection, excludeId] as const,
   dataCollections: () => ['data', 'collections'] as const,
-  dataContext: (pageId?: string) => ['data-context', pageId] as const,
+  dataContext: (collection?: string, bindings?: EditorDataBindings) =>
+    ['data', 'context', collection, bindings] as const,
   allContent: (filters?: GlobalFilters) => ['content', 'all', filters] as const,
   untranslatedContent: (targetLocale: string, excludeSites?: string[], includeUnpublished?: boolean) =>
     ['content', 'untranslated', targetLocale, excludeSites, includeUnpublished] as const,
   sitesConfig: () => ['sites', 'config'] as const,
   assets: () => ['assets'] as const,
-  asset: (filename: string) => ['assets', filename] as const,
+  asset: (path: string) => ['assets', path] as const,
   assetFolders: (path?: string) => ['asset-folders', path] as const,
-  assetUsage: (filename: string | null) => ['asset-usage', filename] as const,
+  assetUsage: (path: string | null) => ['asset-usage', path] as const,
   folderTree: () => ['folder-tree'] as const,
   mdxCompile: (cacheKey: string) => ['mdx', 'compile', cacheKey] as const,
 };
@@ -93,7 +100,7 @@ const queryKeys = {
 export function useContent(id: string) {
   const client = getContentAPIClient();
 
-  return useQuery<ContentEntry | null, Error>({
+  return useQuery<ContentEntry | null>({
     queryKey: queryKeys.content(id),
     queryFn: () => client.getContent(id),
     enabled: !!id,
@@ -103,7 +110,7 @@ export function useContent(id: string) {
 export function useLocalizedContent(id: string, locale: string) {
   const client = getContentAPIClient();
 
-  return useQuery<LocalizedEntry | null, Error>({
+  return useQuery<LocalizedEntry | null>({
     queryKey: queryKeys.localized(id, locale),
     queryFn: () => client.getLocalized(id, locale),
     enabled: !!id && !!locale,
@@ -119,7 +126,7 @@ export function useCompileMDX({ mdxContent, cacheKey }: UseCompileMDXOptions) {
   const client = getContentAPIClient();
   const resolvedCacheKey = cacheKey || (mdxContent ? `mdx-${hashString(mdxContent)}` : 'mdx-empty');
 
-  return useQuery<MDXCompileResponse, Error>({
+  return useQuery<MDXCompileResponse>({
     queryKey: queryKeys.mdxCompile(resolvedCacheKey),
     queryFn: () => client.compileMDX(mdxContent!),
     enabled: !!mdxContent,
@@ -178,9 +185,9 @@ export function useCreateContent() {
               };
             },
           );
-        } else if (variables.kind === 'block') {
-          // Invalidate all block queries to ensure the new block appears everywhere
-          queryClient.invalidateQueries({ queryKey: ['blocks'] });
+        } else if (variables.kind === 'fragment') {
+          // Invalidate all fragment queries to ensure the new fragment appears everywhere
+          queryClient.invalidateQueries({ queryKey: ['fragments'] });
         } else if (variables.kind === 'data') {
           // Invalidate all data queries to ensure the new data entry appears everywhere
           queryClient.invalidateQueries({ queryKey: ['data'] });
@@ -253,7 +260,7 @@ export function useUpdateLocalized() {
 
         queryClient.setQueriesData({ queryKey: ['sites'], exact: false }, updateListQueries);
 
-        queryClient.setQueriesData({ queryKey: ['blocks'], exact: false }, updateListQueries);
+        queryClient.setQueriesData({ queryKey: ['fragments'], exact: false }, updateListQueries);
 
         queryClient.setQueriesData({ queryKey: ['data'], exact: false }, updateListQueries);
       }
@@ -316,7 +323,7 @@ export function useDeleteContent() {
           };
 
           queryClient.setQueriesData({ queryKey: ['sites'], exact: false }, updateListQueries);
-          queryClient.setQueriesData({ queryKey: ['blocks'], exact: false }, updateListQueries);
+          queryClient.setQueriesData({ queryKey: ['fragments'], exact: false }, updateListQueries);
           queryClient.setQueriesData({ queryKey: ['data'], exact: false }, updateListQueries);
           queryClient.setQueriesData({ queryKey: ['content', 'all'], exact: false }, updateListQueries);
         } else {
@@ -335,16 +342,19 @@ export function useDeleteContent() {
             };
           });
 
-          // Update block lists
-          queryClient.setQueriesData({ queryKey: ['blocks'], exact: false }, (old: ContentListResult | undefined) => {
-            if (!isContentListResult(old)) return old;
-            const newItems = old.items.filter((item) => item.id !== variables.id);
-            return {
-              ...old,
-              items: newItems,
-              total: newItems.length < old.items.length ? old.total - 1 : old.total,
-            };
-          });
+          // Update fragment lists
+          queryClient.setQueriesData(
+            { queryKey: ['fragments'], exact: false },
+            (old: ContentListResult | undefined) => {
+              if (!isContentListResult(old)) return old;
+              const newItems = old.items.filter((item) => item.id !== variables.id);
+              return {
+                ...old,
+                items: newItems,
+                total: newItems.length < old.items.length ? old.total - 1 : old.total,
+              };
+            },
+          );
 
           // Update data lists
           queryClient.setQueriesData({ queryKey: ['data'], exact: false }, (old: ContentListResult | undefined) => {
@@ -406,7 +416,7 @@ export function useDeleteLocalized() {
 export function useSitePages(site: string, locale?: string) {
   const client = getContentAPIClient();
 
-  return useQuery<ContentListResult, Error>({
+  return useQuery<ContentListResult>({
     queryKey: queryKeys.sitePages(site, locale),
     queryFn: () => client.getSitePages(site, locale),
   });
@@ -415,20 +425,20 @@ export function useSitePages(site: string, locale?: string) {
 export function usePageByPathname(site: string, pathname: string, locale?: string) {
   const client = getContentAPIClient();
 
-  return useQuery<ContentManifest | null, Error>({
+  return useQuery<ContentManifest | null>({
     queryKey: queryKeys.pageByPathname(site, pathname, locale),
     queryFn: () => client.getPageByPathname(site, pathname, locale),
     enabled: !!pathname,
   });
 }
 
-export function usePathnameAvailability(site: string, pathname: string, excludeId?: string) {
+export function usePathnameAvailability(site: string, pathname: string, excludeId?: string, locale?: string) {
   const client = getContentAPIClient();
 
   return useQuery({
-    queryKey: queryKeys.pathnameAvailability(site, pathname, excludeId),
+    queryKey: queryKeys.pathnameAvailability(site, pathname, excludeId, locale),
     queryFn: async () => {
-      const available = await client.isPathnameAvailable(site, pathname, excludeId);
+      const available = await client.isPathnameAvailable(site, pathname, excludeId, locale);
       return { available };
     },
     enabled: !!site && !!pathname,
@@ -463,23 +473,23 @@ export function useMovePage() {
   });
 }
 
-// ===== Block Hooks =====
+// ===== Fragment Hooks =====
 
-export function useBlocks(collection?: string, locale?: string) {
+export function useFragments(collection?: string, locale?: string) {
   const client = getContentAPIClient();
 
-  return useQuery<ContentListResult, Error>({
-    queryKey: queryKeys.blocks(collection, locale),
-    queryFn: () => client.getBlocks(collection, locale),
+  return useQuery<ContentListResult>({
+    queryKey: queryKeys.fragments(collection, locale),
+    queryFn: () => client.getFragments(collection, locale),
   });
 }
 
-export function useBlockByName(name: string, collection?: string, locale?: string) {
+export function useFragmentByName(name: string, collection?: string, locale?: string) {
   const client = getContentAPIClient();
 
-  return useQuery<ContentManifest | null, Error>({
-    queryKey: queryKeys.blockByName(name, collection, locale),
-    queryFn: () => client.getBlockByName(name, collection, locale),
+  return useQuery<ContentManifest | null>({
+    queryKey: queryKeys.fragmentByName(name, collection, locale),
+    queryFn: () => client.getFragmentByName(name, collection, locale),
     enabled: !!name,
   });
 }
@@ -489,7 +499,7 @@ export function useBlockByName(name: string, collection?: string, locale?: strin
 export function useData(collection?: string, locale?: string) {
   const client = getContentAPIClient();
 
-  return useQuery<ContentListResult, Error>({
+  return useQuery<ContentListResult>({
     queryKey: queryKeys.data(collection, locale),
     queryFn: () => client.getData(collection, locale),
   });
@@ -498,7 +508,7 @@ export function useData(collection?: string, locale?: string) {
 export function useDataByName(name: string, collection: string, locale?: string) {
   const client = getContentAPIClient();
 
-  return useQuery<ContentManifest | null, Error>({
+  return useQuery<ContentManifest | null>({
     queryKey: queryKeys.dataByName(name, collection, locale),
     queryFn: () => client.getDataByName(name, collection, locale),
     enabled: !!name && !!collection,
@@ -523,7 +533,7 @@ export function useDataNameAvailability(name: string, collection: string, exclud
 export function useDataCollections() {
   const client = getContentAPIClient();
 
-  return useQuery<string[], Error>({
+  return useQuery<string[]>({
     queryKey: queryKeys.dataCollections(),
     queryFn: () => client.getDataCollections(),
   });
@@ -531,13 +541,54 @@ export function useDataCollections() {
 
 // ===== Data Context Hooks =====
 
-export function useDataContext(pageId?: string) {
-  const client = getContentAPIClient();
+/** Whether two values are equal by value, Dates compared by their time. */
+function isSameValue<T>(a: T, b: T): boolean {
+  if (a instanceof Date || b instanceof Date) {
+    return a instanceof Date && b instanceof Date && a.getTime() === b.getTime();
+  }
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) {
+    return Object.is(a, b);
+  }
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  const entries = Object.entries(a);
+  return (
+    entries.length === Object.keys(b).length &&
+    entries.every(([key, value]) => {
+      const descriptor = Object.getOwnPropertyDescriptor(b, key);
+      return descriptor !== undefined && isSameValue(value, descriptor.value);
+    })
+  );
+}
 
-  return useQuery<{ dataContext: DataContext }, Error>({
-    queryKey: queryKeys.dataContext(pageId),
-    queryFn: () => client.getDataContext(pageId!),
-    enabled: !!pageId,
+/**
+ * The data context the published page gets for `page`, built in the browser
+ * from the site's routing bindings. Waits while either is unknown; null when
+ * no route serves the page's collection, since a query cannot hold undefined.
+ * A refetch that finds nothing changed hands back the context already held,
+ * so work keyed on it, such as resolving the page's blocks, does not run again.
+ */
+export function useDataContext(page: PageReference | undefined, bindings: EditorDataBindings | undefined) {
+  const client = getContentAPIClient();
+  const collection = page?.collection;
+  // The page is joined on read, not fetched: a Page settings save changes the
+  // page but not what its route binds, so it must not fetch the feed again.
+  const withPage = useCallback(
+    (routeData: RouteData | null): DataContext | null => (routeData && page ? { ...routeData, page } : null),
+    [page],
+  );
+
+  return useQuery<RouteData | null, Error, DataContext | null>({
+    queryKey: queryKeys.dataContext(collection, bindings),
+    queryFn: async () => {
+      // A manual refetch can run a disabled query before its inputs arrive.
+      if (!collection || !bindings) return null;
+      return (await buildRouteData(client, collection, bindings)) ?? null;
+    },
+    enabled: !!collection && !!bindings,
+    select: withPage,
+    // The cache's own sharing keeps unchanged plain objects and arrays only,
+    // so it would take the page timestamps (Dates) for a change every time.
+    structuralSharing: (held, fetched) => (isSameValue(held, fetched) ? held : fetched),
   });
 }
 
@@ -546,7 +597,7 @@ export function useDataContext(pageId?: string) {
 export function useAllContent(filters?: GlobalFilters) {
   const client = getContentAPIClient();
 
-  return useQuery<ContentListResult, Error>({
+  return useQuery<ContentListResult>({
     queryKey: queryKeys.allContent(filters),
     queryFn: () => client.listAllContent(filters),
   });
@@ -555,7 +606,7 @@ export function useAllContent(filters?: GlobalFilters) {
 export function useUntranslatedContent(targetLocale: string, excludeSites?: string[], includeUnpublished?: boolean) {
   const client = getContentAPIClient();
 
-  return useQuery<ContentListResult, Error>({
+  return useQuery<ContentListResult>({
     queryKey: queryKeys.untranslatedContent(targetLocale, excludeSites, includeUnpublished),
     queryFn: () => client.findUntranslatedContent(targetLocale, excludeSites, includeUnpublished),
   });
@@ -564,7 +615,7 @@ export function useUntranslatedContent(targetLocale: string, excludeSites?: stri
 export function useSitesConfig() {
   const client = getContentAPIClient();
 
-  return useQuery<SitesConfig, Error>({
+  return useQuery<SitesConfig>({
     queryKey: queryKeys.sitesConfig(),
     queryFn: () => client.getSitesConfig(),
   });
@@ -621,7 +672,7 @@ export function useBatchUpdate() {
         result.updatedContents.forEach(({ index, content }) => {
           if (!content) return;
 
-          const operation = variables[index!];
+          const operation = variables[index];
 
           // Update localized content
           queryClient.setQueryData(queryKeys.localized(operation.id, operation.locale), content);
@@ -642,8 +693,8 @@ export function useBatchUpdate() {
         // Update list queries with server data
         const updatedMap = new Map(
           result.updatedContents.map(({ index, content }) => {
-            const op = variables[index!];
-            return [op.id + ':' + op.locale, content];
+            const op = variables[index];
+            return [`${op.id}:${op.locale}`, content];
           }),
         );
 
@@ -652,12 +703,12 @@ export function useBatchUpdate() {
           return {
             ...old,
             items: old.items.map((item) => {
-              const hasUpdate = Object.keys(item.locales).some((locale) => updatedMap.has(item.id + ':' + locale));
+              const hasUpdate = Object.keys(item.locales).some((locale) => updatedMap.has(`${item.id}:${locale}`));
 
               if (hasUpdate) {
                 const newLocales = { ...item.locales };
                 Object.keys(newLocales).forEach((locale) => {
-                  const updated = updatedMap.get(item.id + ':' + locale);
+                  const updated = updatedMap.get(`${item.id}:${locale}`);
                   if (updated) {
                     const { content, ...manifestData } = updated.localized;
                     newLocales[locale] = manifestData;
@@ -673,7 +724,7 @@ export function useBatchUpdate() {
 
         queryClient.setQueriesData({ queryKey: ['sites'], exact: false }, updateListQueries);
 
-        queryClient.setQueriesData({ queryKey: ['blocks'], exact: false }, updateListQueries);
+        queryClient.setQueriesData({ queryKey: ['fragments'], exact: false }, updateListQueries);
 
         queryClient.setQueriesData({ queryKey: ['data'], exact: false }, updateListQueries);
       }
@@ -686,7 +737,7 @@ export function useBatchUpdate() {
 export function useGitStatus() {
   const client = getContentAPIClient();
 
-  return useQuery<GitStatus, Error>({
+  return useQuery<GitStatus>({
     queryKey: queryKeys.gitStatus(),
     queryFn: () => client.getGitStatus(),
     refetchInterval: 10000,
@@ -735,19 +786,19 @@ export function usePullChanges() {
 export function useAssets() {
   const client = getContentAPIClient();
 
-  return useQuery<{ assets: AssetEntry[] }, Error>({
+  return useQuery<{ assets: AssetEntry[] }>({
     queryKey: queryKeys.assets(),
     queryFn: () => client.listAssets(),
   });
 }
 
-export function useAsset(filename: string) {
+export function useAsset(path: string) {
   const client = getContentAPIClient();
 
-  return useQuery<AssetEntry | null, Error>({
-    queryKey: queryKeys.asset(filename),
-    queryFn: () => client.getAsset(filename),
-    enabled: !!filename,
+  return useQuery<AssetEntry | null>({
+    queryKey: queryKeys.asset(path),
+    queryFn: () => client.getAsset(path),
+    enabled: !!path,
   });
 }
 
@@ -760,6 +811,7 @@ export function useUploadAsset() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.assets() });
       queryClient.invalidateQueries({ queryKey: ['asset-folders'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.folderTree() });
     },
   });
 }
@@ -774,6 +826,7 @@ export function useImportAssetUrl() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.assets() });
       queryClient.invalidateQueries({ queryKey: ['asset-folders'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.folderTree() });
     },
   });
 }
@@ -783,10 +836,11 @@ export function useDeleteAsset() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (filename: string) => client.deleteAsset(filename),
+    mutationFn: (path: string) => client.deleteAsset(path),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.assets() });
       queryClient.invalidateQueries({ queryKey: ['asset-folders'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.folderTree() });
     },
   });
 }
@@ -796,12 +850,12 @@ export function useBulkDeleteAssets() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (filenames: string[]) => {
+    mutationFn: async (paths: string[]) => {
       let successCount = 0;
       let failCount = 0;
-      for (const filename of filenames) {
+      for (const path of paths) {
         try {
-          await client.deleteAsset(filename);
+          await client.deleteAsset(path);
           successCount++;
         } catch {
           failCount++;
@@ -812,6 +866,7 @@ export function useBulkDeleteAssets() {
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.assets() });
       queryClient.invalidateQueries({ queryKey: ['asset-folders'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.folderTree() });
     },
   });
 }
@@ -821,7 +876,7 @@ export function useBulkDeleteAssets() {
 export function useAssetFolders(path?: string) {
   const client = getContentAPIClient();
 
-  return useQuery<FolderListing, Error>({
+  return useQuery<FolderListing>({
     queryKey: queryKeys.assetFolders(path),
     queryFn: () => client.listFolder(path),
   });
@@ -835,6 +890,7 @@ export function useCreateFolder() {
     mutationFn: (path: string) => client.createFolder(path),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['asset-folders'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.folderTree() });
     },
   });
 }
@@ -844,8 +900,8 @@ export function useUpdateAssetMetadata() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ filename, updates }: { filename: string; updates: { alt?: string; tags?: string[] } }) =>
-      client.updateAssetMetadata(filename, updates),
+    mutationFn: ({ path, updates }: { path: string; updates: AssetMetadataPatch }) =>
+      client.updateAssetMetadata(path, updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.assets() });
       queryClient.invalidateQueries({ queryKey: ['asset-folders'] });
@@ -853,21 +909,22 @@ export function useUpdateAssetMetadata() {
   });
 }
 
-export function useAssetUsage(filename: string | null) {
+export function useAssetUsage(path: string | null) {
   const client = getContentAPIClient();
 
-  return useQuery<AssetUsage[], Error>({
-    queryKey: queryKeys.assetUsage(filename),
-    queryFn: () => client.getAssetUsage(filename!),
-    enabled: !!filename,
-    staleTime: 60_000, // Cache usage for 1 minute to avoid repeated VXJSON scans
+  return useQuery<AssetUsage[]>({
+    queryKey: queryKeys.assetUsage(path),
+    queryFn: () => client.getAssetUsage(path!),
+    enabled: !!path,
+    // Asked again each time: a page saved since the last answer may link the asset now
+    staleTime: 0,
   });
 }
 
 export function useFolderTree() {
   const client = getContentAPIClient();
 
-  return useQuery<{ tree: FolderTreeNode[] }, Error>({
+  return useQuery<{ tree: FolderTreeNode[] }>({
     queryKey: queryKeys.folderTree(),
     queryFn: () => client.getFolderTree(),
     staleTime: 30_000, // Cache for 30 seconds

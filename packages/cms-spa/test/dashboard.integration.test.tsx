@@ -1,13 +1,14 @@
 /// <reference lib="dom" />
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, setSystemTime, test } from 'bun:test';
 import { cleanup, screen } from '@testing-library/react';
-import { CMSDashboard } from '../src/components/CMSDashboard';
-import { renderWithProviders, setupTestAPI, testApi } from './test-utils';
+import { CMSDashboard } from '../src/components/CMSDashboard.js';
+import { renderWithProviders, setupTestAPI, testApi } from './test-utils.js';
 
-// Cleanup after each test
+// Cleanup after each test, including a clock a test stopped
 afterEach(() => {
   cleanup();
   testApi?.clear();
+  setSystemTime();
 });
 
 beforeEach(() => {
@@ -53,8 +54,8 @@ describe('CMSDashboard Integration', () => {
     });
 
     await testApi.createContent({
-      kind: 'block',
-      collection: 'blocks',
+      kind: 'fragment',
+      collection: 'fragments',
       type: 'mdx',
       name: 'hero',
       meta: { title: 'Hero' },
@@ -67,8 +68,8 @@ describe('CMSDashboard Integration', () => {
     });
 
     await testApi.createContent({
-      kind: 'block',
-      collection: 'blocks',
+      kind: 'fragment',
+      collection: 'fragments',
       type: 'mdx',
       name: 'cta',
       meta: { title: 'CTA' },
@@ -87,9 +88,9 @@ describe('CMSDashboard Integration', () => {
 
     // Check stats are displayed
     expect(pagesCard).toHaveTextContent('2'); // Total pages for default site
-    expect(screen.getByTestId('section-card-blocks')).toHaveTextContent('2'); // Total blocks
+    expect(screen.getByTestId('section-card-fragments')).toHaveTextContent('2'); // Total fragments
     expect(screen.getByText('Pages')).toBeInTheDocument();
-    expect(screen.getByText('Blocks')).toBeInTheDocument();
+    expect(screen.getByText('Fragments')).toBeInTheDocument();
   });
 
   test('shows empty state when no content exists', async () => {
@@ -102,6 +103,32 @@ describe('CMSDashboard Integration', () => {
 
     // Should show zero counts using the count-specific test IDs
     expect(screen.getByTestId('section-card-pages-count')).toHaveTextContent('0');
-    expect(screen.getByTestId('section-card-blocks-count')).toHaveTextContent('0');
+    expect(screen.getByTestId('section-card-fragments-count')).toHaveTextContent('0');
+  });
+
+  test('recent activity calls a page a draft from the instant its unpublish time arrives', async () => {
+    // The clock stands still, so the dashboard judges the page at exactly its unpublish time.
+    const unpublishAt = new Date('2026-09-23T12:00:00Z');
+    setSystemTime(unpublishAt);
+    await testApi.createContent({
+      kind: 'page',
+      site: 'default',
+      collection: 'pages',
+      type: 'puck',
+      meta: { title: 'Retired' },
+      locales: {
+        en: {
+          meta: { title: 'Retired' },
+          pathname: '/retired',
+          unpublishAt: unpublishAt.toISOString(),
+          content: { puckData: { root: {}, content: [], zones: {} } },
+        },
+      },
+    });
+
+    renderWithProviders(<CMSDashboard />, {}, false);
+
+    const recentPage = (await screen.findByText('Retired')).closest('a');
+    expect(recentPage).toHaveTextContent('Status: draft');
   });
 });

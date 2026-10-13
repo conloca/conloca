@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
-import { mkdir, rm, writeFile } from 'fs/promises';
-import { join } from 'path';
-import type { SitesConfig, VXJSONFile } from '../src/types';
-import { conlocaContent } from '../src/vite-plugin';
-import { VXJSON } from '../src/vxjson';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import type { SitesConfig, VXJSONFile } from '../src/types.js';
+import { conlocaContent } from '../src/vite-plugin.js';
+import { VXJSON } from '../src/vxjson.js';
+import { testTempDir } from './test-temp-dir.js';
 
 describe('Vite Plugin - File Watching Integration', () => {
-  const testDir = '/tmp/test-vite-plugin';
+  const testDir = testTempDir('test-vite-plugin');
   const contentRoot = join(testDir, 'content');
 
   const sitesConfig: SitesConfig = {
@@ -44,7 +45,7 @@ describe('Vite Plugin - File Watching Integration', () => {
     const mockServer = {
       watcher: {
         add: () => {},
-        on: (event: string, handler: Function) => {
+        on: (event: string, handler: (path: string) => void | Promise<void>) => {
           // Store event handlers for testing
           mockEvents.push({ event, handler });
         },

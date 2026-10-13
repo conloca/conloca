@@ -1,6 +1,6 @@
-import type { ContentAPI } from './content-api.interface';
-import type { DataIndex } from './data-index';
-import type { ContentManifest, CreateResult } from './types';
+import type { ContentAPI } from './content-api.interface.js';
+import type { DataIndex } from './data-index.js';
+import type { ContentManifest, ContentMeta, CreateResult } from './types.js';
 
 export interface DataFilters {
   collection?: string;
@@ -10,12 +10,12 @@ export interface DataFilters {
 export interface CreateDataInput {
   collection: string;
   name: string;
-  meta?: { title?: string; description?: string; [key: string]: unknown };
+  meta?: Partial<ContentMeta>;
   locales: {
     [locale: string]: {
       publishAt?: string | null | false;
       unpublishAt?: string | null | false;
-      meta?: { title?: string; description?: string; [key: string]: unknown };
+      meta?: Partial<ContentMeta>;
       content: {
         data: Record<string, unknown>;
       };
@@ -65,17 +65,16 @@ export class Data {
     return this.dataIndex.getByName(collection, name, locale);
   }
 
-  // Check if data name is available
+  // Check if data name is available, in any letter case as getNameConflict checks it
   isNameAvailable(collection: string, name: string, excludeId?: string): boolean {
-    const existing = this.getByName(collection, name);
-    return !existing || existing.id === excludeId;
+    return this.getNameConflict(collection, name, excludeId) === null;
   }
 
   // Get the ID of content that conflicts with a data name
   getNameConflict(collection: string, name: string, excludeId?: string): string | null {
-    const existing = this.getByName(collection, name);
-    if (existing && existing.id !== excludeId) {
-      return existing.id;
+    // In any letter case: those names share one file on a case-insensitive disk.
+    for (const existing of this.dataIndex.getAllByNameInAnyCase(collection, name)) {
+      if (existing.id !== excludeId) return existing.id;
     }
     return null;
   }

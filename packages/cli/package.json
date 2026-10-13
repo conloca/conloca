@@ -10,8 +10,8 @@
     "directory": "packages/cli"
   },
   "dependencies": {
-    "@conloca/content-api": "workspace:*",
-    "@node-rs/xxhash": "^1.7.6"
+    "@conloca/astro-cms": "workspace:*",
+    "@conloca/content-api": "workspace:*"
   },
   "bin": {
     "conloca": "./dist/conloca.js"
@@ -26,11 +26,29 @@
     "!**/*.tsbuildinfo"
   ],
   "devDependencies": {
-    "@types/bun": "1.3.14"
+    "@types/bun": "1.4.2",
+    "commander": "^15.0.0"
   },
   "nx": {
     "targets": {
+      "clean": {},
       "lint": {},
+      "typecheck": {
+        "//": "No tsconfig.lib.json -- the published bundle is built by the `build` target, not by tsc -- so inference derives no typecheck. tsconfig.json is the library program here (19 files).",
+        "executor": "nx:run-commands",
+        "cache": true,
+        "inputs": [
+          "default",
+          "^production"
+        ],
+        "dependsOn": [
+          "^*-js"
+        ],
+        "options": {
+          "command": "tsc -p tsconfig.json --noEmit",
+          "cwd": "{projectRoot}"
+        }
+      },
       "build": {
         "executor": "nx:run-commands",
         "dependsOn": [
@@ -41,17 +59,56 @@
           "cwd": "{projectRoot}"
         }
       },
+      "typecheck-tests": {
+        "//": "The test program also compiles the shared git-isolation harness it imports from tooling/.",
+        "inputs": [
+          "...",
+          "{workspaceRoot}/tooling/git-env-isolation.ts",
+          "{workspaceRoot}/tooling/git-local-env.ts"
+        ]
+      },
       "test": {
         "executor": "@smoothbricks/nx-plugin:bounded-exec",
         "dependsOn": [
+          "build",
           "typecheck-tests",
+          "test-packed"
+        ],
+        "inputs": [
+          "default",
+          "^default",
+          "{workspaceRoot}/example/website-with-cms/package.json",
+          "{workspaceRoot}/tooling/test-setup.ts",
+          "{workspaceRoot}/tooling/git-local-env.ts",
+          "{workspaceRoot}/tooling/git-env-isolation.ts"
+        ],
+        "options": {
+          "command": "bun test --timeout=30000",
+          "cwd": "{projectRoot}",
+          "timeoutMs": 300000,
+          "killAfterMs": 10000
+        }
+      },
+      "test-packed": {
+        "//": "The packed shape is a function of the built outputs, the manifest and the locked dependency closure; cached on exactly those.",
+        "executor": "nx:run-commands",
+        "cache": true,
+        "inputs": [
+          {
+            "dependentTasksOutputFiles": "**/*",
+            "transitive": true
+          },
+          "{projectRoot}/package.json",
+          "{workspaceRoot}/bun.lock",
+          "{workspaceRoot}/tooling/packaging/**/*"
+        ],
+        "dependsOn": [
+          "build",
           "^build"
         ],
         "options": {
-          "command": "bun --conditions=production test",
-          "cwd": "{projectRoot}",
-          "timeoutMs": 120000,
-          "killAfterMs": 10000
+          "command": "bun tooling/packaging/test-packed.ts cli",
+          "cwd": "{workspaceRoot}"
         }
       }
     },

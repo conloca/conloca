@@ -5,8 +5,8 @@ import type {
   ComponentEntry,
   ComponentEntryWithId,
   ComponentRegistry as ComponentRegistryType,
-} from './component-registry.types';
-import { atomicWriteFile } from './utils/atomic-write';
+} from './component-registry.types.js';
+import { atomicWriteFile } from './utils/atomic-write.js';
 
 /**
  * Component Registry for managing linked and unlinked components

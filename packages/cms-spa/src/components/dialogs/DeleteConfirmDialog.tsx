@@ -1,4 +1,4 @@
-import { Button } from '../ui';
+import { Button } from '../ui/index.js';
 
 interface DeleteConfirmDialogProps {
   isOpen: boolean;
@@ -35,7 +35,7 @@ export function DeleteConfirmDialog({
               "{itemName}"
             </p>
           )}
-          <p className="text-red-04 text-sm mt-3" data-testid="delete-warning-message">
+          <p className="text-red-04 dark:text-red-08 text-sm mt-3" data-testid="delete-warning-message">
             This action cannot be undone.
           </p>
         </div>

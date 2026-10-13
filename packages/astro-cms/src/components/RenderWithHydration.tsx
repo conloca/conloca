@@ -1,11 +1,13 @@
 import type { Config, Data } from '@puckeditor/core';
 import { Render } from '@puckeditor/core/rsc';
 import { isHydratable } from '../lib/hydration-utils.js';
+import type { DataContext } from '../types.js';
 import { HydrationWrapper } from './HydrationWrapper.js';
 
 interface RenderWithHydrationProps {
   config: Config;
   data: Data;
+  metadata: DataContext;
 }
 
 /**
@@ -15,9 +17,11 @@ interface RenderWithHydrationProps {
  * component's render output with HydrationWrapper to add data-hydrate
  * attributes for browser-side hydration.
  *
- * Non-hydratable components render without any wrapper overhead.
+ * Non-hydratable components render without any wrapper overhead. Every block
+ * renders with the page's data context as `puck.metadata` on the server; a
+ * hydrated block does not get `puck` in the browser.
  */
-export function RenderWithHydration({ config, data }: RenderWithHydrationProps) {
+export function RenderWithHydration({ config, data, metadata }: RenderWithHydrationProps) {
   // Create wrapped config with hydration-aware render functions
   const wrappedConfig: Config = {
     ...config,
@@ -47,5 +51,5 @@ export function RenderWithHydration({ config, data }: RenderWithHydrationProps) 
     ),
   };
 
-  return <Render config={wrappedConfig} data={data} />;
+  return <Render config={wrappedConfig} data={data} metadata={metadata} />;
 }

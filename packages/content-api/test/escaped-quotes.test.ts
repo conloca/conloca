@@ -1,16 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
-import { mkdir, rm, writeFile } from 'fs/promises';
-import { join } from 'path';
-import { FileSystemContentAPI } from '../src/filesystem-content-api';
-import type { VXJSONFile } from '../src/types';
-import { VXJSON } from '../src/vxjson';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { FileSystemContentAPI } from '../src/filesystem-content-api.js';
+import type { VXJSONFile } from '../src/types.js';
+import { VXJSON } from '../src/vxjson.js';
+import { testTempDir } from './test-temp-dir.js';
 
 describe('Escaped quotes in metadata', () => {
   let tempDir: string;
   let api: FileSystemContentAPI;
 
   beforeEach(async () => {
-    tempDir = `/tmp/content-api-escape-test-${Math.random().toString(36).substring(2)}`;
+    tempDir = testTempDir('content-api-escape-test');
     await mkdir(tempDir, { recursive: true });
     await mkdir(join(tempDir, 'testsite', 'pages'), { recursive: true });
 
@@ -75,9 +76,8 @@ describe('Escaped quotes in metadata', () => {
 
   it('handles escaped quotes when content field is truncated at 4KB', async () => {
     // Create a VXJSON file that conforms to the new specification:
-    // first 4KB must end exactly with '"content":'
-    const contentMarker = '"content":';
-    const maxMetadataSize = 4096 - contentMarker.length; // 4086 bytes for metadata
+    // first 4KB must end exactly with '"content":'. The padding below stays
+    // conservatively under that budget rather than computing it exactly.
 
     // Create metadata that fills exactly the right amount of space
     const baseMetadata = {

@@ -2,8 +2,9 @@
 // @mdxeditor/editor re-exports gurx, and using that ensures we get the same module instance
 // as the editor internals, avoiding React context isolation issues.
 import { closeImageDialog$, imageDialogState$, insertImage$, useCellValue, usePublisher } from '@mdxeditor/editor';
-import type { AssetEntry } from '../../hooks';
-import { ImagePicker } from '../media/ImagePicker';
+import type { AssetEntry } from '../../hooks/index.js';
+import { buildAssetRef } from '../../utils/asset-url.js';
+import { ImagePicker } from '../media/ImagePicker.js';
 
 /**
  * MDX-specific thin wrapper around ImagePicker.
@@ -15,12 +16,8 @@ export function ImagePickerDialog() {
   const closeDialog = usePublisher(closeImageDialog$);
 
   const handleSelect = (asset: AssetEntry) => {
-    // Build path per CONTEXT.md decision
-    const folder = asset.folder && asset.folder !== '/' ? asset.folder : '';
-    const path = `/assets${folder}/${asset.filename}`;
-
     // Insert image at cursor - no alt text per CONTEXT.md
-    insertImage({ src: path });
+    insertImage({ src: buildAssetRef(asset.folder, asset.filename) });
     closeDialog();
   };
 

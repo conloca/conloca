@@ -7,8 +7,8 @@ import {
 import { usePublisher } from '@mdxeditor/editor';
 import { useCallback, useContext, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { type MdxComponentDescriptor, useMdxComponents } from '../../../mdx-components';
-import { dispatchInsert, insertJsx$, insertMarkdown$ } from './insert-payload';
+import { type MdxComponentDescriptor, useMdxComponents } from '../../../mdx-components.js';
+import { dispatchInsert, insertJsx$, insertMarkdown$ } from './insert-payload.js';
 
 class MdxComponentOption extends MenuOption {
   constructor(public descriptor: MdxComponentDescriptor) {

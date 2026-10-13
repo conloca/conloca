@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { MdxJsxComponentDescriptor } from './mdx-components';
+import type { MdxJsxComponentDescriptor } from './mdx-components.js';
 
 /**
  * Shared registry of the currently-selected MDX JSX block in the editor.
@@ -91,9 +91,9 @@ function getState(): SharedState {
 export function setSelectedBlock(next: SelectedBlock | null): void {
   const state = getState();
   state.selected = next;
-  for (const fn of state.subscribers) {
+  state.subscribers.forEach((fn) => {
     fn(next);
-  }
+  });
 }
 
 /** Read synchronously. */

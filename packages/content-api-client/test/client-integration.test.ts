@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { createContentAPIRouter, InMemoryContentAPI } from '@conloca/content-api/node';
-import { ContentAPIClient, StaleWriteError } from '../src/client';
+import { ContentAPIClient, StaleWriteError } from '../src/client.js';
 
 describe('ContentAPIClient Integration Tests with InMemoryContentAPI', () => {
   let contentApi: InMemoryContentAPI;
@@ -106,9 +106,9 @@ describe('ContentAPIClient Integration Tests with InMemoryContentAPI', () => {
       expect(enContent!.localized.content.puckData.root.props.title).toBe('About Us');
     });
 
-    it('should create and retrieve block content', async () => {
+    it('should create and retrieve fragment content', async () => {
       const createData = {
-        kind: 'block' as const,
+        kind: 'fragment' as const,
         collection: 'heroes',
         type: 'mdx' as const,
         name: 'main-hero',
@@ -132,14 +132,14 @@ describe('ContentAPIClient Integration Tests with InMemoryContentAPI', () => {
         },
       };
 
-      // Create block
+      // Create fragment
       const createResult = await client.createContent(createData);
       expect(createResult.success).toBe(true);
 
-      // Retrieve block by name
-      const block = await client.getBlockByName('main-hero', 'heroes');
-      expect(block).toBeDefined();
-      expect(block!.locales.en?.name).toBe('main-hero');
+      // Retrieve fragment by name
+      const fragment = await client.getFragmentByName('main-hero', 'heroes');
+      expect(fragment).toBeDefined();
+      expect(fragment!.locales.en?.name).toBe('main-hero');
     });
   });
 
@@ -537,7 +537,7 @@ describe('ContentAPIClient Integration Tests with InMemoryContentAPI', () => {
       });
 
       await contentApi.createContent({
-        kind: 'block',
+        kind: 'fragment',
         collection: 'heroes',
         name: 'test-hero',
         type: 'mdx',
@@ -554,9 +554,9 @@ describe('ContentAPIClient Integration Tests with InMemoryContentAPI', () => {
       expect(siteContent.items.every((item) => item.site === 'shop')).toBe(true);
 
       // Filter by kind
-      const blocks = await client.listAllContent({ kind: 'block' });
-      expect(blocks.items.length).toBe(1);
-      expect(blocks.items[0].kind).toBe('block');
+      const fragments = await client.listAllContent({ kind: 'fragment' });
+      expect(fragments.items.length).toBe(1);
+      expect(fragments.items[0].kind).toBe('fragment');
 
       // Filter by collection
       const products = await client.listAllContent({ site: 'shop', collection: 'products' });

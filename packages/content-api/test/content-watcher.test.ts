@@ -5,7 +5,7 @@ import {
   type ContentWatcherOptions,
   createContentWatchHandlers,
   type WebSocketSender,
-} from '../src/content-watcher';
+} from '../src/content-watcher.js';
 
 interface ReindexResult {
   filesProcessed: number;
@@ -20,7 +20,7 @@ interface ReindexResult {
   deleted?: {
     id: string;
     locale: string;
-    kind: 'page' | 'block' | 'data';
+    kind: 'page' | 'fragment' | 'data';
   }[];
 }
 
@@ -135,6 +135,17 @@ describe('createContentWatchHandlers', () => {
     expect(reindexCalls).toHaveLength(0);
     expect(wsMessages).toHaveLength(0);
     expect(refreshEvents).toHaveLength(0);
+  });
+
+  it('reindexes only the data files the content scanner indexes', async () => {
+    const { handlers, reindexCalls } = createTestSetup();
+
+    // A picture's metadata record, for a media folder that happens to be called `data`
+    await handlers.onChange('/repo/content/.asset-metadata/data/chart.png.json');
+    expect(reindexCalls).toEqual([]);
+
+    await handlers.onChange('/repo/content/data/team/alice.en.json');
+    expect(reindexCalls).toEqual([['/repo/content/data/team/alice.en.json']]);
   });
 
   it('flags events under mdxPagesRoot as inMdxRoot for docs-loader refresh', async () => {

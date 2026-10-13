@@ -9,11 +9,8 @@ interface ConflictDialogProps {
 }
 
 export function ConflictDialog({ conflict, onReload, onForceSave, onCancel }: ConflictDialogProps) {
-  const [showReloadConfirm, setShowReloadConfirm] = useState(false);
-
-  useEffect(() => {
-    setShowReloadConfirm(false);
-  }, []);
+  const [reloadConfirmationConflict, setReloadConfirmationConflict] = useState<UpdateResult | null>(null);
+  const showReloadConfirm = reloadConfirmationConflict === conflict;
 
   // Escape key handler
   const handleKeyDown = useCallback(
@@ -32,7 +29,7 @@ export function ConflictDialog({ conflict, onReload, onForceSave, onCancel }: Co
     return null;
   }
 
-  const { conflictDetails } = conflict;
+  const { conflictDetails, currentEtag } = conflict;
   const hasMetaChanges = conflictDetails?.metaChanged ?? false;
   const hasContentChanges = conflictDetails?.contentChanged ?? false;
 
@@ -86,7 +83,7 @@ export function ConflictDialog({ conflict, onReload, onForceSave, onCancel }: Co
 
         {showReloadConfirm ? (
           <div className="space-y-4">
-            <p className="text-red-04 font-medium" data-testid="conflict-discard-warning">
+            <p className="text-red-04 dark:text-red-08 font-medium" data-testid="conflict-discard-warning">
               Are you sure you want to reload? You will lose all unsaved changes.
             </p>
             <div className="flex gap-3">
@@ -94,7 +91,7 @@ export function ConflictDialog({ conflict, onReload, onForceSave, onCancel }: Co
                 type="button"
                 onClick={() => {
                   onReload();
-                  setShowReloadConfirm(false);
+                  setReloadConfirmationConflict(null);
                 }}
                 className="px-4 py-2 bg-red-04 text-white rounded-md hover:bg-red-03"
               >
@@ -102,7 +99,7 @@ export function ConflictDialog({ conflict, onReload, onForceSave, onCancel }: Co
               </button>
               <button
                 type="button"
-                onClick={() => setShowReloadConfirm(false)}
+                onClick={() => setReloadConfirmationConflict(null)}
                 className="px-4 py-2 bg-grey-05 dark:bg-grey-04 text-white rounded-md hover:bg-grey-04 dark:hover:bg-grey-05"
               >
                 Cancel
@@ -113,15 +110,15 @@ export function ConflictDialog({ conflict, onReload, onForceSave, onCancel }: Co
           <div className="flex gap-3">
             <button
               type="button"
-              onClick={() => setShowReloadConfirm(true)}
+              onClick={() => setReloadConfirmationConflict(conflict)}
               className="px-4 py-2 bg-yellow-05 text-white rounded-md hover:bg-yellow-04"
             >
               Reload and Lose Changes
             </button>
-            {conflict.currentEtag && (
+            {currentEtag && (
               <button
                 type="button"
-                onClick={() => onForceSave(conflict.currentEtag!)}
+                onClick={() => onForceSave(currentEtag)}
                 className="px-4 py-2 bg-azure-04 text-white rounded-md hover:bg-azure-03"
               >
                 Force Save

@@ -1,29 +1,25 @@
 import { useCommitChanges, useGitStatus, usePullChanges, usePushChanges } from '@conloca/content-api-client';
 import { AlertCircle, ArrowDownToLine, Check, GitBranch, Loader2, Upload } from 'lucide-react';
-import { cn } from '../utils/cn';
+import { cn } from '../utils/cn.js';
 
 /**
- * VPS-ONLY git status surface.
+ * Standalone-only git status surface.
  *
  * This panel surfaces filesystem-backed git operations (pull /
- * commit / push) against a single-tenant content-api endpoint
+ * commit / push) against the content-api git endpoints
  * (`/__conloca/api/git/*`). It is rendered ONLY when
  * `configureUI({ hosted: false })` — see `Sidebar.tsx`, which
  * gates the mount on `getUIConfig.hosted !== true`.
  *
- * In hosted mode, the host shell owns the equivalent surface — a
- * four-layer status pill plus popover for editor save / commit /
- * push / deploy. The hosted impl lives in the host shell package
- * and is driven by its own status subscription, not by the
- * content-api git endpoints. The two flows are NOT
- * interchangeable: hosted goes through the backend, which mediates
- * commits and pushes server-side; VPS assumes the caller IS the
+ * When `hosted` is set, the host app owns the equivalent surface
+ * and drives it from its own status source rather than the
+ * content-api git endpoints. This panel assumes the caller IS the
  * git user with direct filesystem access.
  *
- * Do not refactor this component to "support hosted mode" — the
- * deployment-mode seam at `Sidebar.tsx` is intentional. If
- * cms-spa ever needs to surface hosted status, add a new
- * component; don't extend this one.
+ * Do not extend this component for host apps — the `hosted` seam
+ * at `Sidebar.tsx` is intentional. If cms-spa ever needs to
+ * surface a host app's status, add a new component; don't extend
+ * this one.
  */
 
 export function GitStatusPanel() {
@@ -75,7 +71,7 @@ export function GitStatusPanel() {
   // Error state
   if (error) {
     return (
-      <div className="flex items-center gap-2 text-red-04 text-sm">
+      <div className="flex items-center gap-2 text-red-04 dark:text-red-08 text-sm">
         <AlertCircle className="h-4 w-4" />
         <span>Git error</span>
       </div>
@@ -88,7 +84,7 @@ export function GitStatusPanel() {
   // Subtle (ghost) styling for non-actionable states — keeps the toolbar from
   // looking like 3 chunky colored bars. Color only when the action is meaningful.
   const ghostClasses =
-    'bg-grey-11 dark:bg-grey-03 text-grey-05 dark:text-grey-06 hover:bg-grey-10 dark:hover:bg-grey-02';
+    'bg-grey-11 dark:bg-grey-03 text-grey-04 dark:text-grey-07 hover:bg-grey-10 dark:hover:bg-grey-02';
 
   return (
     <div className="space-y-2">
@@ -98,7 +94,9 @@ export function GitStatusPanel() {
         <span className="truncate font-mono flex-1 min-w-0" title={status?.branch || 'unknown'}>
           {status?.branch || 'unknown'}
         </span>
-        {status && status.behind > 0 ? <span className="text-yellow-05 flex-shrink-0">↓ {status.behind}</span> : null}
+        {status && status.behind > 0 ? (
+          <span className="text-yellow-05 dark:text-yellow-08 flex-shrink-0">↓ {status.behind}</span>
+        ) : null}
       </div>
 
       {/* 2-row grid in sidebar: Pull/Commit on row 1, Push spans row 2 (matches git workflow) */}
@@ -182,9 +180,9 @@ export function GitStatusPanel() {
       </div>
 
       {/* Error feedback */}
-      {commitMutation.isError ? <span className="text-red-04 text-xs">Commit failed</span> : null}
-      {pushMutation.isError ? <span className="text-red-04 text-xs">Push failed</span> : null}
-      {pullMutation.isError ? <span className="text-red-04 text-xs">Pull failed</span> : null}
+      {commitMutation.isError ? <span className="text-red-04 dark:text-red-08 text-xs">Commit failed</span> : null}
+      {pushMutation.isError ? <span className="text-red-04 dark:text-red-08 text-xs">Push failed</span> : null}
+      {pullMutation.isError ? <span className="text-red-04 dark:text-red-08 text-xs">Pull failed</span> : null}
     </div>
   );
 }

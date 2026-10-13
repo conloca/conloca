@@ -1,0 +1,16 @@
+{
+	"created": "2026-09-01T12:17:28.108Z",
+	"id": "vx-rdq6ERdX",
+	"meta": {
+		"title": "Welcome to Conloca"
+	},
+	"modified": "2026-09-01T12:17:28.108Z",
+	"type": "puck",
+	"content": {
+		"puckData": {
+			"content": [],
+			"root": {},
+			"zones": {}
+		}
+	}
+}

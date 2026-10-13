@@ -1,24 +1,24 @@
 /**
- * A93 Stryker mutation pilot fixture (spec 14 §Conformance tests, §Why these
- * decisions: "Pilot on content-api before rollout"). This file is deliberately
+ * Stryker mutation pilot fixture.
+ * Piloted on content-api before any wider rollout. This file is deliberately
  * a real Vitest spec, separate from the package's normal `bun:test` suite
  * (`vxjson-*.test.ts`) — Stryker's official vitest-runner cannot drive
- * `bun:test`, and per A94 (single-runner policy) this package must not gain a
+ * `bun:test`, and per the single-runner test policy this package must not gain a
  * second, permanent bun:test-vs-vitest split for its regular test target.
  * This file is NOT part of the `content-api:test` Nx target; it is read only
  * by `stryker.pilot.config.mjs` via the dedicated `mutation` Nx target, kept
  * intentionally out of the default (build/lint/test) pipelines.
  *
- * Scope: `src/vxjson.ts` only — spec 14's own example of the "VxJSON/
- * content-write path" mutation scope. The assertions below are drawn from
+ * Scope: `src/vxjson.ts` only — the VxJSON/content-write path is the
+ * highest-value module to mutate first. The assertions below are drawn from
  * the existing bun:test coverage of the same module
  * (vxjson-validation/vxjson-scanning/vxjson-empty-strings.test.ts) so the
  * pilot's mutation score reflects real, already-shipped test intent rather
  * than a thinner ad hoc rewrite.
  */
 import { describe, expect, it } from 'vitest';
-import type { VXJSONFile } from '../src/types';
-import { VXJSON } from '../src/vxjson';
+import type { VXJSONFile } from '../src/types.js';
+import { VXJSON } from '../src/vxjson.js';
 
 describe('VXJSON.calculateETags — content-last validation', () => {
   it('rejects content not being the last root field', () => {

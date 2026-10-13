@@ -1,6 +1,8 @@
 import { nanoid } from 'nanoid';
 import yaml, { Document, isScalar } from 'yaml';
-import type { ContentMeta, LocaleVersion } from './types';
+import { parseLocaleFilename } from './content-path.js';
+import { readDate } from './read-date.js';
+import type { ContentMeta, ContentMetaPatch } from './types.js';
 
 // Pinned key order at the top of every .mdx frontmatter block. Anything not
 // listed here is appended after, sorted alphabetically for determinism. Without
@@ -38,25 +40,77 @@ export function* localesOf<T>(manifest: { locales: Record<string, T | undefined>
  */
 
 /**
- * Check if content is published based on publishAt/unpublishAt dates
+ * Whether content is published at `now`: from its publish time on, until the
+ * instant its unpublish time arrives. Empty or invalid dates count as not set.
+ * Serving a page, the page feed, the site index and the status the editor
+ * shows for a page all ask this, so the site and the editor agree at the
+ * unpublish instant.
+ * The `published` listing filter asks a different question: whether any
+ * locale is still before its unpublish time.
+ *
+ * The schedule takes a locale version or a page entry. A page entry from the
+ * Astro schema holds Date values and nulls, and `undefined` is spelled out
+ * rather than left to `?:` so a host compiling with exactOptionalPropertyTypes
+ * can pass the entry straight in: its schedule keys can be present with no
+ * value.
  */
 export function isContentPublished(
-  localeVersion: Pick<LocaleVersion, 'publishAt' | 'unpublishAt'>,
+  schedule: { publishAt?: string | Date | null | undefined; unpublishAt?: string | Date | null | undefined },
   now = new Date(),
 ): boolean {
-  if (localeVersion.publishAt) {
-    const publishDate = new Date(localeVersion.publishAt);
-    // Check for invalid dates (e.g., from empty strings or invalid values)
-    if (!isNaN(publishDate.getTime()) && publishDate > now) return false;
-  }
+  const publishAt = readDate(schedule.publishAt);
+  if (publishAt && publishAt > now) return false;
 
-  if (localeVersion.unpublishAt) {
-    const unpublishDate = new Date(localeVersion.unpublishAt);
-    // Check for invalid dates (e.g., from empty strings or invalid values)
-    if (!isNaN(unpublishDate.getTime()) && unpublishDate < now) return false;
-  }
+  const unpublishAt = readDate(schedule.unpublishAt);
+  if (unpublishAt && unpublishAt <= now) return false;
 
   return true;
+}
+
+/**
+ * Apply a dialog's metadata patch: absent keys keep the stored value, null
+ * deletes the field. Every update path merges through here so "clear" cannot
+ * silently regress back into "keep" at one of the spread sites.
+ */
+export function applyMetaPatch(current: ContentMeta, patch: ContentMetaPatch): Partial<ContentMeta> {
+  return applyNullClearPatch(current, patch);
+}
+
+/**
+ * The underlying merge: null deletes, absent or undefined keeps. Shared by
+ * content metadata and asset-manifest updates so "clear" means one thing
+ * everywhere a dialog saves a fixed set of fields.
+ */
+export function applyNullClearPatch<T extends object>(current: T, patch: { [K in keyof T]?: T[K] | null }): Partial<T> {
+  // Interfaces carry no index signature, so the spread needs the widened view.
+  const merged: Record<string, unknown> = { ...(current as Record<string, unknown>) };
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === null) {
+      delete merged[key];
+    } else if (value !== undefined) {
+      if (key === '__proto__') {
+        // JSON keys are data, including this legacy prototype setter name.
+        Object.defineProperty(merged, key, { value, enumerable: true, configurable: true, writable: true });
+      } else {
+        merged[key] = value;
+      }
+    }
+  }
+  return merged as Partial<T>;
+}
+
+/**
+ * A meta field read as a string, or undefined when it holds anything else.
+ *
+ * Fields outside ContentMeta's declared set are typed as JsonValue, because
+ * that is all the format guarantees. Content meta is also hand-editable in
+ * git, so a reader that wants a string genuinely cannot assume it has one —
+ * narrowing here stops a malformed value from posing as a real one, which a
+ * cast would wave through. Takes `unknown` so it also serves callers holding
+ * meta in a looser shape than ContentMeta.
+ */
+export function metaString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
 }
 
 /**
@@ -69,10 +123,10 @@ export function isMetadataTooLarge(meta: ContentMeta): boolean {
 }
 
 /**
- * Extract block name from various sources
- * Used when displaying blocks in the UI
+ * Extract fragment name from various sources
+ * Used when displaying fragments in the UI
  */
-export function extractBlockName(source: string): string {
+export function extractFragmentName(source: string): string {
   // If it's a collection/name path, extract the name part
   if (source.includes('/') && !source.includes('.')) {
     const parts = source.split('/');
@@ -81,9 +135,13 @@ export function extractBlockName(source: string): string {
 
   // If it's a filename, extract the base name
   if (source.includes('.')) {
-    const match = source.match(/^(.+?)\.([a-z]{2})?\.(mdx|vxjson)$/);
-    if (match) {
-      return match[1];
+    // Same locale grammar as every reader (content-path.ts), so 'hero.en-US.mdx'
+    // displays as 'hero' rather than 'hero.en-US'. The whole source is passed
+    // on purpose — the greedy base tolerates '/', so 'heroes/main.en.mdx'
+    // names as 'heroes/main'.
+    const suffix = parseLocaleFilename(source);
+    if (suffix) {
+      return suffix.base;
     }
     // Fallback: remove any extension
     return source.replace(/\.[^.]+$/, '');
@@ -91,7 +149,7 @@ export function extractBlockName(source: string): string {
 
   // If it's an ID, create a simple name
   if (source.startsWith('vx-')) {
-    return `block-${source.substring(3, 8)}`;
+    return `fragment-${source.substring(3, 8)}`;
   }
 
   // Otherwise return as-is
@@ -99,13 +157,13 @@ export function extractBlockName(source: string): string {
 }
 
 /**
- * Validate block name according to the specification
+ * Validate fragment name according to the specification
  * - Cannot contain dots (reserved for locale separator)
  * - Cannot contain slashes (would create subdirectories)
  * - Cannot contain spaces (for clean filenames)
  * - Must have at least one character
  */
-export function isValidBlockName(name: string): boolean {
+export function isValidFragmentName(name: string): boolean {
   if (!name || name.length === 0) return false;
   if (name.includes('.')) return false;
   if (name.includes('/')) return false;
@@ -137,7 +195,7 @@ export function getMetadataSize(meta: ContentMeta): number {
  * - Cannot contain special characters that would break URLs
  */
 export function isValidPathname(pathname: string): boolean {
-  if (!pathname || !pathname.startsWith('/')) return false;
+  if (!pathname?.startsWith('/')) return false;
   if (pathname.includes(' ')) return false;
   if (pathname.includes('?') || pathname.includes('#')) return false;
   return true;
@@ -152,22 +210,22 @@ export function isValidPathname(pathname: string): boolean {
 export function normalizePathname(pathname: string): string {
   if (!pathname) return '/';
 
-  let normalized = pathname;
+  let normalizedPathname = pathname;
 
   // Ensure it starts with /
-  if (!normalized.startsWith('/')) {
-    normalized = `/${normalized}`;
+  if (!normalizedPathname.startsWith('/')) {
+    normalizedPathname = `/${normalizedPathname}`;
   }
 
   // Collapse multiple slashes
-  normalized = normalized.replace(/\/+/g, '/');
+  normalizedPathname = normalizedPathname.replace(/\/+/g, '/');
 
   // Remove trailing slash unless it's the root
-  if (normalized !== '/' && normalized.endsWith('/')) {
-    normalized = normalized.slice(0, -1);
+  if (normalizedPathname !== '/' && normalizedPathname.endsWith('/')) {
+    normalizedPathname = normalizedPathname.slice(0, -1);
   }
 
-  return normalized;
+  return normalizedPathname;
 }
 
 /**
@@ -182,6 +240,7 @@ export type PathnameValidationReason =
   | 'uppercase'
   | 'non_ascii'
   | 'traversal_segment'
+  | 'index_segment'
   | 'disallowed_char';
 
 export interface PathnameValidationResult {
@@ -200,7 +259,10 @@ export interface PathnameValidationResult {
  * the UI can show a helpful error message.
  *
  * Accepted chars: a–z, 0–9, `-`, `_`, `/`. Mixed case, accents, spaces,
- * `?`, `#`, `\`, and traversal segments (`.`, `..`) are rejected.
+ * `?`, `#`, `\`, and traversal segments (`.`, `..`) are rejected, as is a
+ * last segment `index`: a page's file is named after its path, `/` is stored
+ * as `index`, and `blog/index` reads back as `/blog`, so `/index` would be the
+ * home page's file and `/blog/index` a second page at `/blog`.
  */
 export function normalizeAndValidatePathname(input: string | undefined | null): PathnameValidationResult {
   const raw = (input ?? '').trim();
@@ -236,7 +298,7 @@ export function normalizeAndValidatePathname(input: string | undefined | null): 
 
   // Normalize: add leading slash, collapse //, strip trailing slash.
   let value = raw;
-  if (!value.startsWith('/')) value = '/' + value;
+  if (!value.startsWith('/')) value = `/${value}`;
   value = value.replace(/\/+/g, '/');
   if (value !== '/' && value.endsWith('/')) value = value.slice(0, -1);
 
@@ -254,6 +316,15 @@ export function normalizeAndValidatePathname(input: string | undefined | null): 
         };
       }
     }
+  }
+
+  if (value.endsWith('/index')) {
+    return {
+      value,
+      valid: false,
+      reason: 'index_segment',
+      message: 'Path cannot end in `/index`: `/index` is the home page and `/blog/index` is `/blog`',
+    };
   }
 
   // Final allowed-chars check — catches stray dots and anything else.
@@ -294,7 +365,7 @@ export function parseDate(dateStr: string | undefined): Date | null {
 
   try {
     const date = new Date(dateStr);
-    if (isNaN(date.getTime())) return null;
+    if (Number.isNaN(date.getTime())) return null;
     return date;
   } catch {
     return null;

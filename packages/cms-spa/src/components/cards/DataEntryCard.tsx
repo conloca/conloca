@@ -1,7 +1,9 @@
 import { Database, Edit2, ExternalLink, FileJson, MoreVertical, Settings, Trash2 } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
-import { useClickOutside } from '../../hooks';
-import { getUIConfig } from '../../ui-config';
+import { useClickOutside } from '../../hooks/index.js';
+import { getUIConfig } from '../../ui-config.js';
+import { cn } from '../../utils/cn.js';
+import { menuOpensUp } from '../../utils/menu-placement.js';
 
 interface DataEntryCardProps {
   id: string;
@@ -36,6 +38,7 @@ export function DataEntryCard({
   onDelete,
 }: DataEntryCardProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [menuUp, setMenuUp] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const closeMenu = useCallback(() => setIsMenuOpen(false), []);
@@ -83,11 +86,14 @@ export function DataEntryCard({
             className="p-1 hover:bg-grey-11 dark:hover:bg-grey-03 rounded-md transition-colors"
             title="Edit data"
           >
-            <Edit2 className="h-4 w-4 text-azure-04" />
+            <Edit2 className="h-4 w-4 text-azure-04 dark:text-azure-08" />
           </button>
           <button
             type="button"
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
+            onClick={(e) => {
+              setMenuUp(menuOpensUp(e.currentTarget.getBoundingClientRect(), window.innerHeight, 200));
+              setIsMenuOpen(!isMenuOpen);
+            }}
             className="p-1 hover:bg-grey-11 dark:hover:bg-grey-03 rounded-md transition-colors"
             title="More actions"
             aria-label="More actions"
@@ -99,7 +105,10 @@ export function DataEntryCard({
           {isMenuOpen && (
             <div
               ref={menuRef}
-              className="absolute right-0 top-8 w-48 bg-white dark:bg-grey-03 border border-grey-09 dark:border-grey-03 rounded-md shadow-lg z-10"
+              className={cn(
+                'absolute right-0 w-48 bg-white dark:bg-grey-03 border border-grey-09 dark:border-grey-03 rounded-md shadow-lg z-10',
+                menuUp ? 'bottom-8' : 'top-8',
+              )}
             >
               <button
                 type="button"
@@ -140,7 +149,7 @@ export function DataEntryCard({
                   onDelete();
                   setIsMenuOpen(false);
                 }}
-                className="w-full px-4 py-2 text-left flex items-center gap-2 hover:bg-red-11 dark:hover:bg-red-02 transition-colors text-red-04"
+                className="w-full px-4 py-2 text-left flex items-center gap-2 hover:bg-red-11 dark:hover:bg-red-02 transition-colors text-red-04 dark:text-red-08"
               >
                 <Trash2 className="h-4 w-4" />
                 <span>Delete</span>

@@ -1,0 +1,25 @@
+{
+  "created": "2026-07-30T00:00:00.000Z",
+  "id": "vx-prose-parity",
+  "meta": {
+    "description": "Fixture page for checking prose parity — embeds the welcome-hero fragment so the published render, the canvas chip and the MDX typing surface can be measured against each other.",
+    "title": "Prose Parity Fixture"
+  },
+  "modified": "2026-07-30T00:00:00.000Z",
+  "type": "puck",
+  "content": {
+    "puckData": {
+      "content": [
+        {
+          "props": {
+            "contentId": "vx-6RmcMpA0",
+            "id": "Fragment_vx-6RmcMpA0-prose-parity-fixture"
+          },
+          "type": "Fragment_vx-6RmcMpA0"
+        }
+      ],
+      "root": {},
+      "zones": {}
+    }
+  }
+}

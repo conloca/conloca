@@ -9,106 +9,120 @@
     "url": "git+https://github.com/conloca/conloca.git",
     "directory": "packages/content-api"
   },
-  "main": "./dist/index.mjs",
-  "module": "./dist/index.mjs",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
   "dependencies": {
-    "@hono/node-server": "^1.19.14",
-    "fast-glob": "^3.3.2",
+    "@hono/node-server": "^2.1.1",
+    "fast-glob": "^3.3.3",
     "gray-matter": "^4.0.3",
-    "hono": "^4.12.23",
+    "hono": "^4.13.5",
     "image-size": "^2.0.2",
-    "jose": "^6.2.3",
-    "nanoid": "^5.1.10",
-    "sort-keys": "^6.0.0",
+    "jose": "^6.2.10",
+    "nanoid": "^6.0.1",
+    "sort-keys": "^6.0.1",
     "tslib": "^2.8.1",
     "xxhash-wasm": "^1.1.0",
-    "yaml": "^2.8.3",
-    "zod": "^4.4.1"
+    "yaml": "^2.9.0",
+    "zod": "^4.5.4"
+  },
+  "peerDependencies": {
+    "vite": "^7.0.0 || ^8.0.0"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    }
   },
   "devDependencies": {
-    "@stryker-mutator/core": "^9.6.1",
-    "@stryker-mutator/vitest-runner": "^9.6.1",
-    "fast-check": "^4.4.0",
-    "vitest": "^4.1.7"
+    "@stryker-mutator/core": "^10.0.0",
+    "@stryker-mutator/vitest-runner": "^10.0.0",
+    "fast-check": "^4.9.0",
+    "vite": "^7.3.6",
+    "vitest": "^4.1.11"
   },
   "exports": {
     "./package.json": "./package.json",
     ".": {
-      "types": "./dist/index.d.mts",
-      "import": "./dist/index.mjs",
-      "default": "./dist/index.mjs"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
     },
     "./node": {
-      "types": "./dist/node.d.mts",
-      "import": "./dist/node.mjs",
-      "default": "./dist/node.mjs"
+      "types": "./dist/node.d.ts",
+      "import": "./dist/node.js",
+      "default": "./dist/node.js"
     },
     "./indexing": {
-      "types": "./dist/indexing.d.mts",
-      "import": "./dist/indexing.mjs",
-      "default": "./dist/indexing.mjs"
+      "types": "./dist/indexing.d.ts",
+      "import": "./dist/indexing.js",
+      "default": "./dist/indexing.js"
+    },
+    "./content-path": {
+      "types": "./dist/content-path.d.ts",
+      "import": "./dist/content-path.js",
+      "default": "./dist/content-path.js"
     },
     "./vxjson-serialize": {
-      "types": "./dist/vxjson-serialize.d.mts",
-      "import": "./dist/vxjson-serialize.mjs",
-      "default": "./dist/vxjson-serialize.mjs"
+      "types": "./dist/vxjson-serialize.d.ts",
+      "import": "./dist/vxjson-serialize.js",
+      "default": "./dist/vxjson-serialize.js"
     },
     "./reader": {
-      "types": "./dist/reader.d.mts",
-      "import": "./dist/reader.mjs",
-      "default": "./dist/reader.mjs"
+      "types": "./dist/reader.d.ts",
+      "import": "./dist/reader.js",
+      "default": "./dist/reader.js"
     },
     "./schemas": {
-      "types": "./dist/schemas/index.d.mts",
-      "import": "./dist/schemas/index.mjs",
-      "default": "./dist/schemas/index.mjs"
+      "types": "./dist/schemas/index.d.ts",
+      "import": "./dist/schemas/index.js",
+      "default": "./dist/schemas/index.js"
+    },
+    "./component-vocabulary": {
+      "types": "./dist/component-vocabulary.d.ts",
+      "import": "./dist/component-vocabulary.js",
+      "default": "./dist/component-vocabulary.js"
     }
   },
   "scripts": {
     "test": "nx run content-api:test --outputStyle=stream"
   },
   "type": "module",
-  "types": "./dist/index.d.mts",
+  "types": "./dist/index.d.ts",
   "files": [
     "dist",
+    "src",
     "!**/*.tsbuildinfo"
   ],
   "nx": {
     "targets": {
       "clean": {},
       "lint": {},
-      "tsdown-js": {
-        "executor": "nx:run-commands",
-        "cache": true,
-        "dependsOn": [
-          "^build"
-        ],
+      "typecheck-tests": {
+        "//": "The test program also compiles the shared git-isolation harness it imports from tooling/.",
         "inputs": [
-          "{projectRoot}/src/**/*",
-          "{projectRoot}/tsdown.config.ts",
-          "{projectRoot}/tsconfig.lib.json",
-          "{projectRoot}/package.json"
-        ],
-        "outputs": [
-          "{projectRoot}/dist/**/*.mjs",
-          "{projectRoot}/dist/**/*.js",
-          "{projectRoot}/dist/**/*.d.mts"
-        ],
-        "options": {
-          "command": "tsdown",
-          "cwd": "{projectRoot}"
-        }
+          "...",
+          "{workspaceRoot}/tooling/git-env-isolation.ts",
+          "{workspaceRoot}/tooling/git-local-env.ts"
+        ]
       },
       "test": {
         "executor": "@smoothbricks/nx-plugin:bounded-exec",
         "dependsOn": [
-          "typecheck-tests"
+          "typecheck-tests",
+          "test-packed"
+        ],
+        "inputs": [
+          "default",
+          "^default",
+          "{workspaceRoot}/tooling/test-setup.ts",
+          "{workspaceRoot}/tooling/git-local-env.ts",
+          "{workspaceRoot}/tooling/git-env-isolation.ts"
         ],
         "options": {
           "command": "bun test --timeout=30000",
           "cwd": "{projectRoot}",
           "timeoutMs": 120000,
-          "killAfterMs": 10000
+          "killAfterMs": 10000.0
         }
       },
       "mutation": {
@@ -117,6 +131,28 @@
         "options": {
           "command": "stryker run stryker.pilot.config.mjs",
           "cwd": "{projectRoot}"
+        }
+      },
+      "test-packed": {
+        "//": "The packed shape is a function of the built outputs, the manifest and the locked dependency closure; cached on exactly those.",
+        "executor": "nx:run-commands",
+        "cache": true,
+        "inputs": [
+          {
+            "dependentTasksOutputFiles": "**/*",
+            "transitive": true
+          },
+          "{projectRoot}/package.json",
+          "{workspaceRoot}/bun.lock",
+          "{workspaceRoot}/tooling/packaging/**/*"
+        ],
+        "dependsOn": [
+          "build",
+          "^build"
+        ],
+        "options": {
+          "command": "bun tooling/packaging/test-packed.ts content-api",
+          "cwd": "{workspaceRoot}"
         }
       }
     },

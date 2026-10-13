@@ -10,117 +10,139 @@
     "directory": "packages/astro-cms"
   },
   "type": "module",
-  "main": "./dist/index.mjs",
-  "module": "./dist/index.mjs",
-  "types": "./dist/index.d.mts",
+  "main": "./dist/ts/src/index.js",
+  "module": "./dist/ts/src/index.js",
+  "types": "./dist/ts/src/index.d.ts",
   "exports": {
     "./package.json": "./package.json",
     ".": {
-      "types": "./dist/index.d.mts",
-      "import": "./dist/index.mjs",
-      "default": "./dist/index.mjs"
+      "types": "./dist/ts/src/index.d.ts",
+      "import": "./dist/ts/src/index.js",
+      "default": "./dist/ts/src/index.js"
     },
     "./node": {
-      "types": "./dist/node/index.d.mts",
-      "import": "./dist/node/index.mjs",
-      "default": "./dist/node/index.mjs"
+      "types": "./dist/ts/node/index.d.ts",
+      "import": "./dist/ts/node/index.js",
+      "default": "./dist/ts/node/index.js"
     },
     "./node/content": {
-      "types": "./dist/node/content.d.mts",
-      "import": "./dist/node/content.mjs",
-      "default": "./dist/node/content.mjs"
+      "types": "./dist/ts/node/content.d.ts",
+      "import": "./dist/ts/node/content.js",
+      "default": "./dist/ts/node/content.js"
     },
     "./cms-handler": {
-      "types": "./dist/internal/cms-handler.d.mts",
-      "import": "./dist/internal/cms-handler.mjs",
-      "default": "./dist/internal/cms-handler.mjs"
+      "types": "./dist/ts/src/cms-handler.d.ts",
+      "import": "./dist/ts/src/cms-handler.js",
+      "default": "./dist/ts/src/cms-handler.js"
+    },
+    "./checks": {
+      "types": "./dist/ts/src/checks.d.ts",
+      "import": "./dist/ts/src/checks.js",
+      "default": "./dist/ts/src/checks.js"
     },
     "./collections": {
-      "types": "./dist/collections.d.mts",
-      "import": "./dist/collections.mjs",
-      "default": "./dist/collections.mjs"
+      "types": "./dist/ts/src/collections.d.ts",
+      "import": "./dist/ts/src/collections.js",
+      "default": "./dist/ts/src/collections.js"
+    },
+    "./page-feed": {
+      "types": "./dist/ts/src/page-feed.d.ts",
+      "import": "./dist/ts/src/page-feed.js",
+      "default": "./dist/ts/src/page-feed.js"
+    },
+    "./page-schemas": {
+      "types": "./dist/ts/src/page-schemas.d.ts",
+      "import": "./dist/ts/src/page-schemas.js",
+      "default": "./dist/ts/src/page-schemas.js"
+    },
+    "./puck-manifest": {
+      "types": "./dist/ts/src/puck-manifest/index.d.ts",
+      "import": "./dist/ts/src/puck-manifest/index.js",
+      "default": "./dist/ts/src/puck-manifest/index.js"
     },
     "./components": {
-      "types": "./dist/components.d.mts",
-      "import": "./dist/components.mjs",
-      "default": "./dist/components.mjs"
+      "types": "./dist/ts/src/components.d.ts",
+      "import": "./dist/ts/src/components.js",
+      "default": "./dist/ts/src/components.js"
     },
     "./virtual-modules": {
       "types": "./dist/virtual-modules.d.ts"
     },
     "./lib/hydration-script": {
-      "types": "./dist/lib/hydration-script.d.mts",
-      "import": "./dist/lib/hydration-script.mjs",
-      "default": "./dist/lib/hydration-script.mjs"
+      "types": "./dist/ts/src/lib/hydration-script.d.ts",
+      "import": "./dist/ts/src/lib/hydration-script.js",
+      "default": "./dist/ts/src/lib/hydration-script.js"
     },
     "./hydration": {
-      "types": "./dist/hydration.d.mts",
-      "import": "./dist/hydration.mjs",
-      "default": "./dist/hydration.mjs"
+      "types": "./dist/ts/src/hydration.d.ts",
+      "import": "./dist/ts/src/hydration.js",
+      "default": "./dist/ts/src/hydration.js"
     }
   },
   "scripts": {
     "test": "nx run astro-cms:test --outputStyle=stream"
   },
   "files": [
-    "dist",
+    "dist/ts",
+    "dist/internal",
+    "dist/virtual-modules.d.ts",
+    "src",
+    "node",
+    "!src/__tests__",
     "!**/*.tsbuildinfo"
   ],
   "dependencies": {
     "@conloca/cms-spa": "workspace:*",
     "@conloca/content-api": "workspace:*",
     "@conloca/mdx": "workspace:*",
-    "@puckeditor/core": "^0.21.2",
+    "@puckeditor/core": "^0.23.0",
+    "@tiptap/static-renderer": "3.31.2",
+    "acorn": "^8.18.0",
     "clsx": "^2.1.1",
-    "fast-glob": "^3.3.2",
-    "mdast-util-from-markdown": "^2.0.0",
+    "fast-glob": "^3.3.3",
+    "mdast-util-from-markdown": "^2.0.3",
     "mdast-util-mdx": "^3.0.0",
     "micromark-extension-mdxjs": "^3.0.0",
     "ts-morph": "^28.0.0",
     "tslib": "^2.8.1"
   },
   "peerDependencies": {
-    "@vitejs/plugin-react": "^4.0.0",
-    "astro": "^7.1.3",
-    "react": "^19.2.5",
-    "react-dom": "^19.2.5",
-    "vite": "^6.0.0 || ^7.0.0 || ^8.0.0",
-    "zod": "^4.4.1"
+    "@astrojs/react": "^6.0.5",
+    "@vitejs/plugin-react": "^5.2.0",
+    "astro": "^7.3.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "vite": "^7.0.0 || ^8.0.0",
+    "zod": "^4.5.4"
   },
   "devDependencies": {
-    "@happy-dom/global-registrator": "20.6.1",
-    "@testing-library/jest-dom": "^6.9.1",
+    "@astrojs/check": "^0.9.10",
+    "@astrojs/sitemap": "^3.7.3",
+    "@happy-dom/global-registrator": "20.13.2",
+    "@tiptap/extension-blockquote": "3.31.2",
+    "@tiptap/extension-bold": "3.31.2",
+    "@tiptap/extension-code": "3.31.2",
+    "@tiptap/extension-code-block": "3.31.2",
+    "@tiptap/extension-document": "3.31.2",
+    "@tiptap/extension-hard-break": "3.31.2",
+    "@tiptap/extension-heading": "3.31.2",
+    "@tiptap/extension-horizontal-rule": "3.31.2",
+    "@tiptap/extension-italic": "3.31.2",
+    "@tiptap/extension-link": "3.31.2",
+    "@tiptap/extension-list": "3.31.2",
+    "@tiptap/extension-paragraph": "3.31.2",
+    "@tiptap/extension-strike": "3.31.2",
+    "@tiptap/extension-text": "3.31.2",
+    "@tiptap/extension-text-align": "3.31.2",
+    "@tiptap/extension-underline": "3.31.2",
+    "@tiptap/html": "3.31.2",
     "@vitejs/plugin-react": "^5.2.0",
-    "astro": "^7.1.3",
-    "vite": "^8.1.5",
-    "vitest": "^4.1.7"
+    "astro": "^7.3.1",
+    "vite": "^7.3.6"
   },
   "nx": {
     "targets": {
       "clean": {},
-      "tsdown-js": {
-        "executor": "nx:run-commands",
-        "cache": true,
-        "dependsOn": [
-          "^build"
-        ],
-        "inputs": [
-          "{projectRoot}/src/**/*",
-          "{projectRoot}/node/**/*",
-          "{projectRoot}/tsdown.config.ts",
-          "{projectRoot}/tsconfig.lib.json",
-          "{projectRoot}/package.json"
-        ],
-        "outputs": [
-          "{projectRoot}/dist/**/*.mjs",
-          "{projectRoot}/dist/**/*.js",
-          "{projectRoot}/dist/**/*.d.mts"
-        ],
-        "options": {
-          "command": "tsdown",
-          "cwd": "{projectRoot}"
-        }
-      },
       "bun-web": {
         "executor": "nx:run-commands",
         "cache": true,
@@ -128,30 +150,94 @@
           "{projectRoot}/src/handlers/page-handler.astro",
           "{projectRoot}/src/internal/acorn-default.mjs",
           "{projectRoot}/src/virtual-modules.d.ts",
-          "{projectRoot}/build.ts"
+          "{projectRoot}/copy-assets.ts"
         ],
         "outputs": [
-          "{projectRoot}/dist/internal/page-handler.astro",
-          "{projectRoot}/dist/internal/acorn-default.mjs",
+          "{projectRoot}/dist/internal",
           "{projectRoot}/dist/virtual-modules.d.ts"
         ],
         "options": {
-          "command": "bun run build.ts",
+          "command": "bun run copy-assets.ts",
           "cwd": "{projectRoot}"
         }
       },
       "lint": {},
+      "typecheck": {
+        "dependsOn": [
+          "^*-js",
+          "typecheck-astro"
+        ]
+      },
+      "typecheck-astro": {
+        "executor": "nx:run-commands",
+        "cache": true,
+        "dependsOn": [
+          "build"
+        ],
+        "inputs": [
+          "versionlessProduction",
+          "^production",
+          "{workspaceRoot}/tsconfig.base.json",
+          {
+            "json": "{workspaceRoot}/package.json",
+            "excludeFields": [
+              "version"
+            ]
+          },
+          {
+            "json": "{workspaceRoot}/bun.lock",
+            "excludeFields": [
+              "workspaces"
+            ]
+          },
+          "{projectRoot}/tsconfig.astro.json"
+        ],
+        "outputs": [],
+        "options": {
+          "command": "astro check --noSync --tsconfig tsconfig.astro.json --minimumSeverity warning --minimumFailingSeverity warning",
+          "cwd": "{projectRoot}"
+        }
+      },
       "test": {
         "executor": "@smoothbricks/nx-plugin:bounded-exec",
         "dependsOn": [
           "typecheck-tests",
-          "^build"
+          "build",
+          "^build",
+          "test-packed"
+        ],
+        "inputs": [
+          "default",
+          "^default",
+          "{workspaceRoot}/example/website-with-cms/src/**/*"
         ],
         "options": {
           "command": "bun --conditions=production test",
           "cwd": "{projectRoot}",
           "timeoutMs": 120000,
-          "killAfterMs": 10000
+          "killAfterMs": 10000.0
+        }
+      },
+      "test-packed": {
+        "//": "The packed shape is a function of the built outputs, the manifest and the locked dependency closure; cached on exactly those.",
+        "executor": "nx:run-commands",
+        "cache": true,
+        "inputs": [
+          {
+            "dependentTasksOutputFiles": "**/*",
+            "transitive": true
+          },
+          "{projectRoot}/package.json",
+          "{workspaceRoot}/bun.lock",
+          "{workspaceRoot}/tooling/packaging/**/*"
+        ],
+        "dependsOn": [
+          "build",
+          "^build"
+        ],
+        "options": {
+          "command": "bun tooling/packaging/test-packed.ts astro-cms",
+          "cwd": "{workspaceRoot}"
         }
       }
     },

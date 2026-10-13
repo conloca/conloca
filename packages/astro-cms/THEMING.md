@@ -54,30 +54,41 @@ You only need the explicit marker when:
 - Your wrapper has classes that matter for CSS targeting and you want them preserved verbatim (Astro scoped hashes
   survive when you mark explicitly).
 
+#### Fragments carry the marker too
+
+Every fragment Conloca renders — inside your own `ContentFragmentSection` block, or as a standalone fragment block —
+comes wrapped in `<div class="mdx-content conloca-prose" data-conloca-content-root>`. That wrapper is a marked element
+like any other, and the first marker in the document wins, so on a page that shows a fragment the editor mirrors the
+fragment's wrapper instead of falling back to `<main>` or to the classed-wrapper heuristic. That is usually what you
+want: the fragment is the prose on that page.
+
+When it isn't, mark the element you'd rather have mirrored. A layout wrapper around the whole page body opens before any
+fragment inside it, so it stays the first marker and keeps winning.
+
 ### CSS variables the editor reads
 
-Anything you set on `:root` (or a more specific selector) flows through. The list below is what the prose styles
-(`@conloca/mdx/prose.css`) consume as fallbacks — your site's CSS just needs to define these for the right elements to
-inherit them. Most modern stacks already do.
+MDX content typography uses a three-layer model:
 
-| Variable                     | What it paints                          | Fallback (dark)   | Fallback (light) |
-| ---------------------------- | --------------------------------------- | ----------------- | ---------------- |
-| `--color-text-heading`       | `h1`–`h6`, `strong`, `<th>`             | `#f1f5f9`         | `#0f172a`        |
-| `--color-text-primary`       | `<blockquote>`                          | `#e2e8f0`         | `#0f172a`        |
-| `--color-text-code`          | inline `<code>` text                    | `#e2e8f0`         | `#334155`        |
-| `--color-bg-code`            | inline `<code>` + `<pre>` background    | `#1e293b`         | `#f1f5f9`        |
-| `--color-border`             | `<hr>`, `<th>`/`<td>` borders, `<code>` | `#334155`         | `#e2e8f0`        |
-| `--color-brand-400/500/700`  | link colors + `<blockquote>` border     | `#22d3ee` / etc   | `#06b6d4` / etc  |
-| `--font-sans`                | body text font                          | system stack      | system stack     |
-| `--font-mono`                | `<code>` / `<pre>` font                 | system mono       | system mono      |
-| `--conloca-code-bg`          | `<pre>` background (overrides above)    | `--color-bg-code` |                  |
-| `--conloca-code-border`      | `<pre>` border                          | `--color-border`  |                  |
-| `--conloca-code-radius`      | `<pre>` border-radius                   | `1rem`            |                  |
-| `--conloca-code-padding`     | `<pre>` padding                         | `1rem 1.25rem`    |                  |
-| `--conloca-editor-max-width` | content column max-width                | `45rem`           |                  |
+1. **L0 — Conloca baseline** (`--conloca-prose-*`) — always on; readable default when host matching is unavailable.
+2. **L1 — Host auto-match** (`--conloca-host-*` from the style probe + fetched host CSS) — overrides L0 when the preview
+   route works.
+3. **L2 — Consumer override** — `editorCSS` / your site CSS on `.conloca-prose--editor` wins on the same properties.
 
-The dark fallback applies when `<html>` has `class="dark"` (Tailwind convention) or `data-theme="dark"` (Starlight /
-shadcn convention). Both are honored — Conloca mirrors whichever your site uses.
+Anything you set on `:root` (or a more specific selector) can flow through. Host tokens the probe and Puck bridge
+commonly pick up:
+
+| Variable                                      | What it paints                    | Notes                                                     |
+| --------------------------------------------- | --------------------------------- | --------------------------------------------------------- |
+| `--font-sans`                                 | Preferred body font when mirrored | Used by Puck iframe bridge; optional for MDX via host CSS |
+| `--font-mono`                                 | Code font                         | Host CSS / code blocks                                    |
+| `--conloca-host-font-family`                  | MDX contenteditable font          | Set by probe when preview works                           |
+| `--conloca-host-color`                        | MDX contenteditable text color    | Set by probe when preview works                           |
+| `--conloca-prose-font-family`                 | MDX baseline font                 | Override the L0 default without a full host match         |
+| `--conloca-prose-color`                       | MDX baseline text color           | Override the L0 default                                   |
+| `--conloca-code-bg` / `--conloca-code-border` | Code chrome                       | Optional host overrides                                   |
+
+Admin light/dark (`conloca-theme`) is separate from your public site theme. The probe mirrors the **admin** resolved
+scheme so typing stays coherent in the editor; it does not sticky-store your brand font across sessions.
 
 ## Integration options
 
@@ -92,10 +103,10 @@ export default defineConfig({
       contentRoot: './content',
       puckConfigPath: './src/puck.config.tsx',
 
-      // Route URL the BLOCK editor uses for style + wrapper discovery.
+      // Route URL the FRAGMENT editor uses for style + wrapper discovery.
       // Defaults to `/` (site root). Pick a representative content page
-      // — typically the same page type your blocks will be embedded in.
-      blockPreviewRoute: '/getting-started/',
+      // — typically the same page type your fragments will be embedded in.
+      fragmentPreviewRoute: '/getting-started/',
 
       // Raw CSS injected into the editor's `conloca-host-preview` layer
       // AFTER auto-discovered host CSS. Use for one-off overrides when
@@ -110,10 +121,10 @@ export default defineConfig({
 });
 ```
 
-### `blockPreviewRoute`
+### `fragmentPreviewRoute`
 
-Blocks aren't tied to a single route, so the block editor needs a route to synthesize its preview from. Pick a
-representative content page on your site — typically one that uses the same layout style your blocks will end up in.
+Fragments aren't tied to a single route, so the fragment editor needs a route to synthesize its preview from. Pick a
+representative content page on your site — typically one that uses the same layout style your fragments will end up in.
 
 Hosts that ship rich typography (custom prose styles, code blocks, custom list markers) see the biggest benefit. Hosts
 whose body bg matches the editor chrome can leave this on the default.

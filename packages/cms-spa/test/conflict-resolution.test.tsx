@@ -9,9 +9,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor, waitForElementToBeRemoved } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
-import { ConflictDialog } from '../src/components/dialogs/ConflictDialog';
-import { PageEditor } from '../src/components/editor/PageEditor';
-import { setupTestAPI, testApi } from './test-utils';
+import { ConflictDialog } from '../src/components/dialogs/ConflictDialog.js';
+import { PageEditor } from '../src/components/editor/PageEditor.js';
+import { setupTestAPI, testApi } from './test-utils.js';
+import { pinTimeZone } from './time-zone.js';
 
 /**
  * PageEditor now uses `useUnsavedChangesGuard` which depends on react-router-dom's
@@ -83,7 +84,7 @@ describe('Conflict Resolution', () => {
 
       // Get the initial content to capture the current ETag
       const initialContent = await testApi.getLocalized(pageId, 'en');
-      const originalEtag = initialContent?.localized.etag;
+      const originalEtag = initialContent!.localized.etag;
 
       // Simulate another user updating the content (this will change the ETag)
       await testApi.updateLocalized({
@@ -96,7 +97,7 @@ describe('Conflict Resolution', () => {
       });
 
       // Now the PageEditor will try to save with the old ETag and should get a conflict
-      const onSave = mock(async (data: any, _forceEtag?: string) => {
+      const onSave = mock(async (data: any) => {
         // When PageEditor tries to save, it will use the old ETag
         const result = await apiClient.updateLocalized({
           id: pageId,
@@ -111,7 +112,6 @@ describe('Conflict Resolution', () => {
 
       renderWithDataRouter(
         <PageEditor
-          pageId={pageId}
           entry={initialContent!}
           config={mockConfig}
           availableLocales={['en']}
@@ -234,7 +234,6 @@ describe('Conflict Resolution', () => {
 
       renderWithDataRouter(
         <PageEditor
-          pageId={contentId}
           entry={modifiedEntry}
           config={mockConfig}
           availableLocales={['en']}
@@ -259,7 +258,73 @@ describe('Conflict Resolution', () => {
     });
   });
 
+  describe('Mid-save keystrokes', () => {
+    it('does not report Saved when a keystroke raced the save response', async () => {
+      // A save snapshots the document when it is sent. A keystroke landing
+      // while it is in flight is not in that payload — so when the response
+      // comes back the header must not flip to the green "Saved", which is
+      // exactly what waved authors off the page while edits were unsent.
+      const createResult = await testApi.createContent({
+        kind: 'page',
+        site: 'default',
+        collection: 'pages',
+        type: 'puck',
+        meta: { title: 'Race Page' },
+        locales: {
+          en: {
+            meta: { title: 'Race Page' },
+            pathname: '/race',
+            content: { puckData: { content: [], root: { props: { rootTitle: 'before' } }, zones: {} } },
+          },
+        },
+      });
+      const initialContent = await testApi.getLocalized(createResult.id!, 'en');
+      if (!initialContent) throw new Error('Content not found');
+
+      let releaseSave!: () => void;
+      const gate = new Promise<void>((resolve) => {
+        releaseSave = resolve;
+      });
+      const onSave = mock(async (): Promise<UpdateResult> => {
+        await gate;
+        return { success: true, etag: 'fresh.etag' };
+      });
+
+      renderWithDataRouter(
+        <PageEditor
+          entry={initialContent}
+          config={mockConfig}
+          availableLocales={['en']}
+          onSave={onSave}
+          onBack={() => {}}
+          onOpenMetadata={() => {}}
+        />,
+        queryClient,
+      );
+      await screen.findByTestId('mock-puck-data');
+
+      fireEvent.keyDown(document, { key: 's', metaKey: true });
+      await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+
+      // The racing keystroke, while the response is still pending. The Puck
+      // mock's change button drives the same onChange a real edit does.
+      fireEvent.click(screen.getByTestId('mock-puck-change'));
+      await waitFor(() => expect(screen.getByTestId('mock-puck-data').textContent).toContain('changed'));
+
+      releaseSave();
+
+      // The save succeeded — for a document older than the one on screen.
+      const saveButton = await screen.findByRole('button', { name: /^save$/i });
+      await waitFor(() => expect(screen.queryByText('Saved')).toBeNull());
+      expect(saveButton.hasAttribute('disabled')).toBe(false);
+    });
+  });
+
   describe('ConflictDialog Component', () => {
+    // The dialog shows a publish date in the reader's own zone; pin one so the
+    // expected day is the same on every machine.
+    pinTimeZone('UTC');
+
     it('should render with proper options', () => {
       const mockConflict: UpdateResult = {
         success: false,
@@ -532,7 +597,6 @@ describe('Conflict Resolution', () => {
 
       renderWithDataRouter(
         <PageEditor
-          pageId={contentId}
           entry={modifiedEntry}
           config={mockConfig}
           availableLocales={['en']}

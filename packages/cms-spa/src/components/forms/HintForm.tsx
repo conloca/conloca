@@ -1,7 +1,8 @@
-import type { FieldHint, FieldHintVariant, PageSchemaGroup } from '../../page-schemas';
-import { ImageFieldRender } from '../fields/ImageField';
-import { Input, Select, Textarea } from '../ui';
-import { ChipArrayField } from './ChipArrayField';
+import { useId, useRef } from 'react';
+import type { FieldHint, FieldHintVariant, PageSchemaGroup } from '../../page-schemas.js';
+import { ImageFieldRender } from '../fields/ImageField.js';
+import { Input, Select, Textarea } from '../ui/index.js';
+import { ChipArrayField } from './ChipArrayField.js';
 
 interface HintFormProps {
   hints: Record<string, FieldHint>;
@@ -25,21 +26,27 @@ interface HintFormProps {
 export function HintForm({ hints, groups, values, onChange, className }: HintFormProps) {
   const setField = (name: string, value: unknown) => onChange({ ...values, [name]: value });
 
+  // A hidden field renders nothing, and its wrapper below would still add a gap to space-y.
+  const shown = Object.entries(hints).filter(([, hint]) => hint.hidden !== true);
+
+  // The wrapper names the field, so a dialog can open at it (see PageMetadataDialog's focusField).
   const renderField = (name: string, hint: FieldHint) => (
-    <HintField key={name} name={name} hint={hint} value={values[name]} onChange={(v) => setField(name, v)} />
+    <div key={name} data-field-name={name}>
+      <HintField name={name} hint={hint} value={values[name]} onChange={(v) => setField(name, v)} />
+    </div>
   );
 
   if (!groups || groups.length === 0) {
     return (
       <div className={className}>
-        <div className="space-y-6">{Object.entries(hints).map(([n, h]) => renderField(n, h))}</div>
+        <div className="space-y-6">{shown.map(([n, h]) => renderField(n, h))}</div>
       </div>
     );
   }
 
   const ungrouped: Array<[string, FieldHint]> = [];
   const byGroup = new Map<string, Array<[string, FieldHint]>>();
-  for (const [name, hint] of Object.entries(hints)) {
+  for (const [name, hint] of shown) {
     if (hint.group && byGroup.has(hint.group)) {
       byGroup.get(hint.group)?.push([name, hint]);
     } else if (hint.group) {
@@ -75,6 +82,7 @@ interface HintFieldProps {
 }
 
 function HintField({ name, hint, value, onChange }: HintFieldProps) {
+  const inputId = useId();
   if (hint.hidden) {
     if (typeof hint.hidden === 'function') {
       // Caller passes `values` so this check is best-effort against the field
@@ -91,15 +99,21 @@ function HintField({ name, hint, value, onChange }: HintFieldProps) {
   switch (hint.control) {
     case 'textarea':
       return (
-        <Wrapper label={label} required={required} description={description}>
-          <Textarea value={(value as string) || ''} onChange={(e) => onChange(e.target.value || undefined)} rows={3} />
+        <Wrapper inputId={inputId} label={label} required={required} description={description}>
+          <Textarea
+            id={inputId}
+            value={(value as string) || ''}
+            onChange={(e) => onChange(e.target.value || undefined)}
+            rows={3}
+          />
         </Wrapper>
       );
     case 'url':
     case 'email':
       return (
-        <Wrapper label={label} required={required} description={description}>
+        <Wrapper inputId={inputId} label={label} required={required} description={description}>
           <Input
+            id={inputId}
             type={hint.control}
             value={(value as string) || ''}
             onChange={(e) => onChange(e.target.value || undefined)}
@@ -108,8 +122,9 @@ function HintField({ name, hint, value, onChange }: HintFieldProps) {
       );
     case 'number':
       return (
-        <Wrapper label={label} required={required} description={description}>
+        <Wrapper inputId={inputId} label={label} required={required} description={description}>
           <Input
+            id={inputId}
             type="number"
             value={typeof value === 'number' ? value : ''}
             onChange={(e) => onChange(e.target.value ? Number(e.target.value) : undefined)}
@@ -118,8 +133,9 @@ function HintField({ name, hint, value, onChange }: HintFieldProps) {
       );
     case 'date':
       return (
-        <Wrapper label={label} required={required} description={description}>
+        <Wrapper inputId={inputId} label={label} required={required} description={description}>
           <Input
+            id={inputId}
             type="datetime-local"
             value={formatDateValue(value)}
             onChange={(e) => onChange(e.target.value || undefined)}
@@ -132,13 +148,13 @@ function HintField({ name, hint, value, onChange }: HintFieldProps) {
           <label className="flex items-center gap-2">
             <input
               type="checkbox"
-              checked={(value as boolean) === true}
+              checked={value === true}
               onChange={(e) => onChange(e.target.checked)}
               className="w-4 h-4 rounded-md border-grey-09 text-azure-04 focus:ring-azure-04"
             />
             <span className="text-sm font-medium text-grey-01 dark:text-grey-12">
               {label}
-              {required && <span className="text-red-04 ml-1">*</span>}
+              {required && <span className="text-red-04 dark:text-red-08 ml-1">*</span>}
             </span>
           </label>
           {description && <p className="mt-1 text-sm text-grey-04 dark:text-grey-07 ml-6">{description}</p>}
@@ -146,14 +162,18 @@ function HintField({ name, hint, value, onChange }: HintFieldProps) {
       );
     case 'image':
       return (
-        <Wrapper label={label} required={required} description={description}>
-          <ImageFieldRender value={(value as string) || ''} onChange={(v) => onChange(v || undefined)} />
+        <Wrapper inputId={inputId} label={label} required={required} description={description}>
+          <ImageFieldRender
+            inputId={inputId}
+            value={(value as string) || ''}
+            onChange={(v) => onChange(v || undefined)}
+          />
         </Wrapper>
       );
     case 'select':
       return (
-        <Wrapper label={label} required={required} description={description}>
-          <Select value={(value as string) || ''} onChange={(e) => onChange(e.target.value || undefined)}>
+        <Wrapper inputId={inputId} label={label} required={required} description={description}>
+          <Select id={inputId} value={(value as string) || ''} onChange={(e) => onChange(e.target.value || undefined)}>
             {!required && <option value="">Select…</option>}
             {hint.options.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -165,15 +185,16 @@ function HintField({ name, hint, value, onChange }: HintFieldProps) {
       );
     case 'chips':
       return (
-        <Wrapper label={label} required={required} description={description}>
+        <Wrapper inputId={inputId} label={label} required={required} description={description}>
           <ChipArrayField
+            inputId={inputId}
             value={Array.isArray(value) ? (value as string[]) : []}
             onChange={(v) => onChange(v)}
-            placeholder={description || 'Type and press Enter to add'}
           />
         </Wrapper>
       );
-    case 'object':
+    case 'object': {
+      const objectValue = value !== null && typeof value === 'object' && !Array.isArray(value) ? value : {};
       return (
         <Wrapper label={label} required={required} description={description}>
           <div className="space-y-4 border-l-2 border-grey-09 pl-3">
@@ -182,13 +203,14 @@ function HintField({ name, hint, value, onChange }: HintFieldProps) {
                 key={k}
                 name={k}
                 hint={h}
-                value={(value as Record<string, unknown> | undefined)?.[k]}
-                onChange={(v) => onChange({ ...((value as Record<string, unknown>) || {}), [k]: v })}
+                value={Object.getOwnPropertyDescriptor(objectValue, k)?.value}
+                onChange={(v) => onChange({ ...objectValue, [k]: v })}
               />
             ))}
           </div>
         </Wrapper>
       );
+    }
     case 'array':
       return (
         <Wrapper label={label} required={required} description={description}>
@@ -203,8 +225,13 @@ function HintField({ name, hint, value, onChange }: HintFieldProps) {
       );
     default:
       return (
-        <Wrapper label={label} required={required} description={description}>
-          <Input type="text" value={(value as string) || ''} onChange={(e) => onChange(e.target.value || undefined)} />
+        <Wrapper inputId={inputId} label={label} required={required} description={description}>
+          <Input
+            id={inputId}
+            type="text"
+            value={(value as string) || ''}
+            onChange={(e) => onChange(e.target.value || undefined)}
+          />
         </Wrapper>
       );
   }
@@ -289,15 +316,31 @@ interface ArrayFieldProps {
 }
 
 function ArrayField({ hint, value, onChange }: ArrayFieldProps) {
+  const idPrefix = useId();
+  const nextItemId = useRef(0);
+  const itemIds = useRef<string[]>([]);
+  const allocateItemId = () => {
+    const itemId = `${idPrefix}-${nextItemId.current}`;
+    nextItemId.current += 1;
+    return itemId;
+  };
+
+  while (itemIds.current.length < value.length) {
+    itemIds.current.push(allocateItemId());
+  }
+  if (itemIds.current.length > value.length) {
+    itemIds.current.length = value.length;
+  }
+
   return (
     <div className="space-y-2">
-      {value.map((item, i) => (
-        <div key={i} className="flex items-start gap-2 border-l-2 border-grey-09 pl-3">
+      {itemIds.current.map((itemId, i) => (
+        <div key={itemId} className="flex items-start gap-2 border-l-2 border-grey-09 pl-3">
           <div className="flex-1">
             <HintField
               name={`item-${i}`}
               hint={hint}
-              value={item}
+              value={value[i]}
               onChange={(v) => {
                 const next = value.slice();
                 next[i] = v;
@@ -307,8 +350,9 @@ function ArrayField({ hint, value, onChange }: ArrayFieldProps) {
           </div>
           <button
             type="button"
-            className="text-xs text-grey-04 hover:text-red-04 mt-1"
+            className="text-xs text-grey-04 dark:text-grey-07 hover:text-red-04 dark:hover:text-red-08 mt-1"
             onClick={() => {
+              itemIds.current.splice(i, 1);
               const next = value.slice();
               next.splice(i, 1);
               onChange(next);
@@ -320,8 +364,11 @@ function ArrayField({ hint, value, onChange }: ArrayFieldProps) {
       ))}
       <button
         type="button"
-        className="text-sm text-azure-04 hover:underline"
-        onClick={() => onChange([...value, undefined])}
+        className="text-sm text-azure-04 dark:text-azure-08 hover:underline"
+        onClick={() => {
+          itemIds.current.push(allocateItemId());
+          onChange([...value, undefined]);
+        }}
       >
         + Add item
       </button>
@@ -330,19 +377,30 @@ function ArrayField({ hint, value, onChange }: ArrayFieldProps) {
 }
 
 interface WrapperProps {
+  inputId?: string;
   label: string;
   required: boolean;
   description?: string;
   children: React.ReactNode;
 }
 
-function Wrapper({ label, required, description, children }: WrapperProps) {
+function Wrapper({ label, required, description, children, inputId }: WrapperProps) {
+  const labelContent = (
+    <>
+      {label}
+      {required && <span className="text-red-04 dark:text-red-08 ml-1">*</span>}
+    </>
+  );
+
   return (
     <div>
-      <label className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
-        {label}
-        {required && <span className="text-red-04 ml-1">*</span>}
-      </label>
+      {inputId ? (
+        <label htmlFor={inputId} className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
+          {labelContent}
+        </label>
+      ) : (
+        <div className="text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">{labelContent}</div>
+      )}
       {children}
       {description && <p className="mt-1 text-sm text-grey-04 dark:text-grey-07">{description}</p>}
     </div>
@@ -358,6 +416,12 @@ function formatLabel(name: string): string {
     .trim();
 }
 
+/**
+ * Host date hints store the picker's zone-less digits, which readers take as
+ * UTC. Slicing UTC hours off a Date or ISO string keeps the picker on that
+ * convention; local hours would shift the stored day across midnight for
+ * authors west of UTC.
+ */
 function formatDateValue(value: unknown): string {
   if (!value) return '';
   if (typeof value === 'string') {

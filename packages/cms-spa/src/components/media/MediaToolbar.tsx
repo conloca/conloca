@@ -1,5 +1,5 @@
 import { Search, Upload } from 'lucide-react';
-import { Button, Input, Select } from '../ui';
+import { Button, Input, Select } from '../ui/index.js';
 
 export type FileTypeFilter = 'all' | 'images' | 'svg';
 export type SortOption = 'date-newest' | 'date-oldest' | 'name-asc' | 'name-desc' | 'size-largest' | 'size-smallest';

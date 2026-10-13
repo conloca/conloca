@@ -3,7 +3,7 @@ import { fromMarkdown } from 'mdast-util-from-markdown';
 import { gfmFromMarkdown, gfmToMarkdown } from 'mdast-util-gfm';
 import { toMarkdown } from 'mdast-util-to-markdown';
 import { gfm } from 'micromark-extension-gfm';
-import { TO_MARKDOWN_OPTIONS } from '../markdown-options';
+import { TO_MARKDOWN_OPTIONS } from '../markdown-options.js';
 
 // Exercise the same library that runs inside MDXEditor on every save. If a
 // markdown construct survives parse -> stringify with our pinned options, the
@@ -56,10 +56,10 @@ describe('TO_MARKDOWN_OPTIONS round-trip', () => {
     const input = [
       '# Build Better Websites with Ligma CMS',
       '',
-      'Experience the power of visual editing with **Puck** and the flexibility of **MDX** content blocks.',
+      'Experience the power of visual editing with **Puck** and the flexibility of **MDX** content fragments.',
       '',
       '- Visual page building',
-      '- MDX content blocks',
+      '- MDX content fragments',
       '- Multi-language support',
       '- Git-based workflow',
       '',

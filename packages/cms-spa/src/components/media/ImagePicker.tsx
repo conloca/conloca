@@ -1,10 +1,11 @@
 import { Upload, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import type { AssetEntry } from '../../hooks';
-import { Button, IconButton } from '../ui';
-import { FolderTreeSidebar } from './FolderTreeSidebar';
-import { MediaLibrary } from './MediaLibrary';
-import { UploadModal } from './UploadModal';
+import type { AssetEntry } from '../../hooks/index.js';
+import { getUIConfig } from '../../ui-config.js';
+import { Button, IconButton } from '../ui/index.js';
+import { FolderTreeSidebar } from './FolderTreeSidebar.js';
+import { MediaLibrary } from './MediaLibrary.js';
+import { UploadModal } from './UploadModal.js';
 
 interface ImagePickerProps {
   isOpen: boolean;
@@ -20,6 +21,9 @@ interface ImagePickerProps {
 export function ImagePicker({ isOpen, onSelect, onClose }: ImagePickerProps) {
   const [currentFolder, setCurrentFolder] = useState('/');
   const [showUpload, setShowUpload] = useState(false);
+  // Host-injected serve base for thumbnails; undefined in astro-cms /
+  // local dev so the grid's AssetCards keep their built-in default.
+  const assetsBasePath = getUIConfig().assetsBasePath;
 
   // Handle Escape key to close
   useEffect(() => {
@@ -44,19 +48,15 @@ export function ImagePicker({ isOpen, onSelect, onClose }: ImagePickerProps) {
     onSelect(asset);
   };
 
-  // Handle backdrop click to close
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
-      onClose();
-    }
-  };
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-      onClick={handleBackdropClick}
-    >
-      <div className="bg-overlay rounded-lg shadow-xl w-full max-w-5xl max-h-[85vh] mx-4 flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <button
+        type="button"
+        aria-label="Close image picker"
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      <div className="relative bg-overlay rounded-lg shadow-xl w-full max-w-5xl max-h-[85vh] mx-4 flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-line flex-shrink-0">
           <h2 className="text-lg font-semibold text-grey-01 dark:text-grey-12">Select Image</h2>
@@ -78,8 +78,8 @@ export function ImagePicker({ isOpen, onSelect, onClose }: ImagePickerProps) {
           <div className="flex-1 p-4 overflow-y-auto">
             <MediaLibrary
               folder={currentFolder}
-              onFolderChange={setCurrentFolder}
               mode="picker"
+              assetsBasePath={assetsBasePath}
               showToolbar={true}
               onSelect={handleAssetSelect}
             />

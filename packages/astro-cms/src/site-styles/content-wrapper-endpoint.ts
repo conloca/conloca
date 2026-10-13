@@ -1,7 +1,4 @@
-import type { IncomingMessage, ServerResponse } from 'node:http';
-
-/** Connect-compatible middleware handler — see render-endpoint.ts. */
-type NextHandleFunction = (req: IncomingMessage, res: ServerResponse, next: (err?: unknown) => void) => void;
+import type { Connect } from 'vite';
 
 /**
  * Per-route content-wrapper discovery endpoint.
@@ -67,7 +64,7 @@ export interface DiscoveredWrappers {
   codeBlock: ContentWrapperInfo[] | null;
 }
 
-export function createContentWrapperEndpoint(): NextHandleFunction {
+export function createContentWrapperEndpoint(): Connect.NextHandleFunction {
   return async (req, res, _next) => {
     try {
       const parsed = new URL(req.url ?? '', 'http://localhost');
@@ -160,9 +157,7 @@ export function findContentWrapper(html: string): DiscoveredWrappers {
   const proseAncestorChains: OpenTag[][] = [];
   const preAncestorChains: OpenTag[][] = [];
 
-  let match: RegExpExecArray | null;
-  // biome-ignore lint/suspicious/noAssignInExpressions: regex exec iterator
-  while ((match = tagRe.exec(cleaned)) !== null) {
+  for (const match of cleaned.matchAll(tagRe)) {
     const isClose = match[1] === '/';
     const tagName = match[2].toLowerCase();
     const attrBlob = match[3] ?? '';
@@ -323,11 +318,9 @@ function resolveCodeBlockWrapper(
 function parseAttributes(s: string): Record<string, string> {
   const out: Record<string, string> = {};
   const re = /([a-zA-Z_:][-a-zA-Z0-9_:.]*)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|(\S+)))?/g;
-  let m: RegExpExecArray | null;
-  // biome-ignore lint/suspicious/noAssignInExpressions: regex exec iterator
-  while ((m = re.exec(s)) !== null) {
-    const name = m[1];
-    const value = m[2] ?? m[3] ?? m[4] ?? '';
+  for (const match of s.matchAll(re)) {
+    const name = match[1];
+    const value = match[2] ?? match[3] ?? match[4] ?? '';
     out[name] = value;
   }
   return out;

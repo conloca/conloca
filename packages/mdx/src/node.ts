@@ -11,14 +11,15 @@
  * ```
  */
 
-export { evaluateMDXBlocks } from './blocks.js';
+export { evaluateMDXFragments } from './fragments.js';
 // MDX compilation and evaluation (Node.js only)
 export { compileMDX } from './mdx/compile.js';
+export { handleMDXCompileRequest } from './mdx/compile-request.js';
 export { evaluateMDXToComponent } from './mdx/evaluate.js';
 // MDX types
 export type {
-  EvaluatedMDXBlock,
-  FailedMDXBlockEvaluation,
-  MDXBlockEvaluationResult,
+  EvaluatedMDXFragment,
+  FailedMDXFragmentEvaluation,
   MDXCompileResult,
+  MDXFragmentEvaluationResult,
 } from './types.js';

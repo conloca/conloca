@@ -1,8 +1,13 @@
-import { useImportAssetUrl, useUploadAsset } from '@conloca/content-api-client';
+import { IMAGE_EXTENSION_MIME, useImportAssetUrl, useUploadAsset } from '@conloca/content-api-client';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { buildUploadFormData } from './useUpload';
+import { buildUploadFormData } from './useUpload.js';
 
-export const ACCEPTED_TYPES = 'image/jpeg,image/png,image/gif,image/webp,image/svg+xml,image/avif';
+/**
+ * The `accept` attribute for the media file pickers, derived from the allowlist
+ * the upload backends enforce so the dialog never greys out a type they accept.
+ * De-duplicated because several extensions share one content type (jpg/jpeg).
+ */
+export const ACCEPTED_TYPES = [...new Set(Object.values(IMAGE_EXTENSION_MIME))].join(',');
 
 export interface UploadProgress {
   total: number;
@@ -104,7 +109,7 @@ export function useUploadFlow({ folder, onUploadComplete, onSuccess }: UseUpload
       setUploadProgress({ total: files.length, completed: 0, failed: 0, inProgress: true });
 
       const uploadPromises = files.map(async (file) => {
-        const formData = await buildUploadFormData(file, undefined, folder);
+        const formData = buildUploadFormData(file, undefined, folder);
         return uploadMutation.mutateAsync(formData);
       });
 
@@ -158,7 +163,7 @@ export function useUploadFlow({ folder, onUploadComplete, onSuccess }: UseUpload
   const handleUpload = async () => {
     if (!pendingFile) return;
 
-    const formData = await buildUploadFormData(pendingFile, altText || undefined, folder);
+    const formData = buildUploadFormData(pendingFile, altText || undefined, folder);
     uploadMutation.mutate(formData, {
       onSuccess: () => {
         // Reset shared state

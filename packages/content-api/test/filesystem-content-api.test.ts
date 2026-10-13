@@ -1,61 +1,64 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdir, mkdtemp, rm, stat, writeFile } from 'fs/promises';
-import { tmpdir } from 'os';
-import { join } from 'path';
-import { FileSystemContentAPI } from '../src/filesystem-content-api';
-import { VXJSON } from '../src/vxjson';
-import { createContentAPITestSuite } from './content-api.shared-tests';
-import { assertDefined } from './test-helpers';
+import { mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { FileSystemContentAPI } from '../src/filesystem-content-api.js';
+import { VXJSON } from '../src/vxjson.js';
+import { createContentAPITestSuite } from './content-api.shared-tests.js';
+import { assertDefined, getCreatedId } from './test-helpers.js';
 
-// Run the shared test suite for FileSystemContentAPI
-let sharedTempDir: string;
+// Run the shared conformance suite against FileSystemContentAPI.
+// Each test gets its own tmpdir so the suite stays insulated from
+// implementation-specific state (file watchers, on-disk caches, etc.).
+createContentAPITestSuite('FileSystemContentAPI', async () => {
+  // Clear caches before each test
+  FileSystemContentAPI.clearCaches();
 
-createContentAPITestSuite(
-  'FileSystemContentAPI',
-  async () => {
-    // Clear caches before each test
-    FileSystemContentAPI.clearCaches();
+  const tempDir = await mkdtemp(join(tmpdir(), 'conloca-content-test-'));
+  const contentRoot = join(tempDir, 'content');
+  const canvasDir = join(tempDir, 'canvas');
+  await mkdir(contentRoot, { recursive: true });
+  await mkdir(canvasDir, { recursive: true });
 
-    sharedTempDir = await mkdtemp(join(tmpdir(), 'conloca-content-test-'));
-    const contentRoot = join(sharedTempDir, 'content');
-    const canvasDir = join(sharedTempDir, 'canvas');
-    await mkdir(contentRoot, { recursive: true });
-    await mkdir(canvasDir, { recursive: true });
-
-    // Create sites.json
-    const sitesConfig = {
-      sites: {
-        shop: {
-          locales: ['en', 'nl', 'de'],
-          defaultLocale: 'en',
-          domains: {
-            en: 'shop.com',
-            nl: 'shop.nl',
-            de: 'shop.de',
-          },
-        },
-        corporate: {
-          locales: ['en', 'nl'],
-          defaultLocale: 'en',
-          domains: {
-            en: 'corporate.com',
-            nl: 'corporate.nl',
-          },
+  // Create sites.json
+  const sitesConfig = {
+    sites: {
+      shop: {
+        locales: ['en', 'nl', 'de'],
+        defaultLocale: 'en',
+        domains: {
+          en: 'shop.com',
+          nl: 'shop.nl',
+          de: 'shop.de',
         },
       },
-      globalLocales: ['en', 'nl', 'de', 'fr', 'es'],
-    };
-    await writeFile(join(contentRoot, 'sites.json'), JSON.stringify(sitesConfig, null, 2));
+      corporate: {
+        locales: ['en', 'nl'],
+        defaultLocale: 'en',
+        domains: {
+          en: 'corporate.com',
+          nl: 'corporate.nl',
+        },
+      },
+    },
+    globalLocales: ['en', 'nl', 'de', 'fr', 'es'],
+  };
+  await writeFile(join(contentRoot, 'sites.json'), JSON.stringify(sitesConfig, null, 2));
 
-    return FileSystemContentAPI.create({
-      contentRoot,
-      canvasDir,
-    });
-  },
-  async () => {
-    await rm(sharedTempDir, { recursive: true, force: true });
-  },
-);
+  const api = await FileSystemContentAPI.create({
+    contentRoot,
+    canvasDir,
+  });
+
+  let counter = 0;
+  return {
+    api,
+    uniq: () => `${Date.now().toString(36)}-${++counter}`,
+    cleanup: async () => {
+      await rm(tempDir, { recursive: true, force: true });
+    },
+  };
+});
 
 describe('FileSystemContentAPI - 4KB index optimization', () => {
   let tempDir: string;
@@ -95,6 +98,40 @@ describe('FileSystemContentAPI - 4KB index optimization', () => {
 
   afterEach(async () => {
     await rm(tempDir, { recursive: true, force: true });
+  });
+
+  test('replaces the fragment name index when updateLocalized renames a fragment', async () => {
+    const api = await FileSystemContentAPI.create({
+      contentRoot: join(tempDir, 'content'),
+      canvasDir: join(tempDir, 'canvas'),
+    });
+    const created = await api.createContent({
+      kind: 'fragment',
+      collection: 'general',
+      type: 'mdx',
+      name: 'old-name',
+      locales: {
+        en: {
+          meta: { title: 'Renamed fragment' },
+          content: { mdx: '# Fragment' },
+        },
+      },
+    });
+    const id = getCreatedId(created);
+    const current = await api.getLocalized(id, 'en');
+    assertDefined(current, 'Created fragment should be readable');
+
+    const updated = await api.updateLocalized({
+      id,
+      locale: 'en',
+      etag: current.localized.etag,
+      data: { name: 'new-name' },
+    });
+
+    expect(updated.success).toBe(true);
+    expect(api.fragments.getByName('general', 'old-name', 'en')).toBeNull();
+    expect(api.fragments.isNameAvailable('general', 'old-name')).toBe(true);
+    expect(api.fragments.getByName('general', 'new-name', 'en')?.id).toBe(id);
   });
 
   test('indexes small files (<4KB) normally', async () => {
@@ -322,15 +359,15 @@ describe('FileSystemContentAPI - 4KB index optimization', () => {
     // Create a small MDX file
     const mdxContent = `---
 id: vx-test-mdx-small
-title: Small MDX Block
-description: This is a small MDX block that fits in 4KB
+title: Small MDX Fragment
+description: This is a small MDX fragment that fits in 4KB
 author: Test Author
 tags:
   - small
   - test
 ---
 
-# Small Block
+# Small Fragment
 
 This is a small MDX content that easily fits within 4KB.
 
@@ -340,7 +377,7 @@ This is a small MDX content that easily fits within 4KB.
 - No truncation needed
 `;
 
-    const contentDir = join(tempDir, 'content', 'blocks', 'features');
+    const contentDir = join(tempDir, 'content', 'fragments', 'features');
     await mkdir(contentDir, { recursive: true });
     const filePath = join(contentDir, 'small.en.mdx');
     await writeFile(filePath, mdxContent);
@@ -356,17 +393,17 @@ This is a small MDX content that easily fits within 4KB.
     });
 
     // Verify MDX was indexed correctly
-    const block = newApi.blocks.getByName('features', 'small', 'en');
-    expect(block).toBeDefined();
-    expect(block!.id).toBe('vx-test-mdx-small');
+    const fragment = newApi.fragments.getByName('features', 'small', 'en');
+    expect(fragment).toBeDefined();
+    expect(fragment!.id).toBe('vx-test-mdx-small');
 
     // Verify full content is available
     const fullContent = await newApi.getLocalized('vx-test-mdx-small', 'en');
     expect(fullContent).toBeDefined();
     assertDefined(fullContent, 'Should get full content');
-    expect(fullContent.localized.meta.title).toBe('Small MDX Block');
+    expect(fullContent.localized.meta.title).toBe('Small MDX Fragment');
     expect(fullContent.localized.meta.tags).toEqual(['small', 'test']);
-    expect(fullContent.localized.content.mdx).toContain('# Small Block');
+    expect(fullContent.localized.content.mdx).toContain('# Small Fragment');
     expect(fullContent.localized.content.mdx).toContain('Fast loading');
   });
 
@@ -374,7 +411,7 @@ This is a small MDX content that easily fits within 4KB.
     // Create MDX content with dynamic padding to reach exactly 4KB
     let mdxContent = `---
 id: vx-test-mdx-4kb
-title: Exactly 4KB MDX Block
+title: Exactly 4KB MDX Fragment
 description: This MDX file is exactly 4KB in size
 author: Test Author
 category: test
@@ -411,7 +448,7 @@ This MDX file is exactly 4KB.`;
       mdxContent = parts.join('\n---');
     }
 
-    const contentDir = join(tempDir, 'content', 'blocks', 'exact');
+    const contentDir = join(tempDir, 'content', 'fragments', 'exact');
     await mkdir(contentDir, { recursive: true });
     const filePath = join(contentDir, '4kb.en.mdx');
     await writeFile(filePath, mdxContent.substring(0, 4096)); // Ensure exactly 4KB
@@ -427,15 +464,15 @@ This MDX file is exactly 4KB.`;
     });
 
     // Verify MDX was indexed correctly
-    const block = newApi.blocks.getByName('exact', '4kb', 'en');
-    expect(block).toBeDefined();
-    expect(block!.id).toBe('vx-test-mdx-4kb');
+    const fragment = newApi.fragments.getByName('exact', '4kb', 'en');
+    expect(fragment).toBeDefined();
+    expect(fragment!.id).toBe('vx-test-mdx-4kb');
 
     // Verify metadata was extracted
     const fullContent = await newApi.getLocalized('vx-test-mdx-4kb', 'en');
     expect(fullContent).toBeDefined();
     assertDefined(fullContent, 'Should get full content');
-    expect(fullContent.localized.meta.title).toBe('Exactly 4KB MDX Block');
+    expect(fullContent.localized.meta.title).toBe('Exactly 4KB MDX Fragment');
     expect(fullContent.localized.meta.category).toBe('test');
     expect(fullContent.localized.meta.tags).toEqual(['exact', 'fourKB', 'test']);
   });
@@ -522,8 +559,8 @@ This MDX file is exactly 4KB.`;
     const longContent = 'Lorem ipsum dolor sit amet. '.repeat(1000);
     const mdxContent = `---
 id: vx-test-mdx
-title: MDX Block
-description: This is a test MDX block
+title: MDX Fragment
+description: This is a test MDX fragment
 author: Test Author
 tags:
   - hero
@@ -540,7 +577,7 @@ This is a very long MDX content that goes on and on...
 ${longContent}
 `;
 
-    const contentDir = join(tempDir, 'content', 'blocks', 'heroes');
+    const contentDir = join(tempDir, 'content', 'fragments', 'heroes');
     await mkdir(contentDir, { recursive: true });
     const filePath = join(contentDir, 'main.en.mdx');
     await writeFile(filePath, mdxContent);
@@ -556,18 +593,18 @@ ${longContent}
     });
 
     // Verify MDX was indexed correctly with metadata
-    const block = newApi.blocks.getByName('heroes', 'main', 'en');
-    expect(block).toBeDefined();
-    expect(block!.id).toBe('vx-test-mdx');
-    expect(block!.site).toBeUndefined(); // blocks don't have site property
-    expect(block!.collection).toBe('heroes');
+    const fragment = newApi.fragments.getByName('heroes', 'main', 'en');
+    expect(fragment).toBeDefined();
+    expect(fragment!.id).toBe('vx-test-mdx');
+    expect(fragment!.site).toBeUndefined(); // fragments don't have site property
+    expect(fragment!.collection).toBe('heroes');
 
     // Verify we can get the full content when needed
     const fullContent = await newApi.getLocalized('vx-test-mdx', 'en');
     expect(fullContent).toBeDefined();
     assertDefined(fullContent, 'Should get full content');
-    expect(fullContent.localized.meta.title).toBe('MDX Block');
-    expect(fullContent.localized.meta.description).toBe('This is a test MDX block');
+    expect(fullContent.localized.meta.title).toBe('MDX Fragment');
+    expect(fullContent.localized.meta.description).toBe('This is a test MDX fragment');
     expect(fullContent.localized.meta.author).toBe('Test Author');
     expect(fullContent.localized.meta.tags).toEqual(['hero', 'banner', 'marketing']);
 
@@ -579,7 +616,7 @@ ${longContent}
   test('automatically renames MDX files without locale suffix during indexing', async () => {
     // Create an MDX file without locale suffix
     const mdxContent = `---
-title: Test Block Without Locale
+title: Test Fragment Without Locale
 category: test
 ---
 
@@ -587,9 +624,9 @@ category: test
 
 This MDX file lacks a locale suffix and should be renamed.`;
 
-    const contentDir = join(tempDir, 'content', 'blocks', 'test');
+    const contentDir = join(tempDir, 'content', 'fragments', 'test');
     await mkdir(contentDir, { recursive: true });
-    const originalPath = join(contentDir, 'test-block.mdx');
+    const originalPath = join(contentDir, 'test-fragment.mdx');
     await writeFile(originalPath, mdxContent);
 
     // Create the API which should trigger indexing and renaming
@@ -602,14 +639,58 @@ This MDX file lacks a locale suffix and should be renamed.`;
     await expect(stat(originalPath)).rejects.toThrow();
 
     // The renamed file with default locale should exist
-    const renamedPath = join(contentDir, 'test-block.en.mdx');
+    const renamedPath = join(contentDir, 'test-fragment.en.mdx');
     const renamedStats = await stat(renamedPath);
     expect(renamedStats.isFile()).toBe(true);
 
     // The content should be indexed under the correct name
-    const block = api.blocks.getByName('test', 'test-block', 'en');
-    expect(block).toBeDefined();
-    expect(block!.locales.en?.meta.title).toBe('Test Block Without Locale');
+    const fragment = api.fragments.getByName('test', 'test-fragment', 'en');
+    expect(fragment).toBeDefined();
+    expect(fragment!.locales.en?.meta.title).toBe('Test Fragment Without Locale');
+  });
+
+  test('keeps direct and general fragment layouts separate when repair collides', async () => {
+    const directPath = join(tempDir, 'content', 'fragments', 'foo.en.mdx');
+    const generalPath = join(tempDir, 'content', 'fragments', 'general', 'foo.en.mdx');
+    await mkdir(join(tempDir, 'content', 'fragments', 'general'), { recursive: true });
+    await writeFile(
+      directPath,
+      `---
+id: direct-fragment
+created: 2024-01-01T00:00:00.000Z
+modified: 2024-01-01T00:00:00.000Z
+title: Direct
+---
+
+# Direct`,
+    );
+    await writeFile(
+      generalPath,
+      `---
+id: general-fragment
+created: 2024-01-01T00:00:00.000Z
+modified: 2024-01-01T00:00:00.000Z
+title: General
+---
+
+# General`,
+    );
+
+    const api = await FileSystemContentAPI.create({
+      contentRoot: join(tempDir, 'content'),
+      canvasDir: join(tempDir, 'canvas'),
+    });
+
+    expect(api.fragments.getByName('', 'foo', 'en')).toMatchObject({
+      id: 'direct-fragment',
+      collection: '',
+    });
+    expect(api.fragments.getByName('general', 'foo', 'en')).toMatchObject({
+      id: 'general-fragment',
+      collection: 'general',
+    });
+    expect((await stat(directPath)).isFile()).toBe(true);
+    expect((await stat(generalPath)).isFile()).toBe(true);
   });
 
   test('handles edge case when target file already exists during MDX rename', async () => {
@@ -629,7 +710,7 @@ category: test
 
 # Existing Content`;
 
-    const contentDir = join(tempDir, 'content', 'blocks', 'test');
+    const contentDir = join(tempDir, 'content', 'fragments', 'test');
     await mkdir(contentDir, { recursive: true });
 
     // Write both files
@@ -654,10 +735,10 @@ category: test
 
     // When there's a conflict, the file without locale is indexed but may overwrite
     // This is acceptable behavior - the important thing is no data loss occurs
-    const block = api.blocks.getByName('test', 'conflict-test', 'en');
-    expect(block).toBeDefined();
+    const fragment = api.fragments.getByName('test', 'conflict-test', 'en');
+    expect(fragment).toBeDefined();
     // Either title is acceptable as long as both files still exist
-    const title = block!.locales.en?.meta.title;
+    const title = fragment!.locales.en?.meta.title;
     expect(title).toBeDefined();
     expect(['Original Without Locale', 'Existing With Locale']).toContain(title!);
   });
@@ -666,8 +747,8 @@ category: test
     // Create a test structure
     const testDir = await mkdtemp(join(tmpdir(), 'relative-path-test-'));
     const contentDir = join(testDir, 'content');
-    const blocksDir = join(contentDir, 'blocks', 'test');
-    await mkdir(blocksDir, { recursive: true });
+    const fragmentsDir = join(contentDir, 'fragments', 'test');
+    await mkdir(fragmentsDir, { recursive: true });
 
     // Create sites.json
     const sitesConfig = {
@@ -683,17 +764,17 @@ category: test
 
     // Create a test MDX file
     const mdxContent = `---
-id: test-block
-title: Test Block
+id: test-fragment
+title: Test Fragment
 created: 2024-01-01T00:00:00Z
 modified: 2024-01-01T00:00:00Z
 ---
 
-# Test Block
+# Test Fragment
 
-This is a test block.`;
+This is a test fragment.`;
 
-    await writeFile(join(blocksDir, 'test-block.en.mdx'), mdxContent);
+    await writeFile(join(fragmentsDir, 'test-fragment.en.mdx'), mdxContent);
 
     // Change to the test directory to test relative paths
     const originalCwd = process.cwd();
@@ -708,19 +789,19 @@ This is a test block.`;
       });
 
       // The API should work correctly with relative paths
-      const block = await api.getLocalized('test-block', 'en');
-      expect(block).toBeDefined();
-      expect(block?.localized.meta.title).toBe('Test Block');
+      const fragment = await api.getLocalized('test-fragment', 'en');
+      expect(fragment).toBeDefined();
+      expect(fragment?.localized.meta.title).toBe('Test Fragment');
 
       // List all content should also work
-      let foundBlock = false;
+      let foundFragment = false;
       for (const manifest of api.listAllContent()) {
-        if (manifest.id === 'test-block') {
-          foundBlock = true;
+        if (manifest.id === 'test-fragment') {
+          foundFragment = true;
           break;
         }
       }
-      expect(foundBlock).toBe(true);
+      expect(foundFragment).toBe(true);
     } finally {
       // Restore original working directory
       process.chdir(originalCwd);
@@ -733,8 +814,8 @@ This is a test block.`;
     // Create a test structure
     const testDir = await mkdtemp(join(tmpdir(), 'contentroot-normalization-test-'));
     const contentDir = join(testDir, 'content');
-    const blocksDir = join(contentDir, 'blocks', 'test');
-    await mkdir(blocksDir, { recursive: true });
+    const fragmentsDir = join(contentDir, 'fragments', 'test');
+    await mkdir(fragmentsDir, { recursive: true });
 
     // Create sites.json
     const sitesConfig = {
@@ -748,8 +829,8 @@ This is a test block.`;
     };
     await writeFile(join(contentDir, 'sites.json'), JSON.stringify(sitesConfig, null, 2));
 
-    // Create a test block
-    const blockContent = {
+    // Create a test fragment
+    const fragmentContent = {
       id: 'test-normalize',
       type: 'puck' as const,
       created: '2024-01-01T00:00:00Z',
@@ -757,7 +838,7 @@ This is a test block.`;
       meta: { title: 'Test Normalization' },
       content: { puckData: { type: 'test' } },
     };
-    await writeFile(join(blocksDir, 'test-normalize.en.vxjson'), VXJSON.serialize(blockContent));
+    await writeFile(join(fragmentsDir, 'test-normalize.en.vxjson'), VXJSON.serialize(fragmentContent));
 
     // Change to the test directory to test relative paths
     const originalCwd = process.cwd();
@@ -773,10 +854,10 @@ This is a test block.`;
       // The internal contentRoot should be normalized to 'content'
       expect((api1 as any).normalizedContentRoot).toBe('content');
 
-      // We'll also verify this by checking that the block can be found
-      const block1 = api1.blocks.getByName('test', 'test-normalize', 'en');
-      expect(block1).toBeDefined();
-      expect(block1?.id).toBe('test-normalize');
+      // We'll also verify this by checking that the fragment can be found
+      const fragment1 = api1.fragments.getByName('test', 'test-normalize', 'en');
+      expect(fragment1).toBeDefined();
+      expect(fragment1?.id).toBe('test-normalize');
 
       // Test 2: contentRoot without ./ prefix should remain unchanged
       const api2 = await FileSystemContentAPI.create({
@@ -787,9 +868,9 @@ This is a test block.`;
       // Should remain as 'content'
       expect((api2 as any).normalizedContentRoot).toBe('content');
 
-      const block2 = api2.blocks.getByName('test', 'test-normalize', 'en');
-      expect(block2).toBeDefined();
-      expect(block2?.id).toBe('test-normalize');
+      const fragment2 = api2.fragments.getByName('test', 'test-normalize', 'en');
+      expect(fragment2).toBeDefined();
+      expect(fragment2?.id).toBe('test-normalize');
 
       // Test 3: Absolute paths should remain absolute
       const absoluteContentRoot = join(testDir, 'content');
@@ -801,9 +882,9 @@ This is a test block.`;
       // Should remain as absolute path
       expect((api3 as any).normalizedContentRoot).toBe(absoluteContentRoot);
 
-      const block3 = api3.blocks.getByName('test', 'test-normalize', 'en');
-      expect(block3).toBeDefined();
-      expect(block3?.id).toBe('test-normalize');
+      const fragment3 = api3.fragments.getByName('test', 'test-normalize', 'en');
+      expect(fragment3).toBeDefined();
+      expect(fragment3?.id).toBe('test-normalize');
 
       // Test 4: Verify cache keys use normalized paths
       // This is harder to test directly, but we can verify that

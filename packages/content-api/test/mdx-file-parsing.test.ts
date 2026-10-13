@@ -1,8 +1,8 @@
-import { mkdir, rm, writeFile } from 'fs/promises';
-import { tmpdir } from 'os';
-import { join } from 'path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { FileSystemContentAPI } from '../src/filesystem-content-api';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { FileSystemContentAPI } from '../src/filesystem-content-api.js';
 
 describe('MDX file parsing', () => {
   let tempDir: string;
@@ -17,7 +17,7 @@ describe('MDX file parsing', () => {
 
     await mkdir(contentRoot, { recursive: true });
     await mkdir(canvasDir, { recursive: true });
-    await mkdir(join(contentRoot, 'blocks', 'headers'), { recursive: true });
+    await mkdir(join(contentRoot, 'fragments', 'headers'), { recursive: true });
 
     // Create sites.json
     const sitesConfig = {
@@ -47,9 +47,9 @@ description: A hero section for the welcome page
 
 # Build Better Websites with Ligma CMS
 
-Experience the power of visual editing with **Puck** and the flexibility of **MDX** content blocks.`;
+Experience the power of visual editing with **Puck** and the flexibility of **MDX** content fragments.`;
 
-    await writeFile(join(contentRoot, 'blocks', 'headers', 'welcome-hero.mdx'), mdxContent);
+    await writeFile(join(contentRoot, 'fragments', 'headers', 'welcome-hero.mdx'), mdxContent);
 
     // This should not throw an error
     const api = await FileSystemContentAPI.create({ contentRoot, canvasDir });
@@ -68,9 +68,9 @@ description: A hero section for the welcome page
 
 # Build Better Websites with Ligma CMS
 
-Experience the power of visual editing with **Puck** and the flexibility of **MDX** content blocks.`;
+Experience the power of visual editing with **Puck** and the flexibility of **MDX** content fragments.`;
 
-    await writeFile(join(contentRoot, 'blocks', 'headers', 'welcome-hero.en.mdx'), mdxContent);
+    await writeFile(join(contentRoot, 'fragments', 'headers', 'welcome-hero.en.mdx'), mdxContent);
 
     // This should not throw an error
     const api = await FileSystemContentAPI.create({ contentRoot, canvasDir });
@@ -78,13 +78,12 @@ Experience the power of visual editing with **Puck** and the flexibility of **MD
     // API should be created successfully
     expect(api).toBeDefined();
 
-    // Should be able to find the block
-    const block = api.blocks.getByName('welcome-hero', 'en');
-    expect(block).toBeDefined();
-    if (block) {
-      console.log('Block found:', JSON.stringify(block, null, 2));
-      expect(block.locales.en).toBeDefined();
-      expect(block.locales.en?.meta.title).toBe('Welcome Hero');
+    // Should be able to find the fragment
+    const fragment = api.fragments.getByName('headers', 'welcome-hero', 'en');
+    expect(fragment).toBeDefined();
+    if (fragment) {
+      expect(fragment.locales.en).toBeDefined();
+      expect(fragment.locales.en?.meta.title).toBe('Welcome Hero');
     }
   });
 
@@ -94,7 +93,7 @@ Experience the power of visual editing with **Puck** and the flexibility of **MD
 
 This is a simple MDX file without frontmatter.`;
 
-    await writeFile(join(contentRoot, 'blocks', 'headers', 'simple.en.mdx'), mdxContent);
+    await writeFile(join(contentRoot, 'fragments', 'headers', 'simple.en.mdx'), mdxContent);
 
     // This should not throw an error
     const api = await FileSystemContentAPI.create({ contentRoot, canvasDir });

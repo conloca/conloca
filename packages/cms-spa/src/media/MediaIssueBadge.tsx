@@ -1,5 +1,5 @@
-import { cn } from '../utils/cn';
-import type { MediaIssue } from './types';
+import { cn } from '../utils/cn.js';
+import type { MediaIssue } from './types.js';
 
 interface MediaIssueBadgeProps {
   issue: MediaIssue | null;
@@ -13,7 +13,7 @@ interface MediaIssueBadgeProps {
 }
 
 /**
- * Format an oversized issue's size delta into customer-facing copy
+ * Format an oversized issue's size delta into user-facing copy
  * for the `md` variant. `sm` only uses the short label so the corner
  * badge stays scannable; this helper kicks in for the sidebar block.
  *
@@ -23,11 +23,11 @@ interface MediaIssueBadgeProps {
  */
 function formatOversizedDetail(sizeBytes: number, limitBytes: number): string {
   const mb = (bytes: number) => `${(bytes / 1_000_000).toFixed(1).replace(/\.0$/, '')} MB`;
-  return `${mb(sizeBytes)} exceeds the ${mb(limitBytes)} inline limit. Move to media storage.`;
+  return `${mb(sizeBytes)} is over the ${mb(limitBytes)} size limit.`;
 }
 
 /**
- * Badge rendering a hosted-mode `MediaIssue` ("Oversized" /
+ * Badge rendering a host-supplied `MediaIssue` ("Oversized" /
  * "Blocked"). When `issue` is `null`, renders nothing — callers
  * can mount this unconditionally and let it disappear when the
  * host has no bridge or the asset is healthy.
@@ -38,7 +38,7 @@ function formatOversizedDetail(sizeBytes: number, limitBytes: number): string {
  *   "this cannot ship").
  * - `oversized` → amber (matches the "work in flight / take
  *   action" idiom shared with `AssetScopePill`'s branch variant —
- *   "it ships, just slower than it should").
+ *   "not blocked, but over the host's size limit").
  *
  * `sm` paints a compact one-word badge for the AssetCard corner
  * (sits below the scope pill so the two stack cleanly). `md` paints

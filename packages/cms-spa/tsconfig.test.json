@@ -1,25 +1,30 @@
 {
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
-    "rootDir": "src",
-    "module": "esnext",
-    "moduleResolution": "bundler",
+    "rootDir": ".",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
     "jsx": "react-jsx",
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "composite": false,
     "declaration": false,
     "declarationMap": false,
     "emitDeclarationOnly": false,
     "noEmit": true,
-    "types": ["bun"]
+    "types": ["bun", "vite/client"]
   },
   "include": [
+    "test-types.d.ts",
+    "test-setup.ts",
     "src/**/*.test.ts",
+    "src/**/*.test.tsx",
     "src/**/*.spec.ts",
     "src/**/*.stories.tsx",
     "src/**/__tests__/**/*.ts",
     "src/**/__tests__/**/*.tsx",
-    "src/test-suite-tracer.ts"
+    "src/test-suite-tracer.ts",
+    "test/**/*.ts",
+    "test/**/*.tsx"
   ],
   "references": [
     {

@@ -1,4 +1,7 @@
 import { describe, expect, test } from 'bun:test';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { extractAstroFrontmatter } from '../src/discovery/astro-frontmatter.js';
 import { createScanProject, extractPropsViaTs } from '../src/discovery/extract-props-ts.js';
 
@@ -17,6 +20,16 @@ import { createScanProject, extractPropsViaTs } from '../src/discovery/extract-p
  * The ts-morph scanner resolves the indexed-access type via the
  * compiler's type checker and yields the four literal values.
  */
+// One Project for the whole file, mirroring how the scan pipeline actually
+// uses it: `createScanProject`'s contract is one Project per scan run, reused
+// across `extractPropsViaTs` calls, because building it loads lib.dom.d.ts
+// (~500ms-2s cold). A fresh Project per test re-paid that warm-up nine times
+// and put six of these cases in CI's slowest-bun-test list, one of them over
+// the 5s default. Reuse is safe: `extractPropsViaTs`
+// removes its virtual source file before returning, so nothing accumulates
+// and no two tests' `Props` declarations ever coexist.
+const scanProject = createScanProject();
+
 describe('extractPropsViaTs', () => {
   test('resolves (typeof X)[number] to literal-union options — the Aside case', () => {
     const source = `
@@ -26,8 +39,7 @@ describe('extractPropsViaTs', () => {
         title?: string;
       }
     `;
-    const project = createScanProject();
-    const props = extractPropsViaTs(project, '/virtual/Aside.ts', source, 'Aside');
+    const props = extractPropsViaTs(scanProject, '/virtual/Aside.ts', source, 'Aside');
 
     const type = props.find((p) => p.name === 'type');
     expect(type).toBeDefined();
@@ -47,8 +59,7 @@ describe('extractPropsViaTs', () => {
         size: 'sm' | 'md' | 'lg';
       }
     `;
-    const project = createScanProject();
-    const props = extractPropsViaTs(project, '/virtual/A.ts', source, 'A');
+    const props = extractPropsViaTs(scanProject, '/virtual/A.ts', source, 'A');
     expect(props[0]?.options).toEqual(['sm', 'md', 'lg']);
     expect(props[0]?.required).toBe(true);
   });
@@ -68,8 +79,7 @@ describe('extractPropsViaTs', () => {
         variant: 'primary' | 'secondary' | string;
       }
     `;
-    const project = createScanProject();
-    const props = extractPropsViaTs(project, '/virtual/B.ts', source, 'B');
+    const props = extractPropsViaTs(scanProject, '/virtual/B.ts', source, 'B');
     expect(props[0]?.type).toBe('string');
     expect(props[0]?.options).toBeUndefined();
   });
@@ -82,26 +92,23 @@ describe('extractPropsViaTs', () => {
         disabled?: boolean;
       }
     `;
-    const project = createScanProject();
-    const props = extractPropsViaTs(project, '/virtual/C.ts', source, 'C');
+    const props = extractPropsViaTs(scanProject, '/virtual/C.ts', source, 'C');
     expect(props.find((p) => p.name === 'name')).toMatchObject({ type: 'string', required: true });
     expect(props.find((p) => p.name === 'count')).toMatchObject({ type: 'number', required: false });
     expect(props.find((p) => p.name === 'disabled')).toMatchObject({ type: 'boolean', required: false });
   });
 
   test('returns [] when no Props declaration exists', () => {
-    const project = createScanProject();
-    const props = extractPropsViaTs(project, '/virtual/Empty.ts', 'export const x = 1;', 'Empty');
+    const props = extractPropsViaTs(scanProject, '/virtual/Empty.ts', 'export const x = 1;', 'Empty');
     expect(props).toEqual([]);
   });
 
-  test('prefers `${ComponentName}Props` over bare `Props`', () => {
+  test('prefers `<ComponentName>Props` over bare `Props`', () => {
     const source = `
       interface Props { wrong: string; }
       interface CardProps { right: string; }
     `;
-    const project = createScanProject();
-    const props = extractPropsViaTs(project, '/virtual/Card.ts', source, 'Card');
+    const props = extractPropsViaTs(scanProject, '/virtual/Card.ts', source, 'Card');
     expect(props.map((p) => p.name)).toEqual(['right']);
   });
 
@@ -112,27 +119,43 @@ describe('extractPropsViaTs', () => {
         kind: 'a' | 'b';
       };
     `;
-    const project = createScanProject();
-    const props = extractPropsViaTs(project, '/virtual/D.ts', source, 'D');
+    const props = extractPropsViaTs(scanProject, '/virtual/D.ts', source, 'D');
     expect(props.find((p) => p.name === 'label')?.type).toBe('string');
     expect(props.find((p) => p.name === 'kind')?.options).toEqual(['a', 'b']);
   });
 
   test('boolean prop under strict-mode tsconfig (true | false | undefined expansion)', () => {
-    // The website's tsconfig extends astro/tsconfigs/strict. Under
+    // A site's tsconfig often extends astro/tsconfigs/strict. Under
     // strictNullChecks, the checker canonicalises `boolean?` into
     // `true | false | undefined` — `Type.isBoolean()` returns false
     // for the expanded form. This test guards the union-of-boolean-
     // literals detection that lets us still classify it correctly.
+    //
+    // The tsconfig is written fresh here rather than pointed at a checkout
+    // on disk: the previous absolute path resolved only on one developer's
+    // machine, and `createScanProject` swallows an unreadable tsconfig and
+    // falls back to its permissive defaults — so on CI this case silently
+    // asserted the NON-strict path it was written to guard against.
+    const configDir = mkdtempSync(join(tmpdir(), 'conloca-strict-tsconfig-'));
+    const configPath = join(configDir, 'tsconfig.json');
+    writeFileSync(configPath, JSON.stringify({ compilerOptions: { strict: true } }));
     const source = `
       interface Props {
         stagger?: boolean;
       }
     `;
-    const project = createScanProject('/Users/niko/Developer/Glider/conloca-public/targets/website/tsconfig.json');
-    const props = extractPropsViaTs(project, '/virtual/CardGrid.ts', source, 'CardGrid');
-    expect(props[0]?.type).toBe('boolean');
-    expect(props[0]?.required).toBe(false);
+    try {
+      const project = createScanProject(configPath);
+      // Precondition, asserted rather than assumed: without it a fallback to
+      // the permissive defaults turns this case into a duplicate of the
+      // non-strict `primitive props` test and the guarded branch goes unrun.
+      expect(project.getCompilerOptions().strict).toBe(true);
+      const props = extractPropsViaTs(project, join(configDir, 'CardGrid.ts'), source, 'CardGrid');
+      expect(props[0]?.type).toBe('boolean');
+      expect(props[0]?.required).toBe(false);
+    } finally {
+      rmSync(configDir, { recursive: true, force: true });
+    }
   });
 
   test('non-primitive types fall back to expression', () => {
@@ -143,8 +166,7 @@ describe('extractPropsViaTs', () => {
         config: { x: number };
       }
     `;
-    const project = createScanProject();
-    const props = extractPropsViaTs(project, '/virtual/E.ts', source, 'E');
+    const props = extractPropsViaTs(scanProject, '/virtual/E.ts', source, 'E');
     for (const p of props) expect(p.type).toBe('expression');
   });
 });
@@ -184,8 +206,7 @@ interface Props {
 </aside>`;
     const frontmatter = extractAstroFrontmatter(astroSource);
     expect(frontmatter).not.toBeNull();
-    const project = createScanProject();
-    const props = extractPropsViaTs(project, '/virtual/Aside.virtual.ts', frontmatter!, 'Aside');
+    const props = extractPropsViaTs(scanProject, '/virtual/Aside.virtual.ts', frontmatter!, 'Aside');
     expect(props.find((p) => p.name === 'type')?.options).toEqual(['note', 'tip', 'caution', 'danger']);
   });
 });

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { IMPORT_RE } from './site-css-layer.js';
 
 /**
  * Two parallel registries for host-supplied CSS strings: `siteStyles` for the
@@ -62,9 +63,9 @@ const getSharedState = (): SharedSiteStylesState => {
 export function setSiteStyles(styles: SiteStyles): void {
   const state = getSharedState();
   state.styles = styles;
-  for (const fn of state.subscribers) {
+  state.subscribers.forEach((fn) => {
     fn(styles);
-  }
+  });
 }
 
 /**
@@ -117,13 +118,26 @@ const getEditorStylesState = (): SharedSiteStylesState => {
 export function setEditorStyles(styles: SiteStyles): void {
   const state = getEditorStylesState();
   state.styles = styles;
-  for (const fn of state.subscribers) {
+  state.subscribers.forEach((fn) => {
     fn(styles);
-  }
+  });
 }
 
 export function getEditorStyles(): SiteStyles {
   return getEditorStylesState().styles;
+}
+
+/**
+ * Interpret a styles-endpoint response body. Accepts only `text/css` — the
+ * real endpoint (astro-cms styles-endpoint) always declares it. Where no such
+ * endpoint exists, a catch-all route can answer the same path with
+ * `200 text/html`: treating that HTML as CSS would not only inject garbage,
+ * it would count as a NON-EMPTY styles result and suppress every fallback
+ * tier below the endpoint in the editor style chain.
+ */
+export function stylesFromResponse(contentType: string | null, body: string): SiteStyles {
+  if (!/^text\/css\b/i.test(contentType ?? '')) return [];
+  return body ? [body] : [];
 }
 
 export function useEditorStyles(): SiteStyles {
@@ -172,11 +186,21 @@ export function useFetchedSiteStyles(routeUrl: string | undefined, options: { cm
     fetch(endpoint)
       .then((res) => {
         if (!res.ok) throw new Error(`Styles endpoint returned ${res.status}`);
-        return res.text();
+        const contentType = res.headers.get('content-type');
+        return res.text().then((body) => {
+          const styles = stylesFromResponse(contentType, body);
+          // A non-CSS 200 means the endpoint doesn't exist on this origin
+          // (a catch-all route answered the path). Warn so the fallthrough
+          // is visible, and return empty so the fallback tiers stay reachable.
+          if (styles.length === 0 && body) {
+            console.warn(`[Conloca] Styles endpoint answered ${contentType ?? 'no content-type'} — ignoring.`);
+          }
+          return styles;
+        });
       })
-      .then((css) => {
+      .then((styles) => {
         if (cancelled) return;
-        setStyles(css ? [css] : []);
+        setStyles(styles);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -269,23 +293,113 @@ export function useFetchedHostWrappers(
 }
 
 /**
- * Inject host CSS strings into the current document's `<head>` while the
- * calling component is mounted. Each stylesheet gets wrapped in a named
- * cascade layer so its rules sit at a known position in the cascade.
- *
- * `@import url(...)` statements are hoisted to the top of the injected
- * `<style>` tag because they must come before other rules to be valid.
- * Hosts using Tailwind / Google Fonts depend on this.
- *
- * The chrome / host collision is handled at the class-name level —
- * chrome surfaces that visibly overlap host's Tailwind utilities use
- * the cms-admin semantic palette (`bg-panel`, `text-foreground`,
- * `border-line`, etc.) whose names the host's Tailwind can't generate.
- * Earlier iterations of this hook took a `scopeSelector` and wrapped
- * everything in `@scope (...)`; that approach broke host components
- * relying on ancestor selectors (eg `html.dark .starlight-aside`).
+ * Put broad host CSS inside the editor surface instead of letting it style
+ * the surrounding admin app. Root selectors are moved onto the scope root so
+ * host variables and root theme selectors still work inside the editor.
  */
-export function useInjectHostStyles(layerName: string, styles: SiteStyles): void {
+export function scopeHostCss(css: string, scopeSelector: string): string {
+  const selectorBoundary = String.raw`(?=$|[\s.#:[>+~,{])`;
+  const selectorStart = String.raw`(^[ \t]*|[{};]\s*|,\s*|\/\*[\s\S]*?\*\/\s*)`;
+  const rebasedRoots = css
+    .replace(new RegExp(`${selectorStart}\\.dark${selectorBoundary}`, 'gm'), '$1:scope:is(.dark, .dark *)')
+    // Same rebase for the attribute form. A host that keys its theme off
+    // `[data-theme="dark"]` (Starlight, for one) writes it as
+    // a bare compound, which inside `@scope` matches only DESCENDANTS of the
+    // scope root — never the root itself. Its `:root` counterpart does get
+    // rebased below, so the light tokens land and the dark ones silently do
+    // not, leaving host rules that read those tokens resolving light inside a
+    // dark editor.
+    .replace(
+      new RegExp(`${selectorStart}\\[data-theme=("|'|)([\\w-]+)\\2\\]${selectorBoundary}`, 'gm'),
+      '$1:scope:is([data-theme="$3"], [data-theme="$3"] *)',
+    )
+    .replace(new RegExp(`${selectorStart}(?::root|:host|html|body)${selectorBoundary}`, 'gm'), '$1:scope')
+    .replace(/(:scope:is\(\.dark, \.dark \*\))(?:\s*>\s*|\s+)(?:html|body)\b/g, '$1')
+    .replace(/:scope([^,{}]*?)(?:\s*>\s*|\s+)(?:html|body)\b/g, ':scope$1');
+  return `@scope (${scopeSelector}) {\n${rebasedRoots}\n}`;
+}
+
+/**
+ * Typography bridged off the scope root once the host's own sheet has been
+ * injected and applied. `editor-styles.css` already consumes every one of
+ * these via `var(--conloca-host-*, …)` on the contenteditable, and the
+ * computed-style probe already emits the same names — this is the same
+ * contract, resolved from the scope root instead of a cross-origin iframe.
+ *
+ * Reading them here works because `scopeHostCss` rebases the host's `:root`
+ * and `body` rules onto `:scope`, ie the scope root itself. So the host's own
+ * page typography IS the computed style of that element, in the editor's
+ * current theme, in this document. No iframe, no headless browser.
+ *
+ * Without this the contenteditable falls back to the L0 platform baseline
+ * (`ui-sans-serif`, `#181818`) even when the host's face and ink are sitting
+ * right there on the surround — the host's `body { font-family }` is layered
+ * and inherited, and the editor's own unlayered rule overrides inheritance.
+ *
+ * All of these are INHERITED properties, which is what makes the
+ * "did the host actually declare this?" test below possible.
+ */
+const HOST_TYPOGRAPHY_BRIDGE: readonly (readonly [property: string, variable: string])[] = [
+  ['font-family', '--conloca-host-font-family'],
+  ['font-size', '--conloca-host-font-size'],
+  ['font-weight', '--conloca-host-font-weight'],
+  ['font-style', '--conloca-host-font-style'],
+  ['line-height', '--conloca-host-line-height'],
+  ['letter-spacing', '--conloca-host-letter-spacing'],
+];
+
+/**
+ * Every variable this bridge may write, for cleanup.
+ *
+ * `--conloca-host-body-bg` is the surround region's paint (main.css,
+ * FragmentEditor) and predates the rest, but the probe publishes it too, so it
+ * sits inside the `bridgeHostVars` gate with every other shared name.
+ *
+ * `--conloca-host-prose-bg` is the one name here the probe does NOT share, so
+ * be explicit about why that is not a fork for one setup: it belongs to the
+ * prose-surface tier's paper, and that tier only exists when live discovery
+ * did NOT deliver — a host app on another origin AND a production build alike.
+ * Where the probe runs, the tier is empty (`deriveProseSurfaceStyles` is
+ * gated in `CMSMDXEditor`), so there is no paper to colour and nothing for the
+ * probe to publish. It is scoped to the tier it serves, not to a setup. Merging
+ * it into `--conloca-host-body-bg` would be wrong in the other direction: that
+ * one is published whenever the host paints anything, while the paper is
+ * published only together with a host ink, so a light card can never end up
+ * carrying light text.
+ */
+const HOST_BRIDGE_VARS: readonly string[] = [
+  '--conloca-host-body-bg',
+  '--conloca-host-prose-bg',
+  '--conloca-host-color',
+  ...HOST_TYPOGRAPHY_BRIDGE.map(([, variable]) => variable),
+];
+
+/**
+ * Inject host CSS strings into the current document's `<head>` while the
+ * calling component is mounted. Each stylesheet can be wrapped in a named
+ * cascade layer and confined to one editor subtree.
+ *
+ * `@import` statements are hoisted to the top of the injected `<style>` tag
+ * because they must come before other rules to be valid. Hosts using
+ * Tailwind / Google Fonts depend on this.
+ *
+ * `bridgeHostVars` controls the `--conloca-host-*` bridge below, and defaults
+ * to on. Pass `false` when the computed-style probe has delivered: the probe
+ * reads the REAL rendered page, which is strictly better than anything this
+ * bridge can derive from a stylesheet, and the two write the same variable
+ * names. Without the gate the bridge wins by accident rather than by design —
+ * it writes inline properties on `<html>` while the probe emits a `:root`
+ * rule, and inline outranks any stylesheet. That would silently supersede the
+ * probe on a same-origin site, where it works.
+ */
+export function useInjectHostStyles(
+  layerName: string,
+  styles: SiteStyles,
+  options?: { layered?: boolean; scopeSelector?: string; bridgeHostVars?: boolean },
+): void {
+  const scopeSelector = options?.scopeSelector;
+  const layered = options?.layered !== false;
+  const bridgeHostVars = options?.bridgeHostVars !== false;
   useEffect(() => {
     if (typeof document === 'undefined' || styles.length === 0) return;
 
@@ -294,11 +408,21 @@ export function useInjectHostStyles(layerName: string, styles: SiteStyles): void
 
     for (const css of styles) {
       const imports: string[] = [];
-      const cleaned = css.replace(/@import\s+url\([^)]*\)[^;]*;/g, (m) => {
+      // Both `@import` shapes, via the same regex the canvas layer uses. The
+      // `url(…)`-only pattern this used to carry missed the minified
+      // bare-string form (`@import"https://fonts.googleapis.com/…"`) that real
+      // Astro output opens with, leaving it stranded after the `@layer`
+      // prelude where the parser drops it.
+      const cleaned = css.replace(IMPORT_RE, (m) => {
         imports.push(m.trim());
         return '';
       });
-      const wrapped = `${imports.join('\n')}\n@layer ${layerName} {\n${cleaned}\n}`;
+      // Probe typography stays unlayered so it can beat the editor's prose
+      // defaults. Full host CSS is both layered and scoped to the editor
+      // surface; broad host resets and utility names never reach admin chrome.
+      const scoped = scopeSelector ? scopeHostCss(cleaned, scopeSelector) : cleaned;
+      const body = layered ? `@layer ${layerName} {\n${scoped}\n}` : scoped;
+      const wrapped = `${imports.join('\n')}\n${body}`;
       const tag = document.createElement('style');
       tag.setAttribute(marker, '');
       tag.textContent = wrapped;
@@ -307,10 +431,10 @@ export function useInjectHostStyles(layerName: string, styles: SiteStyles): void
     }
 
     /**
-     * Bridge the host page's `body { background }` into a CSS custom
-     * property the editor's content-surround region can read. Works
-     * together with the `hostWrapperPlugin` (which mirrors the host's
-     * `<main>`/marked element around the contenteditable):
+     * Bridge the host page's own resolved typography and background into CSS
+     * custom properties the editor's content surround and contenteditable
+     * read. Works together with the `hostWrapperPlugin` (which mirrors the
+     * host's `<main>`/marked element around the contenteditable):
      *
      *   - Editor's chrome wrapper paints `bg-page` (the CMS grey).
      *   - Inside the chrome, the content column paints the host body
@@ -321,23 +445,80 @@ export function useInjectHostStyles(layerName: string, styles: SiteStyles): void
      *     like Starlight whose `<main>` is transparent rely on the
      *     surround's body bg showing through.
      *
+     * Written as inline custom properties on `<html>` so they outrank the
+     * prose-surface tier's platform fallbacks.
+     *
      * Defers a frame so the freshly-appended `<style>` tags actually
-     * apply before we read computed style.
+     * apply before we read the scoped replacement for the host body.
      */
-    const rafId = requestAnimationFrame(() => {
-      const bg = getComputedStyle(document.body).backgroundColor;
-      if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') {
-        document.documentElement.style.setProperty('--conloca-host-body-bg', bg);
-      }
-    });
+    const rafId = scopeSelector
+      ? requestAnimationFrame(() => {
+          const scopeRoot = document.querySelector<HTMLElement>(scopeSelector);
+          if (!scopeRoot) return;
+          const computed = getComputedStyle(scopeRoot);
+
+          // Everything below is the contract the PROBE also fills, so it is
+          // gated: when the probe delivered, it wins.
+          if (!bridgeHostVars) return;
+
+          // The surround region's paint (main.css `.conloca-mdx-editor-surround`,
+          // also referenced by FragmentEditor). Inside the gate with the rest:
+          // the probe publishes this same variable as a `:root` rule, and the
+          // inline value written here outranks that rule permanently, latching
+          // whatever this read-back caught on its first frame — which would
+          // leave a light paper under the probe's dark ink. Gating costs a
+          // same-origin surround nothing: where the probe runs, its own rule
+          // paints the region. `background-color` is not inherited, so
+          // transparency is a real "host painted nothing" sentinel.
+          const background = computed.backgroundColor;
+          const painted = background && background !== 'rgba(0, 0, 0, 0)' && background !== 'transparent';
+          if (painted) document.documentElement.style.setProperty('--conloca-host-body-bg', background);
+
+          // "Did the host actually declare this?" — the whole correctness of
+          // the bridge. For INHERITED properties every element computes a
+          // value, so a host that declares no `body { color }` still reports
+          // one here: the admin chrome's, inherited, which is near-white in
+          // the SPA's dark theme. Publishing that as the host's ink would put
+          // near-white text on a light paper — the very defect this fixes.
+          //
+          // `scopeHostCss` rebases the host's `:root`/`body` rules onto
+          // `:scope`, ie onto this element, so a host declaration is exactly
+          // what makes this element differ from its parent. No guessing.
+          const outer = scopeRoot.parentElement ? getComputedStyle(scopeRoot.parentElement) : null;
+          const hostDeclared = (property: string): string | null => {
+            const value = computed.getPropertyValue(property);
+            if (!value || value === 'normal' || value === 'none') return null;
+            if (outer && value === outer.getPropertyValue(property)) return null;
+            return value;
+          };
+
+          for (const [property, variable] of HOST_TYPOGRAPHY_BRIDGE) {
+            const value = hostDeclared(property);
+            if (value !== null) document.documentElement.style.setProperty(variable, value);
+          }
+
+          // The prose surface's ink and paper, published as a PAIR or not at
+          // all. Mixing them is what makes text vanish: the host's dark page
+          // background under the platform's dark ink floor is as unreadable
+          // as the platform's light paper under a host's light ink. When
+          // either half is missing, both stay on the platform pairing, which
+          // is contrast-checked by construction (light paper, dark ink).
+          const ink = hostDeclared('color');
+          if (painted && ink !== null) {
+            document.documentElement.style.setProperty('--conloca-host-prose-bg', background);
+            document.documentElement.style.setProperty('--conloca-host-color', ink);
+          }
+        })
+      : null;
 
     return () => {
-      cancelAnimationFrame(rafId);
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+        for (const variable of HOST_BRIDGE_VARS) {
+          document.documentElement.style.removeProperty(variable);
+        }
+      }
       for (const tag of tags) tag.remove();
-      // Drop the bridged var so a doc switch to a host without a body
-      // bg falls back cleanly to the cms grey fallback rather than
-      // sticking with the previous host's color.
-      document.documentElement.style.removeProperty('--conloca-host-body-bg');
     };
-  }, [styles, layerName]);
+  }, [styles, layerName, layered, scopeSelector, bridgeHostVars]);
 }

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import * as mdxPackage from '../index';
-import { MDXEditor } from '../index';
+import * as mdxPackage from '../index.js';
+import { MDXEditor } from '../index.js';
 
 describe('MDXEditor exports', () => {
   test('exports MDXEditor component', () => {
@@ -13,7 +13,7 @@ describe('MDXEditor exports', () => {
   });
 
   // Migration: the modal-based editor was removed when the SPA standardized
-  // on the page-route editor (/blocks/:id, /pages/:id). These exports must
+  // on the page-route editor (/fragments/:id, /pages/:id). These exports must
   // stay deleted; if they ever come back, callers should consider whether
   // the page editor handles their use case first.
   test('does NOT export the removed modal API', () => {

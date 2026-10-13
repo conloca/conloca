@@ -1,15 +1,29 @@
 // This file will be loaded by Bun before running tests
-import { expect, mock } from 'bun:test';
+import { afterEach, expect, mock } from 'bun:test';
 // Set up DOM environment
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
-import * as matchers from '@testing-library/jest-dom/matchers';
+import type { Data } from '@puckeditor/core';
 import React from 'react';
 
-// Configure Happy DOM for better test performance
+// Configure Happy DOM before importing jest-dom. Its testing-library dependency
+// binds `screen` to the global document at module evaluation time.
 GlobalRegistrator.register();
+// jest-dom ships one CommonJS-shaped declaration for both conditions, so the
+// namespace carries a synthetic `default` that dist/matchers.mjs — the file Bun
+// loads — does not, and `expect.extend` rejects it as a matcher.
+const { default: _namespaceDefault, ...matchers } = await import('@testing-library/jest-dom/matchers');
 
 // Extend Bun's expect with jest-dom matchers
 expect.extend(matchers);
+
+// Testing-library's auto-cleanup does not self-register under bun:test, so a
+// file that rendered and skipped its own cleanup() leaked DOM into the shared
+// document — `screen` queries then see other files' leftovers, in whatever
+// file order the run happened to use (a stale-write suite's Force Save button
+// broke an unrelated header test on CI). Clean up after every test, globally;
+// per-file cleanup() calls remain harmless duplicates.
+const { cleanup } = await import('@testing-library/react');
+afterEach(cleanup);
 
 // Mock Radix UI Portal to render inline for testing
 mock.module('@radix-ui/react-portal', () => ({
@@ -35,7 +49,19 @@ mock.module('@lexical/react/LexicalTypeaheadMenuPlugin', () => ({
 }));
 
 mock.module('@puckeditor/core', () => ({
-  Puck: ({ data, headerTitle, overrides }: { data: any; headerTitle?: string; overrides?: Record<string, any> }) =>
+  Puck: ({
+    data,
+    metadata,
+    headerTitle,
+    overrides,
+    onChange,
+  }: {
+    data: Data;
+    metadata?: object;
+    headerTitle?: string;
+    overrides?: { headerActions?: () => React.ReactNode };
+    onChange?: (data: Data) => void;
+  }) =>
     React.createElement(
       'div',
       { 'data-testid': 'mock-puck-editor' },
@@ -43,8 +69,21 @@ mock.module('@puckeditor/core', () => ({
       overrides?.headerActions
         ? React.createElement('div', { 'data-testid': 'mock-puck-header-actions' }, overrides.headerActions())
         : null,
+      onChange
+        ? React.createElement(
+            'button',
+            {
+              type: 'button',
+              'data-testid': 'mock-puck-change',
+              onClick: () => onChange({ content: [{ type: 'Test', props: { id: 'changed' } }], root: {}, zones: {} }),
+            },
+            'Change Puck data',
+          )
+        : null,
       React.createElement('pre', { 'data-testid': 'mock-puck-data' }, JSON.stringify(data ?? {})),
+      React.createElement('pre', { 'data-testid': 'mock-puck-metadata' }, JSON.stringify(metadata ?? {})),
     ),
+  registerOverlayPortal: () => undefined,
   resolveAllData: async (data: unknown) => data,
   useGetPuck: () => () => ({
     appState: {

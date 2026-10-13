@@ -1,9 +1,11 @@
 import { Image } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import type { AssetEntry } from '../../hooks';
-import { useBulkDeleteAssets, useMoveAssets } from '../../hooks';
-import { cn } from '../../utils/cn';
-import { DeleteConfirmDialog, MoveFolderDialog } from '../dialogs';
+import type { AssetEntry } from '../../hooks/index.js';
+import { useAssetFolders, useBulkDeleteAssets, useMoveAssets } from '../../hooks/index.js';
+import { getUIConfig } from '../../ui-config.js';
+import { assetPath, buildAssetPath } from '../../utils/asset-url.js';
+import { cn } from '../../utils/cn.js';
+import { DeleteConfirmDialog, MoveFolderDialog } from '../dialogs/index.js';
 import {
   AssetDetailSidebar,
   BulkActionBar,
@@ -11,8 +13,8 @@ import {
   MediaLibrary,
   MediaToolbar,
   UploadModal,
-} from '../media';
-import type { FileTypeFilter, SortOption } from '../media/MediaToolbar';
+} from '../media/index.js';
+import type { FileTypeFilter, SortOption } from '../media/MediaToolbar.js';
 
 /**
  * Full-page media management layout with three-panel view:
@@ -21,6 +23,10 @@ import type { FileTypeFilter, SortOption } from '../media/MediaToolbar';
  * - Right: Asset detail sidebar (conditional)
  */
 export function MediaPage() {
+  // Host-injected serve base for thumbnails; undefined in astro-cms /
+  // local dev so AssetCard / AssetDetailSidebar keep their built-in default.
+  const assetsBasePath = getUIConfig().assetsBasePath;
+
   // Navigation state
   const [currentFolder, setCurrentFolder] = useState('/');
 
@@ -29,7 +35,8 @@ export function MediaPage() {
 
   // Selection state
   const [selectedAssets, setSelectedAssets] = useState<Set<string>>(new Set());
-  const [selectedAsset, setSelectedAsset] = useState<AssetEntry | null>(null);
+  // The picture whose details are open, by its folder and name: a namesake in another folder is another picture
+  const [detailPath, setDetailPath] = useState<string | null>(null);
 
   // Toolbar state (lifted from MediaLibrary for direct control)
   const [search, setSearch] = useState('');
@@ -44,9 +51,20 @@ export function MediaPage() {
   // Bulk delete state
   const [bulkDeleteResult, setBulkDeleteResult] = useState<{ success: number; failed: number } | null>(null);
 
-  // Mutations
+  // Queries and mutations
+  const folderListing = useAssetFolders(currentFolder);
   const moveAssets = useMoveAssets();
   const bulkDelete = useBulkDeleteAssets();
+
+  // Read from the listing the grid shows, so the details follow each save
+  const listing = folderListing.data;
+  const selectedAsset = listing?.assets.find((asset) => assetPath(asset.folder, asset.filename) === detailPath);
+
+  // A picture gone from the listing closes its details for good, so a new picture that takes its
+  // name does not open them by itself
+  useEffect(() => {
+    if (listing && detailPath && !selectedAsset) setDetailPath(null);
+  }, [listing, detailPath, selectedAsset]);
 
   // Toggle asset in selection set
   const handleToggleSelect = (filename: string) => {
@@ -61,19 +79,27 @@ export function MediaPage() {
     });
   };
 
+  // A selection and the open details belong to the folder on screen: bulk move and delete act on that folder
+  const handleFolderChange = (folder: string) => {
+    if (folder === currentFolder) return;
+    setCurrentFolder(folder);
+    setSelectedAssets(new Set());
+    setDetailPath(null);
+  };
+
   // Click handler with mode awareness
   const handleAssetClick = (asset: AssetEntry) => {
     if (isSelectMode) {
       handleToggleSelect(asset.filename);
     } else {
-      setSelectedAsset(asset); // Open detail sidebar
+      setDetailPath(assetPath(asset.folder, asset.filename)); // Open detail sidebar
     }
   };
 
   // Enter select mode
   const handleEnterSelectMode = () => {
     setIsSelectMode(true);
-    setSelectedAsset(null); // Close detail sidebar when entering select mode
+    setDetailPath(null); // Close detail sidebar when entering select mode
   };
 
   // Exit select mode and clear selection
@@ -84,10 +110,11 @@ export function MediaPage() {
 
   // Bulk delete selected assets
   const handleBulkDelete = async () => {
-    const filenames = Array.from(selectedAssets);
+    // Selected in the folder on screen, like a bulk move; its name alone could match a file in another folder
+    const paths = Array.from(selectedAssets, (filename) => assetPath(currentFolder, filename));
     setBulkDeleteResult(null);
 
-    const result = await bulkDelete.mutateAsync(filenames);
+    const result = await bulkDelete.mutateAsync(paths);
     setBulkDeleteResult({ success: result.successCount, failed: result.failCount });
 
     if (result.successCount > 0) {
@@ -97,17 +124,27 @@ export function MediaPage() {
   };
 
   // Bulk move selected assets
-  const handleBulkMove = (targetFolder: string) => {
+  const handleBulkMove = async (targetFolder: string) => {
     const filenames = Array.from(selectedAssets);
-    moveAssets.mutate(
-      { filenames, sourceFolder: currentFolder, targetFolder },
-      {
-        onSuccess: () => {
-          setSelectedAssets(new Set());
-          setShowMoveDialog(false);
-        },
-      },
-    );
+    const result = await moveAssets.mutateAsync({ filenames, sourceFolder: currentFolder, targetFolder });
+    // Some content clients answer a refused move with a result instead of an error,
+    // possibly after moving part of the batch.
+    if (!result.success) {
+      if (result.moved) {
+        // The assets that did move have left this folder; keep the rest selected for a retry.
+        const { data } = await folderListing.refetch();
+        if (data) {
+          const remaining = new Set(data.assets.map((asset) => asset.filename));
+          setSelectedAssets((prev) => new Set([...prev].filter((filename) => remaining.has(filename))));
+        }
+      }
+      const partly = result.moved
+        ? `Moved ${result.moved} of ${filenames.length} assets; the rest could not be moved.`
+        : '';
+      throw new Error(result.error ?? partly);
+    }
+    setSelectedAssets(new Set());
+    setShowMoveDialog(false);
   };
 
   // Clear selection and exit select mode
@@ -118,7 +155,7 @@ export function MediaPage() {
 
   // Close detail sidebar
   const handleCloseDetail = () => {
-    setSelectedAsset(null);
+    setDetailPath(null);
   };
 
   // Auto-dismiss bulk delete result banner after 5 seconds
@@ -131,7 +168,7 @@ export function MediaPage() {
   return (
     <div className="flex h-full">
       {/* Left: Folder tree sidebar */}
-      <FolderTreeSidebar currentFolder={currentFolder} onFolderSelect={setCurrentFolder} />
+      <FolderTreeSidebar currentFolder={currentFolder} onFolderSelect={handleFolderChange} />
 
       {/* Center: Main content area */}
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -186,7 +223,7 @@ export function MediaPage() {
           <MediaLibrary
             mode="page"
             folder={currentFolder}
-            onFolderChange={setCurrentFolder}
+            assetsBasePath={assetsBasePath}
             selectedAssets={isSelectMode ? selectedAssets : new Set()}
             onAssetClick={handleAssetClick}
             showToolbar={false}
@@ -207,9 +244,17 @@ export function MediaPage() {
         )}
       </div>
 
-      {/* Right: Asset detail sidebar (only in view mode with selection) */}
+      {/* Right: Asset detail sidebar (only in view mode with selection). Keyed by
+          the asset's path: another asset gets a fresh panel whose fields start
+          from its record, while a reload of the same asset keeps what is typed. */}
       {!isSelectMode && selectedAsset && (
-        <AssetDetailSidebar asset={selectedAsset} onClose={handleCloseDetail} onAssetDeleted={handleCloseDetail} />
+        <AssetDetailSidebar
+          key={buildAssetPath(selectedAsset.folder, selectedAsset.filename)}
+          asset={selectedAsset}
+          assetsBasePath={assetsBasePath}
+          onClose={handleCloseDetail}
+          onAssetDeleted={handleCloseDetail}
+        />
       )}
 
       {/* Move dialog */}

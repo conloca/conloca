@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdir, rm, writeFile } from 'fs/promises';
-import { join } from 'path';
-import type { ContentAPI } from '../src/content-api.interface';
-import { FileSystemContentAPI } from '../src/filesystem-content-api';
-import { InMemoryContentAPI } from '../src/in-memory-content-api';
-import type { SitesConfig } from '../src/types';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import type { ContentAPI } from '../src/content-api.interface.js';
+import { FileSystemContentAPI } from '../src/filesystem-content-api.js';
+import { InMemoryContentAPI } from '../src/in-memory-content-api.js';
+import type { SitesConfig } from '../src/types.js';
+import { getCreatedId } from './test-helpers.js';
+import { testTempDir } from './test-temp-dir.js';
 
 describe('Content validation', () => {
   const sitesConfig: SitesConfig = {
@@ -23,10 +25,10 @@ describe('Content validation', () => {
     [
       'FileSystemContentAPI',
       async () => {
-        const tempDir = `/tmp/content-validation-test-${Date.now()}`;
+        const tempDir = testTempDir('content-validation-test');
         await mkdir(tempDir, { recursive: true });
         await mkdir(join(tempDir, 'testsite/pages'), { recursive: true });
-        await mkdir(join(tempDir, 'blocks/components'), { recursive: true });
+        await mkdir(join(tempDir, 'fragments/components'), { recursive: true });
         await writeFile(join(tempDir, 'sites.json'), JSON.stringify(sitesConfig));
         const api = await FileSystemContentAPI.create({ contentRoot: tempDir });
         // Store tempDir on api for cleanup
@@ -34,7 +36,7 @@ describe('Content validation', () => {
         return api;
       },
     ],
-  ])('%s', (name, createApi) => {
+  ])('%s', (_name, createApi) => {
     let api: ContentAPI;
 
     beforeEach(async () => {
@@ -87,34 +89,34 @@ describe('Content validation', () => {
       expect(result.id).toBeDefined();
     });
 
-    test('blocks must have name defined', async () => {
-      // Try to create a block without name
+    test('fragments must have name defined', async () => {
+      // Try to create a fragment without name
       const result = await api.createContent({
-        kind: 'block',
+        kind: 'fragment',
         collection: 'components',
         type: 'mdx',
         // Missing name!
         locales: {
           en: {
-            meta: { title: 'Test Block' },
+            meta: { title: 'Test Fragment' },
             content: { mdx: '# Hello' },
           },
         },
       });
 
       expect(result.success).toBe(false);
-      expect(result.error?.message).toBe('Block name is required');
+      expect(result.error?.message).toBe('Fragment name is required');
     });
 
-    test('blocks with name provided should succeed', async () => {
+    test('fragments with name provided should succeed', async () => {
       const result = await api.createContent({
-        kind: 'block',
+        kind: 'fragment',
         collection: 'components',
         type: 'mdx',
-        name: 'test-block',
+        name: 'test-fragment',
         locales: {
           en: {
-            meta: { title: 'Test Block' },
+            meta: { title: 'Test Fragment' },
             content: { mdx: '# Hello' },
           },
         },
@@ -207,6 +209,32 @@ describe('Content validation', () => {
       expect(result.success).toBe(false);
       expect(result.reason).toBe('invalid_pathname');
       expect(result.error?.message).toContain('`.` or `..` segments');
+    });
+
+    test('refuses a path ending in index, whose file is the page at the folder above it', async () => {
+      const home = await api.createContent({
+        kind: 'page',
+        site: 'testsite',
+        collection: 'pages',
+        type: 'puck',
+        locales: { en: { pathname: '/', meta: { title: 'Home' }, content: { puckData: { root: {} } } } },
+      });
+      const homeId = getCreatedId(home);
+
+      for (const pathname of ['/index', '/blog/index']) {
+        const result = await api.createContent({
+          kind: 'page',
+          site: 'testsite',
+          collection: 'pages',
+          type: 'puck',
+          locales: { en: { pathname, meta: { title: 'Index' }, content: { puckData: { root: {} } } } },
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.reason).toBe('invalid_pathname');
+        expect(result.error?.message).toContain('Path cannot end in `/index`');
+      }
+      expect((await api.getLocalized(homeId, 'en'))?.localized.meta.title).toBe('Home');
     });
 
     test('silently normalizes missing leading slash, doubled slashes, and trailing slash', async () => {

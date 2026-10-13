@@ -1,8 +1,8 @@
 import { getRequestListener } from '@hono/node-server';
 import type { Plugin, ViteDevServer } from 'vite';
-import { createContentAPI, createContentWatchHandlers } from './content-watcher';
-import type { FileSystemContentAPI } from './filesystem-content-api';
-import { createContentAPIRouter } from './middleware';
+import { createContentAPI, createContentWatchHandlers } from './content-watcher.js';
+import type { FileSystemContentAPI } from './filesystem-content-api.js';
+import { createContentAPIRouter } from './middleware.js';
 
 export interface ConlocaContentOptions {
   contentRoot: string;
@@ -11,8 +11,8 @@ export interface ConlocaContentOptions {
 }
 
 /**
- * Vite plugin wrapper for content middleware
- * This follows the spec in 04-cms-api.md and 09-conloca-content-editing.md
+ * Vite plugin wrapper for content middleware, mounting the content API routes
+ * on the dev server so editing works without a separate backend.
  */
 export function conlocaContent(options: ConlocaContentOptions): Plugin {
   let contentApi: FileSystemContentAPI;

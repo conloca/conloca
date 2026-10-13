@@ -2,23 +2,29 @@
 export type {
   AssetEntry,
   AssetUsage,
-  BlockEditable,
   ContentData,
   ContentEntry,
   ContentIdentity,
   ContentManifest,
+  ContentMeta,
+  ContentMetaPatch,
   ContentType,
   CreateResult,
+  DataBindingConfig,
   DataCollectionEntry,
   DataContext,
   DataEditable,
   DeleteResult,
+  EditorDataBindings,
   FolderListing,
   FolderTreeNode,
+  FragmentEditable,
+  HostPageMeta,
   LocaleVersion,
   LocalizedEntry,
   LocalizedManifest,
   MDXCompileResponse,
+  MDXHeading,
   PageReference,
   PathnameValidationReason,
   PathnameValidationResult,
@@ -27,14 +33,18 @@ export type {
 } from '@conloca/content-api';
 // Runtime re-exports for cms-spa layer compliance
 export {
-  blockEditableSchema,
   dataEditableSchema,
   ErrorCodes,
   formatFileSize,
+  fragmentEditableSchema,
+  IMAGE_EXTENSION_MIME,
+  isContentPublished,
   localesOf,
+  metaString,
   normalizeAndValidatePathname,
+  pageReferenceOf,
 } from '@conloca/content-api';
 
-export * from './client';
-export * from './hooks';
-export { API_ROUTES } from './test-helpers';
+export * from './client.js';
+export * from './hooks.js';
+export { API_ROUTES } from './test-helpers.js';

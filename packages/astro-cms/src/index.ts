@@ -19,7 +19,7 @@ export {
   type MdxSnippetDescriptor,
   readStringAttribute,
   writeStringAttribute,
-} from '@conloca/cms-spa/mdx-components';
+} from '@conloca/cms-spa/mdx-components-define';
 // Page-schema plugin API — hosts use these to declare frontmatter form UI
 // for the CMS page-settings dialog. Runtime registry lives in @conloca/cms-spa
 // and is wired by the schemasPath option (see ConlocaCMSOptions).
@@ -34,14 +34,26 @@ export {
   type PageSchemaEntry,
   type PageSchemaGroup,
   type PageSchemas,
-} from '@conloca/cms-spa/page-schemas';
+} from '@conloca/cms-spa/page-schema-define';
+// Blocks mark the parts they render from the page's settings, so a click on
+// the editor canvas opens Page settings at that field.
+export {
+  type PageSettingAttributes,
+  type PageSettingName,
+  pageSettingAttributes,
+} from '@conloca/cms-spa/page-setting-attributes';
 // Re-export Zod schemas and types for convenience
 export {
-  type BlockMeta,
-  blockMetaSchema,
+  type FragmentMeta,
+  fragmentMetaSchema,
   type PageMeta,
   pageMetaSchema,
 } from '@conloca/content-api/schemas';
+// Read-only ContentAPI over the build's content collections.
+export {
+  type CollectionBackedContentAPIOptions,
+  createCollectionBackedContentAPI,
+} from './handlers/collection-content-api.js';
 // `scanForHydratableComponents` lives in '@conloca/astro-cms/node' — it
 // imports fast-glob and node:fs, which crash when this barrel is
 // dynamic-imported in the browser (notably by the CMS SPA's schemas
@@ -55,7 +67,14 @@ export {
   hasHydratableComponents,
   isHydratable,
 } from './lib/hydration-utils.js';
-export { extractSlugFromPathname, isPublished, pathnameFromSlug, toDate } from './lib/route-utils.js';
+export {
+  entryIdFromPath,
+  extractSlugFromPathname,
+  isPublished,
+  pathnameFromSlug,
+  staticPathParams,
+  toDate,
+} from './lib/route-utils.js';
 export { serializeProps } from './lib/serialize-props.js';
 // New hydration API: withHydration wrapper and build-time scanner
 export { type HydrationMeta, type WithHydrationStrategy, withHydration } from './lib/withHydration.js';
@@ -65,8 +84,24 @@ export { type ConlocaLocales, localesFromAstroI18n, localesFromStarlight } from 
 // Hydration support for interactive components
 // NOTE: The root entry point is intentionally static-safe.
 // Node/Astro integration APIs live under '@conloca/astro-cms/node'.
+
+/**
+ * Migration stub: the integration moved to '@conloca/astro-cms/node' so the
+ * root entry stays static-safe. Published 0.1.x exported it from the root —
+ * without this stub those configs fail with an opaque "not a function".
+ *
+ * @deprecated Import { conlocaCMS } from '@conloca/astro-cms/node' instead.
+ */
+export function conlocaCMS(_options?: unknown): never {
+  throw new Error(
+    "conlocaCMS moved: import { conlocaCMS } from '@conloca/astro-cms/node'. " +
+      'The package root stays free of Node-only code so it can load in any runtime.',
+  );
+}
 export type {
+  ContentFragmentSectionProps,
   DataCollectionEntry,
+  DataContext,
   HydrationStrategy,
   LayoutProps,
   PageData,

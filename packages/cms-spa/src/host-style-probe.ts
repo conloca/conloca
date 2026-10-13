@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 /**
  * Host-style probe — captures the host's computed styles for prose
@@ -127,6 +127,13 @@ const PROBE_PROPS = [
 const IFRAME_TIMEOUT_MS = 10_000;
 
 /**
+ * Where the probe publishes the host's resolved design tokens. The editor's
+ * content region is also where the host sheet is scoped, so the two land on
+ * the same element and the unlayered probe tier wins.
+ */
+const HOST_TOKEN_SCOPE = '.conloca-mdx-editor-surround';
+
+/**
  * Locate the host's prose wrapper inside the iframe's document, given
  * the className the server-side discovery already resolved (eg
  * `sl-markdown-content` for Starlight, `prose` for Tailwind Typography).
@@ -135,17 +142,23 @@ const IFRAME_TIMEOUT_MS = 10_000;
  * HTML and gives us the right answer. The probe just resolves that
  * className back to an actual element inside the iframe.
  *
- * Returns null when the class isn't found (probe falls back to no-op)
- * or when no className was provided (host has no classed wrapper).
+ * When discovery came back empty (or its class isn't in the document),
+ * fall back to the documented prose scope `.conloca-prose` before `main`:
+ * synthetic probe elements must land INSIDE the scope the host's prose
+ * rules target, or they measure unscoped page defaults — and every
+ * Conloca-rendered fragment page carries the scope class by construction,
+ * even when the wrapper heuristic finds nothing. Exported for tests.
  */
-function findWrapperByClass(doc: Document, className: string | null): HTMLElement | null {
-  if (!className) return doc.querySelector('main');
+export function findWrapperByClass(doc: Document, className: string | null): HTMLElement | null {
+  const fallback = () =>
+    (doc.querySelector('.conloca-prose') as HTMLElement) ?? (doc.querySelector('main') as HTMLElement) ?? null;
+  if (!className) return fallback();
   // Match an element carrying ALL the classes in the discovered name
   // (preserves Astro scoped-hash matching: `astro-xxxx` must be on the
   // same element). `.foo.bar` requires all listed classes.
   const selector = `.${className.split(/\s+/).filter(Boolean).join('.')}`;
   const found = doc.querySelector(selector);
-  return (found as HTMLElement) ?? (doc.querySelector('main') as HTMLElement) ?? null;
+  return (found as HTMLElement) ?? fallback();
 }
 
 /**
@@ -178,6 +191,55 @@ function buildProbeStylesheet(doc: Document, wrapperClass: string | null): strin
   // rule beats inheritance and restores the host's typography.
   const wrapperRule = probeWrapper(view, wrapper);
   if (wrapperRule) rules.push(wrapperRule);
+
+  // Page background, read off BODY rather than the wrapper. The wrapper is
+  // transparent on most hosts (Starlight's is), so the page's surface colour
+  // lives on `body` — and it is the value the editor's content surround paints
+  // via `--conloca-host-body-bg` (main.css). Publishing it here is what lets
+  // the probe own the whole surface, ink and paper together, instead of a
+  // second derived producer having to guess it from the stylesheet.
+  //
+  // `background-color` is not inherited, so a transparent result is a real
+  // "the host painted nothing" signal and is left unpublished — the surround
+  // then keeps its own chrome colour.
+  const pageBackground = view.getComputedStyle(doc.body).backgroundColor;
+  if (pageBackground && pageBackground !== 'rgba(0, 0, 0, 0)' && pageBackground !== 'transparent') {
+    rules.push(`:root { --conloca-host-body-bg: ${pageBackground}; }`);
+  }
+
+  // The host's design tokens, RESOLVED.
+  //
+  // The host's own stylesheet is injected scoped to the editor's content
+  // region, and `scopeHostCss` rewrites its `:root` / `html` / `body` / `.dark`
+  // selectors onto the scope root so those blocks still apply. That rewriting
+  // cannot be made complete. A compiled bundle also keys themes off attribute
+  // selectors and CSS nesting (`&[data-theme="dark"]`), and any theme block the
+  // rewriting misses simply never applies — so one half of a token set lands
+  // and the other half silently does not. That is not a cosmetic gap: a light
+  // background token can end up applying under the probe's dark ink, which is
+  // white text on white paper.
+  //
+  // Resolving the tokens here removes the class of bug rather than another of
+  // its instances. These are read off the probe document, which rendered the
+  // real page in the editor's own theme, so there is no selector left to
+  // re-target and nothing left to get wrong.
+  //
+  // Emitted onto the editor's content region rather than `:root` because the
+  // host sheet defines its tokens on that same element, and an inherited
+  // `:root` value loses to a local definition. This tier is unlayered while
+  // the host sheet is layered, so it wins there without needing specificity.
+  //
+  // `--conloca-*` names are skipped: that contract is published deliberately
+  // elsewhere in this file and by the bridge, and must not be shadowed by
+  // whatever a host happens to have inherited from the admin chrome.
+  const rootStyle = view.getComputedStyle(doc.documentElement);
+  const tokens: string[] = [];
+  for (const property of rootStyle) {
+    if (!property.startsWith('--') || property.startsWith('--conloca-')) continue;
+    const value = rootStyle.getPropertyValue(property).trim();
+    if (value) tokens.push(`${property}: ${value};`);
+  }
+  if (tokens.length > 0) rules.push(`${HOST_TOKEN_SCOPE} {\n  ${tokens.join('\n  ')}\n}`);
 
   // Block-level: inject INSIDE a synthetic two-element sequence so
   // adjacent-sibling rules fire during the probe. Hosts like Starlight
@@ -299,8 +361,10 @@ const WRAPPER_PROBE_PROPS = [
  * layered probe rule loses the cascade regardless of selector
  * specificity. Custom properties inherit through cascade layers and can
  * be consumed by an unlayered rule in `editor-styles.css`, which DOES
- * compete on equal terms with MDXEditor and wins on source order
- * (editor-styles.css is imported after `@mdxeditor/editor/style.css`).
+ * compete on equal terms with MDXEditor and wins on specificity: it
+ * chains `.conloca-prose` for (0,2,0) against MDXEditor's (0,1,0).
+ * `@conloca/mdx/style.css` pulls MDXEditor's stylesheet in ahead of
+ * its own rules.
  *
  * Property names: short, namespaced under `--conloca-host-`. Map 1:1 to
  * the inheritance-eligible typography properties that drive prose look.
@@ -383,15 +447,52 @@ function probeInlineTag(view: Window, parent: HTMLElement, tag: string): string 
 }
 
 /**
- * Run a one-shot probe against `routeUrl`. Returns the generated
- * stylesheet, or an empty string when the iframe failed to load or
- * the page had no probable elements.
+ * Where the probe reads from. Two delivery routes, ONE mechanism:
+ *
+ *   - `{ url }` — the site's real rendered page, for when the editor and the
+ *     site share an origin, so `contentDocument` is readable.
+ *   - `{ srcdoc }` — a same-origin reconstruction assembled from what the host
+ *     set with `setHostDiscovery` (its `routeCss` plus the discovered wrapper
+ *     class). For a site on a DIFFERENT origin, where no header on either side
+ *     can make its document readable: the same-origin
+ *     policy is not a permission, it is the boundary. An `srcdoc` frame
+ *     inherits the parent's origin, so the probe runs against it normally, and
+ *     a CSP of `frame-src 'self'` already covers `srcdoc`.
+ *
+ * A reconstruction sees the stylesheet but not the markup, so it cannot
+ * observe utility-class or inline-style typography on real elements — the very
+ * thing the probe exists for on utility-first hosts.
+ */
+export type ProbeSource = { url: string } | { srcdoc: string };
+
+/**
+ * Build the reconstruction document for `{ srcdoc }` probing: the host's route
+ * CSS inlined, and an empty clone of its content wrapper for the probe's
+ * sample elements to be injected into. Nothing else — no shell, no scripts.
+ */
+export function buildProbeReconstruction(routeCss: string, wrapperClass: string | null): string {
+  const wrapper = wrapperClass ? `<div class="${wrapperClass.replace(/"/g, '&quot;')}"></div>` : '<main></main>';
+  // Neutralise a literal `</style` in the site's CSS. It is legal inside a
+  // `content:` string, and because a srcdoc frame inherits THIS origin, an
+  // early close would let the remainder parse as HTML in the app's own origin.
+  // Escaping the slash keeps the bytes valid CSS while making the sequence
+  // unable to terminate the element. Paired with the `sandbox` attribute in
+  // `probeHostStyles`: a document built from site CSS is a different trust
+  // boundary than this probe's original job of loading the site's own
+  // already-trusted page, so it gets belt and braces.
+  const inert = routeCss.replace(/<\/(style)/gi, '<\\/$1');
+  return `<!doctype html><html><head><meta charset="utf-8"><style>${inert}</style></head><body>${wrapper}</body></html>`;
+}
+
+/**
+ * Run a one-shot probe against `source`. Returns the generated stylesheet, or
+ * an empty string when the frame failed to load or there was nothing probable.
  *
  * `signal` lets the caller cancel a probe (eg the user navigated to
  * a different page mid-fetch). Cleanup is best-effort.
  */
 export function probeHostStyles(
-  routeUrl: string,
+  source: ProbeSource,
   wrapperClass: string | null,
   theme: 'light' | 'dark' | null,
   signal?: AbortSignal,
@@ -413,15 +514,31 @@ export function probeHostStyles(
     iframe.setAttribute('aria-hidden', 'true');
     iframe.setAttribute('tabindex', '-1');
     iframe.setAttribute('data-conloca-probe-iframe', '');
-    iframe.src = routeUrl;
+    if ('srcdoc' in source) {
+      // `allow-same-origin` ONLY: `contentDocument` stays readable, which the
+      // probe needs, while no script in the reconstruction can execute. Applied
+      // to the srcdoc route alone — sandboxing the real-page route would stop
+      // the site's own scripts running and silently change what the
+      // same-origin probe measures, which is the path that already works.
+      iframe.setAttribute('sandbox', 'allow-same-origin');
+      iframe.srcdoc = source.srcdoc;
+    } else {
+      iframe.src = source.url;
+    }
 
     let settled = false;
+    let timeout: number | undefined;
     const cleanup = () => {
       if (iframe.parentElement) iframe.parentElement.removeChild(iframe);
     };
     const settle = (css: string) => {
       if (settled) return;
       settled = true;
+      // Cancel the deadline as well. A superseded probe (re-render, theme or
+      // route change) is torn down through here and never fires `load`, so a
+      // surviving timer later reports a timeout for a probe that was already
+      // resolved and is no longer in flight.
+      if (timeout !== undefined) window.clearTimeout(timeout);
       cleanup();
       resolve(css);
     };
@@ -429,8 +546,8 @@ export function probeHostStyles(
     const abortHandler = () => settle('');
     signal?.addEventListener('abort', abortHandler);
 
-    const timeout = window.setTimeout(() => {
-      console.warn('[Conloca] Host style probe timed out for', routeUrl);
+    timeout = window.setTimeout(() => {
+      console.warn('[Conloca] Host style probe timed out for', 'srcdoc' in source ? '<reconstruction>' : source.url);
       settle('');
     }, IFRAME_TIMEOUT_MS);
 
@@ -498,38 +615,70 @@ export function probeHostStyles(
 }
 
 /**
- * React hook wrapper. Re-probes whenever `routeUrl` changes or the
- * document's theme attribute changes (so dark/light swaps refresh
- * the captured styles).
+ * React hook wrapper. Re-probes whenever its inputs change (so dark/light
+ * swaps refresh the captured styles).
  *
- * Returns the generated stylesheet as a single string. Callers feed
- * it into `useInjectHostStyles` (or any other stylesheet injector)
- * with a sensible layer name.
+ * `routeCss` selects the delivery route. When the registered route CSS is
+ * present — the site is on another origin, so its page cannot be read — the
+ * probe measures a same-origin reconstruction of it. Otherwise it measures the
+ * real page at `routeUrl`, which is the same-origin path and strictly better:
+ * real markup means utility classes and inline styles are observed.
+ *
+ * Returns both the stylesheet and whether the current inputs have settled
+ * once. Callers must gate fallback tiers on `settled`, not on `css === ''`:
+ * the empty string is the initial state AND the definitive "nothing probable"
+ * outcome, and treating them the same paints the derived tier then restyles
+ * when the probe lands.
+ *
+ * During a re-probe (theme toggle, route change) prior `css` stays visible
+ * and `settled` stays true until the new result arrives, so fallback tiers
+ * do not flash back in.
  */
 export function useProbedHostStyles(
   routeUrl: string | undefined,
   wrapperClass: string | null,
-  options: { theme?: 'light' | 'dark' | null } = {},
-): string {
+  options: { theme?: 'light' | 'dark' | null; routeCss?: string } = {},
+): { css: string; settled: boolean } {
   const [css, setCss] = useState<string>('');
+  const [settled, setSettled] = useState(false);
+  // Mirror of `css` for the effect body — reading state inside the effect
+  // would stale-close over the mount value and mis-handle re-probes.
+  const cssRef = useRef(css);
   const theme = options.theme ?? null;
+  const routeCss = options.routeCss ?? '';
 
   useEffect(() => {
-    if (!routeUrl) {
+    const source: ProbeSource | null = routeCss
+      ? { srcdoc: buildProbeReconstruction(routeCss, wrapperClass) }
+      : routeUrl
+        ? { url: routeUrl }
+        : null;
+    if (!source) {
+      cssRef.current = '';
       setCss('');
+      setSettled(true);
       return;
     }
 
+    // First probe / empty prior result: stay unsettled so callers hold off
+    // fallback tiers. Re-probe with prior css: keep both until the new result
+    // lands (theme toggles must not flash the derived tier back in).
+    if (!cssRef.current) {
+      setSettled(false);
+    }
+
     const controller = new AbortController();
-    probeHostStyles(routeUrl, wrapperClass, theme, controller.signal).then((result) => {
+    probeHostStyles(source, wrapperClass, theme, controller.signal).then((result) => {
       if (controller.signal.aborted) return;
+      cssRef.current = result;
       setCss(result);
+      setSettled(true);
     });
 
     return () => {
       controller.abort();
     };
-  }, [routeUrl, wrapperClass, theme]);
+  }, [routeUrl, routeCss, wrapperClass, theme]);
 
-  return css;
+  return { css, settled };
 }

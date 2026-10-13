@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { formatDate, relativeTime } from '../src/utils/format-date';
+import { formatDate, relativeTime } from '../src/utils/format-date.js';
 
 // Entries can carry a missing/garbled `modified` (e.g. a manifest whose
 // meta envelope was lost). `new Date(undefined)` is an Invalid Date and

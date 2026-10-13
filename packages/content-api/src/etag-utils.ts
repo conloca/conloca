@@ -1,7 +1,7 @@
-import { createHash } from 'crypto';
-import { JsonWhitespaceSkippingView } from './json-whitespace-view';
-import { bigintToUrlSafeBase64, toUrlSafeBase64 } from './url-safe-base64';
-import { createXxh64 } from './xxhash';
+import { createHash } from 'node:crypto';
+import { JsonWhitespaceSkippingView } from './json-whitespace-view.js';
+import { bigintToUrlSafeBase64, toUrlSafeBase64 } from './url-safe-base64.js';
+import { createXxh64 } from './xxhash.js';
 
 /**
  * Dual ETag system for content API
@@ -11,7 +11,6 @@ import { createXxh64 } from './xxhash';
  *
  * Format: "metaEtag.contentEtag" in query strings
  */
-
 
 /**
  * Calculate metadata ETag (XXH64) from buffer view

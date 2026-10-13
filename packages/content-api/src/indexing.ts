@@ -1,8 +1,8 @@
-export { ContentIndex } from './content-index';
-export type { ParseHeaderResult } from './header-parser';
-export { parseContentHeader } from './header-parser';
+export { ContentIndex } from './content-index.js';
+export type { ParseHeaderResult } from './header-parser.js';
+export { parseContentHeader } from './header-parser.js';
 // The canonical VXJSON serializer/parser for readers inside the effectful
-// indexing world. Pure writers (the SaaS Branch DO's commit-plan core) use
+// indexing world. Pure writers that must stay free of node/WASM imports use
 // the dedicated `./vxjson-serialize` subpath instead — this chunk evaluates
-// crypto/xxhash at import time, which spec 14 §A90 bans inside cores.
-export { VXJSON } from './vxjson';
+// crypto/xxhash at import time.
+export { VXJSON } from './vxjson.js';

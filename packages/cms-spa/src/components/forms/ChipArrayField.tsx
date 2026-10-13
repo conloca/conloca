@@ -1,20 +1,21 @@
 import { X } from 'lucide-react';
-import { useRef, useState } from 'react';
-import { cn } from '../../utils/cn';
+import { useId, useState } from 'react';
+import { cn } from '../../utils/cn.js';
 
 interface ChipArrayFieldProps {
+  inputId?: string;
   value: string[];
   onChange: (value: string[]) => void;
-  placeholder?: string;
 }
 
 /**
  * Chip/pill input for z.array(z.string) schema fields.
  * Enter or comma adds a chip, Backspace on empty input removes the last chip.
  */
-export function ChipArrayField({ value, onChange, placeholder = 'Type and press Enter to add' }: ChipArrayFieldProps) {
+export function ChipArrayField({ value, onChange, inputId }: ChipArrayFieldProps) {
+  const generatedInputId = useId();
+  const resolvedInputId = inputId ?? generatedInputId;
   const [input, setInput] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const addChip = (text: string) => {
     const trimmed = text.trim();
@@ -37,13 +38,8 @@ export function ChipArrayField({ value, onChange, placeholder = 'Type and press 
     }
   };
 
-  const handleContainerClick = () => {
-    inputRef.current?.focus();
-  };
-
   return (
     <div
-      onClick={handleContainerClick}
       className={cn(
         'flex flex-wrap gap-1.5 p-2 border border-line bg-panel rounded-md',
         'focus-within:ring-2 focus-within:ring-azure-04',
@@ -68,16 +64,18 @@ export function ChipArrayField({ value, onChange, placeholder = 'Type and press 
           </button>
         </span>
       ))}
-      <input
-        ref={inputRef}
-        type="text"
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        onKeyDown={handleKeyDown}
-        onBlur={() => addChip(input)}
-        placeholder={value.length === 0 ? placeholder : ''}
-        className="flex-1 min-w-[120px] outline-none text-sm bg-transparent"
-      />
+      <label htmlFor={resolvedInputId} className="flex flex-1 min-w-[120px] cursor-text">
+        <input
+          id={resolvedInputId}
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onBlur={() => addChip(input)}
+          placeholder={value.length === 0 ? 'Type and press Enter to add' : ''}
+          className="w-full outline-none text-sm bg-transparent"
+        />
+      </label>
     </div>
   );
 }

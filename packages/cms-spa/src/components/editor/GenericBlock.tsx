@@ -16,9 +16,10 @@ import {
   type MdxComponentDescriptor,
   useMdxComponents,
   writeAttribute,
-} from '../../mdx-components';
-import { getSelectedBlock, setSelectedBlock, useSelectedBlock } from '../../selected-block';
-import { bodyNeedsStaticHtml, isHtmlTag, mdastToHtml } from '../../utils/mdast-to-html';
+} from '../../mdx-components.js';
+import { useSandboxPreviewStyles } from '../../sandbox-preview-styles.js';
+import { getSelectedBlock, setSelectedBlock, useSelectedBlock } from '../../selected-block.js';
+import { bodyNeedsStaticHtml, isHtmlTag, mdastToHtml } from '../../utils/mdast-to-html.js';
 import {
   effectiveChildren,
   getMdastAtPath,
@@ -29,7 +30,9 @@ import {
   replaceMdastNodeAtPath,
   slotIdToPath,
   stripBodyFields,
-} from '../../utils/mdast-tree';
+} from '../../utils/mdast-tree.js';
+import { sanitizeComponentHtml, sanitizeHtml } from '../../utils/sanitize-html.js';
+import { ContentSandbox } from '../sandbox/ContentSandbox.js';
 
 /**
  * One editor component for any MDX JSX block. Replaces the per-component
@@ -178,17 +181,21 @@ function wireInlinePropEditors(
     }
     const textMatches: Text[] = [];
     const walker = wrap.ownerDocument.createTreeWalker(wrap, NodeFilter.SHOW_TEXT);
-    let textNode: Node | null = walker.nextNode();
+    let textNode = walker.nextNode();
     while (textNode) {
       const t = textNode as Text;
-      if (!t.parentElement) continue;
-      // Don't double-count: a text node that is the sole content of a
-      // leaf element is already caught by the element walk above.
-      const parentIsLeaf = t.parentElement.children.length === 0;
-      if (parentIsLeaf) continue;
-      // Skip text inside an already-wired inline editor.
-      if (t.parentElement.closest('[data-conloca-prop]')) continue;
-      if ((t.nodeValue ?? '').trim() === value) textMatches.push(t);
+      const parent = t.parentElement;
+      // A text node wholly contained by a leaf element is already
+      // represented by `elementMatches`; only consider mixed-content
+      // parents that have not already been wired.
+      if (
+        parent &&
+        parent.children.length > 0 &&
+        !parent.closest('[data-conloca-prop]') &&
+        (t.nodeValue ?? '').trim() === value
+      ) {
+        textMatches.push(t);
+      }
       textNode = walker.nextNode();
     }
     if (elementMatches.length + textMatches.length !== 1) continue;
@@ -493,7 +500,7 @@ function findTopLevelList(
  * DOM mutation safety: we DO NOT replace the li's children or inject
  * anything React might reconcile against. Just set `contenteditable`
  * on the existing element and attach listeners. The next render's
- * `wrap.innerHTML = html` wipes the contenteditable cleanly.
+ * `wrap.innerHTML = sanitizeComponentHtml(html)` wipes the contenteditable cleanly.
  */
 function wireListItemEditors(
   wrap: HTMLElement,
@@ -562,7 +569,7 @@ function wireListItemEditors(
      * Insert an empty list item BELOW this one and ask the next
      * render to focus the new li. The render cycle is:
      *   1. writeListChildren → mdast updates → React re-renders
-     *   2. html-injection effect runs `wrap.innerHTML = html`
+     *   2. html-injection effect runs `wrap.innerHTML = sanitizeComponentHtml(html)`
      *   3. wireListItemEditors runs again; it sees the pending
      *      focus index and focuses that li.
      * The ref decouples the focus request from the render — we
@@ -688,7 +695,7 @@ function buildRenderTree(
     const slot = getNamedSlotName(child);
     if (slot) {
       const inner = (child as { children?: unknown[] }).children;
-      namedSlots[slot] = mdastToHtml({ children: Array.isArray(inner) ? inner : [] });
+      namedSlots[slot] = sanitizeHtml(mdastToHtml({ children: Array.isArray(inner) ? inner : [] }));
     } else {
       kids.push(child);
     }
@@ -712,7 +719,8 @@ function buildRenderTree(
   // slot tag name and reject `<conloca-slot>`. `bodyHtml` makes the
   // server emit our rendered list directly as the slot content with
   // no wrapper.
-  const bodyHtml = !hasJsxChildren && bodyNeedsStaticHtml(kids) ? mdastToHtml({ children: kids }) : undefined;
+  const bodyHtml =
+    !hasJsxChildren && bodyNeedsStaticHtml(kids) ? sanitizeHtml(mdastToHtml({ children: kids })) : undefined;
 
   // Previously, nested leaves shipped a static-text `body` fallback
   // inside their slot so authored text was visible even without an
@@ -805,12 +813,19 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
   const updater = useMdastNodeUpdater<MdxJsxFlowElement>();
   const removeNode = useLexicalNodeRemove();
   const descriptors = useMdxComponents();
+  const descriptorsByName = useMemo(() => {
+    const byName = new Map<string, MdxComponentDescriptor>();
+    for (const candidate of descriptors) {
+      if ('name' in candidate) byName.set(candidate.name, candidate);
+    }
+    return byName;
+  }, [descriptors]);
   const { parentEditor, lexicalNode } = useNestedEditorContext();
 
   const node = mdastNode as MdxJsxFlowElement;
   const attrs = readAttrs(node);
   const name = node.name ?? '';
-  const found = descriptors.find((d): d is MdxComponentDescriptor => 'name' in d && d.name === name);
+  const found = descriptorsByName.get(name);
   const descriptor = found && isJsxDescriptor(found) ? found : null;
   const source = descriptor?.import?.from;
 
@@ -870,15 +885,14 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
     // structurally stable, so we use stableStringify in cacheKey to
     // dedupe identical requests. Recomputing the tree per render is
     // cheap.
-    // biome-ignore lint/correctness/useExhaustiveDependencies: descriptors identity changes every render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [node, descriptors],
   );
 
-  const propsJson = useMemo(() => stableStringify(attrs), [attrs]);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: propsJson is the stable attrs signal
+  const selectionSignature = useMemo(() => stableStringify({ node }), [node]);
   const renderReq = useMemo<RenderRequest | null>(
     () => (tree ? { tree, documentIndex, ...(isInline ? { inline: true } : {}) } : null),
-    [tree, documentIndex, propsJson, isInline],
+    [tree, documentIndex, isInline],
   );
 
   const [html, setHtml] = useState<string | null>(() =>
@@ -897,6 +911,14 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
    * next re-wire pass. Lives at component level (not effect-local)
    * so it survives across render cycles. */
   const pendingListItemFocusRef = useRef<number | null>(null);
+  // Preview wiring must only re-run when the rendered HTML changes:
+  // replacing innerHTML during selection-only renders would destroy
+  // contenteditable focus. Keep the current editor bindings in a ref so
+  // that the HTML-triggered effect still commits through the latest node.
+  const previewBindingsRef = useRef({ attrs, node, updater });
+  previewBindingsRef.current.attrs = attrs;
+  previewBindingsRef.current.node = node;
+  previewBindingsRef.current.updater = updater;
 
   // Fetch (or serve from cache) the rendered HTML on prop changes.
   useEffect(() => {
@@ -929,18 +951,35 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
   // subtree via path resolution — so editing the body of a Card
   // inside a CardGrid works the same as editing the body of a
   // root-level Aside.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: attrs/onPropChange deliberately omitted — see comment in effect
   useEffect(() => {
     const wrap = wrapperRef.current;
     if (!wrap || html == null) return;
-    wrap.innerHTML = html;
+    const { attrs: currentAttrs, node: currentNode, updater: currentUpdater } = previewBindingsRef.current;
+    const currentOnPropChange = (propName: string, value: string | boolean | number | null | undefined) => {
+      currentUpdater({
+        attributes: writeAttribute(currentNode.attributes, propName, value) as typeof currentNode.attributes,
+      });
+    };
+    // The render-endpoint RESPONSE lands in the PRIVILEGED admin document here
+    // (this fourth content-execution site can't be iframed — the portaled
+    // Lexical editors need same-origin DOM access). It is DOMPurified before the
+    // innerHTML assignment so no active markup reaches the privileged document,
+    // whatever produced it: the `bodyHtml`/`namedSlots` we send, OR a string prop
+    // a registered component reflected through `set:html`. `sanitizeComponentHtml`
+    // is used (not the strict author `sanitizeHtml`) because the response is our
+    // OWN registered-component output — it keeps the `<iframe>` embeds and SVG
+    // `<use>` icons real components emit, while still stripping scripts, `on*`
+    // handlers, dangerous URL schemes, and CSS `url()` beacons. Escaped entities
+    // survive untouched, so legitimate prop text (`5 &lt; 10`) still renders;
+    // `conloca-slot` stays allowlisted so the inline-editing slots survive.
+    wrap.innerHTML = sanitizeComponentHtml(html);
     // After replacing the preview HTML, scan for string-prop values that
     // appear exactly once as a leaf element's textContent and wire those
     // elements as contenteditable. Authors edit eg LinkCard's `description`
     // in place; the blur handler commits via `onPropChange`. Runs after
     // every prop change because the new HTML wipes prior contenteditable
     // attributes — re-wiring keeps inline editing alive across re-renders.
-    wireInlinePropEditors(wrap, attrs, onPropChange);
+    wireInlinePropEditors(wrap, currentAttrs, currentOnPropChange);
     if (containerMode) {
       // Multiple slots — discover them all and key by slot-id so the
       // path resolution in `ContainerSlotEditor` can find the right
@@ -965,7 +1004,7 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
       // the author click "First card" inside a CardGrid and edit it.
       for (const [slotId, slotEl] of next) {
         const childPath = slotIdToPath(slotId);
-        const childNode = getMdastAtPath(node, childPath);
+        const childNode = getMdastAtPath(currentNode, childPath);
         if (!childNode) continue;
         const region = findChildRegion(slotEl as HTMLElement);
         if (!region) continue;
@@ -984,8 +1023,8 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
             ...childNode,
             attributes: writeAttribute(childNode.attributes, propName, value),
           } as MdxJsxFlowElement;
-          const nextRoot = replaceMdastNodeAtPath(node, childPath, newChild);
-          updater({ children: nextRoot.children as typeof node.children });
+          const nextRoot = replaceMdastNodeAtPath(currentNode, childPath, newChild);
+          currentUpdater({ children: nextRoot.children as typeof currentNode.children });
         };
         wireInlinePropEditors(region, childAttrs, childOnPropChange);
       }
@@ -999,20 +1038,13 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
       // with React. Trade-off: plaintext-only commits (loses bold/
       // italic on edit). Future enhancement: parse inline markdown
       // back from contenteditable text so formatting round-trips.
-      wireListItemEditors(wrap, node, updater, pendingListItemFocusRef);
+      wireListItemEditors(wrap, currentNode, currentUpdater, pendingListItemFocusRef);
       setContainerSlots(new Map());
       setSlotEl(wrap.querySelector(SLOT_TAG));
     }
-    // `attrs` and `onPropChange` are NOT in deps on purpose. They get a
-    // fresh identity on every render (new object from `readAttrs`, new
-    // callback closure), so listing them would re-run this effect for
-    // every parent render — including selection-change re-renders that
-    // don't actually touch the preview HTML. That would re-set
-    // `innerHTML` mid-typing and trash the contenteditable's focus.
-    // The effect already runs whenever `html` changes, and `html` only
-    // updates after `propsJson` changes (via the renderReq fetch path),
-    // so the closure captures the right `attrs`/`onPropChange` for the
-    // commit that triggered the new render.
+    // `previewBindingsRef` supplies the current attrs, node, and updater
+    // without making their render-local identities effect triggers.
+    // This preserves focus while preventing stale editor callbacks.
   }, [html, containerMode]);
 
   const slot = (
@@ -1047,15 +1079,51 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
   // across siblings — exactly what the side-panel registry and the
   // `is-selected` className need to identify the active block.
   const blockKey = lexicalNode.getKey();
+  // Selection publication is keyed by a structural signature rather
+  // than render-local mdast and callback identities. The mutable
+  // bindings keep the published handlers current without feeding the
+  // external selection store an infinite render loop.
+  const selectionBindingsRef = useRef({
+    signature: selectionSignature,
+    attrs,
+    onPropChange,
+    removeNode,
+    node,
+    updater,
+  });
+  const selectionBindings = selectionBindingsRef.current;
+  selectionBindings.signature = selectionSignature;
+  selectionBindings.attrs = attrs;
+  selectionBindings.onPropChange = onPropChange;
+  selectionBindings.removeNode = removeNode;
+  selectionBindings.node = node;
+  selectionBindings.updater = updater;
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: selection republish uses blockKey/propsJson signal
   useEffect(() => {
+    const bindings = selectionBindingsRef.current;
+    // Effects run after commit; only publish a snapshot that matches the
+    // structural change which scheduled this effect.
+    if (bindings.signature !== selectionSignature) return;
+    const {
+      attrs: currentAttrs,
+      onPropChange: currentOnPropChange,
+      removeNode: currentRemoveNode,
+      node: currentNode,
+      updater: currentUpdater,
+    } = bindings;
     if (!descriptor) return;
     const current = getSelectedBlock();
     if (!current) return;
     if (current.key === blockKey) {
       // Container/leaf itself is selected — republish with current attrs.
-      setSelectedBlock({ key: blockKey, name, descriptor, attrs, onPropChange, onRemove: removeNode });
+      setSelectedBlock({
+        key: blockKey,
+        name,
+        descriptor,
+        attrs: currentAttrs,
+        onPropChange: currentOnPropChange,
+        onRemove: currentRemoveNode,
+      });
       return;
     }
     // A child of this container might be the selection. Child keys are
@@ -1066,9 +1134,9 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
     if (containerMode && current.key.startsWith(`${blockKey}:`)) {
       const dotPath = current.key.slice(blockKey.length + 1);
       const childPath = dotPath ? dotPath.split('.').map((s) => Number.parseInt(s, 10)) : [];
-      const childNode = getMdastAtPath(node, childPath);
+      const childNode = getMdastAtPath(currentNode, childPath);
       if (!childNode || childNode.name !== current.name) return;
-      const childDescriptor = descriptors.find((d) => d.name === childNode.name);
+      const childDescriptor = descriptorsByName.get(childNode.name);
       if (!childDescriptor || !isJsxDescriptor(childDescriptor)) return;
       const childAttrs = readAttrs(childNode);
       const childOnPropChange = (propName: string, value: string | boolean | number | null | undefined) => {
@@ -1076,12 +1144,12 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
           ...childNode,
           attributes: writeAttribute(childNode.attributes, propName, value),
         } as MdxJsxFlowElement;
-        const next = replaceMdastNodeAtPath(node, childPath, newChild);
-        updater({ children: next.children as typeof node.children });
+        const next = replaceMdastNodeAtPath(currentNode, childPath, newChild);
+        currentUpdater({ children: next.children as typeof currentNode.children });
       };
       const childOnRemove = () => {
-        const next = removeMdastNodeAtPath(node, childPath);
-        updater({ children: next.children as typeof node.children });
+        const next = removeMdastNodeAtPath(currentNode, childPath);
+        currentUpdater({ children: next.children as typeof currentNode.children });
       };
       setSelectedBlock({
         key: current.key,
@@ -1092,15 +1160,10 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
         onRemove: childOnRemove,
       });
     }
-    // Deps are intentionally narrow. `propsJson` is the content the panel
-    // reads; `descriptor`/`name`/`blockKey` define identity. `onPropChange`
-    // and `removeNode` are FRESH closures on every render (Lexical's
-    // updater hooks rebuild them), so including them would trigger a
-    // re-publish → useSelectedBlock fires → all blocks re-render →
-    // closure identities change → re-publish → infinite loop. We capture
-    // the latest closures via the `attrs`/`propsJson` change signal
-    // instead, which is the moment the panel actually needs an update.
-  }, [propsJson, descriptor, name, blockKey, containerMode]);
+    // The signature changes only when mdast content changes; the
+    // descriptor map changes only when the host registry changes.
+    // Render-local editor bindings are read from the ref above.
+  }, [selectionSignature, descriptor, name, blockKey, containerMode, descriptorsByName]);
 
   const handleSelect = useCallback(
     (e?: React.SyntheticEvent) => {
@@ -1126,7 +1189,7 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
           const slotId = slotEl.getAttribute('data-conloca-child-path') ?? slotEl.getAttribute('data-slot-id') ?? '';
           const childPath = slotIdToPath(slotId);
           const childNode = getMdastAtPath(node, childPath);
-          if (childNode && childNode.name) {
+          if (childNode?.name) {
             const childDescriptor = descriptors.find((d) => d.name === childNode.name);
             if (childDescriptor && isJsxDescriptor(childDescriptor)) {
               const childAttrs = readAttrs(childNode);
@@ -1201,23 +1264,27 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
   // the accent outline; the side panel keys off the same registry.
   const selected = useSelectedBlock();
   const isSelected = selected?.key === blockKey;
+  const sandboxStyles = useSandboxPreviewStyles();
 
   // Raw HTML in MDX (`<div class="x">`, `<details>`, etc.) lands here
   // with a lowercase tag name and no registered component descriptor.
   // Render the whole subtree client-side as HTML — no SSR roundtrip,
   // no labelled fallback. Static (not inline-editable) for now.
   if (!source && isHtmlTag(name)) {
-    const rawHtml = mdastToHtml(node);
+    // Raw HTML is sanitized AND rendered inside the opaque-origin sandbox —
+    // defence in depth: even a payload that slips past the sanitizer cannot
+    // reach this document's cookies or `__CONTENT_API_CLIENT__`. This block is
+    // static (no descriptor, so `handleSelect` already no-ops); anchor
+    // navigation is swallowed by ignoring the frame's `link` message.
+    const rawHtml = sanitizeHtml(mdastToHtml(node));
     return (
       <div
         className={`conloca-generic-block conloca-generic-block--html${isSelected ? ' is-selected' : ''}`}
         onMouseDownCapture={handleSelect}
         onFocusCapture={handleSelect}
-        onClickCapture={handleAnchorClickInPreview}
-        onAuxClickCapture={handleAnchorClickInPreview}
-        // eslint-disable-next-line react/no-danger
-        dangerouslySetInnerHTML={{ __html: rawHtml }}
-      />
+      >
+        <ContentSandbox mode="html" content={rawHtml} styles={sandboxStyles} />
+      </div>
     );
   }
 

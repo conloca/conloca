@@ -1,11 +1,18 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
+import { ensureSiteInSitesConfig } from '../lib/sites-config.js';
+// Kept as a real .md file so it stays editable markdown; Bun inlines it into
+// the bundle.
+import CONLOCA_SKILL_TEMPLATE from '../templates/conloca-skill.md' with { type: 'text' };
+
+/** Site name every other Conloca default assumes for a single-site project. */
+export const DEFAULT_SITE_NAME = 'default';
 
 // ============================================================================
 // Component Templates
 // ============================================================================
 
-const LAYOUT_TEMPLATE = `import type { ComponentConfig, DefaultComponentProps, ObjectField } from '@puckeditor/core';
+const COMPONENT_LAYOUT_TEMPLATE = `import type { ComponentConfig, DefaultComponentProps, ObjectField } from '@puckeditor/core';
 import type { CSSProperties } from 'react';
 import { forwardRef, type ReactNode } from 'react';
 
@@ -20,7 +27,7 @@ export type WithLayout<Props extends DefaultComponentProps> = Props & {
   layout?: LayoutFieldProps;
 };
 
-type LayoutProps = WithLayout<{
+type ComponentLayoutProps = WithLayout<{
   children: ReactNode;
   className?: string;
   style?: CSSProperties;
@@ -75,28 +82,30 @@ export const layoutField: ObjectField<LayoutFieldProps> = {
   },
 };
 
-const Layout = forwardRef<HTMLDivElement, LayoutProps>(({ children, className, layout, style }, ref) => {
-  return (
-    <div
-      className={className}
-      ref={ref}
-      style={{
-        gridColumn: layout?.spanCol ? \`span \${Math.max(Math.min(layout.spanCol, 12), 1)}\` : undefined,
-        gridRow: layout?.spanRow ? \`span \${Math.max(Math.min(layout.spanRow, 12), 1)}\` : undefined,
-        paddingTop: layout?.padding,
-        paddingBottom: layout?.padding,
-        flex: layout?.grow ? '1 1 0' : undefined,
-        ...style,
-      }}
-    >
-      {children}
-    </div>
-  );
-});
+const ComponentLayout = forwardRef<HTMLDivElement, ComponentLayoutProps>(
+  ({ children, className, layout, style }, ref) => {
+    return (
+      <div
+        className={className}
+        ref={ref}
+        style={{
+          gridColumn: layout?.spanCol ? \`span \${Math.max(Math.min(layout.spanCol, 12), 1)}\` : undefined,
+          gridRow: layout?.spanRow ? \`span \${Math.max(Math.min(layout.spanRow, 12), 1)}\` : undefined,
+          paddingTop: layout?.padding,
+          paddingBottom: layout?.padding,
+          flex: layout?.grow ? '1 1 0' : undefined,
+          ...style,
+        }}
+      >
+        {children}
+      </div>
+    );
+  },
+);
 
-Layout.displayName = 'Layout';
+ComponentLayout.displayName = 'ComponentLayout';
 
-export { Layout };
+export { ComponentLayout };
 
 export function withLayout<ThisComponentConfig extends ComponentConfig<any> = ComponentConfig<any>>(
   componentConfig: ThisComponentConfig,
@@ -156,9 +165,9 @@ export function withLayout<ThisComponentConfig extends ComponentConfig<any> = Co
     },
     inline: true,
     render: (props) => (
-      <Layout className="puck-layout" layout={props.layout as LayoutFieldProps} ref={props.puck.dragRef}>
+      <ComponentLayout className="puck-layout" layout={props.layout as LayoutFieldProps} ref={props.puck.dragRef}>
         {componentConfig.render(props)}
-      </Layout>
+      </ComponentLayout>
     ),
   };
 }
@@ -241,8 +250,8 @@ export function HeadingComponent({ text, level = '2', size = 'm', align = 'left'
 
 const HEADING_TEMPLATE = `import type { ComponentConfig } from '@puckeditor/core';
 import React from 'react';
-import type { WithLayout } from '../Layout';
-import { withLayout } from '../Layout';
+import type { WithLayout } from '../ComponentLayout';
+import { withLayout } from '../ComponentLayout';
 import { Section } from '../Section';
 import { HeadingComponent } from './HeadingComponent';
 
@@ -347,8 +356,8 @@ export function TextComponent({ text, size = 'm', color = 'default', align = 'le
 
 const TEXT_TEMPLATE = `import type { ComponentConfig } from '@puckeditor/core';
 import React from 'react';
-import type { WithLayout } from '../Layout';
-import { withLayout } from '../Layout';
+import type { WithLayout } from '../ComponentLayout';
+import { withLayout } from '../ComponentLayout';
 import { Section } from '../Section';
 import { TextComponent } from './TextComponent';
 
@@ -413,8 +422,8 @@ export const Text = withLayout(TextInner);
 
 const FLEX_TEMPLATE = `import type { ComponentConfig, Slot } from '@puckeditor/core';
 import React from 'react';
-import type { WithLayout } from '../Layout';
-import { withLayout } from '../Layout';
+import type { WithLayout } from '../ComponentLayout';
+import { withLayout } from '../ComponentLayout';
 import { Section } from '../Section';
 
 export type FlexProps = WithLayout<{
@@ -501,7 +510,7 @@ export const Flex = withLayout(FlexInternal);
 
 const GRID_TEMPLATE = `import type { ComponentConfig, Slot } from '@puckeditor/core';
 import React from 'react';
-import { withLayout } from '../Layout';
+import { withLayout } from '../ComponentLayout';
 import { Section } from '../Section';
 
 export type GridProps = {
@@ -549,6 +558,36 @@ export const GridInternal: ComponentConfig<GridProps> = {
 };
 
 export const Grid = withLayout(GridInternal);
+`;
+
+// ============================================================================
+// Page Layout Template
+// ============================================================================
+
+// Bare skeleton on purpose: without a layout the `layout` option has nothing to
+// point at and content pages render with no <html>, <head> or styles. It carries
+// no styling opinions so it can be replaced wholesale.
+const PAGE_LAYOUT_TEMPLATE = `---
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+const { title, description } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>{title ?? 'My site'}</title>
+    {description && <meta name="description" content={description} />}
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>
 `;
 
 // ============================================================================
@@ -633,15 +672,27 @@ export const dataSchemas = {
 // Setup Command
 // ============================================================================
 
-export async function setup(projectPath = '.') {
+/** Scaffold the Astro-side files into `projectPath`, recording `siteName` in sites.json, and report what was written. */
+export async function setup(projectPath = '.', siteName = DEFAULT_SITE_NAME): Promise<string[]> {
   try {
     const absolutePath = resolve(projectPath);
     const srcDir = join(absolutePath, 'src');
 
     console.log('Setting up Conloca for Astro...\n');
 
-    // Create directories (routes now handled by conlocaCMS({ routing: true }))
-    const dirs = [join(srcDir, 'components'), join(srcDir, 'components', 'puck'), join(srcDir, 'schemas')];
+    // Create directories (routes are handled by the integration's routing option)
+    const contentDir = join(absolutePath, 'content');
+    const dirs = [
+      contentDir,
+      // The site is registered in sites.json below, and doctor's C4
+      // wants every registered site's pages directory on disk.
+      join(contentDir, siteName, 'pages'),
+      join(srcDir, 'components'),
+      join(srcDir, 'components', 'puck'),
+      join(srcDir, 'layouts'),
+      join(srcDir, 'schemas'),
+      join(absolutePath, '.claude', 'skills', 'conloca'),
+    ];
 
     for (const dir of dirs) {
       await mkdir(dir, { recursive: true });
@@ -663,7 +714,11 @@ export async function setup(projectPath = '.') {
     }
 
     // 1. Core components
-    await writeIfNotExists(join(srcDir, 'components', 'Layout.tsx'), LAYOUT_TEMPLATE, 'src/components/Layout.tsx');
+    await writeIfNotExists(
+      join(srcDir, 'components', 'ComponentLayout.tsx'),
+      COMPONENT_LAYOUT_TEMPLATE,
+      'src/components/ComponentLayout.tsx',
+    );
 
     await writeIfNotExists(join(srcDir, 'components', 'Section.tsx'), SECTION_TEMPLATE, 'src/components/Section.tsx');
 
@@ -710,6 +765,26 @@ export async function setup(projectPath = '.') {
     // 5. Data schemas
     await writeIfNotExists(join(srcDir, 'schemas', 'data.ts'), DATA_SCHEMAS_TEMPLATE, 'src/schemas/data.ts');
 
+    // 6. Page layout
+    await writeIfNotExists(join(srcDir, 'layouts', 'Layout.astro'), PAGE_LAYOUT_TEMPLATE, 'src/layouts/Layout.astro');
+
+    // 6b. Agent skill — the one-page Conloca guide coding agents load when
+    // working on this project.
+    await writeIfNotExists(
+      join(absolutePath, '.claude', 'skills', 'conloca', 'SKILL.md'),
+      CONLOCA_SKILL_TEMPLATE,
+      '.claude/skills/conloca/SKILL.md',
+    );
+
+    // 7. Sites config. Without it the CMS creates no page collections, which
+    // looks exactly like a missing content config: every content page 404s.
+    const sites = await ensureSiteInSitesConfig(contentDir, siteName);
+    if (sites.added) {
+      created.push(sites.existed ? `content/sites.json (added site: ${siteName})` : 'content/sites.json');
+    } else {
+      skipped.push('content/sites.json');
+    }
+
     // Summary
     console.log('Created:');
     for (const file of created) {
@@ -724,13 +799,52 @@ export async function setup(projectPath = '.') {
     }
 
     console.log('\n✨ Astro setup complete!');
-    console.log('\nNext steps:');
-    console.log('1. Run `conloca init . <site-name>` to create content directory');
-    console.log('2. Configure routing in astro.config: conlocaCMS({ routing: true })');
-    console.log('3. Start your dev server and visit /__cms to edit pages');
-    console.log('4. Add more Puck components in src/components/puck/');
+
+    return created;
   } catch (error) {
     console.error('❌ Error during setup:', error);
     throw error;
   }
+}
+
+/** What a human still has to wire by hand after `astro setup`: the astro config, the content config, and the first edit. */
+export function printSetupNextSteps(): void {
+  console.log('\nNext steps:');
+  console.log(`1. content/sites.json now lists the site '${DEFAULT_SITE_NAME}'. To add a second site,`);
+  console.log('   run `conloca init . <site-name>`.');
+  console.log('\n2. Name the generated files in astro.config.mjs. Nothing loads them until');
+  console.log('   they are listed here, and react() must come before conlocaCMS():\n');
+  console.log(`     import react from '@astrojs/react';
+     import { conlocaCMS } from '@conloca/astro-cms/node';
+
+     export default defineConfig({
+       integrations: [
+         react(),
+         conlocaCMS({
+           contentRoot: './content',
+           puckConfigPath: './src/puck.config.tsx',
+           schemasPath: './src/schemas/data.ts',
+           layout: './src/layouts/Layout.astro',
+         }),
+       ],
+     });`);
+  console.log('\n   `layout` on its own turns on a catch-all /[...slug] route over the pages');
+  console.log('   collection. Adding `routing` replaces that route, and the top-level `layout`');
+  console.log('   is then ignored — name it under routing.routes.<name>.layout instead.');
+  console.log('\n3. Create src/content.config.ts. Without it every content page returns 404:\n');
+  console.log(`     import { conlocaData, conlocaFragments, conlocaPages } from '@conloca/astro-cms/node/content';
+     import { dataSchemas } from './schemas/data';
+
+     export const collections = {
+       pages: conlocaPages(),
+       ...conlocaData({ dataSchemas }),
+       ...conlocaFragments(),
+     };`);
+  console.log('\n   Every collection is declared here by name — content the config does not name');
+  console.log('   fails the build instead of silently not building. The generated schemas file');
+  console.log('   already declares its data collections, so they are covered before the first');
+  console.log('   entry is saved.');
+  console.log('\n4. Start your dev server and visit /__cms to edit pages');
+  console.log('5. Add more Puck components in src/components/puck/');
+  console.log('6. Working with a coding agent? .claude/skills/conloca/SKILL.md teaches it Conloca');
 }

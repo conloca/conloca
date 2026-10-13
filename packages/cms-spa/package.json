@@ -10,77 +10,111 @@
     "directory": "packages/cms-spa"
   },
   "type": "module",
-  "main": "./dist/index.mjs",
-  "module": "./dist/index.mjs",
-  "types": "./dist/index.d.mts",
+  "main": "./dist/ts/index.js",
+  "module": "./dist/ts/index.js",
+  "types": "./dist/ts/index.d.ts",
   "exports": {
     "./package.json": "./package.json",
     ".": {
-      "types": "./dist/index.d.mts",
-      "import": "./dist/index.mjs",
-      "default": "./dist/index.mjs"
+      "types": "./dist/ts/index.d.ts",
+      "import": "./dist/ts/index.js",
+      "default": "./dist/ts/index.js"
     },
     "./data-schemas": {
-      "types": "./dist/data-schemas.d.mts",
-      "import": "./dist/data-schemas.mjs",
-      "default": "./dist/data-schemas.mjs"
+      "types": "./dist/ts/data-schemas.d.ts",
+      "import": "./dist/ts/data-schemas.js",
+      "default": "./dist/ts/data-schemas.js"
     },
     "./mdx-components": {
-      "types": "./dist/mdx-components.d.mts",
-      "import": "./dist/mdx-components.mjs",
-      "default": "./dist/mdx-components.mjs"
+      "types": "./dist/ts/mdx-components.d.ts",
+      "import": "./dist/ts/mdx-components.js",
+      "default": "./dist/ts/mdx-components.js"
+    },
+    "./mdx-components-define": {
+      "types": "./dist/ts/mdx-components-define.d.ts",
+      "import": "./dist/ts/mdx-components-define.js",
+      "default": "./dist/ts/mdx-components-define.js"
     },
     "./page-schemas": {
-      "types": "./dist/page-schemas.d.mts",
-      "import": "./dist/page-schemas.mjs",
-      "default": "./dist/page-schemas.mjs"
+      "types": "./dist/ts/page-schemas.d.ts",
+      "import": "./dist/ts/page-schemas.js",
+      "default": "./dist/ts/page-schemas.js"
+    },
+    "./page-schema-define": {
+      "types": "./dist/ts/page-schema-define.d.ts",
+      "import": "./dist/ts/page-schema-define.js",
+      "default": "./dist/ts/page-schema-define.js"
+    },
+    "./page-setting-attributes": {
+      "types": "./dist/ts/page-setting-attributes.d.ts",
+      "import": "./dist/ts/page-setting-attributes.js",
+      "default": "./dist/ts/page-setting-attributes.js"
+    },
+    "./merge-default-props": {
+      "types": "./dist/ts/merge-default-props.d.ts",
+      "import": "./dist/ts/merge-default-props.js",
+      "default": "./dist/ts/merge-default-props.js"
     },
     "./puck-config": {
-      "types": "./dist/puck-config.d.mts",
-      "import": "./dist/puck-config.mjs",
-      "default": "./dist/puck-config.mjs"
+      "types": "./dist/ts/puck-config.d.ts",
+      "import": "./dist/ts/puck-config.js",
+      "default": "./dist/ts/puck-config.js"
+    },
+    "./host-discovery": {
+      "types": "./dist/ts/host-discovery.d.ts",
+      "import": "./dist/ts/host-discovery.js",
+      "default": "./dist/ts/host-discovery.js"
     },
     "./site-styles": {
-      "types": "./dist/site-styles.d.mts",
-      "import": "./dist/site-styles.mjs",
-      "default": "./dist/site-styles.mjs"
+      "types": "./dist/ts/site-styles.d.ts",
+      "import": "./dist/ts/site-styles.js",
+      "default": "./dist/ts/site-styles.js"
+    },
+    "./theme": {
+      "types": "./dist/ts/theme.d.ts",
+      "import": "./dist/ts/theme.js",
+      "default": "./dist/ts/theme.js"
     },
     "./mock-puck-config": {
-      "types": "./dist/mock-puck-config.d.ts",
-      "import": "./dist/mock-puck-config.mjs",
-      "default": "./dist/mock-puck-config.mjs"
+      "types": "./dist/ts/mock-puck-config.d.ts",
+      "import": "./dist/ts/mock-puck-config.js",
+      "default": "./dist/ts/mock-puck-config.js"
     },
     "./ui": {
-      "types": "./dist/ui.d.mts",
-      "import": "./dist/ui.mjs",
-      "default": "./dist/ui.mjs"
+      "types": "./dist/ts/components/ui/index.d.ts",
+      "import": "./dist/ts/components/ui/index.js",
+      "default": "./dist/ts/components/ui/index.js"
     },
     "./dialog": {
-      "types": "./dist/dialog.d.mts",
-      "import": "./dist/dialog.mjs",
-      "default": "./dist/dialog.mjs"
+      "types": "./dist/ts/components/dialog.d.ts",
+      "import": "./dist/ts/components/dialog.js",
+      "default": "./dist/ts/components/dialog.js"
     },
     "./toast": {
-      "types": "./dist/toast.d.mts",
-      "import": "./dist/toast.mjs",
-      "default": "./dist/toast.mjs"
+      "types": "./dist/ts/components/toast.d.ts",
+      "import": "./dist/ts/components/toast.js",
+      "default": "./dist/ts/components/toast.js"
     },
     "./main": {
-      "import": "./dist/main.mjs",
-      "default": "./dist/main.mjs"
+      "types": "./dist/ts/main.d.ts",
+      "import": "./dist/ts/main.js",
+      "default": "./dist/ts/main.js"
     },
     "./tailwind-theme.css": {
-      "types": "./styles/tailwind-theme.css.d.ts",
+      "types": "./styles/stylesheet.d.ts",
       "default": "./styles/tailwind-theme.css"
     },
     "./styles.css": {
-      "types": "./styles/styles.css.d.ts",
+      "types": "./styles/stylesheet.d.ts",
       "default": "./dist/spa/main.css"
     },
     "./dist/spa/*": "./dist/spa/*"
   },
   "files": [
     "dist",
+    "src",
+    "!src/**/*.test.*",
+    "!src/**/*.stories.*",
     "styles",
     "!**/*.tsbuildinfo"
   ],
@@ -92,50 +126,53 @@
   "dependencies": {
     "@conloca/content-api-client": "workspace:*",
     "@conloca/mdx": "workspace:*",
-    "@lexical/react": "^0.35.0",
-    "@mdxeditor/editor": "^3.55.0",
-    "@puckeditor/core": "^0.21.2",
-    "@radix-ui/react-dialog": "^1.1.15",
-    "@radix-ui/react-dropdown-menu": "^2.1.16",
-    "@radix-ui/react-select": "^2.2.6",
-    "@tanstack/react-query": "^5.100.6",
-    "@tanstack/react-query-devtools": "^5.100.6",
+    "@lexical/react": "^0.48.0",
+    "@mdxeditor/editor": "^4.2.3",
+    "@puckeditor/core": "^0.23.0",
+    "@radix-ui/react-dialog": "^1.1.23",
+    "@radix-ui/react-dropdown-menu": "^2.1.24",
+    "@radix-ui/react-select": "^2.3.7",
+    "@tanstack/react-query": "^5.102.8",
+    "@tanstack/react-query-devtools": "^5.102.8",
     "@types/mdast": "^4.0.4",
     "clsx": "^2.1.1",
-    "lexical": "^0.35.0",
+    "dompurify": "^3.4.14",
+    "lexical": "^0.48.0",
     "lucide-react": "^0.564.0",
-    "mdast-util-from-markdown": "^2.0.0",
-    "mdast-util-mdx-jsx": "^3.0.0",
-    "react-router-dom": "^7.14.2",
-    "sonner": "^2.0.7",
-    "tailwind-merge": "^3.5.0",
+    "mdast-util-from-markdown": "^2.0.3",
+    "mdast-util-mdx-jsx": "^3.2.0",
+    "react-router-dom": "^7.18.3",
+    "sonner": "^2.0.8",
+    "tailwind-merge": "^3.6.0",
     "tslib": "^2.8.1",
-    "zod": "^4.4.1"
+    "zod": "^4.5.4"
   },
   "peerDependencies": {
-    "react": "^19.2.5",
-    "react-dom": "^19.2.5"
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "@happy-dom/global-registrator": "20.6.1",
-    "@storybook/addon-vitest": "^10.5.0",
-    "@storybook/react-vite": "^10.5.0",
-    "@tailwindcss/cli": "4.2.4",
-    "@tailwindcss/typography": "^0.5.19",
-    "@testing-library/jest-dom": "^6.9.1",
-    "@testing-library/react": "^16.3.2",
+    "@happy-dom/global-registrator": "20.13.2",
+    "@storybook/addon-vitest": "^10.6.0",
+    "@storybook/react-vite": "^10.6.0",
+    "@tailwindcss/cli": "4.3.3",
+    "@tailwindcss/typography": "^0.5.20",
+    "@tailwindcss/vite": "^4.3.3",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
     "@vitejs/plugin-react": "^5.2.0",
-    "@vitest/browser-playwright": "^4.1.7",
+    "@vitest/browser-playwright": "^4.1.11",
     "bun-tailwindcss": "^0.0.9",
-    "hono": "^4.12.23",
-    "playwright": "^1.61.1",
-    "react": "19.2.4",
-    "react-dom": "19.2.4",
+    "hono": "^4.13.5",
+    "playwright": "^1.62.1",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
     "react-refresh-typescript": "^2.0.12",
-    "storybook": "^10.5.0",
-    "tailwindcss": "^4.1.16",
+    "storybook": "^10.6.0",
+    "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.7"
+    "vite": "^7.3.6",
+    "vitest": "^4.1.11"
   },
   "nx": {
     "targets": {
@@ -152,27 +189,6 @@
         }
       },
       "lint": {},
-      "tsdown-js": {
-        "executor": "nx:run-commands",
-        "cache": true,
-        "dependsOn": [
-          "^build"
-        ],
-        "inputs": [
-          "{projectRoot}/src/**/*",
-          "{projectRoot}/tsdown.config.ts",
-          "{projectRoot}/tsconfig.lib.json",
-          "{projectRoot}/package.json"
-        ],
-        "outputs": [
-          "{projectRoot}/dist/**/*.mjs",
-          "{projectRoot}/dist/**/*.d.mts"
-        ],
-        "options": {
-          "command": "tsdown",
-          "cwd": "{projectRoot}"
-        }
-      },
       "bun-web": {
         "executor": "nx:run-commands",
         "cache": true,
@@ -197,7 +213,9 @@
         "executor": "@smoothbricks/nx-plugin:bounded-exec",
         "dependsOn": [
           "typecheck-tests",
-          "^build"
+          "bun-web",
+          "^build",
+          "test-packed"
         ],
         "options": {
           "command": "bun --conditions=production test",
@@ -206,16 +224,45 @@
           "killAfterMs": 10000
         }
       },
-      "test-storybook": {
+      "test-browser": {
         "executor": "@smoothbricks/nx-plugin:bounded-exec",
+        "cache": true,
+        "parallelism": false,
+        "inputs": [
+          "default",
+          "^production"
+        ],
         "dependsOn": [
           "^build"
         ],
         "options": {
-          "command": "vitest run --config .storybook/vitest.config.ts",
+          "command": "smoo playwright ensure chromium && vitest run --config .storybook/vitest.config.ts",
           "cwd": "{projectRoot}",
           "timeoutMs": 300000,
           "killAfterMs": 10000
+        }
+      },
+      "test-packed": {
+        "//": "The packed shape is a function of the built outputs, the stylesheets and their declarations shipped as written, the manifest and the locked dependency closure; cached on exactly those.",
+        "executor": "nx:run-commands",
+        "cache": true,
+        "inputs": [
+          {
+            "dependentTasksOutputFiles": "**/*",
+            "transitive": true
+          },
+          "{projectRoot}/styles/**/*",
+          "{projectRoot}/package.json",
+          "{workspaceRoot}/bun.lock",
+          "{workspaceRoot}/tooling/packaging/**/*"
+        ],
+        "dependsOn": [
+          "build",
+          "^build"
+        ],
+        "options": {
+          "command": "bun tooling/packaging/test-packed.ts cms-spa",
+          "cwd": "{workspaceRoot}"
         }
       }
     },

@@ -1,8 +1,8 @@
-export { ConflictDialog } from './ConflictDialog';
-export { CreateDataDialog } from './CreateDataDialog';
-export { CreatePageDialog } from './CreatePageDialog';
-export { DataPropertiesDialog } from './DataPropertiesDialog';
-export { DeleteConfirmDialog } from './DeleteConfirmDialog';
-export { ErrorModal } from './ErrorModal';
-export { MoveFolderDialog } from './MoveFolderDialog';
-export { PageMetadataDialog } from './PageMetadataDialog';
+export { ConflictDialog } from './ConflictDialog.js';
+export { CreateDataDialog } from './CreateDataDialog.js';
+export { CreatePageDialog } from './CreatePageDialog.js';
+export { DataPropertiesDialog } from './DataPropertiesDialog.js';
+export { DeleteConfirmDialog } from './DeleteConfirmDialog.js';
+export { ErrorModal } from './ErrorModal.js';
+export { MoveFolderDialog } from './MoveFolderDialog.js';
+export { PageMetadataDialog } from './PageMetadataDialog.js';

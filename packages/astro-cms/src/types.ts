@@ -1,3 +1,4 @@
+import type { DataBindingConfig, PageReference } from '@conloca/content-api';
 import type { Data } from '@puckeditor/core';
 
 /**
@@ -22,6 +23,8 @@ import type { Data } from '@puckeditor/core';
  * - 'idle': Hydrate when browser is idle (client:idle)
  */
 export type HydrationStrategy = 'none' | 'load' | 'visible' | 'idle';
+
+export type { ContentFragmentSectionProps } from '@conloca/cms-spa';
 
 /**
  * Configuration for Conloca's content page routing system.
@@ -94,11 +97,13 @@ export interface RoutingConfig {
   /**
    * Behavior when a route pattern matches but no content exists.
    *
-   * - '404': Return a 404 response (standard behavior)
-   * - 'passthrough': Let Astro continue to the next route handler
+   * - '404': Return a bare 404 response (standard behavior)
+   * - 'passthrough': Hand the miss back to Astro's own error handling, which
+   *   renders the site's /404 route (prerendered included) with a real 404
+   *   status — never a redirect or a soft-404
    *
-   * 'passthrough' is useful when you have both CMS-managed pages
-   * and file-based pages coexisting during migration.
+   * 'passthrough' is useful when the site has its own designed /404 page
+   * that should answer for paths the CMS doesn't know.
    *
    * @default '404'
    */
@@ -224,6 +229,11 @@ export interface RouteConfig {
    *
    * IMPORTANT: Pattern must start with '/'
    * IMPORTANT: Catch-all patterns ([...param]) capture everything after the prefix
+   * IMPORTANT: The parameter name must be unique among the site's routes — Astro's
+   * runtime resolves a page's stylesheets by route name, so a Conloca route named
+   * like another integration's (Starlight's docs route is '/[...slug]') breaks
+   * the styling of one or the other in server output or when rendered on demand.
+   * Conloca fails such a build; pick another name, e.g. '/[...page]'.
    */
   pattern: string;
 
@@ -412,25 +422,8 @@ export interface PageData {
    */
   meta?: Record<string, unknown>;
 
-  /**
-   * Timestamps for the page content.
-   */
-  timestamps?: {
-    /**
-     * When the page was first created.
-     */
-    created?: Date;
-
-    /**
-     * When the page was last modified.
-     */
-    modified?: Date;
-
-    /**
-     * When the page was published (if different from created).
-     */
-    published?: Date;
-  };
+  /** The page's dates, as on PageReference. */
+  timestamps?: PageReference['timestamps'];
 }
 
 /**
@@ -438,6 +431,10 @@ export interface PageData {
  *
  * Layouts receive common props (title, description) that work with
  * most existing layouts. No special Conloca-specific layout needed.
+ * A layout that needs more of the page's settings (an Open Graph image,
+ * structured data) reads them from `page` instead of looking the page up
+ * again, because a second lookup would have to repeat the handler's language,
+ * publication and preview rules.
  *
  * @example Astro layout usage
  * ```astro
@@ -493,6 +490,13 @@ export interface LayoutProps {
   description?: string;
 
   /**
+   * The page being rendered, with its settings in `meta`: the version in the
+   * route's language that the handler matched, published or the draft a
+   * preview renders.
+   */
+  page: PageReference;
+
+  /**
    * The rendered Puck content.
    *
    * In Astro layouts, use <slot /> instead of {children}.
@@ -526,105 +530,14 @@ export interface ResolvedRoutingConfig {
   locale: string;
 }
 
-// ============================================================================
-// Data Binding Types
-// ============================================================================
-
-/**
- * Configuration for automatic data collection injection into Puck components.
- *
- * Allows components to declare data dependencies on Conloca data collections,
- * which are automatically fetched and injected via Puck's metadata system.
- *
- * @example Route with data bindings
- * ```typescript
- * conlocaCMS({
- *   routing: {
- *     routes: {
- *       pages: {
- *         pattern: '/[...slug]',
- *         dataBindings: {
- *           collections: ['team', 'testimonials'],
- *         },
- *       },
- *     },
- *   },
- * });
- * ```
- */
-export interface DataBindingConfig {
-  /**
-   * Collections to fetch and inject into component resolvers.
-   *
-   * Each collection name must match a data collection in the content directory.
-   * The fetched data will be available in `metadata.collections[collectionName]`
-   * within Puck component resolvers.
-   *
-   * @example ['team', 'testimonials', 'products']
-   */
-  collections?: string[];
-
-  /**
-   * Locale override for data fetching.
-   *
-   * Defaults to the route's locale setting (from routing.locale).
-   * Use this to fetch data in a specific locale regardless of route config.
-   */
-  locale?: string;
-
-  /**
-   * Page discovery configuration for listing pages by path prefix.
-   *
-   * Enables components to access lists of pages matching a URL pattern,
-   * useful for blog listings, category pages, and site navigation.
-   *
-   * @example Blog listing page
-   * ```typescript
-   * {
-   *   pattern: '/blog',
-   *   dataBindings: {
-   *     pages: {
-   *       prefix: '/blog/',
-   *       sort: 'date-desc',
-   *       limit: 10,
-   *     },
-   *   },
-   * }
-   * ```
-   */
-  pages?: {
-    /**
-     * Path prefix to filter pages.
-     *
-     * Only pages whose pathname starts with this prefix are included.
-     * The listing page itself is excluded.
-     *
-     * @example '/blog/' matches '/blog/post-1', '/blog/post-2'
-     */
-    prefix: string;
-
-    /**
-     * Maximum number of pages to return.
-     *
-     * Useful for showing "latest N posts" on a homepage or sidebar.
-     */
-    limit?: number;
-
-    /**
-     * Sort order for returned pages.
-     *
-     * - 'date-desc': Newest first (by modified/created date)
-     * - 'date-asc': Oldest first
-     * - 'title': Alphabetical by title
-     *
-     * @default 'date-desc'
-     */
-    sort?: 'date-desc' | 'date-asc' | 'title';
-  };
-}
-
-// Data context types re-exported from content-api (canonical source)
-export type { DataCollectionEntry, DataContext, PageReference } from '@conloca/content-api';
+// Data context and binding types re-exported from content-api (canonical source)
+export type {
+  DataBindingConfig,
+  DataCollectionEntry,
+  DataContext,
+  EditorDataBindings,
+  PageReference,
+} from '@conloca/content-api';
 
 /**
  * Configuration for a page creation template.

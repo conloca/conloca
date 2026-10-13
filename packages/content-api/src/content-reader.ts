@@ -1,4 +1,4 @@
-import type { ContentAPIOptions } from './types';
+import type { ContentAPIOptions } from './types.js';
 
 export type ContentReaderOptions = ContentAPIOptions;
 
@@ -9,7 +9,7 @@ export type ContentReaderOptions = ContentAPIOptions;
  * eagerly traverse native hashing dependencies through the reader entrypoint.
  */
 export async function createContentAPI(options: ContentReaderOptions) {
-  const { FileSystemContentAPI: ReaderAPI } = await import('./filesystem-content-api');
+  const { FileSystemContentAPI: ReaderAPI } = await import('./filesystem-content-api.js');
 
   return ReaderAPI.create({
     ...options,

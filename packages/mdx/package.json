@@ -9,53 +9,67 @@
     "url": "git+https://github.com/conloca/conloca.git",
     "directory": "packages/mdx"
   },
-  "main": "./dist/index.mjs",
-  "module": "./dist/index.mjs",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
   "dependencies": {
     "@conloca/content-api": "workspace:*",
     "@mdx-js/mdx": "^3.1.1",
     "@mdx-js/react": "^3.1.1",
-    "@mdxeditor/editor": "^3.55.0",
+    "@mdxeditor/editor": "^4.2.3",
+    "github-slugger": "^2.0.0",
     "gray-matter": "^4.0.3",
+    "hast-util-to-jsx-runtime": "^2.3.6",
     "lucide-react": "^0.564.0",
     "mdast-util-to-markdown": "^2.1.2",
     "remark-frontmatter": "^5.0.0",
-    "remark-gfm": "^4.0.0",
+    "remark-gfm": "^4.0.1",
+    "remark-mdx": "^3.1.1",
     "remark-mdx-frontmatter": "^5.2.0",
-    "tslib": "^2.8.1"
+    "remark-parse": "^11.0.0",
+    "remark-rehype": "^11.1.2",
+    "tslib": "^2.8.1",
+    "unified": "^11.0.5"
   },
   "peerDependencies": {
-    "react": "^19.2.5",
-    "react-dom": "^19.2.5"
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "@happy-dom/global-registrator": "20.6.1",
-    "@testing-library/react": "^16.3.2",
-    "@tsdown/css": "^0.22.0",
-    "@types/react": "19.2.14",
-    "@types/react-dom": "19.2.3",
-    "happy-dom": "20.6.1",
-    "mdast-util-from-markdown": "^2.0.0",
+    "@happy-dom/global-registrator": "20.13.2",
+    "@testing-library/react": "^16.3.3",
+    "@types/mdast": "^4.0.4",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "happy-dom": "20.13.2",
+    "mdast-util-from-markdown": "^2.0.3",
     "mdast-util-gfm": "^3.1.0",
     "micromark-extension-gfm": "^3.0.0",
-    "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
   },
   "exports": {
     "./package.json": "./package.json",
     ".": {
-      "types": "./dist/index.d.mts",
-      "import": "./dist/index.mjs",
-      "default": "./dist/index.mjs"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
     },
     "./node": {
-      "types": "./dist/node.d.mts",
-      "import": "./dist/node.mjs",
-      "default": "./dist/node.mjs"
-    }
+      "types": "./dist/node.d.ts",
+      "import": "./dist/node.js",
+      "default": "./dist/node.js"
+    },
+    "./sandbox-frame": {
+      "types": "./dist/sandbox-frame.d.ts",
+      "import": "./dist/sandbox-frame.js",
+      "default": "./dist/sandbox-frame.js"
+    },
+    "./style.css": "./src/editor-styles.css"
   },
   "files": [
     "dist",
+    "src",
+    "!src/__tests__",
     "!**/*.tsbuildinfo"
   ],
   "scripts": {
@@ -63,39 +77,42 @@
   },
   "nx": {
     "targets": {
+      "clean": {},
       "test": {
         "dependsOn": [
           "typecheck-tests",
-          "^build"
+          "^build",
+          "test-packed"
         ],
         "executor": "@smoothbricks/nx-plugin:bounded-exec",
         "options": {
           "command": "bun --conditions=production test",
           "cwd": "{projectRoot}",
           "timeoutMs": 120000,
-          "killAfterMs": 10000
+          "killAfterMs": 10000.0
         }
       },
       "lint": {},
-      "tsdown-js": {
+      "test-packed": {
+        "//": "The packed shape is a function of the built outputs, the manifest and the locked dependency closure; cached on exactly those.",
         "executor": "nx:run-commands",
         "cache": true,
+        "inputs": [
+          {
+            "dependentTasksOutputFiles": "**/*",
+            "transitive": true
+          },
+          "{projectRoot}/package.json",
+          "{workspaceRoot}/bun.lock",
+          "{workspaceRoot}/tooling/packaging/**/*"
+        ],
         "dependsOn": [
+          "build",
           "^build"
         ],
-        "inputs": [
-          "{projectRoot}/src/**/*",
-          "{projectRoot}/tsdown.config.ts",
-          "{projectRoot}/tsconfig.lib.json",
-          "{projectRoot}/package.json"
-        ],
-        "outputs": [
-          "{projectRoot}/dist/**/*.mjs",
-          "{projectRoot}/dist/**/*.d.mts"
-        ],
         "options": {
-          "command": "tsdown",
-          "cwd": "{projectRoot}"
+          "command": "bun tooling/packaging/test-packed.ts mdx",
+          "cwd": "{workspaceRoot}"
         }
       }
     },
@@ -105,6 +122,6 @@
     "name": "mdx"
   },
   "type": "module",
-  "types": "./dist/index.d.mts",
+  "types": "./dist/index.d.ts",
   "license": "FSL-1.1-ALv2"
 }

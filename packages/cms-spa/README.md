@@ -32,7 +32,7 @@ The dev server includes a comprehensive mock Puck config with these components:
 
 1. **CSS Processing**: Tailwind CSS is processed in watch mode
 2. **HMR**: File changes trigger automatic browser reload via WebSocket
-3. **Mock Config**: Components are injected as `window.__PUCK_CONFIG__`
+3. **Mock Config**: Mock components are installed with `setPuckConfig()` from `src/puck-config.ts`
 4. **Static Serving**: Bun serves the SPA with proper MIME types
 
 ### Building for Production

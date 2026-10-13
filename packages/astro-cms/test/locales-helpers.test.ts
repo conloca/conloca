@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { localesFromAstroI18n, localesFromStarlight } from '../src/locales-helpers';
+import { localesFromAstroI18n, localesFromStarlight } from '../src/locales-helpers.js';
 
 describe('localesFromAstroI18n', () => {
   test('flattens bare string locales', () => {

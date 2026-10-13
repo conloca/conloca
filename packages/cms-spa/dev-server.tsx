@@ -1,5 +1,5 @@
 import index from './src/dev.html';
-import { processTailwindCSS, TAILWIND_CONFIG } from './tailwind-config';
+import { processTailwindCSS, TAILWIND_CONFIG } from './tailwind-config.js';
 
 // ANSI color codes
 const colors = {
@@ -42,9 +42,9 @@ if (!globalThis.__watchersStarted) {
         const color = hasError ? colors.red : colors.green;
         const lines = trimmed.split('\n');
         console.log(`${color}[${processName}]${colors.reset} ${lines[0]}`);
-        for (const line of lines.slice(1)) {
+        lines.slice(1).forEach((line) => {
           console.log(line);
-        }
+        });
         console.log(`${colors.dim}${'─'.repeat(80)}${colors.reset}`);
       }
     });

@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { Button } from './Button';
+import { Button } from './Button.js';
 
-// A96 canary: smoke-renders a pure leaf component (spec 14 §Storybook adoption).
+// Canary: smoke-renders a pure leaf component.
 const meta = {
   component: Button,
 } satisfies Meta<typeof Button>;

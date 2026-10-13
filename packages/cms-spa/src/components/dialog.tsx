@@ -1,6 +1,6 @@
 import * as RadixDialog from '@radix-ui/react-dialog';
 import type { ComponentProps } from 'react';
-import { cn } from '../utils/cn';
+import { cn } from '../utils/cn.js';
 
 /**
  * Dialog primitive surface for `@conloca/cms-spa/dialog`.
@@ -30,7 +30,7 @@ import { cn } from '../utils/cn';
  *
  *   Width and per-dialog padding are caller-provided via `className`
  *   (e.g. `w-full max-w-md` for cms-spa; `w-[calc(100vw-2rem)] max-w-md`
- *   for the host shell). Common chrome (`p-6 max-h-[90vh]
+ *   for a host app). Common chrome (`p-6 max-h-[90vh]
  *   overflow-y-auto`) is baked in.
  *
  * Style provenance: the utility classes baked into the wrappers (e.g.

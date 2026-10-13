@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import type { ContentAPI } from '../src/content-api.interface';
-import { InMemoryContentAPI } from '../src/in-memory-content-api';
-import { createContentAPIRouter } from '../src/middleware';
-import { ErrorCodes } from '../src/types';
+import type { ContentAPI } from '../src/content-api.interface.js';
+import { InMemoryContentAPI } from '../src/in-memory-content-api.js';
+import { createContentAPIRouter } from '../src/middleware.js';
+import { ErrorCodes } from '../src/types.js';
 import {
   assertDefined,
   getCreatedId,
@@ -10,7 +10,6 @@ import {
   isCollectionsResponse,
   isContentListResponse,
   isContentWithLocales,
-  isCreateSuccess,
   isErrorResponse,
   isLocalizedContent,
   isNameAvailableResponse,
@@ -18,7 +17,7 @@ import {
   isSitesConfigResponse,
   isSuccessResponse,
   parseJsonResponse,
-} from './test-helpers';
+} from './test-helpers.js';
 
 describe('Content API Middleware', () => {
   let api: ContentAPI;
@@ -55,12 +54,12 @@ describe('Content API Middleware', () => {
       });
 
       await api.createContent({
-        kind: 'block',
+        kind: 'fragment',
         collection: 'heroes',
         type: 'mdx',
-        name: 'hero-block',
+        name: 'hero-fragment',
         locales: {
-          en: { meta: { title: 'Hero Block' }, content: { mdx: '# Hero' } },
+          en: { meta: { title: 'Hero Fragment' }, content: { mdx: '# Hero' } },
         },
       });
 
@@ -77,25 +76,25 @@ describe('Content API Middleware', () => {
       }
     });
 
-    test('filters by kind=block', async () => {
-      // Create block content
+    test('filters by kind=fragment', async () => {
+      // Create fragment content
       await api.createContent({
-        kind: 'block',
+        kind: 'fragment',
         collection: 'heroes',
         type: 'mdx',
-        name: 'hero-block',
+        name: 'hero-fragment',
         locales: {
-          en: { meta: { title: 'Hero Block' }, content: { mdx: '# Hero' } },
+          en: { meta: { title: 'Hero Fragment' }, content: { mdx: '# Hero' } },
         },
       });
 
       await api.createContent({
-        kind: 'block',
+        kind: 'fragment',
         collection: 'features',
         type: 'mdx',
-        name: 'feature-block',
+        name: 'feature-fragment',
         locales: {
-          en: { meta: { title: 'Feature Block' }, content: { mdx: '# Feature' } },
+          en: { meta: { title: 'Feature Fragment' }, content: { mdx: '# Feature' } },
         },
       });
 
@@ -111,7 +110,7 @@ describe('Content API Middleware', () => {
       });
 
       const app = createContentAPIRouter(api);
-      const res = await app.fetch(new Request('http://localhost/content?kind=block'));
+      const res = await app.fetch(new Request('http://localhost/content?kind=fragment'));
 
       expect(res.status).toBe(200);
       const response = await parseJsonResponse(res);
@@ -120,7 +119,7 @@ describe('Content API Middleware', () => {
       if (isContentListResponse(data)) {
         expect(data.total).toBe(2);
         expect(data.items).toHaveLength(2);
-        expect(data.items.every((item) => item.kind === 'block')).toBe(true);
+        expect(data.items.every((item) => item.kind === 'fragment')).toBe(true);
       }
     });
 
@@ -136,14 +135,14 @@ describe('Content API Middleware', () => {
         },
       });
 
-      // Create block content (should be filtered out)
+      // Create fragment content (should be filtered out)
       await api.createContent({
-        kind: 'block',
+        kind: 'fragment',
         collection: 'heroes',
         type: 'mdx',
-        name: 'hero-block',
+        name: 'hero-fragment',
         locales: {
-          en: { meta: { title: 'Hero Block' }, content: { mdx: '# Hero' } },
+          en: { meta: { title: 'Hero Fragment' }, content: { mdx: '# Hero' } },
         },
       });
 
@@ -556,9 +555,9 @@ describe('Content API Middleware', () => {
       }
     });
 
-    test('GET /blocks/pathname-available returns error', async () => {
+    test('GET /fragments/pathname-available returns error', async () => {
       const app = createContentAPIRouter(api);
-      const res = await app.fetch(new Request('http://localhost/blocks/pathname-available?pathname=/test'));
+      const res = await app.fetch(new Request('http://localhost/fragments/pathname-available?pathname=/test'));
 
       expect(res.status).toBe(400);
       const response = await parseJsonResponse(res);
@@ -569,8 +568,6 @@ describe('Content API Middleware', () => {
       }
     });
     test('GET /:site/collections returns collections for site', async () => {
-      const site = api.getSite('shop');
-
       // Create content to populate collections
       await api.createContent({
         kind: 'page',
@@ -606,10 +603,10 @@ describe('Content API Middleware', () => {
       }
     });
 
-    test('GET /blocks/collections returns block collections', async () => {
-      // Create blocks in different collections
+    test('GET /fragments/collections returns fragment collections', async () => {
+      // Create fragments in different collections
       await api.createContent({
-        kind: 'block',
+        kind: 'fragment',
         collection: 'heroes',
         type: 'mdx',
         name: 'hero',
@@ -619,7 +616,7 @@ describe('Content API Middleware', () => {
       });
 
       await api.createContent({
-        kind: 'block',
+        kind: 'fragment',
         collection: 'features',
         type: 'mdx',
         name: 'feature-1',
@@ -629,7 +626,7 @@ describe('Content API Middleware', () => {
       });
 
       const app = createContentAPIRouter(api);
-      const res = await app.fetch(new Request('http://localhost/blocks/collections'));
+      const res = await app.fetch(new Request('http://localhost/fragments/collections'));
 
       expect(res.status).toBe(200);
       const response = await parseJsonResponse(res);
@@ -668,9 +665,9 @@ describe('Content API Middleware', () => {
       }
     });
 
-    test('GET /blocks/pages returns 400 error', async () => {
+    test('GET /fragments/pages returns 400 error', async () => {
       const app = createContentAPIRouter(api);
-      const res = await app.fetch(new Request('http://localhost/blocks/pages'));
+      const res = await app.fetch(new Request('http://localhost/fragments/pages'));
 
       expect(res.status).toBe(400);
       const response = await parseJsonResponse(res);
@@ -681,29 +678,29 @@ describe('Content API Middleware', () => {
       }
     });
 
-    test('GET /blocks/name-available checks block name availability', async () => {
-      // Create a block with a name
+    test('GET /fragments/name-available checks fragment name availability', async () => {
+      // Create a fragment with a name
       const createResult = await api.createContent({
-        kind: 'block',
+        kind: 'fragment',
         collection: 'heroes',
         type: 'mdx',
-        name: 'hero-block',
+        name: 'hero-fragment',
         locales: {
-          en: { meta: { title: 'Hero Block' }, content: { mdx: '# Hero' } },
+          en: { meta: { title: 'Hero Fragment' }, content: { mdx: '# Hero' } },
         },
       });
 
-      // Get the actual block name
-      const blockId = getCreatedId(createResult);
-      const block = await api.getLocalized(blockId, 'en');
-      assertDefined(block, 'Block should exist');
-      const blockName = block.localized.name || '';
+      // Get the actual fragment name
+      const fragmentId = getCreatedId(createResult);
+      const fragment = await api.getLocalized(fragmentId, 'en');
+      assertDefined(fragment, 'Fragment should exist');
+      const fragmentName = fragment.localized.name || '';
 
       const app = createContentAPIRouter(api);
 
       // Check taken name
       let res = await app.fetch(
-        new Request(`http://localhost/blocks/name-available?name=${blockName}&collection=heroes`),
+        new Request(`http://localhost/fragments/name-available?name=${fragmentName}&collection=heroes`),
       );
       expect(res.status).toBe(200);
       let response = await parseJsonResponse(res);
@@ -715,7 +712,7 @@ describe('Content API Middleware', () => {
       }
 
       // Check available name
-      res = await app.fetch(new Request('http://localhost/blocks/name-available?name=new-hero&collection=heroes'));
+      res = await app.fetch(new Request('http://localhost/fragments/name-available?name=new-hero&collection=heroes'));
       expect(res.status).toBe(200);
       response = await parseJsonResponse(res);
       const data2 = response.data;
@@ -725,9 +722,9 @@ describe('Content API Middleware', () => {
       }
     });
 
-    test('GET /blocks/name-available returns error for missing name', async () => {
+    test('GET /fragments/name-available returns error for missing name', async () => {
       const app = createContentAPIRouter(api);
-      const res = await app.fetch(new Request('http://localhost/blocks/name-available'));
+      const res = await app.fetch(new Request('http://localhost/fragments/name-available'));
 
       expect(res.status).toBe(400);
       const response = await parseJsonResponse(res);
@@ -738,9 +735,9 @@ describe('Content API Middleware', () => {
       }
     });
 
-    test('GET /blocks filters blocks by collection', async () => {
+    test('GET /fragments filters fragments by collection', async () => {
       await api.createContent({
-        kind: 'block',
+        kind: 'fragment',
         collection: 'heroes',
         type: 'mdx',
         name: 'hero-1',
@@ -750,7 +747,7 @@ describe('Content API Middleware', () => {
       });
 
       await api.createContent({
-        kind: 'block',
+        kind: 'fragment',
         collection: 'features',
         type: 'mdx',
         name: 'feature-1',
@@ -760,7 +757,7 @@ describe('Content API Middleware', () => {
       });
 
       const app = createContentAPIRouter(api);
-      const res = await app.fetch(new Request('http://localhost/blocks?collection=heroes'));
+      const res = await app.fetch(new Request('http://localhost/fragments?collection=heroes'));
 
       expect(res.status).toBe(200);
       const response = await parseJsonResponse(res);

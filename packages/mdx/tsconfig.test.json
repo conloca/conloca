@@ -1,9 +1,9 @@
 {
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
-    "rootDir": "src",
-    "module": "esnext",
-    "moduleResolution": "bundler",
+    "rootDir": ".",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
     "jsx": "react-jsx",
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "composite": false,
@@ -14,6 +14,7 @@
     "types": ["bun"]
   },
   "include": [
+    "happydom.ts",
     "src/**/*.test.ts",
     "src/**/*.spec.ts",
     "src/**/__tests__/**/*.ts",

@@ -1,16 +1,36 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Conloca CMS Dev</title>
-  <link rel="stylesheet" href="./main.processed.css">
-</head>
-<body>
-  <script>
-    (()=> {var t=localStorage.getItem('conloca-theme');if(t==='dark'||(t!=='light'&&matchMedia('(prefers-color-scheme:dark)').matches))document.documentElement.classList.add('dark')})();
-  </script>
-  <div id="root"></div>
-  <script type="module" src="./dev-entry.tsx"></script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Conloca CMS Dev</title>
+    <link rel="stylesheet" href="./main.processed.css" />
+  </head>
+  <body>
+    <!--
+    Paint the theme on <html> before React mounts, exactly like the shipped
+    entry does — see `main.html` for why this copy cannot import `./theme`.
+    The canonical text lives there as `PRE_PAINT_THEME_SCRIPT`;
+    `src/pre-paint-theme.test.ts` discovers this file by glob too and fails
+    the build if it drifts.
+  -->
+    <script>
+      (() => {
+        try {
+          const stored = localStorage.getItem('conloca-theme');
+          const pref = stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'system';
+          const resolved =
+            pref === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : pref;
+          if (resolved === 'dark') document.documentElement.classList.add('dark');
+          document.documentElement.setAttribute('data-theme', resolved);
+          document.documentElement.style.colorScheme = resolved;
+        } catch (_e) {
+          // localStorage / matchMedia unavailable (private mode,
+          // ancient browser) — fall back to the light default.
+        }
+      })();
+    </script>
+    <div id="root"></div>
+    <script type="module" src="./dev-entry.tsx"></script>
+  </body>
 </html>

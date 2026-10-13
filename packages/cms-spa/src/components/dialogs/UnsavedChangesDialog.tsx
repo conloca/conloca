@@ -1,5 +1,5 @@
 import { AlertTriangle, X } from 'lucide-react';
-import { Button, IconButton } from '../ui';
+import { Button, IconButton } from '../ui/index.js';
 
 interface UnsavedChangesDialogProps {
   onSave: () => void;
@@ -14,7 +14,7 @@ export function UnsavedChangesDialog({ onSave, onDiscard, onCancel }: UnsavedCha
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-line">
           <div className="flex items-center gap-3">
-            <AlertTriangle className="h-5 w-5 text-yellow-05" />
+            <AlertTriangle className="h-5 w-5 text-yellow-05 dark:text-yellow-08" />
             <h2 className="text-lg font-semibold text-foreground">Unsaved Changes</h2>
           </div>
           <IconButton icon={X} ariaLabel="Close dialog" onClick={onCancel} variant="ghost" />

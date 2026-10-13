@@ -1,4 +1,4 @@
-import { BaseContentIndex } from './base-content-index';
+import { BaseContentIndex } from './base-content-index.js';
 
 /**
  * V8-optimized index for data collections

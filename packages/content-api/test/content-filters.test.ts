@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
-import { applyContentFilters, filterByLocalization } from '../src/content-filters';
-import type { ContentManifest, GlobalFilters, LocaleVersion } from '../src/types';
+import { applyContentFilters, filterByLocalization } from '../src/content-filters.js';
+import type { ContentManifest, GlobalFilters } from '../src/types.js';
 
 describe('Content Filters', () => {
   const mockEntry: ContentManifest = {
@@ -21,15 +21,15 @@ describe('Content Filters', () => {
     },
   };
 
-  const mockBlockEntry: ContentManifest = {
-    id: 'block-id',
+  const mockFragmentEntry: ContentManifest = {
+    id: 'fragment-id',
     type: 'mdx',
-    kind: 'block',
+    kind: 'fragment',
     collection: 'heroes',
     locales: {
       en: {
         locale: 'en',
-        etag: 'block-etag',
+        etag: 'fragment-etag',
         created: new Date().toISOString(),
         modified: new Date().toISOString(),
         name: 'main',
@@ -62,8 +62,8 @@ describe('Content Filters', () => {
       expect(applyContentFilters(mockEntry, { type: 'puck' })).toBe(true);
       expect(applyContentFilters(mockEntry, { type: 'mdx' })).toBe(false);
 
-      expect(applyContentFilters(mockBlockEntry, { type: 'mdx' })).toBe(true);
-      expect(applyContentFilters(mockBlockEntry, { type: 'puck' })).toBe(false);
+      expect(applyContentFilters(mockFragmentEntry, { type: 'mdx' })).toBe(true);
+      expect(applyContentFilters(mockFragmentEntry, { type: 'puck' })).toBe(false);
     });
 
     it('filters by published status', () => {
@@ -73,10 +73,10 @@ describe('Content Filters', () => {
 
     it('filters by kind', () => {
       expect(applyContentFilters(mockEntry, { kind: 'page' })).toBe(true);
-      expect(applyContentFilters(mockEntry, { kind: 'block' })).toBe(false);
+      expect(applyContentFilters(mockEntry, { kind: 'fragment' })).toBe(false);
 
-      expect(applyContentFilters(mockBlockEntry, { kind: 'block' })).toBe(true);
-      expect(applyContentFilters(mockBlockEntry, { kind: 'page' })).toBe(false);
+      expect(applyContentFilters(mockFragmentEntry, { kind: 'fragment' })).toBe(true);
+      expect(applyContentFilters(mockFragmentEntry, { kind: 'page' })).toBe(false);
     });
 
     it('combines multiple filters', () => {

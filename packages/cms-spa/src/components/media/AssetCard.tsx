@@ -1,10 +1,10 @@
-import type { AssetEntry } from '../../hooks';
-import { AssetScopePill } from '../../media/AssetScopePill';
-import { MediaIssueBadge } from '../../media/MediaIssueBadge';
-import { useAssetScope } from '../../media/use-asset-scope';
-import { useMediaIssue } from '../../media/use-media-issue';
-import { buildAssetServeUrl } from '../../utils/asset-url';
-import { cn } from '../../utils/cn';
+import type { AssetEntry } from '../../hooks/index.js';
+import { AssetScopePill } from '../../media/AssetScopePill.js';
+import { MediaIssueBadge } from '../../media/MediaIssueBadge.js';
+import { useAssetScope } from '../../media/use-asset-scope.js';
+import { useMediaIssue } from '../../media/use-media-issue.js';
+import { buildAssetServeUrl } from '../../utils/asset-url.js';
+import { cn } from '../../utils/cn.js';
 
 interface AssetCardProps {
   asset: AssetEntry;
@@ -24,16 +24,15 @@ export function AssetCard({
   onDoubleClick,
   assetsBasePath = '/__cms/api/assets/serve',
 }: AssetCardProps) {
-  // Hosted-only: ask the host shell whether this asset is branch-only
-  // or published. Returns null when no `mediaBridge` is installed —
-  // the AssetScopePill skips rendering, so astro-cms / local dev see
-  // the card unchanged.
-  const scope = useAssetScope(asset.filename);
-  // Hosted-only: oversized / blocked status the host's media
-  // scanner or quota tracker flags. Returns null when the host has
-  // no opinion — surfaces degrade exactly like the scope pill in
-  // standalone mounts.
-  const issue = useMediaIssue(asset.filename);
+  // Only with a host bridge: ask the host app whether this asset is
+  // branch-only or published. Returns null when no `mediaBridge` is
+  // installed — the AssetScopePill skips rendering, so astro-cms /
+  // local dev see the card unchanged.
+  const scope = useAssetScope(asset.filename, asset.folder);
+  // Only with a host bridge: oversized / blocked status the host
+  // reports. Returns null when the host has no opinion — surfaces
+  // degrade exactly like the scope pill in standalone mounts.
+  const issue = useMediaIssue(asset.filename, asset.folder);
 
   const handleClick = () => {
     onClick?.();
@@ -44,17 +43,10 @@ export function AssetCard({
   };
 
   return (
-    <div
+    <button
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          handleClick();
-        }
-      }}
-      role="button"
-      tabIndex={0}
+      type="button"
       className={cn(
         'group relative rounded-md overflow-hidden cursor-pointer transition-colors',
         'bg-white dark:bg-grey-02 hover:border-azure-04',
@@ -87,6 +79,6 @@ export function AssetCard({
           {asset.originalName}
         </p>
       </div>
-    </div>
+    </button>
   );
 }

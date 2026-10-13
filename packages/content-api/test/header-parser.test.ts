@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import fc from 'fast-check';
-import { parseContentHeader } from '../src/header-parser';
-import { VXJSON } from '../src/vxjson';
+import { parseContentHeader } from '../src/header-parser.js';
+import { VXJSON } from '../src/vxjson.js';
 
 const enc = new TextEncoder();
 
@@ -121,7 +121,7 @@ describe('parseContentHeader — pure parser', () => {
   it('MDX with frontmatter and body → ok, derived metadata and localeVersion populated', () => {
     const mdx = [
       '---',
-      'id: block-1',
+      'id: fragment-1',
       'title: Hero',
       'created: 2024-01-01T00:00:00.000Z',
       'modified: 2024-01-01T00:00:00.000Z',
@@ -133,7 +133,7 @@ describe('parseContentHeader — pure parser', () => {
     ].join('\n');
     const bytes = enc.encode(mdx);
     const result = parseContentHeader({
-      path: 'blocks/hero/welcome.en.mdx',
+      path: 'fragments/hero/welcome.en.mdx',
       header: bytes,
       size: bytes.byteLength,
       complete: true,
@@ -141,7 +141,7 @@ describe('parseContentHeader — pure parser', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error('unreachable');
-    expect(result.manifest.kind).toBe('block');
+    expect(result.manifest.kind).toBe('fragment');
     expect(result.manifest.collection).toBe('hero');
     expect(result.manifest.type).toBe('mdx');
     expect(result.locale).toBe('en');
@@ -157,7 +157,7 @@ describe('parseContentHeader — pure parser', () => {
     // header-parser.ts opt out of that cache.
     const bytes = enc.encode('valueOf');
     const result = parseContentHeader({
-      path: 'blocks/general/note.en.mdx',
+      path: 'fragments/general/note.en.mdx',
       header: bytes,
       size: bytes.byteLength,
       complete: true,
@@ -238,7 +238,7 @@ describe('parseContentHeader — pure parser', () => {
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error('unreachable');
     // Path layout regex doesn't match unknown extensions, so it gets caught
-    // as unsupported-locale-path (parsePathLayout returns null first).
+    // as unsupported-locale-path (parseContentPathLayout returns null first).
     expect(['unknown-format', 'unsupported-locale-path']).toContain(result.reason);
   });
 
@@ -255,7 +255,7 @@ describe('parseContentHeader — pure parser', () => {
     expect(result.reason).toBe('malformed-vxjson');
   });
 
-  // Property test (spec 02 requires numRuns >= 200): for any valid VXJSON
+  // Property test (200 runs — this invariant is cheap enough to sample hard): for any valid VXJSON
   // content with shuffled top-level keys, parseContentHeader produces a
   // manifest whose etag matches the canonical-form etag for the same logical
   // content.
@@ -306,14 +306,14 @@ describe('parseContentHeader — pure parser', () => {
 
 describe('parseContentHeader — malformed MDX frontmatter is errors-as-data', () => {
   it('returns malformed-mdx instead of throwing for an unparseable leading YAML block', () => {
-    // A hand-authored customer file starting with a frontmatter delimiter
+    // A hand-authored content file starting with a frontmatter delimiter
     // followed by invalid YAML ('---\n[') made gray-matter's js-yaml throw
     // straight through parseContentHeader, bypassing the malformed-mdx
     // rejection this parser was designed to return (its JSON and VXJSON
     // siblings already catch and return null).
     const bytes = enc.encode('---\n[');
     const result = parseContentHeader({
-      path: 'blocks/general/broken.en.mdx',
+      path: 'fragments/general/broken.en.mdx',
       header: bytes,
       size: bytes.byteLength,
       complete: true,

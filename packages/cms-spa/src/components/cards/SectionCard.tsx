@@ -1,7 +1,7 @@
 import { ArrowRight, Loader2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { cn } from '../../utils/cn';
+import { cn } from '../../utils/cn.js';
 
 interface SectionCardProps {
   to: string;

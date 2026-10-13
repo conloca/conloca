@@ -1,17 +1,20 @@
 {
   "$schema": "./node_modules/nx/schemas/nx-schema.json",
   "sync": {
-    "applyChanges": true
+    "applyChanges": true,
+    "globalGenerators": ["@smoothbricks/nx-plugin:managed-files"]
   },
   "workspaceLayout": {
     "appsDir": "packages",
     "libsDir": "packages"
   },
   "namedInputs": {
+    "typescriptGlobals": ["{workspaceRoot}/tsconfig.base.json", "{workspaceRoot}/packages/tsconfig.base.json"],
     "default": ["{projectRoot}/**/*", "sharedGlobals"],
     "production": [
       "{projectRoot}/src/**/*",
       "{projectRoot}/package.json",
+      "typescriptGlobals",
       "!{projectRoot}/**/__tests__/**",
       "!{projectRoot}/**/*.test.*",
       "!{projectRoot}/**/*.spec.*"
@@ -48,23 +51,13 @@
       "cache": false
     },
     "lint": {
-      "executor": "nx:run-commands",
-      "cache": true,
-      "inputs": ["{projectRoot}/**/*", "{workspaceRoot}/biome.json"],
-      "options": {
-        "command": "biome lint --files-ignore-unknown=true {projectRoot}",
-        "cwd": "{workspaceRoot}"
-      }
+      "cache": true
     },
     "build": {
-      "cache": true,
-      "outputs": ["{projectRoot}/dist"]
+      "cache": true
     },
-    "tsc-js": {
-      "dependsOn": ["^build"]
-    },
-    "typecheck": {
-      "dependsOn": ["^build"]
+    "test": {
+      "cache": true
     }
   },
   "generators": {
@@ -86,7 +79,6 @@
     }
   },
   "release": {
-    "projects": ["tag:npm:public"],
     "version": {
       "specifierSource": "conventional-commits",
       "currentVersionResolver": "git-tag",

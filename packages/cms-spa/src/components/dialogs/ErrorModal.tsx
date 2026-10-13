@@ -1,6 +1,6 @@
 import { AlertTriangle, X } from 'lucide-react';
 import { useEffect } from 'react';
-import { Button, IconButton } from '../ui';
+import { Button, IconButton } from '../ui/index.js';
 
 export interface ErrorModalProps {
   isOpen: boolean;
@@ -45,6 +45,10 @@ export function ErrorModal({ isOpen, onClose, title = 'Error', message, error, a
       return error.stack || error.message;
     }
 
+    // A message a remote server flattened out of an Error on the way here. Printing
+    // it through JSON.stringify would wrap it in quotes for no reason.
+    if (typeof error === 'string') return error;
+
     return JSON.stringify(error, null, 2);
   };
 
@@ -56,7 +60,7 @@ export function ErrorModal({ isOpen, onClose, title = 'Error', message, error, a
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-line">
           <div className="flex items-center gap-3">
-            <AlertTriangle className="h-5 w-5 text-red-04" />
+            <AlertTriangle className="h-5 w-5 text-red-04 dark:text-red-08" />
             <h2 className="text-lg font-semibold text-foreground">{title}</h2>
           </div>
           <IconButton icon={X} ariaLabel="Close error dialog" onClick={onClose} variant="ghost" />
@@ -81,7 +85,7 @@ export function ErrorModal({ isOpen, onClose, title = 'Error', message, error, a
         {/* Actions */}
         <div className="flex justify-end gap-3 p-4 border-t border-line">
           {actions.length > 0 ? (
-            actions.map((action, index) => (
+            actions.map((action) => (
               <Button
                 key={action.label}
                 variant={variantMap[action.variant || 'secondary']}

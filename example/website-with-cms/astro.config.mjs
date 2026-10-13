@@ -1,11 +1,12 @@
 // @ts-check
 import node from '@astrojs/node';
-import { conlocaCMS } from '@conloca/astro-cms/node';
 import react from '@astrojs/react';
+import { conlocaCMS } from '@conloca/astro-cms/node';
 import { defineConfig } from 'astro/config';
 
 // https://astro.build/config
 export default defineConfig({
+  site: 'https://example.conloca.com',
   output: 'server',
   adapter: node({ mode: 'standalone' }),
   integrations: [
@@ -13,7 +14,19 @@ export default defineConfig({
     conlocaCMS({
       contentRoot: './content',
       canvasDir: './canvas',
+      // Same sheet the Layout imports: the option feeds the canvas/sandbox
+      // registry, the Layout import feeds the page graph + discovery
+      // endpoints. Both channels carrying one file mirrors how real sites
+      // wire prose CSS, so the editor surfaces and the rendered page agree.
+      siteStyles: './src/styles/prose.css',
+      // The fragment editor discovers styles against a representative page;
+      // the default (`/`) has no page in this example. The parity fixture
+      // page embeds the fragment, so it IS the representative context.
+      fragmentPreviewRoute: '/prose-parity',
       puckConfigPath: './src/puck.config.tsx',
+      // Same module content.config.ts imports `dataSchemas` from: the option
+      // feeds the editor's entry forms, the import feeds build validation and
+      // entry types. The one object is the contract — keep both pointing at it.
       schemasPath: './src/schemas/data.ts',
       assetsPath: './public/assets',
       routing: {

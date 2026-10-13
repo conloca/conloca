@@ -2,10 +2,12 @@
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "rootDir": "src",
-    "outDir": "dist",
-    "tsBuildInfoFile": "dist/tsconfig.lib.tsbuildinfo",
-    "module": "esnext",
-    "moduleResolution": "bundler",
+    "outDir": "dist/ts",
+    "tsBuildInfoFile": "dist/ts/tsconfig.lib.tsbuildinfo",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "verbatimModuleSyntax": true,
+    "sourceMap": true,
     "forceConsistentCasingInFileNames": true,
     "jsx": "react-jsx",
     "types": ["node"],
@@ -14,14 +16,8 @@
   "include": ["src/**/*.ts", "src/**/*.tsx"],
   "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/**/*.stories.tsx"],
   "references": [
-    {
-      "path": "../content-api/tsconfig.lib.json"
-    },
-    {
-      "path": "../mdx/tsconfig.lib.json"
-    },
-    {
-      "path": "../content-api-client/tsconfig.lib.json"
-    }
+    { "path": "../content-api/tsconfig.lib.json" },
+    { "path": "../mdx/tsconfig.lib.json" },
+    { "path": "../content-api-client/tsconfig.lib.json" }
   ]
 }

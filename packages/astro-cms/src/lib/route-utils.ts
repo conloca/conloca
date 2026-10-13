@@ -1,36 +1,16 @@
-export function toDate(value: string | Date | null | undefined) {
-  if (!value) {
-    return undefined;
-  }
+import { isContentPublished } from '@conloca/content-api';
 
-  if (value instanceof Date) {
-    return value;
-  }
-
+/** The existing public date helper, retaining Date identity for callers that already hold one. */
+export function toDate(value: string | Date | null | undefined): Date | undefined {
+  if (!value) return undefined;
+  if (value instanceof Date) return value;
   const parsed = new Date(value);
-
   return Number.isNaN(parsed.getTime()) ? undefined : parsed;
 }
 
-interface PublishSchedule {
-  publishAt?: string | Date | null;
-  unpublishAt?: string | Date | null;
-}
-
-export function isPublished(data: PublishSchedule) {
-  const now = new Date();
-  const publishAt = toDate(data.publishAt);
-  const unpublishAt = toDate(data.unpublishAt);
-
-  if (publishAt && publishAt > now) {
-    return false;
-  }
-
-  if (unpublishAt && unpublishAt <= now) {
-    return false;
-  }
-
-  return true;
+/** Preserve the one-argument public predicate, including direct use as an array filter. */
+export function isPublished(schedule: Parameters<typeof isContentPublished>[0]): boolean {
+  return isContentPublished(schedule);
 }
 
 /**
@@ -95,4 +75,32 @@ export function pathnameFromSlug(slug: string | undefined, pattern: string): str
 
   // Combine prefix and slug
   return `${prefix}/${slug}`;
+}
+
+/**
+ * The `params` a prerendered path must carry for a route pattern. Astro keys
+ * them by the name inside the pattern's brackets, so a `/[...page]` route
+ * needs `{ page }`, not `{ slug }`; static patterns carry none.
+ */
+export function staticPathParams(pathname: string, pattern: string): Record<string, string | undefined> {
+  const name = pattern.match(/\[(?:\.\.\.)?([^\]]+)\]/)?.[1];
+
+  return name ? { [name]: extractSlugFromPathname(pathname, pattern) } : {};
+}
+
+/**
+ * Entry-id factory for Astro content loaders over Conloca-managed markdown.
+ *
+ * Conloca's read-repair writes a tracking `id: vx-*` into managed frontmatter,
+ * and Astro's glob-style loaders prefer a frontmatter `id` over the file path
+ * — which silently breaks filename-based slug lookups (a Starlight sidebar
+ * entry like `slug: 'getting-started'` stops resolving). Pass this as the
+ * loader's `generateId` to pin entry ids to the file path; the Conloca `id`
+ * stays available as frontmatter data.
+ *
+ * @example
+ * docsLoader({ generateId: entryIdFromPath })
+ */
+export function entryIdFromPath({ entry }: { entry: string }): string {
+  return entry.replace(/\.(md|mdx|markdown|mdown|mkdn|mkd|mdwn|mdoc)$/, '');
 }

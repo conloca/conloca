@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { Separator } from './Separator';
+import { Separator } from './Separator.js';
 
-// A96 canary: smoke-renders a pure leaf component (spec 14 §Storybook adoption).
+// Canary: smoke-renders a pure leaf component.
 const meta = {
   component: Separator,
 } satisfies Meta<typeof Separator>;

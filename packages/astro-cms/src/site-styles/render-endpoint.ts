@@ -1,14 +1,8 @@
-import type { IncomingMessage, ServerResponse } from 'node:http';
 import { experimental_AstroContainer } from 'astro/container';
+import type { Connect } from 'vite';
 
-/** Connect-compatible middleware handler. Avoids importing Vite's Connect
- * namespace so dual peer-hash installs of the same Vite version can't
- * produce cross-package `ViteDevServer` identity errors under tsc. */
-type NextHandleFunction = (req: IncomingMessage, res: ServerResponse, next: (err?: unknown) => void) => void;
-
-/** Minimal surface used by the render tree — only ssrLoadModule. */
-interface SsrModuleLoader {
-  ssrLoadModule(url: string): Promise<Record<string, unknown>>;
+interface ViteModuleLoader {
+  ssrLoadModule(url: string): Promise<unknown>;
 }
 
 /**
@@ -55,9 +49,9 @@ interface SsrModuleLoader {
  * plain-text error otherwise.
  */
 export function createRenderEndpoint(
-  server: SsrModuleLoader,
+  server: ViteModuleLoader,
   getAllowedSources: () => Promise<Set<string>>,
-): NextHandleFunction {
+): Connect.NextHandleFunction {
   let containerPromise: Promise<experimental_AstroContainer> | null = null;
   const getContainer = () => {
     if (!containerPromise) containerPromise = experimental_AstroContainer.create();
@@ -197,7 +191,7 @@ interface RequestBody {
 async function renderTree(
   node: RenderTreeNode,
   container: experimental_AstroContainer,
-  server: SsrModuleLoader,
+  server: ViteModuleLoader,
 ): Promise<string> {
   const module = (await server.ssrLoadModule(node.source)) as Record<string, unknown>;
   const exportKey = node.defaultExport ? 'default' : node.component;
@@ -318,7 +312,7 @@ function defaultI18nFallback(key: string): string {
   return leaf.charAt(0).toUpperCase() + leaf.slice(1);
 }
 
-async function readJson(req: IncomingMessage): Promise<unknown> {
+async function readJson(req: Connect.IncomingMessage): Promise<unknown> {
   return new Promise((resolve, reject) => {
     let raw = '';
     req.setEncoding('utf8');

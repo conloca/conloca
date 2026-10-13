@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdir, rm, writeFile } from 'fs/promises';
-import { join } from 'path';
-import type { ContentAPI } from '../src/content-api.interface';
-import { FileSystemContentAPI } from '../src/filesystem-content-api';
-import { InMemoryContentAPI } from '../src/in-memory-content-api';
-import type { SitesConfig } from '../src/types';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import type { ContentAPI } from '../src/content-api.interface.js';
+import { FileSystemContentAPI } from '../src/filesystem-content-api.js';
+import { InMemoryContentAPI } from '../src/in-memory-content-api.js';
+import type { SitesConfig } from '../src/types.js';
+import { testTempDir } from './test-temp-dir.js';
 
 describe('Pathname and Name persistence', () => {
   const sitesConfig: SitesConfig = {
@@ -23,10 +24,10 @@ describe('Pathname and Name persistence', () => {
     [
       'FileSystemContentAPI',
       async () => {
-        const tempDir = `/tmp/pathname-name-test-${Date.now()}`;
+        const tempDir = testTempDir('pathname-name-test');
         await mkdir(tempDir, { recursive: true });
         await mkdir(join(tempDir, 'testsite/pages'), { recursive: true });
-        await mkdir(join(tempDir, 'blocks/components'), { recursive: true });
+        await mkdir(join(tempDir, 'fragments/components'), { recursive: true });
         await writeFile(join(tempDir, 'sites.json'), JSON.stringify(sitesConfig));
         const api = await FileSystemContentAPI.create({ contentRoot: tempDir });
         // Store tempDir on api for cleanup
@@ -137,10 +138,10 @@ describe('Pathname and Name persistence', () => {
       expect(frContent!.localized.pathname).toBe('/test-derive');
     });
 
-    test('blocks - created name equals read name in all locales', async () => {
-      // Create a block with a name
+    test('fragments - created name equals read name in all locales', async () => {
+      // Create a fragment with a name
       const createResult = await api.createContent({
-        kind: 'block',
+        kind: 'fragment',
         collection: 'components',
         type: 'mdx',
         name: 'hero-section',
@@ -199,15 +200,15 @@ describe('Pathname and Name persistence', () => {
       expect(content!.locales.en.pathname).toBe('/test');
     });
 
-    test('blocks do not have pathname field', async () => {
+    test('fragments do not have pathname field', async () => {
       const createResult = await api.createContent({
-        kind: 'block',
+        kind: 'fragment',
         collection: 'components',
         type: 'mdx',
-        name: 'test-block',
+        name: 'test-fragment',
         locales: {
           en: {
-            meta: { title: 'Test Block' },
+            meta: { title: 'Test Fragment' },
             content: { mdx: '# Test' },
           },
         },
@@ -219,7 +220,7 @@ describe('Pathname and Name persistence', () => {
       const content = await api.getContent(id);
       expect(content).toBeDefined();
       expect(content!.locales.en.pathname).toBeUndefined();
-      expect(content!.locales.en.name).toBe('test-block');
+      expect(content!.locales.en.name).toBe('test-fragment');
     });
   });
 });

@@ -1,1 +1,1 @@
-export { DataEntryCard } from './DataEntryCard';
+export { DataEntryCard } from './DataEntryCard.js';

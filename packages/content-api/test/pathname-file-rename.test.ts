@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { existsSync } from 'fs';
-import { mkdir, mkdtemp, readdir, rm, writeFile } from 'fs/promises';
-import { tmpdir } from 'os';
-import { join } from 'path';
-import { FileSystemContentAPI } from '../src/filesystem-content-api';
-import type { CreateContentInput } from '../src/types';
-import { assertDefined, getCreatedId } from './test-helpers';
+import { existsSync } from 'node:fs';
+import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { FileSystemContentAPI } from '../src/filesystem-content-api.js';
+import type { CreateContentInput } from '../src/types.js';
+import { assertDefined, getCreatedId } from './test-helpers.js';
 
 describe('Pathname update file renaming', () => {
   let tempDir: string;
@@ -138,7 +138,6 @@ describe('Pathname update file renaming', () => {
     const content = await contentApi.getContent(id);
     assertDefined(content);
     const enEtag = content.locales.en.etag;
-    const nlEtag = content.locales.nl.etag;
 
     // Update pathname for both locales
     await contentApi.updateLocalized({

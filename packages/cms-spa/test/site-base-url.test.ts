@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { buildSiteUrl, extractPathFromUrl } from '../src/lib/utils';
-import { configureUI, getUIConfig } from '../src/ui-config';
+import { buildSiteUrl, extractPathFromUrl } from '../src/lib/utils.js';
+import { configureUI, getUIConfig, setSiteBaseUrl } from '../src/ui-config.js';
 
 describe('Site Base URL', () => {
   describe('buildSiteUrl', () => {
@@ -35,6 +35,19 @@ describe('Site Base URL', () => {
     test('handles missing leading slash in base URL', () => {
       configureUI({ siteBaseUrl: 'docs' });
       expect(buildSiteUrl('/about')).toBe('/docs/about');
+    });
+  });
+
+  describe('setSiteBaseUrl (post-configure override — the preview target)', () => {
+    test('overrides the same-origin default so buildSiteUrl opens the site', () => {
+      // A host may call configureUI with siteBaseUrl '/' first and set the
+      // site's URL later, once it knows it.
+      configureUI({ siteBaseUrl: '/' });
+      expect(buildSiteUrl('/about')).toBe('/about');
+
+      setSiteBaseUrl('https://acme.example.com');
+      expect(getUIConfig().siteBaseUrl).toBe('https://acme.example.com');
+      expect(buildSiteUrl('/about')).toBe('https://acme.example.com/about');
     });
   });
 

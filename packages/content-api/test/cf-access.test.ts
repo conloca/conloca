@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { extractCFAccessToken } from '../src/cf-access';
+import { extractCFAccessToken } from '../src/cf-access.js';
 
 describe('extractCFAccessToken', () => {
   test('returns header token from Cf-Access-Jwt-Assertion', () => {

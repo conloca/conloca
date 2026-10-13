@@ -50,7 +50,7 @@ applyTo: '**/*.{ts,tsx,astro,js,jsx}'
 // ✅ CORRECT - This is intentional, not a missing dependency
 import type { ContentAPI } from '@conloca/content-api';
 
-export function evaluateMDXBlocks(api: ContentAPI, locale: string) {
+export function evaluateMDXFragments(api: ContentAPI, locale: string) {
   // Function receives api instance from caller
   // Package does NOT have @conloca/content-api as runtime dependency
 }
@@ -101,11 +101,11 @@ try {
 
 ```typescript
 try {
-  blocks = Array.from(api.listAllContent({ kind: 'block' }));
+  fragments = Array.from(api.listAllContent({ kind: 'fragment' }));
 } catch (error) {
   // ✅ This is CORRECT for content errors
-  console.error('[evaluateMDXBlocks] Failed to list blocks:', error);
-  return []; // Continue build without blocks
+  console.error('[evaluateMDXFragments] Failed to list fragments:', error);
+  return []; // Continue build without fragments
 }
 ```
 
@@ -114,7 +114,7 @@ try {
 - ❌ "Should propagate error to caller"
 - ❌ "Silent error handling"
 
-**WHY:** Missing content blocks shouldn't crash the entire build. Error is logged with context.
+**WHY:** Missing content fragments shouldn't crash the entire build. Error is logged with context.
 
 ### 4. Logging Levels Are Already Correct
 
@@ -226,7 +226,7 @@ console.log(a); // Line 53 - ✅ 'a' IS declared above
 
 ```typescript
 // Current code:
-return function PageRendererWithBlocks() {
+return function PageRendererWithFragments() {
   return <Component />;
 };
 ```

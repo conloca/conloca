@@ -1,7 +1,15 @@
-import { createRequire } from 'node:module';
+// Uniform acorn surface for SSR builds: some toolchain consumers
+// default-import acorn (which its ESM build does not provide), others use
+// named imports — this shim serves both. Resolved with a static import, never
+// a Node require built from `import.meta.url` — that value is undefined
+// inside a Workers bundle, and building one at module scope throws before the
+// bundle can serve anything. The
+// integration's alias plugin skips this file as an importer, so the specifier
+// below reaches the real package instead of recursing into the shim.
+import * as acornModule from 'acorn';
 
-const require = createRequire(import.meta.url);
-const acorn = require('acorn');
+// Bundler CJS interop can surface the namespace under `default`.
+const acorn = acornModule.Parser ? acornModule : acornModule.default;
 
 export const Node = acorn.Node;
 export const Parser = acorn.Parser;

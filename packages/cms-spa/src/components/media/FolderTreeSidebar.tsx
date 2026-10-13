@@ -1,8 +1,8 @@
 import { Folder, FolderPlus } from 'lucide-react';
 import { useState } from 'react';
-import { type FolderTreeNode, useCreateFolder, useFolderTree } from '../../hooks';
-import { cn } from '../../utils/cn';
-import { CreateFolderDialog } from '../dialogs/CreateFolderDialog';
+import { type FolderTreeNode, useCreateFolder, useFolderTree } from '../../hooks/index.js';
+import { cn } from '../../utils/cn.js';
+import { CreateFolderDialog } from '../dialogs/CreateFolderDialog.js';
 
 interface FolderTreeSidebarProps {
   currentFolder: string;
@@ -28,16 +28,23 @@ function FolderNode({ node, depth, currentFolder, dropTargetFolder, onFolderSele
       <button
         type="button"
         onClick={() => onFolderSelect(node.path)}
-        className={cn('w-full flex items-center gap-2 py-1.5 px-3 rounded-md text-sm transition-colors text-left', {
-          'bg-azure-11 dark:bg-azure-03 text-azure-01 dark:text-azure-11': isActive,
-          'hover:bg-grey-11 dark:hover:bg-grey-03': !isActive,
-          'ring-2 ring-azure-04': isDropTarget,
-        })}
-        style={{ paddingLeft: `${depth * 16 + 12}px` }}
+        aria-label={`Folder: ${node.name}`}
+        title={node.name}
+        className={cn(
+          'w-full flex items-center justify-center sm:justify-start gap-0 sm:gap-2 py-1.5 px-2 sm:px-3 rounded-md text-sm transition-colors text-left',
+          {
+            'bg-azure-11 dark:bg-azure-03 text-azure-01 dark:text-azure-11': isActive,
+            'hover:bg-grey-11 dark:hover:bg-grey-03': !isActive,
+            'ring-2 ring-azure-04': isDropTarget,
+          },
+        )}
       >
+        <span className="hidden sm:block flex-shrink-0" style={{ width: `${depth * 16}px` }} aria-hidden />
         <Folder className="w-4 h-4 flex-shrink-0" />
-        <span className="truncate flex-1">{node.name}</span>
-        <span className="text-grey-05 dark:text-grey-06 text-xs">({node.assetCount})</span>
+        <span className="hidden sm:block truncate flex-1">{node.name}</span>
+        <span className={cn('hidden sm:block text-xs', { 'text-grey-04 dark:text-grey-07': !isActive })}>
+          ({node.assetCount})
+        </span>
       </button>
 
       {node.children.map((child) => (
@@ -73,20 +80,28 @@ export function FolderTreeSidebar({ currentFolder, onFolderSelect, dropTargetFol
     });
   };
 
-  // Get total asset count from root node (includes all assets across all folders)
+  // Root shows the Root node's own count, the files directly in Root like every other folder's count;
+  // a tree without a Root node falls back to the sum of its top-level folders
   const rootAssetCount =
     rawTree.length === 1 && rawTree[0].path === '/'
       ? rawTree[0].assetCount
       : tree.reduce((sum, node) => sum + node.assetCount, 0);
 
   return (
-    <div className="w-56 flex-shrink-0 border-r border-grey-09 dark:border-grey-03 bg-white dark:bg-grey-02">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-grey-09 dark:border-grey-03">
-        <h3 className="font-semibold text-grey-01 dark:text-grey-12">Folders</h3>
+    <div
+      className="w-14 sm:w-56 flex-shrink-0 flex flex-col h-full min-h-0 border-r border-grey-09 dark:border-grey-03 bg-white dark:bg-grey-02"
+      data-testid="folder-tree-sidebar"
+    >
+      {/* Keep folders reachable on phones without spending almost half of
+          the viewport on labels. Icons retain names through aria-label/title. */}
+      <div className="flex items-center justify-center sm:justify-between px-2 sm:px-4 py-3 border-b border-grey-09 dark:border-grey-03">
+        <h3 className="hidden sm:block font-semibold text-grey-01 dark:text-grey-12">Folders</h3>
         <button
           type="button"
-          onClick={() => setShowCreateFolderDialog(true)}
+          onClick={() => {
+            createFolder.reset();
+            setShowCreateFolderDialog(true);
+          }}
           className="p-1.5 rounded-md hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
           title="New Folder"
         >
@@ -95,7 +110,7 @@ export function FolderTreeSidebar({ currentFolder, onFolderSelect, dropTargetFol
       </div>
 
       {/* Folder tree */}
-      <div className="p-2 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 200px)' }}>
+      <div className="flex-1 min-h-0 p-2 overflow-y-auto">
         {isLoading ? (
           <div className="text-sm text-grey-05 dark:text-grey-06 px-3 py-2">Loading...</div>
         ) : (
@@ -104,8 +119,10 @@ export function FolderTreeSidebar({ currentFolder, onFolderSelect, dropTargetFol
             <button
               type="button"
               onClick={() => onFolderSelect('/')}
+              aria-label="Folder: Root"
+              title="Root"
               className={cn(
-                'w-full flex items-center gap-2 py-1.5 px-3 rounded-md text-sm transition-colors text-left',
+                'w-full flex items-center justify-center sm:justify-start gap-0 sm:gap-2 py-1.5 px-2 sm:px-3 rounded-md text-sm transition-colors text-left',
                 {
                   'bg-azure-11 dark:bg-azure-03 text-azure-01 dark:text-azure-11': currentFolder === '/',
                   'hover:bg-grey-11 dark:hover:bg-grey-03': currentFolder !== '/',
@@ -114,8 +131,12 @@ export function FolderTreeSidebar({ currentFolder, onFolderSelect, dropTargetFol
               )}
             >
               <Folder className="w-4 h-4 flex-shrink-0" />
-              <span className="truncate flex-1">Root</span>
-              <span className="text-grey-05 dark:text-grey-06 text-xs">({rootAssetCount})</span>
+              <span className="hidden sm:block truncate flex-1">Root</span>
+              <span
+                className={cn('hidden sm:block text-xs', { 'text-grey-04 dark:text-grey-07': currentFolder !== '/' })}
+              >
+                ({rootAssetCount})
+              </span>
             </button>
 
             {/* Folder tree nodes */}
@@ -131,7 +152,7 @@ export function FolderTreeSidebar({ currentFolder, onFolderSelect, dropTargetFol
                 />
               ))
             ) : (
-              <div className="text-sm text-grey-05 dark:text-grey-06 px-3 py-2">No folders yet</div>
+              <div className="hidden sm:block text-sm text-grey-05 dark:text-grey-06 px-3 py-2">No folders yet</div>
             )}
           </>
         )}
@@ -141,6 +162,7 @@ export function FolderTreeSidebar({ currentFolder, onFolderSelect, dropTargetFol
       <CreateFolderDialog
         open={showCreateFolderDialog}
         isPending={createFolder.isPending}
+        error={createFolder.error?.message}
         onClose={() => setShowCreateFolderDialog(false)}
         onCreate={handleCreateFolder}
       />

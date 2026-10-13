@@ -1,5 +1,5 @@
 /**
- * Utilities for working with suffix pattern as specified in 04-cms-api.md
+ * Utilities for working with the `<name>.<locale>.<ext>` suffix pattern.
  */
 export const ContentUtils = {
   /**

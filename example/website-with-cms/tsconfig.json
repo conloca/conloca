@@ -1,16 +1,5 @@
 {
   "extends": "astro/tsconfigs/strict",
   "include": [".astro/types.d.ts", "**/*"],
-  "exclude": ["dist"],
-  "references": [
-    {
-      "path": "../../packages/mdx"
-    },
-    {
-      "path": "../../packages/content-api"
-    },
-    {
-      "path": "../../packages/astro-cms"
-    }
-  ]
+  "exclude": ["dist"]
 }

@@ -300,7 +300,7 @@ describe('Hydration Scanner', () => {
       expect(results).toEqual([]);
     });
 
-    test('matches real-world CorpOS usage pattern', async () => {
+    test('matches a real-world site usage pattern', async () => {
       const realWorldDir = join(tempDir, 'real-world');
       await mkdir(realWorldDir, { recursive: true });
 

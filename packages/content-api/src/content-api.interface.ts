@@ -1,6 +1,6 @@
-import type { Blocks } from './blocks';
-import type { Data } from './data';
-import type { Site } from './site';
+import type { Data } from './data.js';
+import type { Fragments } from './fragments.js';
+import type { Site } from './site.js';
 import type {
   BatchResult,
   ContentEntry,
@@ -15,7 +15,7 @@ import type {
   SitesConfig,
   UpdateLocaleInput,
   UpdateResult,
-} from './types';
+} from './types.js';
 
 /**
  * Content API Interface
@@ -67,9 +67,9 @@ export interface ContentAPI {
   deleteContent(id: string, etag: string): Promise<DeleteResult>; // Deletes all locales
   deleteLocalized(input: DeleteLocaleInput): Promise<DeleteResult>; // Deletes single locale
 
-  // Site, blocks, and data access (getters without arguments)
-  getSite(siteName: string): Site | null; // Returns Site instance or null if not found (not for "blocks")
-  readonly blocks: Blocks; // Property for shared content blocks
+  // Site, fragments, and data access (getters without arguments)
+  getSite(siteName: string): Site | null; // Returns Site instance or null if not found (not for "fragments")
+  readonly fragments: Fragments; // Property for shared content fragments
   readonly data: Data; // Property for structured data collections
 
   // Global operations

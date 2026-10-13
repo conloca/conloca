@@ -1,6 +1,7 @@
 import type {
   APIError,
   AssetEntry,
+  AssetMetadataPatch,
   AssetUsage,
   BatchResult,
   ContentEntry,
@@ -8,7 +9,6 @@ import type {
   ContentManifest,
   CreateContentInput,
   CreateResult,
-  DataContext,
   DeleteResult,
   ErrorCode,
   FolderListing,
@@ -49,8 +49,8 @@ export class ContentAPIClient {
     this.baseUrl = options.baseUrl || '/__conloca/api';
   }
 
-  private encodeAssetPath(filename: string): string {
-    return filename
+  private encodeAssetPath(path: string): string {
+    return path
       .split('/')
       .map((s) => encodeURIComponent(s))
       .join('/');
@@ -195,10 +195,11 @@ export class ContentAPIClient {
     }
   }
 
-  async isPathnameAvailable(site: string, pathname: string, excludeId?: string): Promise<boolean> {
+  async isPathnameAvailable(site: string, pathname: string, excludeId?: string, locale?: string): Promise<boolean> {
     const params = new URLSearchParams({
       pathname,
       ...(excludeId && { excludeId }),
+      ...(locale && { locale }),
     });
 
     const response = await this.fetch(`${this.baseUrl}/${site}/pathname-available?${params}`);
@@ -217,33 +218,33 @@ export class ContentAPIClient {
     });
   }
 
-  // Block operations
-  async getBlocks(collection?: string, locale?: string): Promise<ContentListResult> {
+  // Fragment operations
+  async getFragments(collection?: string, locale?: string): Promise<ContentListResult> {
     const params = new URLSearchParams();
     if (collection) params.set('collection', collection);
     if (locale) params.set('locale', locale);
 
-    const url = `${this.baseUrl}/blocks${params.toString() ? `?${params}` : ''}`;
+    const url = `${this.baseUrl}/fragments${params.toString() ? `?${params}` : ''}`;
     return this.fetchAPI<ContentListResult>(url);
   }
 
-  async getBlockByName(name: string, collection?: string, locale?: string): Promise<ContentManifest | null> {
+  async getFragmentByName(name: string, collection?: string, locale?: string): Promise<ContentManifest | null> {
     try {
       const params = new URLSearchParams();
       if (collection) params.set('collection', collection);
       if (locale) params.set('locale', locale);
 
-      const url = `${this.baseUrl}/blocks/${name}${params.toString() ? `?${params}` : ''}`;
+      const url = `${this.baseUrl}/fragments/${name}${params.toString() ? `?${params}` : ''}`;
       const response = await this.fetch(url);
       if (response.status === 404) {
         return null;
       }
       if (!response.ok) {
-        throw new Error(`Failed to fetch block: ${response.statusText}`);
+        throw new Error(`Failed to fetch fragment: ${response.statusText}`);
       }
       return (await response.json()) as ContentManifest;
     } catch (error) {
-      console.error('Error fetching block by name:', error);
+      console.error('Error fetching fragment by name:', error);
       throw error;
     }
   }
@@ -305,11 +306,6 @@ export class ContentAPIClient {
   async getDataCollections(): Promise<string[]> {
     const response = await this.fetchAPI<{ collections: string[] }>(`${this.baseUrl}/data/collections`);
     return response.collections;
-  }
-
-  // Data context operations
-  async getDataContext(pageId: string): Promise<{ dataContext: DataContext }> {
-    return this.fetchAPI<{ dataContext: DataContext }>(`${this.baseUrl}/data-context?pageId=${pageId}`);
   }
 
   // Global operations
@@ -384,9 +380,10 @@ export class ContentAPIClient {
     return this.fetchAPI<{ assets: AssetEntry[] }>(`${this.baseUrl}/assets`);
   }
 
-  async getAsset(filename: string): Promise<AssetEntry | null> {
+  /** An asset by its path from the assets root: `trip/beach.png`, or `beach.png` for one at the top. */
+  async getAsset(path: string): Promise<AssetEntry | null> {
     try {
-      const response = await this.fetch(`${this.baseUrl}/assets/meta/${this.encodeAssetPath(filename)}`);
+      const response = await this.fetch(`${this.baseUrl}/assets/meta/${this.encodeAssetPath(path)}`);
       if (response.status === 404) {
         return null;
       }
@@ -427,8 +424,9 @@ export class ContentAPIClient {
     });
   }
 
-  async deleteAsset(filename: string): Promise<{ success: boolean }> {
-    return this.fetchAPI<{ success: boolean }>(`${this.baseUrl}/assets/meta/${this.encodeAssetPath(filename)}`, {
+  /** Delete the asset at a path from the assets root, as `getAsset` takes it. */
+  async deleteAsset(path: string): Promise<{ success: boolean }> {
+    return this.fetchAPI<{ success: boolean }>(`${this.baseUrl}/assets/meta/${this.encodeAssetPath(path)}`, {
       method: 'DELETE',
     });
   }
@@ -440,24 +438,27 @@ export class ContentAPIClient {
   }
 
   async createFolder(path: string): Promise<void> {
-    await this.fetch(`${this.baseUrl}/assets/folders`, {
+    await this.fetchAPI<{ success: true }>(`${this.baseUrl}/assets/folders`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path }),
     });
   }
 
   // Asset metadata operations
-  async updateAssetMetadata(filename: string, updates: { alt?: string; tags?: string[] }): Promise<AssetEntry> {
-    return this.fetchAPI<AssetEntry>(`${this.baseUrl}/assets/meta/${this.encodeAssetPath(filename)}`, {
+  /** Merge alt text and tags onto the asset at a path from the assets root, as `getAsset` takes it. */
+  async updateAssetMetadata(path: string, updates: AssetMetadataPatch): Promise<AssetEntry> {
+    return this.fetchAPI<AssetEntry>(`${this.baseUrl}/assets/meta/${this.encodeAssetPath(path)}`, {
       method: 'PATCH',
       body: JSON.stringify(updates),
     });
   }
 
-  // Asset usage tracking
-  async getAssetUsage(filename: string): Promise<AssetUsage[]> {
-    return this.fetchAPI<AssetUsage[]>(`${this.baseUrl}/assets/usage/${this.encodeAssetPath(filename)}`);
+  /** The content that links to the asset at a path from the assets root, as `getAsset` takes it. */
+  async getAssetUsage(path: string): Promise<AssetUsage[]> {
+    const response = await this.fetchAPI<{ usage: AssetUsage[] }>(
+      `${this.baseUrl}/assets/usage/${this.encodeAssetPath(path)}`,
+    );
+    return response.usage;
   }
 
   // Move assets between folders

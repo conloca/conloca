@@ -9,7 +9,7 @@
  * version is well past that; same-window mounting is the documented
  * and supported configuration.
  */
-import('./main-spa').then((m) => m.mountSpa());
+import('./main-spa.js').then((m) => m.mountSpa());
 
 // Keep TypeScript treating this file as a module so other `declare global`
 // blocks in the package merge correctly.

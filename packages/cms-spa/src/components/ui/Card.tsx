@@ -1,13 +1,13 @@
 import type { ComponentProps } from 'react';
-import { cn } from '../../utils/cn';
+import { cn } from '../../utils/cn.js';
 
 /**
  * Surface vocabulary shared with `Dialog.Content` so any host
- * shell that mixes plain cards and dialog panels reads as one
+ * app that mixes plain cards and dialog panels reads as one
  * design system rather than two.
  *
  * - `panel` — opaque-white-on-light, opaque-grey-on-dark, with a
- *   border. The default for pre-auth screens, account menus, and
+ *   border. The default for sign-in screens, account menus, and
  *   any anchored popover. Matches `Dialog.Content surface="panel"`
  *   verbatim so a panel that turns into a dialog (or vice versa)
  *   doesn't visually jump.
@@ -19,7 +19,7 @@ import { cn } from '../../utils/cn';
 export type CardSurface = 'panel' | 'elevated';
 
 /**
- * Inner padding scale. The pre-auth `LoginScreen` card uses `xl`;
+ * Inner padding scale. The largest card (e.g. a sign-in screen) uses `xl`;
  * tight popovers (account menu) use `sm`; the default `md` covers
  * most cases. `none` exists for callers that want to manage
  * padding internally (e.g. a header row + body split where the
@@ -82,7 +82,7 @@ export interface CardProps extends ComponentProps<'div'> {
 /**
  * Generic card surface primitive.
  *
- * Hosted shells (pre-auth screens, account menus, banner panels,
+ * Host apps (sign-in screens, account menus, banner panels,
  * etc.) compose this rather than restating
  * `bg-white dark:bg-grey-02 border border-grey-09 ... rounded-md
  * shadow-sm` at every call site. Centralising the surface here:

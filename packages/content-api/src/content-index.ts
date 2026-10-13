@@ -1,17 +1,53 @@
-import { BlockIndex } from './block-index';
-import { localesOf, mapSiteNames } from './content-utils';
-import { DataIndex } from './data-index';
-import { SiteIndex } from './site-index';
-import type { ContentData, ContentIdentity, ContentManifest, LocaleVersion, SitesConfig } from './types';
+import { localesOf, mapSiteNames } from './content-utils.js';
+import { DataIndex } from './data-index.js';
+import { FragmentIndex } from './fragment-index.js';
+import { parseContentHeader } from './header-parser.js';
+import type { ContentReaderBackend } from './reader-backend.js';
+import { SiteIndex } from './site-index.js';
+import type { ContentData, ContentIdentity, ContentManifest, LocaleVersion, SitesConfig } from './types.js';
 
 /**
- * ContentIndex coordinates between per-site indexes and the block index
+ * ContentIndex coordinates between per-site indexes and the fragment index
  * This provides efficient filtering by routing to the appropriate specialized index
  */
-// Use global registry to survive module reloads in development
-const globalCache = (globalThis as any).__CONLOCA_CONTENT_INDEX_CACHE__ || {};
-if (!(globalThis as any).__CONLOCA_CONTENT_INDEX_CACHE__) {
-  (globalThis as any).__CONLOCA_CONTENT_INDEX_CACHE__ = globalCache;
+// Use global registry to survive module reloads in development (Vite HMR keeps
+// per-module state hot-swappable, so caching on `globalThis` is what allows a
+// reload-triggered re-import to reuse the same hydrated index).
+type ContentIndexCache = Record<string, ContentIndex | undefined>;
+type GlobalWithCache = typeof globalThis & {
+  __CONLOCA_CONTENT_INDEX_CACHE__?: ContentIndexCache;
+};
+const globalWithCache = globalThis as GlobalWithCache;
+const globalCache: ContentIndexCache = globalWithCache.__CONLOCA_CONTENT_INDEX_CACHE__ ?? {};
+if (!globalWithCache.__CONLOCA_CONTENT_INDEX_CACHE__) {
+  globalWithCache.__CONLOCA_CONTENT_INDEX_CACHE__ = globalCache;
+}
+
+/** A file the indexer could not read, and therefore had to leave out of the index. */
+export interface IndexProblem {
+  path: string;
+  reason: string;
+  message: string;
+}
+
+/** Problem message for a page filed under a site sites.json does not declare. */
+export function unknownSiteMessage(site: string): string {
+  return (
+    `site "${site}" is not declared in sites.json, so this page cannot appear anywhere. ` +
+    'Declare the site, or move the file under a declared one.'
+  );
+}
+
+/**
+ * Problem text for two files carrying one id+locale. Shared by both hydration
+ * paths so the guidance cannot drift between them.
+ */
+export function duplicateIdMessage(id: string, locale: string, claimant: string): string {
+  return (
+    `id "${id}" (locale "${locale}") is already claimed by ${claimant}. ` +
+    'Two files cannot share an id — one of them would stop appearing on the site. ' +
+    'Give this file a new id, or delete it if it is a stray copy.'
+  );
 }
 
 export class ContentIndex {
@@ -23,15 +59,21 @@ export class ContentIndex {
   // Per-site indexes using V8-optimized object
   private siteIndexes: Record<string, SiteIndex | undefined>;
 
-  // Single block index
-  private blockIndex: BlockIndex;
+  // Single fragment index
+  private fragmentIndex: FragmentIndex;
 
   // Single data index
   private dataIndex: DataIndex;
 
+  // Files the hydration pass could not read. They belong to the index rather
+  // than to whichever API instance ran the pass: the index is cached per
+  // content root and reused by every later instance over that root, which
+  // skips re-indexing and would otherwise start with an empty problem list.
+  private problems: IndexProblem[] = [];
+
   private constructor(private sitesConfig: SitesConfig) {
-    // Initialize block index
-    this.blockIndex = new BlockIndex(sitesConfig.globalLocales);
+    // Initialize fragment index
+    this.fragmentIndex = new FragmentIndex();
 
     // Initialize data index
     this.dataIndex = new DataIndex();
@@ -39,7 +81,7 @@ export class ContentIndex {
     // Initialize V8-optimized site indexes
     this.siteIndexes = mapSiteNames(sitesConfig, (siteName) => {
       const siteConfig = sitesConfig.sites[siteName];
-      return new SiteIndex(siteName, siteConfig.locales);
+      return new SiteIndex(siteConfig.locales);
     });
   }
 
@@ -47,10 +89,11 @@ export class ContentIndex {
    * Get cached index or create a new one
    */
   static async getCachedOrCreate(contentRoot: string, sitesConfig: SitesConfig): Promise<ContentIndex> {
-    if (!ContentIndex.cache[contentRoot]) {
-      ContentIndex.cache[contentRoot] = new ContentIndex(sitesConfig);
-    }
-    return ContentIndex.cache[contentRoot];
+    const cached = ContentIndex.cache[contentRoot];
+    if (cached) return cached;
+    const created = new ContentIndex(sitesConfig);
+    ContentIndex.cache[contentRoot] = created;
+    return created;
   }
 
   /**
@@ -70,12 +113,106 @@ export class ContentIndex {
   }
 
   /**
-   * Add or update content in the appropriate index
-   * Updates a single locale's manifest and content cache if provided
+   * Hydrate this index from any content reader backend.
+   *
+   * Replaces the contents of the index. Reports per-item parse failures via
+   * the optional `onError` callback; never throws on a single corrupt file.
+   *
+   * Concurrent calls are not safe — callers must serialize. A single-threaded
+   * coordinator (e.g. one request turn) satisfies this naturally.
+   *
+   * The hydrator is backend-agnostic and pure with respect to the backend:
+   * it never calls `readPath` and never writes back. Non-canonical headers
+   * are interpreted from a canonical in-memory copy (via parseContentHeader)
+   * so etags are stable; the bytes on storage stay as-is.
    */
+  async indexAll(
+    backend: ContentReaderBackend,
+    opts?: {
+      glob?: string;
+      headerBytes?: number;
+      onError?: (path: string, reason: string, message: string) => void;
+    },
+  ): Promise<{ indexed: number; skipped: number }> {
+    this.clear();
+
+    let indexed = 0;
+    let skipped = 0;
+    const onError = opts?.onError;
+
+    // Which file claimed each id+locale. Without this a duplicated file
+    // merges into the first one's locale slot and a page silently stops
+    // existing — for every pathname lookup, every build and every editor
+    // list — while still being counted as indexed.
+    const claimedBy = new Map<string, string>();
+
+    for await (const result of backend.listContentPaths({
+      ...(opts?.glob ? { glob: opts.glob } : {}),
+      ...(opts?.headerBytes !== undefined ? { headerBytes: opts.headerBytes } : {}),
+    })) {
+      if (!result.ok) {
+        skipped++;
+        onError?.(result.path, result.reason, result.message);
+        continue;
+      }
+
+      const parsed = parseContentHeader({
+        path: result.path,
+        header: result.header,
+        size: result.size,
+        complete: result.complete,
+      });
+      if (!parsed.ok) {
+        skipped++;
+        onError?.(result.path, parsed.reason, parsed.message);
+        continue;
+      }
+
+      // A page whose site has no index would silently vanish: addContent
+      // files pages under their site index and no-ops when there is none, so
+      // the page reached no pathname lookup and no build while still being
+      // counted as indexed.
+      if (parsed.manifest.kind === 'page' && parsed.manifest.site && !this.hasSite(parsed.manifest.site)) {
+        skipped++;
+        onError?.(result.path, 'unknown-site', unknownSiteMessage(parsed.manifest.site));
+        continue;
+      }
+
+      const claim = `${parsed.manifest.id}::${parsed.localeVersion.locale}`;
+      const claimant = claimedBy.get(claim);
+      if (claimant !== undefined && claimant !== result.path) {
+        skipped++;
+        onError?.(
+          result.path,
+          'duplicate-id',
+          duplicateIdMessage(parsed.manifest.id, parsed.localeVersion.locale, claimant),
+        );
+        continue;
+      }
+      claimedBy.set(claim, result.path);
+
+      try {
+        this.addContent(parsed.manifest, parsed.localeVersion, parsed.content);
+        indexed++;
+      } catch (error) {
+        skipped++;
+        const message = error instanceof Error ? error.message : String(error);
+        onError?.(result.path, 'index-error', message);
+      }
+    }
+
+    return { indexed, skipped };
+  }
+
+  /** Whether a site index exists for this site name (i.e. sites.json declares it). */
+  hasSite(site: string): boolean {
+    return Object.hasOwn(this.siteIndexes, site) && this.siteIndexes[site] !== undefined;
+  }
+
+  /** Add or update a single locale's manifest and optional content cache in its index. */
   addContent(identity: ContentIdentity, localeVersion: LocaleVersion, content?: ContentData | null): void {
-    // Validate that blocks and data don't have a site
-    if ((identity.kind === 'block' || identity.kind === 'data') && identity.site) {
+    // Validate that fragments and data don't have a site
+    if ((identity.kind === 'fragment' || identity.kind === 'data') && identity.site) {
       throw new Error(`${identity.kind} cannot have a site property`);
     }
     // Validate that pages must have a site
@@ -83,8 +220,8 @@ export class ContentIndex {
       throw new Error('Pages must have a site property');
     }
 
-    if (identity.kind === 'block') {
-      this.blockIndex.addContent(identity, localeVersion, content);
+    if (identity.kind === 'fragment') {
+      this.fragmentIndex.addContent(identity, localeVersion, content);
     } else if (identity.kind === 'data') {
       this.dataIndex.addContent(identity, localeVersion, content);
     } else {
@@ -103,8 +240,8 @@ export class ContentIndex {
     if (!manifest) return;
 
     // Remove from the appropriate index
-    if (manifest.kind === 'block') {
-      this.blockIndex.removeLocale(id, locale);
+    if (manifest.kind === 'fragment') {
+      this.fragmentIndex.removeLocale(id, locale);
     } else if (manifest.kind === 'data') {
       this.dataIndex.removeLocale(id, locale);
     } else {
@@ -122,8 +259,8 @@ export class ContentIndex {
     const manifest = this.getManifest(id);
     if (!manifest) return null;
 
-    if (manifest.kind === 'block') {
-      return this.blockIndex.getCachedContent(id, locale);
+    if (manifest.kind === 'fragment') {
+      return this.fragmentIndex.getCachedContent(id, locale);
     }
     if (manifest.kind === 'data') {
       return this.dataIndex.getCachedContent(id, locale);
@@ -136,8 +273,8 @@ export class ContentIndex {
    * Remove an entry from all indexes
    */
   removeEntry(id: string): void {
-    // Try blocks first
-    this.blockIndex.removeEntry(id);
+    // Try fragments first
+    this.fragmentIndex.removeEntry(id);
 
     // Try data
     this.dataIndex.removeEntry(id);
@@ -155,8 +292,8 @@ export class ContentIndex {
    * Get content manifest for a content ID
    */
   getManifest(id: string): ContentManifest | null {
-    // Check blocks first
-    let manifest = this.blockIndex.getManifest(id);
+    // Check fragments first
+    let manifest = this.fragmentIndex.getManifest(id);
     if (manifest) return manifest;
 
     // Check data
@@ -192,10 +329,10 @@ export class ContentIndex {
   }
 
   /**
-   * Get block index
+   * Get fragment index
    */
-  getBlockIndex(): BlockIndex {
-    return this.blockIndex;
+  getFragmentIndex(): FragmentIndex {
+    return this.fragmentIndex;
   }
 
   /**
@@ -215,10 +352,15 @@ export class ContentIndex {
   }
 
   /**
-   * Find block by name
+   * Find fragment by name
    */
-  getBlockByName(collection: string, name: string, locale?: string): ContentManifest | null {
-    return this.blockIndex.getByName(collection, name, locale);
+  getFragmentByName(collection: string, name: string, locale?: string): ContentManifest | null {
+    return this.fragmentIndex.getByName(collection, name, locale);
+  }
+
+  /** Every fragment of `collection` named `name` in some locale, in any letter case. */
+  getFragmentsByNameInAnyCase(collection: string, name: string): Generator<ContentManifest> {
+    return this.fragmentIndex.getAllByNameInAnyCase(collection, name);
   }
 
   /**
@@ -235,6 +377,11 @@ export class ContentIndex {
     return this.dataIndex.getByName(collection, name, locale);
   }
 
+  /** Every data entry of `collection` named `name` in some locale, in any letter case. */
+  getDataByNameInAnyCase(collection: string, name: string): Generator<ContentManifest> {
+    return this.dataIndex.getAllByNameInAnyCase(collection, name);
+  }
+
   /**
    * Get all collections for data
    */
@@ -246,8 +393,8 @@ export class ContentIndex {
    * List all content (for iteration)
    */
   *listAllContent(): Generator<ContentManifest> {
-    // Yield all blocks
-    yield* this.blockIndex.getAllManifests();
+    // Yield all fragments
+    yield* this.fragmentIndex.getAllManifests();
 
     // Yield all data entries
     yield* this.dataIndex.getAllManifests();
@@ -281,10 +428,10 @@ export class ContentIndex {
   }
 
   /**
-   * Get all collections for blocks
+   * Get all collections for fragments
    */
-  getBlockCollections(): Set<string> {
-    return this.blockIndex.collections;
+  getFragmentCollections(): Set<string> {
+    return this.fragmentIndex.collections;
   }
 
   /**
@@ -309,8 +456,8 @@ export class ContentIndex {
       includeUnpublished?: boolean;
     },
   ): Generator<ContentManifest> {
-    // Always check blocks as they don't belong to any site
-    for (const manifest of this.blockIndex.getAllManifests()) {
+    // Always check fragments as they don't belong to any site
+    for (const manifest of this.fragmentIndex.getAllManifests()) {
       if (!manifest.locales[targetLocale]) {
         // Check if we should include unpublished content
         if (!options?.includeUnpublished) {
@@ -356,9 +503,9 @@ export class ContentIndex {
    * Generators for efficient filtering
    */
 
-  *getManifestsForKind(kind: 'block' | 'page' | 'data'): Generator<ContentManifest> {
-    if (kind === 'block') {
-      yield* this.blockIndex.getAllManifests();
+  *getManifestsForKind(kind: 'fragment' | 'page' | 'data'): Generator<ContentManifest> {
+    if (kind === 'fragment') {
+      yield* this.fragmentIndex.getAllManifests();
     } else if (kind === 'data') {
       yield* this.dataIndex.getAllManifests();
     } else {
@@ -398,8 +545,8 @@ export class ContentIndex {
   }
 
   *getManifestsForLocale(locale: string): Generator<ContentManifest> {
-    // Yield from blocks
-    yield* this.blockIndex.getManifestsByLocale(locale);
+    // Yield from fragments
+    yield* this.fragmentIndex.getManifestsByLocale(locale);
 
     // Yield from data
     yield* this.dataIndex.getManifestsByLocale(locale);
@@ -414,8 +561,8 @@ export class ContentIndex {
   }
 
   *getManifestsForCollection(collection: string): Generator<ContentManifest> {
-    // Check blocks first
-    yield* this.blockIndex.getManifestsByCollection(collection);
+    // Check fragments first
+    yield* this.fragmentIndex.getManifestsByCollection(collection);
 
     // Check data
     yield* this.dataIndex.getManifestsByCollection(collection);
@@ -437,7 +584,7 @@ export class ContentIndex {
    * Get the count of indexed content entries
    */
   get entryCount(): number {
-    let count = this.blockIndex.entryCount;
+    let count = this.fragmentIndex.entryCount;
     count += this.dataIndex.entryCount;
     for (const site in this.siteIndexes) {
       const siteIndex = this.siteIndexes[site];
@@ -449,10 +596,40 @@ export class ContentIndex {
   }
 
   /**
-   * Clear all indexes
+   * Record a file the hydration pass could not read. Argument order matches
+   * the `onError` callback of indexAll so either hydration path can feed it.
+   */
+  recordProblem(path: string, reason: string, message: string): void {
+    this.problems.push({ path, reason, message });
+  }
+
+  /**
+   * Files missing from this index because they could not be read. Any caller
+   * that treats the indexed content as the complete picture must consult this.
+   */
+  getProblems(): readonly IndexProblem[] {
+    return this.problems;
+  }
+
+  /**
+   * Forget the recorded verdicts for files that are about to be re-examined,
+   * so problems do not pile up across partial rescans.
+   */
+  dropProblems(paths: ReadonlySet<string>): void {
+    this.problems = this.problems.filter((problem) => !paths.has(problem.path));
+  }
+
+  /** Forget every recorded verdict, for a pass that re-examines everything. */
+  clearProblems(): void {
+    this.problems = [];
+  }
+
+  /**
+   * Clear all indexes, including the problems describing what is missing
+   * from them — an empty index has nothing left to explain.
    */
   clear(): void {
-    this.blockIndex.clear();
+    this.fragmentIndex.clear();
     this.dataIndex.clear();
     for (const site in this.siteIndexes) {
       const siteIndex = this.siteIndexes[site];
@@ -460,5 +637,6 @@ export class ContentIndex {
         siteIndex.clear();
       }
     }
+    this.clearProblems();
   }
 }

@@ -1,7 +1,7 @@
 /// <reference lib="dom" />
 import { afterEach, describe, expect, test } from 'bun:test';
 import { cleanup, render, screen } from '@testing-library/react';
-import * as Dialog from '../src/components/dialog';
+import * as Dialog from '../src/components/dialog.js';
 
 afterEach(() => {
   cleanup();

@@ -1,1 +1,1 @@
-export { MDXContent } from './MDXContent';
+export { MDXContent } from './MDXContent.js';

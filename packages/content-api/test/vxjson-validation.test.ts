@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { VXJSON } from '../src/vxjson';
+import { VXJSON } from '../src/vxjson.js';
 
 describe('VXJSON format validation', () => {
   test('should throw error when content field is not last', () => {

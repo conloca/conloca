@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises';
-import { tmpdir } from 'os';
-import { join } from 'path';
-import type { ContentAPI } from '../src/content-api.interface';
-import { FileSystemContentAPI } from '../src/filesystem-content-api';
-import { InMemoryContentAPI } from '../src/in-memory-content-api';
-import type { ContentManifest } from '../src/types';
-import { ContentUtils } from '../src/utils';
-import { assertDefined, getCreatedId, isContentWithLocales, isLocalizedContent } from './test-helpers';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import type { ContentAPI } from '../src/content-api.interface.js';
+import { FileSystemContentAPI } from '../src/filesystem-content-api.js';
+import { InMemoryContentAPI } from '../src/in-memory-content-api.js';
+import type { ContentManifest } from '../src/types.js';
+import { ContentUtils } from '../src/utils.js';
+import { assertDefined, getCreatedId } from './test-helpers.js';
 
 describe('Critical Features - Locale Parsing', () => {
   describe('ContentUtils.extractLocale', () => {
@@ -34,7 +34,7 @@ describe('Critical Features - Locale Parsing', () => {
     test('handles MDX files', () => {
       expect(ContentUtils.extractLocale('hero.mdx')).toBe('en');
       expect(ContentUtils.extractLocale('hero.nl.mdx')).toBe('nl');
-      expect(ContentUtils.extractLocale('feature-block.fr.mdx')).toBe('fr');
+      expect(ContentUtils.extractLocale('feature-fragment.fr.mdx')).toBe('fr');
       expect(ContentUtils.extractLocale('complex.name.es.mdx')).toBe('es');
     });
 
@@ -59,7 +59,7 @@ describe('Critical Features - Locale Parsing', () => {
       const contentRoot = join(tempDir, 'content');
       await mkdir(contentRoot, { recursive: true });
       await mkdir(join(contentRoot, 'shop', 'pages'), { recursive: true });
-      await mkdir(join(contentRoot, 'blocks', 'heroes'), { recursive: true });
+      await mkdir(join(contentRoot, 'fragments', 'heroes'), { recursive: true });
 
       // Create sites.json
       await writeFile(
@@ -98,15 +98,15 @@ describe('Critical Features - Locale Parsing', () => {
         JSON.stringify({ ...pageContent, meta: { ...pageContent.meta, title: 'Test Page NL' } }),
       );
 
-      // Create block with locale
+      // Create fragment with locale
       await writeFile(
-        join(contentRoot, 'blocks', 'heroes', 'main.en.mdx'),
-        '---\nid: vx-block123\ntitle: Hero Block EN\n---\n# Hero',
+        join(contentRoot, 'fragments', 'heroes', 'main.en.mdx'),
+        '---\nid: vx-fragment123\ntitle: Hero Fragment EN\n---\n# Hero',
       );
 
       await writeFile(
-        join(contentRoot, 'blocks', 'heroes', 'main.nl.mdx'),
-        '---\nid: vx-block123\ntitle: Hero Block NL\n---\n# Held',
+        join(contentRoot, 'fragments', 'heroes', 'main.nl.mdx'),
+        '---\nid: vx-fragment123\ntitle: Hero Fragment NL\n---\n# Held',
       );
 
       api = await FileSystemContentAPI.create({ contentRoot });
@@ -126,14 +126,14 @@ describe('Critical Features - Locale Parsing', () => {
       expect(content.locales.nl.meta.title).toBe('Test Page NL');
     });
 
-    test('correctly indexes MDX blocks with locale suffixes', async () => {
-      const block = await api.getContent('vx-block123');
-      expect(block).toBeDefined();
-      assertDefined(block, 'Block should be indexed');
-      expect(block.locales).toHaveProperty('en');
-      expect(block.locales).toHaveProperty('nl');
-      expect(block.locales.en.meta.title).toBe('Hero Block EN');
-      expect(block.locales.nl.meta.title).toBe('Hero Block NL');
+    test('correctly indexes MDX fragments with locale suffixes', async () => {
+      const fragment = await api.getContent('vx-fragment123');
+      expect(fragment).toBeDefined();
+      assertDefined(fragment, 'Fragment should be indexed');
+      expect(fragment.locales).toHaveProperty('en');
+      expect(fragment.locales).toHaveProperty('nl');
+      expect(fragment.locales.en.meta.title).toBe('Hero Fragment EN');
+      expect(fragment.locales.nl.meta.title).toBe('Hero Fragment NL');
     });
   });
 });
@@ -667,11 +667,11 @@ async function generateRedirectMap(api: ContentAPI): Promise<Record<string, Reco
   // Get all content
   const allContent = Array.from(api.listAllContent());
 
-  // Group by site (excluding blocks which don't have pathnames)
+  // Group by site (excluding fragments which don't have pathnames)
   const contentBySite = new Map<string, ContentManifest[]>();
   for (const item of allContent) {
-    // Skip blocks - they don't have sites or pathnames
-    if (item.kind === 'block') continue;
+    // Skip fragments - they don't have sites or pathnames
+    if (item.kind === 'fragment') continue;
 
     const siteName = item.site!; // Pages must have a site
     if (!contentBySite.has(siteName)) {

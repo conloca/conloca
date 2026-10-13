@@ -69,6 +69,21 @@ export interface APIError {
 export interface MDXCompileResponse {
   code: string;
   metadata: Record<string, unknown>;
+  /**
+   * The content's headings, in document order, carrying the ids the compiled
+   * markup puts on them. Editing surfaces render the body inside a sandbox
+   * they cannot read, so the outline rides the compile they already request
+   * rather than being scraped back off the frame.
+   */
+  outline: readonly MDXHeading[];
+}
+
+/** One heading of compiled MDX: the anchor target and the text to label it with. */
+export interface MDXHeading {
+  /** Heading level as authored: 2 for `##`, 3 for `###`. */
+  depth: number;
+  id: string;
+  text: string;
 }
 
 // Common error codes
@@ -95,6 +110,10 @@ export const ErrorCodes = {
   INVALID_REQUEST: 'INVALID_REQUEST',
   MDX_COMPILE_FAILED: 'MDX_COMPILE_FAILED',
 
+  // Request errors
+  /** A write another website sent through the developer's browser. */
+  FORBIDDEN: 'FORBIDDEN',
+
   // System errors
   INTERNAL_ERROR: 'INTERNAL_ERROR',
   FETCH_ERROR: 'FETCH_ERROR',
@@ -111,6 +130,12 @@ export const ErrorCodes = {
   ASSET_INVALID_FORMAT: 'ASSET_INVALID_FORMAT',
   ASSET_TOO_LARGE: 'ASSET_TOO_LARGE',
   ASSET_UPLOAD_FAILED: 'ASSET_UPLOAD_FAILED',
+
+  // Preview errors
+  /** The target site is not serving the preview endpoint, so a generated
+   *  preview URL would 404 there. This describes the target deployment, not a
+   *  failure of the request — callers must not render it as an error. */
+  PREVIEW_NOT_DEPLOYED: 'PREVIEW_NOT_DEPLOYED',
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
@@ -134,7 +159,7 @@ export interface ContentProp {
 export interface ContentIdentity {
   id: string;
   type: ContentType;
-  kind: 'block' | 'page' | 'data';
+  kind: 'fragment' | 'page' | 'data';
   site?: string; // Only for pages
   collection: string;
 }
@@ -143,7 +168,7 @@ export interface ContentIdentity {
 export interface LocalePathData {
   locale: string;
   pathname?: string; // pages only - derived from file path
-  name?: string; // blocks only - derived from filename
+  name?: string; // fragments only - derived from filename
 }
 
 // Localized content manifest - metadata about translated content without the actual content
@@ -155,6 +180,13 @@ export interface LocaleVersion extends LocalePathData {
   unpublishAt?: string;
   previousPathnames?: Record<string, string>; // pages only
   meta: ContentMeta; // title, description, seo, etc.
+  /**
+   * Path of the file backing this locale, as the hydrating backend knows it.
+   * Set during filesystem hydration; absent on backends that do not read
+   * files and on manifests built in-memory before the first rescan. Diagnostic only — it exists so an error about this locale can
+   * name a file a human can open instead of the opaque content id.
+   */
+  sourcePath?: string;
 }
 
 // Manifest for all locales (what's in the index and returned in listings)
@@ -182,7 +214,21 @@ export interface UpdateResult {
   success: boolean;
   etag?: string;
   modified?: Date;
-  reason?: 'not_found' | 'stale_write' | 'write_error';
+  /**
+   * The `invalid_pathname`, `pathname_taken` and `pathname_in_redirects`
+   * refusals of a page's new path, and the `invalid_name` and `name_taken`
+   * refusals of a fragment or data entry's new name, mean what they mean for a
+   * create; a backend that does not tell them apart reports `write_error`.
+   */
+  reason?:
+    | 'not_found'
+    | 'stale_write'
+    | 'write_error'
+    | 'invalid_pathname'
+    | 'pathname_taken'
+    | 'pathname_in_redirects'
+    | 'invalid_name'
+    | 'name_taken';
   error?: Error;
   currentEtag?: string;
   conflictDetails?: {
@@ -198,7 +244,8 @@ export interface MoveResult {
   moved: boolean;
   previousPathname?: string;
   files?: string[];
-  reason?: 'not_found' | 'already_exists' | 'stale_write' | 'write_error';
+  /** `already_exists` also covers a path another page redirects from; `invalid_pathname` is a malformed path. */
+  reason?: 'not_found' | 'already_exists' | 'stale_write' | 'write_error' | 'invalid_pathname';
   error?: Error;
   etag?: string;
 }
@@ -216,7 +263,7 @@ export interface GlobalFilters {
   locales?: string[];
   type?: 'puck' | 'mdx' | 'json';
   published?: boolean;
-  kind?: 'block' | 'page' | 'data';
+  kind?: 'fragment' | 'page' | 'data';
   localization?: 'complete' | 'partial' | 'one';
   missingLocales?: string[];
 }
@@ -228,7 +275,7 @@ export interface SiteFilters {
   published?: boolean;
 }
 
-export interface BlockFilters {
+export interface FragmentFilters {
   collection?: string;
   locales?: string[];
 }
@@ -241,12 +288,12 @@ export interface FindOptions {
 // Input types
 
 export interface CreateContentInput {
-  kind: 'block' | 'page' | 'data';
-  site?: string; // Required for pages, must be undefined for blocks and data
+  kind: 'fragment' | 'page' | 'data';
+  site?: string; // Required for pages, must be undefined for fragments and data
   collection: string;
   type: ContentType;
   created?: string; // Optional, will use current time if not provided
-  name?: string; // Internal identifier for blocks and data (same across all locales)
+  name?: string; // Internal identifier for fragments and data (same across all locales)
   meta?: Partial<ContentMeta>; // Shared metadata defaults (applied to all locales)
   locales: {
     [locale: string]: {
@@ -273,7 +320,7 @@ export interface CreatePageInput {
   };
 }
 
-export interface CreateBlockInput {
+export interface CreateFragmentInput {
   collection: string;
   type: 'mdx';
   name: string; // Internal identifier (same across all locales)
@@ -297,13 +344,21 @@ export interface UpdateLocaleInput {
   etag: string;
 }
 
+/**
+ * A metadata update as a dialog sends it: absent keys are left alone, null
+ * clears the stored field. "Cleared" used to travel as undefined, which
+ * JSON.stringify drops, so the server's shallow merge silently kept the old
+ * value — the dialog reported success and the field reappeared on refresh.
+ */
+export type ContentMetaPatch = { [K in keyof ContentMeta]?: ContentMeta[K] | null };
+
 export interface LocaleUpdateData {
   pathname?: string; // for pages - update pathname
-  name?: string; // for blocks - update name (filename)
+  name?: string; // for fragments - update name (filename)
   publishAt?: string | null | false;
   unpublishAt?: string | null | false;
   modified?: string; // Optional, will use current time if not provided
-  meta?: Partial<ContentMeta>;
+  meta?: ContentMetaPatch;
   content?: ContentData;
 }
 
@@ -349,8 +404,43 @@ export interface BatchResult {
   updated: number; // number of successfully updated items
 }
 
+/**
+ * Any value that survives a JSON round trip.
+ *
+ * Content metadata is serialised into `.vxjson` files on disk, so JSON is the
+ * real ceiling on what a meta field can hold. Saying that concretely — rather
+ * than `unknown` — keeps the type honest in both directions: readers still
+ * have to narrow before using a value, and the structure stays visible to
+ * anything that has to prove the type is serialisable in order to carry it.
+ */
+export type JsonValue = string | number | boolean | null | JsonArray | JsonObject;
+
+/**
+ * The array arm of {@link JsonValue}. An interface for the same reason as
+ * {@link JsonObject}; `Array<JsonValue>` rather than `JsonValue[]` only
+ * because `extends` has no shorthand-array form to use here.
+ */
+export interface JsonArray extends Array<JsonValue> {}
+
+/**
+ * The object arm of {@link JsonValue}, kept as an interface rather than an
+ * inline type so the recursion terminates: a structural checker walking this
+ * type can defer the interface instead of re-expanding it at every level.
+ */
+export interface JsonObject {
+  [key: string]: JsonValue;
+}
+
+/**
+ * Host-declared page-meta fields. Sites augment this from their `pageSchemas`
+ * so listing components see `excerpt` / `featuredImage` as real keys instead
+ * of an open bag. Empty until a host writes `declare module '@conloca/content-api'`.
+ */
+// biome-ignore lint/suspicious/noEmptyInterface: empty interface is the module-augmentation hole hosts fill
+export interface HostPageMeta {}
+
 // Common metadata structure for all content types (stored in 'meta' field)
-export interface ContentMeta {
+export interface ContentMeta extends HostPageMeta {
   // Required
   title: string; // Display name for UI
 
@@ -365,8 +455,8 @@ export interface ContentMeta {
   ogDescription?: string;
   ogImage?: string;
 
-  // Any additional fields from frontmatter/pageMeta
-  [key: string]: any;
+  // Leftover host fields that were not declared on HostPageMeta.
+  [key: string]: JsonValue | undefined;
 }
 
 // File format types
@@ -455,9 +545,16 @@ export interface CreateResult {
     | 'name_taken'
     | 'pathname_taken'
     | 'pathname_in_redirects'
-    | 'metadata_too_large';
+    | 'invalid_collection'
+    | 'invalid_locale'
+    | 'metadata_too_large'
+    | 'missing_field'
+    | 'unknown_site'
+    | 'no_sites_configured';
   error?: Error;
   existingId?: string;
+  /** The input field a caller has to change, when the failure points at one. */
+  field?: string;
 }
 
 export interface BatchOperationResult {
@@ -486,11 +583,18 @@ export interface PageReference {
   /** Content collection. */
   collection: string;
   /** Page metadata from content. */
-  meta?: Record<string, unknown>;
+  meta?: ContentMeta;
   /** Page timestamps for sorting and display. */
   timestamps?: {
+    /** When the page was created. */
     created?: Date;
+    /** When the page was last saved. Page lists never order by it, so an edit does not move a page. */
     modified?: Date;
+    /**
+     * When the page went or goes live: its publish time (`publishAt`), or its
+     * creation time when it has none. Page lists order by it.
+     */
+    published?: Date;
   };
 }
 
@@ -511,12 +615,15 @@ export interface DataCollectionEntry {
 }
 
 /**
- * Context object passed to Puck component resolvers via metadata.
+ * Context Puck hands every block of a page as its metadata: to `resolveData`
+ * as `metadata` and to `render` as `puck.metadata`.
  *
- * Contains fetched collection data and contextual information
- * for data-driven component rendering.
+ * Contains the page being rendered, the data its route binds and contextual
+ * information for data-driven component rendering.
  */
 export interface DataContext {
+  /** The page being rendered, with its settings. */
+  page: PageReference;
   /** Collection data keyed by collection name. */
   collections: Record<string, DataCollectionEntry[]>;
   /** Pages matching the dataBindings.pages filter. */
@@ -525,6 +632,113 @@ export interface DataContext {
   locale: string;
   /** Site name from routing configuration. */
   siteName: string;
+}
+
+/**
+ * Configuration for automatic data collection injection into Puck components.
+ *
+ * Allows components to declare data dependencies on Conloca data collections,
+ * which are automatically fetched and injected via Puck's metadata system.
+ *
+ * @example Route with data bindings
+ * ```typescript
+ * conlocaCMS({
+ *   routing: {
+ *     routes: {
+ *       pages: {
+ *         pattern: '/[...slug]',
+ *         dataBindings: {
+ *           collections: ['team', 'testimonials'],
+ *         },
+ *       },
+ *     },
+ *   },
+ * });
+ * ```
+ */
+export interface DataBindingConfig {
+  /**
+   * Collections to fetch and inject into component resolvers.
+   *
+   * Each collection name must match a data collection in the content directory.
+   * The fetched data will be available in `metadata.collections[collectionName]`
+   * within Puck component resolvers.
+   *
+   * @example ['team', 'testimonials', 'products']
+   */
+  collections?: string[];
+
+  /**
+   * Locale override for data fetching.
+   *
+   * Defaults to the route's locale setting (from routing.locale).
+   * Use this to fetch data in a specific locale regardless of route config.
+   */
+  locale?: string;
+
+  /**
+   * Page discovery configuration for listing pages by path prefix.
+   *
+   * Enables components to access lists of pages matching a URL pattern,
+   * useful for blog listings, category pages, and site navigation.
+   *
+   * @example Blog listing page
+   * ```typescript
+   * {
+   *   pattern: '/blog',
+   *   dataBindings: {
+   *     pages: {
+   *       prefix: '/blog/',
+   *       sort: 'date-desc',
+   *       limit: 10,
+   *     },
+   *   },
+   * }
+   * ```
+   */
+  pages?: {
+    /**
+     * Path prefix to filter pages.
+     *
+     * Only pages whose pathname starts with this prefix are included.
+     * The listing page itself is excluded.
+     *
+     * @example '/blog/' matches '/blog/post-1', '/blog/post-2'
+     */
+    prefix: string;
+
+    /**
+     * Maximum number of pages to return.
+     *
+     * Useful for showing "latest N posts" on a homepage or sidebar.
+     */
+    limit?: number;
+
+    /**
+     * Sort order for returned pages.
+     *
+     * - 'date-desc': Newest first by `timestamps.published`, so editing a page never moves it
+     * - 'date-asc': Oldest first
+     * - 'title': Alphabetical by title
+     *
+     * Pages that tie are listed by pathname, then id, so every surface shows one order.
+     *
+     * @default 'date-desc'
+     */
+    sort?: 'date-desc' | 'date-asc' | 'title';
+  };
+}
+
+/**
+ * What an editor needs to build a page's {@link DataContext} the way the
+ * published page gets it: the site and locale the routes read under, and every
+ * page collection a route serves, keyed by collection, with that route's
+ * bindings. The first route wins when two share a collection.
+ */
+export interface EditorDataBindings {
+  siteName: string;
+  locale: string;
+  routes: Record<string, DataBindingConfig>;
 }
 
 // Internal type for locale data returned by readLocaleFile

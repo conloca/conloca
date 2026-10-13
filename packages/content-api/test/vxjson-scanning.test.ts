@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { VXJSON } from '../src/vxjson';
+import { VXJSON } from '../src/vxjson.js';
 
 describe('VXJSON efficient scanning', () => {
   test('should detect content not last with minimal scanning', () => {

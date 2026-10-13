@@ -8,18 +8,21 @@ import {
 import { ExternalLink, Settings } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useErrorModal } from '../../hooks/useErrorModal';
-import { useTheme } from '../../hooks/useTheme';
-import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard';
-import type { PageMetadata } from '../../types';
-import { buildMetadataUpdate, extractPageMetadata } from '../../utils/pageMetadata';
-import { ConflictDialog } from '../dialogs/ConflictDialog';
-import { ErrorModal } from '../dialogs/ErrorModal';
-import { PageMetadataDialog } from '../dialogs/PageMetadataDialog';
-import { UnsavedChangesDialog } from '../dialogs/UnsavedChangesDialog';
-import { CMSMDXEditor } from './CMSMDXEditor';
-import { JsxPropsPanel } from './JsxPropsPanel';
-import { LocaleSelector } from './LocaleSelector';
+import { notifyEditorDirtyChanged, registerEditorFlushHandler } from '../../editor-flush.js';
+import { useSiteBaseUrl } from '../../hooks/index.js';
+import { useErrorModal } from '../../hooks/useErrorModal.js';
+import { useTheme } from '../../hooks/useTheme.js';
+import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard.js';
+import type { PageMetadata } from '../../types.js';
+import { getUIConfig } from '../../ui-config.js';
+import { buildMetadataUpdate, extractPageMetadata, pageSettingsSaveError } from '../../utils/pageMetadata.js';
+import { ConflictDialog } from '../dialogs/ConflictDialog.js';
+import { ErrorModal } from '../dialogs/ErrorModal.js';
+import { PageMetadataDialog } from '../dialogs/PageMetadataDialog.js';
+import { UnsavedChangesDialog } from '../dialogs/UnsavedChangesDialog.js';
+import { CMSMDXEditor } from './CMSMDXEditor.js';
+import { JsxPropsPanel } from './JsxPropsPanel.js';
+import { LocaleSelector } from './LocaleSelector.js';
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error' | 'conflict';
 type PersistStatus = 'saved' | 'conflict' | 'error';
@@ -28,8 +31,8 @@ type PersistStatus = 'saved' | 'conflict' | 'error';
  * Page editor for kind:'page' + type:'mdx' entries.
  *
  * Inline page layout. Routed via /pages/:id which lives outside CMSLayout,
- * so the editor occupies the full viewport. The sister flow for blocks
- * lives in BlockEditor.tsx — same shape, different back target and
+ * so the editor occupies the full viewport. The sister flow for fragments
+ * lives in FragmentEditor.tsx — same shape, different back target and
  * filePath label.
  */
 export function MdxPageEditor() {
@@ -64,8 +67,8 @@ export function MdxPageEditor() {
   // Live preview is intentionally omitted for pages: page-level MDX often
   // imports JSX components scoped by the host site's MDX provider, which
   // the in-browser compiler used by the preview pane can't resolve.
-  // Block-level editing keeps its preview. See ../MDXLivePreview.tsx and
-  // BlockEditor.tsx.
+  // Fragment-level editing keeps its preview. See ../MDXLivePreview.tsx and
+  // FragmentEditor.tsx.
 
   const { data: sitesConfig } = useSitesConfig();
   const availableLocales = sitesConfig?.globalLocales || ['en'];
@@ -79,7 +82,19 @@ export function MdxPageEditor() {
     // any cache invalidation — without this gate, the effect would call
     // `setContent(serverMdx)` and silently overwrite the user's typing.
     // Manual remote-reload remains available via the conflict dialog.
-    if (!isContentLoaded && loadedContent?.localized?.etag) {
+    //
+    // The predicate is "the localized payload ARRIVED", not "it carries an
+    // etag". An etag is NOT proof of arrival: an index that parses only
+    // the first 4 KB of each file defers the etag for anything larger
+    // (`parseContentHeader`, `complete: false` → `etag: ''`), so any doc over
+    // that window is served with `etag: ''`, and gating on a truthy etag would
+    // never open. PageEditorWrapper does not gate on the etag either.
+    //
+    // Arrival is proven by the payload, not by the envelope around it:
+    // `localized` alone is present on a response whose content has not
+    // arrived, and opening there seeds an empty buffer that the next save
+    // writes over the real document.
+    if (!isContentLoaded && loadedContent?.localized?.content) {
       setCurrentEtag(loadedContent.localized.etag);
       const data = loadedContent.localized.content as { mdx?: string } | undefined;
       const mdx = data?.mdx || '';
@@ -94,6 +109,7 @@ export function MdxPageEditor() {
   const blocker = useUnsavedChangesGuard(isDirty);
 
   const editorClassName = resolvedTheme === 'dark' ? 'dark-theme' : undefined;
+  const { buildUrl } = useSiteBaseUrl();
   const publishedPathname = loadedContent?.localized?.pathname;
   const pagePathname = publishedPathname || id || 'page';
 
@@ -157,6 +173,40 @@ export function MdxPageEditor() {
     }
   };
 
+  const contentRef = useRef(content);
+  contentRef.current = content;
+  const isDirtyRef = useRef(isDirty);
+  isDirtyRef.current = isDirty;
+  const persistRef = useRef(persist);
+  // persist is recreated each render; keep the latest for the flush bridge.
+  persistRef.current = persist;
+
+  useEffect(() => {
+    return registerEditorFlushHandler(
+      async () => {
+        if (!isDirtyRef.current) return { ok: true };
+        const status = await persistRef.current(contentRef.current);
+        if (status === 'error' || status === 'conflict') {
+          return { ok: false, message: 'Could not save editor changes.' };
+        }
+        return { ok: true };
+      },
+      { isDirty: () => isDirtyRef.current },
+    );
+  }, []);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: The dependency change is the event; handlers read current state through refs.
+  useEffect(() => {
+    notifyEditorDirtyChanged();
+  }, [isDirty]);
+
+  const ui = getUIConfig();
+  const hideSave = ui.hideEditorSave === true;
+  // When `hosted` is set, the host app owns Cmd/Ctrl+S (its window binding
+  // fires once the editor leaves the combo alone), so drop the editor-level shortcut
+  // there — the visible Save button above stays unless hideEditorSave.
+  const bindSaveShortcut = !hideSave && ui.hosted !== true;
+
   const handleSaveClick = () => {
     void persist(content);
   };
@@ -168,27 +218,19 @@ export function MdxPageEditor() {
   // YAML head, body is rebuilt from the existing on-disk file.
   const handleSaveMetadata = async (metadata: PageMetadata) => {
     if (!id) return;
-    try {
-      const result = await updateContent.mutateAsync({
-        id,
-        locale: currentLocale,
-        data: buildMetadataUpdate(metadata),
-        etag: currentEtag,
-      });
+    const result = await updateContent.mutateAsync({
+      id,
+      locale: currentLocale,
+      data: buildMetadataUpdate(metadata),
+      etag: currentEtag,
+    });
 
-      if (result.success && result.etag) {
-        setCurrentEtag(result.etag);
-        return;
-      }
-
-      // Surface failures the dialog can't show on its own — it auto-closes
-      // on submit, so a silent console.error would look like a successful
-      // save to the user.
-      showError('Failed to save page settings', new Error(`Save failed: ${result.reason ?? 'unknown'}`));
-    } catch (err) {
-      console.error('Failed to save page metadata:', err);
-      showError('Failed to save page settings', err);
+    if (result.success && result.etag) {
+      setCurrentEtag(result.etag);
     }
+    // A failure must throw, like a rejected write does: the dialog then stays
+    // open with the author's edits and says what happened.
+    if (!result.success) throw pageSettingsSaveError(result);
   };
 
   const handleCancel = () => {
@@ -267,24 +309,23 @@ export function MdxPageEditor() {
     setPendingLocaleSwitch(null);
   };
 
-  // Render the loading splash until we have the initial markdown — MDXEditorLib
-  // only reads `markdown` once on mount, so we can't safely render the editor
-  // with a placeholder empty string and update it later.
-  if (isLoading || !isContentLoaded) {
+  // The failure branch must come BEFORE the loading splash: a failed load
+  // never produces content, so a splash-first ordering spins forever and the
+  // user gets no error and no way back. `getLocalized` resolves null (no
+  // error) for a missing entry, so a SETTLED query with nothing loaded is a
+  // failure too, not "loading". FragmentEditor and PageEditorWrapper were
+  // both corrected this way (see test/editor-load-failure.test.tsx); this
+  // editor was missed, which is the second reason an unopenable page here
+  // showed an eternal spinner instead of an error.
+  //
+  // `!isContentLoaded` scopes this to the FIRST load. After a locale switch
+  // to an untranslated locale the query also settles null, and that is not a
+  // failure — `switchLocale` deliberately clears the buffer so the user can
+  // author the new locale in place.
+  if (!isContentLoaded && (error || !isLoading) && !loadedContent) {
     return (
-      <div className="flex items-center justify-center h-screen bg-page">
-        <div className="flex items-center gap-3 text-muted">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-azure-04" />
-          <span>Loading page…</span>
-        </div>
-      </div>
-    );
-  }
-
-  if (error && !loadedContent && !savedContentRef.current) {
-    return (
-      <div className="flex flex-col items-center justify-center h-screen bg-page gap-4">
-        <div className="text-red-04">Failed to load page: {error?.message || 'Not found'}</div>
+      <div className="flex flex-col items-center justify-center h-full bg-page gap-4">
+        <div className="text-red-04 dark:text-red-08">Failed to load page: {error?.message || 'Not found'}</div>
         <button
           type="button"
           onClick={() => navigate('/pages')}
@@ -292,6 +333,20 @@ export function MdxPageEditor() {
         >
           Back to Pages
         </button>
+      </div>
+    );
+  }
+
+  // Render the loading splash until we have the initial markdown — MDXEditorLib
+  // only reads `markdown` once on mount, so we can't safely render the editor
+  // with a placeholder empty string and update it later.
+  if (isLoading || !isContentLoaded) {
+    return (
+      <div className="flex items-center justify-center h-full bg-page">
+        <div className="flex items-center gap-3 text-muted">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-azure-04" />
+          <span>Loading page…</span>
+        </div>
       </div>
     );
   }
@@ -308,7 +363,7 @@ export function MdxPageEditor() {
             : 'Save';
 
   return (
-    <div className="h-screen flex flex-col bg-page">
+    <div className="h-full flex flex-col bg-page">
       <header className="flex items-center justify-between gap-4 px-4 py-2 border-b border-line bg-overlay shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           <button
@@ -329,7 +384,11 @@ export function MdxPageEditor() {
           />
           {publishedPathname && (
             <a
-              href={publishedPathname}
+              // Resolve against the site (siteBaseUrl), not
+              // the editor origin — the same rule Puck's preview links follow.
+              // A bare relative pathname here would open the page on the
+              // editor's own origin instead of the site.
+              href={buildUrl(publishedPathname)}
               target="_blank"
               rel="noopener noreferrer"
               aria-label="Open published page in a new tab"
@@ -357,14 +416,16 @@ export function MdxPageEditor() {
           >
             Cancel
           </button>
-          <button
-            type="button"
-            onClick={handleSaveClick}
-            disabled={saveState === 'saving' || (!isDirty && saveState === 'idle')}
-            className="px-3 py-1.5 text-sm bg-accent text-accent-foreground rounded hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {saveButtonLabel}
-          </button>
+          {!hideSave && (
+            <button
+              type="button"
+              onClick={handleSaveClick}
+              disabled={saveState === 'saving' || (!isDirty && saveState === 'idle')}
+              className="px-3 py-1.5 text-sm bg-accent text-accent-foreground rounded hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {saveButtonLabel}
+            </button>
+          )}
         </div>
       </header>
       {/* `min-h-0` is required on flex children that themselves overflow —
@@ -380,7 +441,10 @@ export function MdxPageEditor() {
             (eg a card surface), the wrapper paints; when the host's
             wrapper is transparent (Starlight's `<main>`), the
             surround's body bg shows through. */}
-        <div className="flex-1 min-w-0 overflow-hidden conloca-mdx-editor-surround">
+        <div
+          className={`flex-1 min-w-0 overflow-hidden conloca-mdx-editor-surround${resolvedTheme === 'dark' ? ' dark' : ''}`}
+          data-theme={resolvedTheme}
+        >
           <CMSMDXEditor
             // Re-mount on locale switch so the editor re-initializes with
             // the new locale's markdown — `value` is read once on first
@@ -407,7 +471,7 @@ export function MdxPageEditor() {
                 savedContentRef.current = next;
               }
             }}
-            onSave={persist}
+            onSave={bindSaveShortcut ? persist : undefined}
             className={editorClassName}
             autoFocus
             placeholder="Start writing your page…"

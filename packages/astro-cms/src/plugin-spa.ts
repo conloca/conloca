@@ -5,11 +5,18 @@ import type { UIConfig } from '@conloca/cms-spa';
 import { readSitesConfig } from '@conloca/content-api/node';
 import viteReact from '@vitejs/plugin-react';
 import type { AstroIntegration } from 'astro';
-import { searchForWorkspaceRoot } from 'vite';
+import { type HotPayload, type InferCustomEventPayload, type NormalizedHotChannel, searchForWorkspaceRoot } from 'vite';
+import { deriveAssetRefBase } from './asset-ref-base.js';
+import type { MdxRegistryScanOptions } from './discovery/discover.js';
 import { createRegistryEndpoint } from './discovery/registry-endpoint.js';
+import { EDITOR_DESCRIPTORS_ENV_VAR, type EditorDescriptorChannel } from './editor-descriptors.js';
+import { CONTENT_CONFIG_SNIPPET, findContentConfigProblem } from './lib/content-config-guard.js';
 import { deriveComponentPaths, type HydrationDiscovery, scanForHydratableComponents } from './lib/hydration-scanner.js';
-import { normalizeRoutingConfig, resolveRouteConfig } from './lib/routing-config.js';
+import { resolveLocale } from './lib/resolve-locale.js';
+import { resolveSiteName } from './lib/resolve-site-name.js';
+import { normalizeRoutingConfig, resolveRouteConfig, toEditorDataBindings } from './lib/routing-config.js';
 import type { ConlocaLocales } from './locales-helpers.js';
+import { createComponentsEndpoint, endpointReaderOptions } from './puck-manifest/components-endpoint.js';
 import { createContentWrapperEndpoint } from './site-styles/content-wrapper-endpoint.js';
 import { createRenderEndpoint } from './site-styles/render-endpoint.js';
 import { createStylesEndpoint } from './site-styles/styles-endpoint.js';
@@ -28,20 +35,31 @@ if (typeof viteReact.preambleCode !== 'string') {
 
 const reactRefreshPreamble = viteReact.preambleCode.replace('__BASE__', '/');
 
-// Get the directory of this module to resolve page-handler.astro
-// Works from both src/ (dev) and dist/ (published) since build copies the file
+// The preamble is served as a module of its own rather than pasted into each
+// dev virtual module below. A module's static imports all evaluate before its
+// own body runs, so inlined preamble statements always lose to the cms-spa
+// import underneath them — and cms-spa's built entries are plain `.js`, which
+// Vite's React plugin rewrites with Fast Refresh, throwing on evaluation while
+// `window.$RefreshReg$` is still unset. Imported first, the preamble wins.
+const VIRTUAL_REFRESH_PREAMBLE = 'virtual:conloca-react-refresh-preamble';
+const RESOLVED_REFRESH_PREAMBLE = `\0${VIRTUAL_REFRESH_PREAMBLE}`;
+
+// Get the directory of this module to resolve the copied handler assets.
+// Compiled, this file sits in dist/ts/src/, the copied Astro handler in
+// dist/internal/, and the emitted handler modules right next to this file.
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const PAGE_HANDLER_PATH = join(__dirname, '..', 'internal', 'page-handler.astro');
-const CMS_HANDLER_PATH = join(__dirname, '..', 'internal', 'cms-handler.mjs');
-const ACORN_DEFAULT_SHIM_PATH = join(__dirname, '..', 'internal', 'acorn-default.mjs');
+const PAGE_HANDLER_PATH = join(__dirname, '..', '..', 'internal', 'page-handler.astro');
+const CMS_HANDLER_PATH = join(__dirname, 'cms-handler.js');
+const SANDBOX_FRAME_HANDLER_PATH = join(__dirname, 'sandbox-frame-handler.js');
+const ACORN_DEFAULT_SHIM_PATH = join(__dirname, '..', '..', 'internal', 'acorn-default.mjs');
+const TIPTAP_HTML_SHIM_PATH = join(__dirname, 'tiptap-html-static.js');
 
 import {
   generateLayoutModule,
-  generatePageApiModule,
   generatePuckConfigModule,
   generateRoutingConfigModule,
 } from './lib/virtual-module-generators.js';
-import type { ResolvedRoutingConfig, RoutingConfigInput, TemplateConfig } from './types.js';
+import type { EditorDataBindings, ResolvedRoutingConfig, RoutingConfigInput, TemplateConfig } from './types.js';
 
 // Virtual module for passing config from plugin to route handler
 const VIRTUAL_CONFIG_MODULE = 'virtual:conloca-config';
@@ -50,13 +68,11 @@ const RESOLVED_VIRTUAL_CONFIG = `\0${VIRTUAL_CONFIG_MODULE}`;
 // Virtual module IDs for routing system
 const VIRTUAL_ROUTING_CONFIG = 'virtual:conloca-routing-config';
 const VIRTUAL_LAYOUT = 'virtual:conloca-layout';
-const VIRTUAL_PAGE_API = 'virtual:conloca-page-api';
 const VIRTUAL_PUCK_CONFIG = 'virtual:conloca-puck-config';
 
 // Resolved IDs (with \0 prefix to prevent file resolution)
 const RESOLVED_ROUTING_CONFIG = `\0${VIRTUAL_ROUTING_CONFIG}`;
 const RESOLVED_LAYOUT = `\0${VIRTUAL_LAYOUT}`;
-const RESOLVED_PAGE_API = `\0${VIRTUAL_PAGE_API}`;
 const RESOLVED_PUCK_CONFIG = `\0${VIRTUAL_PUCK_CONFIG}`;
 
 // Virtual modules for hydration system
@@ -64,6 +80,12 @@ const VIRTUAL_HYDRATION_REGISTRY = 'virtual:conloca-hydration-registry';
 const VIRTUAL_HYDRATION_ENTRY = 'virtual:conloca-hydration-entry';
 const RESOLVED_HYDRATION_REGISTRY = `\0${VIRTUAL_HYDRATION_REGISTRY}`;
 const RESOLVED_HYDRATION_ENTRY = `\0${VIRTUAL_HYDRATION_ENTRY}`;
+
+/** Vite payloads whose browser-side effects would overwrite the editor's own save update. */
+function dropsEditorSaveUpdate(payload: HotPayload): boolean {
+  if (payload.type === 'full-reload') return true;
+  return payload.type === 'custom' && payload.event === 'conloca:content-update';
+}
 
 // Virtual module for CMS SPA source loading (dev only)
 const VIRTUAL_CMS_SPA_ENTRY = 'virtual:conloca-cms-spa-entry';
@@ -74,11 +96,16 @@ async function loadContentApiNode() {
 }
 
 export interface ConlocaCMSOptions extends Omit<UIConfig, 'basename'> {
+  /**
+   * Path to the content root directory. The single source of truth: the
+   * integration publishes it (via process.env.CONLOCA_CONTENT_ROOT) to
+   * createConlocaCollections(), so the content config needs no copy.
+   */
   contentRoot: string;
   canvasDir?: string;
   route?: string; // Default: /__cms
   puckConfigPath: string; // Path to the puck config module (should be .tsx file with React components)
-  schemasPath?: string; // Path to the schemas module (exports { dataSchemas, pageSchemas })
+  schemasPath?: string; // Path to the schemas module (exports { dataSchemas, pageSchemas, mdxComponents })
 
   /**
    * Default layout for content pages.
@@ -111,15 +138,18 @@ export interface ConlocaCMSOptions extends Omit<UIConfig, 'basename'> {
    *
    * Paths are project-relative. Defaults to `['src/components/mdx']`.
    *
-   * @example ['src/components/mdx', 'src/components/blocks']
+   * @example ['src/components/mdx', 'src/components/prose']
    */
   mdxComponentFolders?: string[];
 
   /**
    * Path to the assets directory for image uploads.
    * When provided, enables the Media Library and asset upload API routes.
+   * The editor stores links under the public URL derived from this folder.
+   * The site must serve the folder from its publicDir, directly or through a link, or dev and build fail.
+
    *
-   * @example 'src/assets/uploads'
+   * @example './public/assets'
    */
   assetsPath?: string;
 
@@ -148,7 +178,7 @@ export interface ConlocaCMSOptions extends Omit<UIConfig, 'basename'> {
    * `./src/styles/starlight-components.css`, `./src/styles/code-blocks.css`.
    *
    * What does NOT belong: the host's `global.css` (Tailwind base, theme,
-   * utilities), `prose.css` (already loaded by `@conloca/mdx`), or any
+   * utilities) or any
    * stylesheet with `body`, `:root`, or `*` rules that would override
    * admin chrome. Those go in `siteStyles` instead — that path is only
    * injected into the Puck iframe, never the admin shell.
@@ -159,24 +189,24 @@ export interface ConlocaCMSOptions extends Omit<UIConfig, 'basename'> {
 
   /**
    * Route URL whose styles + content-wrapper shape get applied when
-   * editing a standalone BLOCK (not a page). Blocks aren't tied to a
+   * editing a standalone FRAGMENT (not a page). Fragments aren't tied to a
    * specific route, but they're consumed inside pages — so the
    * authoring experience should look like the user's actual site. The
    * editor fetches this route's CSS (via `/api/styles?url=…`) and its
    * content-root wrapper (via `/api/content-wrapper?url=…`) the same
-   * way it does for pages, then renders the block inside that frame.
+   * way it does for pages, then renders the fragment inside that frame.
    *
    * Pick a representative content page on your site — typically the
    * site root or a docs landing page. Hosts that ship rich typography
    * benefit most; for hosts whose body bg matches the editor chrome,
    * the value barely matters. Defaults to `/` (site root).
    *
-   * Per-block overrides via block frontmatter remain on the roadmap
-   * for cases where one block ships only inside a specific layout.
+   * Per-fragment overrides via fragment frontmatter remain on the roadmap
+   * for cases where one fragment ships only inside a specific layout.
    *
    * @example '/getting-started/'
    */
-  blockPreviewRoute?: string;
+  fragmentPreviewRoute?: string;
 
   /**
    * Inline CSS to inject into the editor's `conloca-host-preview`
@@ -222,11 +252,11 @@ export interface ConlocaCMSOptions extends Omit<UIConfig, 'basename'> {
    * behavior; preserved for backwards compatibility).
    *
    * Use one of the framework-bridge helpers exported from
-   * `@conloca/astro-cms` to keep the declaration in a single spot:
+   * `@conloca/astro-cms/node` to keep the declaration in a single spot:
    *
    * @example Pass Astro's i18n config directly:
    * ```ts
-   * import { conlocaCMS, localesFromAstroI18n } from '@conloca/astro-cms';
+   * import { conlocaCMS, localesFromAstroI18n } from '@conloca/astro-cms/node';
    * const i18n = { defaultLocale: 'en', locales: ['en', 'de'] };
    * defineConfig({
    *   i18n,
@@ -265,10 +295,10 @@ export default {};
 const puckConfigLoader = (absolutePuckPath: string, cmsSpaDistDir?: string) => {
   // We need to ensure the preamble executes before ANY module evaluation
   // So we'll use a dynamic import after the preamble is set up
-  const puckConfigImport = cmsSpaDistDir ? `${cmsSpaDistDir}/puck-config.mjs` : '@conloca/cms-spa/puck-config';
+  const puckConfigImport = cmsSpaDistDir ? `${cmsSpaDistDir}/ts/puck-config.js` : '@conloca/cms-spa/puck-config';
   return `
-// Import and execute React refresh preamble first (from @vitejs/plugin-react)
-${reactRefreshPreamble}
+// React refresh preamble first — it must be the first import, see its module
+import '${VIRTUAL_REFRESH_PREAMBLE}';
 
 // Import the setPuckConfig function from cms-spa
 import { setPuckConfig } from '${puckConfigImport}';
@@ -303,19 +333,23 @@ export default puckConfigPromise.then(m => m.default);
 
 // Template for the schemas loader virtual module
 const schemasLoader = (absoluteSchemasPath: string, cmsSpaDistDir?: string) => {
-  const pageSchemasImport = cmsSpaDistDir ? `${cmsSpaDistDir}/page-schemas.mjs` : '@conloca/cms-spa/page-schemas';
-  const mdxComponentsImport = cmsSpaDistDir ? `${cmsSpaDistDir}/mdx-components.mjs` : '@conloca/cms-spa/mdx-components';
+  const pageSchemasImport = cmsSpaDistDir ? `${cmsSpaDistDir}/ts/page-schemas.js` : '@conloca/cms-spa/page-schemas';
+  const mdxComponentsImport = cmsSpaDistDir
+    ? `${cmsSpaDistDir}/ts/mdx-components.js`
+    : '@conloca/cms-spa/mdx-components';
+  const dataSchemasImport = cmsSpaDistDir ? `${cmsSpaDistDir}/ts/data-schemas.js` : '@conloca/cms-spa/data-schemas';
   // The host's schemas file may transitively import React components (the
   // `Editor` field on an MdxComponentDescriptor can be a JSX/TSX
-  // component). Vite's React plugin requires the Fast Refresh preamble to
-  // run before any TSX module is evaluated, so we emit it here and then
-  // dynamically import the schemas file — matching the pattern used by
-  // the Puck config loader above.
+  // component), and so does cms-spa's own mdx-components entry. Vite's React
+  // plugin requires the Fast Refresh preamble to run before any such module
+  // is evaluated, so we import it first and then dynamically import the
+  // schemas file — matching the pattern used by the Puck config loader above.
   return `
-${reactRefreshPreamble}
+import '${VIRTUAL_REFRESH_PREAMBLE}';
 
 import { setPageSchemas } from '${pageSchemasImport}';
-import { setMdxComponents } from '${mdxComponentsImport}';
+import { installHostAuthoredMdxComponents } from '${mdxComponentsImport}';
+import { setDataSchemas } from '${dataSchemasImport}';
 
 const schemasPromise = import('${absoluteSchemasPath}');
 
@@ -324,7 +358,13 @@ schemasPromise.then((schemas) => {
     setPageSchemas(schemas.pageSchemas);
   }
   if (schemas.mdxComponents) {
-    setMdxComponents(schemas.mdxComponents);
+    // Slotted installer, not setMdxComponents: this module and the SPA's
+    // /api/registry fetch settle in either order, and a bare set from the
+    // late one would overwrite the other's components.
+    installHostAuthoredMdxComponents(schemas.mdxComponents);
+  }
+  if (schemas.dataSchemas) {
+    setDataSchemas(schemas.dataSchemas);
   }
 });
 
@@ -334,7 +374,10 @@ if (import.meta.hot) {
       setPageSchemas(newModule.pageSchemas);
     }
     if (newModule?.mdxComponents) {
-      setMdxComponents(newModule.mdxComponents);
+      installHostAuthoredMdxComponents(newModule.mdxComponents);
+    }
+    if (newModule?.dataSchemas) {
+      setDataSchemas(newModule.dataSchemas);
     }
   });
 }
@@ -360,9 +403,10 @@ const siteStylesLoader = (cssPaths: string[], cmsSpaDistDir?: string) => {
     })
     .join('\n');
   const vars = cssPaths.map((_, i) => `css${i}`).join(', ');
-  const siteStylesImport = cmsSpaDistDir ? `${cmsSpaDistDir}/site-styles.mjs` : '@conloca/cms-spa/site-styles';
+  const siteStylesImport = cmsSpaDistDir ? `${cmsSpaDistDir}/ts/site-styles.js` : '@conloca/cms-spa/site-styles';
 
   return `
+import '${VIRTUAL_REFRESH_PREAMBLE}';
 ${imports}
 import { setSiteStyles } from '${siteStylesImport}';
 
@@ -389,9 +433,10 @@ const editorStylesLoader = (cssPaths: string[], cmsSpaDistDir?: string) => {
     })
     .join('\n');
   const vars = cssPaths.map((_, i) => `css${i}`).join(', ');
-  const siteStylesImport = cmsSpaDistDir ? `${cmsSpaDistDir}/site-styles.mjs` : '@conloca/cms-spa/site-styles';
+  const siteStylesImport = cmsSpaDistDir ? `${cmsSpaDistDir}/ts/site-styles.js` : '@conloca/cms-spa/site-styles';
 
   return `
+import '${VIRTUAL_REFRESH_PREAMBLE}';
 ${imports}
 import { setEditorStyles } from '${siteStylesImport}';
 
@@ -404,6 +449,19 @@ if (import.meta.hot) {
 export default {};
 `;
 };
+
+/**
+ * Whether a resolved package directory came from the registry rather than from
+ * a workspace. @conloca/cms-spa ships its sources so source maps resolve, so
+ * the files on disk no longer tell the two apart — the location does. Node
+ * resolves symlinks, so a registry install always sits under a node_modules
+ * directory (hoisted `<consumer>/node_modules/@conloca/cms-spa`, or isolated
+ * `…/node_modules/.bun/…/node_modules/@conloca/cms-spa`), while a workspace
+ * package or a cross-repo `bun link` resolves to its own checkout.
+ */
+export function isRegistryInstall(packageDir: string): boolean {
+  return packageDir.split(/[\\/]/).includes('node_modules');
+}
 
 export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
   const cmsRoute = options.route || '/__cms';
@@ -443,6 +501,10 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
 
   // Build resolved routing config with all defaults applied
   let resolvedRoutingConfig: ResolvedRoutingConfig | undefined;
+  // The site's final output mode, read at config:done because integrations
+  // that run after this one may still switch it. The duplicate-route-name check
+  // below keys on it.
+  let outputMode: 'static' | 'server' | undefined;
   if (routingConfig?.enabled !== false && routingConfig) {
     const resolvedRoutes: Record<string, Required<import('./types.js').RouteConfig>> = {};
     for (const [name, config] of Object.entries(routingConfig.routes || {})) {
@@ -453,6 +515,10 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
       routes: resolvedRoutes,
       fallback: routingConfig.fallback ?? '404',
       onConflict: routingConfig.onConflict ?? 'warn',
+      // Both provisional. sites.json cannot be read here — integration
+      // construction is synchronous — so `astro:config:setup` below
+      // re-resolves them against the declared sites before any consumer
+      // loads. See `resolveSiteName` and `resolveLocale`.
       siteName: routingConfig.siteName ?? 'default',
       locale: routingConfig.locale ?? 'en',
     };
@@ -476,6 +542,8 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
     templates?: unknown;
     mdxPagesEnabled: boolean;
     locales?: { list: string[]; defaultLocale: string };
+    assetRefBase?: string;
+    dataBindings?: EditorDataBindings;
   } = {
     basename: cmsRoute,
     apiBaseUrl: `${cmsRoute}/api`,
@@ -502,18 +570,57 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
   // files (if any) fall back to living alongside Puck pages.
   let resolvedMdxPages: string | null = null;
 
+  // One root for every path this plugin resolves against, so a scan and an
+  // endpoint can never disagree about where the project is.
+  const projectRoot = process.cwd();
+
+  // Registry scan inputs, resolved ONCE: the dev endpoint below and anything
+  // that reads them off the descriptor channel must never disagree about which
+  // folders and content root were scanned.
+  // `contentRoot` is re-pointed at sites.json's `mdxPages` in config:setup,
+  // once that file has been read.
+  let registryScan: MdxRegistryScanOptions = {
+    contentRoot: options.contentRoot,
+    componentFolders: options.mdxComponentFolders ?? ['src/components/mdx'],
+    projectRoot,
+  };
+
   let refreshConlocaContent: (() => Promise<void>) | undefined;
 
   return {
     name: '@conloca/astro-cms',
     hooks: {
-      'astro:config:setup': async ({ updateConfig, injectRoute, command, logger }) => {
+      'astro:config:setup': async ({ config, updateConfig, injectRoute, command, logger }) => {
+        // Publish the content root for createConlocaCollections(): the
+        // content config loads later in this same process, so the contentRoot
+        // configured here is the single source of truth. Raw on purpose —
+        // FileSystemContentAPI keys its process-wide index cache on the
+        // string as-passed, and the dev content watcher uses the raw option;
+        // resolving here would split one cache into two and dev refreshes
+        // would read stale content.
+        process.env.CONLOCA_CONTENT_ROOT = options.contentRoot;
         // Read sites.json — the canonical home for per-site config
         // including the optional `mdxPages` field. Reading it here (once,
         // at integration setup) gives us a single source of truth for
         // the rest of the hook. `readSitesConfig` returns a safe default
         // when the file is missing or malformed.
         const sitesConfig = await readSitesConfig(options.contentRoot);
+        // Now that sites.json is known, replace the provisional site name and
+        // locale built at construction time. Resolving from the raw options
+        // (not the already-defaulted resolved config) is what makes the
+        // sites.json fallbacks reachable. Every consumer — the routing
+        // virtual module, the editor's data bindings below, and
+        // `astro:routes:resolved` — reads them after this, so they all
+        // observe the resolved values.
+        if (resolvedRoutingConfig) {
+          resolvedRoutingConfig.siteName = resolveSiteName(routingConfig?.siteName, sitesConfig.sites);
+          resolvedRoutingConfig.locale = resolveLocale(
+            routingConfig?.locale,
+            options.locales?.defaultLocale,
+            resolvedRoutingConfig.siteName,
+            sitesConfig,
+          );
+        }
         // Pick the first site that declares an `mdxPages` path. Today's
         // integration supports a single `mdxPages` per project;
         // multi-site `mdxPages` is a future expansion (would require
@@ -521,10 +628,68 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
         const firstSiteWithMdxPages = Object.values(sitesConfig.sites).find((s) => s?.mdxPages);
         resolvedMdxPages = firstSiteWithMdxPages?.mdxPages ?? null;
         spaConfig.mdxPagesEnabled = Boolean(resolvedMdxPages);
+        // The editor builds each page's data context in the browser from
+        // these, the same bindings the published page resolves with.
+        spaConfig.dataBindings = resolvedRoutingConfig?.enabled
+          ? toEditorDataBindings(resolvedRoutingConfig)
+          : undefined;
+
+        registryScan = { ...registryScan, contentRoot: resolvedMdxPages ?? options.contentRoot };
+        // Publish the resolved editor descriptors for other integrations in
+        // this build (see EDITOR_DESCRIPTORS_ENV_VAR): they read the same
+        // descriptors dev loads from `schemasPath`, `/api/registry` and
+        // `virtual:conloca-config` instead of taking these options again.
+        // schemasPath is absolutized because a reader may use it as an import
+        // specifier.
+        const editorDescriptors: EditorDescriptorChannel = {
+          ...(options.schemasPath ? { schemasPath: resolve(options.schemasPath) } : {}),
+          registry: registryScan,
+          ...(options.templates ? { templates: options.templates } : {}),
+          ...(spaConfig.dataBindings ? { dataBindings: spaConfig.dataBindings } : {}),
+        };
+        process.env[EDITOR_DESCRIPTORS_ENV_VAR] = JSON.stringify(editorDescriptors);
 
         // Auto-inject fs.allow for external contentRoot (dev mode only)
         const astroRoot = process.cwd();
         const contentAbsolute = resolve(options.contentRoot);
+
+        // A missing content root used to produce an empty site that 404'd
+        // every page with no hint. Fail the build loudly; in dev (and sync)
+        // only warn — a brand-new project boots with an empty site and the
+        // CMS creates the directory on first save.
+        if (!existsSync(contentAbsolute)) {
+          const hint =
+            `Content root not found: ${contentAbsolute}. Create the directory ` +
+            '(git cannot track empty folders — add a .gitkeep) or fix contentRoot in conlocaCMS().';
+          if (command === 'build') {
+            throw new Error(`[Conloca] ${hint}`);
+          }
+          logger.warn(`${hint} Starting with an empty site.`);
+        }
+
+        // A content config that never declares Conloca collections yields
+        // an empty Astro collection, so the injected route resolves nothing
+        // and every page 404s with no other symptom. Astro exposes no hook
+        // that reveals resolved collections, so check the file itself.
+        const contentConfigProblem = findContentConfigProblem(astroRoot);
+        if (contentConfigProblem) {
+          const cause =
+            contentConfigProblem === 'missing'
+              ? 'No content config found.'
+              : 'Your content config does not declare Conloca collections.';
+          const hint = `${cause} Conloca pages will 404 until it does. Add this:\n\n${CONTENT_CONFIG_SNIPPET}\n`;
+          if (command === 'build') {
+            throw new Error(`[Conloca] ${hint}`);
+          }
+          logger.warn(hint);
+        }
+
+        // Every image the editor picks is stored under this base and served
+        // as-is by the published site. Derived in build too, so a media
+        // folder the site cannot serve fails there as well as in dev.
+        if (options.assetsPath) {
+          spaConfig.assetRefBase = deriveAssetRefBase(options.assetsPath, config.publicDir, config.base);
+        }
 
         if (command === 'dev' && !contentAbsolute.startsWith(astroRoot)) {
           logger.info(`Auto-allowing contentRoot in Vite fs.allow: ${options.contentRoot}`);
@@ -575,7 +740,24 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
               // package's node_modules and must NOT be forced to resolve from the
               // consumer root (which would fail).
               dedupe: ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
+              alias: [
+                // Puck's richtext field render imports @tiptap/html. Its browser
+                // build throws off-browser ("generateHTML can only be used in a
+                // browser environment"), and its /server build fakes a browser
+                // with happy-dom — whose Window constructor reaches for
+                // node:vm's Script.runInContext, a stub on workerd, so every
+                // richtext section died there with "The 'contextifiedObject'
+                // argument must be an vm.Context". Both specifiers resolve to a
+                // shim that writes the markup as a string, with no DOM and no
+                // vm, so the same output comes out on every engine.
+                { find: /^@tiptap\/html(\/server)?$/, replacement: TIPTAP_HTML_SHIM_PATH },
+              ],
             },
+            // react-dom@19 ships ./server as CJS under the workerd exports
+            // condition; without pre-bundling, the Cloudflare adapter's type-gen
+            // phase evaluates it raw in workerd ("require is not defined").
+            // Inert for Node builds.
+            optimizeDeps: { include: ['react-dom/server'] },
             // Virtual modules for routing - needed in both dev and build
             plugins: [
               // Public page rendering should use Puck's server entry, not the full editor.
@@ -590,14 +772,15 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
                   return null;
                 },
               },
-              // Alias acorn to a CJS shim only during SSR (static page builds).
-              // Must NOT apply to the browser bundle — the shim uses createRequire
-              // which is Node.js-only and crashes in the browser.
+              // Alias acorn to a default+named shim only during SSR (page
+              // builds). Must NOT apply to the browser bundle, and must NOT
+              // apply to the shim's own `import ... from 'acorn'` — that
+              // static import has to reach the real package, not recurse.
               {
                 name: 'conloca-acorn-ssr-alias',
                 enforce: 'pre' as const,
-                resolveId(id, _importer, options) {
-                  if (id === 'acorn' && options?.ssr) {
+                resolveId(id, importer, options) {
+                  if (id === 'acorn' && options?.ssr && !importer?.endsWith('acorn-default.mjs')) {
                     return ACORN_DEFAULT_SHIM_PATH;
                   }
                   return null;
@@ -690,6 +873,24 @@ initHydration(componentRegistry)
           }
         }
 
+        // The sandbox frame document ContentSandbox loads for MDX previews.
+        // Root-absolute by contract (SANDBOX_FRAME_PATH in @conloca/mdx) and
+        // needed wherever the editor runs — anything that serves the editor
+        // serves the same path. Injected outside the dev-only block: a
+        // production editor build needs the frame too.
+        //
+        // On-demand by necessity — the response carries the sandbox CSP, which
+        // a prerendered file cannot — so injecting it into a fully static site
+        // fails that build with NoAdapterInstalled. Such a site has no runtime
+        // editor to serve it to; dev serves it whatever the output mode.
+        if (command === 'dev' || config.output !== 'static') {
+          injectRoute({
+            pattern: '/api/v1/mdx/sandbox-frame',
+            entrypoint: SANDBOX_FRAME_HANDLER_PATH,
+            prerender: false,
+          });
+        }
+
         // Only inject CMS admin routes and dev-specific config in dev mode
         if (command !== 'dev') return;
 
@@ -705,10 +906,10 @@ initHydration(componentRegistry)
               // longer surfaced as env vars — the content-api reads them
               // directly from sites.json under `contentRoot` at request
               // time. See `readSitesConfig()` and `SitesConfig.sites[name].mdxPages`.
-              // Default route URL the block editor uses for style /
-              // wrapper discovery. See `blockPreviewRoute` option doc
+              // Default route URL the fragment editor uses for style /
+              // wrapper discovery. See `fragmentPreviewRoute` option doc
               // above. `/` is a sane fallback for most layouts.
-              'import.meta.env.CONLOCA_BLOCK_PREVIEW_ROUTE': JSON.stringify(options.blockPreviewRoute || '/'),
+              'import.meta.env.CONLOCA_FRAGMENT_PREVIEW_ROUTE': JSON.stringify(options.fragmentPreviewRoute || '/'),
               // Raw CSS the host wants injected into the editor's
               // `conloca-host-preview` layer for visual overrides.
               // See `editorCSS` option doc above for use cases.
@@ -782,6 +983,9 @@ initHydration(componentRegistry)
                   if (id === VIRTUAL_CONFIG_MODULE) {
                     return RESOLVED_VIRTUAL_CONFIG;
                   }
+                  if (id === VIRTUAL_REFRESH_PREAMBLE) {
+                    return RESOLVED_REFRESH_PREAMBLE;
+                  }
                   if (id === `${cmsRoute}/puck-entry.js`) {
                     return id;
                   }
@@ -797,9 +1001,6 @@ initHydration(componentRegistry)
                   if (id === `${cmsRoute}/editor-styles.js`) {
                     return id;
                   }
-                  if (id === VIRTUAL_PAGE_API) {
-                    return RESOLVED_PAGE_API;
-                  }
                   if (id === VIRTUAL_CMS_SPA_ENTRY) {
                     return RESOLVED_CMS_SPA_ENTRY;
                   }
@@ -812,6 +1013,9 @@ initHydration(componentRegistry)
                   // Dev-only config module for cms-handler.ts
                   if (id === RESOLVED_VIRTUAL_CONFIG) {
                     return `export default ${JSON.stringify(spaConfig)};`;
+                  }
+                  if (id === RESOLVED_REFRESH_PREAMBLE) {
+                    return reactRefreshPreamble;
                   }
                   if (id === `${cmsRoute}/puck-entry.js`) {
                     const absolutePuckPath = options.puckConfigPath.startsWith('.')
@@ -846,20 +1050,12 @@ initHydration(componentRegistry)
                     }
                     return 'export default {};';
                   }
-                  if (id === RESOLVED_PAGE_API) {
-                    return generatePageApiModule({
-                      contentRoot: options.contentRoot,
-                      canvasDir: options.canvasDir || './canvas',
-                      siteName: resolvedRoutingConfig?.siteName ?? 'default',
-                      locale: resolvedRoutingConfig?.locale ?? 'en',
-                    });
-                  }
                   if (id === RESOLVED_CMS_SPA_ENTRY) {
-                    // Detect whether cms-spa source is available (workspace mode)
-                    // vs only dist/ (npm install).  Reuses `cmsSpaDir` resolved
-                    // at plugin setup time.
+                    // Detect whether cms-spa is a workspace checkout (import its
+                    // source for HMR) or a registry install (import its built
+                    // entry). Reuses `cmsSpaDir` resolved at plugin setup time.
                     let cmsSpaImport: string;
-                    if (cmsSpaDir) {
+                    if (cmsSpaDir && !isRegistryInstall(cmsSpaDir)) {
                       const realSrcMainPath = join(cmsSpaDir, 'src', 'main.tsx');
                       // Prefer the consumer-side symlink path when @conloca/cms-spa is
                       // linked in from another workspace (e.g. cross-repo `bun link`).
@@ -877,23 +1073,18 @@ initHydration(componentRegistry)
                         'src',
                         'main.tsx',
                       );
-                      const srcMainPath = existsSync(linkedSrcMainPath) ? linkedSrcMainPath : realSrcMainPath;
 
-                      if (existsSync(srcMainPath)) {
-                        // Workspace mode: import source for HMR
-                        cmsSpaImport = `import '${srcMainPath}';`;
-                      } else {
-                        // npm mode: import pre-built SPA mounting entry
-                        cmsSpaImport = "import '@conloca/cms-spa/main';";
-                      }
+                      // Workspace mode: import source for HMR
+                      cmsSpaImport = `import '${existsSync(linkedSrcMainPath) ? linkedSrcMainPath : realSrcMainPath}';`;
                     } else {
-                      // Fallback: use package import
+                      // npm mode, and the fallback when the package cannot be
+                      // resolved: import the pre-built SPA mounting entry
                       cmsSpaImport = "import '@conloca/cms-spa/main';";
                     }
 
                     return `
-// Import and execute React refresh preamble first (from @vitejs/plugin-react)
-${reactRefreshPreamble}
+// React refresh preamble first — it must be the first import, see its module
+import '${VIRTUAL_REFRESH_PREAMBLE}';
 
 // Import cms-spa through Vite
 // Vite will resolve React from its pre-bundled deps (same instance as puck.config.tsx)
@@ -955,11 +1146,7 @@ if (import.meta.hot) {
                 name: 'conloca-registry-and-render-endpoints',
                 apply: 'serve' as const,
                 configureServer(server) {
-                  const registry = createRegistryEndpoint({
-                    contentRoot: resolvedMdxPages ?? options.contentRoot,
-                    componentFolders: options.mdxComponentFolders ?? ['src/components/mdx'],
-                    projectRoot: process.cwd(),
-                  });
+                  const registry = createRegistryEndpoint(registryScan);
                   server.middlewares.use(`${cmsRoute}/api/registry`, registry.handler);
                   server.middlewares.use(
                     `${cmsRoute}/api/render`,
@@ -978,6 +1165,25 @@ if (import.meta.hot) {
                   server.watcher.on('add', onFsChange);
                   server.watcher.on('change', onFsChange);
                   server.watcher.on('unlink', onFsChange);
+                },
+              },
+              {
+                // The Puck component vocabulary: every component the config
+                // declares, with its fields, read from source and never
+                // executed — so an agent editing a page can find out what it
+                // may compose with. A build that publishes the vocabulary
+                // reads the same config through the same entry
+                // (`./puck-manifest`), never describing components a second
+                // way.
+                name: 'conloca-components-endpoint',
+                apply: 'serve' as const,
+                configureServer(server) {
+                  server.middlewares.use(
+                    `${cmsRoute}/api/components`,
+                    createComponentsEndpoint(
+                      endpointReaderOptions({ puckConfigPath: options.puckConfigPath, projectRoot }),
+                    ),
+                  );
                 },
               },
               {
@@ -1121,30 +1327,33 @@ if (import.meta.hot) {
                   //    optimistic setQueryData, so this event is redundant for
                   //    CMS-originated writes. External edits (outside the save window)
                   //    still pass through normally.
-                  const shouldDropDuringWindow = (payload: unknown): boolean => {
-                    if (!payload || typeof payload !== 'object') return false;
-                    const p = payload as { type?: string; event?: string };
-                    if (p.type === 'full-reload') return true;
-                    if (p.type === 'custom' && p.event === 'conloca:content-update') return true;
-                    return false;
-                  };
-
-                  const patchSend = <T extends { send: (...a: never[]) => unknown }>(target: T | undefined) => {
-                    if (!target) return;
-                    const marked = target as unknown as { __conlocaPatched?: boolean };
-                    if (marked.__conlocaPatched) return;
+                  const patchedChannels = new WeakSet();
+                  const patchSend = (target: NormalizedHotChannel | undefined) => {
+                    if (!target || patchedChannels.has(target)) return;
                     const origSend = target.send.bind(target);
-                    target.send = ((payload: unknown, ...rest: unknown[]) => {
-                      if (shouldDropDuringWindow(payload) && Date.now() < suppressUntil) {
+
+                    function send(payload: HotPayload): void;
+                    function send<T extends string>(event: T, payload?: InferCustomEventPayload<T>): void;
+                    function send(
+                      payloadOrEvent: HotPayload | string,
+                      payload?: InferCustomEventPayload<string>,
+                    ): void {
+                      if (typeof payloadOrEvent === 'string') {
+                        origSend(payloadOrEvent, payload);
+                        return;
+                      }
+                      if (dropsEditorSaveUpdate(payloadOrEvent) && Date.now() < suppressUntil) {
                         server.config.logger.info(
-                          `[conloca] suppressed ${(payload as { type: string }).type} during CMS save window`,
+                          `[conloca] suppressed ${payloadOrEvent.type} during CMS save window`,
                           { timestamp: true },
                         );
                         return;
                       }
-                      return (origSend as (...a: unknown[]) => unknown)(payload, ...rest);
-                    }) as T['send'];
-                    marked.__conlocaPatched = true;
+                      origSend(payloadOrEvent);
+                    }
+
+                    target.send = send;
+                    patchedChannels.add(target);
                   };
 
                   // Astro's content plugin sends `full-reload` via environments.client.hot.
@@ -1172,6 +1381,10 @@ if (import.meta.hot) {
           entrypoint: CMS_HANDLER_PATH,
           prerender: false,
         });
+      },
+
+      'astro:config:done': ({ config }) => {
+        outputMode = config.output;
       },
 
       'astro:server:setup': ({ logger, refreshContent }) => {
@@ -1204,9 +1417,33 @@ if (import.meta.hot) {
 
         const injectedPatterns = new Set(Object.values(resolvedRoutingConfig.routes).map((r) => r.pattern));
 
+        // Another integration's route with the SAME NAME as a Conloca route is
+        // fatal, whatever `onConflict` says: routing copes (Astro falls through
+        // a prerendered match to the on-demand twin), but Astro's runtime app
+        // resolves a page's stylesheets by route name and takes the first
+        // match, so the twins swap or lose their styles — silently, and only
+        // in the built site. That app renders every page of a server-output
+        // build (prerendering included) and the on-demand pages of a static
+        // one; fully static generation resolves by route and component, where
+        // twins are harmless, so such a site is left alone. Starlight's docs
+        // route is the usual twin: it is named /[...slug] too. The fix is a
+        // different parameter name.
+        const isConlocaHandler = (route: { entrypoint?: string }) =>
+          route.entrypoint?.endsWith('/internal/page-handler.astro') ?? false;
+        const ownRoutes = routes.filter(isConlocaHandler);
+        for (const route of routes) {
+          if (route.origin !== 'external' || !injectedPatterns.has(route.pattern) || isConlocaHandler(route)) continue;
+          const own = ownRoutes.find((candidate) => candidate.pattern === route.pattern);
+          const stylesResolvedByName = outputMode === 'server' || !route.isPrerendered || own?.isPrerendered === false;
+          if (!stylesResolvedByName) continue;
+          throw new Error(
+            `[Conloca] Route '${route.pattern}' is registered by Conloca routing and by ${route.entrypoint}. ` +
+              'Astro resolves stylesheets by route name, so two routes with the same name lose their styles. ' +
+              "Give the Conloca route a parameter name of its own, e.g. '/[...page]'.",
+          );
+        }
+
         // Find file-based project routes that conflict with injected routes.
-        // Integration routes (origin: 'external') sharing the same catch-all pattern
-        // is expected — Astro's prerender fallthrough handles coexistence automatically.
         const conflicts: { injected: string; fileBased: string }[] = [];
 
         for (const route of routes) {

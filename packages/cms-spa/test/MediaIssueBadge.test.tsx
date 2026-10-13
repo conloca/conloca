@@ -1,7 +1,7 @@
 /// <reference lib="dom" />
 import { afterEach, describe, expect, test } from 'bun:test';
 import { cleanup, render, screen } from '@testing-library/react';
-import { MediaIssueBadge } from '../src/media/MediaIssueBadge';
+import { MediaIssueBadge } from '../src/media/MediaIssueBadge.js';
 
 afterEach(() => {
   cleanup();
@@ -15,7 +15,7 @@ describe('MediaIssueBadge', () => {
 
   test('renders the short "Blocked" label for the sm blocked variant', () => {
     render(
-      <MediaIssueBadge issue={{ kind: 'blocked', filename: 'foo.jpg', reason: 'Still being scanned.' }} size="sm" />,
+      <MediaIssueBadge issue={{ kind: 'blocked', filename: 'foo.jpg', reason: 'Held back by the host.' }} size="sm" />,
     );
     const badge = screen.getByRole('status', { name: /media issue: blocked/i });
     expect(badge.textContent).toBe('Blocked');
@@ -32,20 +32,20 @@ describe('MediaIssueBadge', () => {
     expect(badge.textContent).toBe('Oversized');
   });
 
-  test('renders the full scanner reason for the md blocked variant', () => {
+  test("renders the host's full reason for the md blocked variant", () => {
     render(
       <MediaIssueBadge
         issue={{
           kind: 'blocked',
           filename: 'foo.jpg',
-          reason: 'Flagged by the malware scanner — contact support.',
+          reason: 'Held back by the host: policy violation.',
         }}
         size="md"
       />,
     );
     const badge = screen.getByRole('status');
     expect(badge.textContent).toContain('Blocked');
-    expect(badge.textContent).toContain('Flagged by the malware scanner');
+    expect(badge.textContent).toContain('Held back by the host: policy violation.');
   });
 
   test('renders the size delta for the md oversized variant', () => {
@@ -57,9 +57,7 @@ describe('MediaIssueBadge', () => {
     );
     const badge = screen.getByRole('status');
     expect(badge.textContent).toContain('Oversized');
-    expect(badge.textContent).toContain('5.4 MB');
-    expect(badge.textContent).toContain('2 MB');
-    expect(badge.textContent).toMatch(/media storage/i);
+    expect(badge.textContent).toContain('5.4 MB is over the 2 MB size limit.');
   });
 
   test('paints blocked in red (destructive vocabulary)', () => {

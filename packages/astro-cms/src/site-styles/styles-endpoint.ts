@@ -1,7 +1,4 @@
-import type { IncomingMessage, ServerResponse } from 'node:http';
-
-/** Connect-compatible middleware handler — see render-endpoint.ts. */
-type NextHandleFunction = (req: IncomingMessage, res: ServerResponse, next: (err?: unknown) => void) => void;
+import type { Connect } from 'vite';
 
 /**
  * Vite middleware that returns the concatenated CSS for a route URL.
@@ -43,7 +40,7 @@ type NextHandleFunction = (req: IncomingMessage, res: ServerResponse, next: (err
  *   - Cross-origin stylesheets the dev server can't reach get logged
  *     and skipped (graceful degradation, not silent failure).
  */
-export function createStylesEndpoint(): NextHandleFunction {
+export function createStylesEndpoint(): Connect.NextHandleFunction {
   return async (req, res, _next) => {
     try {
       const parsed = new URL(req.url ?? '', 'http://localhost');
@@ -125,9 +122,7 @@ export async function collectStylesFromHtml(
   const entries: Entry[] = [];
 
   const styleRe = /<style\b([^>]*)>([\s\S]*?)<\/style>/gi;
-  let match: RegExpExecArray | null;
-  // biome-ignore lint/suspicious/noAssignInExpressions: regex exec iterator
-  while ((match = styleRe.exec(cleaned)) !== null) {
+  for (const match of cleaned.matchAll(styleRe)) {
     const attrs = match[1];
     if (/media\s*=\s*["']?print/i.test(attrs)) continue;
     const css = match[2];
@@ -138,8 +133,7 @@ export async function collectStylesFromHtml(
   }
 
   const linkRe = /<link\b([^>]*)\/?>/gi;
-  // biome-ignore lint/suspicious/noAssignInExpressions: regex exec iterator
-  while ((match = linkRe.exec(cleaned)) !== null) {
+  for (const match of cleaned.matchAll(linkRe)) {
     const attrs = match[1];
     if (!/rel\s*=\s*["']?stylesheet["']?/i.test(attrs)) continue;
     if (/media\s*=\s*["']?print/i.test(attrs)) continue;

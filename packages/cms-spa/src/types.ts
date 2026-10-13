@@ -1,4 +1,4 @@
-import type { BlockEditable, DataEditable } from '@conloca/content-api-client';
+import type { DataEditable, FragmentEditable } from '@conloca/content-api-client';
 
 export interface Page {
   id: string;
@@ -11,15 +11,15 @@ export interface Page {
   locales: string[];
 }
 
-export interface Block {
+export interface Fragment {
   id: string;
   title: string;
   preview: string;
   category: string;
   locales: string[];
   etag: string;
-  name?: string; // The filename for this block
-  meta?: BlockEditable;
+  name?: string; // The filename for this fragment
+  meta?: FragmentEditable;
 }
 
 export interface DataEntry {
@@ -52,6 +52,7 @@ export type SaveState = 'idle' | 'saving' | 'saved' | 'error' | 'conflict';
 
 export interface CreatePageData {
   title: string;
+  /** The path the page is created at, as the dialog checked it: tidied and under the template's `pathPrefix`. */
   path: string;
   template: string;
   locale: string;

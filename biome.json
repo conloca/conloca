@@ -1,6 +1,6 @@
 {
   "root": true,
-  "$schema": "https://biomejs.dev/schemas/2.5.4/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.5.12/schema.json",
   "vcs": {
     "enabled": true,
     "clientKind": "git",
@@ -27,7 +27,7 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true,
+      "preset": "recommended",
       "style": {
         "noParameterAssign": "error",
         "useAsConstAssertion": "error",
@@ -38,26 +38,19 @@
         "noUnusedTemplateLiteral": "error",
         "useNumberNamespace": "error",
         "noInferrableTypes": "error",
-        "noUselessElse": "error"
+        "noUselessElse": "error",
+        "useNodejsImportProtocol": "error"
       },
-      "a11y": {
-        "useSemanticElements": "warn",
-        "noLabelWithoutControl": "warn",
-        "noStaticElementInteractions": "warn",
-        "useKeyWithClickEvents": "warn",
-        "useAriaPropsSupportedByRole": "warn",
-        "useAriaPropsForRole": "warn",
-        "useFocusableInteractive": "warn",
-        "noSvgWithoutTitle": "warn",
-        "noNoninteractiveElementToInteractiveRole": "warn",
-        "noRedundantRoles": "warn",
-        "useHtmlLang": "warn"
-      },
-      "suspicious": {
-        "noArrayIndexKey": "warn"
-      },
-      "security": {
-        "noDangerouslySetInnerHtml": "warn"
+      "correctness": {
+        "useImportExtensions": {
+          "level": "error",
+          "options": {
+            "extensionMappings": {
+              "ts": "js",
+              "tsx": "js"
+            }
+          }
+        }
       }
     }
   },
@@ -74,9 +67,34 @@
   },
   "overrides": [
     {
-      "includes": ["**/*.css"],
+      "includes": ["**/*.astro"],
       "linter": {
-        "enabled": false
+        "rules": {
+          "correctness": {
+            "noUnusedVariables": "off",
+            "noUnusedImports": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["**", "!packages/**"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "useImportExtensions": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/**", "example/**", "tooling/**", "targets/website/**"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noImportCycles": "error"
+          }
+        }
       }
     }
   ]

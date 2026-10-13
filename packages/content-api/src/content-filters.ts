@@ -1,6 +1,6 @@
-import type { ContentIndex } from './content-index';
-import { localesOf } from './content-utils';
-import type { ContentManifest, GlobalFilters, SitesConfig } from './types';
+import type { ContentIndex } from './content-index.js';
+import { localesOf } from './content-utils.js';
+import type { ContentManifest, GlobalFilters, SitesConfig } from './types.js';
 
 /**
  * Apply filters to a single content manifest
@@ -212,11 +212,11 @@ export function* filterContentWithIndexes(
     if (!siteCollections.has(filters.collection)) {
       return; // Early exit - no pages in this collection for this site
     }
-  } else if (filters.kind === 'block' && filters.collection) {
-    // Check if blocks have this collection
-    const blockCollections = contentIndex.getBlockCollections();
-    if (!blockCollections.has(filters.collection)) {
-      return; // Early exit - no blocks in this collection
+  } else if (filters.kind === 'fragment' && filters.collection) {
+    // Check if fragments have this collection
+    const fragmentCollections = contentIndex.getFragmentCollections();
+    if (!fragmentCollections.has(filters.collection)) {
+      return; // Early exit - no fragments in this collection
     }
   }
 
@@ -227,8 +227,8 @@ export function* filterContentWithIndexes(
   if (filters.kind === 'page' && filters.site && filters.collection) {
     // Most specific for pages: site + collection
     generator = contentIndex.getManifestsForSiteCollection(filters.site, filters.collection);
-  } else if (filters.kind === 'block' && filters.collection) {
-    // Most specific for blocks: kind + collection
+  } else if (filters.kind === 'fragment' && filters.collection) {
+    // Most specific for fragments: kind + collection
     generator = contentIndex.getManifestsForCollection(filters.collection);
   } else if (filters.kind) {
     generator = contentIndex.getManifestsForKind(filters.kind);

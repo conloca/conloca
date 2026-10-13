@@ -98,7 +98,10 @@ async function resolveRepoRoot(contentPath: string): Promise<string | null> {
  * Requires git binary available on PATH and CONTENT_PATH inside a git repository.
  */
 export function createGitOperations(config: GitConfig): GitOperations {
-  const { contentPath, branch } = config;
+  // Git commands run with the repo root as cwd, so a project-relative contentPath
+  // (`./content`) would match nothing there when the repo root is a parent of the site.
+  const contentPath = resolve(config.contentPath);
+  const { branch } = config;
 
   let cachedRepoRoot: string | null | undefined;
 

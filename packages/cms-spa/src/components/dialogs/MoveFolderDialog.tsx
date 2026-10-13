@@ -1,14 +1,16 @@
 import { Folder, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { type FolderTreeNode, useFolderTree } from '../../hooks';
-import { cn } from '../../utils/cn';
-import { Button, IconButton } from '../ui';
+import { useEffect, useRef, useState } from 'react';
+import { type FolderTreeNode, useFolderTree } from '../../hooks/index.js';
+import { cn } from '../../utils/cn.js';
+import { contentFailureMessage } from '../../utils/content-failure.js';
+import { Button, IconButton } from '../ui/index.js';
 
 interface MoveFolderDialogProps {
   isOpen: boolean;
   assetCount: number;
   currentFolder: string;
-  onMove: (targetFolder: string) => void;
+  /** Rejects with the reason the move was refused; the dialog shows it. */
+  onMove: (targetFolder: string) => Promise<void>;
   onCancel: () => void;
   isMoving?: boolean;
 }
@@ -69,10 +71,16 @@ export function MoveFolderDialog({
   isMoving = false,
 }: MoveFolderDialogProps) {
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+  const [moveError, setMoveError] = useState<string | null>(null);
+  // Bumped on open, close and every change of folder: a refusal that arrives
+  // after one of those answers a move the dialog no longer shows, so it is dropped.
+  const view = useRef(0);
 
   useEffect(() => {
+    view.current++;
     if (isOpen) {
       setSelectedFolder(null);
+      setMoveError(null);
     }
   }, [isOpen]);
 
@@ -82,9 +90,22 @@ export function MoveFolderDialog({
   const rawTree = data?.tree ?? [];
   const tree = rawTree.length === 1 && rawTree[0].path === '/' ? rawTree[0].children : rawTree;
 
-  const handleMove = () => {
-    if (selectedFolder) {
-      onMove(selectedFolder);
+  const selectFolder = (path: string) => {
+    if (path === selectedFolder) return;
+    view.current++;
+    setSelectedFolder(path);
+    setMoveError(null);
+  };
+
+  const handleMove = async () => {
+    if (!selectedFolder) return;
+    const attempt = ++view.current;
+    setMoveError(null);
+    try {
+      await onMove(selectedFolder);
+    } catch (error) {
+      const fallback = assetCount === 1 ? 'Could not move the asset.' : 'Could not move the assets.';
+      if (view.current === attempt) setMoveError(contentFailureMessage({ error }, fallback));
     }
   };
 
@@ -122,7 +143,7 @@ export function MoveFolderDialog({
               {/* Root folder option */}
               <button
                 type="button"
-                onClick={() => currentFolder !== '/' && setSelectedFolder('/')}
+                onClick={() => currentFolder !== '/' && selectFolder('/')}
                 disabled={currentFolder === '/'}
                 className={cn(
                   'w-full flex items-center gap-2 py-2 px-3 rounded-md text-sm transition-colors text-left text-grey-01 dark:text-grey-12',
@@ -147,7 +168,7 @@ export function MoveFolderDialog({
                   depth={1}
                   selectedFolder={selectedFolder}
                   currentFolder={currentFolder}
-                  onSelect={setSelectedFolder}
+                  onSelect={selectFolder}
                 />
               ))}
 
@@ -159,6 +180,15 @@ export function MoveFolderDialog({
             </div>
           )}
         </div>
+
+        {moveError && (
+          <p
+            role="alert"
+            className="max-h-32 overflow-y-auto px-6 pb-4 text-sm wrap-break-word text-red-04 dark:text-red-08"
+          >
+            {moveError}
+          </p>
+        )}
 
         {/* Footer */}
         <div className="flex justify-end gap-3 px-6 py-4 border-t border-line">

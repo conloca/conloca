@@ -1,5 +1,5 @@
 import { FolderInput, Trash2, X } from 'lucide-react';
-import { Button, IconButton } from '../ui';
+import { Button, IconButton } from '../ui/index.js';
 
 interface BulkActionBarProps {
   count: number;

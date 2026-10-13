@@ -3,110 +3,134 @@ import type { z } from 'zod';
 export interface FieldInfo {
   type: 'string' | 'number' | 'boolean' | 'date' | 'array' | 'enum';
   format?: 'url' | 'email' | 'date-time';
+  /** Help text the schema gives the field, from .describe() or .meta({ description }). */
   description?: string;
   isOptional: boolean;
   isNullable: boolean;
-  /** For enum types, the list of allowed values */
   enumValues?: string[];
-  /** For string types, the max length constraint if defined */
   maxLength?: number;
 }
 
-// Internal Zod def shape — intentionally loosely typed since we access internals
-type ZodDef = Record<string, unknown>;
+/* oxlint-disable no-underscore-dangle -- Zod 3/4 expose these compatibility internals with underscore-prefixed names. */
 
-/**
- * Gets the Zod type name from _def, supporting both old (typeName) and new (type) API.
- */
+interface ZodCompat {
+  _def?: ZodDef;
+  _zod?: { def?: ZodDef };
+  description?: string;
+  options?: string[];
+}
+
+interface ZodDef {
+  typeName?: string;
+  type?: string;
+  check?: string;
+  format?: string;
+  kind?: string;
+  maximum?: number;
+  value?: number;
+  innerType?: ZodCompat;
+  values?: string[] | Record<string, string | number>;
+  checks?: ZodCheck[];
+}
+
+interface ZodCheck extends ZodDef {
+  _zod?: { def?: ZodDef };
+}
+
+function definition(schema: ZodCompat): ZodDef | undefined {
+  return schema._def ?? schema._zod?.def;
+}
+
 function getZodTypeName(def: ZodDef): string {
-  // Zod 3.x uses typeName, Zod 4.x/mini uses type
-  return (def.typeName as string) || (def.type as string) || '';
+  if (typeof def.typeName === 'string') return def.typeName;
+  return typeof def.type === 'string' ? def.type : '';
+}
+
+function readStringCheck(def: ZodDef): Pick<FieldInfo, 'format' | 'maxLength'> {
+  const format = def.check === 'string_format' ? def.format : def.kind;
+  if (format === 'url' || format === 'email') return { format };
+  if (def.check === 'max_length' && typeof def.maximum === 'number') return { maxLength: def.maximum };
+  if (def.kind === 'max' && typeof def.value === 'number') return { maxLength: def.value };
+  return {};
 }
 
 /**
- * Introspects a Zod field to extract type and validation information.
- * Note: Uses Zod's internal `._def` structure which is stable but not public API.
- * Supports both Zod 3.x (typeName) and Zod 4.x/mini (type) structures.
+ * Introspects the subset of Zod 3/4 internals required to render form hints.
+ * The single assertion is the compatibility boundary; every field read after
+ * it is represented explicitly by ZodCompat/ZodDef.
  */
-export function getZodFieldInfo(field: z.ZodTypeAny): FieldInfo {
-  let current: { _def: ZodDef } = field as unknown as { _def: ZodDef };
+export function getZodFieldInfo(field: z.ZodRawShape[string]): FieldInfo {
+  // SAFETY: both supported Zod generations expose either _def or _zod.def;
+  // ZodCompat contains only optional fields read by this compatibility adapter.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- documented third-party compatibility boundary
+  let current = field as ZodCompat;
   let isOptional = false;
   let isNullable = false;
-  let description: string | undefined;
+  let helpText: string | undefined;
 
-  // Unwrap optional/nullable/default wrappers to get to the inner type
-  while (current._def) {
-    const typeName = getZodTypeName(current._def);
+  while (true) {
+    helpText ??= current.description;
+    const def = definition(current);
+    if (!def) break;
+    const typeName = getZodTypeName(def);
 
     if (typeName === 'ZodOptional' || typeName === 'optional') {
       isOptional = true;
-      current = current._def.innerType as { _def: ZodDef };
     } else if (typeName === 'ZodNullable' || typeName === 'nullable') {
       isNullable = true;
-      current = current._def.innerType as { _def: ZodDef };
-    } else if (typeName === 'ZodDefault' || typeName === 'default') {
-      current = current._def.innerType as { _def: ZodDef };
-    } else {
+    } else if (typeName !== 'ZodDefault' && typeName !== 'default') {
       break;
     }
+
+    if (!def.innerType) break;
+    current = def.innerType;
   }
 
-  description = current._def.description as string | undefined;
-  const typeName = getZodTypeName(current._def);
+  const def = definition(current);
+  const typeName = def ? getZodTypeName(def) : '';
 
-  // Detect type and format based on Zod type
   if (typeName === 'ZodEnum' || typeName === 'enum') {
-    const enumValues =
-      (current._def.values as string[]) || ((current as unknown as { options?: string[] }).options as string[]) || [];
-    return { type: 'enum', enumValues, description, isOptional, isNullable };
+    const enumValues = Array.isArray(def?.values)
+      ? def.values.filter((value): value is string => typeof value === 'string')
+      : (current.options ?? []);
+    return { type: 'enum', enumValues, description: helpText, isOptional, isNullable };
   }
   if (typeName === 'ZodNativeEnum' || typeName === 'nativeEnum') {
-    const nativeEnum = current._def.values as Record<string, string | number>;
-    const enumValues = Object.values(nativeEnum).filter((v) => typeof v === 'string') as string[];
-    return { type: 'enum', enumValues, description, isOptional, isNullable };
+    const values = def?.values;
+    const enumValues =
+      values && !Array.isArray(values)
+        ? Object.values(values).filter((value): value is string => typeof value === 'string')
+        : [];
+    return { type: 'enum', enumValues, description: helpText, isOptional, isNullable };
   }
   if (typeName === 'ZodDate' || typeName === 'date') {
-    return { type: 'date', format: 'date-time', description, isOptional, isNullable };
+    return { type: 'date', format: 'date-time', description: helpText, isOptional, isNullable };
   }
   if (typeName === 'ZodBoolean' || typeName === 'boolean') {
-    return { type: 'boolean', description, isOptional, isNullable };
+    return { type: 'boolean', description: helpText, isOptional, isNullable };
   }
+
   if (typeName === 'ZodNumber' || typeName === 'number') {
-    return { type: 'number', description, isOptional, isNullable };
+    return { type: 'number', description: helpText, isOptional, isNullable };
   }
   if (typeName === 'ZodArray' || typeName === 'array') {
-    return { type: 'array', description, isOptional, isNullable };
+    return { type: 'array', description: helpText, isOptional, isNullable };
   }
   if (typeName === 'ZodString' || typeName === 'string') {
-    const checks = (current._def.checks as { kind: string; value?: number }[] | undefined) || [];
-    for (const check of checks) {
-      if (check.kind === 'url') {
-        return { type: 'string', format: 'url', description, isOptional, isNullable };
-      }
-      if (check.kind === 'email') {
-        return { type: 'string', format: 'email', description, isOptional, isNullable };
-      }
-    }
-    const maxCheck = checks.find((c) => c.kind === 'max');
-    const maxLength = maxCheck?.value;
-    return { type: 'string', description, isOptional, isNullable, maxLength };
+    const checks = def?.checks ?? [];
+    const constraints = [def, ...checks.map((check) => check._zod?.def ?? check)]
+      .filter((check): check is ZodDef => check !== undefined)
+      .map(readStringCheck);
+    const format = constraints.find((constraint) => constraint.format)?.format;
+    const maxLength = constraints.find((constraint) => constraint.maxLength !== undefined)?.maxLength;
+    return { type: 'string', format, description: helpText, isOptional, isNullable, maxLength };
   }
 
-  // Default fallback for unknown types
-  return { type: 'string', description, isOptional, isNullable };
+  return { type: 'string', description: helpText, isOptional, isNullable };
 }
 
-/**
- * Extracts field information from a Zod object schema.
- * Returns a record mapping field names to their FieldInfo.
- */
 export function getZodShape(schema: z.ZodObject<z.ZodRawShape>): Record<string, FieldInfo> {
-  const shape = schema.shape;
   const result: Record<string, FieldInfo> = {};
-
-  for (const [key, field] of Object.entries(shape)) {
-    result[key] = getZodFieldInfo(field as z.ZodTypeAny);
-  }
-
+  for (const [key, field] of Object.entries(schema.shape)) result[key] = getZodFieldInfo(field);
   return result;
 }

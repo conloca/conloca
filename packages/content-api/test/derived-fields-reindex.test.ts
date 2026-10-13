@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdir, rm, writeFile } from 'fs/promises';
-import { join } from 'path';
-import { FileSystemContentAPI } from '../src/filesystem-content-api';
-import type { SitesConfig } from '../src/types';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { FileSystemContentAPI } from '../src/filesystem-content-api.js';
+import type { SitesConfig } from '../src/types.js';
+import { testTempDir } from './test-temp-dir.js';
 
 describe('Derived fields after reindex', () => {
   let tempDir: string;
@@ -19,10 +20,10 @@ describe('Derived fields after reindex', () => {
   };
 
   beforeEach(async () => {
-    tempDir = `/tmp/derived-fields-test-${Date.now()}`;
+    tempDir = testTempDir('derived-fields-test');
     await mkdir(tempDir, { recursive: true });
     await mkdir(join(tempDir, 'testsite/pages'), { recursive: true });
-    await mkdir(join(tempDir, 'blocks/components'), { recursive: true });
+    await mkdir(join(tempDir, 'fragments/components'), { recursive: true });
     await writeFile(join(tempDir, 'sites.json'), JSON.stringify(sitesConfig));
 
     api = await FileSystemContentAPI.create({ contentRoot: tempDir });
@@ -96,10 +97,10 @@ describe('Derived fields after reindex', () => {
     expect(en2!.localized.pathname).toBe('/services/consulting');
   });
 
-  test('blocks - name is derived from filesystem path after reindex', async () => {
-    // Create blocks with specific names
+  test('fragments - name is derived from filesystem path after reindex', async () => {
+    // Create fragments with specific names
     const createResult1 = await api.createContent({
-      kind: 'block',
+      kind: 'fragment',
       collection: 'components',
       type: 'mdx',
       name: 'hero-section',
@@ -116,7 +117,7 @@ describe('Derived fields after reindex', () => {
     });
 
     const createResult2 = await api.createContent({
-      kind: 'block',
+      kind: 'fragment',
       collection: 'components',
       type: 'mdx',
       name: 'footer-links',
@@ -173,21 +174,21 @@ describe('Derived fields after reindex', () => {
       },
     });
 
-    const blockResult = await api.createContent({
-      kind: 'block',
+    const fragmentResult = await api.createContent({
+      kind: 'fragment',
       collection: 'components',
       type: 'mdx',
-      name: 'manual-block',
+      name: 'manual-fragment',
       locales: {
         en: {
-          meta: { title: 'Manual Block' },
+          meta: { title: 'Manual Fragment' },
           content: { mdx: '# Manual' },
         },
       },
     });
 
     const pageId = pageResult.id!;
-    const blockId = blockResult.id!;
+    const fragmentId = fragmentResult.id!;
 
     // Call reindex manually
     await api.reindex();
@@ -196,7 +197,7 @@ describe('Derived fields after reindex', () => {
     const page = await api.getLocalized(pageId, 'en');
     expect(page!.localized.pathname).toBe('/manual-test');
 
-    const block = await api.getLocalized(blockId, 'en');
-    expect(block!.localized.name).toBe('manual-block');
+    const fragment = await api.getLocalized(fragmentId, 'en');
+    expect(fragment!.localized.name).toBe('manual-fragment');
   });
 });

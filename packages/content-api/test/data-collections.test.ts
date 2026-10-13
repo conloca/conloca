@@ -2,12 +2,12 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { ContentAPI } from '../src/content-api.interface';
-import { DataIndex } from '../src/data-index';
-import { FileSystemContentAPI } from '../src/filesystem-content-api';
-import { InMemoryContentAPI } from '../src/in-memory-content-api';
-import type { ContentIdentity, LocaleVersion } from '../src/types';
-import { assertDefined, getCreatedId } from './test-helpers';
+import type { ContentAPI } from '../src/content-api.interface.js';
+import { DataIndex } from '../src/data-index.js';
+import { FileSystemContentAPI } from '../src/filesystem-content-api.js';
+import { InMemoryContentAPI } from '../src/in-memory-content-api.js';
+import type { ContentIdentity, LocaleVersion } from '../src/types.js';
+import { assertDefined, getCreatedId } from './test-helpers.js';
 
 describe('Data Collections - DataIndex', () => {
   let dataIndex: DataIndex;
@@ -664,6 +664,20 @@ describe('Data Collections - Data Class', () => {
       const id = getCreatedId(result);
       expect(api.data.getNameConflict('authors', 'john-doe')).toBe(id);
     });
+
+    test('finds a name taken in other capitals, which names the same file on a disk that ignores capitals', async () => {
+      const id = getCreatedId(
+        await api.data.create({
+          collection: 'authors',
+          name: 'john-doe',
+          locales: { en: { meta: { title: 'John' }, content: { data: {} } } },
+        }),
+      );
+
+      expect(api.data.getNameConflict('authors', 'John-Doe')).toBe(id);
+      expect(api.data.getNameConflict('authors', 'John-Doe', id)).toBeNull();
+      expect(api.data.isNameAvailable('authors', 'JOHN-DOE')).toBe(false);
+    });
   });
 
   describe('collections', () => {
@@ -765,7 +779,7 @@ describe('Data Collections - FileSystem Integration', () => {
 
   test('data entries use actual locales like other content types', () => {
     const author = api.data.getByName('authors', 'john-doe');
-    // Data entries now use actual locales (e.g., 'en') like blocks and pages
+    // Data entries now use actual locales (e.g., 'en') like fragments and pages
     expect(author?.locales.en).toBeDefined();
     expect(author?.locales.en?.meta.title).toBe('John Doe');
     expect(author?.locales.en?.name).toBe('john-doe');
@@ -779,8 +793,9 @@ describe('Data Collections - FileSystem Integration', () => {
     const localized = await api.getLocalized(author.id, 'en');
     assertDefined(localized, 'Localized content should exist');
 
-    expect(localized.localized.content?.data).toBeDefined();
-    expect((localized.localized.content!.data as any).email).toBe('john@example.com');
+    const data = localized.localized.content?.data;
+    assertDefined(data, 'Data content should exist');
+    expect(data.email).toBe('john@example.com');
   });
 
   test('creates new data entry with file', async () => {
@@ -880,8 +895,12 @@ describe('Data Collections - CRUD Operations', () => {
     expect(updateResult.success).toBe(true);
 
     const updated = await api.getLocalized(id, 'en');
-    expect(updated?.localized.meta.title).toBe('John Doe Updated');
-    expect((updated!.localized.content!.data as any).email).toBe('john@updated.com');
+    assertDefined(updated, 'Updated content should exist');
+    expect(updated.localized.meta.title).toBe('John Doe Updated');
+
+    const data = updated.localized.content?.data;
+    assertDefined(data, 'Updated data content should exist');
+    expect(data.email).toBe('john@updated.com');
   });
 
   test('deletes data entry via deleteContent', async () => {

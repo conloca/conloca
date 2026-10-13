@@ -1,8 +1,8 @@
-import { localesOf } from './content-utils';
-import type { ContentData, ContentIdentity, ContentManifest, LocaleVersion } from './types';
+import { localesOf } from './content-utils.js';
+import type { ContentData, ContentIdentity, ContentManifest, LocaleVersion } from './types.js';
 
 /**
- * Base class for content indexes (blocks, data)
+ * Base class for content indexes (fragments, data)
  * Maintains collection->name->locale lookups with V8-optimized structures
  */
 export class BaseContentIndex {
@@ -76,7 +76,20 @@ export class BaseContentIndex {
    */
   removeLocale(id: string, locale: string): void {
     const manifest = this.index.get(id);
-    if (!manifest || !manifest.locales[locale]) return;
+    const localeVersion = manifest?.locales[locale];
+    if (!manifest || !localeVersion) return;
+
+    if (
+      localeVersion.name &&
+      !Object.entries(manifest.locales).some(
+        ([otherLocale, otherVersion]) => otherLocale !== locale && otherVersion?.name === localeVersion.name,
+      )
+    ) {
+      const collectionMap = this.nameIndex.get(manifest.collection);
+      if (collectionMap?.get(localeVersion.name)?.id === id) {
+        collectionMap.delete(localeVersion.name);
+      }
+    }
 
     // Remove locale from manifest
     manifest.locales[locale] = undefined;
@@ -150,6 +163,18 @@ export class BaseContentIndex {
     }
 
     return manifest;
+  }
+
+  /**
+   * Every entry of `collection` named `name` in some locale, in any letter case: their files
+   * ('Hero.en.mdx', 'hero.en.mdx') are one file on a case-insensitive disk, the default on macOS
+   * and Windows.
+   */
+  *getAllByNameInAnyCase(collection: string, name: string): Generator<ContentManifest> {
+    const folded = name.toLowerCase();
+    for (const [other, manifest] of this.nameIndex.get(collection) ?? []) {
+      if (other.toLowerCase() === folded) yield manifest;
+    }
   }
 
   /**

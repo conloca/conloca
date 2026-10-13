@@ -1,4 +1,4 @@
-import { getUIConfig } from '../ui-config';
+import { getUIConfig } from '../ui-config.js';
 
 /**
  * Build a full URL from the site base URL and a path

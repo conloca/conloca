@@ -1,25 +1,40 @@
 /// <reference lib="dom" />
 
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
-import type { ContentEntry, LocalizedEntry } from '@conloca/content-api';
+import type {
+  AssetEntry,
+  ContentEntry,
+  ContentManifest,
+  FolderTreeNode,
+  LocalizedEntry,
+  PageReference,
+} from '@conloca/content-api';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import type { ContentAPIClient } from '../src/client';
+import { ContentAPIClient } from '../src/client.js';
 import {
   setContentAPIClient,
+  useBulkDeleteAssets,
   useCompileMDX,
   useContent,
   useCreateContent,
+  useCreateFolder,
   useData,
   useDataByName,
   useDataCollections,
+  useDataContext,
   useDataNameAvailability,
+  useDeleteAsset,
+  useFolderTree,
+  useImportAssetUrl,
   useLocalizedContent,
   usePathnameAvailability,
   useSitePages,
   useUpdateLocalized,
-} from '../src/hooks';
+  useUploadAsset,
+} from '../src/hooks.js';
+import { jsonResponse } from '../src/test-helpers.js';
 
 // Cleanup after each test
 afterEach(() => {
@@ -58,8 +73,8 @@ describe('Content API Hooks', () => {
       getPageByPathname: mock(() => Promise.resolve(null)),
       isPathnameAvailable: mock(() => Promise.resolve(true)),
       movePage: mock(() => Promise.resolve({ moved: true })),
-      getBlocks: mock(() => Promise.resolve({ items: [], total: 0 })),
-      getBlockByName: mock(() => Promise.resolve(null)),
+      getFragments: mock(() => Promise.resolve({ items: [], total: 0 })),
+      getFragmentByName: mock(() => Promise.resolve(null)),
       compileMDX: mock(() =>
         Promise.resolve({ code: 'return { default: function Test() { return null } }', metadata: {} }),
       ),
@@ -185,6 +200,7 @@ describe('Content API Hooks', () => {
       const compileResult = {
         code: 'return { default: function Test() { return null } }',
         metadata: { title: 'Test' },
+        outline: [],
       };
 
       mockClient.compileMDX = mock(() => Promise.resolve(compileResult));
@@ -377,8 +393,40 @@ describe('Content API Hooks', () => {
         expect(result.current.isSuccess).toBe(true);
       });
 
-      expect(mockClient.isPathnameAvailable).toHaveBeenCalledWith('test-site', '/new-path', 'exclude-id');
+      expect(mockClient.isPathnameAvailable).toHaveBeenCalledWith('test-site', '/new-path', 'exclude-id', undefined);
       expect(result.current.data).toEqual({ available: true });
+    });
+
+    it('should check pathname availability in the given locale', async () => {
+      const { result } = renderHook(() => usePathnameAvailability('test-site', '/kontakt', undefined, 'de'), {
+        wrapper,
+      });
+
+      await waitFor(() => {
+        expect(result.current.isSuccess).toBe(true);
+      });
+
+      expect(mockClient.isPathnameAvailable).toHaveBeenCalledWith('test-site', '/kontakt', undefined, 'de');
+    });
+
+    it('should re-check when only the locale changes', async () => {
+      mockClient.isPathnameAvailable = mock((_site: string, _pathname: string, _excludeId?: string, locale?: string) =>
+        Promise.resolve(locale !== 'de'),
+      );
+      const { result, rerender } = renderHook(
+        ({ locale }: { locale: string }) => usePathnameAvailability('test-site', '/kontakt', undefined, locale),
+        { wrapper, initialProps: { locale: 'en' } },
+      );
+
+      await waitFor(() => {
+        expect(result.current.data).toEqual({ available: true });
+      });
+
+      rerender({ locale: 'de' });
+
+      await waitFor(() => {
+        expect(result.current.data).toEqual({ available: false });
+      });
     });
 
     it('should not query if site or pathname is empty', () => {
@@ -542,6 +590,348 @@ describe('Content API Hooks', () => {
 
       expect(mockClient.getDataCollections).toHaveBeenCalled();
       expect(result.current.data).toEqual(mockCollections);
+    });
+  });
+
+  describe('useDataContext', () => {
+    const blogFeed = { siteName: 'default', locale: 'en', routes: { pages: { pages: { prefix: '/blog/' } } } };
+    /** The page open in the editor, as the editor hands it over. */
+    const openPage: PageReference = {
+      id: 'vx-open',
+      pathname: '/blog/open',
+      title: 'Open post',
+      collection: 'pages',
+      meta: { title: 'Open post', author: 'Ada' },
+    };
+    const tomorrow = () => new Date(Date.now() + 86_400_000).toISOString();
+    const yesterday = () => new Date(Date.now() - 86_400_000).toISOString();
+
+    /** One English version of a piece of content, scheduled as given. */
+    function manifest(
+      id: string,
+      kind: ContentManifest['kind'],
+      version: { pathname?: string; name?: string; title: string; publishAt?: string; unpublishAt?: string },
+    ): ContentManifest {
+      const { title, ...fields } = version;
+      return {
+        id,
+        kind,
+        type: kind === 'data' ? 'json' : 'puck',
+        collection: kind === 'data' ? 'team' : 'pages',
+        ...(kind === 'page' ? { site: 'default' } : {}),
+        locales: {
+          en: {
+            locale: 'en',
+            etag: 'meta.content',
+            created: '2026-09-01T00:00:00.000Z',
+            modified: '2026-09-01T00:00:00.000Z',
+            meta: { title },
+            ...fields,
+          },
+        },
+      };
+    }
+
+    /**
+     * A backend that answers only the given paths; every other request gets
+     * the 404 a server without that route answers.
+     */
+    function serveOnly(bodiesByPath: Record<string, unknown>) {
+      const fetchMock = mock(async (input: RequestInfo | URL) => {
+        const body = bodiesByPath[new URL(String(input), 'http://localhost').pathname];
+        return body === undefined ? new Response('Not found', { status: 404 }) : jsonResponse(body);
+      });
+      setContentAPIClient(new ContentAPIClient({ baseUrl: '/api', fetch: fetchMock as unknown as typeof fetch }));
+      return fetchMock;
+    }
+
+    it('builds the page feed from the content listing, with no data context route on the server', async () => {
+      const listing = [
+        manifest('a', 'page', { pathname: '/blog/a', title: 'A' }),
+        manifest('b', 'page', { pathname: '/blog/b', title: 'B', publishAt: tomorrow() }),
+        manifest('pricing', 'page', { pathname: '/pricing', title: 'Pricing' }),
+      ];
+      serveOnly({ '/api/content': { items: listing, total: listing.length } });
+
+      const { result } = renderHook(() => useDataContext(openPage, blogFeed), { wrapper });
+
+      await waitFor(() => {
+        expect(result.current.isSuccess).toBe(true);
+      });
+      expect(result.current.data?.pages?.map((page) => page.pathname)).toEqual(['/blog/a']);
+    });
+
+    // The editor resolves its blocks again whenever the context it holds
+    // changes, and doing so replaces the editor, unsaved edits included. The
+    // context's page timestamps are Dates, which the query cache cannot tell
+    // apart from a change on its own.
+    it('keeps the same context through a refetch that finds nothing changed', async () => {
+      const listing = [manifest('a', 'page', { pathname: '/blog/a', title: 'A' })];
+      const fetchMock = serveOnly({ '/api/content': { items: listing, total: listing.length } });
+
+      const { result } = renderHook(() => useDataContext(openPage, blogFeed), { wrapper });
+      await waitFor(() => {
+        expect(result.current.isSuccess).toBe(true);
+      });
+      const first = result.current.data;
+
+      // The refetch's own result is what the component renders next; the
+      // cache hands it over only on a later task.
+      let refetched: Awaited<ReturnType<typeof result.current.refetch>> | undefined;
+      await act(async () => {
+        refetched = await result.current.refetch();
+      });
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(refetched?.data).toBe(first);
+    });
+
+    it('hands back a new context when a refetch finds a page edited since', async () => {
+      const edited = manifest('a', 'page', { pathname: '/blog/a', title: 'A' });
+      edited.locales.en!.modified = '2026-09-02T00:00:00.000Z';
+      const bodies: Record<string, unknown> = {
+        '/api/content': { items: [manifest('a', 'page', { pathname: '/blog/a', title: 'A' })], total: 1 },
+      };
+      serveOnly(bodies);
+
+      const { result } = renderHook(() => useDataContext(openPage, blogFeed), { wrapper });
+      await waitFor(() => {
+        expect(result.current.isSuccess).toBe(true);
+      });
+      const first = result.current.data;
+
+      bodies['/api/content'] = { items: [edited], total: 1 };
+      await act(async () => {
+        await result.current.refetch();
+      });
+
+      await waitFor(() => {
+        expect(result.current.data).not.toBe(first);
+      });
+      expect(result.current.data?.pages?.[0]?.timestamps?.modified).toEqual(new Date('2026-09-02T00:00:00.000Z'));
+    });
+
+    it('bounds concurrent localized reads for a large routed data collection', async () => {
+      const team = Array.from({ length: 24 }, (_, index) =>
+        manifest(`member-${index}`, 'data', { name: `member-${index}`, title: `Member ${index}` }),
+      );
+      let inFlight = 0;
+      let maxInFlight = 0;
+      mockClient.getData = mock(() => Promise.resolve({ items: team, total: team.length }));
+      mockClient.getLocalized = mock(async (id: string) => {
+        inFlight += 1;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        inFlight -= 1;
+        const item = team.find((entry) => entry.id === id)!;
+        return {
+          id,
+          kind: 'data' as const,
+          type: 'json' as const,
+          collection: 'team',
+          localized: { ...item.locales.en!, content: { data: { id } } },
+        };
+      });
+      const bindings = { siteName: 'default', locale: 'en', routes: { pages: { collections: ['team'] } } };
+      const { result } = renderHook(() => useDataContext(openPage, bindings), { wrapper });
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+      expect(result.current.data?.collections.team).toHaveLength(team.length);
+      expect(maxInFlight).toBeLessThanOrEqual(8);
+    });
+
+    it("hands blocks each bound data collection's published, named entries with their data", async () => {
+      const team = [
+        manifest('jane', 'data', { name: 'jane', title: 'Jane' }),
+        manifest('gone', 'data', { name: 'gone', title: 'Gone', unpublishAt: yesterday() }),
+        manifest('unnamed', 'data', { title: 'Unnamed' }),
+      ];
+      const jane: LocalizedEntry = {
+        id: 'jane',
+        kind: 'data',
+        type: 'json',
+        collection: 'team',
+        localized: { ...team[0].locales.en!, content: { data: { role: 'CTO' } } },
+      };
+      serveOnly({ '/api/data': { items: team, total: team.length }, '/api/content/jane/en': jane });
+
+      const bindings = { siteName: 'default', locale: 'en', routes: { pages: { collections: ['team'] } } };
+      const { result } = renderHook(() => useDataContext(openPage, bindings), { wrapper });
+
+      await waitFor(() => {
+        expect(result.current.isSuccess).toBe(true);
+      });
+      expect(result.current.data).toEqual({
+        collections: { team: [{ id: 'jane', name: 'jane', data: { role: 'CTO' }, meta: { title: 'Jane' } }] },
+        locale: 'en',
+        siteName: 'default',
+        page: openPage,
+      });
+    });
+
+    it('tells blocks which page they render, with its settings, on a route that binds nothing', async () => {
+      const fetchMock = serveOnly({});
+      const bindsNothing = { siteName: 'default', locale: 'en', routes: { pages: {} } };
+
+      const { result } = renderHook(() => useDataContext(openPage, bindsNothing), { wrapper });
+
+      await waitFor(() => {
+        expect(result.current.isSuccess).toBe(true);
+      });
+      expect(result.current.data).toEqual({ collections: {}, locale: 'en', siteName: 'default', page: openPage });
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('hands over the page as it is now, without fetching the feed again, when its settings change', async () => {
+      const listing = [manifest('a', 'page', { pathname: '/blog/a', title: 'A' })];
+      const fetchMock = serveOnly({ '/api/content': { items: listing, total: listing.length } });
+
+      const { result, rerender } = renderHook(({ page }) => useDataContext(page, blogFeed), {
+        wrapper,
+        initialProps: { page: openPage },
+      });
+      await waitFor(() => {
+        expect(result.current.isSuccess).toBe(true);
+      });
+      const feed = result.current.data?.pages;
+
+      const retitled: PageReference = { ...openPage, title: 'Retitled', meta: { title: 'Retitled', author: 'Ada' } };
+      rerender({ page: retitled });
+
+      expect(result.current.data?.page).toBe(retitled);
+      expect(result.current.data?.pages).toBe(feed);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('gives no context to a page no route serves, which has no published render either', async () => {
+      const fetchMock = serveOnly({});
+
+      const { result } = renderHook(() => useDataContext({ ...openPage, collection: 'posts' }, blogFeed), {
+        wrapper,
+      });
+
+      await waitFor(() => {
+        expect(result.current.isSuccess).toBe(true);
+      });
+      expect(result.current.data).toBeNull();
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('asks the backend nothing until the page has loaded', () => {
+      const fetchMock = serveOnly({});
+
+      const { result } = renderHook(() => useDataContext(undefined, blogFeed), { wrapper });
+
+      expect(result.current.data).toBeUndefined();
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    for (const unavailable of ['page', 'bindings'] as const) {
+      it(`a manual refetch waits safely while ${unavailable} is unavailable`, async () => {
+        const fetchMock = serveOnly({});
+        const { result } = renderHook(
+          () =>
+            useDataContext(
+              unavailable === 'page' ? undefined : openPage,
+              unavailable === 'bindings' ? undefined : blogFeed,
+            ),
+          { wrapper },
+        );
+        await act(async () => {
+          const refreshed = await result.current.refetch();
+          expect(refreshed.isError).toBe(false);
+          expect(refreshed.data).toBeNull();
+        });
+        expect(fetchMock).not.toHaveBeenCalled();
+      });
+    }
+
+    it('asks the backend nothing while the editor has no bindings', () => {
+      const fetchMock = serveOnly({});
+
+      const { result } = renderHook(() => useDataContext(openPage, undefined), { wrapper });
+
+      expect(result.current.isLoading).toBe(false);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('reports a listing the backend fails to serve instead of an empty feed', async () => {
+      serveOnly({});
+
+      const { result } = renderHook(() => useDataContext(openPage, blogFeed), { wrapper });
+
+      await waitFor(() => {
+        expect(result.current.isError).toBe(true);
+      });
+      expect(result.current.data).toBeUndefined();
+    });
+  });
+
+  describe('media changes keep the folder tree current', () => {
+    const uploaded: AssetEntry = {
+      filename: 'a.png',
+      originalName: 'a.png',
+      mimeType: 'image/png',
+      size: 1,
+      uploadedAt: '2024-01-01T00:00:00Z',
+    };
+    let serverTree: { tree: FolderTreeNode[] };
+
+    /** The server's tree: Root holding `assetCount` files, with `children` beneath it. */
+    const rootWith = (assetCount: number, children: FolderTreeNode[] = []) => ({
+      tree: [{ name: 'Root', path: '/', assetCount, children }],
+    });
+
+    beforeEach(() => {
+      serverTree = rootWith(0);
+      mockClient.getFolderTree = mock(() => Promise.resolve(serverTree));
+      mockClient.uploadAsset = mock(() => Promise.resolve(uploaded));
+      mockClient.importAssetUrl = mock(() => Promise.resolve(uploaded));
+      mockClient.deleteAsset = mock(() => Promise.resolve({ success: true }));
+      mockClient.createFolder = mock(() => Promise.resolve());
+    });
+
+    /** Render the folder tree beside a media change, once the first tree has arrived. */
+    async function renderTreeWith<T>(useMediaChange: () => T) {
+      const view = renderHook(() => ({ tree: useFolderTree(), change: useMediaChange() }), { wrapper });
+      await waitFor(() => expect(view.result.current.tree.isSuccess).toBe(true));
+      return view;
+    }
+
+    it('counts an uploaded file in its folder', async () => {
+      const { result } = await renderTreeWith(useUploadAsset);
+      serverTree = rootWith(1);
+      result.current.change.mutate(new FormData());
+      await waitFor(() => expect(result.current.tree.data?.tree[0].assetCount).toBe(1));
+    });
+
+    it('counts an image imported from a URL in its folder', async () => {
+      const { result } = await renderTreeWith(useImportAssetUrl);
+      serverTree = rootWith(1);
+      result.current.change.mutate({ url: 'https://example.com/a.png' });
+      await waitFor(() => expect(result.current.tree.data?.tree[0].assetCount).toBe(1));
+    });
+
+    it('stops counting a deleted file', async () => {
+      serverTree = rootWith(1);
+      const { result } = await renderTreeWith(useDeleteAsset);
+      serverTree = rootWith(0);
+      result.current.change.mutate('a.png');
+      await waitFor(() => expect(result.current.tree.data?.tree[0].assetCount).toBe(0));
+    });
+
+    it('stops counting files removed by a bulk delete', async () => {
+      serverTree = rootWith(2);
+      const { result } = await renderTreeWith(useBulkDeleteAssets);
+      serverTree = rootWith(0);
+      result.current.change.mutate(['a.png', 'b.png']);
+      await waitFor(() => expect(result.current.tree.data?.tree[0].assetCount).toBe(0));
+    });
+
+    it('lists a newly created folder', async () => {
+      const { result } = await renderTreeWith(useCreateFolder);
+      serverTree = rootWith(0, [{ name: 'blog', path: '/blog', assetCount: 0, children: [] }]);
+      result.current.change.mutate('/blog');
+      await waitFor(() => expect(result.current.tree.data?.tree[0].children.map((c) => c.path)).toEqual(['/blog']));
     });
   });
 });

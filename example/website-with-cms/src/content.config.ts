@@ -1,4 +1,8 @@
-import { createConlocaCollections } from '@conloca/astro-cms/node/content';
+import { conlocaData, conlocaFragments, conlocaPages } from '@conloca/astro-cms/node/content';
+import { dataSchemas } from './schemas/data';
 
-// Uses default pages + blocks collections
-export const { collections } = await createConlocaCollections();
+export const collections = {
+  pages: conlocaPages(),
+  ...conlocaData({ dataSchemas }),
+  ...conlocaFragments('general'),
+};

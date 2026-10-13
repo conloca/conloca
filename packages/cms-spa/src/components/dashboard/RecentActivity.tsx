@@ -1,9 +1,9 @@
-import { localesOf, useSitePages } from '@conloca/content-api-client';
+import { isContentPublished, localesOf, useSitePages } from '@conloca/content-api-client';
 import { AlertCircle, Clock, FileText, Loader2 } from 'lucide-react';
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { cn } from '../../utils/cn';
-import { relativeTime } from '../../utils/format-date';
+import { cn } from '../../utils/cn.js';
+import { relativeTime } from '../../utils/format-date.js';
 
 interface RecentPage {
   id: string;
@@ -35,9 +35,8 @@ export function RecentActivity() {
       let status: RecentPage['status'] = 'published';
       const now = new Date();
       const publishAt = firstLocale.publishAt ? new Date(firstLocale.publishAt) : null;
-      const unpublishAt = firstLocale.unpublishAt ? new Date(firstLocale.unpublishAt) : null;
       if (publishAt && publishAt > now) status = 'scheduled';
-      else if (unpublishAt && unpublishAt < now) status = 'draft';
+      else if (!isContentPublished(firstLocale, now)) status = 'draft';
 
       pages.push({
         id: entry.id,
@@ -62,7 +61,7 @@ export function RecentActivity() {
   if (error) {
     return (
       <div className="text-center py-8">
-        <AlertCircle className="h-8 w-8 text-red-04 mx-auto mb-2" />
+        <AlertCircle className="h-8 w-8 text-red-04 dark:text-red-08 mx-auto mb-2" />
         <p className="text-sm text-grey-05 dark:text-grey-06">Failed to load recent activity</p>
       </div>
     );
@@ -92,10 +91,11 @@ export function RecentActivity() {
           className="flex items-center gap-3 px-3 py-2.5 rounded-md hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors group"
         >
           <span
+            aria-hidden="true"
             className={cn('h-2 w-2 rounded-full flex-shrink-0', statusDot[page.status])}
             title={page.status}
-            aria-label={page.status}
           />
+          <span className="sr-only">Status: {page.status}</span>
           <FileText className="h-4 w-4 text-grey-06 dark:text-grey-05 flex-shrink-0" />
           <div className="flex-1 min-w-0">
             <span className="block text-[15px] font-medium text-grey-01 dark:text-grey-12 truncate group-hover:text-azure-04 dark:group-hover:text-azure-06 transition-colors">

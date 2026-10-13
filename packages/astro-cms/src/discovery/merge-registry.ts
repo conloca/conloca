@@ -1,7 +1,7 @@
 import type { MdxComponentProp, MdxJsxComponentDescriptor } from '@conloca/cms-spa/mdx-components';
-import type { LocalComponentScanResult, ParsedProp } from './scan-components';
-import type { MdxImport, MdxScanResult } from './scan-mdx';
-import type { CmsOverride } from './scan-overrides';
+import type { LocalComponentScanResult, ParsedProp } from './scan-components.js';
+import type { MdxImport, MdxScanResult } from './scan-mdx.js';
+import type { CmsOverride } from './scan-overrides.js';
 
 /**
  * Combine the MDX usage scan with the local-component folder scan

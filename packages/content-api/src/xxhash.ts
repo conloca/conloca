@@ -12,8 +12,11 @@
  * bytes through `update()` and reads `digest()` synchronously, and ESM guarantees
  * this module is fully evaluated (WASM ready) before any importer runs.
  *
- * This module performs exactly one top-level WASM instantiation, avoiding
- * workerd issue #1529, which requires two top-level WASM instantiations.
+ * Top-level await is safe here despite workerd issue #1529 (which needs TWO
+ * top-level WASM instantiations) as long as this stays the only top-level
+ * instantiation in a Worker that bundles it — any other WASM-backed dependency in
+ * the same Worker must instantiate its WASM lazily on first use, never at module
+ * top level.
  *
  * XXH64, not XXH3 (xxhash-wasm ships XXH32/64): etags are opaque cache
  * validators, so the exact xxHash variant is irrelevant — only speed and a

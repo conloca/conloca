@@ -1,9 +1,9 @@
 import type { FolderTreeNode } from '@conloca/content-api-client';
-import { useBlocks, useData, useFolderTree, useSitePages } from '@conloca/content-api-client';
+import { useData, useFolderTree, useFragments, useSitePages } from '@conloca/content-api-client';
 import { Database, FileText, Image, Package, Plus, Upload } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { SectionCard } from './cards/SectionCard';
-import { RecentActivity } from './dashboard/RecentActivity';
+import { SectionCard } from './cards/SectionCard.js';
+import { RecentActivity } from './dashboard/RecentActivity.js';
 
 function countAllAssets(nodes: FolderTreeNode[]): number {
   return nodes.reduce((sum, node) => sum + node.assetCount + countAllAssets(node.children), 0);
@@ -11,12 +11,12 @@ function countAllAssets(nodes: FolderTreeNode[]): number {
 
 export function CMSDashboard() {
   const { data: sitePages, isLoading: pagesLoading } = useSitePages('default');
-  const { data: blocks, isLoading: blocksLoading } = useBlocks();
+  const { data: fragments, isLoading: fragmentsLoading } = useFragments();
   const { data: dataEntries, isLoading: dataLoading } = useData();
   const { data: folderTree, isLoading: mediaLoading } = useFolderTree();
 
   const pagesCount = sitePages?.items?.length ?? 0;
-  const blocksCount = blocks?.items?.length ?? 0;
+  const fragmentsCount = fragments?.items?.length ?? 0;
   const dataCount = dataEntries?.items?.length ?? 0;
   const mediaCount = countAllAssets(folderTree?.tree ?? []);
 
@@ -28,7 +28,7 @@ export function CMSDashboard() {
           <h1 className="text-2xl font-semibold text-grey-01 dark:text-grey-12" data-testid="dashboard-title">
             Dashboard
           </h1>
-          <p className="text-grey-05 dark:text-grey-06 mt-1">Overview of your content and recent activity.</p>
+          <p className="text-grey-04 dark:text-grey-07 mt-1">Overview of your content and recent activity.</p>
         </div>
         <div className="flex items-center gap-2">
           <Link
@@ -77,16 +77,16 @@ export function CMSDashboard() {
           variant="compact"
         />
         <SectionCard
-          to="/blocks"
+          to="/fragments"
           icon={
             <Package className="h-5 w-5 text-grey-04 dark:text-grey-07 group-hover:text-azure-04 transition-colors" />
           }
-          title="Blocks"
+          title="Fragments"
           description=""
-          count={blocksCount}
-          countLabel={blocksCount === 1 ? 'block' : 'blocks'}
-          isLoading={blocksLoading}
-          testId="section-card-blocks"
+          count={fragmentsCount}
+          countLabel={fragmentsCount === 1 ? 'fragment' : 'fragments'}
+          isLoading={fragmentsLoading}
+          testId="section-card-fragments"
           variant="compact"
         />
         <SectionCard

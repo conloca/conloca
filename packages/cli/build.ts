@@ -24,11 +24,11 @@ const bundleResult = await build({
     'node:path',
     'node:util',
     'node:fs/promises',
-    // Keep these external as they have native dependencies
-    '@node-rs/xxhash',
+    // Keep this external as it has native/heavy transitive deps
     'fast-glob',
-    // Workspace dependency - resolved via npm at install time
+    // Workspace dependencies - resolved via npm at install time
     '@conloca/content-api',
+    '@conloca/astro-cms',
   ],
   naming: {
     entry: 'conloca.js',

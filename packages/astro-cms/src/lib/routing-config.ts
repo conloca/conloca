@@ -1,4 +1,11 @@
-import type { RouteConfig, RoutingConfig, RoutingConfigInput } from '../types.js';
+import type {
+  DataBindingConfig,
+  EditorDataBindings,
+  ResolvedRoutingConfig,
+  RouteConfig,
+  RoutingConfig,
+  RoutingConfigInput,
+} from '../types.js';
 
 /**
  * Normalize routing config input to full RoutingConfig.
@@ -73,6 +80,19 @@ export function resolveRouteConfig(config: RouteConfig): Required<RouteConfig> {
     meta: config.meta ?? {},
     dataBindings: config.dataBindings ?? { collections: [] },
   };
+}
+
+/**
+ * The bindings the editor builds a page's data context from: every page
+ * collection a route serves, with that route's bindings. A page's collection is
+ * all the editor knows of its route, so the first route wins when two share one.
+ */
+export function toEditorDataBindings(resolved: ResolvedRoutingConfig): EditorDataBindings {
+  const routes: Record<string, DataBindingConfig> = {};
+  for (const route of Object.values(resolved.routes)) {
+    routes[route.collection] ??= route.dataBindings;
+  }
+  return { siteName: resolved.siteName, locale: resolved.locale, routes };
 }
 
 /**

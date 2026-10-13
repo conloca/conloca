@@ -2,12 +2,13 @@
  * Type declarations for Conloca virtual modules.
  *
  * These modules are generated at build/dev time by the Vite plugin
- * and provide routing configuration, layout components, page API,
- * and Puck config to page handlers.
+ * and provide routing configuration, layout components and Puck config
+ * to page handlers.
+ *
+ * Every type import lives INSIDE its `declare module` block so this file has
+ * no top-level import/export: a file that is itself a module turns these into
+ * augmentations of modules that must already resolve, which they never do.
  */
-
-import type { LayoutProps, PageData, PageReference, ResolvedRoutingConfig } from '@conloca/astro-cms';
-import type { Config } from '@puckeditor/core';
 
 /**
  * Virtual module: virtual:conloca-routing-config
@@ -16,6 +17,8 @@ import type { Config } from '@puckeditor/core';
  * All defaults are applied before this module is generated.
  */
 declare module 'virtual:conloca-routing-config' {
+  import type { ResolvedRoutingConfig } from '@conloca/astro-cms';
+
   const config: ResolvedRoutingConfig;
   export default config;
 }
@@ -30,98 +33,12 @@ declare module 'virtual:conloca-routing-config' {
  * is planned for future versions.
  */
 declare module 'virtual:conloca-layout' {
+  import type { LayoutProps } from '@conloca/astro-cms';
+
   type LayoutComponent = ((props: LayoutProps) => unknown) | undefined;
 
   const Layout: LayoutComponent;
   export default Layout;
-}
-
-/**
- * Virtual module: virtual:conloca-page-api
- *
- * Provides ContentAPI-backed helpers for the dev-only CMS runtime.
- * Public page routing uses Astro content collections directly.
- */
-declare module 'virtual:conloca-page-api' {
-  /**
-   * Content configuration options for ContentAPI initialization.
-   * Useful for creating additional ContentAPI instances (e.g., for MDX evaluation).
-   */
-  export const contentOptions: {
-    /** Path to content directory */
-    contentRoot: string;
-    /** Path to canvas/puck directory */
-    canvasDir: string;
-    /** Site name for content resolution */
-    siteName: string;
-    /** Default locale for content resolution */
-    locale: string;
-  };
-
-  /**
-   * Get all pages for static path generation.
-   * @param collection - Optional collection filter (defaults to all collections)
-   * @returns Array of page references with id, pathname, title, collection
-   */
-  export function getAllPages(collection?: string): Promise<PageReference[]>;
-
-  /**
-   * Load full page data for rendering.
-   * @param pathname - URL pathname (e.g., '/about')
-   * @param collection - Optional collection to search in
-   * @returns Full page data including puckData for rendering
-   * @throws Error with code 'PAGE_NOT_FOUND' if page doesn't exist
-   */
-  export function getPage(pathname: string, collection?: string): Promise<PageData>;
-
-  /**
-   * Check if a page exists without loading full data.
-   * @param pathname - URL pathname
-   * @param collection - Optional collection filter
-   * @returns true if page exists, false otherwise
-   */
-  export function pageExists(pathname: string, collection?: string): Promise<boolean>;
-
-  /**
-   * Get all entries from a data collection.
-   *
-   * Fetches all entries from a data collection and returns them as
-   * simplified DataCollectionEntry objects for use in Puck component resolvers.
-   *
-   * @param collection - Data collection name
-   * @param locale - Optional locale override (defaults to configured locale)
-   * @returns Array of DataCollectionEntry objects with id, name, data, and meta
-   */
-  export function getDataCollection(
-    collection: string,
-    locale?: string,
-  ): Promise<import('@conloca/astro-cms').DataCollectionEntry[]>;
-
-  /**
-   * Get pages matching a path prefix.
-   *
-   * Filters all pages by pathname prefix and returns them sorted.
-   * Excludes the listing page itself (exact prefix match).
-   *
-   * @param prefix - Path prefix to match (e.g., '/blog/')
-   * @param options - Optional sort and limit settings
-   * @returns Array of PageReference objects with meta and timestamps
-   *
-   * @example Get latest 10 blog posts
-   * ```typescript
-   * const posts = await getPagesByPrefix('/blog/', {
-   *   sort: 'date-desc',
-   *   limit: 10,
-   * });
-   * ```
-   */
-  export function getPagesByPrefix(
-    prefix: string,
-    options?: {
-      sort?: 'date-desc' | 'date-asc' | 'title';
-      limit?: number;
-    },
-  ): Promise<PageReference[]>;
 }
 
 /**
@@ -134,6 +51,8 @@ declare module 'virtual:conloca-page-api' {
  * preamble since it's used for SSG builds.
  */
 declare module 'virtual:conloca-puck-config' {
+  import type { Config } from '@puckeditor/core';
+
   const config: Config;
   export default config;
 }

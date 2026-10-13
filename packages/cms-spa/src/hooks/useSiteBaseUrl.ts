@@ -1,5 +1,5 @@
-import { buildSiteUrl, extractPathFromUrl } from '../lib/utils';
-import { getUIConfig } from '../ui-config';
+import { buildSiteUrl, extractPathFromUrl } from '../lib/utils.js';
+import { getUIConfig } from '../ui-config.js';
 
 /**
  * Hook to access and use the site base URL configuration

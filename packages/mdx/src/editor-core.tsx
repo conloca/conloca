@@ -36,11 +36,10 @@ import {
   UndoRedo,
 } from '@mdxeditor/editor';
 import { Maximize2, Minimize2 } from 'lucide-react';
-import React, { useCallback, useEffect, useSyncExternalStore } from 'react';
-import '@mdxeditor/editor/style.css';
-import './editor-styles.css';
-import { conlocaCodeBlockDescriptor } from './code-block-frame';
-import { TO_MARKDOWN_OPTIONS } from './markdown-options';
+import React, { useCallback, useEffect, useImperativeHandle, useRef, useSyncExternalStore } from 'react';
+import { conlocaCodeBlockDescriptor } from './code-block-frame.js';
+import { joinEsm, type PreservedEsm, splitEsm } from './esm-passthrough.js';
+import { TO_MARKDOWN_OPTIONS } from './markdown-options.js';
 
 const FOCUS_MODE_STORAGE_KEY = 'conloca.mdxeditor.focusMode';
 const FOCUS_MODE_BODY_CLASS = 'mdxeditor-focus-mode';
@@ -224,6 +223,64 @@ export const BaseMDXEditor = React.forwardRef<MDXEditorMethods, BaseMDXEditorPro
     },
     ref,
   ) => {
+    // The library reads `markdown` once, as `initialMarkdown`, and consumers
+    // swap documents by remounting (see the `key=` on MdxPageEditor's and
+    // FragmentEditor's editors). So the ESM lifted off the document belongs to
+    // whatever the editor was *seeded* with — re-deriving it from `value` would
+    // parse the whole document on every keystroke and would be wrong if the
+    // prop ever changed without a remount.
+    const seededRef = useRef<PreservedEsm | null>(null);
+    seededRef.current ??= splitEsm(value);
+    // Known consequence: the editor is seeded with the stripped body, so the
+    // Source and Diff views (diffSourcePlugin, below) show a document without
+    // the import block even though the committed file has it. Data is safe —
+    // retyping an import there is reconciled by `joinEsm` against the preserved
+    // bindings rather than declared twice — but the raw view is not a faithful
+    // picture of the file on disk. Fixing that needs the library to render ESM
+    // it cannot represent in rich-text mode.
+
+    const innerRef = useRef<MDXEditorMethods>(null);
+
+    // Everything leaving the editor gets the author's import/export block put
+    // back verbatim. `onChange` is the save path; the imperative handle is
+    // intercepted too so `getMarkdown()` never reports a document that is
+    // missing statements the file on disk has.
+    const handleChange = useCallback(
+      (markdown: string, initialMarkdownNormalize?: boolean) => {
+        const preserved = seededRef.current;
+        onChange(preserved === null ? markdown : joinEsm(preserved, markdown), initialMarkdownNormalize);
+      },
+      [onChange],
+    );
+
+    useImperativeHandle(
+      ref,
+      () => ({
+        getMarkdown: () => {
+          const markdown = innerRef.current?.getMarkdown() ?? '';
+          const preserved = seededRef.current;
+          return preserved === null ? markdown : joinEsm(preserved, markdown);
+        },
+        // Replaces the whole document, so its ESM becomes the preserved block.
+        setMarkdown: (markdown: string) => {
+          const split = splitEsm(markdown);
+          seededRef.current = split;
+          innerRef.current?.setMarkdown(split.body);
+        },
+        // Inserts at the cursor rather than reseeding, so the preserved block is
+        // unaffected. ESM in inserted markdown is dropped by the library, as
+        // before — the editor has never been able to author new imports.
+        insertMarkdown: (markdown: string) => innerRef.current?.insertMarkdown(markdown),
+        focus: (
+          callbackFn?: () => void,
+          opts?: { defaultSelection?: 'rootStart' | 'rootEnd'; preventScroll?: boolean },
+        ) => innerRef.current?.focus(callbackFn, opts),
+        getContentEditableHTML: () => innerRef.current?.getContentEditableHTML() ?? '',
+        getSelectionMarkdown: () => innerRef.current?.getSelectionMarkdown() ?? '',
+      }),
+      [],
+    );
+
     useEffect(() => {
       const handleKeyDown = (event: KeyboardEvent) => {
         if ((event.ctrlKey || event.metaKey) && event.key === 's') {
@@ -247,10 +304,10 @@ export const BaseMDXEditor = React.forwardRef<MDXEditorMethods, BaseMDXEditorPro
 
     return (
       <MDXEditorLib
-        ref={ref}
-        markdown={value}
+        ref={innerRef}
+        markdown={seededRef.current.body}
         toMarkdownOptions={TO_MARKDOWN_OPTIONS}
-        onChange={onChange}
+        onChange={handleChange}
         onError={({ error, source }) => {
           // Library invokes this synchronously inside a gurx signal, so don't
           // setState here — that triggers a render-phase warning (#872).

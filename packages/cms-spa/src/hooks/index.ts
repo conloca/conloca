@@ -13,10 +13,10 @@ export {
   useUpdateAssetMetadata,
   useUploadAsset,
 } from '@conloca/content-api-client';
-export { useClickOutside } from './useClickOutside';
-export { useDialogState } from './useDialogState';
-export { useErrorModal } from './useErrorModal';
-export { useSiteBaseUrl } from './useSiteBaseUrl';
-export { buildUploadFormData, getImageDimensions, useImportUrl, useUpload } from './useUpload';
-export type { UploadProgress, UseUploadFlowReturn } from './useUploadFlow';
-export { ACCEPTED_TYPES, useUploadFlow } from './useUploadFlow';
+export { useClickOutside } from './useClickOutside.js';
+export { useDialogState } from './useDialogState.js';
+export { useErrorModal } from './useErrorModal.js';
+export { useSiteBaseUrl } from './useSiteBaseUrl.js';
+export { buildUploadFormData, useImportUrl, useUpload } from './useUpload.js';
+export type { UploadProgress, UseUploadFlowReturn } from './useUploadFlow.js';
+export { ACCEPTED_TYPES, useUploadFlow } from './useUploadFlow.js';

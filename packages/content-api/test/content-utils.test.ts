@@ -1,12 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 import {
-  extractBlockName,
+  extractFragmentName,
   generateContentId,
   getCurrentISODate,
   isContentPublished,
   isMetadataTooLarge,
   resolvePublishDate,
-} from '../src/content-utils';
+} from '../src/content-utils.js';
 
 describe('content-utils', () => {
   describe('isContentPublished', () => {
@@ -66,6 +66,25 @@ describe('content-utils', () => {
       expect(isContentPublished(meta, new Date('2024-01-25'))).toBe(false);
     });
 
+    test('a page is no longer published at the instant its unpublish time arrives', () => {
+      const t = new Date('2026-09-23T12:00:00Z');
+      expect(isContentPublished({ unpublishAt: t.toISOString() }, t)).toBe(false);
+    });
+
+    test('a page is published at the instant its publish time arrives', () => {
+      const t = new Date('2026-09-23T12:00:00Z');
+      expect(isContentPublished({ publishAt: t.toISOString() }, t)).toBe(true);
+    });
+
+    test('accepts the Date values a page entry carries', () => {
+      const hour = 3_600_000;
+      expect(isContentPublished({ publishAt: new Date(Date.now() + hour) })).toBe(false);
+      expect(isContentPublished({ unpublishAt: new Date(Date.now() - hour) })).toBe(false);
+      expect(
+        isContentPublished({ publishAt: new Date(Date.now() - hour), unpublishAt: new Date(Date.now() + hour) }),
+      ).toBe(true);
+    });
+
     test('handles falsy date values gracefully', () => {
       // Empty string dates should be treated as not set
       expect(isContentPublished({ publishAt: '' })).toBe(true);
@@ -76,9 +95,9 @@ describe('content-utils', () => {
       expect(isContentPublished({ publishAt: 'invalid-date' })).toBe(true);
       expect(isContentPublished({ unpublishAt: 'not-a-date' })).toBe(true);
 
-      // Null/undefined values should work (TypeScript allows these in Pick)
-      expect(isContentPublished({ publishAt: null as any })).toBe(true);
-      expect(isContentPublished({ unpublishAt: undefined as any })).toBe(true);
+      // A page entry's schedule keys can be null, or present with no value
+      expect(isContentPublished({ publishAt: null, unpublishAt: null })).toBe(true);
+      expect(isContentPublished({ publishAt: undefined, unpublishAt: undefined })).toBe(true);
     });
   });
 
@@ -110,24 +129,30 @@ describe('content-utils', () => {
     });
   });
 
-  describe('extractBlockName', () => {
+  describe('extractFragmentName', () => {
     test('extracts name from .mdx filename', () => {
-      expect(extractBlockName('hero.en.mdx')).toBe('hero');
-      expect(extractBlockName('feature-grid.nl.mdx')).toBe('feature-grid');
-      expect(extractBlockName('cta.mdx')).toBe('cta');
+      expect(extractFragmentName('hero.en.mdx')).toBe('hero');
+      expect(extractFragmentName('feature-grid.nl.mdx')).toBe('feature-grid');
+      expect(extractFragmentName('cta.mdx')).toBe('cta');
+    });
+
+    test('strips a region-qualified or upper-case locale suffix', () => {
+      expect(extractFragmentName('hero.en-US.mdx')).toBe('hero');
+      expect(extractFragmentName('hero.EN.mdx')).toBe('hero');
+      expect(extractFragmentName('quote.en.json')).toBe('quote');
     });
 
     test('extracts name from collection/name path', () => {
-      expect(extractBlockName('heroes/main')).toBe('main');
-      expect(extractBlockName('features/grid')).toBe('grid');
+      expect(extractFragmentName('heroes/main')).toBe('main');
+      expect(extractFragmentName('features/grid')).toBe('grid');
     });
 
     test('creates name from content ID', () => {
-      expect(extractBlockName('vx-12345678')).toBe('block-12345');
+      expect(extractFragmentName('vx-12345678')).toBe('fragment-12345');
     });
 
     test('returns source for unrecognized formats', () => {
-      expect(extractBlockName('some-random-string')).toBe('some-random-string');
+      expect(extractFragmentName('some-random-string')).toBe('some-random-string');
     });
   });
 

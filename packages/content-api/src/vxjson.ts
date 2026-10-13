@@ -1,31 +1,16 @@
-import { createHash } from 'crypto';
-import { JsonWhitespaceSkippingView } from './json-whitespace-view';
-import type { ContentData, ContentMeta, VXJSONFile } from './types';
-import { bigintToUrlSafeBase64, toUrlSafeBase64 } from './url-safe-base64';
-import { serializeVxjson } from './vxjson-serialize';
-import { createXxh64 } from './xxhash';
+import { createHash } from 'node:crypto';
+import { calculateMetaEtagFromBuffer } from './etag-utils.js';
+import { JsonWhitespaceSkippingView } from './json-whitespace-view.js';
+import type { ContentData, ContentMeta, VXJSONFile } from './types.js';
+import { bigintToUrlSafeBase64, toUrlSafeBase64 } from './url-safe-base64.js';
+import { serializeVxjson } from './vxjson-serialize.js';
+import { createXxh64 } from './xxhash.js';
 
 // Reusable TextDecoder instance - safe to reuse as it's stateless
 const textDecoder = new TextDecoder();
 
 // Pre-allocated content marker for efficiency
 const CONTENT_MARKER = new TextEncoder().encode('"content":');
-
-/**
- * Calculate metadata ETag using xxHash from buffer view
- * @param buffer - The file buffer view
- * @param start - Start position (inclusive)
- * @param end - End position (exclusive), or -1 for entire buffer
- */
-function calculateMetaEtagFromBuffer(buffer: Uint8Array, start = 0, end = -1): string {
-  const actualEnd = end === -1 ? buffer.length : end;
-  const hasher = createXxh64();
-  const jsonView = new JsonWhitespaceSkippingView(hasher);
-
-  jsonView.updateBuffer(buffer, start, actualEnd);
-
-  return bigintToUrlSafeBase64(hasher.digest());
-}
 
 /**
  * Calculate both ETags from a VXJSON buffer using views
@@ -447,8 +432,9 @@ export class VXJSON {
 
   /**
    * Serialize a VXJSONFile to VXJSON format string. Delegates to the pure
-   * vxjson-serialize module — kept apart so spec-14 cores can import the
-   * serializer without this module's crypto/WASM ETag imports.
+   * vxjson-serialize module — kept apart so code that must avoid node/WASM
+   * imports can import the serializer without this module's crypto/WASM ETag
+   * imports.
    */
   static serialize(data: VXJSONFile): string {
     return serializeVxjson(data);

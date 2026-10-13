@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises';
-import { tmpdir } from 'os';
-import { join } from 'path';
-import { FileSystemContentAPI } from '../src/filesystem-content-api';
-import type { CreateContentInput } from '../src/types';
-import { assertDefined, getCreatedId } from './test-helpers';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { FileSystemContentAPI } from '../src/filesystem-content-api.js';
+import type { CreateContentInput } from '../src/types.js';
+import { assertDefined, getCreatedId } from './test-helpers.js';
 
 describe('Pathname redirects functionality', () => {
   let tempDir: string;

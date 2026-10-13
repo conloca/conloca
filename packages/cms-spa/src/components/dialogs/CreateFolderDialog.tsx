@@ -1,16 +1,21 @@
-import { useEffect, useRef, useState } from 'react';
-import { Button, Input } from '../ui';
+import { useEffect, useId, useRef, useState } from 'react';
+import { Button, FieldError, Input } from '../ui/index.js';
 
 interface CreateFolderDialogProps {
   open: boolean;
   isPending?: boolean;
+  /** Why the server refused the last name, shown under the field */
+  error?: string;
   onClose: () => void;
   onCreate: (folderName: string) => void;
 }
 
-export function CreateFolderDialog({ open, isPending, onClose, onCreate }: CreateFolderDialogProps) {
+export function CreateFolderDialog({ open, isPending, error, onClose, onCreate }: CreateFolderDialogProps) {
   const [folderName, setFolderName] = useState('');
+  // The name last sent to onCreate, so a refusal is shown only while the field still holds that name
+  const [submittedName, setSubmittedName] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const errorId = useId();
 
   // Reset and focus input when dialog opens
   useEffect(() => {
@@ -24,6 +29,7 @@ export function CreateFolderDialog({ open, isPending, onClose, onCreate }: Creat
   const handleCreate = () => {
     const name = folderName.trim();
     if (!name) return;
+    setSubmittedName(name);
     onCreate(name);
   };
 
@@ -38,6 +44,7 @@ export function CreateFolderDialog({ open, isPending, onClose, onCreate }: Creat
   if (!open) return null;
 
   const isValid = folderName.trim().length > 0;
+  const shownError = folderName.trim() === submittedName ? error : undefined;
 
   return (
     <div
@@ -58,8 +65,15 @@ export function CreateFolderDialog({ open, isPending, onClose, onCreate }: Creat
             value={folderName}
             onChange={(e) => setFolderName(e.target.value)}
             placeholder="Enter folder name"
+            aria-invalid={!!shownError}
+            aria-describedby={shownError ? errorId : undefined}
             data-testid="folder-name-input"
           />
+          {shownError && (
+            <FieldError id={errorId} className="mt-2">
+              {shownError}
+            </FieldError>
+          )}
         </div>
         <div className="flex justify-end gap-3">
           <Button variant="outline" onClick={onClose}>

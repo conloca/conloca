@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
 import type { ContentEntry, CreateContentInput, CreateResult, UpdateLocaleInput } from '@conloca/content-api';
-import { ContentAPIClient, StaleWriteError } from '../src/client';
+import { ContentAPIClient, StaleWriteError } from '../src/client.js';
 
 describe('ContentAPIClient', () => {
   let client: ContentAPIClient;
@@ -240,17 +240,28 @@ describe('ContentAPIClient', () => {
       );
       expect(result).toBe(true);
     });
+
+    it('should check pathname availability in the given locale', async () => {
+      fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ available: false }), { status: 200 }));
+
+      const result = await client.isPathnameAvailable('test-site', '/kontakt', undefined, 'de');
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/__conloca/api/test-site/pathname-available?pathname=%2Fkontakt&locale=de',
+      );
+      expect(result).toBe(false);
+    });
   });
 
-  describe('block operations', () => {
-    it('should get blocks with filters', async () => {
+  describe('fragment operations', () => {
+    it('should get fragments with filters', async () => {
       const mockResult = { items: [], total: 0 };
 
       fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(mockResult), { status: 200 }));
 
-      const result = await client.getBlocks('components', 'en');
+      const result = await client.getFragments('components', 'en');
 
-      expect(fetchMock).toHaveBeenCalledWith('/__conloca/api/blocks?collection=components&locale=en', {
+      expect(fetchMock).toHaveBeenCalledWith('/__conloca/api/fragments?collection=components&locale=en', {
         headers: { 'Content-Type': 'application/json' },
       });
       expect(result).toEqual(mockResult);
@@ -260,6 +271,7 @@ describe('ContentAPIClient', () => {
       const mockResult = {
         code: 'return { default: function Test() { return null } };',
         metadata: { title: 'Test block' },
+        outline: [{ depth: 2, id: 'test-block', text: 'Test block' }],
       };
 
       fetchMock.mockResolvedValueOnce(
@@ -441,6 +453,34 @@ describe('ContentAPIClient', () => {
         headers: { 'Content-Type': 'application/json' },
       });
       expect(result).toEqual(mockResult);
+    });
+  });
+
+  describe('folder operations', () => {
+    it('creates a folder the server accepts', async () => {
+      fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 201 }));
+
+      await client.createFolder('/blog');
+
+      expect(fetchMock).toHaveBeenCalledWith('/__conloca/api/assets/folders', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/blog' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+
+    it("rejects with the server's reason when it refuses a folder name", async () => {
+      fetchMock.mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: { code: 'INVALID_REQUEST', message: 'Invalid folder path' } }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+
+      await expect(client.createFolder('/..')).rejects.toMatchObject({
+        code: 'INVALID_REQUEST',
+        message: 'Invalid folder path',
+      });
     });
   });
 

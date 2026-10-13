@@ -1,10 +1,15 @@
-import { describe, expect, test } from 'bun:test';
+import { beforeEach, describe, expect, test } from 'bun:test';
 import {
   containsMarkdownMarkers,
   defineMdxComponents,
+  getMdxComponents,
+  installDiscoveredMdxComponents,
+  installHostAuthoredMdxComponents,
   type MdxJsxComponentDescriptor,
   type MdxSnippetDescriptor,
-} from '../src/mdx-components';
+  mergeDiscoveredMdxComponents,
+  toJsxComponentDescriptor,
+} from '../src/mdx-components.js';
 
 // Smallest JSX descriptor that satisfies the type — `kind: 'flow'` is the
 // default insert path, `name` is required, everything else stays optional.
@@ -105,5 +110,93 @@ describe('containsMarkdownMarkers', () => {
   });
   test('false on empty string', () => {
     expect(containsMarkdownMarkers('')).toBe(false);
+  });
+});
+
+/**
+ * Guards the single merge rule every caller shares: the dev SPA merges
+ * the `/api/registry` response over the schemas-module exports, and a
+ * host app merges the same two lists from what it supplies. Discovered
+ * entries must win a name collision in both.
+ */
+describe('mergeDiscoveredMdxComponents', () => {
+  test('auto-discovered descriptors win on a name collision', () => {
+    const hostAuthored = [minimal({ name: 'Aside', insert: { label: 'Host Aside' } }), minimal({ name: 'Steps' })];
+    const discovered = [minimal({ name: 'Aside', insert: { label: 'Discovered Aside' } })];
+
+    const merged = mergeDiscoveredMdxComponents(hostAuthored, discovered);
+
+    // Shadowed host entry is dropped, order puts the survivors first.
+    expect(merged.map((descriptor) => descriptor.name)).toEqual(['Steps', 'Aside']);
+    expect(merged.find((descriptor) => descriptor.name === 'Aside')?.insert?.label).toBe('Discovered Aside');
+  });
+
+  test('returns the host list untouched when nothing was discovered', () => {
+    const hostAuthored = [minimal({ name: 'Steps' })];
+
+    expect(mergeDiscoveredMdxComponents(hostAuthored, [])).toBe(hostAuthored);
+  });
+
+  test('keeps every discovered descriptor when the host authored none', () => {
+    const discovered = [minimal({ name: 'Card' }), minimal({ name: 'Tabs' })];
+
+    expect(mergeDiscoveredMdxComponents([], discovered).map((d) => d.name)).toEqual(['Card', 'Tabs']);
+  });
+});
+
+/**
+ * Guards the dev boot race: the schemas virtual module and the
+ * `/api/registry` fetch are unordered, and a plain `setMdxComponents`
+ * from whichever settles LAST used to overwrite the other's entries.
+ * The slotted installers must converge on the same merged registry
+ * regardless of settle order.
+ */
+describe('slotted mdx component installs', () => {
+  beforeEach(() => {
+    installHostAuthoredMdxComponents([]);
+    installDiscoveredMdxComponents([]);
+  });
+
+  test('a late host-authored install keeps earlier discovered components', () => {
+    installDiscoveredMdxComponents([minimal({ name: 'Card' })]);
+    installHostAuthoredMdxComponents([minimal({ name: 'Steps' })]);
+
+    expect(getMdxComponents().map((d) => d.name)).toEqual(['Steps', 'Card']);
+  });
+
+  test('a host re-install replaces only the host slot', () => {
+    installHostAuthoredMdxComponents([minimal({ name: 'Old' })]);
+    installDiscoveredMdxComponents([minimal({ name: 'Card' })]);
+    installHostAuthoredMdxComponents([minimal({ name: 'New' })]);
+
+    expect(getMdxComponents().map((d) => d.name)).toEqual(['New', 'Card']);
+  });
+
+  test('discovered still wins a name collision through the slots', () => {
+    installDiscoveredMdxComponents([minimal({ name: 'Aside', insert: { label: 'Discovered' } })]);
+    installHostAuthoredMdxComponents([minimal({ name: 'Aside', insert: { label: 'Host' } })]);
+
+    const [aside] = getMdxComponents();
+    expect(getMdxComponents()).toHaveLength(1);
+    expect(aside.insert?.label).toBe('Discovered');
+  });
+});
+
+/**
+ * The fallback editor arrives as an argument: importing the editor's
+ * fallback block here would close an import cycle back into this module.
+ * A descriptor's own editor still takes precedence.
+ */
+describe('toJsxComponentDescriptor', () => {
+  const FallbackEditor = () => null;
+
+  test('uses the injected fallback editor when the descriptor brings none', () => {
+    expect(toJsxComponentDescriptor(minimal(), FallbackEditor).Editor).toBe(FallbackEditor);
+  });
+
+  test("keeps the descriptor's own editor over the fallback", () => {
+    const OwnEditor = () => null;
+
+    expect(toJsxComponentDescriptor(minimal({ Editor: OwnEditor }), FallbackEditor).Editor).toBe(OwnEditor);
   });
 });

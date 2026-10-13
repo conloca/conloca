@@ -2,11 +2,11 @@ import { ContentAPIClient, setContentAPIClient } from '@conloca/content-api-clie
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { createRoot } from 'react-dom/client';
-import App from './App';
-import { CanvasThemeProvider } from './hooks/useCanvasTheme';
-import { ThemeProvider } from './hooks/useTheme';
-import { getMdxComponents, type MdxComponents, setMdxComponents } from './mdx-components';
-import { getUIConfig } from './ui-config';
+import App from './App.js';
+import { CanvasThemeProvider } from './hooks/useCanvasTheme.js';
+import { ThemeProvider } from './hooks/useTheme.js';
+import { installDiscoveredMdxComponents, type MdxComponents } from './mdx-components.js';
+import { getUIConfig } from './ui-config.js';
 
 /**
  * Full SPA boot. Loaded by `main.tsx` when the document is the top
@@ -33,12 +33,10 @@ export function mountSpa(): void {
 
   // Kick off the auto-discover registry fetch in the background.
   // The integration's `/api/registry` endpoint scans the host's MDX
-  // content + configured component folders for JSX components.
-  // Merge those with whatever the schemas-loader virtual module
-  // already put in the registry (typically host-curated snippets
-  // and any non-JSX descriptors), with auto-discovered JSX entries
-  // winning on name collisions — they're derived from the source
-  // of truth (the MDX files themselves).
+  // content + configured component folders for JSX components. The
+  // slotted installer merges them with the schemas-loader module's
+  // host-authored list regardless of which of the two settles first —
+  // see `installHostAuthoredMdxComponents` for the race this closes.
   const cmsBase = (config.basename ?? '/__cms').replace(/\/+$/, '');
   fetch(`${cmsBase}/api/registry`)
     .then((res) => {
@@ -47,9 +45,7 @@ export function mountSpa(): void {
     })
     .then((data: { components?: MdxComponents }) => {
       if (!Array.isArray(data?.components)) return;
-      const discoveredNames = new Set(data.components.map((c) => c.name));
-      const existing = getMdxComponents().filter((c) => !discoveredNames.has(c.name));
-      setMdxComponents([...existing, ...data.components]);
+      installDiscoveredMdxComponents(data.components);
     })
     .catch((err) => {
       console.warn('[Conloca] auto-discover registry unavailable; using host-provided descriptors:', err);

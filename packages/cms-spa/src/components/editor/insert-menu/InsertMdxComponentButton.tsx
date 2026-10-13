@@ -5,8 +5,8 @@ import { usePublisher } from '@mdxeditor/editor';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { Plus } from 'lucide-react';
 import { useMemo } from 'react';
-import { type MdxComponentDescriptor, useMdxComponents } from '../../../mdx-components';
-import { dispatchInsert, insertJsx$, insertMarkdown$ } from './insert-payload';
+import { type MdxComponentDescriptor, useMdxComponents } from '../../../mdx-components.js';
+import { dispatchInsert, insertJsx$, insertMarkdown$ } from './insert-payload.js';
 
 interface DescriptorGroup {
   /** Section header label. Empty string for the ungrouped bucket. */

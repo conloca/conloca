@@ -1,9 +1,11 @@
 /* Cascade layer ordering.
- * `cms-admin` is declared LAST so all CMS SPA styles win over any
+ * `cms-admin` ranks AFTER the ordinary top-level Tailwind layers
+ * (base/theme/components/utilities) so all CMS SPA styles win over any
  * stylesheet injected into /__cms/* via host-style routes. Without
  * this, host base utilities (.fixed, .w-full, etc.) clobber our
  * responsive variants (.md:static, .md:w-80, etc.) because they
- * load later in source order. Layers override source order.
+ * load later in source order. Layers override source order. The two
+ * `conloca-host-*` layers sit after `cms-admin` BY DESIGN — see below.
  *
  * Host CSS lands in the SPA <head> ONLY through `useInjectHostStyles`,
  * which wraps each stylesheet in `@layer conloca-host-preview { ... }`.
@@ -15,16 +17,32 @@
  * `conloca-host-preview` is the slot for host CSS injected directly into
  * the main admin document while an MDX editor is mounted (see
  * `useInjectHostStyles` in site-styles.ts). Sits AFTER `cms-admin` —
- * Tailwind preflight (`*, ::before, ::after { border-width: 0; margin: 0;
- * padding: 0 }`) is part of cms-admin, and a "before cms-admin" position
- * means every host rule fights universal resets it cannot win on
- * specificity (a class selector loses to `*` once layer order beats it).
+ * well after the layer carrying Tailwind's preflight (`*, ::before,
+ * ::after { border-width: 0; margin: 0; padding: 0 }`), so no host rule
+ * has to fight the universal reset on specificity (a class selector
+ * loses to `*` once layer order beats it).
  * The host's CSS only targets `.conloca-aside`, `.conloca-card`, and
  * other host-component selectors that admin chrome never claims, so
  * letting host CSS win on those classes is safe; admin chrome stays
  * intact because no host rule names admin selectors.
  *
- * `conloca-host-probe` is the slot for the computed-style probe's
+ * Preflight placement: preflight is imported into the
+ * TOP-LEVEL `base` layer — its Tailwind v4 native home (`tailwindcss/
+ * index.css` wraps it in `@layer base`) and the weakest slot in this
+ * stack. It used to ride inside `cms-admin` via the monolithic
+ * `@import "tailwindcss" layer(cms-admin)`, which ranked the universal
+ * reset AFTER a host app's top-level `utilities` layer and made every
+ * host utility the admin build didn't also emit cascade-inert (the
+ * reset's `* { padding: 0 }` beat the host's own `.px-[28px]`). Only
+ * preflight moves: `theme.css` and `utilities.css` keep their
+ * `cms-admin.theme` / `cms-admin.utilities` sublayers, so the
+ * admin-beats-host invariant above is untouched for everything that
+ * styles admin chrome. Moving the utilities copy out instead was
+ * considered and rejected — it would re-introduce the failure via
+ * source-order ties between the host's and the admin's top-level
+ * `utilities` layers.
+ *
+ * `conloca-host-defaults` is the slot for the computed-style probe's
  * synthesized stylesheet (`.conloca-prose--editor h1 { font-size: …
  * }`, etc.). Declared BEFORE `conloca-host-preview` so the probe is
  * a FALLBACK, not an override.
@@ -63,7 +81,21 @@
 @layer base, theme, components, utilities, cms-admin, conloca-host-defaults, conloca-host-preview;
 
 @import "@puckeditor/core/puck.css" layer(cms-admin);
-@import "tailwindcss" layer(cms-admin);
+/* Granular Tailwind v4 imports (see the preflight note in the header):
+ * theme + utilities keep their exact pre-split homes — the
+ * `cms-admin.theme` / `cms-admin.utilities` sublayers the monolithic
+ * import produced — so admin-internal precedence (puck.css and
+ * hand-written cms-admin rules beat the utilities sublayer) is
+ * byte-for-byte what it was. Sublayer order stays implicit
+ * (first-mention: theme, then utilities — the same relative order the
+ * monolithic import pinned); an explicit `@layer cms-admin.*` statement
+ * here makes the v4 compiler nest rules under
+ * `cms-admin.utilities.cms-admin`, so it is deliberately NOT declared.
+ * Only preflight moves: to the top-level `base` layer, so host-app
+ * utilities beat the reset. */
+@import "tailwindcss/theme.css" layer(cms-admin.theme);
+@import "tailwindcss/preflight.css" layer(base);
+@import "tailwindcss/utilities.css" layer(cms-admin.utilities);
 @import "../styles/tailwind-theme.css";
 @plugin "@tailwindcss/typography";
 @source ".";
@@ -204,12 +236,14 @@
 }
 
 /* Dark mode: selector strategy for manual toggle + system preference.
- * Uses :is() (not :where()) so dark variants beat the conloca.com
- * website Tailwind that gets injected into /__cms — its plain .bg-white
+ * Uses :is() (not :where()) so dark variants beat any host site's
+ * Tailwind that gets injected into /__cms — its plain .bg-white
  * etc. has spec (0,1,0) and would override a :where()-wrapped variant. */
-@variant dark 
-(
-&:is(.dark, .dark *));
+@custom-variant dark {
+  &:is(.dark, .dark *) {
+    @slot;
+  }
+}
 
 /* Drawer + overlay animations (used by Radix Dialog wrappers) */
 @keyframes drawer-fade-in {
@@ -308,23 +342,59 @@ body {
   --puck-color-azure-10: #0f1d3d;
   --puck-color-azure-11: #0a1530;
   --puck-color-azure-12: #060e22;
+  /* Puck's blue text; its default azure-04 reads at about 2.5:1 on these dark surfaces. Sidebar tabs when selected
+   * (also the side marker on wide screens) or hovered, block categories and blocks on hover, active fields
+   * (a checked radio option, an expanded list item), and a list field's add icon. */
+  --puck-pluginbar-color-text-selected: var(--color-azure-08);
+  --puck-pluginbar-color-text-hover: var(--color-azure-08);
+  --puck-drawer-category-color-text-hover: var(--color-azure-08);
+  --puck-drawer-item-color-text-hover: var(--color-azure-08);
+  --puck-field-color-text-active: var(--color-azure-08);
+  --puck-field-array-add-color-icon: var(--color-azure-08);
 
   /* Semantic surface tokens — dark-mode values.
    * Keep in sync with the light-mode values inside @theme above. */
-  --color-page-bg: var(--color-grey-01);    /* #181818 */
-  --color-overlay: var(--color-grey-03);    /* #404040 */
-  --color-panel: var(--color-grey-02);      /* #292929 */
-  --color-subtle: var(--color-grey-02);     /* #292929 */
-  --color-line: var(--color-grey-04);       /* #5a5a5a */
-  --color-hover: var(--color-grey-04);      /* #5a5a5a */
-  --color-selected: var(--color-grey-03);   /* #404040 */
+  --color-page-bg: var(--color-grey-01); /* #181818 */
+  --color-overlay: var(--color-grey-03); /* #404040 */
+  --color-panel: var(--color-grey-02); /* #292929 */
+  --color-subtle: var(--color-grey-02); /* #292929 */
+  --color-line: var(--color-grey-04); /* #5a5a5a */
+  --color-hover: var(--color-grey-04); /* #5a5a5a */
+  --color-selected: var(--color-grey-03); /* #404040 */
   --color-foreground: var(--color-grey-12); /* #fafafa */
-  --color-muted: var(--color-grey-07);      /* #ababab */
-  --color-accent: var(--color-azure-05);    /* #3479be — slightly lighter for dark surfaces */
+  --color-muted: var(--color-grey-07); /* #ababab */
+  --color-accent: var(--color-azure-05); /* #3479be — slightly lighter for dark surfaces */
   --color-accent-foreground: #ffffff;
+}
 
-  color-scheme: dark;
-  color: var(--color-grey-12);
+/* The right panel's parent link takes Puck's interactive blues directly, with no variable of its own, so re-point
+ * them on that link alone: 2.5:1 becomes 10.2:1, and hover and press stay distinct. */
+.dark [class*="breadcrumbLabel"] {
+  --puck-color-interactive: var(--color-azure-08);
+  --puck-color-interactive-hover: var(--color-azure-09);
+  --puck-color-interactive-active: var(--color-azure-10);
+}
+
+/* The two PAINT declarations of the dark theme live in `cms-admin`, not out
+ * here with the token overrides above.
+ *
+ * Unlayered rules beat every layered rule, whatever the declared layer order
+ * says. The surround carries `dark` (so the host's own dark-theme rules
+ * resolve), so an unlayered `.dark { color }` painted the host's content
+ * surface with ADMIN ink and outranked the entire cascade this file documents
+ * at line 63 — `conloca-host-preview` last, precisely so host rules win
+ * inside the editor. `color-scheme` rode along with the same problem.
+ *
+ * Layered, they still win everywhere in admin chrome (nothing unlayered sets
+ * `color`; `html, body` above sets only box metrics and font-family), and they
+ * now correctly lose to the host's rebased `body { color }` inside the editor
+ * surround. The token overrides stay unlayered: they are custom properties
+ * that admin components read by name, not paint. */
+@layer cms-admin {
+  .dark {
+    color-scheme: dark;
+    color: var(--color-grey-12);
+  }
 }
 
 /* Style Puck's header buttons — uses --puck-color-* vars so dark mode inverts automatically */
@@ -559,7 +629,9 @@ body.mdxeditor-focus-mode .mdxeditor-root-contenteditable {
   .conloca-generic-block--inline .sl-markdown-content {
     display: contents;
   }
-  /* Tailwind preflight (in the `base` sub-layer of `cms-admin`)
+  /* Tailwind preflight (in the top-level `base` layer since the
+   * cascade-layer fix — it used to be the `base` sub-layer of
+   * `cms-admin`)
    * declares `svg { display: block; vertical-align: middle }`. For
    * Icon — a text-kind component whose payload is a single inline
    * SVG — that wipes the line and forces a wrap. Pin display back to
@@ -742,7 +814,6 @@ body.mdxeditor-focus-mode .mdxeditor-root-contenteditable {
   margin-bottom: 0;
 }
 
-
 /* MDX editor content column — sits between the chrome header and the
  * right-side props panel. Paints the host page's body bg (set via the
  * `--conloca-host-body-bg` bridge in useInjectHostStyles) so the area
@@ -834,7 +905,7 @@ body.mdxeditor-focus-mode .mdxeditor-root-contenteditable {
     align-items: center;
     gap: 0.5rem;
   }
-  .conloca-jsx-props-panel__field--inline input[type='checkbox'] {
+  .conloca-jsx-props-panel__field--inline input[type="checkbox"] {
     /* Default checkboxes inherit the input padding/border block we
      * use for text inputs — visually wrong. Reset to native sizing. */
     padding: 0 !important;
@@ -950,35 +1021,64 @@ body.mdxeditor-focus-mode .mdxeditor-root-contenteditable {
   }
 }
 
+/* Embedded: the page editor fills the height left under a host app's top bar.
+ * Puck's left Blocks panel scrolls inside that box. Without height:100% on
+ * the layout chain, h-screen editors extend under that bar and the
+ * last components are clipped with no way to reach them. */
+.Puck[class*="Puck"] {
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
+}
+[class*="PuckLayout"] {
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
+}
+[class*="PuckLayout-inner"] {
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
+}
+[class*="Sidebar--left"],
+[class*="Sidebar--right"] {
+  max-height: 100%;
+  min-height: 0;
+}
+[class*="BlocksPlugin"] {
+  max-height: 100%;
+  min-height: 0;
+}
+
 /* Right panel (SidebarSection) breadcrumbs: prevent the parent-link label
  * from overlapping the selected component's heading on narrow sidebars.
- * Puck renders the right-panel header as:
+ * Puck (0.23) renders the right-panel header as:
  *   <div .SidebarSection-title>
  *     <div .SidebarSection-breadcrumbs>   -- display: flex; gap: 4px (nowrap)
- *       <div .SidebarSection-breadcrumb>
- *         <button .SidebarSection-breadcrumbLabel>Parent</button>  -- flex-shrink: 0
- *         <ChevronRight />
+ *       <div .Breadcrumbs>
+ *         <div .Breadcrumbs-breadcrumb>
+ *           <button .Breadcrumbs-breadcrumbLabel>Parent</button>  -- flex-shrink: 0
+ *           <ChevronRight />
+ *         </div>
  *       </div>
  *       <div .SidebarSection-heading><h2>Selected</h2></div>
  *     </div>
  *   </div>
- * Root cause: breadcrumbLabel has flex-shrink: 0 (index.css:2130) so it keeps
- * its full width when the panel is narrow, and the heading flex-shrinks and
- * wraps behind it — the blue parent link visually overlaps the bold component
- * heading. Allow the label to shrink with ellipsis and give the heading
- * min-width: 0 so flex can distribute space cleanly. Class-prefix selectors
- * survive Puck's hash rotation (same pattern as the MenuBar override above). */
+ * Root cause: breadcrumbLabel has flex-shrink: 0 so it keeps its full width
+ * when the panel is narrow, and the heading flex-shrinks and wraps behind it —
+ * the blue parent link visually overlaps the bold component heading. Wrap the
+ * row, let the label shrink with ellipsis and give the heading min-width: 0 so
+ * flex can distribute space cleanly. Class-prefix selectors survive Puck's hash
+ * rotation (same pattern as the MenuBar override above). */
 [class*="SidebarSection-breadcrumbs"] {
   min-width: 0;
   flex-wrap: wrap;
 }
-[class*="SidebarSection-breadcrumb"] {
+[class*="Breadcrumbs"] {
   min-width: 0;
   flex-shrink: 1;
 }
-[class*="SidebarSection-breadcrumbLabel"] {
-  flex-shrink: 1;
-  min-width: 0;
+[class*="Breadcrumbs-breadcrumbLabel"] {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

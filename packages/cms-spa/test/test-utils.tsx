@@ -2,21 +2,20 @@ import {
   type APIError,
   createContentAPIRouter,
   type ErrorCode,
-  ErrorCodes,
   InMemoryContentAPI,
   type SitesConfig,
 } from '@conloca/content-api/node';
 import { API_ROUTES, ContentAPIClient, setContentAPIClient } from '@conloca/content-api-client';
-import { compileMDX } from '@conloca/mdx/node';
+import { handleMDXCompileRequest } from '@conloca/mdx/node';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { type RenderOptions, render } from '@testing-library/react';
 import { Hono } from 'hono';
 import type { ReactElement, ReactNode } from 'react';
 import { createMemoryRouter, createRoutesFromElements, MemoryRouter, RouterProvider } from 'react-router-dom';
-import { routeElements } from '../src/App';
-import { useDataSchemas } from '../src/data-schemas';
-import { ThemeProvider } from '../src/hooks/useTheme';
-import { usePuckConfig } from '../src/puck-config';
+import { routeElements } from '../src/App.js';
+import { useDataSchemas } from '../src/data-schemas.js';
+import { ThemeProvider } from '../src/hooks/useTheme.js';
+import { usePuckConfig } from '../src/puck-config.js';
 
 export * from '@testing-library/react';
 
@@ -67,38 +66,10 @@ export function setupTestAPI(baseUrl = '/__cms/api', sitesConfig?: SitesConfig) 
     const apiRouter = createContentAPIRouter(testApi);
 
     // POST /mdx/compile lives in @conloca/astro-cms's cms-handler (not in
-    // createContentAPIRouter) because compileMDX is a renderer concern.
-    // Mirror it here so tests that exercise useCompileMDX see the same
-    // endpoint shape they would in a real Astro host.
-    apiRouter.post('/mdx/compile', async (c) => {
-      let body: unknown;
-      try {
-        body = await c.req.json();
-      } catch {
-        return c.json({ error: { code: ErrorCodes.INVALID_REQUEST, message: 'Invalid JSON body' } }, 400);
-      }
-      const mdxContent =
-        typeof body === 'object' && body !== null ? (body as { mdxContent?: unknown }).mdxContent : null;
-      if (!mdxContent || typeof mdxContent !== 'string') {
-        return c.json(
-          {
-            error: {
-              code: ErrorCodes.MISSING_REQUIRED_FIELD,
-              message: 'mdxContent string required',
-              details: { field: 'mdxContent' },
-            },
-          },
-          400,
-        );
-      }
-      try {
-        const { code, metadata } = await compileMDX(mdxContent);
-        return c.json({ code, metadata });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to compile MDX';
-        return c.json({ error: { code: ErrorCodes.MDX_COMPILE_FAILED, message } }, 422);
-      }
-    });
+    // createContentAPIRouter) because compileMDX is a renderer concern. It is
+    // mounted here the way the Astro host mounts it, so tests that exercise
+    // useCompileMDX get the real endpoint.
+    apiRouter.post('/mdx/compile', (c) => handleMDXCompileRequest(c.req.raw));
 
     // Create the main app and mount at the specified base URL
     const app = new Hono();
@@ -151,11 +122,6 @@ export function setupTestAPI(baseUrl = '/__cms/api', sitesConfig?: SitesConfig) 
 
       // console.log(`[MockFetch #${requestId}] app.request returned at ${afterRequest.toFixed(2)}ms`);
 
-      const _fetchEnd = performance.now();
-      // console.log(
-      //   `[MockFetch #${requestId}] Completed fetch at ${fetchEnd.toFixed(2)}ms (took ${(fetchEnd - fetchStart).toFixed(2)}ms): ${url}`,
-      // );
-
       return response;
     };
     // Add preconnect method to satisfy TypeScript
@@ -174,7 +140,7 @@ export function setupTestAPI(baseUrl = '/__cms/api', sitesConfig?: SitesConfig) 
 
   // Also configure the UI config to use the correct API base URL
   if (typeof window !== 'undefined') {
-    (window as any).__UI_CONFIG__ = {
+    window.__UI_CONFIG__ = {
       apiBaseUrl: baseUrl,
       basename: '/__cms',
     };
@@ -246,7 +212,7 @@ export function renderWithProviders(ui: ReactElement, options?: Omit<RenderOptio
  * Render the full app under a Data Router (`createMemoryRouter` +
  * `<RouterProvider>`) using the same route config as production.
  *
- * Tests that navigate into the page or block editor must use this — those
+ * Tests that navigate into the page or fragment editor must use this — those
  * editors call `useUnsavedChangesGuard` → `useBlocker`, which only works
  * under a Data Router. Rendering `<AppRoutes>` inside a legacy
  * `<MemoryRouter>` (the default `renderWithProviders` path) makes

@@ -1,0 +1,63 @@
+---
+title: API Keys
+description: Authenticate programmatic access with API keys
+id: vx-hu4EicGI
+created: '2026-05-07T18:07:39.047Z'
+modified: '2026-05-07T18:07:39.047Z'
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="caution">
+  **Dev Branch Preview** — API key authentication exists on the `dev` branch, but it is not implemented on the current
+  branch yet. There is currently no `conlocaCMS({auth})` API or `apiKey()` export here.
+</Aside>
+
+This page exists so the docs navigation can point to the planned API key work without implying that the feature is ready
+today.
+
+## Current status
+
+- No API key provider is available in the current `@conloca/content-api/node` exports
+- No `auth` option is available in `conlocaCMS()`
+- No request header format is finalized in the shipped code yet
+
+## What to use today
+
+For production protection today, use [Cloudflare Access](/guides/auth/cf-access/). That flow is implemented and works
+without changing your Astro config.
+
+## Planned use case
+
+The likely target is programmatic access for CI/CD pipelines, scripts, and headless API consumers. Exact request and
+configuration shapes are still subject to implementation.
+
+## Dev Branch Preview
+
+On the `dev` branch, API keys are configured through `conlocaCMS({ auth })` using the `apiKey()` provider from
+`@conloca/content-api/node`.
+
+```js
+// dev branch preview only
+import { apiKey } from '@conloca/content-api/node';
+
+auth: {
+  provider: apiKey({
+    keys: [
+      {
+        hash: 'sha256:YOUR_BASE64_HASH',
+        role: 'editor',
+        label: 'ci-deploy',
+      },
+    ],
+  }),
+}
+```
+
+The dev branch implementation expects API keys in the `Authorization: Bearer ...` header.
+
+## Next steps
+
+- [Getting Started](/getting-started/) -- Set up your first Conloca site
+- [Cloudflare Access](/guides/auth/cf-access/) -- Current production-ready protection
+- [Docker deployment](/guides/deploy/docker/) -- Deploy with Docker Compose

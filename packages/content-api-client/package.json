@@ -10,82 +10,82 @@
     "directory": "packages/content-api-client"
   },
   "type": "module",
-  "main": "./dist/index.mjs",
-  "module": "./dist/index.mjs",
-  "types": "./dist/index.d.mts",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     "./package.json": "./package.json",
     ".": {
-      "types": "./dist/index.d.mts",
-      "import": "./dist/index.mjs",
-      "default": "./dist/index.mjs"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
     },
     "./testing": {
-      "types": "./dist/testing.d.mts",
-      "import": "./dist/testing.mjs",
-      "default": "./dist/testing.mjs"
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js",
+      "default": "./dist/testing.js"
     }
   },
   "files": [
     "dist",
-    "!**/*.tsbuildinfo",
-    "!dist/test"
+    "src",
+    "!**/*.tsbuildinfo"
   ],
   "scripts": {
     "test": "nx run content-api-client:test --outputStyle=stream"
   },
   "dependencies": {
     "@conloca/content-api": "workspace:*",
-    "@tanstack/react-query": "^5.100.6",
+    "@tanstack/react-query": "^5.102.8",
     "tslib": "^2.8.1"
   },
   "peerDependencies": {
-    "react": "^19.2.5",
-    "react-dom": "^19.2.5"
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "@happy-dom/global-registrator": "20.6.1",
-    "@testing-library/jest-dom": "^6.9.1",
-    "@testing-library/react": "^16.3.2",
-    "@types/react": "19.2.14"
+    "@happy-dom/global-registrator": "20.13.2",
+    "@testing-library/react": "^16.3.3",
+    "@types/react": "19.2.18"
   },
   "nx": {
     "targets": {
       "clean": {},
       "lint": {},
-      "tsdown-js": {
-        "executor": "nx:run-commands",
-        "cache": true,
-        "dependsOn": [
-          "^build"
-        ],
-        "inputs": [
-          "{projectRoot}/src/**/*",
-          "{projectRoot}/tsdown.config.ts",
-          "{projectRoot}/tsconfig.lib.json",
-          "{projectRoot}/package.json"
-        ],
-        "outputs": [
-          "{projectRoot}/dist/**/*.mjs",
-          "{projectRoot}/dist/**/*.js",
-          "{projectRoot}/dist/**/*.d.mts"
-        ],
-        "options": {
-          "command": "tsdown",
-          "cwd": "{projectRoot}"
-        }
-      },
       "test": {
         "executor": "@smoothbricks/nx-plugin:bounded-exec",
         "dependsOn": [
           "typecheck-tests",
-          "^build"
+          "^build",
+          "test-packed"
         ],
         "options": {
           "command": "bun test --timeout=30000",
           "cwd": "{projectRoot}",
           "timeoutMs": 120000,
-          "killAfterMs": 10000
+          "killAfterMs": 10000.0
+        }
+      },
+      "test-packed": {
+        "//": "The packed shape is a function of the built outputs, the manifest and the locked dependency closure; cached on exactly those.",
+        "executor": "nx:run-commands",
+        "cache": true,
+        "inputs": [
+          {
+            "dependentTasksOutputFiles": "**/*",
+            "transitive": true
+          },
+          "{projectRoot}/package.json",
+          "{workspaceRoot}/bun.lock",
+          "{workspaceRoot}/tooling/packaging/**/*"
+        ],
+        "dependsOn": [
+          "build",
+          "^build"
+        ],
+        "options": {
+          "command": "bun tooling/packaging/test-packed.ts content-api-client",
+          "cwd": "{workspaceRoot}"
         }
       }
     },

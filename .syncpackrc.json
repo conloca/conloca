@@ -10,17 +10,19 @@
       "packages": ["**"],
       "dependencies": ["react", "react-dom"],
       "dependencyTypes": ["dev", "prod"],
-      "pinVersion": "19.2.4"
+      "//": "One exact React per workspace, because one process loads them all: a package pinning its own version renders with one copy while a hook from a sibling workspace package runs against the other, and the second React's dispatcher is null. 19.2.4 predated two root bumps and was installed nowhere; ^19.2.8 peer ranges above refused it outright.",
+      "pinVersion": "19.2.8"
     },
     {
       "packages": ["**"],
       "dependencies": ["@types/react"],
-      "pinVersion": "19.2.14"
+      "//": "The root's pin, which is what bun installs and what every program in this workspace compiles against. 19.2.14 predated two root bumps and was installed nowhere; mdx and content-api-client had drifted up to 19.3.0 on their own, so three programs read three different React type surfaces.",
+      "pinVersion": "19.2.18"
     },
     {
       "packages": ["**"],
       "dependencies": ["@types/react-dom"],
-      "pinVersion": "19.2.3"
+      "pinVersion": "19.2.7"
     }
   ],
   "semverGroups": [
