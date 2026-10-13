@@ -136,9 +136,11 @@ server-rendered site): one rule for `/_conloca/*`, plus one for each folder of f
 reference.
 
 - **Cloudflare Pages and Netlify** apply `_headers` themselves. Nothing else to do.
-- **Everywhere else**, `_headers` is ignored — including a Node server built with `@astrojs/node`, which reads only its
-  own `_headers.json`. Set the header for every path the generated `_headers` lists, in whatever serves the site. With
-  Caddy in front of the Node server:
+- **Everywhere else**, `_headers` is ignored — including a Node server built with `@astrojs/node`, which has no setting
+  for headers on static files. Set the header for every path the generated `_headers` lists, in whatever serves the
+  site. A site made by `conloca create` is such a Node server: add the header in a proxy in front of it, or switch the
+  site to static output (remove `output: 'server'` and the adapter from `astro.config.mjs`) and deploy it to Cloudflare
+  Pages or Netlify. With Caddy in front of the Node server:
 
   ```caddyfile
   www.example.com {
