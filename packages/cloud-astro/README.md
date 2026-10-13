@@ -32,7 +32,8 @@ Before you start you need:
 bun add @conloca/cloud-astro
 ```
 
-It needs Astro 7.3.1 or a later 7.x release. Its other peers (`@astrojs/react`, `@conloca/astro-cms`, `vite`) are
+It needs Astro 7.3.1 or a later 7.x release, and `@conloca/astro-cms` at its own version: the `@conloca/*` packages are
+released together, so keep them on one version and update them together. Its other peers (`@astrojs/react`, `vite`) are
 already in a site that runs `@conloca/astro-cms`.
 
 ### 2. Add it next to `conlocaCMS`
