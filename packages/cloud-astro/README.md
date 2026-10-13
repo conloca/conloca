@@ -62,7 +62,8 @@ export default defineConfig({
 
 - `conlocaCloud` is an add-on to `conlocaCMS`, not a replacement: keep both, with `react()` first. Doctor reports a
   config without `conlocaCMS` as an error.
-- `endpoint` is the address you open the editor at, with no trailing slash.
+- `endpoint` is only the scheme and host of the address you open the editor at, such as `https://cms.example.com`. Leave
+  out any path the browser's address bar shows after the host, and the trailing slash.
 - `puckConfigPath` is the value you already gave `conlocaCMS`. If your `conlocaCMS` options also set `siteStyles` or
   `fragmentPreviewRoute`, give `conlocaCloud` the same values, so the editor renders your pages with your site's styles.
 - `publicBaseUrl` is the address your deployed site is served from: the editor loads this build's editor files from
@@ -227,7 +228,7 @@ Then reload the editor: it opens your site instead of **Connect this site**, and
 
 | Name                   | Required | Description                                                                                                                          |
 | ---------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `endpoint`             | yes      | Editor endpoint, e.g. `https://cms.example.com`, no trailing slash. URL-shape validated.                                             |
+| `endpoint`             | yes      | Editor endpoint, scheme and host only, e.g. `https://cms.example.com`: no path, no trailing slash. URL-shape validated.              |
 | `puckConfigPath`       | yes      | Puck config entry to compile (same option name and value as in `@conloca/astro-cms`).                                                |
 | `publicBaseUrl`        | no       | Where the deployed site is served; the editor loads the bundle from there. Astro's `site` is not read. Falls back to `CF_PAGES_URL`. |
 | `repoUri`              | no       | Advanced `owner/repo` override; normally detected from CI or the Git remote.                                                         |
