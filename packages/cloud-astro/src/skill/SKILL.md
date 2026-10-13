@@ -30,8 +30,12 @@ still deployed.
 no other setup, no OIDC. Repository identity comes from CI metadata (`GITHUB_REPOSITORY`, Vercel, GitLab) or the git
 remote; `repoUri` is only for non-standard checkouts. The `endpoint` is an https URL with no trailing slash.
 
-**Rotation gotcha:** creating a new token invalidates the old one. A `401` from the endpoint (doctor CC5) almost always
-means the CI secret still holds a rotated token — create a new one and update the secret.
+**Whole-line gotcha:** the endpoint shows and copies the token as the line `CONLOCA_BUILD_TOKEN=cbt_…`. Pasted whole
+into a secret's value, doctor CC2 reports it and the build's registration answers `401`; the token is fine — store only
+the part from `cbt_`.
+
+**Rotation gotcha:** creating a new token invalidates the old one. A `401` from the endpoint for a value that does start
+with `cbt_` (doctor CC5) means the CI secret still holds a rotated token — create a new one and update the secret.
 
 ## The pipeline: build → register → editor
 

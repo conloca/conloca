@@ -171,6 +171,13 @@ describe('CC2 — build token', () => {
     ]);
   });
 
+  it('asks for only the part after "=" when the whole NAME=value line went into the value, not for a new token', async () => {
+    const outcome = check(await run(files, { CONLOCA_BUILD_TOKEN: `CONLOCA_BUILD_TOKEN=${TOKEN}` }), 'CC2');
+    expect(messages(outcome)).toEqual([
+      'error: the build token value starts with "CONLOCA_BUILD_TOKEN=" — the whole NAME=value line went into the value; store only the part after "=", which starts with cbt_',
+    ]);
+  });
+
   it('warns when the token is committed in the config', async () => {
     const committed = { [CONFIG]: config(`{ endpoint: 'https://cms.example.com', buildToken: '${TOKEN}' }`) };
     const outcome = check(await run(committed, {}), 'CC2');

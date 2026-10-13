@@ -114,11 +114,15 @@ export function checkBuildToken(
   }
   const orgId = buildTokenOrgId(token);
   if (orgId === null) {
+    // The endpoint shows and copies the token as a whole `NAME=value` line; pasted as a secret's value, the token
+    // inside it is fine, so a new one would not help.
+    const assignment = `${BUILD_TOKEN_ENV_VAR}=`;
     outcome.problems.push({
       check: 'CC2',
       level: 'error',
-      message:
-        'the build token is malformed — expected cbt_<id>.<43-character secret>; create a new token at the endpoint',
+      message: token.startsWith(assignment)
+        ? `the build token value starts with "${assignment}" — the whole NAME=value line went into the value; store only the part after "=", which starts with cbt_`
+        : 'the build token is malformed — expected cbt_<id>.<43-character secret>; create a new token at the endpoint',
     });
     return { outcome };
   }
