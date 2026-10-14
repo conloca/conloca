@@ -182,6 +182,76 @@ function extractCmsOptions(configText: string): CmsOptions {
   return parsed === null ? { state: 'dynamic' } : { state: 'literal', ...parsed };
 }
 
+/** The calls a `collections` member may be, for the config text to show every collection it makes. */
+const IN_VIEW_COLLECTION_CALLS = new Set(['conlocaPages', 'conlocaData', 'conlocaFragments', 'defineCollection']);
+
+/** True when `value` is exactly one call to a function in IN_VIEW_COLLECTION_CALLS. */
+function isInViewCollectionCall(value: string): boolean {
+  const call = /^([$A-Za-z_][$\w]*)\s*\(/.exec(value);
+  if (call === null || !IN_VIEW_COLLECTION_CALLS.has(call[1])) return false;
+  const argsStart = call[0].length - 1;
+  return balancedSlice(value, argsStart) === value.slice(argsStart);
+}
+
+/**
+ * True when the config's `collections` object literal has only keys and
+ * spreads whose value is a call in IN_VIEW_COLLECTION_CALLS. Any other member
+ * — `blog`, `blog: blogCollection`, `...extraCollections`, a helper's result —
+ * may hold a collection made in another file, which the text cannot see.
+ */
+function collectionsAllInView(text: string): boolean {
+  const declaration = /\b(?:const|let|var)\s+collections\s*=\s*/.exec(text);
+  const start = declaration === null ? -1 : declaration.index + declaration[0].length;
+  const objectText = text[start] === '{' ? balancedSlice(text, start) : null;
+  if (objectText === null) return false;
+  const body = objectText.slice(1, -1);
+  for (let i = 0; i < body.length; ) {
+    const end = skipValue(body, i);
+    const member = body.slice(i, end).trim();
+    i = end + 1;
+    if (member === '') continue;
+    const key = /^(?:\.\.\.|(?:[$A-Za-z_][$\w]*|'[^']*'|"[^"]*")\s*:)/.exec(member);
+    if (key === null || !isInViewCollectionCall(member.slice(key[0].length).trim())) return false;
+  }
+  return true;
+}
+
+/**
+ * The page collections a content config's `conlocaPages(...)` calls declare,
+ * read as text, or null when the text cannot tell: no call at all, a call
+ * whose collection is not a plain string, a `collections` object that may
+ * hold collections made elsewhere (see collectionsAllInView), or a config
+ * that also declares pages another way (discovery, a hand-wired loader, a
+ * renamed import).
+ */
+export function declaredPageCollections(configText: string): Set<string> | null {
+  const text = stripComments(configText);
+  if (['createConlocaCollections', 'conlocaLoader'].some((marker) => containsOutsideStrings(text, marker))) {
+    return null;
+  }
+  if (/\bconlocaPages\s+as\b/.test(text) || !collectionsAllInView(text)) return null;
+  const declared = new Set<string>();
+  for (const call of text.matchAll(/\bconlocaPages\s*\(/g)) {
+    const args = balancedSlice(text, call.index + call[0].length - 1);
+    if (args === null) return null;
+    const inner = args.slice(1, -1).trim().replace(/,$/, '').trim();
+    if (inner === '') {
+      declared.add('pages');
+      continue;
+    }
+    const objectText = inner.startsWith('{') ? balancedSlice(inner, 0) : null;
+    const options = objectText === inner ? parseObjectEntries(objectText) : null;
+    if (options === null || options.hasSpread) return null;
+    const raw = options.entries.get('collection');
+    // A shorthand `{ collection }` never reaches the entries.
+    if (raw === undefined && /\bcollection\b/.test(inner)) return null;
+    const name = raw === undefined ? 'pages' : stringLiteral(raw);
+    if (name === null) return null;
+    declared.add(name);
+  }
+  return declared.size > 0 ? declared : null;
+}
+
 /** Insertion order is the report order. */
 const ASTRO_CHECK_LABELS: Record<string, string> = {
   C1: 'content config registers Conloca collections',

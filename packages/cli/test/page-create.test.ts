@@ -267,3 +267,115 @@ describe('conloca page create', () => {
     }
   });
 });
+
+/**
+ * A content config whose `collections` object is `entries`, importing the
+ * factories the way the README writes them and site modules the cases use.
+ */
+function contentConfig(entries: string): string {
+  return `import { conlocaFragments, conlocaPages } from '@conloca/astro-cms/node/content';
+import { defineCollection } from 'astro:content';
+import { blog, blogCollection, blogPages, extraCollections } from './collections';
+import { docsLoader, options, pageSchemas } from './schemas';
+
+export const collections = {
+${entries}
+};
+`;
+}
+
+/**
+ * The build fails on content in a page collection the content config does
+ * not declare. page create reads the config as text, never running it, and
+ * warns only when the text plainly leaves the collection out.
+ */
+describe('conloca page create — a collection the content config does not declare', () => {
+  async function createBlogPage(config: string | null, json: boolean) {
+    const dir = await makeProject('conloca-page-create-undeclared-');
+    try {
+      if (config !== null) await Bun.write(join(dir, 'src', 'content.config.ts'), config);
+      const flags = json ? ['--json'] : [];
+      const result =
+        await $`${CLI} page create ${flags} --site default --collection blog --pathname /blog/hello --title Hello ${dir}`
+          .quiet()
+          .nothrow();
+      const created = await stat(join(dir, 'content', 'default', 'blog', 'blog', 'hello.en.vxjson')).catch(() => null);
+      return { result, created };
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }
+
+  test.each([
+    ['declares only the default pages collection', contentConfig('  pages: conlocaPages({ pageSchemas }),')],
+    [
+      'declares other page collections',
+      contentConfig("  pages: conlocaPages(),\n  landing: conlocaPages({ collection: 'landing' }),"),
+    ],
+    [
+      'declares the collection only in a comment',
+      contentConfig("  pages: conlocaPages(),\n  // blog: conlocaPages({ collection: 'blog' }),"),
+    ],
+    [
+      'also declares a collection of its own',
+      contentConfig(
+        "  pages: conlocaPages(),\n  docs: defineCollection({ loader: docsLoader() }),\n  ...conlocaFragments('general'),",
+      ),
+    ],
+  ])('--json still creates the page and carries a warning when the config %s', async (_label, config) => {
+    const { result, created } = await createBlogPage(config, true);
+    expect(result.exitCode).toBe(0);
+    expect(created?.isFile()).toBe(true);
+    const report = JSON.parse(result.stdout.toString());
+    expect(report.ok).toBe(true);
+    expect(report.warnings).toHaveLength(1);
+    expect(report.warnings[0]).toContain('"blog"');
+    expect(report.warnings[0]).toContain("conlocaPages({ collection: 'blog' })");
+    expect(result.stderr.toString()).toContain(`Warning: ${report.warnings[0]}`);
+  });
+
+  test('without --json the warning goes to stderr and the page is still created', async () => {
+    const { result, created } = await createBlogPage(contentConfig('  pages: conlocaPages(),'), false);
+    expect(result.exitCode).toBe(0);
+    expect(created?.isFile()).toBe(true);
+    expect(result.stderr.toString()).toContain("conlocaPages({ collection: 'blog' })");
+    expect(result.stdout.toString()).not.toContain('conlocaPages');
+  });
+
+  test.each([
+    ['declares it', contentConfig("  pages: conlocaPages(),\n  blog: conlocaPages({ collection: 'blog' }),")],
+    ['names it with a variable', contentConfig('  blog: conlocaPages({ collection: options.name }),')],
+    ['names it with a shorthand', contentConfig('  blog: conlocaPages({ collection }),')],
+    ['spreads options into the call', contentConfig('  blog: conlocaPages({ ...options }),')],
+    ['passes options as a variable', contentConfig('  blog: conlocaPages(options),')],
+    [
+      'imports the factory under another name',
+      contentConfig('  pages: conlocaPages(),\n  blog: pagesOf(options),').replace(
+        'conlocaPages }',
+        'conlocaPages, conlocaPages as pagesOf }',
+      ),
+    ],
+    ['discovers its collections', 'export const { collections } = await createConlocaCollections();\n'],
+    // A collection made in another file is declared when the build imports that file.
+    [
+      'takes a collection from another file',
+      contentConfig('  pages: conlocaPages(),\n  blog,\n  ...conlocaFragments(),'),
+    ],
+    ['names a collection from another file', contentConfig('  pages: conlocaPages(),\n  blog: blogCollection,')],
+    ['spreads collections from another file', contentConfig('  pages: conlocaPages(),\n  ...extraCollections,')],
+    ['builds a collection with a helper', contentConfig('  pages: conlocaPages(),\n  blog: blogPages(),')],
+    [
+      'builds the collections object some other way',
+      "import { conlocaPages } from '@conloca/astro-cms/node/content';\nimport { extraCollections } from './collections';\n\nexport const collections = Object.assign({ pages: conlocaPages() }, extraCollections);\n",
+    ],
+    ['never calls conlocaPages', contentConfig('  ...conlocaFragments(),')],
+    ['does not exist', null],
+  ])('--json carries no warning when the config %s', async (_label, config) => {
+    const { result, created } = await createBlogPage(config, true);
+    expect(result.exitCode).toBe(0);
+    expect(created?.isFile()).toBe(true);
+    const report = JSON.parse(result.stdout.toString());
+    expect(report.ok).toBe(true);
+    expect(report.warnings).toBeUndefined();
+  });
+});

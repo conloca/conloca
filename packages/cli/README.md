@@ -190,8 +190,12 @@ conloca page create --site <site> --collection <collection> --pathname <pathname
 Writes a new `.vxjson` file under `<content root>/<site>/<collection>` with the same empty Puck payload the CMS writes
 for a new page, then prints the page id and the created file path. It exits 1 when the site is unknown, the pathname is
 invalid or already taken, or the write fails; validation failures name the offending option. `--json` prints
-`{ok, id, path}` on success and `{ok: false, error, field?}` on failure — stdout carries exactly that one object,
-progress lines go to stderr.
+`{ok, id, path, warnings?}` on success and `{ok: false, error, field?}` on failure — stdout carries exactly that one
+object, progress lines and warnings go to stderr.
+
+A collection other than `pages` must be declared with `conlocaPages({ collection })` in the content config, or the build
+fails on its pages, and given a route in `conlocaCMS({ routing })` to be served; `page create` warns when the config
+plainly does not declare it.
 
 Example:
 

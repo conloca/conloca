@@ -22,6 +22,13 @@ export type ContentConfigProblem = 'missing' | 'not-wired';
  */
 const WIRED_MARKERS = ['createConlocaCollections', 'conlocaPages', 'conlocaData', 'conlocaFragments', 'conlocaLoader'];
 
+/** The content config file Astro loads for a project, or null when it has none. */
+export function findContentConfig(projectRoot: string): string | null {
+  return (
+    CONTENT_CONFIG_CANDIDATES.map((candidate) => join(projectRoot, candidate)).find((path) => existsSync(path)) ?? null
+  );
+}
+
 /**
  * Detect the single most common Conloca misconfiguration: a project whose
  * content config never registers Conloca's collections, so every page 404s
@@ -29,9 +36,7 @@ const WIRED_MARKERS = ['createConlocaCollections', 'conlocaPages', 'conlocaData'
  * collections, so this reads the file instead.
  */
 export function findContentConfigProblem(projectRoot: string): ContentConfigProblem | null {
-  const found = CONTENT_CONFIG_CANDIDATES.map((candidate) => join(projectRoot, candidate)).find((path) =>
-    existsSync(path),
-  );
+  const found = findContentConfig(projectRoot);
   if (!found) return 'missing';
 
   const source = readFileSync(found, 'utf8');
