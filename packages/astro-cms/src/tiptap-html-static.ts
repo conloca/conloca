@@ -1,17 +1,22 @@
-// Drop-in replacement for `@tiptap/html` in server bundles: same named exports,
-// no DOM anywhere. The richtext field render imports `generateHTML`/`generateJSON`
+// Drop-in replacement for `@tiptap/html` wherever the site's build resolves it, in
+// the editor and in the server render alike: same named exports, no happy-dom and
+// no `node:vm`. The richtext field render imports `generateHTML`/`generateJSON`
 // from `@tiptap/html`; its browser build needs `window`, and its `/server` build
 // fakes one with happy-dom — whose `Window` constructor calls `node:vm`
 // (`Script.runInContext`). Workers runtimes ship `node:vm` as a stub, so that
 // call throws at render time and every richtext section on the page dies. The
 // static renderer walks the ProseMirror document and writes the markup as a
-// string instead, so the same output comes out on any engine.
+// string instead, so the same output comes out on any engine; reading HTML back
+// takes the browser's own parser, or linkedom where there is none.
+import { getSchema } from '@tiptap/core';
+import { type ParseOptions, DOMParser as ProseMirrorDOMParser } from '@tiptap/pm/model';
 import {
   escapeHTML,
   renderJSONContentToString,
   serializeChildrenToHTMLString,
 } from '@tiptap/static-renderer/json/html-string';
 import { domOutputSpecToHTMLString, renderToElement } from '@tiptap/static-renderer/pm/html-string';
+import { parseHTML } from 'linkedom/worker';
 
 type RenderArgs = Parameters<typeof renderToElement<string>>[0];
 type RichTextContent = RenderArgs['content'];
@@ -72,13 +77,27 @@ export function generateHTML(doc: RichTextContent, extensions: RichTextExtension
 }
 
 /**
- * Parsing an HTML string back into ProseMirror JSON needs a real HTML parser,
- * which no DOM-free server runtime provides. Richtext values written by the
- * editor are already ProseMirror JSON, so this only trips on hand-authored HTML
- * strings — and says so instead of failing deep inside a fake DOM.
+ * Reads an HTML string into a ProseMirror JSON document. The richtext field stores
+ * the editor's HTML and its render reads it back through here. A browser parses
+ * with its own DOMParser; a server render has none, so linkedom parses there —
+ * plain JavaScript without `node:vm`, so it runs in Workers runtimes too.
  */
-export function generateJSON(_html: string, _extensions: RichTextExtensions): Record<string, unknown> {
-  throw new Error(
-    'generateJSON cannot parse HTML without a DOM. Store richtext values as tiptap JSON documents instead of HTML strings.',
-  );
+export function generateJSON(
+  html: string,
+  extensions: RichTextExtensions,
+  options?: ParseOptions,
+): Record<string, unknown> {
+  const parser = ProseMirrorDOMParser.fromSchema(getSchema(extensions));
+  if (typeof globalThis.DOMParser === 'function') {
+    const { body } = new globalThis.DOMParser().parseFromString(html, 'text/html');
+    return parser.parse(body, options).toJSON();
+  }
+
+  const { document } = parseHTML(`<!DOCTYPE html><html><body>${html}</body></html>`);
+  // linkedom's elements implement the part of the DOM ProseMirror reads, under types of their own.
+  const doc = parser.parse(document.body as unknown as Node, options).toJSON();
+  // linkedom answers `getAttribute('class')` with "" for an element that has no
+  // class, where a browser answers null, so every link would read back with an
+  // empty class and render as `class=""`. Give the null back.
+  return JSON.parse(JSON.stringify(doc), (key, value) => (key === 'class' && value === '' ? null : value));
 }

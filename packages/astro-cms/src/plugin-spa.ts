@@ -749,7 +749,10 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
                 // richtext section died there with "The 'contextifiedObject'
                 // argument must be an vm.Context". Both specifiers resolve to a
                 // shim that writes the markup as a string, with no DOM and no
-                // vm, so the same output comes out on every engine.
+                // vm, so the same output comes out on every engine. The alias
+                // reaches the editor in the browser too, and the field stores
+                // HTML, so the shim also reads it back: with the browser's own
+                // parser there, with linkedom on the server.
                 { find: /^@tiptap\/html(\/server)?$/, replacement: TIPTAP_HTML_SHIM_PATH },
               ],
             },

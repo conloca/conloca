@@ -15,7 +15,7 @@ import { Strike } from '@tiptap/extension-strike';
 import { Text } from '@tiptap/extension-text';
 import TextAlign from '@tiptap/extension-text-align';
 import { Underline } from '@tiptap/extension-underline';
-import { generateHTML as generateHTMLWithDom } from '@tiptap/html';
+import { generateHTML as generateHTMLWithDom, generateJSON as generateJSONWithDom } from '@tiptap/html';
 import { generateHTML, generateJSON } from '../src/tiptap-html-static.js';
 
 // The richtext field's own extension set, in its own order — schema rank
@@ -151,10 +151,6 @@ describe('DOM-free richtext rendering', () => {
     expect(html).toContain('<blockquote><p>Quoted "text" &amp; &lt;markup&gt;</p></blockquote>');
   });
 
-  test('reports the unsupported HTML-string parse instead of failing obscurely', () => {
-    expect(() => generateJSON('<p>hello</p>', extensions)).toThrow(/tiptap JSON/);
-  });
-
   test('wraps every marked run on its own, where the DOM keeps one element open across runs', () => {
     // The one known divergence, pinned so a tiptap upgrade cannot widen it
     // unnoticed: the DOM serializer holds a mark element open while the next
@@ -188,5 +184,63 @@ describe('DOM-free richtext rendering', () => {
 
     expect(generateHTMLWithDom(doc, extensions)).toBe('<p style="text-align: right;">x</p>');
     expect(generateHTML(doc, extensions)).toBe('<p style="text-align: right">x</p>');
+  });
+});
+
+// The richtext field saves what the editor shows as HTML, and its render reads that HTML back into a
+// document before writing the page. One stored value per construct the field offers.
+const storedHtml = [
+  '<p>Hello <strong>bold</strong> world</p>',
+  '<h2>A heading</h2><p>Plain, <strong>bold</strong>, <em>italic</em>, <u>under</u>, <s>struck</s> and <code>code()</code>.</p>',
+  '<p style="text-align: center">Before the break<br><a target="_blank" rel="noopener noreferrer nofollow" href="https://example.com/docs?a=1&amp;b=2">a link</a></p>',
+  '<hr><ul><li><p>one</p></li><li><p>two</p></li></ul><ol start="3"><li><p>three</p></li></ol>',
+  '<blockquote><p>quoted &lt;tag&gt; &amp; entity</p></blockquote><pre><code class="language-js">const a = 1;\n  b();</code></pre>',
+  '<p><strong><em>nested</em></strong> marks and   spaces</p>',
+  '<h3 style="text-align: right">Right heading</h3>',
+  '<p>bad <script>alert(1)</script><img src=x onerror=alert(1)> stripped</p>',
+];
+
+/** Runs `read` as a server render runs it: no DOMParser on the global object, as in Node or a Workers runtime. */
+function withoutDomParser<T>(read: () => T): T {
+  const browserParser = globalThis.DOMParser;
+  Reflect.deleteProperty(globalThis, 'DOMParser');
+  try {
+    return read();
+  } finally {
+    globalThis.DOMParser = browserParser;
+  }
+}
+
+describe('reading back the HTML a richtext field stores', () => {
+  test.each(storedHtml)('in the browser, %p reads as the DOM implementation reads it', (html) => {
+    expect(generateJSON(html, extensions)).toEqual(generateJSONWithDom(html, extensions));
+  });
+
+  test.each(storedHtml)('on a server without a DOM, %p reads as the DOM implementation reads it', (html) => {
+    expect(withoutDomParser(() => generateJSON(html, extensions))).toEqual(generateJSONWithDom(html, extensions));
+  });
+
+  test('on a server without a DOM, a whole document the editor wrote reads as the DOM implementation reads it', () => {
+    const html = generateHTMLWithDom(richtextDoc, extensions);
+
+    expect(withoutDomParser(() => generateJSON(html, extensions))).toEqual(generateJSONWithDom(html, extensions));
+  });
+
+  test('on a server without a DOM, parse options reach the parser as they do in the DOM implementation', () => {
+    const html = '<p>marks and   spaces</p>';
+    const options = { preserveWhitespace: 'full' } as const;
+
+    const kept = withoutDomParser(() => generateJSON(html, extensions, options));
+
+    expect(kept).toEqual(generateJSONWithDom(html, extensions, options));
+    expect(kept).not.toEqual(withoutDomParser(() => generateJSON(html, extensions)));
+  });
+
+  test('on a server without a DOM, a link without a class reads back with no class, so it renders without one', () => {
+    const doc = withoutDomParser(() => generateJSON('<p><a href="https://example.com">a link</a></p>', extensions));
+
+    expect(generateHTML(doc, extensions)).toBe(
+      '<p><a target="_blank" rel="noopener noreferrer nofollow" href="https://example.com">a link</a></p>',
+    );
   });
 });
