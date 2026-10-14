@@ -113,7 +113,11 @@ async function collectConfigUpdates({
 }
 
 /** Reads the config the dev editor boots with, as its virtual module serves it. */
-function editorConfigOf(updates: Record<string, unknown>[]): { assetRefBase?: string; dataBindings?: unknown } {
+function editorConfigOf(updates: Record<string, unknown>[]): {
+  assetRefBase?: string;
+  dataBindings?: unknown;
+  locales?: unknown;
+} {
   const code = updates
     .flatMap((update) => {
       const vite = update.vite as { plugins?: { name?: string; load?: (id: string) => unknown }[] } | undefined;
@@ -647,6 +651,68 @@ describe('@conloca/astro-cms', () => {
         siteName: 'default',
         locale: 'en',
         routes: { pages: { pages: { prefix: '/' } } },
+      });
+    });
+  });
+
+  describe('the languages the editor creates content in', () => {
+    // The server refuses a new page in a language its site is not set up
+    // for, and the published site renders fragments of its own language only.
+    // An editor that guesses English on a German site therefore cannot create
+    // a page at all, and its new fragments never show up.
+    const germanSites = {
+      sites: { default: { locales: ['de'], defaultLocale: 'de' } },
+      globalLocales: ['de'],
+    };
+
+    async function editorLocalesOf(sites: object, options: HookRunOptions = {}): Promise<unknown> {
+      const root = mkdtempSync(join(tmpdir(), 'conloca-editor-locales-'));
+      mkdirSync(join(root, 'content'), { recursive: true });
+      mkdirSync(join(root, 'src'), { recursive: true });
+      writeFileSync(join(root, 'content', 'sites.json'), JSON.stringify(sites));
+      writeFileSync(
+        join(root, 'src', 'content.config.ts'),
+        "import { conlocaPages } from '@conloca/astro-cms/node/content';\n" +
+          'export const collections = { pages: conlocaPages() };\n',
+      );
+      process.chdir(root);
+      try {
+        const updates = await collectConfigUpdates({ command: 'dev', contentRoot: './content', ...options });
+        return editorConfigOf(updates).locales;
+      } finally {
+        process.chdir(projectRoot);
+        rmSync(root, { recursive: true, force: true });
+      }
+    }
+
+    it("offers the site's own languages from sites.json when the integration names none", async () => {
+      expect(await editorLocalesOf(germanSites)).toEqual({ list: ['de'], defaultLocale: 'de' });
+    });
+
+    it('offers them on a site with page routing too', async () => {
+      expect(await editorLocalesOf(germanSites, { routing: true })).toEqual({ list: ['de'], defaultLocale: 'de' });
+    });
+
+    it('starts from the routing locale when the site names one', async () => {
+      const sites = { sites: { default: { locales: ['de', 'fr'], defaultLocale: 'de' } }, globalLocales: ['de', 'fr'] };
+
+      expect(
+        await editorLocalesOf(sites, {
+          routing: { enabled: true, routes: { pages: { pattern: '/[...slug]' } }, locale: 'fr' },
+        }),
+      ).toEqual({ list: ['de', 'fr'], defaultLocale: 'fr' });
+    });
+
+    it('offers the global languages when the site lists none of its own', async () => {
+      const sites = { sites: { default: { defaultLocale: 'nl' } }, globalLocales: ['nl', 'en'] };
+
+      expect(await editorLocalesOf(sites)).toEqual({ list: ['nl', 'en'], defaultLocale: 'nl' });
+    });
+
+    it('keeps the languages the integration names over sites.json', async () => {
+      expect(await editorLocalesOf(germanSites, { locales: { list: ['en', 'de'], defaultLocale: 'en' } })).toEqual({
+        list: ['en', 'de'],
+        defaultLocale: 'en',
       });
     });
   });

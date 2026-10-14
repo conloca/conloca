@@ -560,7 +560,8 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
     // Forward the locale list so the SPA stops hardcoding en/nl/fr in
     // the create-page dialog. The integration receives this from the
     // top-level `locales` option, which can in turn be produced by
-    // `localesFromAstroI18n` / `localesFromStarlight`.
+    // `localesFromAstroI18n` / `localesFromStarlight`; without it the
+    // `astro:config:setup` hook fills it from sites.json.
     locales: options.locales ? { list: options.locales.list, defaultLocale: options.locales.defaultLocale } : undefined,
   };
 
@@ -612,14 +613,22 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
         // virtual module, the editor's data bindings below, and
         // `astro:routes:resolved` — reads them after this, so they all
         // observe the resolved values.
+        const siteName = resolveSiteName(routingConfig?.siteName, sitesConfig.sites);
+        const locale = resolveLocale(routingConfig?.locale, options.locales?.defaultLocale, siteName, sitesConfig);
         if (resolvedRoutingConfig) {
-          resolvedRoutingConfig.siteName = resolveSiteName(routingConfig?.siteName, sitesConfig.sites);
-          resolvedRoutingConfig.locale = resolveLocale(
-            routingConfig?.locale,
-            options.locales?.defaultLocale,
-            resolvedRoutingConfig.siteName,
-            sitesConfig,
-          );
+          resolvedRoutingConfig.siteName = siteName;
+          resolvedRoutingConfig.locale = locale;
+        }
+        // Without the `locales` option the editor offers the site's own
+        // languages from sites.json — the list the server checks a new page
+        // against — starting from the locale the site renders. Left unset, the
+        // editor guessed English: a site in any other language could not
+        // create a page, and its new fragments were never rendered.
+        if (!options.locales) {
+          spaConfig.locales = {
+            list: sitesConfig.sites[siteName]?.locales ?? sitesConfig.globalLocales,
+            defaultLocale: locale,
+          };
         }
         // Pick the first site that declares an `mdxPages` path. Today's
         // integration supports a single `mdxPages` per project;
