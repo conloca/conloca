@@ -722,6 +722,35 @@ describe('Content API Middleware', () => {
       }
     });
 
+    // A fragment has one name for all its languages, and a create refuses a name any of them uses
+    test('GET /fragments/name-available answers a name another fragment has in another language as taken', async () => {
+      const heroId = getCreatedId(
+        await api.createContent({
+          kind: 'fragment',
+          collection: 'heroes',
+          type: 'mdx',
+          name: 'hero-fragment',
+          locales: { nl: { meta: { title: 'Held' }, content: { mdx: '# Held' } } },
+        }),
+      );
+      const app = createContentAPIRouter(api);
+
+      const res = await app.fetch(
+        new Request('http://localhost/fragments/name-available?name=hero-fragment&collection=heroes&locale=en'),
+      );
+
+      expect(await res.json()).toEqual({ available: false, existingId: heroId });
+      expect(
+        await api.createContent({
+          kind: 'fragment',
+          collection: 'heroes',
+          type: 'mdx',
+          name: 'hero-fragment',
+          locales: { en: { meta: { title: 'Hero' }, content: { mdx: '# Hero' } } },
+        }),
+      ).toMatchObject({ success: false, reason: 'name_taken' });
+    });
+
     test('GET /fragments/name-available returns error for missing name', async () => {
       const app = createContentAPIRouter(api);
       const res = await app.fetch(new Request('http://localhost/fragments/name-available'));

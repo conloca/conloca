@@ -164,4 +164,22 @@ describe('fragment and data names that differ only in letter case', () => {
     expect(api.fragments.isNameAvailable('general', 'Hero')).toBe(false);
     expect(api.fragments.isNameAvailable('general', 'HERO', heroId)).toBe(true);
   });
+
+  // The route compared names in exact letter case, so it called 'Hero' available and the create that followed was refused
+  test('answers a fragment name another fragment has in other letter case as not available, naming that fragment', async () => {
+    const heroId = getCreatedId(
+      await api.createContent({
+        kind: 'fragment',
+        type: 'mdx',
+        collection: 'general',
+        name: 'hero',
+        locales: { en: { meta: { title: 'hero' }, content: { mdx: '# hero' } } },
+      }),
+    );
+    const check = async (query: string) =>
+      (await router.fetch(new Request(`http://localhost/fragments/name-available?collection=general&${query}`))).json();
+
+    expect(await check('name=Hero')).toEqual({ available: false, existingId: heroId });
+    expect(await check(`name=HERO&excludeId=${heroId}`)).toEqual({ available: true });
+  });
 });

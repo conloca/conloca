@@ -2,11 +2,10 @@ import { type Context, Hono } from 'hono';
 import { type AssetConfig, AssetOperations } from './asset-operations.js';
 import { findAssetUsage } from './asset-usage.js';
 import type { ContentAPI } from './content-api.interface.js';
-import { localesOf, normalizeAndValidatePathname } from './content-utils.js';
+import { normalizeAndValidatePathname } from './content-utils.js';
 import { createGitOperations, type GitAuthor, type GitConfig } from './git-operations.js';
 import type {
   APIError,
-  ContentManifest,
   CreateResult,
   DeleteResult,
   ErrorCode,
@@ -921,11 +920,12 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
     }
   });
 
-  // GET /fragments/name-available - Check if fragment name is available
+  // GET /fragments/name-available - Check if fragment name is available, the way a create checks it: in
+  // any letter case and in any language. `locale` is still accepted but narrows nothing, since a fragment
+  // has one name for all its languages.
   app.get('/fragments/name-available', async (c) => {
     const name = c.req.query('name');
     const collection = c.req.query('collection') || 'components';
-    const locale = c.req.query('locale') || 'en';
     const excludeId = c.req.query('excludeId');
 
     if (!name) {
@@ -936,41 +936,12 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
     }
 
     try {
-      // Check fragment name availability through listing
-      const existing = Array.from(
-        api.listAllContent({
-          kind: 'fragment',
-          collection: collection,
-          locales: [locale],
-        }),
-      );
-
-      let taken: ContentManifest | undefined;
-      for (const item of existing) {
-        for (const localeVersion of localesOf(item)) {
-          if (localeVersion.name === name) {
-            taken = item;
-            break;
-          }
-        }
-      }
-
-      // If no existing fragment, name is available
-      if (!taken) {
+      const existingId = api.fragments.getNameConflict(collection, name, excludeId);
+      if (existingId === null) {
         return c.json({ available: true });
       }
 
-      // If existing fragment has same ID as excludeId, name is available
-      // (useful when editing existing fragment)
-      if (excludeId && taken.id === excludeId) {
-        return c.json({ available: true });
-      }
-
-      // Otherwise, name is taken
-      return c.json({
-        available: false,
-        existingId: taken.id,
-      });
+      return c.json({ available: false, existingId });
     } catch (error) {
       return c.json(
         logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to check fragment name availability'),
