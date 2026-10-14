@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { AssetOperations } from '../src/asset-operations.js';
 import type { AssetUsage } from '../src/asset-types.js';
 import type { ContentAPI } from '../src/content-api.interface.js';
 import { FileSystemContentAPI } from '../src/filesystem-content-api.js';
@@ -191,5 +192,11 @@ describe('which content uses a picture', () => {
     const api = await FileSystemContentAPI.create({ contentRoot, canvasDir: join(root, 'canvas') });
 
     expect(await usage(api, 'beach.png')).toEqual([{ page: '/getting-started (en)', field: 'content.mdx' }]);
+  });
+
+  // A second lookup on the asset operations matched the bare file name in .vxjson files only, so it
+  // disagreed with this list. It was removed once and came back in a bulk change; keep it gone.
+  test('the asset operations offer no second lookup that would answer differently', () => {
+    expect('getUsage' in AssetOperations.prototype).toBe(false);
   });
 });

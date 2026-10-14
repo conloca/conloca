@@ -4,23 +4,15 @@ import { extname, join, parse, resolve, sep } from 'node:path';
 import { imageSizeFromFile } from 'image-size/fromFile';
 import { DEFAULT_ACCEPTED_FORMATS, DEFAULT_MAX_FILE_SIZE, IMAGE_EXTENSION_MIME } from './asset-constraints.js';
 import * as assetMetadata from './asset-metadata-store.js';
-import type {
-  AssetEntry,
-  AssetMetadata,
-  AssetMetadataPatch,
-  AssetUsage,
-  FolderListing,
-  FolderTreeNode,
-} from './asset-types.js';
+import type { AssetEntry, AssetMetadata, AssetMetadataPatch, FolderListing, FolderTreeNode } from './asset-types.js';
 import { setupGitLfsAttributes } from './git-operations.js';
-import type { JsonValue } from './types.js';
 import { validateFetchUrl } from './url-validation.js';
 
 export interface AssetConfig {
   assetsPath: string;
   maxFileSize?: number;
   acceptedFormats?: string[];
-  /** The content root: it holds each asset's metadata record, and is scanned for the pages that use an asset */
+  /** The content root: it holds each asset's metadata record */
   contentRoot: string;
 }
 
@@ -32,24 +24,6 @@ const SYSTEM_FILES = new Set(['.ds_store', 'thumbs.db', '.gitkeep', 'desktop.ini
 
 /** Max redirect hops a URL import may follow (each re-validated before it is requested) */
 const MAX_IMPORT_REDIRECTS = 5;
-
-/** Recursively enumerate vxjson files without serial directory waits. */
-async function vxjsonFiles(dir: string): Promise<string[]> {
-  let entries: Dirent[];
-  try {
-    entries = await readdir(dir, { withFileTypes: true });
-  } catch {
-    return [];
-  }
-  const nested = await Promise.all(
-    entries.map(async (entry): Promise<string[]> => {
-      const fullPath = join(dir, entry.name);
-      if (entry.isDirectory() && !entry.name.startsWith('.')) return vxjsonFiles(fullPath);
-      return entry.isFile() && entry.name.endsWith('.vxjson') ? [fullPath] : [];
-    }),
-  );
-  return nested.flat();
-}
 
 /** Check if filename has a recognized web image extension */
 function isRecognizedImageExtension(filename: string): boolean {
@@ -617,48 +591,6 @@ export class AssetOperations {
   }
 
   /**
-   * Get usage information for an asset (which pages reference it)
-   * @param filename Asset filename
-   */
-  async getUsage(filename: string): Promise<AssetUsage[]> {
-    const usages: AssetUsage[] = [];
-
-    // Search patterns for the asset
-    const searchPatterns = [filename, `/assets/uploads/${filename}`, `assets/uploads/${filename}`];
-
-    const files = await vxjsonFiles(this.config.contentRoot);
-    // Promise.all preserves `files` order while avoiding serial disk reads.
-    const documents = await Promise.all(
-      files.map(async (filePath) => {
-        try {
-          return { filePath, content: await readFile(filePath, 'utf-8') };
-        } catch {
-          return null;
-        }
-      }),
-    );
-
-    for (const document of documents) {
-      if (document === null) continue;
-      const { filePath, content } = document;
-      if (!searchPatterns.some((pattern) => content.includes(pattern))) continue;
-
-      const relativePath = filePath.replace(this.config.contentRoot, '').replace(/^[/\\]/, '');
-      const pageName = relativePath.replace(/\.vxjson$/, '');
-      let field = 'content';
-      try {
-        const json: JsonValue = JSON.parse(content);
-        field = this.findFieldWithAsset(json, searchPatterns) || 'content';
-      } catch {
-        // An unreadable JSON document can still be reported by its text match.
-      }
-      usages.push({ page: pageName, field });
-    }
-
-    return usages;
-  }
-
-  /**
    * Get the file path for an asset
    * @param filename Asset filename
    * @param folder Optional folder path (defaults to asset's stored folder)
@@ -697,35 +629,6 @@ export class AssetOperations {
     } catch {
       return { success: false, error: 'Asset not found' };
     }
-  }
-
-  /**
-   * Helper to find which field contains an asset reference
-   */
-  private findFieldWithAsset(obj: JsonValue, patterns: string[], path = ''): string | null {
-    if (typeof obj === 'string') {
-      if (patterns.some((p) => obj.includes(p))) {
-        return path || 'root';
-      }
-      return null;
-    }
-
-    if (Array.isArray(obj)) {
-      for (let i = 0; i < obj.length; i++) {
-        const result = this.findFieldWithAsset(obj[i], patterns, path ? `${path}[${i}]` : `[${i}]`);
-        if (result) return result;
-      }
-      return null;
-    }
-
-    if (obj && typeof obj === 'object') {
-      for (const [key, value] of Object.entries(obj)) {
-        const result = this.findFieldWithAsset(value, patterns, path ? `${path}.${key}` : key);
-        if (result) return result;
-      }
-    }
-
-    return null;
   }
 
   /**

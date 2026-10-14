@@ -805,26 +805,6 @@ describe('AssetOperations', () => {
     });
   });
 
-  describe('getUsage', () => {
-    test('returns empty when no page references the asset', async () => {
-      const usages = await ops.getUsage('photo.jpg');
-      expect(usages).toEqual([]);
-    });
-
-    test('finds usage in .vxjson files that reference the filename', async () => {
-      // Create a vxjson file referencing our asset
-      const vxjsonContent = JSON.stringify({
-        meta: { title: 'Home' },
-        content: { hero: { image: '/assets/uploads/photo.jpg' } },
-      });
-      await writeFile(join(contentRoot, 'home.vxjson'), vxjsonContent);
-
-      const usages = await ops.getUsage('photo.jpg');
-      expect(usages.length).toBeGreaterThan(0);
-      expect(usages[0].page).toBe('home');
-    });
-  });
-
   describe('resolveFilename collision resolution', () => {
     test('appends incrementing suffix for 3+ collisions', async () => {
       // Upload photo.jpg 3 times -- should produce photo.jpg, photo-1.jpg, photo-2.jpg
