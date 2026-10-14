@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { invalidLocaleMessage } from '@conloca/content-api/content-path';
 import { $ } from 'bun';
 
 const CLI = join(import.meta.dir, '..', 'dist', 'conloca.js');
@@ -43,6 +44,31 @@ describe('conloca doctor', () => {
       const report = JSON.parse(result.stdout.toString());
       expect(report.ok).toBe(false);
       expect(report.problems).toContainEqual(expect.objectContaining({ check: 'C3', level: 'error' }));
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('a declared locale no content file can carry fails sites.json with the message creating a page gives', async () => {
+    const dir = await makeProject('conloca-doctor-locale-grammar-');
+    try {
+      await Bun.write(
+        join(dir, 'content', 'sites.json'),
+        JSON.stringify({
+          sites: { default: { locales: ['en', 'pt-br'], defaultLocale: 'en' } },
+          globalLocales: ['en', 'pt-br', 'zh-Hans'],
+        }),
+      );
+      const result = await $`${CLI} doctor --json ${dir}`.quiet().nothrow();
+      expect(result.exitCode).toBe(1);
+      const report = JSON.parse(result.stdout.toString());
+      const problems = report.problems as { check: string; level: string; message: string }[];
+      expect(problems.filter((problem) => problem.check === 'C3')).toEqual([
+        expect.objectContaining({ level: 'error', message: invalidLocaleMessage('pt-br') }),
+        expect.objectContaining({ level: 'error', message: invalidLocaleMessage('zh-Hans') }),
+      ]);
+      // The rest of sites.json is still usable: the en page indexes under its site.
+      expect(problems.filter((problem) => problem.check !== 'C3')).toEqual([]);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

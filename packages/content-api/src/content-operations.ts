@@ -1,5 +1,5 @@
 import sortKeys from 'sort-keys';
-import { isContentLocale } from './content-path.js';
+import { invalidLocaleMessage, isContentLocale } from './content-path.js';
 import { generateContentId, isContentPublished, normalizeAndValidatePathname } from './content-utils.js';
 import type { Fragments } from './fragments.js';
 import type { Site } from './site.js';
@@ -309,7 +309,7 @@ export function checkEntryPlace(collection: string | undefined, locales: string[
     return {
       valid: false,
       reason: 'invalid_locale',
-      error: `Invalid locale: ${malformed}. A locale is a two-letter language code, optionally with a region, like en or en-US.`,
+      error: invalidLocaleMessage(malformed),
       field: 'locales',
     };
   }

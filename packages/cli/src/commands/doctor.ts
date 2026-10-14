@@ -1,5 +1,6 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
+import { invalidLocaleMessage, isContentLocale } from '@conloca/content-api/content-path';
 import { ContentIndex, FileSystemReaderBackend, type SitesConfig } from '@conloca/content-api/node';
 import { contentRootOf } from '../lib/content-root.js';
 import { isRecord } from '../lib/is-record.js';
@@ -46,14 +47,27 @@ function isLocaleList(value: unknown): value is string[] {
   );
 }
 
+/**
+ * Every non-empty locale string sites.json declares, globally and per site, in
+ * file order. Empty and non-string entries have their own C3 errors.
+ */
+function declaredLocales(parsed: Record<string, unknown>): string[] {
+  const sites = isRecord(parsed.sites) ? Object.values(parsed.sites).filter(isRecord) : [];
+  const lists = [parsed.globalLocales, ...sites.flatMap((site) => [site.locales, [site.defaultLocale]])];
+  return lists
+    .flatMap((list) => (Array.isArray(list) ? list : []))
+    .filter((locale): locale is string => typeof locale === 'string' && locale.trim() !== '');
+}
+
 function counted(count: number, noun: string): string {
   return count === 1 ? `1 ${noun}` : `${count} ${noun}s`;
 }
 
 /**
  * C3 — sites.json exists, parses, and declares defaultLocale plus a non-empty
- * locales list for every site. Returns the parsed config for the later checks,
- * or null when the file is unusable.
+ * locales list for every site, each locale one a content file name can carry.
+ * Returns the parsed config for the later checks, or null when the file is
+ * unusable.
  */
 async function checkSitesFile(contentRoot: string): Promise<{ outcome: CheckOutcome; config: SitesConfig | null }> {
   const path = join(contentRoot, 'sites.json');
@@ -124,7 +138,15 @@ async function checkSitesFile(contentRoot: string): Promise<{ outcome: CheckOutc
     problems.push({ check: 'C3', level: 'error', message: 'globalLocales must contain only non-empty strings', path });
   }
 
-  if (problems.some((problem) => problem.level === 'error')) {
+  const unusable = problems.some((problem) => problem.level === 'error');
+  // A locale no file name can carry leaves the rest of the file usable, so the
+  // later checks still run against it.
+  for (const locale of new Set(declaredLocales(parsed))) {
+    if (!isContentLocale(locale)) {
+      problems.push({ check: 'C3', level: 'error', message: invalidLocaleMessage(locale), path });
+    }
+  }
+  if (unusable) {
     return { outcome, config: null };
   }
 

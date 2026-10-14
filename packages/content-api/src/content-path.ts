@@ -37,6 +37,14 @@ export function isContentLocale(locale: string): boolean {
   return LOCALE.test(locale);
 }
 
+/**
+ * Why `locale` cannot name content files, in the words every refusal of one uses: creating an
+ * entry in it, a sites.json that declares it, and `conloca doctor`.
+ */
+export function invalidLocaleMessage(locale: string): string {
+  return `Invalid locale: ${locale}. A locale is a two-letter language code, optionally with a region, like en or en-US.`;
+}
+
 /** `<base>.<locale>.<ext>` — the filename half of every content layout. */
 const LOCALE_FILENAME = new RegExp(`^(.+)\\.(${LOCALE_SUBTAG})\\.(mdx|vxjson|json)$`);
 

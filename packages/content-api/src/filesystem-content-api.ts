@@ -21,7 +21,13 @@ import {
   validateAndPrepareMetadata,
   validateCreateContent,
 } from './content-operations.js';
-import { type ContentPathLayout, parseContentPathLayout, parseLocaleFilename } from './content-path.js';
+import {
+  type ContentPathLayout,
+  invalidLocaleMessage,
+  isContentLocale,
+  parseContentPathLayout,
+  parseLocaleFilename,
+} from './content-path.js';
 import {
   applyMetaPatch,
   localesOf,
@@ -236,12 +242,50 @@ export async function readSitesConfig(contentRoot: string): Promise<SitesConfig>
   }
   if (!parsed.globalLocales || !Array.isArray(parsed.globalLocales)) {
     console.warn(`Warning: sites.json is missing 'globalLocales' array at ${sitesPath}. Using default global locales.`);
+    warnUnreadableLocales(sitesPath, parsed.sites, []);
     return {
       sites: parsed.sites,
       globalLocales: ['en'],
     };
   }
+  warnUnreadableLocales(sitesPath, parsed.sites, parsed.globalLocales);
   return parsed;
+}
+
+/**
+ * Why a page file's name gives no locale the content grammar reads: either it
+ * names one the grammar refuses ('about.pt-br.vxjson') or it names none.
+ */
+function unreadablePageLocaleMessage(filename: string): string {
+  const written = /^.+\.([^.]+)\.(?:mdx|vxjson)$/.exec(filename)?.[1];
+  return written === undefined
+    ? `Page file ${filename} has no locale in its name (<name>.<locale>.vxjson), so it is not indexed.`
+    : `Page file ${filename} is not indexed. ${invalidLocaleMessage(written)}`;
+}
+
+// One warning per sites.json and locale for the whole process: the file is
+// read again by every content API created and every config reload.
+const warnedLocales = new Set<string>();
+
+/**
+ * Warn about each locale sites.json declares that content file names cannot
+ * carry: its pages can be neither created nor read, and nothing else says so
+ * until a save is refused.
+ */
+function warnUnreadableLocales(sitesPath: string, sites: SitesConfig['sites'], globalLocales: unknown[]): void {
+  const declared = [...globalLocales];
+  for (const site of Object.values(sites)) {
+    if (Array.isArray(site?.locales)) declared.push(...site.locales);
+    declared.push(site?.defaultLocale);
+  }
+  for (const locale of declared) {
+    const key = `${sitesPath}\0${locale}`;
+    if (typeof locale !== 'string' || isContentLocale(locale) || warnedLocales.has(key)) continue;
+    warnedLocales.add(key);
+    console.warn(
+      `Warning: sites.json at ${sitesPath} declares a locale no content file can carry, so its pages can be neither created nor read. ${invalidLocaleMessage(locale)}`,
+    );
+  }
 }
 
 export type { IndexProblem } from './content-index.js';
@@ -798,7 +842,9 @@ export class FileSystemContentAPI implements ContentAPI {
         // (the reindex path) has always refused these — now both halves agree.
         const localeSuffix = filename ? parseLocaleFilename(filename) : null;
         if (!localeSuffix || localeSuffix.extension === 'json') {
-          console.warn(`Skipping page file without a locale suffix: ${filePath}`);
+          const message = unreadablePageLocaleMessage(filename ?? relativePath);
+          console.warn(`Skipping ${filePath}: ${message}`);
+          this.recordIndexProblem(filePath, 'unsupported-locale-path', message);
           return null;
         }
         locale = localeSuffix.locale;

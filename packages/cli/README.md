@@ -111,7 +111,8 @@ conloca doctor [path] [--json] [--live]
 
 Content checks, always:
 
-- `sites.json` exists, parses, and declares `defaultLocale` plus a non-empty `locales` list for every site
+- `sites.json` exists, parses, and declares `defaultLocale` plus a non-empty `locales` list for every site, each locale
+  one a content file name can carry: a two-letter language code, optionally with a region, like `en` or `en-US`
 - every configured site has its `pages/` directory on disk (site-shaped directories missing from `sites.json` are
   flagged too)
 - every content file indexes cleanly — each file reported is one the CMS would otherwise silently drop
