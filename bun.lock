@@ -140,7 +140,7 @@
     },
     "packages/cloud-astro": {
       "name": "@conloca/cloud-astro",
-      "version": "0.1.17-next.0",
+      "version": "0.2.1-next.0",
       "dependencies": {
         "@conloca/content-api": "workspace:*",
         "esbuild": "^0.28.2",
