@@ -151,12 +151,33 @@ describe('DOM-free richtext rendering', () => {
     expect(html).toContain('<blockquote><p>Quoted "text" &amp; &lt;markup&gt;</p></blockquote>');
   });
 
-  test('wraps every marked run on its own, where the DOM keeps one element open across runs', () => {
-    // The one known divergence, pinned so a tiptap upgrade cannot widen it
-    // unnoticed: the DOM serializer holds a mark element open while the next
-    // text run carries the same mark, and nests several marks outermost-first.
-    // The string renderer closes each run and nests them innermost-first. Same
-    // text, same marks, different element nesting.
+  test('keeps a link one link when part of its text carries another mark', () => {
+    // An editor underlines one word of a link. Two <a> elements would be two
+    // tab stops and two links to a screen reader, and a hover style would
+    // cover half of it.
+    const link = { type: 'link', attrs: { href: 'https://example.com/pricing', target: '_blank' } };
+    const doc = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'Our ' },
+            { type: 'text', marks: [link], text: 'pricing ' },
+            { type: 'text', marks: [link, { type: 'underline' }], text: 'changed' },
+          ],
+        },
+      ],
+    };
+
+    expect(generateHTML(doc, extensions)).toBe(
+      '<p>Our <a target="_blank" rel="noopener noreferrer nofollow" href="https://example.com/pricing">pricing <u>changed</u></a></p>',
+    );
+    expect(generateHTML(doc, extensions)).toBe(generateHTMLWithDom(doc, extensions));
+  });
+
+  test('keeps a mark open across the runs that share it, and nests marks the way the DOM implementation does', () => {
+    const link = { type: 'link', attrs: { href: 'https://nodejs.org' } };
     const doc = {
       type: 'doc',
       content: [
@@ -167,16 +188,23 @@ describe('DOM-free richtext rendering', () => {
             { type: 'text', marks: [{ type: 'bold' }, { type: 'italic' }], text: 'and italic' },
           ],
         },
+        { type: 'paragraph', content: [{ type: 'text', marks: [{ type: 'code' }, link], text: 'rename()' }] },
       ],
     };
 
-    expect(generateHTMLWithDom(doc, extensions)).toBe('<p><strong>bold<em>and italic</em></strong></p>');
-    expect(generateHTML(doc, extensions)).toBe('<p><strong>bold</strong><em><strong>and italic</strong></em></p>');
+    expect(generateHTML(doc, extensions)).toBe(generateHTMLWithDom(doc, extensions));
+  });
+
+  test('writes a stored value whose link is partly formatted back as one link', () => {
+    const stored = '<p>Our <a href="https://example.com/pricing">pricing <u>changed</u></a> this year.</p>';
+    const doc = generateJSONWithDom(stored, extensions);
+
+    expect(generateHTML(doc, extensions)).toBe(generateHTMLWithDom(doc, extensions));
   });
 
   test('writes a style attribute without the semicolon happy-dom appends', () => {
-    // The second known divergence, pinned for the same reason. Both spellings
-    // are the same declaration to any HTML parser.
+    // The one known divergence, pinned so a tiptap upgrade cannot widen it
+    // unnoticed. Both spellings are the same declaration to any HTML parser.
     const doc = {
       type: 'doc',
       content: [{ type: 'paragraph', attrs: { textAlign: 'right' }, content: [{ type: 'text', text: 'x' }] }],

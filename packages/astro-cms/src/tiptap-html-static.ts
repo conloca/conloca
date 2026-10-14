@@ -4,76 +4,111 @@
 // from `@tiptap/html`; its browser build needs `window`, and its `/server` build
 // fakes one with happy-dom — whose `Window` constructor calls `node:vm`
 // (`Script.runInContext`). Workers runtimes ship `node:vm` as a stub, so that
-// call throws at render time and every richtext section on the page dies. The
-// static renderer walks the ProseMirror document and writes the markup as a
-// string instead, so the same output comes out on any engine; reading HTML back
-// takes the browser's own parser, or linkedom where there is none.
-import { getSchema } from '@tiptap/core';
-import { type ParseOptions, DOMParser as ProseMirrorDOMParser } from '@tiptap/pm/model';
+// call throws at render time and every richtext section on the page dies. Here
+// ProseMirror's own serializer, the one `@tiptap/html` runs, writes into a few
+// string-backed elements instead of a DOM, so the same markup comes out on any
+// engine; reading HTML back takes the browser's own parser, or linkedom where
+// there is none.
+import { type Extensions, getSchema, type JSONContent } from '@tiptap/core';
 import {
-  escapeHTML,
-  renderJSONContentToString,
-  serializeChildrenToHTMLString,
-} from '@tiptap/static-renderer/json/html-string';
-import { domOutputSpecToHTMLString, renderToElement } from '@tiptap/static-renderer/pm/html-string';
+  DOMSerializer,
+  type ParseOptions,
+  DOMParser as ProseMirrorDOMParser,
+  Node as ProseMirrorNode,
+} from '@tiptap/pm/model';
 import { parseHTML } from 'linkedom/worker';
 
-type RenderArgs = Parameters<typeof renderToElement<string>>[0];
-type RichTextContent = RenderArgs['content'];
-type RichTextExtensions = RenderArgs['extensions'];
-type ElementSpec = Parameters<typeof domOutputSpecToHTMLString>[0];
+// Elements the HTML parser closes on its own, so a DOM serializer writes no end tag.
+const VOID_ELEMENTS = new Set([
+  'area',
+  'base',
+  'br',
+  'col',
+  'embed',
+  'hr',
+  'img',
+  'input',
+  'link',
+  'meta',
+  'param',
+  'source',
+  'track',
+  'wbr',
+]);
 
-// Void elements the HTML parser closes on its own. The static renderer writes
-// them self-closing (`<br/>`); a DOM serializer writes `<br>`. Both parse
-// identically, but the rendered markup is compared byte for byte against the
-// DOM output, so normalize to the DOM spelling.
-const VOID_ELEMENTS = /<(area|base|br|col|embed|hr|img|input|link|meta|param|source|track|wbr)((?:\s[^>]*?)?)\/>/gi;
+const escapeText = (text: string) =>
+  text
+    .replace(/&/g, '&amp;')
+    .replace(/\u00a0/g, '&nbsp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 
-/**
- * Drops the attributes an extension left empty. A DOM serializer skips those;
- * the string renderer would spell them out as the text "null" (`class="null"`
- * on every link, `type="null"` on every ordered list).
- */
-function withoutEmptyAttributes(spec: ElementSpec): ElementSpec {
-  if (!Array.isArray(spec)) {
-    return spec;
+const escapeAttribute = (value: string) => escapeText(value).replace(/"/g, '&quot;');
+
+class StringText {
+  readonly nodeType = 3;
+  constructor(private readonly text: string) {}
+  toString(): string {
+    return escapeText(this.text);
   }
-
-  const [tag, ...parts] = spec;
-  const cleaned: [string, ...unknown[]] = [
-    tag,
-    ...parts.map((part: unknown, index) => {
-      // Position 0 of the rest holds the attributes, unless the element has
-      // none — then a nested element spec sits there instead.
-      if (Array.isArray(part) && typeof part[0] === 'string') {
-        return withoutEmptyAttributes(part as [string, ...unknown[]]);
-      }
-      if (index !== 0 || part === null || typeof part !== 'object') {
-        return part;
-      }
-      return Object.fromEntries(Object.entries(part).filter(([, value]) => value !== null && value !== undefined));
-    }),
-  ];
-
-  return cleaned;
 }
 
-/** Generates HTML from a ProseMirror JSON document, without a DOM. */
-export function generateHTML(doc: RichTextContent, extensions: RichTextExtensions): string {
-  const html = renderToElement<string>({
-    // The string renderer's own generic defaults describe plain JSON marks;
-    // this walk hands it ProseMirror ones. Same function, narrower input.
-    renderer: renderJSONContentToString as RenderArgs['renderer'],
-    domOutputSpecToElement: (spec) => domOutputSpecToHTMLString(withoutEmptyAttributes(spec)),
-    mapDefinedTypes: {
-      doc: ({ children }) => serializeChildrenToHTMLString(children),
-      text: ({ node }) => escapeHTML(node.text ?? ''),
-    },
-    content: doc,
-    extensions,
-  });
+/**
+ * An element as far as ProseMirror's serializer uses one: attributes in the
+ * order they were set, children appended. Having no `style` object, it takes
+ * `style` as a plain attribute, as written.
+ */
+class StringElement {
+  readonly nodeType = 1;
+  private readonly attributes = new Map<string, string>();
+  private readonly children: (StringElement | StringText)[] = [];
+  constructor(private readonly tagName: string) {}
 
-  return html.replace(VOID_ELEMENTS, '<$1$2>');
+  setAttribute(name: string, value: unknown): void {
+    this.attributes.set(name, String(value));
+  }
+
+  setAttributeNS(_namespace: string | null, name: string, value: unknown): void {
+    this.setAttribute(name, value);
+  }
+
+  appendChild<T extends StringElement | StringText>(child: T): T {
+    this.children.push(child);
+    return child;
+  }
+
+  get innerHTML(): string {
+    return this.children.join('');
+  }
+
+  toString(): string {
+    const attributes = [...this.attributes].map(([name, value]) => ` ${name}="${escapeAttribute(value)}"`).join('');
+    const open = `<${this.tagName}${attributes}>`;
+    return VOID_ELEMENTS.has(this.tagName) ? open : `${open}${this.innerHTML}</${this.tagName}>`;
+  }
+}
+
+const stringDocument = {
+  createElement: (tagName: string) => new StringElement(tagName),
+  createElementNS: (_namespace: string, tagName: string) => new StringElement(tagName),
+  createTextNode: (text: string) => new StringText(text),
+};
+
+/**
+ * Generates HTML from a ProseMirror JSON document, without a DOM. The
+ * serializer keeps a mark's element open across the runs that share it, so a
+ * link with one underlined word stays one link.
+ */
+export function generateHTML(doc: JSONContent, extensions: Extensions): string {
+  const schema = getSchema(extensions);
+  const root = new StringElement('div');
+  // The string-backed elements cover every DOM call the serializer makes, under types of their own.
+  DOMSerializer.fromSchema(schema).serializeFragment(
+    ProseMirrorNode.fromJSON(schema, doc).content,
+    { document: stringDocument as unknown as Document },
+    root as unknown as HTMLElement,
+  );
+  return root.innerHTML;
 }
 
 /**
@@ -82,11 +117,7 @@ export function generateHTML(doc: RichTextContent, extensions: RichTextExtension
  * with its own DOMParser; a server render has none, so linkedom parses there —
  * plain JavaScript without `node:vm`, so it runs in Workers runtimes too.
  */
-export function generateJSON(
-  html: string,
-  extensions: RichTextExtensions,
-  options?: ParseOptions,
-): Record<string, unknown> {
+export function generateJSON(html: string, extensions: Extensions, options?: ParseOptions): Record<string, unknown> {
   const parser = ProseMirrorDOMParser.fromSchema(getSchema(extensions));
   if (typeof globalThis.DOMParser === 'function') {
     const { body } = new globalThis.DOMParser().parseFromString(html, 'text/html');
