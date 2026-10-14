@@ -69,3 +69,34 @@ describe('evaluateMDXToComponent — static (eval-free) rendering', () => {
     expect(error?.message).toMatch(/UnregisteredThing/);
   });
 });
+
+/**
+ * Markdown reads an HTML tag written on one line, `<div>x</div>`, as the start of a paragraph. Left
+ * like that it renders `<p><div>x</div></p>`, which a browser splits into an empty paragraph and a
+ * loose `<div>`, moving the page around. The `@mdx-js/mdx` compiler this path replaced lifts such
+ * tags out of the paragraph when nothing but whitespace sits beside them; the expected output is
+ * what that compiler rendered.
+ */
+describe('evaluateMDXToComponent — a paragraph that holds only HTML tags', () => {
+  test.each([
+    ['<div>x</div>', '<div>x</div>'],
+    ['<section>Note text</section>', '<section>Note text</section>'],
+    ['<details><summary>More</summary>Hidden text</details>', '<details><summary>More</summary>Hidden text</details>'],
+    ['<table><tr><td>a</td></tr></table>', '<table><tr><td>a</td></tr></table>'],
+    ['<p>already a p</p>', '<p>already a p</p>'],
+    ['Para one\n\n<div>x</div>\n\nPara two', '<p>Para one</p>\n<div>x</div>\n<p>Para two</p>'],
+    ['<span>a</span> <span>b</span>', '<span>a</span>\n<span>b</span>'],
+    ['<div>a</div>\n<div>b</div>', '<div>a</div>\n<div>b</div>'],
+    ['- <div>in a list</div>', '<ul>\n<li>\n<div>in a list</div>\n</li>\n</ul>'],
+    ['> <div>quoted</div>', '<blockquote>\n<div>quoted</div>\n</blockquote>'],
+  ])('%p renders without a wrapping paragraph', async (mdx, html) => {
+    expect(await renderMdx(mdx)).toBe(html);
+  });
+
+  test.each([
+    ['<span>inline</span> text', '<p><span>inline</span> text</p>'],
+    ['Text with <strong>bold</strong> tag', '<p>Text with <strong>bold</strong> tag</p>'],
+  ])('%p keeps its paragraph, since it has text beside the tags', async (mdx, html) => {
+    expect(await renderMdx(mdx)).toBe(html);
+  });
+});

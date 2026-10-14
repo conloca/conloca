@@ -1,5 +1,5 @@
 import { toJsxRuntime } from 'hast-util-to-jsx-runtime';
-import type { Root } from 'mdast';
+import type { Parent, Root, RootContent } from 'mdast';
 import type { ComponentType } from 'react';
 import { Fragment, jsx, jsxs } from 'react/jsx-runtime';
 import remarkFrontmatter from 'remark-frontmatter';
@@ -74,6 +74,39 @@ function resolveStaticJsx() {
   };
 }
 
+/** Nothing, or only the HTML whitespace a line break or a space between two tags leaves. */
+const BLANK = /^[\t\n\f\r ]*$/;
+
+/** A JSX element standing on its own as a block, like `<div>` written over several lines. */
+type JsxBlock = Extract<RootContent, { type: 'mdxJsxFlowElement' }>;
+
+/**
+ * Lift HTML tags out of a paragraph that holds nothing else. Markdown reads a tag written on one line,
+ * `<div>x</div>`, as the start of a paragraph, and `<p><div>x</div></p>` is HTML a browser splits into
+ * an empty paragraph and a loose `<div>`. The `@mdx-js/mdx` compiler this pipeline replaced does the
+ * same lifting (its `remarkMarkAndUnravel`); a paragraph with any text beside its tags keeps its `<p>`.
+ */
+function unravelJsxParagraphs() {
+  const lift = (node: Parent): void => {
+    node.children = node.children.flatMap((child): RootContent[] => {
+      if (child.type !== 'paragraph') return [child];
+      const tags = child.children.filter((inline) => inline.type === 'mdxJsxTextElement');
+      const onlyTags = child.children.every(
+        (inline) => inline.type === 'mdxJsxTextElement' || (inline.type === 'text' && BLANK.test(inline.value)),
+      );
+      if (tags.length === 0 || !onlyTags) return [child];
+      // A tag's inline content stays as it is: written on one line, it never held a block.
+      return tags.map(
+        (tag): JsxBlock => ({ ...tag, type: 'mdxJsxFlowElement', children: tag.children as JsxBlock['children'] }),
+      );
+    });
+    for (const child of node.children) {
+      if ('children' in child) lift(child);
+    }
+  };
+  return (tree: Root): void => lift(tree);
+}
+
 /**
  * Markdown → mdast (with MDX JSX syntax) → hast, with the JSX element nodes
  * passed through for `toJsxRuntime` to turn into React elements directly.
@@ -88,6 +121,7 @@ const processor = unified()
   // unified's strict Plugin shape here rather than forking their signatures.
   .use(remarkRestrictExpressions as unknown as Plugin<[], Root>)
   .use(resolveStaticJsx as unknown as Plugin<[], Root>)
+  .use(unravelJsxParagraphs)
   .use(remarkRehype, { passThrough: ['mdxJsxFlowElement', 'mdxJsxTextElement'] });
 
 /**
