@@ -48,6 +48,9 @@ export function DataList({ dataSchemas }: DataListProps) {
 
   // Get config for editor links
   const config = getUIConfig();
+  // A page reads the data entries of its own language only: create one in the language the editor
+  // offers first, as a new page or fragment is.
+  const newEntryLocale = config.locales?.defaultLocale ?? config.locales?.list[0] ?? 'en';
   const schemasEditorLink =
     config.projectRoot && config.schemasPath ? getSchemasEditorLink(config.projectRoot, config.schemasPath) : null;
   const [deleteDialog, openDeleteDialog, closeDeleteDialog] = useDialogState({
@@ -188,9 +191,8 @@ export function DataList({ dataSchemas }: DataListProps) {
           title,
           description,
         },
-        // Use 'en' as the default locale for new data entries
         locales: {
-          en: {
+          [newEntryLocale]: {
             meta: {
               title,
               description,
@@ -226,8 +228,8 @@ export function DataList({ dataSchemas }: DataListProps) {
         entryId: result.id,
         entryTitle: title,
         collection,
-        locale: 'en',
-        existingLocales: ['en'],
+        locale: newEntryLocale,
+        existingLocales: [newEntryLocale],
         name,
       });
     } else if (!result.success) {
