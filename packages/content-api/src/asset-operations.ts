@@ -328,7 +328,8 @@ export class AssetOperations {
   }
 
   /**
-   * Get asset by filename and optional folder
+   * Get asset by filename and folder; the default '/' is the top of the assets folder, never a
+   * same-named file in another folder
    */
   async getAsset(filename: string, folder = '/'): Promise<AssetEntry | undefined> {
     const relativePath = folder === '/' ? filename : `${folder.slice(1)}/${filename}`;
@@ -590,11 +591,7 @@ export class AssetOperations {
     return { success: true, asset: await this.assetEntry(filename, folder, stats, metadata) };
   }
 
-  /**
-   * Get the file path for an asset
-   * @param filename Asset filename
-   * @param folder Optional folder path (defaults to asset's stored folder)
-   */
+  /** The file path of an asset in a folder; no folder, or '/', is the top of the assets folder. */
   getAssetPath(filename: string, folder?: string): string {
     const subpath = folder && folder !== '/' ? folder.replace(/^\/+|\/+$/g, '') : '';
     const combined = subpath ? `${subpath}/${filename}` : filename;
