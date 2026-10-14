@@ -184,7 +184,7 @@ Passed to `conlocaCMS({ ... })`. Only two are required.
 | `editorStyles`         | no       | CSS injected into the MDX editor's admin document. Host-component selectors only — see the file's own notes on what does not belong.                |
 | `editorCSS`            | no       | Raw CSS applied after auto-discovered host styles in the editor's host-preview layer.                                                               |
 | `fragmentPreviewRoute` | no       | Route whose styles and content wrapper frame the standalone fragment editor. Defaults to `/`.                                                       |
-| `locales`              | no       | The site's locales and default locale. Falls back to `globalLocales` in `sites.json`.                                                               |
+| `locales`              | no       | The site's locales and default locale. Without it: the site's `locales` and `defaultLocale` in `sites.json`, else `globalLocales`.                  |
 
 `ConlocaCMSOptions` also extends the editor's `UIConfig` (minus `basename`), so fields such as `apiBaseUrl`,
 `siteBaseUrl`, `enableDevtools`, `queryClientOptions`, `projectRoot` and `hosted` are accepted as well. Those exist for
