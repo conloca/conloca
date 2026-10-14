@@ -54,6 +54,12 @@ describe('evaluateMDXToComponent — expression + ESM restriction', () => {
     expect(error?.message).toMatch(/expression/i);
   });
 
+  test('rejects an expression written beside a comment', async () => {
+    const { Component, error } = await evaluateMDXToComponent('{/* note */ globalThis.__CONTENT_API_CLIENT__}');
+    expect(Component).toBeNull();
+    expect(error?.message).toMatch(/expression/i);
+  });
+
   test('rejects a top-level ESM export statement', async () => {
     const { Component, error } = await evaluateMDXToComponent(
       'export const x = (globalThis.__pwned_esm = true)\n\n# hi',
@@ -69,6 +75,24 @@ describe('evaluateMDXToComponent — expression + ESM restriction', () => {
     );
     expect(Component).toBeNull();
     expect(error?.message).toMatch(/import\/export statements are not allowed/i);
+  });
+});
+
+/**
+ * `{/* … *\/}` is how MDX writes a comment: it has no `<!-- -->`. A comment holds
+ * no code, so it renders as nothing, the way MDX itself renders it.
+ */
+describe('evaluateMDXToComponent — MDX comments', () => {
+  test('a comment on a line of its own renders as nothing', async () => {
+    const mdx = '# Title\n\n{/* an MDX comment */}\n\nBody';
+    expect((await evaluateMDXToComponent(mdx)).error).toBeUndefined();
+    expect(await renderMdx(mdx)).toBe('<h1 id="title">Title</h1>\n<p>Body</p>');
+  });
+
+  test('a comment inside a sentence renders as nothing', async () => {
+    const mdx = 'Before {/* note */}after';
+    expect((await evaluateMDXToComponent(mdx)).error).toBeUndefined();
+    expect(await renderMdx(mdx)).toBe('<p>Before after</p>');
   });
 });
 

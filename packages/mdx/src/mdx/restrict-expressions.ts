@@ -64,6 +64,15 @@ function isDangerousElement(node: MdastNode): boolean {
   return /^[a-z]/.test(name) && DANGEROUS_ELEMENTS.has(name.toLowerCase());
 }
 
+/** `{/* … *\/}`, the way MDX writes a comment: the parsed program has no
+ * statements, so nothing in it can run. Without the parsed program it is
+ * not trusted to be one. */
+function isComment(node: MdastNode): boolean {
+  if (node?.type !== 'mdxFlowExpression' && node?.type !== 'mdxTextExpression') return false;
+  const program = (node.data as { estree?: { body?: unknown } } | undefined)?.estree;
+  return Array.isArray(program?.body) && program.body.length === 0;
+}
+
 /** A JSON-literal expression whose parsed value is a dangerous-scheme URL string
  * (`href={"data:text/html,…"}` round-trips through `JSON.parse` yet navigates). */
 function isDangerousLiteralUrl(value: unknown): boolean {
@@ -123,6 +132,8 @@ function sanitizeAttributes(attributes: MdastAttribute[]): MdastAttribute[] {
  *      `mdxTextExpression`) and top-level ESM `import`/`export` (`mdxjsEsm`) reach
  *      `new AsyncFunction`/`evaluate()` as live code, so they fail the compile
  *      with a clear error; content fragments never legitimately need either.
+ *      A comment, `{/* … *\/}`, holds no code and is removed instead, so it
+ *      renders as nothing, as it does in MDX.
  *   2. HTML injection — `dangerouslySetInnerHTML` (React's raw-HTML escape hatch,
  *      which a JSON-literal object slips past the expression exemption), inline
  *      `on*` handlers, dangerous URL schemes (`javascript:`/`vbscript:`/
@@ -164,7 +175,7 @@ export function remarkRestrictExpressions() {
       }
       if (Array.isArray(node.attributes)) node.attributes = sanitizeAttributes(node.attributes);
       if (Array.isArray(node.children)) {
-        node.children = node.children.filter((child) => !isDangerousElement(child));
+        node.children = node.children.filter((child) => !isDangerousElement(child) && !isComment(child));
         node.children.forEach(walk);
       }
     };

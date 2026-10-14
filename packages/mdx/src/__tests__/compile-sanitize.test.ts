@@ -22,6 +22,17 @@ describe('compileMDX — expression restriction', () => {
     await expect(compileMDX('Hello {globalThis.__CONTENT_API_CLIENT__}')).rejects.toThrow(/expression/i);
   });
 
+  test('compiles an MDX comment, on its own line or inside a sentence, to nothing', async () => {
+    const { code } = await compileMDX('# Title\n\n{/* flow comment */}\n\nBefore {/* text comment */}after');
+    expect(code).toContain('Title');
+    expect(code).not.toContain('flow comment');
+    expect(code).not.toContain('text comment');
+  });
+
+  test('rejects an expression written beside a comment', async () => {
+    await expect(compileMDX('{/* note */ globalThis.__CONTENT_API_CLIENT__}')).rejects.toThrow(/expression/i);
+  });
+
   test('keeps a JSON-literal JSX attribute expression', async () => {
     const { code } = await compileMDX('<Box columns={3} />');
     expect(code).toContain('columns');
