@@ -54,6 +54,13 @@ describe('evaluateMDXToComponent — static (eval-free) rendering', () => {
     expect(html).not.toContain('disabled');
   });
 
+  test('a JSON-literal true or false on an aria- or data- attribute renders as its word, as React renders it', async () => {
+    const html = await renderMdx(
+      '<span aria-hidden={false} data-open={false} aria-expanded={true} data-ready={true}>x</span>',
+    );
+    expect(html).toBe('<span aria-hidden="false" data-open="false" aria-expanded="true" data-ready="true">x</span>');
+  });
+
   test('markdown nested inside a raw HTML element renders', async () => {
     const html = await renderMdx('<div class="callout">\n\nSome **bold** prose\n\n</div>');
     expect(html).toContain('class="callout"');

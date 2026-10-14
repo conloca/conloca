@@ -34,10 +34,12 @@ interface TreeNode {
  * JSON-literal `{…}` attribute values (the only expressions
  * `remarkRestrictExpressions` admits) are resolved into plain static values,
  * so rendering never needs an expression evaluator: strings pass through,
- * numbers stringify (identical SSR output), `{true}` becomes the JSX boolean
- * shorthand, and `{false}`/`null`/object literals drop the attribute. Object
- * props only ever carried data for components, which this static path does not
- * render, so dropping them loses nothing.
+ * numbers stringify (identical SSR output), and `{true}`/`{false}` reach React
+ * as booleans, which it renders as it renders any boolean prop: `{false}`
+ * leaves out `disabled` but writes `aria-hidden="false"` and `data-open="false"`.
+ * `null` and object literals drop the attribute. The converter reads an object
+ * value as an expression to run, which this path never does, so `style={{…}}`
+ * on an HTML element is dropped too.
  */
 function resolveStaticJsx() {
   return (tree: TreeNode): void => {
@@ -64,7 +66,7 @@ function resolveStaticJsx() {
           }
           if (typeof parsed === 'string') return [{ ...attr, value: parsed }];
           if (typeof parsed === 'number') return [{ ...attr, value: String(parsed) }];
-          if (parsed === true) return [{ ...attr, value: null }];
+          if (typeof parsed === 'boolean') return [{ ...attr, value: parsed }];
           return [];
         });
       }
