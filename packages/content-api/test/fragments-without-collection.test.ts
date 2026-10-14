@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { FileSystemContentAPI } from '../src/filesystem-content-api.js';
 
@@ -57,6 +57,20 @@ This fragment is not in a collection subdirectory.`;
     expect(content?.localized.content.mdx).toContain('# Direct Fragment Content');
   });
 
+  test('moves a fragment written straight into fragments/ into the folder the editor saves fragments to', async () => {
+    // Every conlocaFragments(...) call in a site's content config declares that
+    // folder, so the moved fragment still builds; any other folder name may be
+    // one the config never declares, which fails the build.
+    await writeFile(join(tempDir, 'fragments/loose.en.mdx'), '---\ntitle: Loose\n---\n\n# Loose');
+
+    api = await FileSystemContentAPI.create({ contentRoot: tempDir });
+
+    expect(await readdir(join(tempDir, 'fragments'))).toEqual(['fragments']);
+    expect(await readdir(join(tempDir, 'fragments/fragments'))).toEqual(['loose.en.mdx']);
+    expect(api.fragments.collections).toEqual(new Set(['fragments']));
+    expect(api.fragments.getByName('fragments', 'loose', 'en')?.locales.en?.meta.title).toBe('Loose');
+  });
+
   test('should handle fragments with locale suffix directly in fragments/ directory', async () => {
     // Create an MDX fragment with locale suffix
     const mdxContent = `---
@@ -68,7 +82,7 @@ category: test
 
     await writeFile(join(tempDir, 'fragments/localized-fragment.en.mdx'), mdxContent);
 
-    // Create the API - this will move the file to general collection
+    // Create the API - this will move the file into fragments/fragments/
     api = await FileSystemContentAPI.create({
       contentRoot: tempDir,
     });

@@ -649,10 +649,10 @@ This MDX file lacks a locale suffix and should be renamed.`;
     expect(fragment!.locales.en?.meta.title).toBe('Test Fragment Without Locale');
   });
 
-  test('keeps direct and general fragment layouts separate when repair collides', async () => {
+  test('keeps direct and repaired fragment layouts separate when repair collides', async () => {
     const directPath = join(tempDir, 'content', 'fragments', 'foo.en.mdx');
-    const generalPath = join(tempDir, 'content', 'fragments', 'general', 'foo.en.mdx');
-    await mkdir(join(tempDir, 'content', 'fragments', 'general'), { recursive: true });
+    const repairedPath = join(tempDir, 'content', 'fragments', 'fragments', 'foo.en.mdx');
+    await mkdir(join(tempDir, 'content', 'fragments', 'fragments'), { recursive: true });
     await writeFile(
       directPath,
       `---
@@ -665,15 +665,15 @@ title: Direct
 # Direct`,
     );
     await writeFile(
-      generalPath,
+      repairedPath,
       `---
-id: general-fragment
+id: repaired-fragment
 created: 2024-01-01T00:00:00.000Z
 modified: 2024-01-01T00:00:00.000Z
-title: General
+title: Repaired
 ---
 
-# General`,
+# Repaired`,
     );
 
     const api = await FileSystemContentAPI.create({
@@ -685,12 +685,12 @@ title: General
       id: 'direct-fragment',
       collection: '',
     });
-    expect(api.fragments.getByName('general', 'foo', 'en')).toMatchObject({
-      id: 'general-fragment',
-      collection: 'general',
+    expect(api.fragments.getByName('fragments', 'foo', 'en')).toMatchObject({
+      id: 'repaired-fragment',
+      collection: 'fragments',
     });
     expect((await stat(directPath)).isFile()).toBe(true);
-    expect((await stat(generalPath)).isFile()).toBe(true);
+    expect((await stat(repairedPath)).isFile()).toBe(true);
   });
 
   test('handles edge case when target file already exists during MDX rename', async () => {

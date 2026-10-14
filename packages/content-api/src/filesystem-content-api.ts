@@ -86,6 +86,13 @@ function ensureError(error: unknown): Error {
 // Reusable TextDecoder instance - safe to reuse as it's stateless
 const textDecoder = new TextDecoder();
 
+/**
+ * Where the read repair moves a fragment saved straight into fragments/: the
+ * folder the editor saves new fragments to, which every conlocaFragments(...)
+ * call in a site's content config declares, so the moved fragment still builds.
+ */
+const REPAIRED_FRAGMENT_COLLECTION = 'fragments';
+
 async function readFilePrefix(filePath: string, buffer: Uint8Array): Promise<number> {
   const handle = await open(filePath, 'r');
   try {
@@ -634,29 +641,31 @@ export class FileSystemContentAPI implements ContentAPI {
           collection = '';
           const filename = parts[1];
 
-          // Create the general directory if it doesn't exist
-          const generalDir = join(this.absoluteContentRoot, 'fragments', 'general');
+          // Create the repair folder if it doesn't exist
+          const repairDir = join(this.absoluteContentRoot, 'fragments', REPAIRED_FRAGMENT_COLLECTION);
           try {
-            await mkdir(generalDir, { recursive: true });
+            await mkdir(repairDir, { recursive: true });
           } catch {
             // Directory might already exist, that's fine
           }
 
-          // Move the file to the general collection
-          const newFilePath = join(generalDir, filename);
+          // Move the file to the repair folder
+          const newFilePath = join(repairDir, filename);
 
           try {
             // Check if target file already exists
             try {
               await access(newFilePath);
-              console.warn(`Cannot move ${filename} to fragments/general/: target file already exists`);
+              console.warn(
+                `Cannot move ${filename} to fragments/${REPAIRED_FRAGMENT_COLLECTION}/: target file already exists`,
+              );
             } catch {
               // Target doesn't exist, safe to move
               await rename(filePath, newFilePath);
-              console.log(`Repaired: Moved ${filename} to fragments/general/ collection`);
+              console.log(`Repaired: Moved ${filename} to fragments/${REPAIRED_FRAGMENT_COLLECTION}/ collection`);
 
               // The file now uses the repaired collection layout.
-              collection = 'general';
+              collection = REPAIRED_FRAGMENT_COLLECTION;
               filePath = newFilePath;
 
               // Update relativePath and parts for the new file path
@@ -666,7 +675,7 @@ export class FileSystemContentAPI implements ContentAPI {
               bytesRead = await readFilePrefix(filePath, buffer);
             }
           } catch (moveError) {
-            console.error(`Failed to move ${filename} to general collection:`, moveError);
+            console.error(`Failed to move ${filename} to fragments/${REPAIRED_FRAGMENT_COLLECTION}/:`, moveError);
             // Continue processing with original file
             bytesRead = await readFilePrefix(filePath, buffer);
           }
