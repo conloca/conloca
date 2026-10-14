@@ -38,13 +38,48 @@ export function createSandboxRuntime(): {
   jsxs: (type: unknown, props: Record<string, unknown>) => Node;
   jsxDEV: (type: unknown, props: Record<string, unknown>) => Node;
 } {
+  // Everything below stays inside this function: the frame receives it as source text.
   const Fragment = Symbol('sandbox.fragment');
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  // A child is built before its parent, so an element written inside <svg>
+  // starts out as HTML, which a browser does not draw there. The <svg> builds
+  // it again as SVG from what each HTML element was made of, kept here, which
+  // is the namespace React would have given it.
+  const madeOf = new WeakMap<Node, { type: string; props: Record<string, unknown> }>();
   const toNodes = (value: unknown): Node[] => {
     if (value == null || value === true || value === false) return [];
     if (Array.isArray(value)) return value.flatMap(toNodes);
     if (typeof value === 'string' || typeof value === 'number') return [document.createTextNode(String(value))];
     if (value instanceof Node) return [value];
     return [document.createTextNode(String(value))];
+  };
+  const element = (type: string, p: Record<string, unknown>, inSvg: boolean): Element => {
+    const svg = inSvg || type === 'svg';
+    const el = svg ? document.createElementNS(SVG_NS, type) : document.createElement(type);
+    if (!svg) madeOf.set(el, { type, props: p });
+    for (const key in p) {
+      if (key === 'children' || key === 'key') continue;
+      const value = p[key];
+      if (/^on/i.test(key)) continue; // never wire an event handler
+      if (key === 'className') {
+        el.setAttribute('class', String(value));
+      } else if (key === 'htmlFor') {
+        el.setAttribute('for', String(value));
+      } else if (key === 'style' && value && typeof value === 'object') {
+        Object.assign((el as HTMLElement).style, value as Record<string, string>);
+      } else if (value === true) {
+        el.setAttribute(key, '');
+      } else if (value != null && value !== false) {
+        el.setAttribute(key, String(value));
+      }
+    }
+    // What a <foreignObject> holds is HTML again, as in a browser.
+    const svgChildren = svg && type !== 'foreignObject';
+    for (const child of toNodes(p.children)) {
+      const source = svgChildren ? madeOf.get(child) : undefined;
+      el.appendChild(source ? element(source.type, source.props, true) : child);
+    }
+    return el;
   };
   const jsx = (type: unknown, props: Record<string, unknown>): Node => {
     const p = props || {};
@@ -54,25 +89,7 @@ export function createSandboxRuntime(): {
       return frag;
     }
     if (typeof type === 'function') return (type as (props: Record<string, unknown>) => Node)(p);
-    if (typeof type === 'string') {
-      const el = document.createElement(type);
-      for (const key in p) {
-        if (key === 'children' || key === 'key') continue;
-        const value = p[key];
-        if (/^on/i.test(key)) continue; // never wire an event handler
-        if (key === 'className') {
-          el.setAttribute('class', String(value));
-        } else if (key === 'style' && value && typeof value === 'object') {
-          Object.assign((el as HTMLElement).style, value as Record<string, string>);
-        } else if (value === true) {
-          el.setAttribute(key, '');
-        } else if (value != null && value !== false) {
-          el.setAttribute(key, String(value));
-        }
-      }
-      for (const child of toNodes(p.children)) el.appendChild(child);
-      return el;
-    }
+    if (typeof type === 'string') return element(type, p, false);
     const missing = document.createElement('span');
     missing.setAttribute('data-sandbox-unknown', '');
     return missing;
