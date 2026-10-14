@@ -463,18 +463,18 @@ export class FileSystemContentAPI implements ContentAPI {
     // is the one every local dev server and Astro build hydrates through.
     const claimedBy = new Map<string, string>();
 
-    // Reuse a small pool of 4KB buffers across the batch; matches the
-    // existing reindex() loop. parseFileHeaderWithRepair owns the buffer
-    // contract (reads up to 4096 bytes from offset 0).
-    const buffers = Array.from({ length: Math.min(files.length, 100) }, () => new Uint8Array(4096));
+    // One 4KB buffer per file in a batch: the batch is read in parallel, so
+    // two files sharing a buffer overwrite each other's bytes mid-parse.
+    // parseFileHeaderWithRepair owns the buffer contract (reads up to 4096
+    // bytes from offset 0).
+    const buffers = Array.from({ length: Math.min(files.length, OPTIMAL_BATCH_SIZE) }, () => new Uint8Array(4096));
 
     for (let i = 0; i < files.length; i += OPTIMAL_BATCH_SIZE) {
       const batch = files.slice(i, i + OPTIMAL_BATCH_SIZE);
       await Promise.all(
         batch.map(async (filePath, batchIndex) => {
-          const buffer = buffers[(i + batchIndex) % buffers.length];
           try {
-            const result = await this.parseFileHeaderWithRepair(filePath, buffer);
+            const result = await this.parseFileHeaderWithRepair(filePath, buffers[batchIndex]);
             if (result) {
               // Same reason as the shared indexAll loop: a page under a site
               // sites.json does not declare would be filed nowhere and
