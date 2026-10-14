@@ -95,7 +95,8 @@ augmentation, the host's own page fields, and a data entry carries `data` typed 
 (`data?: T`): an entry saved before any payload exists is not an error, so readers guard the access. Content the config
 does not declare fails the build, and the error names the collection and its kind, rather than silently not building;
 declaring a collection before its folder exists is the normal order, since the folder appears with the first entry saved
-in the editor.
+in the editor. The editor saves new fragments in the `fragments` folder, and every form of `conlocaFragments(...)`
+declares that folder, so it never needs naming for the build to accept it.
 
 A site with no MDX fragments yet prints this once per rendered page, and it is expected — nothing is wrong with the file
 this message points at:

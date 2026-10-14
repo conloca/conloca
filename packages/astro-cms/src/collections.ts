@@ -230,15 +230,24 @@ export function conlocaData<DS extends DataSchemas>(options: ConlocaDataOptions<
 }
 
 /**
+ * The folder the editor saves every new fragment to (content/fragments/fragments/).
+ * Every conlocaFragments call declares it, so a fragment made in the editor
+ * never fails the build of a site whose config does not name that folder.
+ */
+const EDITOR_FRAGMENT_FOLDER = 'fragments';
+
+/**
  * The fragments aggregate (always) plus one collection per named fragment
  * folder: `...conlocaFragments('general')`. No arguments declares only the
- * aggregate the render pipeline reads. There are no per-call options:
- * contentRoot comes from conlocaCMS()'s contentRoot (via
- * CONLOCA_CONTENT_ROOT) and the site is always 'default'.
+ * aggregate the render pipeline reads. Every form also declares the folder
+ * the editor saves new fragments to, without returning a collection for it.
+ * There are no per-call options: contentRoot comes from conlocaCMS()'s
+ * contentRoot (via CONLOCA_CONTENT_ROOT) and the site is always 'default'.
  */
 export function conlocaFragments<const N extends readonly string[]>(...names: N) {
   const contentRoot = defaultContentRoot();
   const site = 'default';
+  declareConlocaCollection('fragment', EDITOR_FRAGMENT_FOLDER);
   const fragmentCollection = (collection?: string) =>
     defineCollection({
       loader: withDeclarationCheck(conlocaLoader({ collection, contentRoot, site, kind: 'fragment' }), {

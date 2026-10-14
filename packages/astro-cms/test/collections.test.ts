@@ -445,10 +445,20 @@ describe('collection factories', () => {
     expect(() => assertCollectionsDeclared(['fragment:general'])).not.toThrow();
   });
 
-  test('conlocaFragments with no names declares only the aggregate', () => {
+  test('conlocaFragments with no names returns only the aggregate and declares no folder but the editor one', () => {
     const cols = conlocaFragments();
     expect(Object.keys(cols)).toEqual(['__conloca_fragments']);
     expect(() => assertCollectionsDeclared(['fragment:general'])).toThrow(/the fragment collection "general"/);
+  });
+
+  test.each([
+    ['no names', []],
+    ['other names', ['general']],
+  ] as const)('conlocaFragments with %s declares the folder the editor saves new fragments to', (_label, names) => {
+    const cols = conlocaFragments(...names);
+    // Declared, not returned: getCollection('fragments') still needs the name passed.
+    expect(Object.keys(cols)).not.toContain('fragments');
+    expect(() => assertCollectionsDeclared(['fragment:fragments'])).not.toThrow();
   });
 
   test('returns the exact pageSchemas object a collection was declared with', () => {
