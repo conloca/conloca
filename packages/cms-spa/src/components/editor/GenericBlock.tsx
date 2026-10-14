@@ -19,6 +19,7 @@ import {
 } from '../../mdx-components.js';
 import { useSandboxPreviewStyles } from '../../sandbox-preview-styles.js';
 import { getSelectedBlock, setSelectedBlock, useSelectedBlock } from '../../selected-block.js';
+import { getCmsRoute } from '../../ui-config.js';
 import { bodyNeedsStaticHtml, isHtmlTag, mdastToHtml } from '../../utils/mdast-to-html.js';
 import {
   effectiveChildren,
@@ -118,7 +119,6 @@ interface RenderRequest {
 }
 
 const SLOT_TAG = 'conloca-slot';
-const RENDER_ENDPOINT = '/__cms/api/render';
 
 /**
  * Find string-prop values inside the SSR'd preview and make their rendering
@@ -405,7 +405,7 @@ async function fetchRendered(req: RenderRequest): Promise<string> {
   const cached = renderCache.get(key);
   if (cached !== undefined) return cached;
 
-  const res = await fetch(RENDER_ENDPOINT, {
+  const res = await fetch(`${getCmsRoute()}/api/render`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(req),

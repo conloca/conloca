@@ -70,6 +70,7 @@ interface HookRunOptions {
   publicDir?: URL;
   /** The site's Astro `base`, as the hook's `config` reports it. */
   base?: string;
+  route?: string;
 }
 
 /** Runs the astro:config:setup hook with stub args and collects updateConfig calls. */
@@ -88,6 +89,7 @@ async function collectConfigUpdates({
   assetsPath,
   publicDir,
   base,
+  route,
 }: HookRunOptions = {}): Promise<Record<string, unknown>[]> {
   const updates: Record<string, unknown>[] = [];
   const integration = conlocaCMS({
@@ -100,6 +102,7 @@ async function collectConfigUpdates({
     ...(siteStyles ? { siteStyles } : {}),
     ...(editorStyles ? { editorStyles } : {}),
     ...(assetsPath ? { assetsPath } : {}),
+    ...(route ? { route } : {}),
   });
   const noop = () => {};
   await integration.hooks['astro:config:setup']?.({
@@ -115,6 +118,7 @@ async function collectConfigUpdates({
 /** Reads the config the dev editor boots with, as its virtual module serves it. */
 function editorConfigOf(updates: Record<string, unknown>[]): {
   assetRefBase?: string;
+  assetsBasePath?: string;
   dataBindings?: unknown;
   locales?: unknown;
 } {
@@ -638,6 +642,14 @@ describe('@conloca/astro-cms', () => {
         await expect(attempt).rejects.toThrow(join(site, 'public'));
       });
     }
+  });
+
+  describe('a CMS the site mounts under its own route', () => {
+    it('shows media thumbnails from that route, not from /__cms', async () => {
+      const updates = await collectConfigUpdates({ command: 'dev', route: '/admin' });
+
+      expect(editorConfigOf(updates).assetsBasePath).toBe('/admin/api/assets/serve');
+    });
   });
 
   describe('the data bindings the editor builds its data context from', () => {

@@ -6,7 +6,7 @@ import App from './App.js';
 import { CanvasThemeProvider } from './hooks/useCanvasTheme.js';
 import { ThemeProvider } from './hooks/useTheme.js';
 import { installDiscoveredMdxComponents, type MdxComponents } from './mdx-components.js';
-import { getUIConfig } from './ui-config.js';
+import { getCmsRoute, getUIConfig } from './ui-config.js';
 
 /**
  * Full SPA boot. Loaded by `main.tsx` when the document is the top
@@ -37,8 +37,7 @@ export function mountSpa(): void {
   // slotted installer merges them with the schemas-loader module's
   // host-authored list regardless of which of the two settles first —
   // see `installHostAuthoredMdxComponents` for the race this closes.
-  const cmsBase = (config.basename ?? '/__cms').replace(/\/+$/, '');
-  fetch(`${cmsBase}/api/registry`)
+  fetch(`${getCmsRoute()}/api/registry`)
     .then((res) => {
       if (!res.ok) throw new Error(`registry endpoint ${res.status}`);
       return res.json();

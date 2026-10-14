@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { IMPORT_RE } from './site-css-layer.js';
+import { getCmsRoute } from './ui-config.js';
 
 /**
  * Two parallel registries for host-supplied CSS strings: `siteStyles` for the
@@ -168,11 +169,11 @@ export function useEditorStyles(): SiteStyles {
  * Fetch the host's CSS for a route URL from the integration's
  * `/api/styles` endpoint and return it as a single-element array suitable
  * for `useInjectHostStyles`. Empty until the fetch resolves; empty if no
- * URL is given.
+ * URL is given. `cmsRoute` defaults to the route the CMS is mounted at.
  */
 export function useFetchedSiteStyles(routeUrl: string | undefined, options: { cmsRoute?: string } = {}): SiteStyles {
   const [styles, setStyles] = useState<SiteStyles>([]);
-  const cmsRoute = options.cmsRoute ?? '/__cms';
+  const cmsRoute = options.cmsRoute ?? getCmsRoute();
 
   useEffect(() => {
     if (!routeUrl) {
@@ -251,14 +252,15 @@ export interface HostWrappers {
  *
  * Re-fetches whenever `routeUrl` changes (eg locale switch / doc
  * switch). Errors are logged and swallowed; the caller falls back to
- * the no-wrapper render path.
+ * the no-wrapper render path. `cmsRoute` defaults to the route the CMS is
+ * mounted at.
  */
 export function useFetchedHostWrappers(
   routeUrl: string | undefined,
   options: { cmsRoute?: string } = {},
 ): HostWrappers {
   const [wrappers, setWrappers] = useState<HostWrappers>({ content: null, codeBlock: null });
-  const cmsRoute = options.cmsRoute ?? '/__cms';
+  const cmsRoute = options.cmsRoute ?? getCmsRoute();
 
   useEffect(() => {
     if (!routeUrl) {

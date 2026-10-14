@@ -542,11 +542,15 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
     templates?: unknown;
     mdxPagesEnabled: boolean;
     locales?: { list: string[]; defaultLocale: string };
+    assetsBasePath: string;
     assetRefBase?: string;
     dataBindings?: EditorDataBindings;
   } = {
     basename: cmsRoute,
     apiBaseUrl: `${cmsRoute}/api`,
+    // The media surfaces' thumbnails, served by the content API under the
+    // same route; the editor's own default only covers a CMS at /__cms.
+    assetsBasePath: `${cmsRoute}/api/assets/serve`,
     siteBaseUrl: options.siteBaseUrl,
     enableDevtools: options.enableDevtools ?? true,
     queryClientOptions: options.queryClientOptions,

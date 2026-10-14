@@ -130,10 +130,10 @@ export interface UIConfig {
    * Base path the media surfaces build thumbnail URLs against
    * (`buildAssetServeUrl(assetsBasePath, folder, filename)`). A host
    * passes its own base here when it serves media somewhere other than
-   * the `/__cms/api/assets/serve` default. When absent,
-   * `MediaPage`/`ImagePicker` pass `undefined` and
-   * `AssetCard`/`AssetDetailSidebar` keep their literal default — so
-   * astro-cms / local dev render byte-identically.
+   * the `/__cms/api/assets/serve` default; astro-cms passes the one under
+   * the route it mounts the CMS at. When absent, `MediaPage`/`ImagePicker`
+   * pass `undefined` and `AssetCard`/`AssetDetailSidebar` keep their
+   * literal default.
    */
   assetsBasePath?: string;
   /**
@@ -331,4 +331,14 @@ export function getUIConfig(): UIConfig {
   }
 
   return config;
+}
+
+/**
+ * The route the CMS is mounted at, without a trailing slash. The integration
+ * serves the editor's own endpoints — styles, content wrapper, component
+ * render, registry — under `<route>/api`, so a site that moves the CMS off
+ * `/__cms` moves them with it.
+ */
+export function getCmsRoute(): string {
+  return (getUIConfig().basename ?? '/__cms').replace(/\/+$/, '');
 }
