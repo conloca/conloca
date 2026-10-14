@@ -9,6 +9,7 @@ import remarkParse from 'remark-parse';
 import remarkRehype from 'remark-rehype';
 import { type Plugin, unified } from 'unified';
 import { applyHeadingIds, type FragmentHeading } from './heading-outline.js';
+import { literalAttributeValue } from './literal-attributes.js';
 import { remarkRestrictExpressions } from './restrict-expressions.js';
 
 interface JsxAttributeNode {
@@ -57,17 +58,10 @@ function resolveStaticJsx() {
           const value = attr?.value;
           if (!value || typeof value !== 'object') return [attr];
           const raw = (value as { value?: unknown }).value;
-          if (typeof raw !== 'string') return [];
-          let parsed: unknown;
-          try {
-            parsed = JSON.parse(raw.trim());
-          } catch {
-            return []; // non-literal — already dropped by the restrict gate; belt and braces
-          }
-          if (typeof parsed === 'string') return [{ ...attr, value: parsed }];
-          if (typeof parsed === 'number') return [{ ...attr, value: String(parsed) }];
-          if (typeof parsed === 'boolean') return [{ ...attr, value: parsed }];
-          return [];
+          // The same rule compileMDX applies, so the editor preview drops what this drops.
+          const literal = typeof raw === 'string' ? literalAttributeValue(raw) : undefined;
+          if (literal === undefined) return [];
+          return [{ ...attr, value: typeof literal === 'number' ? String(literal) : literal }];
         });
       }
       if (Array.isArray(node.children)) node.children.forEach(walk);

@@ -65,6 +65,18 @@ describe('preview frame runtime — what React would draw', () => {
     expect(preview).toEqual(alignments(await renderPublished(source)));
   });
 
+  test('an attribute written as an object, a list or null shows nowhere, as on the published page', async () => {
+    const source =
+      '<div style={{"background":"tomato","width":120}} data-items={[1, 2]} title={null} lang={"en"}>Hi</div>';
+    const preview = await renderPreview(source);
+    const div = preview.querySelector('div');
+    expect(div?.hasAttribute('style')).toBe(false);
+    expect(div?.hasAttribute('data-items')).toBe(false);
+    expect(div?.hasAttribute('title')).toBe(false);
+    expect(div?.getAttribute('lang')).toBe('en');
+    expect(preview.innerHTML).toBe((await renderPublished(source)).innerHTML);
+  });
+
   test('htmlFor becomes the for attribute, as on the published page', async () => {
     const source = '<label htmlFor="email">Email</label>';
     const preview = await renderPreview(source);

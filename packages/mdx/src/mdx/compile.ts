@@ -5,6 +5,7 @@ import remarkGfm from 'remark-gfm';
 import remarkMdxFrontmatter from 'remark-mdx-frontmatter';
 import type { MDXCompileResult } from '../types.js';
 import { applyHeadingIds, type FragmentHeading, type OutlineTree } from './heading-outline.js';
+import { remarkDropUnrenderedAttributes } from './literal-attributes.js';
 import { remarkRestrictExpressions } from './restrict-expressions.js';
 
 export async function compileMDX(content: string): Promise<MDXCompileResult> {
@@ -30,7 +31,15 @@ export async function compileMDX(content: string): Promise<MDXCompileResult> {
       // `import`/`export` parse into `mdxjsEsm` nodes at parse time (so restrict
       // sees and rejects them), while the legitimate `export const frontmatter`
       // that `remarkMdxFrontmatter` injects appears only after restrict has run.
-      remarkPlugins: [remarkFrontmatter, remarkRestrictExpressions, remarkMdxFrontmatter, remarkGfm],
+      // `remarkDropUnrenderedAttributes` drops what the published fragment
+      // drops (`style={{…}}`, lists, `null`), so the preview matches it.
+      remarkPlugins: [
+        remarkFrontmatter,
+        remarkRestrictExpressions,
+        remarkDropUnrenderedAttributes,
+        remarkMdxFrontmatter,
+        remarkGfm,
+      ],
       rehypePlugins: [collectOutline],
     });
 
