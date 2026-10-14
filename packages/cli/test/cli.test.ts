@@ -67,11 +67,11 @@ describe('Conloca CLI', () => {
       expect(sitesConfig).toEqual({
         sites: {
           mysite: {
-            locales: ['en', 'nl', 'de', 'fr'],
+            locales: ['en'],
             defaultLocale: 'en',
           },
         },
-        globalLocales: ['en', 'nl', 'de', 'fr'],
+        globalLocales: ['en'],
       });
     } finally {
       await rm(tempDir, { recursive: true });
@@ -188,11 +188,11 @@ describe('Conloca CLI', () => {
       expect(sitesConfig).toEqual({
         sites: {
           default: {
-            locales: ['en', 'nl', 'de', 'fr'],
+            locales: ['en'],
             defaultLocale: 'en',
           },
         },
-        globalLocales: ['en', 'nl', 'de', 'fr'],
+        globalLocales: ['en'],
       });
 
       // init is now for the second site, not a step the first one depends on.

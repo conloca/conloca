@@ -2,7 +2,12 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { SitesConfig } from '@conloca/content-api';
 
-const DEFAULT_LOCALES = ['en', 'nl', 'de', 'fr'];
+/**
+ * A new site's one language. Its routing serves a single locale, `en` unless
+ * told otherwise, while the editor offers a version of each page in every
+ * language listed here, so any other would collect translations no page shows.
+ */
+const DEFAULT_LOCALES = ['en'];
 
 export type EnsureSiteResult = {
   /** Path of the sites.json that was read or written. */

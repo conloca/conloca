@@ -114,6 +114,21 @@ describe('conloca create', () => {
     }
   });
 
+  test('sets the site up in the one language its routing publishes', async () => {
+    const parent = await tempParent('conloca-create-locales-');
+    try {
+      const dir = join(parent, 'site');
+      await $`${CLI} create --no-install --no-git ${dir}`.quiet();
+      // The editor offers a version of each page in every listed language, so a
+      // language the routing never serves would collect translations nobody sees.
+      expect(await readFile(join(dir, 'astro.config.mjs'), 'utf-8')).toContain("locale: 'en'");
+      const sites = JSON.parse(await readFile(join(dir, 'content', 'sites.json'), 'utf-8'));
+      expect(sites).toEqual({ sites: { default: { locales: ['en'], defaultLocale: 'en' } }, globalLocales: ['en'] });
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
   test('--site names the site in sites.json, the config, and the home page path', async () => {
     const parent = await tempParent('conloca-create-site-');
     try {
