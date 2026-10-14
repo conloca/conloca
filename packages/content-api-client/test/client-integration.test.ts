@@ -227,6 +227,31 @@ describe('ContentAPIClient Integration Tests with InMemoryContentAPI', () => {
         }),
       ).rejects.toThrow(StaleWriteError);
     });
+
+    // The README promises StaleWriteError for an outdated etag on every write, deletes and moves included.
+    it.each([
+      ['deleting the whole entry', (id: string, etag: string) => client.deleteContent(id, etag)],
+      ['deleting one language', (id: string, etag: string) => client.deleteLocalized({ id, locale: 'en', etag })],
+      ['moving the page', (id: string, etag: string) => client.movePage('shop', id, '/moved', 'en', etag)],
+    ])('throws StaleWriteError with the current etag when %s with an outdated etag', async (_, write) => {
+      const created = await contentApi.createContent({
+        kind: 'page',
+        site: 'shop',
+        collection: 'pages',
+        type: 'puck',
+        locales: { en: { pathname: '/test', meta: { title: 'Test Page' }, content: { puckData: { root: {} } } } },
+      });
+      const id = created.id!;
+      const loaded = (await client.getLocalized(id, 'en'))!.localized.etag;
+      await client.updateLocalized({ id, locale: 'en', data: { meta: { title: 'Edited' } }, etag: loaded });
+
+      const error = await write(id, loaded).catch((thrown: unknown) => thrown);
+
+      const kept = await client.getLocalized(id, 'en');
+      expect(error).toBeInstanceOf(StaleWriteError);
+      expect((error as StaleWriteError).currentEtag).toBe(kept!.localized.etag);
+      expect(kept!.localized.pathname).toBe('/test');
+    });
   });
 
   describe('Dual ETag system for conflict resolution', () => {

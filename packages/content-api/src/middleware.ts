@@ -366,12 +366,16 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
           );
         }
         if (result.reason === 'stale_write') {
+          // The error envelope is what a client reads to tell an outdated etag from any other failure.
           return c.json(
             {
               success: false,
               reason: result.reason,
               currentEtag: result.currentEtag,
               message: 'Content has been modified',
+              ...errorResponse(ErrorCodes.STALE_WRITE, 'Content has been modified since you last loaded it', {
+                currentEtag: result.currentEtag,
+              }),
             },
             412,
           );
@@ -1035,12 +1039,16 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
 
       if (!updateResult.success) {
         if (updateResult.reason === 'stale_write') {
+          // The error envelope is what a client reads to tell an outdated etag from any other failure.
           return c.json(
             {
               moved: false,
               reason: 'stale_write',
               currentEtag: updateResult.currentEtag,
               message: 'Content has been modified',
+              ...errorResponse(ErrorCodes.STALE_WRITE, 'Content has been modified since you last loaded it', {
+                currentEtag: updateResult.currentEtag,
+              }),
             },
             412,
           );
