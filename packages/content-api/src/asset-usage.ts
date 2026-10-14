@@ -3,12 +3,13 @@ import type { ContentAPI } from './content-api.interface.js';
 
 /**
  * Every page, fragment and data entry language whose meta or content links to an asset. The editor
- * links an asset as `/assets/<path>`; only that link standing whole counts, so `/assets/trip/beach.png`
- * is no use of `beach.png` and neither is `/assets/my-beach.png` or `/assets/beach.png.bak`. A full URL
- * such as `https://…/assets/beach.png` never counts, even one to this site, whose address is not known here.
+ * links an asset as `<assetRefBase>/<path>`, `/assets/<path>` by default; only that link standing whole
+ * counts, so `/assets/trip/beach.png` is no use of `beach.png` and neither is `/assets/my-beach.png` or
+ * `/assets/beach.png.bak`. A full URL such as `https://…/assets/beach.png` never counts, even one to this
+ * site, whose address is not known here.
  */
-export async function findAssetUsage(api: ContentAPI, path: string): Promise<AssetUsage[]> {
-  const link = `/assets/${path.replace(/^\/+|\/+$/g, '')}`;
+export async function findAssetUsage(api: ContentAPI, path: string, assetRefBase = '/assets'): Promise<AssetUsage[]> {
+  const link = `${assetRefBase}/${path.replace(/^\/+|\/+$/g, '')}`;
   const whole = new RegExp(`(?<![\\w.~%/-])${link.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w./-])`);
   const usage: AssetUsage[] = [];
   const severalSites = Object.keys(api.sitesConfig.sites).length > 1;

@@ -26,10 +26,11 @@ describe('which content uses a picture', () => {
     await rm(root, { recursive: true, force: true });
   });
 
-  async function usage(api: ContentAPI, path: string): Promise<AssetUsage[]> {
+  async function usage(api: ContentAPI, path: string, assetRefBase?: string): Promise<AssetUsage[]> {
     const router = createContentAPIRouter(api, {
       assetsPath: join(root, 'assets'),
       contentRoot: join(root, 'content'),
+      ...(assetRefBase !== undefined && { assetRefBase }),
     });
     const response = await router.request(`/assets/usage/${path}`);
     expect(response.status).toBe(200);
@@ -121,6 +122,20 @@ describe('which content uses a picture', () => {
     });
 
     expect(await usage(api, 'beach.png')).toEqual([]);
+  });
+
+  // A site that serves its media folder at another address, or sets a base, has the editor store
+  // that address instead of `/assets`, so only a link under it is a use of the picture.
+  test.each([
+    ['a media folder of its own', '/media'],
+    ['a base', '/docs/assets'],
+    ['its media at the top of the site', ''],
+  ])('on a site with %s, links under the address it serves media at count', async (_, assetRefBase) => {
+    const api = store();
+    await page(api, '/shown', { ogImage: `${assetRefBase}/beach.png` });
+    await page(api, '/elsewhere', { ogImage: '/other/beach.png' });
+
+    expect(await usage(api, 'beach.png', assetRefBase)).toEqual([{ page: '/shown (en)', field: 'meta.ogImage' }]);
   });
 
   test('each language that uses the picture is its own row', async () => {

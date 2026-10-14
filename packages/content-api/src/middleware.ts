@@ -100,6 +100,8 @@ function isCrossSiteWrite(c: Context): boolean {
  */
 export interface ContentAPIRouterOptions {
   assetsPath?: string;
+  /** Where the site serves `assetsPath`, which begins every image link the editor stores; `/assets` when unset */
+  assetRefBase?: string;
   assetConfig?: Omit<AssetConfig, 'assetsPath' | 'contentRoot'>;
   /** Content root directory: holds asset metadata records, is scanned for asset usage, and is where git runs */
   contentRoot?: string;
@@ -678,7 +680,7 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
     // GET /assets/usage/:path{.+} — content that links to the asset at this path from the assets root
     app.get('/assets/usage/:path{.+}', async (c) => {
       try {
-        const usage = await findAssetUsage(api, c.req.param('path'));
+        const usage = await findAssetUsage(api, c.req.param('path'), options.assetRefBase);
         return c.json({ usage });
       } catch (error) {
         return c.json(logAndCreateErrorResponse(error, ErrorCodes.INTERNAL_ERROR, 'Failed to get asset usage'), 500);

@@ -229,7 +229,8 @@ async function handleContentApi(request: Request, cfResult: CFAccessResult): Pro
   // Create the Hono router with assets and content root for git operations
   const assetsPath = import.meta.env.CONLOCA_ASSETS_PATH || '';
   const app = createContentAPIRouter(contentApi, {
-    ...(assetsPath && { assetsPath }),
+    // The editor stores image links under assetRefBase, so the usage lookup must search for that.
+    ...(assetsPath && { assetsPath, assetRefBase: spaConfig.assetRefBase }),
     contentRoot,
   });
 
