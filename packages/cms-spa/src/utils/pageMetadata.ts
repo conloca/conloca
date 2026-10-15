@@ -102,7 +102,7 @@ export function extractPageMetadata(
   const customMeta: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(localized.meta)) {
     if (!coreKeys.has(key)) {
-      customMeta[key] = value;
+      setDataKey(customMeta, key, value);
     }
   }
 
@@ -144,7 +144,7 @@ export function buildMetadataUpdate(metadata: PageMetadata): MetadataUpdatePaylo
   const cleared = (value: unknown) => (value === undefined || value === '' ? null : value);
   const custom: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(metadata.customMeta || {})) {
-    custom[key] = cleared(value);
+    setDataKey(custom, key, cleared(value));
   }
 
   return {
@@ -200,8 +200,10 @@ export function flattenForHints(
     const segments = dotted.split('.');
     let cursor: unknown = value;
     for (const seg of segments) {
-      if (cursor && typeof cursor === 'object' && seg in (cursor as Record<string, unknown>)) {
-        cursor = (cursor as Record<string, unknown>)[seg];
+      // Own properties only: an inherited one is not the author's data.
+      const own = cursor && typeof cursor === 'object' ? Object.getOwnPropertyDescriptor(cursor, seg) : undefined;
+      if (own) {
+        cursor = own.value;
       } else {
         cursor = undefined;
         break;
@@ -217,7 +219,7 @@ export function flattenForHints(
       if (remainder === undefined) {
         delete out[segments[0]];
       } else {
-        out[segments[0]] = remainder;
+        setDataKey(out, segments[0], remainder);
       }
     }
   }
@@ -242,11 +244,23 @@ function pruneLeaf(branch: unknown, path: string[]): unknown {
     if (pruned === undefined) {
       delete copy[head];
     } else {
-      copy[head] = pruned;
+      setDataKey(copy, head, pruned);
     }
   }
 
   return Object.keys(copy).length > 0 ? copy : undefined;
+}
+
+/**
+ * Store a frontmatter key as data. Plain assignment of `__proto__` would run the legacy prototype setter,
+ * swapping the target's prototype and dropping the author's value (same rule as content-api's applyNullClearPatch).
+ */
+function setDataKey(target: Record<string, unknown>, key: string, value: unknown): void {
+  if (key === '__proto__') {
+    Object.defineProperty(target, key, { value, enumerable: true, configurable: true, writable: true });
+  } else {
+    target[key] = value;
+  }
 }
 
 /**
@@ -264,22 +278,25 @@ export function unflattenFromHints(value: Record<string, unknown>): Record<strin
   // remainder) has to be in place before dotted leaves merge into it,
   // otherwise assigning it later would overwrite them.
   for (const [key, val] of entries) {
-    if (!key.includes('.')) out[key] = val;
+    if (!key.includes('.')) setDataKey(out, key, val);
   }
 
   for (const [key, val] of entries) {
     if (!key.includes('.')) continue;
     const segments = key.split('.');
+    // Walk own properties only: an inherited one (`__proto__` resolves to
+    // Object.prototype) would make the leaf write below pollute every object.
+    // Names like `prototype` stay ordinary nested keys, so they still round-trip.
     let cursor = out;
     for (let i = 0; i < segments.length - 1; i++) {
       const seg = segments[i];
-      const existing = cursor[seg];
+      const existing = Object.getOwnPropertyDescriptor(cursor, seg)?.value;
       if (!existing || typeof existing !== 'object') {
-        cursor[seg] = {};
+        setDataKey(cursor, seg, {});
       }
       cursor = cursor[seg] as Record<string, unknown>;
     }
-    cursor[segments[segments.length - 1]] = val;
+    setDataKey(cursor, segments[segments.length - 1], val);
   }
   return out;
 }

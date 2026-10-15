@@ -1,7 +1,8 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
 import { pinTimeZone } from '../../test/time-zone.js';
 import {
   buildMetadataUpdate,
+  extractPageMetadata,
   flattenForHints,
   fromDatetimeLocalValue,
   toDatetimeLocalValue,
@@ -49,6 +50,85 @@ describe('dotted hint keys round-trip', () => {
     const stored = { title: 'Docs', draft: true };
 
     expect(unflattenFromHints(flattenForHints(stored, hintKeys))).toEqual({ title: 'Docs', draft: true });
+  });
+});
+
+describe('hostile frontmatter keys', () => {
+  // Frontmatter keys come from content files, so a key like `__proto__.x` can
+  // arrive from an author (or a contributor's pull request) and must never walk
+  // into Object.prototype while the page-settings form rebuilds the tree.
+  afterEach(() => {
+    Reflect.deleteProperty(Object.prototype, 'polluted');
+  });
+
+  test('a `__proto__` path does not pollute Object.prototype', () => {
+    const hostile: Record<string, unknown> = JSON.parse('{"__proto__.polluted":"yes","title":"Docs"}');
+
+    const result = unflattenFromHints(hostile);
+
+    expect(Object.getOwnPropertyDescriptor(Object.prototype, 'polluted')).toBeUndefined();
+    expect(result.title).toBe('Docs');
+  });
+
+  test('a `constructor.prototype` path does not pollute Object.prototype', () => {
+    const hostile: Record<string, unknown> = JSON.parse('{"constructor.prototype.polluted":"yes"}');
+
+    unflattenFromHints(hostile);
+
+    expect(Object.getOwnPropertyDescriptor(Object.prototype, 'polluted')).toBeUndefined();
+  });
+
+  test('nests the hostile dotted key as own data instead of dropping the author data', () => {
+    const hostile: Record<string, unknown> = JSON.parse('{"__proto__.polluted":"yes"}');
+
+    const result = unflattenFromHints(hostile);
+
+    expect(Object.getPrototypeOf(result)).toBe(Object.prototype);
+    expect(Object.getOwnPropertyDescriptor(result, '__proto__')?.value).toEqual({ polluted: 'yes' });
+  });
+
+  test('a nested key named `prototype` or `constructor` still round-trips', () => {
+    const stored = { widget: { prototype: 'old', constructor: 'kept', label: 'L' } };
+    const hints: ReadonlySet<string> = new Set(['widget.prototype', 'widget.constructor']);
+
+    const widget = unflattenFromHints(flattenForHints(stored, hints)).widget;
+
+    expect(Object.getOwnPropertyDescriptor(widget, 'prototype')?.value).toBe('old');
+    expect(Object.getOwnPropertyDescriptor(widget, 'constructor')?.value).toBe('kept');
+    expect(Object.getOwnPropertyDescriptor(widget, 'label')?.value).toBe('L');
+  });
+
+  // A bare `__proto__` key assigned with `obj[key] = value` runs the prototype
+  // setter: the author's value vanishes and the target's prototype changes.
+  test('a bare `__proto__` key stays an own data key through unflattenFromHints', () => {
+    const hostile: Record<string, unknown> = JSON.parse('{"__proto__":{"polluted":"yes"}}');
+
+    const result = unflattenFromHints(hostile);
+
+    expect(Object.getPrototypeOf(result)).toBe(Object.prototype);
+    expect(Object.getOwnPropertyDescriptor(result, '__proto__')?.value).toEqual({ polluted: 'yes' });
+  });
+
+  test('a nested `__proto__` key survives pruning a hinted sibling', () => {
+    const stored: Record<string, unknown> = JSON.parse('{"sidebar":{"label":"L","__proto__":{"kept":"v"}}}');
+    const hints: ReadonlySet<string> = new Set(['sidebar.label']);
+
+    const sidebar = unflattenFromHints(flattenForHints(stored, hints)).sidebar;
+
+    expect(Object.getPrototypeOf(sidebar)).toBe(Object.prototype);
+    expect(Object.getOwnPropertyDescriptor(sidebar, '__proto__')?.value).toEqual({ kept: 'v' });
+    expect(Object.getOwnPropertyDescriptor(sidebar, 'label')?.value).toBe('L');
+  });
+
+  test('a bare `__proto__` meta key round-trips through page settings as data', () => {
+    const meta = JSON.parse('{"title":"Docs","__proto__":{"polluted":"yes"}}');
+
+    const metadata = extractPageMetadata({ meta, pathname: '/docs' }, null);
+    const payload = buildMetadataUpdate(metadata);
+
+    expect(Object.getPrototypeOf(metadata.customMeta)).toBe(Object.prototype);
+    expect(Object.getOwnPropertyDescriptor(metadata.customMeta, '__proto__')?.value).toEqual({ polluted: 'yes' });
+    expect(Object.getOwnPropertyDescriptor(payload.meta, '__proto__')?.value).toEqual({ polluted: 'yes' });
   });
 });
 
