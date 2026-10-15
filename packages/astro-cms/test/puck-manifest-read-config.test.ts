@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -1444,6 +1444,11 @@ describe('a config that names one large value in many places is refused before i
 });
 
 describe('a manifest held to the size of what it sends', () => {
+  const writtenRoots: string[] = [];
+  afterAll(() => {
+    for (const root of writtenRoots) rmSync(root, { recursive: true, force: true });
+  });
+
   /** A field's `ai` naming `A{depth}`, where each level names the one below ten times and `A0` is `leaf`. */
   function namedOver(depth: number, leaf: string, label = ''): string {
     const levels = [`const A0 = ${leaf};`];
@@ -1500,9 +1505,10 @@ describe('a manifest held to the size of what it sends', () => {
     expect(over.manifest.unreadableReason).toMatch(/^the manifest would run to more than 32,000,000 bytes of JSON/);
   }, 60_000);
 
-  /** A throwaway config on disk, as reader options. Left for the system to clear: it is read once and never run. */
+  /** A throwaway config on disk, as reader options, removed once the block is done. */
   async function written(config: string): Promise<{ configPath: string }> {
     const root = mkdtempSync(join(tmpdir(), 'puck-config-size-'));
+    writtenRoots.push(root);
     const configPath = join(root, 'puck.config.ts');
     writeFileSync(configPath, config);
     return { configPath };
