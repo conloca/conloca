@@ -1,9 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { expect } from 'storybook/test';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
 import '../../main.css';
-import { ThemeProvider } from '../../hooks/useTheme.js';
+import { ThemeProvider, useTheme } from '../../hooks/useTheme.js';
 import { setHostDiscovery } from '../../host-discovery.js';
 import { filterProseSurfaceCss } from '../../prose-surface-css.js';
 import { setSiteStyles, useInjectHostStyles } from '../../site-styles.js';
@@ -116,17 +116,17 @@ if (typeof localStorage !== 'undefined') localStorage.setItem(THEME_STORAGE_KEY,
  * `conloca-mdx-editor-surround` region, which is the `@scope` root the
  * layered host tier is rebased onto (`:root`/`body` → `:scope`).
  */
-function EmbeddedEditorHarness() {
-  const [value, setValue] = useState(MARKDOWN);
+function EmbeddedEditorHarness({ themeControls = false }: { themeControls?: boolean }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     // Both registries a host writes after `configureUI` has run — the same
     // post-configure swap point `setSiteStyles` uses: the registered discovery
     // tier (route CSS + wrapper shape) and siteStyles.
-    setSiteStyles([ROUTE_CSS]);
+    const routeCss = themeControls ? `${ROUTE_CSS}${LIGHT_ROUTE_CSS}` : ROUTE_CSS;
+    setSiteStyles([routeCss]);
     setHostDiscovery({
-      routeCss: ROUTE_CSS,
+      routeCss,
       wrappers: { content: { tagName: 'div', className: WRAPPER_CLASS }, codeBlock: null },
     });
     setReady(true);
@@ -134,25 +134,75 @@ function EmbeddedEditorHarness() {
       setSiteStyles([]);
       setHostDiscovery({});
     };
-  }, []);
+  }, [themeControls]);
 
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        {/* Admin chrome sibling: must never be reached by host CSS. */}
-        <h2 className="admin-escape-canary" data-testid="admin-chrome-heading">
-          Admin chrome heading
-        </h2>
-        <div
-          className="conloca-mdx-editor-surround dark"
-          data-theme="dark"
-          data-testid="surround"
-          style={{ height: 520 }}
-        >
-          {ready && <CMSMDXEditor value={value} onChange={(next) => setValue(next)} />}
-        </div>
+        <EmbeddedEditorSurface ready={ready} themeControls={themeControls} />
       </ThemeProvider>
     </QueryClientProvider>
+  );
+}
+
+/**
+ * The host's light palette, keyed off the attribute form Starlight uses. Only
+ * the theme-switching story installs it, so every other story keeps measuring
+ * the dark sheet alone.
+ */
+const LIGHT_ROUTE_CSS = `
+:root[data-theme="light"] {
+  --sl-color-white: #172554;
+  --sl-color-text: #334155;
+  --sl-color-bg: #f8fafc;
+  --sl-color-gray-5: #e2e8f0;
+  --sl-color-gray-6: #f1f5f9;
+}
+`;
+
+/**
+ * The markdown is held here, above the editor, the way `MdxPageEditor` holds
+ * the page body: closing the editor unmounts `CMSMDXEditor` but keeps the text,
+ * so reopening proves what the editor serialized, not what it still had in
+ * memory.
+ */
+function EmbeddedEditorSurface({ ready, themeControls }: { ready: boolean; themeControls: boolean }) {
+  const [value, setValue] = useState(MARKDOWN);
+  const [mounted, setMounted] = useState(true);
+  const { resolvedTheme, setTheme } = useTheme();
+  const surfaceTheme = themeControls ? resolvedTheme : 'dark';
+  return (
+    <>
+      {/* Admin chrome sibling: must never be reached by host CSS. */}
+      <h2
+        className={themeControls ? 'admin-escape-canary text-foreground' : 'admin-escape-canary'}
+        data-testid="admin-chrome-heading"
+      >
+        Admin chrome heading
+      </h2>
+      {themeControls && (
+        <>
+          <button type="button" onClick={() => setTheme('light')}>
+            Use light theme
+          </button>
+          <button type="button" onClick={() => setTheme('dark')}>
+            Use dark theme
+          </button>
+          <button type="button" onClick={() => setMounted((current) => !current)}>
+            {mounted ? 'Close editor' : 'Reopen editor'}
+          </button>
+          <pre data-testid="serialized-markdown">{value}</pre>
+        </>
+      )}
+      <div
+        className={`conloca-mdx-editor-surround ${surfaceTheme}`}
+        data-theme={surfaceTheme}
+        data-testid="surround"
+        style={{ height: 520 }}
+      >
+        {ready && mounted && <CMSMDXEditor value={value} onChange={setValue} />}
+      </div>
+    </>
   );
 }
 
@@ -543,5 +593,61 @@ export const BridgeFillsTheContractWhenNoProbe: Story = {
     expect(vars['--conloca-host-color']).toBe('rgb(226, 232, 240)');
     expect(document.documentElement.style.getPropertyValue('--conloca-host-prose-bg')).toBe('rgb(2, 6, 23)');
     expect(document.documentElement.style.getPropertyValue('--conloca-host-body-bg')).toBe('rgb(2, 6, 23)');
+  },
+};
+
+/**
+ * Typing in the real editor reaches the markdown it serializes, survives the
+ * editor being closed and reopened, and stays readable in both admin themes
+ * against a host that ships a palette for each. The boundary is the editor's
+ * `onChange`: no save request or backend persistence is involved.
+ */
+export const EditingSurvivesRemountAndThemeChanges: Story = {
+  render: () => <EmbeddedEditorHarness themeControls />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const marker = 'typed after the host styles landed';
+    const editable = await waitForElement<HTMLElement>(canvasElement, '.conloca-prose--editor', 'initial editor');
+    expect(editable.textContent).not.toContain(marker);
+    expect(canvas.getByTestId('serialized-markdown').textContent).not.toContain(marker);
+    await userEvent.click(canvas.getByRole('button', { name: 'Use dark theme' }));
+    await waitFor(() => expect(paintedBackground(editable)).toBe('rgb(2, 6, 23)'), { timeout: 15000 });
+    const paragraph = await waitForElement<HTMLElement>(editable, 'p', 'initial paragraph');
+    await userEvent.click(paragraph);
+    await userEvent.keyboard(` ${marker}`);
+    await waitFor(() => expect(canvas.getByTestId('serialized-markdown').textContent).toContain(marker), {
+      timeout: 15000,
+    });
+
+    await userEvent.click(canvas.getByRole('button', { name: 'Close editor' }));
+    await waitFor(() => expect(editable.isConnected).toBe(false), { timeout: 15000 });
+    expect(canvasElement.querySelector('.conloca-prose--editor')).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: 'Reopen editor' }));
+    const reopened = await waitForElement<HTMLElement>(canvasElement, '.conloca-prose--editor', 'reopened editor');
+    expect(reopened).not.toBe(editable);
+    await waitFor(() => expect(reopened.textContent).toContain(marker), { timeout: 15000 });
+    expect(reopened.querySelector('h2')?.textContent).toBe('Heading two sample');
+    expect(reopened.querySelector('code')?.textContent).toBe('inline code');
+
+    for (const theme of ['light', 'dark'] as const) {
+      await userEvent.click(canvas.getByRole('button', { name: `Use ${theme} theme` }));
+      await waitFor(
+        () => {
+          const current = canvasElement.querySelector<HTMLElement>('.conloca-prose--editor');
+          const heading = current?.querySelector('h2');
+          if (!current || !heading) throw new Error('Editor disappeared during theme change');
+          expect(canvas.getByTestId('surround').dataset.theme).toBe(theme);
+          expect(getComputedStyle(current).color).toBe(theme === 'light' ? 'rgb(51, 65, 85)' : 'rgb(226, 232, 240)');
+          expect(getComputedStyle(heading).color).toBe(theme === 'light' ? 'rgb(23, 37, 84)' : 'rgb(248, 250, 252)');
+          expect(paintedBackground(current)).toBe(theme === 'light' ? 'rgb(248, 250, 252)' : 'rgb(2, 6, 23)');
+          expect(getComputedStyle(document.documentElement).colorScheme).toBe(theme);
+          expect(getComputedStyle(canvas.getByTestId('admin-chrome-heading')).color).toBe(
+            theme === 'light' ? 'rgb(24, 24, 24)' : 'rgb(250, 250, 250)',
+          );
+          expect(current.textContent).toContain(marker);
+        },
+        { timeout: 15000 },
+      );
+    }
   },
 };
