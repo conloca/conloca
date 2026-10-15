@@ -1,6 +1,6 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
 
-import { extractCFAccessToken } from '../src/cf-access.js';
+import { extractCFAccessToken, validateCFAccessRequest } from '../src/cf-access.js';
 
 describe('extractCFAccessToken', () => {
   test('returns header token from Cf-Access-Jwt-Assertion', () => {
@@ -37,5 +37,55 @@ describe('extractCFAccessToken', () => {
       headers: { Cookie: 'OtherCookie=some-value; session_id=abc' },
     });
     expect(extractCFAccessToken(request)).toBeNull();
+  });
+});
+
+describe('validateCFAccessRequest configuration', () => {
+  const saved = { team: process.env.CF_ACCESS_TEAM_NAME, aud: process.env.CF_ACCESS_AUD };
+
+  function setEnv(team: string | undefined, aud: string | undefined): void {
+    if (team === undefined) delete process.env.CF_ACCESS_TEAM_NAME;
+    else process.env.CF_ACCESS_TEAM_NAME = team;
+    if (aud === undefined) delete process.env.CF_ACCESS_AUD;
+    else process.env.CF_ACCESS_AUD = aud;
+  }
+
+  afterEach(() => setEnv(saved.team, saved.aud));
+
+  // Setting one of the two variables means Access was meant to be on; treating that as local dev
+  // would leave the CMS open to anyone, so a half-set config refuses every request instead.
+  test('refuses a request when only the team name is set', async () => {
+    setEnv('acme', undefined);
+    const result = await validateCFAccessRequest(new Request('http://test.local'));
+    expect(result.valid).toBe(false);
+    expect(result.required).toBe(true);
+  });
+
+  test('refuses a request when only the audience is set', async () => {
+    setEnv(undefined, 'aud-tag');
+    const result = await validateCFAccessRequest(new Request('http://test.local'));
+    expect(result.valid).toBe(false);
+    expect(result.required).toBe(true);
+  });
+
+  test('a team name with a whitespace-only audience is partial and refuses', async () => {
+    setEnv('acme', '  ');
+    const result = await validateCFAccessRequest(new Request('http://test.local'));
+    expect(result.valid).toBe(false);
+    expect(result.required).toBe(true);
+  });
+
+  test('skips validation when neither variable is set', async () => {
+    setEnv(undefined, undefined);
+    expect(await validateCFAccessRequest(new Request('http://test.local'))).toEqual({ valid: true, required: false });
+  });
+
+  test('requires a token when both variables are set', async () => {
+    setEnv('acme', 'aud-tag');
+    expect(await validateCFAccessRequest(new Request('http://test.local'))).toEqual({
+      valid: false,
+      required: true,
+      error: 'No token provided',
+    });
   });
 });

@@ -3,18 +3,24 @@
  *
  * Validates JWT tokens from CF Access for API authorization and git commit attribution.
  * When CF_ACCESS_TEAM_NAME and CF_ACCESS_AUD env vars are set, requests must have valid tokens.
- * When env vars are not set (local dev), validation is skipped.
+ * When neither is set (local dev), validation is skipped. When only one is set, every request is
+ * refused: Access was meant to be on, and skipping it would leave the CMS open.
  */
 
-import { createRemoteJWKSet, jwtVerify } from 'jose';
+import { createRemoteJWKSet, type JWTVerifyGetKey, jwtVerify } from 'jose';
 
-const CF_ACCESS_TEAM_NAME = process.env.CF_ACCESS_TEAM_NAME;
-const CF_ACCESS_AUD = process.env.CF_ACCESS_AUD;
+// One JWKS per team, each with jose's built-in caching (handles key rotation automatically).
+// The env is read per request so a config change or a test never sees a stale module-load value.
+const jwksByTeam = new Map<string, JWTVerifyGetKey>();
 
-// JWKS with built-in caching (handles key rotation automatically)
-const JWKS = CF_ACCESS_TEAM_NAME
-  ? createRemoteJWKSet(new URL(`https://${CF_ACCESS_TEAM_NAME}.cloudflareaccess.com/cdn-cgi/access/certs`))
-  : null;
+function jwksFor(team: string): JWTVerifyGetKey {
+  let jwks = jwksByTeam.get(team);
+  if (!jwks) {
+    jwks = createRemoteJWKSet(new URL(`https://${team}.cloudflareaccess.com/cdn-cgi/access/certs`));
+    jwksByTeam.set(team, jwks);
+  }
+  return jwks;
+}
 
 export interface CFAccessUser {
   email?: string;
@@ -46,14 +52,24 @@ export function extractCFAccessToken(request: Request): string | null {
 /**
  * Validate CF Access JWT from request.
  *
- * Returns { valid: true, required: false } when env vars not set (local dev mode).
+ * Returns { valid: true, required: false } when neither env var is set (local dev mode).
+ * Returns { valid: false, required: true, error } when only one is set (misconfigured: fail closed).
  * Returns { valid: true, required: true, user } when token is valid.
  * Returns { valid: false, required: true, error } when token is invalid or missing.
  */
 export async function validateCFAccessRequest(request: Request): Promise<CFAccessResult> {
-  // If CF Access not configured, skip validation (local dev)
-  if (!CF_ACCESS_TEAM_NAME || !CF_ACCESS_AUD || !JWKS) {
+  // Whitespace-only counts as unset, so a blank line in an env file does not half-configure Access
+  const team = process.env.CF_ACCESS_TEAM_NAME?.trim() || undefined;
+  const audience = process.env.CF_ACCESS_AUD?.trim() || undefined;
+  if (!team && !audience) {
     return { valid: true, required: false };
+  }
+  if (!team || !audience) {
+    return {
+      valid: false,
+      required: true,
+      error: 'CF Access is partially configured: set both CF_ACCESS_TEAM_NAME and CF_ACCESS_AUD, or neither',
+    };
   }
 
   const token = extractCFAccessToken(request);
@@ -62,9 +78,9 @@ export async function validateCFAccessRequest(request: Request): Promise<CFAcces
   }
 
   try {
-    const { payload } = await jwtVerify(token, JWKS, {
-      issuer: `https://${CF_ACCESS_TEAM_NAME}.cloudflareaccess.com`,
-      audience: CF_ACCESS_AUD,
+    const { payload } = await jwtVerify(token, jwksFor(team), {
+      issuer: `https://${team}.cloudflareaccess.com`,
+      audience,
     });
 
     return {
