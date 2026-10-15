@@ -99,7 +99,9 @@ export function FolderTreeSidebar({ currentFolder, onFolderSelect, dropTargetFol
         <button
           type="button"
           onClick={() => {
-            createFolder.reset();
+            // Resetting an in-flight mutation detaches its success callback, so a reopened
+            // dialog would stay open with Create enabled after the folder was made.
+            if (!createFolder.isPending) createFolder.reset();
             setShowCreateFolderDialog(true);
           }}
           className="p-1.5 rounded-md hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"

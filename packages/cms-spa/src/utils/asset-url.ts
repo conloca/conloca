@@ -11,6 +11,14 @@ export function buildAssetPath(folder: string | undefined, filename: string): st
   return assetPath(folder, filename);
 }
 
+/** Join asset paths without moving an existing query or fragment into the resource path. */
+export function appendAssetUrlPath(base: string, path: string): string {
+  const suffixIndex = base.search(/[?#]/);
+  const pathname = suffixIndex === -1 ? base : base.slice(0, suffixIndex);
+  const suffix = suffixIndex === -1 ? '' : base.slice(suffixIndex);
+  return `${pathname.replace(/\/$/, '')}/${path}${suffix}`;
+}
+
 /** Build a full asset serve URL, correctly handling subfolder paths. */
 export function buildAssetServeUrl(basePath: string, folder: string | undefined, filename: string): string {
   return `${basePath}/${assetPath(folder, filename)}`;

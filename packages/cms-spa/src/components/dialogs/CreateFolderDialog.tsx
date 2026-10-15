@@ -28,7 +28,8 @@ export function CreateFolderDialog({ open, isPending, error, onClose, onCreate }
 
   const handleCreate = () => {
     const name = folderName.trim();
-    if (!name) return;
+    // Enter bypasses the disabled button; a second request would detach the first one's callbacks.
+    if (!name || isPending) return;
     setSubmittedName(name);
     onCreate(name);
   };

@@ -15,6 +15,7 @@ import { UnsavedChangesDialog } from '../dialogs/UnsavedChangesDialog.js';
 import { ImageFieldRender } from '../fields/ImageField.js';
 import { toast } from '../toast.js';
 import { DrawerItemOverride } from './DrawerItemOverride.js';
+import { withDraftMediaRendering } from './draft-media-config.js';
 import { PageEditorHeaderActions } from './PageEditorHeaderActions.js';
 import { PuckWithUntouchedMetadata } from './PuckWithUntouchedMetadata.js';
 import {
@@ -200,6 +201,11 @@ export function PageEditor({
   onReload,
   onPublish,
 }: PageEditorProps) {
+  const draftAssetsBasePath = getUIConfig().draftAssetsBasePath;
+  const renderConfig = useMemo(
+    () => withDraftMediaRendering(config, draftAssetsBasePath),
+    [config, draftAssetsBasePath],
+  );
   const [data, setData] = useState(entry.localized.content.puckData);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [isDirty, setIsDirty] = useState(false);
@@ -465,7 +471,7 @@ export function PageEditor({
         <PageSettingTargetsProvider onOpen={onOpenMetadata}>
           {/* Not <Puck> itself: on the canvas Puck rewrites the page data it hands blocks; see PuckWithUntouchedMetadata.tsx. */}
           <PuckWithUntouchedMetadata
-            config={config}
+            config={renderConfig}
             data={data}
             metadata={metadata}
             onChange={handleDataChange}

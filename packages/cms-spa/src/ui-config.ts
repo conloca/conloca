@@ -136,6 +136,8 @@ export interface UIConfig {
    * literal default.
    */
   assetsBasePath?: string;
+  /** Draft-image render base; render URLs must never replace canonical saved asset refs. */
+  draftAssetsBasePath?: string;
   /**
    * Base the STORED asset reference is built on (`buildAssetRef(folder,
    * filename)`) — the sibling of `assetsBasePath`, and deliberately a
