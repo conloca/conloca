@@ -6,6 +6,8 @@ export interface BakedPreviewOpts {
   saasEndpoint?: string;
   saasIssuer?: string;
   saasAudience?: string;
+  /** The commit the preview build was built from; page-status compares the branch's latest commit with it. */
+  buildCommit?: string;
 }
 
 /**
@@ -44,6 +46,9 @@ export function resolveFromBaked(
     saasEndpoint: pick('CONLOCA_SAAS_ENDPOINT', baked.saasEndpoint),
     saasIssuer: pick('CONLOCA_SAAS_ISSUER', baked.saasIssuer),
     saasAudience: pick('CONLOCA_SAAS_AUDIENCE', baked.saasAudience),
+    // Optional: an artifact built before this was baked has none, and the
+    // endpoint then falls back to the branch's registered build.
+    ...(baked.buildCommit ? { buildCommit: baked.buildCommit } : {}),
   };
 }
 

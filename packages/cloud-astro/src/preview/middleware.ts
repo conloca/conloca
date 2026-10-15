@@ -22,6 +22,12 @@ export interface PreviewMiddlewareOptions {
   saasEndpoint: string;
   saasIssuer: string;
   saasAudience: string;
+  /**
+   * The commit this preview artifact was built from. Page-status compares the
+   * branch's committed head with it; absent (an older artifact) ⇒ the
+   * endpoint compares with the branch's registered build instead.
+   */
+  buildCommit?: string;
   getKey?: JWTVerifyGetKey;
   /**
    * Transport for the JWKS fetch. A deployment that cannot reach the endpoint

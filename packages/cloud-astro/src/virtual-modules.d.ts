@@ -15,6 +15,7 @@ declare module 'virtual:conloca-preview-opts' {
     saasEndpoint?: string;
     saasIssuer?: string;
     saasAudience?: string;
+    buildCommit?: string;
   };
   export default baked;
 }

@@ -60,6 +60,13 @@ describe('fetchPageStatus', () => {
     expect(String(fetchSpy.calls[0].input)).toBe(`${ENDPOINT}/preview/page-status/about?locale=en&site=default`);
   });
 
+  it("threads the artifact's own build commit into the page-status query", async () => {
+    const fetchSpy = makeFetch([new Response(null, { status: 304 })]);
+    const build = 'a'.repeat(40);
+    await fetchPageStatus({ saasEndpoint: ENDPOINT, ctx: ctx(), path: '/about', build, fetchFn: fetchSpy.fn });
+    expect(String(fetchSpy.calls[0].input)).toBe(`${ENDPOINT}/preview/page-status/about?build=${build}`);
+  });
+
   it('returns "deleted" on 404', async () => {
     const fetchSpy = makeFetch([new Response(null, { status: 404 })]);
     const status = await fetchPageStatus({ saasEndpoint: ENDPOINT, ctx: ctx(), path: '/about', fetchFn: fetchSpy.fn });

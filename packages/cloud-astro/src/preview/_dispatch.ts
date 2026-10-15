@@ -4,8 +4,9 @@ import type { PreviewContext } from './middleware.js';
 /**
  * Four-verdict response of the endpoint's page-status route.
  *
- * - `unchanged` — page render graph is byte-equivalent to the production
- *   build; serve the ordinary page.
+ * - `unchanged` — page render graph is byte-equivalent to the build this
+ *   deployment serves (nothing edited or committed on the branch since that
+ *   build's registered commit); serve the ordinary page.
  * - `changed` — page or one of its dependencies has been edited in the
  *   branch; carry the (possibly empty) embedded payload map into the
  *   preview reader so dependency reads short-circuit when the endpoint
@@ -33,6 +34,8 @@ interface FetchPageStatusInput {
    *  embedded map is locale-keyed so a mismatch silently never hits. */
   site?: string;
   locale?: string;
+  /** The commit this preview artifact was built from; the endpoint compares the branch's latest commit with it. */
+  build?: string;
   fetchFn?: typeof fetch;
 }
 
@@ -50,6 +53,7 @@ export async function fetchPageStatus(input: FetchPageStatusInput): Promise<Page
   const query = new URLSearchParams();
   if (input.locale !== undefined) query.set('locale', input.locale);
   if (input.site !== undefined) query.set('site', input.site);
+  if (input.build !== undefined) query.set('build', input.build);
   const suffix = query.size > 0 ? `?${query.toString()}` : '';
   const url = `${input.saasEndpoint}/preview/page-status/${normalisedPath}${suffix}`;
   const response = await fetchImpl(url, {

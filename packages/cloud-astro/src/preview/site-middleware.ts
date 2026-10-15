@@ -128,6 +128,7 @@ export function createPreviewSiteMiddleware(resolveOpts: () => PreviewMiddleware
         path,
         site: seams.site,
         locale: seams.locale,
+        build: opts.buildCommit,
         fetchFn: seams.fetchFn,
       });
     } catch (error) {

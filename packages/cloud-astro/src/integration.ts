@@ -123,6 +123,16 @@ export function conlocaCloud(options: ConlocaCloudOptions): AstroIntegration {
             // DURING this build, but the deployment that would carry it as an
             // env var only happens afterwards. `saasIssuer` stays unbaked
             // unless configured: it is a property of the endpoint, not of the site.
+            // The commit this preview build's checkout holds: a PR build may
+            // check out a merge commit rather than the PR commit it registers.
+            // Page-status compares the branch's latest commit with it, so the
+            // endpoint diffs against the content actually serving, not a newer
+            // registration whose deploy never landed. A checkout commit the
+            // endpoint does not have makes it render from the branch instead.
+            const buildCommit = registrationCommits({
+              eventCommitSha: process.env.CF_PAGES_COMMIT_SHA,
+              checkoutCommitSha: gitOutput(['rev-parse', 'HEAD']),
+            }).buildId;
             previewOptsModule = {
               secret,
               saasEndpoint: options.endpoint,
@@ -130,6 +140,7 @@ export function conlocaCloud(options: ConlocaCloudOptions): AstroIntegration {
               // string this integration posts at registration time.
               saasAudience: repoUri,
               ...(options.saasIssuer ? { saasIssuer: options.saasIssuer } : {}),
+              ...(buildCommit ? { buildCommit } : {}),
             };
             // Preview-build path: the child build must emit an SSR
             // artifact even when the primary build is fully static. Switch to

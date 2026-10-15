@@ -62,6 +62,11 @@
       "import": "./dist/content-path.js",
       "default": "./dist/content-path.js"
     },
+    "./content-file-id": {
+      "types": "./dist/content-file-id.d.ts",
+      "import": "./dist/content-file-id.js",
+      "default": "./dist/content-file-id.js"
+    },
     "./vxjson-serialize": {
       "types": "./dist/vxjson-serialize.d.ts",
       "import": "./dist/vxjson-serialize.js",

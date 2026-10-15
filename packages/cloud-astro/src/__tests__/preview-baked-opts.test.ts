@@ -43,6 +43,19 @@ describe('resolveFromBaked', () => {
     expect(opts.saasIssuer).toBe('https://iss.test');
   });
 
+  it('carries the baked build commit, and omits it for an artifact baked without one', () => {
+    const base = {
+      secret: 'sek',
+      saasEndpoint: 'https://api.test',
+      saasIssuer: 'https://iss.test',
+      saasAudience: 'a/b',
+    };
+    expect(resolveFromBaked({ ...base, buildCommit: 'c'.repeat(40) }, () => undefined).buildCommit).toBe(
+      'c'.repeat(40),
+    );
+    expect('buildCommit' in resolveFromBaked(base, () => undefined)).toBe(false);
+  });
+
   it('names the missing value when neither baked nor in the environment', () => {
     expect(() =>
       resolveFromBaked(
