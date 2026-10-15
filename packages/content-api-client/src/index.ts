@@ -5,6 +5,7 @@ export type {
   ContentData,
   ContentEntry,
   ContentIdentity,
+  ContentListResult,
   ContentManifest,
   ContentMeta,
   ContentMetaPatch,
