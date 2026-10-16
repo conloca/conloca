@@ -25,11 +25,15 @@ export {
 // and is wired by the schemasPath option (see ConlocaCMSOptions).
 export {
   type CoreFieldsMode,
+  type DataSchemas,
+  defineHostSchema,
   definePageSchema,
   type FieldHint,
   type FieldHintCommon,
   type FieldHints,
   type FieldHintVariant,
+  type HostSchema,
+  type HostSchemaType,
   type PageSchemaDescriptor,
   type PageSchemaEntry,
   type PageSchemaGroup,
@@ -42,13 +46,8 @@ export {
   type PageSettingName,
   pageSettingAttributes,
 } from '@conloca/cms-spa/page-setting-attributes';
-// Re-export Zod schemas and types for convenience
-export {
-  type FragmentMeta,
-  fragmentMetaSchema,
-  type PageMeta,
-  pageMetaSchema,
-} from '@conloca/content-api/schemas';
+// Content metadata types; their generated validators live on `@conloca/content-api/schemas`.
+export type { DataMeta, FragmentMeta, PageMeta } from '@conloca/content-api/schemas';
 // Read-only ContentAPI over the build's content collections.
 export {
   type CollectionBackedContentAPIOptions,

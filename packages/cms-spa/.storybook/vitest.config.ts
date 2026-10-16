@@ -7,6 +7,7 @@ import { playwright } from '@vitest/browser-playwright';
 import type { Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
 import { buildSandboxSrcdoc, SANDBOX_FRAME_PATH } from '../src/components/sandbox/frame-runtime.js';
+import { typiaRuntimeHelpers } from './typia-fixtures.js';
 
 // Prefer an explicit browser binary, then a Chrome already installed on the
 // machine, and only then Playwright's own download. CI runner images ship
@@ -45,7 +46,8 @@ export default defineConfig({
   // Pre-bundle DOMPurify so its first import inside a story does not trigger a
   // mid-run Vite dep-optimization reload (which drops the module fetch and fails
   // the sanitizer stories on a cold cache — see SanitizeHtml.stories.tsx).
-  optimizeDeps: { include: ['dompurify'] },
+  // Typia's runtime helpers likewise (see typia-fixtures.ts).
+  optimizeDeps: { include: ['dompurify', ...typiaRuntimeHelpers] },
   test: {
     name: 'storybook',
     browser: {

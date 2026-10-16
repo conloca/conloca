@@ -1,5 +1,6 @@
-import { type FragmentEditable, fragmentEditableSchema } from '@conloca/content-api-client';
+import type { FragmentEditable } from '@conloca/content-api-client';
 import { useEffect, useMemo, useState } from 'react';
+import { fragmentEditableFields } from '../../content-form-fields.js';
 import { SchemaForm } from '../forms/SchemaForm.js';
 import { Button } from '../ui/index.js';
 
@@ -75,7 +76,7 @@ export function FragmentPropertiesDialog({
         <h2 className="text-xl font-semibold text-grey-01 dark:text-grey-12 mb-4">Edit Fragment Properties</h2>
 
         <div className="mb-4">
-          <SchemaForm schema={fragmentEditableSchema} values={formValues} onChange={setFormValues} />
+          <SchemaForm fields={fragmentEditableFields} values={formValues} onChange={setFormValues} />
         </div>
 
         <div className="flex justify-end gap-3">

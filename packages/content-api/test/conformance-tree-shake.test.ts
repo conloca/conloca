@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 /**
- * Tree-shake gate for the @conloca/content-api browser entry.
+ * Tree-shake gate for the @conloca/content-api browser entries.
  *
  * The browser entry must expose schemas, types, validators, and pure
  * utilities without pulling node-only modules (`FileSystemContentAPI`,
@@ -18,17 +18,30 @@ import { join, resolve } from 'node:path';
  * the source mirrors the published artifact, which is `tsc`'s per-file emit of those same sources.
  */
 describe('@conloca/content-api tree-shaking', () => {
-  it('importing browser-safe symbols does not pull in node-only implementations', async () => {
-    const pkgDir = resolve(__dirname, '..');
-    // Temp dir INSIDE the package so bare imports (zod, etc.) resolve up to the real
+  const pkgDir = resolve(__dirname, '..');
+
+  // `typia` replaced `zod` in this list with the validator migration. Bun.build
+  // does not run the ttsc transform, so the validator module bundles as its
+  // untransformed source; the gate is about what gets LINKED IN, and no
+  // generated validator is invoked here.
+  const external = [
+    'node:*',
+    'crypto',
+    '@node-rs/*',
+    'fast-glob',
+    'gray-matter',
+    'nanoid',
+    'yaml',
+    'sort-keys',
+    'typia',
+  ];
+
+  async function bundle(entrySource: (src: string) => string, entryModule: string): Promise<string> {
+    // Temp dir INSIDE the package so bare imports resolve up to the real
     // node_modules regardless of the runner's cwd — Bun anchors resolution at the entry.
     const dir = mkdtempSync(join(pkgDir, '.tree-shake-'));
     const entry = join(dir, 'tree-shake-entry.ts');
-    const src = join(pkgDir, 'src', 'index.ts');
-    writeFileSync(
-      entry,
-      `import { ErrorCodes, normalizeAndValidatePathname, fragmentEditableSchema } from ${JSON.stringify(src)};\nconsole.log(ErrorCodes, normalizeAndValidatePathname, fragmentEditableSchema);\n`,
-    );
+    writeFileSync(entry, entrySource(join(pkgDir, 'src', entryModule)));
     try {
       const result = await Bun.build({
         entrypoints: [entry],
@@ -36,22 +49,46 @@ describe('@conloca/content-api tree-shaking', () => {
         target: 'browser',
         format: 'esm',
         minify: true,
-        // nanoid/yaml/zod are pulled by browser-safe modules and stay external
-        // because we are testing tree-shaking of *our* code, not re-bundling
-        // third-party deps. xxhash / gray-matter / fast-glob / sort-keys are
-        // externalized so a stray import surfaces as a marker in the bundle
-        // (the assertions below scan for them) instead of failing the build.
-        external: ['node:*', 'crypto', '@node-rs/*', 'fast-glob', 'gray-matter', 'nanoid', 'yaml', 'sort-keys', 'zod'],
+        external,
       });
       expect(result.success).toBe(true);
-      const out = await result.outputs[0].text();
-      // Node-only implementations and their native deps must not be linked in
-      // by the browser entry — they live behind `@conloca/content-api/node`.
-      expect(out).not.toMatch(/FileSystemContentAPI/);
-      expect(out).not.toMatch(/@node-rs\/xxhash/);
-      expect(out).not.toMatch(/gray-matter/);
+      return await result.outputs[0].text();
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  }
+
+  it('importing browser-safe symbols does not pull in node-only implementations', async () => {
+    const out = await bundle(
+      (src) =>
+        `import { ErrorCodes, normalizeAndValidatePathname, IMAGE_EXTENSION_MIME } from ${JSON.stringify(src)};\n` +
+        'console.log(ErrorCodes, normalizeAndValidatePathname, IMAGE_EXTENSION_MIME);\n',
+      'index.ts',
+    );
+    // Node-only implementations and their native deps must not be linked in
+    // by the browser entry — they live behind `@conloca/content-api/node`.
+    expect(out).not.toMatch(/FileSystemContentAPI/);
+    expect(out).not.toMatch(/@node-rs\/xxhash/);
+    expect(out).not.toMatch(/gray-matter/);
+  });
+
+  it('the browser barrel re-exports the schema shapes as types only, so no validator code rides along', async () => {
+    const out = await bundle(
+      (src) => `import { ErrorCodes } from ${JSON.stringify(src)};\nconsole.log(ErrorCodes);\n`,
+      'index.ts',
+    );
+    expect(out).not.toMatch(/typia/);
+    expect(out).not.toMatch(/parsePageMeta|parseDataMeta|parseFragmentEditable/);
+  });
+
+  it('the schemas subpath carries the validators without dragging node-only modules in', async () => {
+    const out = await bundle(
+      (src) => `import { parseFragmentEditable } from ${JSON.stringify(src)};\nconsole.log(parseFragmentEditable);\n`,
+      join('schemas', 'index.ts'),
+    );
+    expect(out).toMatch(/typia/);
+    expect(out).not.toMatch(/FileSystemContentAPI/);
+    expect(out).not.toMatch(/@node-rs\/xxhash/);
+    expect(out).not.toMatch(/gray-matter/);
   });
 });

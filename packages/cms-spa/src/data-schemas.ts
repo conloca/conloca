@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import type { z } from 'zod';
+import type { HostSchema } from './host-schema.js';
 
 /**
  * Type for a collection of data schemas.
- * Each key is a collection name, value is the Zod schema for that collection's data.
+ * Each key is a collection name, value is the {@link HostSchema} (generated
+ * Typia validator + JSON Schema metadata) for that collection's data payload.
  */
-export type DataSchemas = Record<string, z.ZodObject<z.ZodRawShape>>;
+export type DataSchemas = Record<string, HostSchema>;
 
 /**
  * Shared state for data schemas across module instances.

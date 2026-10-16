@@ -1,4 +1,5 @@
 {
+  "//": "Type-check only. The typia transform ttsc would pick up from this package's dependencies is disabled: its native emit fails on the .tsx tests, and the Typia fixtures type-check as declared. test-native-preload.ts runs the transform where tests execute.",
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "rootDir": ".",
@@ -11,7 +12,8 @@
     "declarationMap": false,
     "emitDeclarationOnly": false,
     "noEmit": true,
-    "types": ["bun", "vite/client"]
+    "types": ["bun", "vite/client"],
+    "plugins": [{ "transform": "typia/lib/transform", "enabled": false }]
   },
   "include": [
     "test-types.d.ts",

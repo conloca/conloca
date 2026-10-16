@@ -74,7 +74,8 @@ This command will generate:
 - `src/components/puck/Flex.tsx` - Flex layout component
 - `src/components/puck/Grid.tsx` - Grid layout component
 - `src/layouts/Layout.astro` - Bare page layout, meant to be replaced
-- `src/schemas/data.ts` - Example Zod schemas for data collections
+- `src/schemas/data.ts` - Example Typia data-collection schemas (types plus generated validators and form metadata)
+- `typia-vite.mjs` / `tsconfig.typia.json` - The native Typia transform `astro.config.mjs` runs over `src/schemas/`
 - `content/sites.json` - Site list, holding the site `default`
 - `.claude/skills/conloca/SKILL.md` - One-page Conloca guide for coding agents
 
@@ -123,7 +124,7 @@ Astro checks, when an `astro.config.mjs`/`.ts`/`.js` is present (the config is r
 - `conlocaCMS` is imported from `@conloca/astro-cms/node` and its options carry `contentRoot`, `puckConfigPath`, and a
   `routing` block or `layout`
 - `react()` is in `integrations` and comes before `conlocaCMS()`
-- the `zod` and `@vitejs/plugin-react` peers are declared in `package.json`
+- the `@vitejs/plugin-react` peer is declared in `package.json`
 - `tsconfig.json` sets `compilerOptions.jsx` to `react-jsx` (advisory — a warning only)
 - with `output: 'server'`, every file under `src/pages` declares `prerender`
 - no static `src/pages/index.astro` shadows the CMS home page
@@ -223,7 +224,8 @@ Adding Conloca to an existing Astro site instead? Install the packages, run `con
 prints to `astro.config.mjs`, create `src/content.config.ts` as printed, then run `conloca doctor`:
 
 ```bash
-npm install @conloca/astro-cms @conloca/content-api @conloca/mdx @puckeditor/core @astrojs/react @vitejs/plugin-react zod
+npm install @conloca/astro-cms @conloca/content-api @conloca/mdx @puckeditor/core @astrojs/react @vitejs/plugin-react typia
+npm install -D ttsc @ttsc/unplugin
 conloca astro setup
 conloca doctor
 ```

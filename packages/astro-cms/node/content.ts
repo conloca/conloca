@@ -1,14 +1,23 @@
 export {
   ALL_FRAGMENTS_COLLECTION,
+  type CollectionEntryLike,
   type ConlocaCollectionsResult,
+  type ConlocaDataEntry,
   type ConlocaDataOptions,
+  type ConlocaFragmentEntry,
+  type ConlocaPageEntry,
   type ConlocaPagesOptions,
   type CreateConlocaCollectionsOptions,
   conlocaData,
+  conlocaDataEntries,
+  conlocaFragmentEntries,
   conlocaFragments,
+  conlocaPageEntries,
   conlocaPages,
   createConlocaCollections,
+  type EntryParser,
+  entryParserOf,
   pageSchemasOf,
+  type TypedCollectionEntry,
 } from '../src/collections.js';
-export type { ConlocaPageEntry } from '../src/internal/page-collection-schema.js';
 export { type ConlocaLoaderOptions, conlocaLoader } from '../src/loader.js';

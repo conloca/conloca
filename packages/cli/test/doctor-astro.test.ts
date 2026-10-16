@@ -68,7 +68,6 @@ const GOOD_PACKAGE_JSON = JSON.stringify({
     astro: '^6.0.0',
     react: '^19.0.0',
     'react-dom': '^19.0.0',
-    zod: '^4.0.0',
   },
   devDependencies: {
     '@vitejs/plugin-react': '^5.0.0',
@@ -272,11 +271,11 @@ export default defineConfig({
     const dir = await makeAstroProject('conloca-astro-c8-');
     try {
       const pkg = JSON.parse(GOOD_PACKAGE_JSON);
-      delete pkg.dependencies.zod;
+      delete pkg.devDependencies['@vitejs/plugin-react'];
       await Bun.write(join(dir, 'package.json'), JSON.stringify(pkg));
       const { exitCode, stdout } = await runDoctor(dir);
       expect(exitCode).toBe(1);
-      expect(stdout).toContain('zod');
+      expect(stdout).toContain('@vitejs/plugin-react');
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -376,7 +375,7 @@ export default defineConfig({
         GOOD_ASTRO_CONFIG.replace("from '@conloca/astro-cms/node';", "from '@conloca/astro-cms';"),
       );
       const pkg = JSON.parse(GOOD_PACKAGE_JSON);
-      delete pkg.dependencies.zod;
+      delete pkg.devDependencies['@vitejs/plugin-react'];
       await Bun.write(join(dir, 'package.json'), JSON.stringify(pkg));
 
       const result = await $`${CLI} doctor --json ${dir}`.quiet().nothrow();

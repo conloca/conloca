@@ -21,9 +21,9 @@
     "nanoid": "^6.0.1",
     "sort-keys": "^6.0.1",
     "tslib": "^2.8.1",
+    "typia": "^14.0.4",
     "xxhash-wasm": "^1.1.0",
-    "yaml": "^2.9.0",
-    "zod": "^4.5.4"
+    "yaml": "^2.9.0"
   },
   "peerDependencies": {
     "vite": "^7.0.0 || ^8.0.0"
@@ -36,7 +36,9 @@
   "devDependencies": {
     "@stryker-mutator/core": "^10.0.0",
     "@stryker-mutator/vitest-runner": "^10.0.0",
+    "@ttsc/unplugin": "^0.30.4",
     "fast-check": "^4.9.0",
+    "ttsc": "0.30.4",
     "vite": "^7.3.6",
     "vitest": "^4.1.11"
   },
@@ -124,7 +126,7 @@
           "{workspaceRoot}/tooling/git-env-isolation.ts"
         ],
         "options": {
-          "command": "bun test --timeout=30000",
+          "command": "bun test --preload ./test-native-preload.ts --timeout=30000",
           "cwd": "{projectRoot}",
           "timeoutMs": 120000,
           "killAfterMs": 10000.0

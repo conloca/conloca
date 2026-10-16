@@ -37,7 +37,23 @@ export type { GitCommitResult, GitPullResult, GitPushResult, GitStatus } from '.
 export { pageReferenceOf, pageTimestampsOf, selectPagesByPrefix } from './page-references.js';
 // Reader backend interface types (browser-safe; type-only re-export).
 export type { BackendReadResult, ContentReaderBackend } from './reader-backend.js';
-export * from './schemas/index.js';
+// Content metadata shapes. Types only: the generated validators live on the
+// `./schemas` subpath so this browser barrel stays free of the Typia
+// transform's output (and of anything a consumer would tree-shake to avoid it).
+export type {
+  DataEditable,
+  DataMeta,
+  FragmentEditable,
+  FragmentMeta,
+  LooseDataMeta,
+  LooseFragmentMeta,
+  LoosePageMeta,
+  MdxPageFrontmatter,
+  PageEditable,
+  PageMeta,
+  SchemaIssue,
+  SchemaParseResult,
+} from './schemas/types.js';
 export { Site } from './site.js';
 export * from './types.js';
 // SSRF host predicate — pure string/number logic, so any host's import guards can share it.

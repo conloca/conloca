@@ -45,6 +45,8 @@ const EXPECTED_FILES = [
   'src/puck.config.tsx',
   'src/schemas/data.ts',
   'tsconfig.json',
+  'tsconfig.typia.json',
+  'typia-vite.mjs',
 ];
 
 async function tempParent(prefix: string): Promise<string> {

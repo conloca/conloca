@@ -4,7 +4,7 @@ import { X } from 'lucide-react';
 import type React from 'react';
 /* oxlint-disable anti-slop/no-unsafe-dictionary-type -- Form state intentionally mirrors SchemaForm/HintForm's validated Record<string, unknown> contract until schema parsing materializes PageMetadata. */
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { z } from 'zod';
+import { pathnameOnlyFields, publishWindowFields, seoPublishingFields } from '../../content-form-fields.js';
 import { type PageSchemaDescriptor, resolvePageSchemaEntry, usePageSchemas } from '../../page-schemas.js';
 import type { CorePageSettingName } from '../../page-setting-attributes.js';
 import type { PageMetadata } from '../../types.js';
@@ -18,31 +18,8 @@ import { HintForm } from '../forms/HintForm.js';
 import { SchemaForm } from '../forms/SchemaForm.js';
 import { Button, FieldError, IconButton, Input } from '../ui/index.js';
 
-const pathnameOnlySchema = z.object({
-  pathname: z.string().describe('URL path (e.g., /about)'),
-});
-
-const publishWindowSchema = z.object({
-  publishAt: z.coerce
-    .date()
-    .nullable()
-    .optional()
-    .describe(
-      'When the page goes live. Page lists that sort by date use this date, or the date the page was created when it is empty.',
-    ),
-  unpublishAt: z.coerce.date().nullable().optional().describe('Schedule unpublish date/time'),
-});
-
-const seoPublishingSchema = z
-  .object({
-    description: z.string().optional().describe('Meta description for search engines'),
-    robots: z.string().optional().describe('Robots meta tag (e.g., index, follow)'),
-    canonical: z.string().url().optional().describe('Canonical URL for duplicate content'),
-  })
-  .extend(publishWindowSchema.shape);
-
 type Assert<T extends true> = T;
-type DialogCoreField = 'title' | keyof z.infer<typeof pathnameOnlySchema> | keyof z.infer<typeof seoPublishingSchema>;
+type DialogCoreField = 'title' | keyof typeof pathnameOnlyFields | keyof typeof seoPublishingFields;
 /** A block can name exactly the core fields this dialog renders (CorePageSettingName): renaming a field here breaks the typecheck. */
 export type CoreFieldNamesProof = Assert<
   [DialogCoreField] extends [CorePageSettingName]
@@ -264,7 +241,7 @@ function PageMetadataForm({ formRef, page, descriptor, onSave, onSaved }: PageMe
       )}
       <SchemaForm
         className={cn({ 'mt-6': mode === 'full' })}
-        schema={pathnameOnlySchema}
+        fields={pathnameOnlyFields}
         values={coreValues}
         onChange={changeCoreValues}
       />
@@ -283,10 +260,10 @@ function PageMetadataForm({ formRef, page, descriptor, onSave, onSaved }: PageMe
         ))}
 
       {mode === 'full' && (
-        <SchemaForm className="mt-6" schema={seoPublishingSchema} values={coreValues} onChange={changeCoreValues} />
+        <SchemaForm className="mt-6" fields={seoPublishingFields} values={coreValues} onChange={changeCoreValues} />
       )}
       {mode === 'minimal' && (
-        <SchemaForm className="mt-6" schema={publishWindowSchema} values={coreValues} onChange={changeCoreValues} />
+        <SchemaForm className="mt-6" fields={publishWindowFields} values={coreValues} onChange={changeCoreValues} />
       )}
 
       {titleMissing && mode !== 'full' && <FieldError className="mt-6">Enter a page title before saving.</FieldError>}

@@ -1,5 +1,7 @@
 import { createContentAPI } from '@conloca/content-api/reader';
 import type { Loader, LoaderContext } from 'astro/loaders';
+import { describeEntryIssues } from './internal/entry-issues.js';
+import type { EntryParser } from './internal/entry-validation.js';
 
 export interface ConlocaLoaderOptions {
   /** Must equal the content.config key this loader is mounted under — load() asserts it. */
@@ -8,6 +10,14 @@ export interface ConlocaLoaderOptions {
   site?: string;
   /** Collection kind. If not provided, defaults to 'fragment' for 'fragments' collection, 'page' otherwise. */
   kind?: 'page' | 'fragment' | 'data';
+  /**
+   * Validates every entry before it is stored; a failing entry fails the load
+   * with its file and every issue. The collection factories pass the generated
+   * Typia parsers for the collection's kind and host schemas. Without it, the
+   * entry is stored as loaded (and whatever `schema` the collection was
+   * declared with still runs through `parseData`).
+   */
+  parseEntry?: EntryParser<Record<string, unknown>>;
 }
 
 /**
@@ -84,8 +94,8 @@ export function conlocaLoader(options: ConlocaLoaderOptions): Loader {
             }
           }
 
-          // Any key added here that is not part of pageMetaSchema must also be
-          // listed in LOADER_RESERVED_FIELDS (internal/page-collection-schema.ts),
+          // Any key added here that is not part of PageMeta must also be
+          // listed in LOADER_RESERVED_FIELDS (internal/entry-validation.ts),
           // or a host page-meta field of the same name will replace it on every page.
           const data: Record<string, unknown> = {
             id: manifest.id,
@@ -110,11 +120,19 @@ export function conlocaLoader(options: ConlocaLoaderOptions): Loader {
             data.puckData = puckData;
           }
 
+          const validatedData = options.parseEntry
+            ? validEntryData(options.parseEntry, data, {
+                collection: context.collection,
+                id: entryId,
+                filePath: localeVersion.sourcePath,
+              })
+            : data;
+
           // filePath feeds Astro's error location: without it a validation
           // failure names only the opaque content id, not a file to open.
           const parsedData = await parseData({
             id: entryId,
-            data,
+            data: validatedData,
             ...(localeVersion.sourcePath ? { filePath: localeVersion.sourcePath } : {}),
           });
 
@@ -129,4 +147,15 @@ export function conlocaLoader(options: ConlocaLoaderOptions): Loader {
       logger.info(`Loaded ${store.keys().length} entries from ${options.collection || `${kind} content`}`);
     },
   };
+}
+
+/** The parsed entry data, or the build error naming the entry, its file and every issue. */
+function validEntryData(
+  parseEntry: EntryParser<Record<string, unknown>>,
+  data: Record<string, unknown>,
+  where: { collection: string; id: string; filePath?: string },
+): Record<string, unknown> {
+  const result = parseEntry(data);
+  if (!result.success) throw new Error(describeEntryIssues(result.issues, where));
+  return result.data;
 }

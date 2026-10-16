@@ -138,7 +138,9 @@ function HintField({ name, hint, value, onChange }: HintFieldProps) {
             id={inputId}
             type="datetime-local"
             value={formatDateValue(value)}
-            onChange={(e) => onChange(e.target.value || undefined)}
+            // The picker's digits carry no zone or seconds; a host's `Format<'date-time'>`
+            // validator needs a full timestamp, so they are saved as the UTC instant they mean.
+            onChange={(e) => onChange(e.target.value ? `${e.target.value}:00.000Z` : undefined)}
           />
         </Wrapper>
       );
@@ -417,10 +419,10 @@ function formatLabel(name: string): string {
 }
 
 /**
- * Host date hints store the picker's zone-less digits, which readers take as
- * UTC. Slicing UTC hours off a Date or ISO string keeps the picker on that
- * convention; local hours would shift the stored day across midnight for
- * authors west of UTC.
+ * Host date hints save the picker's digits as a UTC instant, and older pages
+ * may hold the bare zone-less digits, which readers also take as UTC. Slicing
+ * UTC hours off a Date or ISO string keeps the picker on that convention; local
+ * hours would shift the stored day across midnight for authors west of UTC.
  */
 function formatDateValue(value: unknown): string {
   if (!value) return '';

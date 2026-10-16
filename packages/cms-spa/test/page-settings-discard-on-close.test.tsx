@@ -7,11 +7,11 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
-import { z } from 'zod';
 import { PageMetadataDialog } from '../src/components/dialogs/PageMetadataDialog.js';
 import { definePageSchema } from '../src/page-schema-define.js';
 import { setPageSchemas } from '../src/page-schemas.js';
 import type { PageMetadata } from '../src/types.js';
+import { authorFields } from './fixtures/typia/host-schemas.js';
 
 const page: PageMetadata = {
   title: 'Saved title',
@@ -30,7 +30,7 @@ beforeEach(() => {
   setPageSchemas({
     '/blog/': definePageSchema({
       label: 'Blog post',
-      schema: z.object({ author: z.string().optional() }),
+      schema: authorFields,
       ui: { author: { control: 'text', group: 'post' } },
       groups: [{ id: 'post', label: 'Blog post' }],
     }),

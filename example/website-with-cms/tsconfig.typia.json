@@ -1,0 +1,12 @@
+{
+  "//": "The TypeScript program the ttsc/typia transform compiles (typia-vite.mjs): the schema modules that author Typia call sites. Type-check only, so the base's composite build settings are off.",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "declarationMap": false,
+    "emitDeclarationOnly": false,
+    "noEmit": true,
+    "types": []
+  },
+  "include": ["src/schemas/**/*.ts"]
+}

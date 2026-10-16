@@ -1,15 +1,51 @@
 import { defineCollection } from 'astro:content';
-import type { DataSchemas, PageSchemas } from '@conloca/cms-spa/page-schema-define';
+import type { DataSchemas, HostSchema, PageSchemas } from '@conloca/cms-spa/page-schema-define';
 import { createContentAPI } from '@conloca/content-api/reader';
-import { dataMetaSchema, fragmentMetaSchema, pageMetaSchema } from '@conloca/content-api/schemas';
-import type { z } from 'zod';
-import { ALL_FRAGMENTS_COLLECTION } from './handlers/page-render-core.js';
-import { dataCollectionSchema, fragmentCollectionSchema, pageCollectionSchema } from './internal/collection-schemas.js';
+import { parseLooseDataMeta } from '@conloca/content-api/schemas';
+import type { Loader } from 'astro/loaders';
+import { ALL_FRAGMENTS_COLLECTION } from './handlers/collection-names.js';
 import { declareConlocaCollection, withDeclarationCheck } from './internal/declared-collections.js';
-import { buildPageCollectionSchema, hostFieldsFromPageSchemas } from './internal/page-collection-schema.js';
+import {
+  createDataEntryParser,
+  createPageEntryParser,
+  type EntryParser,
+  parseFragmentEntry,
+} from './internal/entry-validation.js';
 import { conlocaLoader } from './loader.js';
 
+export {
+  type CollectionEntryLike,
+  type ConlocaDataEntry,
+  type ConlocaFragmentEntry,
+  type ConlocaPageEntry,
+  conlocaDataEntries,
+  conlocaFragmentEntries,
+  conlocaPageEntries,
+  type TypedCollectionEntry,
+} from './entries.js';
+export type { EntryParser };
 export { ALL_FRAGMENTS_COLLECTION };
+
+/**
+ * How every collection below is declared: a loader and NO `schema`.
+ *
+ * Astro's `schema` option only accepts Zod; it is optional, and without it
+ * `parseData` stores the loader's data unchanged. Validation therefore runs in
+ * the loader, before `store.set`, with the generated Typia validators for the
+ * collection (see `internal/entry-validation.ts`) — a stored entry that fails
+ * them still fails the build. Entry typing comes from the typed accessors
+ * (`conlocaPageEntries` / `conlocaDataEntries` / `conlocaFragmentEntries`),
+ * because Astro infers `getCollection` types from a Zod schema only.
+ */
+function conlocaCollection(loader: Loader, parseEntry: EntryParser<Record<string, unknown>>) {
+  const defined = defineCollection({ loader });
+  entryParsersByCollection.set(defined, parseEntry);
+  return defined;
+}
+
+// The entry parser each Conloca-built collection's loader validates with, so a
+// test (or a host) can run exactly the build's validation without a content root.
+const entryParsersByCollection = new WeakMap<object, EntryParser<Record<string, unknown>>>();
 
 /**
  * Options for createConlocaCollections().
@@ -24,8 +60,8 @@ export interface CreateConlocaCollectionsOptions {
   site?: string;
   /**
    * The same `pageSchemas` object the editor loads. Host meta fields are
-   * validated on every page collection at build time (made optional, because
-   * the editor scopes a descriptor to a prefix while Astro validates the
+   * validated on every page collection at build time (optional, because
+   * the editor scopes a descriptor to a prefix while Astro builds the
    * whole pile). Pass the object itself — not a hand-copied field list — so
    * the form and the build cannot drift. Listing types come from augmenting
    * `HostPageMeta`, not from Astro `entry.data`.
@@ -45,10 +81,8 @@ export interface ConlocaCollectionsResult {
 
 /**
  * @deprecated Declare collections explicitly with {@link conlocaPages},
- * {@link conlocaData} and {@link conlocaFragments} — they keep the entry
- * types Astro's generated `getCollection` needs, and undeclared content
- * fails the build instead of silently not building. This wrapper still
- * works but returns untyped entries.
+ * {@link conlocaData} and {@link conlocaFragments} — undeclared content fails
+ * the build instead of silently not building. This wrapper still works.
  *
  * Creates Astro Content Collections by discovering from indexed content.
  * Uses content-api to find collections that have content.
@@ -57,7 +91,7 @@ export interface ConlocaCollectionsResult {
  * ```typescript
  * // src/content.config.ts
  * import { createConlocaCollections } from '@conloca/astro-cms/node/content';
- * import { pageSchemas } from './page-schemas';
+ * import { pageSchemas } from './page-schemas.js';
  *
  * export const { collections } = await createConlocaCollections({ pageSchemas });
  * ```
@@ -74,37 +108,32 @@ export async function createConlocaCollections(
   const api = await createContentAPI({ contentRoot });
   const collections: Record<string, ReturnType<typeof defineCollection>> = {};
 
-  collections[ALL_FRAGMENTS_COLLECTION] = defineCollection({
-    loader: conlocaLoader({ contentRoot, site, kind: 'fragment' }),
-    schema: fragmentMetaSchema.loose(),
-  });
+  collections[ALL_FRAGMENTS_COLLECTION] = conlocaCollection(
+    conlocaLoader({ contentRoot, site, kind: 'fragment', parseEntry: parseFragmentEntry }),
+    parseFragmentEntry,
+  );
 
   for (const name of api.fragments.collections) {
-    collections[name] = defineCollection({
-      loader: conlocaLoader({ collection: name, contentRoot, site, kind: 'fragment' }),
-      schema: fragmentMetaSchema.loose(),
-    });
+    collections[name] = conlocaCollection(
+      conlocaLoader({ collection: name, contentRoot, site, kind: 'fragment', parseEntry: parseFragmentEntry }),
+      parseFragmentEntry,
+    );
   }
 
   for (const name of api.data.collections) {
-    collections[name] = defineCollection({
-      loader: conlocaLoader({ collection: name, contentRoot, site, kind: 'data' }),
-      schema: dataMetaSchema.loose(),
-    });
+    collections[name] = conlocaCollection(
+      conlocaLoader({ collection: name, contentRoot, site, kind: 'data', parseEntry: parseLooseDataMeta }),
+      parseLooseDataMeta,
+    );
   }
 
-  const hostFields = pageSchemas ? hostFieldsFromPageSchemas(pageSchemas) : undefined;
-  const pageSchema =
-    hostFields && Object.keys(hostFields.shape).length > 0
-      ? buildPageCollectionSchema(hostFields)
-      : pageMetaSchema.loose();
-
+  const parsePage = createPageEntryParser(pageSchemas);
   const siteCollections = api.getSite(site)?.collections ?? new Set<string>();
   for (const name of siteCollections) {
-    collections[name] = defineCollection({
-      loader: conlocaLoader({ collection: name, contentRoot, site, kind: 'page' }),
-      schema: pageSchema,
-    });
+    collections[name] = conlocaCollection(
+      conlocaLoader({ collection: name, contentRoot, site, kind: 'page', parseEntry: parsePage }),
+      parsePage,
+    );
   }
 
   return { collections };
@@ -145,26 +174,35 @@ export function pageSchemasOf(collection: object): PageSchemas | undefined {
 }
 
 /**
- * One typed Astro collection for Conloca pages — the explicit,
- * Starlight-shaped declaration:
+ * The entry parser a Conloca-built collection's loader validates every entry
+ * with before storing it, or undefined for any other collection.
+ */
+export function entryParserOf(collection: object): EntryParser<Record<string, unknown>> | undefined {
+  return entryParsersByCollection.get(collection);
+}
+
+/**
+ * One Astro collection for Conloca pages — the explicit, Starlight-shaped
+ * declaration:
  *
  * ```ts
  * export const collections = { pages: conlocaPages({ pageSchemas }) };
  * ```
  *
- * Entry data is typed as {@link ConlocaPageEntry}; `getCollection('pages')`
- * carries pathname/title/dates and the host's declared meta fields.
+ * Every page is validated as {@link ConlocaPageEntry} while it loads; read it
+ * typed with `conlocaPageEntries(await getCollection('pages'), pageSchemas)`.
  */
 export function conlocaPages(options: ConlocaPagesOptions = {}) {
   const { contentRoot = defaultContentRoot(), site = 'default', collection = 'pages', pageSchemas } = options;
   declareConlocaCollection('page', collection);
-  const defined = defineCollection({
-    loader: withDeclarationCheck(conlocaLoader({ collection, contentRoot, site, kind: 'page' }), {
+  const parseEntry = createPageEntryParser(pageSchemas);
+  const defined = conlocaCollection(
+    withDeclarationCheck(conlocaLoader({ collection, contentRoot, site, kind: 'page', parseEntry }), {
       contentRoot,
       site,
     }),
-    schema: pageCollectionSchema(pageSchemas),
-  });
+    parseEntry,
+  );
   if (pageSchemas) pageSchemasByCollection.set(defined, pageSchemas);
   return defined;
 }
@@ -185,47 +223,41 @@ export interface ConlocaDataOptions<DS extends DataSchemas> {
 
 /**
  * Deliberate asymmetry with pages: a data schema is validated AS GIVEN —
- * requiredness preserved, no rewrite guard — because the site owns it whole
- * for exactly one collection, unlike host page fields folded into the shared
- * pages schema. The flip side, accepted for now: a .transform or .default in
- * a dataSchema runs at build time but not in the editor form, so the two can
- * diverge.
+ * requiredness preserved — because the site owns it whole for exactly one
+ * collection, unlike host page fields checked across the shared pages pile.
  */
-function conlocaDataCollection<T extends z.ZodObject<z.ZodRawShape>>(
-  name: string,
-  payload: T,
-  contentRoot: string,
-  site: string,
-) {
-  return defineCollection({
-    loader: withDeclarationCheck(conlocaLoader({ collection: name, contentRoot, site, kind: 'data' }), {
+function conlocaDataCollection(name: string, payload: HostSchema, contentRoot: string, site: string) {
+  const parseEntry = createDataEntryParser(payload);
+  return conlocaCollection(
+    withDeclarationCheck(conlocaLoader({ collection: name, contentRoot, site, kind: 'data', parseEntry }), {
       contentRoot,
       site,
     }),
-    schema: dataCollectionSchema(payload),
-  });
+    parseEntry,
+  );
 }
 
 /**
- * Typed Astro collections for Conloca data, one per `dataSchemas` key:
+ * Astro collections for Conloca data, one per `dataSchemas` key:
  *
  * ```ts
  * export const collections = { ...conlocaData({ dataSchemas }) };
  * ```
  *
- * `getCollection('testimonials')` entries carry `data` typed by that key's
- * schema, and a stored entry that fails its schema fails the build instead
- * of rendering blank.
+ * A stored entry whose payload fails its schema fails the build instead of
+ * rendering blank. Read entries typed by that key's schema with
+ * `conlocaDataEntries(dataSchemas, 'testimonials', await getCollection('testimonials'))`.
  */
 export function conlocaData<DS extends DataSchemas>(options: ConlocaDataOptions<DS>) {
   const { dataSchemas, contentRoot = defaultContentRoot(), site = 'default' } = options;
-  const entries = Object.entries(dataSchemas).map(([name, payload]) => {
+  const collections: Record<string, ReturnType<typeof conlocaDataCollection>> = {};
+  for (const [name, payload] of Object.entries(dataSchemas)) {
     declareConlocaCollection('data', name);
-    return [name, conlocaDataCollection(name, payload, contentRoot, site)] as const;
-  });
-  // Object.fromEntries erases per-key types; the assertion restores exactly
-  // what the loop built — one collection per dataSchemas key.
-  return Object.fromEntries(entries) as { [K in keyof DS]: ReturnType<typeof conlocaDataCollection<DS[K]>> };
+    collections[name] = conlocaDataCollection(name, payload, contentRoot, site);
+  }
+  // The loop built exactly one collection per dataSchemas key; the record type
+  // keeps those keys for the content.config `collections` export.
+  return collections as { [K in keyof DS]: ReturnType<typeof conlocaDataCollection> };
 }
 
 /**
@@ -248,13 +280,13 @@ export function conlocaFragments<const N extends readonly string[]>(...names: N)
   const site = 'default';
   declareConlocaCollection('fragment', EDITOR_FRAGMENT_FOLDER);
   const fragmentCollection = (collection?: string) =>
-    defineCollection({
-      loader: withDeclarationCheck(conlocaLoader({ collection, contentRoot, site, kind: 'fragment' }), {
-        contentRoot,
-        site,
-      }),
-      schema: fragmentCollectionSchema,
-    });
+    conlocaCollection(
+      withDeclarationCheck(
+        conlocaLoader({ collection, contentRoot, site, kind: 'fragment', parseEntry: parseFragmentEntry }),
+        { contentRoot, site },
+      ),
+      parseFragmentEntry,
+    );
   const named = Object.fromEntries(
     names.map((name) => {
       declareConlocaCollection('fragment', name);

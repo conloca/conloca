@@ -63,7 +63,7 @@ declare module 'virtual:conloca-puck-config' {
  * The site's `contentSchemasPath` module (the `pageSchemas` / `dataSchemas`
  * its content config hands the collection factories), imported on the first
  * call only; an empty object when the site names none. A preview render
- * builds its collection schemas from it.
+ * builds its collections' entry parsers from it.
  */
 declare module 'virtual:conloca-content-schemas' {
   import type { DataSchemas, PageSchemas } from '@conloca/cms-spa/page-schema-define';

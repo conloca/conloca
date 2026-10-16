@@ -1,7 +1,7 @@
 import { getContentAPIClient, useLocalizedContent, useUpdateLocalized } from '@conloca/content-api-client';
 import { AlertCircle, Code2, Loader2, Save } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import type { z } from 'zod';
+import type { HostSchema } from '../../host-schema.js';
 import { contentFailureMessage } from '../../utils/content-failure.js';
 import { UnsavedChangesDialog } from '../dialogs/UnsavedChangesDialog.js';
 import { LocaleSelector } from '../editor/LocaleSelector.js';
@@ -12,7 +12,7 @@ interface DataEditorProps {
   collection: string;
   initialLocale: string;
   existingLocales: string[];
-  schema: z.ZodObject<z.ZodRawShape> | null;
+  schema: HostSchema | null;
   onSave?: () => void;
   onCancel?: () => void;
 }

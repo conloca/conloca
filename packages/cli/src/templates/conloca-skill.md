@@ -47,7 +47,8 @@ config, then run `conloca doctor` to verify the result. `conloca init . <site-na
 ## Install: the exact package set
 
 ```bash
-npm install @conloca/astro-cms @conloca/content-api @conloca/mdx @puckeditor/core @astrojs/react @vitejs/plugin-react zod
+npm install @conloca/astro-cms @conloca/content-api @conloca/mdx @puckeditor/core @astrojs/react @vitejs/plugin-react typia
+npm install -D ttsc @ttsc/unplugin
 ```
 
 `@puckeditor/core` is what the generated components import — there is no other Puck package to install.
@@ -60,6 +61,7 @@ The minimal working config, matching what `conloca astro setup` prints:
 import react from '@astrojs/react';
 import { conlocaCMS } from '@conloca/astro-cms/node';
 import { defineConfig } from 'astro/config';
+import { schemaTypia } from './typia-vite.mjs';
 
 export default defineConfig({
   integrations: [
@@ -71,10 +73,14 @@ export default defineConfig({
       layout: './src/layouts/Layout.astro',
     }),
   ],
+  vite: { plugins: [...schemaTypia()] },
 });
 ```
 
-`react()` must come before `conlocaCMS()` — doctor checks the order. And `src/content.config.ts`:
+`react()` must come before `conlocaCMS()` — doctor checks the order. `src/schemas/data.ts` declares each data collection
+as a TypeScript type plus its generated Typia validator (`typia.plain.createValidatePrune<T>()`) and form metadata
+(`typia.json.schema<T>()`); `typia-vite.mjs` is the native transform that generates them, so it must stay in
+`vite.plugins`. And `src/content.config.ts`:
 
 ```ts
 import { conlocaData, conlocaFragments, conlocaPages } from '@conloca/astro-cms/node/content';

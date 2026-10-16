@@ -2,11 +2,11 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
-import { z } from 'zod';
 import { PageMetadataDialog } from '../src/components/dialogs/PageMetadataDialog.js';
 import { definePageSchema } from '../src/page-schema-define.js';
 import { setPageSchemas } from '../src/page-schemas.js';
 import type { PageMetadata } from '../src/types.js';
+import { authorFields, titleFields } from './fixtures/typia/host-schemas.js';
 
 const savedPage: PageMetadata = {
   title: 'Saved article',
@@ -100,7 +100,7 @@ for (const mode of ['full', 'minimal', 'none'] as const) {
     if (mode !== 'full')
       setPageSchemas({
         '/': definePageSchema({
-          schema: z.object({ title: z.string() }),
+          schema: titleFields,
           coreFields: { mode },
         }),
       });
@@ -118,7 +118,7 @@ for (const mode of ['full', 'minimal', 'none'] as const) {
 
 for (const editedField of ['title', 'author'] as const) {
   test(`a pending save does not discard a newer ${editedField} edit`, async () => {
-    setPageSchemas({ '/': definePageSchema({ schema: z.object({ author: z.string().optional() }) }) });
+    setPageSchemas({ '/': definePageSchema({ schema: authorFields }) });
     const request = Promise.withResolvers<void>();
     const save = mock(() => request.promise);
     render(<Editor onSave={save} page={{ ...savedPage, customMeta: { author: 'Ada' } }} />);

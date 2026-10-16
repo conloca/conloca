@@ -5,6 +5,7 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import type { Plugin } from 'esbuild';
 import {
   bundleEditorAssets,
   type EditorBundleDescriptors,
@@ -561,7 +562,7 @@ describe('bundleEditorAssets — editor descriptors', () => {
     await writeFile(schemasPath, SCHEMAS);
   });
 
-  async function bundleWithDescriptors(descriptors?: EditorBundleDescriptors) {
+  async function bundleWithDescriptors(descriptors?: EditorBundleDescriptors, plugins?: Plugin[]) {
     const logger = makeLogger();
     const result = await bundleEditorAssets({
       dir: distDir,
@@ -570,6 +571,7 @@ describe('bundleEditorAssets — editor descriptors', () => {
       puckConfigPath: plainEntry,
       logger,
       ...(descriptors ? { descriptors } : {}),
+      ...(plugins ? { plugins } : {}),
     });
     const bundleModule = (await import(pathToFileURL(join(distDir, result.url)).href)) as {
       default?: unknown;
@@ -619,6 +621,25 @@ describe('bundleEditorAssets — editor descriptors', () => {
     const { bundleModule } = await bundleWithDescriptors({ dataBindings });
 
     expect(bundleModule.dataBindings).toEqual(dataBindings);
+  });
+
+  it('runs the supplied editor bundle plugins over the schemas module', async () => {
+    // Stands in for a source transform (Typia's) the site's Vite plugins would
+    // apply: the editor bundle is esbuild-built and only sees it if passed in.
+    await writeFile(schemasPath, 'export const pageSchemas = __TRANSFORM_ME__;\n');
+    const transform: Plugin = {
+      name: 'test-transform',
+      setup(build) {
+        build.onLoad({ filter: /schemas\.ts$/ }, async (args) => ({
+          contents: (await readFile(args.path, 'utf8')).replace('__TRANSFORM_ME__', "{ '/blog/': { label: 'Blog' } }"),
+          loader: 'ts',
+        }));
+      },
+    };
+
+    const { bundleModule } = await bundleWithDescriptors({ schemasPath }, [transform]);
+
+    expect(bundleModule.pageSchemas).toEqual({ '/blog/': { label: 'Blog' } });
   });
 
   it('tolerates a schemas module that declares only one of the exports, without warning', async () => {

@@ -15,11 +15,13 @@ export const THIRD_PARTY_VERSIONS = {
   '@vitejs/plugin-react': '^5.2.0',
   react: '19.2.8',
   'react-dom': '19.2.8',
-  zod: '^4.5.4',
+  typia: '^14.0.4',
   '@astrojs/check': '^0.9.10',
+  '@ttsc/unplugin': '^0.30.4',
+  ttsc: '0.30.4',
 } as const;
 
-const DEV_ONLY = new Set(['@astrojs/check']);
+const DEV_ONLY = new Set(['@astrojs/check', '@ttsc/unplugin', 'ttsc']);
 
 // Where this module sits inside the package differs between the shipped bundle
 // (one file at dist/conloca.js) and the source the tests import (src/lib/), so

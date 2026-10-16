@@ -11,7 +11,8 @@ workflow, accessible at `/__cms` routes without requiring authentication or comp
 
 ```bash
 npm install @conloca/astro-cms
-npm install @astrojs/react @vitejs/plugin-react astro react react-dom vite zod
+npm install @astrojs/react @vitejs/plugin-react astro react react-dom vite typia
+npm install -D ttsc @ttsc/unplugin
 ```
 
 The second line is the full peer set — the CMS expects the host site to own those packages. `@astrojs/react` is not
@@ -168,25 +169,25 @@ With those four files in place, run the Astro dev server and open `/__cms`.
 
 Passed to `conlocaCMS({ ... })`. Only two are required.
 
-| Option                 | Required | What it does                                                                                                                                        |
-| ---------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `contentRoot`          | yes      | Directory holding `sites.json` and the content files. Also handed to the collection factories, so the content config needs no copy of it.           |
-| `puckConfigPath`       | yes      | Module whose default export is the Puck `Config`. Supplies the visual editor's component palette and seeds component auto-discovery.                |
-| `canvasDir`            | no       | Directory for canvas documents.                                                                                                                     |
-| `route`                | no       | Where the CMS mounts. Defaults to `/__cms`.                                                                                                         |
-| `layout`               | no       | Default layout for content pages. On its own it enables routing with a catch-all pattern.                                                           |
-| `routing`              | no       | Full routing configuration, for sites with more than one content route.                                                                             |
-| `templates`            | no       | Page templates offered in the create-page dialog.                                                                                                   |
-| `schemasPath`          | no       | Module exporting `dataSchemas`, `pageSchemas` and `mdxComponents`. Drives the page-settings form and the MDX component registry.                    |
-| `contentSchemasPath`   | no       | Schema-only module exporting the `pageSchemas` / `dataSchemas` your content config passes to `conlocaPages()` / `conlocaData()`. Draft previews parse entries with the collection schemas built from it, as the build does. |
-| `componentPaths`       | no       | Extra folders to scan for components wrapped in `withHydration()`.                                                                                  |
-| `mdxComponentFolders`  | no       | Folders scanned for locally authored MDX components, whose `interface Props` becomes the editor's prop panel. Defaults to `['src/components/mdx']`. |
-| `assetsPath`           | no       | Upload directory; enables the Media Library. The site must serve it from `publicDir`, directly or through a link there, or dev and build fail.      |
-| `siteStyles`           | no       | CSS injected into the Puck preview iframe so components render with site styling.                                                                   |
-| `editorStyles`         | no       | CSS injected into the MDX editor's admin document. Host-component selectors only — see the file's own notes on what does not belong.                |
-| `editorCSS`            | no       | Raw CSS applied after auto-discovered host styles in the editor's host-preview layer.                                                               |
-| `fragmentPreviewRoute` | no       | Route whose styles and content wrapper frame the standalone fragment editor. Defaults to `/`.                                                       |
-| `locales`              | no       | The site's locales and default locale. Without it: the site's `locales` and `defaultLocale` in `sites.json`, else `globalLocales`.                  |
+| Option                 | Required | What it does                                                                                                                                                                                                           |
+| ---------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `contentRoot`          | yes      | Directory holding `sites.json` and the content files. Also handed to the collection factories, so the content config needs no copy of it.                                                                              |
+| `puckConfigPath`       | yes      | Module whose default export is the Puck `Config`. Supplies the visual editor's component palette and seeds component auto-discovery.                                                                                   |
+| `canvasDir`            | no       | Directory for canvas documents.                                                                                                                                                                                        |
+| `route`                | no       | Where the CMS mounts. Defaults to `/__cms`.                                                                                                                                                                            |
+| `layout`               | no       | Default layout for content pages. On its own it enables routing with a catch-all pattern.                                                                                                                              |
+| `routing`              | no       | Full routing configuration, for sites with more than one content route.                                                                                                                                                |
+| `templates`            | no       | Page templates offered in the create-page dialog.                                                                                                                                                                      |
+| `schemasPath`          | no       | Module exporting `dataSchemas`, `pageSchemas` and `mdxComponents`. Drives the page-settings form and the MDX component registry.                                                                                       |
+| `contentSchemasPath`   | no       | Schema-only module exporting the `pageSchemas` / `dataSchemas` your content config passes to `conlocaPages()` / `conlocaData()`. Draft previews parse entries with the entry parsers built from it, as the build does. |
+| `componentPaths`       | no       | Extra folders to scan for components wrapped in `withHydration()`.                                                                                                                                                     |
+| `mdxComponentFolders`  | no       | Folders scanned for locally authored MDX components, whose `interface Props` becomes the editor's prop panel. Defaults to `['src/components/mdx']`.                                                                    |
+| `assetsPath`           | no       | Upload directory; enables the Media Library. The site must serve it from `publicDir`, directly or through a link there, or dev and build fail.                                                                         |
+| `siteStyles`           | no       | CSS injected into the Puck preview iframe so components render with site styling.                                                                                                                                      |
+| `editorStyles`         | no       | CSS injected into the MDX editor's admin document. Host-component selectors only — see the file's own notes on what does not belong.                                                                                   |
+| `editorCSS`            | no       | Raw CSS applied after auto-discovered host styles in the editor's host-preview layer.                                                                                                                                  |
+| `fragmentPreviewRoute` | no       | Route whose styles and content wrapper frame the standalone fragment editor. Defaults to `/`.                                                                                                                          |
+| `locales`              | no       | The site's locales and default locale. Without it: the site's `locales` and `defaultLocale` in `sites.json`, else `globalLocales`.                                                                                     |
 
 `ConlocaCMSOptions` also extends the editor's `UIConfig` (minus `basename`), so fields such as `apiBaseUrl`,
 `siteBaseUrl`, `enableDevtools`, `queryClientOptions`, `projectRoot` and `hosted` are accepted as well. Those exist for

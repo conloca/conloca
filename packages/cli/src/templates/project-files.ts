@@ -7,6 +7,7 @@ import node from '@astrojs/node';
 import react from '@astrojs/react';
 import { conlocaCMS } from '@conloca/astro-cms/node';
 import { defineConfig } from 'astro/config';
+import { schemaTypia } from './typia-vite.mjs';
 
 export default defineConfig({
   output: 'server',
@@ -32,9 +33,50 @@ export default defineConfig({
       },
     }),
   ],
+  // Generates the validators and form metadata src/schemas/data.ts declares.
+  vite: { plugins: [...schemaTypia()] },
 });
 `;
 }
+
+/** The native Typia transform for \`src/schemas/\`, the modules that author \`typia.*<T>()\` call sites. */
+export const TYPIA_VITE_TEMPLATE = `import { fileURLToPath } from 'node:url';
+import ttsc from '@ttsc/unplugin/vite';
+
+const project = fileURLToPath(new URL('./tsconfig.typia.json', import.meta.url));
+
+/**
+ * Compiles the Typia call sites in src/schemas/ into generated validators and
+ * JSON Schema metadata. Astro's content config and the CMS editor both load
+ * those modules through this Vite pipeline.
+ *
+ * @returns {import('vite').Plugin[]}
+ */
+export function schemaTypia() {
+  const plugins = ttsc({ project });
+  return (Array.isArray(plugins) ? plugins : [plugins]).map((plugin) => {
+    const transform = plugin.transform;
+    if (!transform) return plugin;
+    const hook = typeof transform === 'function' ? { handler: transform } : transform;
+    return { ...plugin, transform: { ...hook, filter: { ...hook.filter, id: /[\\\\/]src[\\\\/]schemas[\\\\/]/ } } };
+  });
+}
+`;
+
+/** The program typia-vite.mjs compiles: only the schema modules. */
+export const TYPIA_TSCONFIG_TEMPLATE = `{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": []
+  },
+  "include": ["src/schemas/**/*.ts"]
+}
+`;
 
 export const TSCONFIG_TEMPLATE = `{
   "extends": "astro/tsconfigs/strict",

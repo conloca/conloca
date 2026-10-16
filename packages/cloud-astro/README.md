@@ -247,6 +247,7 @@ Then reload the editor: it opens your site instead of **Connect this site**, and
 | `siteId`               | no       | Advanced site-id override for CMS-less builds; sites.json is authoritative.                                                          |
 | `buildToken`           | no       | Build token issued by the endpoint; use the `CONLOCA_BUILD_TOKEN` environment variable instead, so it is never committed.            |
 | `siteStyles`           | no       | Site CSS compiled into the canvas stylesheet, as in `conlocaCMS`.                                                                    |
+| `editorBundlePlugins`  | no       | esbuild plugins for the editor bundle, which is built outside Vite: pass e.g. the Typia transform your page schemas need.            |
 | `fragmentPreviewRoute` | no       | Content route for build-time style discovery, as in `conlocaCMS`.                                                                    |
 | `previewDomain`        | no       | Dedicated preview domain. When set, switches to `preview-domain` mode and is used instead of `publicBaseUrl`.                        |
 | `previewBuild`         | no       | `PreviewBuildOptions` or `false`. On by default; set `false`, since draft previews on your own deployment are not available yet.     |

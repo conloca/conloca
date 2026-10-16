@@ -1,4 +1,5 @@
 import type { AstroIntegration } from 'astro';
+import type { Plugin as EsbuildPlugin } from 'esbuild';
 
 /**
  * Configuration for a recursive preview build that runs immediately after the
@@ -79,6 +80,15 @@ export interface ConlocaCloudOptions {
    * lives outside the component graph.
    */
   siteStyles?: string | string[];
+  /**
+   * esbuild plugins for the editor bundle (puck config, its components and the
+   * conlocaCMS schemas module). That bundle is built with esbuild, outside the
+   * site's Vite pipeline, so a source transform the site's Vite plugins apply
+   * — e.g. Typia's `createValidate<T>()` generation in page schemas — must be
+   * passed here in its esbuild form too, or the bundle carries untransformed
+   * calls that throw when the editor loads it.
+   */
+  editorBundlePlugins?: EsbuildPlugin[];
   /**
    * Representative content route for build-time style discovery — the SAME
    * name and meaning as `conlocaCMS`'s option: the page whose styles and

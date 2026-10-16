@@ -9,7 +9,8 @@
     "verbatimModuleSyntax": true,
     "sourceMap": true,
     "forceConsistentCasingInFileNames": true,
-    "types": ["node"]
+    "types": ["node"],
+    "plugins": [{ "transform": "typia/lib/transform" }]
   },
   "include": ["src/**/*.ts"],
   "exclude": ["src/**/*.test.ts", "src/__tests__/**/*"],

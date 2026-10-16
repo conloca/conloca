@@ -2,7 +2,6 @@
 import { afterEach, beforeEach, describe, expect, mock, setSystemTime, test } from 'bun:test';
 import { ErrorCodes } from '@conloca/content-api-client';
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
-import { z } from 'zod';
 import { CMSDashboard } from '../src/components/CMSDashboard.js';
 import { CreatePageDialog } from '../src/components/dialogs/CreatePageDialog.js';
 import { PageMetadataDialog } from '../src/components/dialogs/PageMetadataDialog.js';
@@ -14,6 +13,7 @@ import { definePageSchema, setPageSchemas } from '../src/page-schemas.js';
 import { setPuckConfig } from '../src/puck-config.js';
 import type { PageMetadata } from '../src/types.js';
 import { setTemplates } from '../src/ui-config.js';
+import { titleFields } from './fixtures/typia/host-schemas.js';
 import { API_ROUTES, mockAPIError, renderWithProviders, setupTestAPI, testApi } from './test-utils.js';
 import { pinTimeZone } from './time-zone.js';
 
@@ -519,7 +519,7 @@ describe('Page Metadata Dialog', () => {
       test(`in '${mode}' mode an emptied title says the page needs one and keeps Save from sending`, () => {
         // The site's own schema renders the title field in these modes, and Save
         // sent the emptied title as null for every backend to refuse.
-        setPageSchemas({ '/': definePageSchema({ schema: z.object({ title: z.string() }), coreFields: { mode } }) });
+        setPageSchemas({ '/': definePageSchema({ schema: titleFields, coreFields: { mode } }) });
         const onSave = mock();
         const page = { ...mockPage, customMeta: { title: mockPage.title } };
         const { getByLabelText, getByRole, queryByRole } = render(

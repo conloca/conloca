@@ -1,3 +1,4 @@
-# `bun test` from this directory reads this file, not the workspace root's: load the same preload.
+# `bun test` from this directory reads this file, not the workspace root's: load the same preload, plus the
+# ttsc/Typia transform the schema validators need, so a single test file run directly compiles them too.
 [test]
-preload = ["../../tooling/test-setup.ts"]
+preload = ["../../tooling/test-setup.ts", "./test-native-preload.ts"]

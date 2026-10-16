@@ -327,6 +327,7 @@ export function conlocaCloud(options: ConlocaCloudOptions): AstroIntegration {
           vite: viteConfig,
           puckConfigPath: options.puckConfigPath,
           siteStyles: options.siteStyles,
+          ...(options.editorBundlePlugins ? { plugins: options.editorBundlePlugins } : {}),
           publicBaseUrl: resolveDeploymentUrl(options),
           ...(descriptors === undefined ? {} : { descriptors }),
           logger,

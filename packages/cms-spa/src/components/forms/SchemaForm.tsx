@@ -1,14 +1,25 @@
 import { Loader2 } from 'lucide-react';
 import { useId } from 'react';
-import type { z } from 'zod';
-import { toDatetimeLocalValue } from '../../utils/pageMetadata.js';
-import { type FieldInfo, getZodShape } from '../../utils/zodIntrospect.js';
+import type { HostSchema } from '../../host-schema.js';
+import { fromDatetimeLocalValue, toDatetimeLocalValue } from '../../utils/pageMetadata.js';
+import { type FieldInfo, type FormFields, fieldsOfHostSchema } from '../../utils/schema-fields.js';
 import { ImageFieldRender } from '../fields/ImageField.js';
 import { Input, Select, Textarea } from '../ui/index.js';
 import { ChipArrayField } from './ChipArrayField.js';
 
 interface SchemaFormProps {
-  schema: z.ZodObject<z.ZodRawShape> | null;
+  /**
+   * A host-declared schema, rendered from its generated JSON Schema metadata.
+   * This is the dynamic path: a site's `pageSchemas`/`dataSchemas` entry exists
+   * only at runtime, so its field shape is read off the metadata it carries.
+   */
+  schema?: HostSchema | null;
+  /**
+   * An already-resolved field record — how the CMS's own metadata sections are
+   * declared now that they are no longer schema objects (`content-form-fields`).
+   * Takes precedence over `schema` when both are given.
+   */
+  fields?: FormFields | null;
   values: Record<string, unknown>;
   onChange: (values: Record<string, unknown>) => void;
   isLoading?: boolean;
@@ -16,10 +27,10 @@ interface SchemaFormProps {
 }
 
 /**
- * Renders a form based on a Zod schema.
- * Fields are rendered automatically based on Zod type information.
+ * Renders a form from a host schema or a field record.
+ * Fields are rendered automatically based on their {@link FieldInfo}.
  */
-export function SchemaForm({ schema, values, onChange, isLoading, className }: SchemaFormProps) {
+export function SchemaForm({ schema, fields, values, onChange, isLoading, className }: SchemaFormProps) {
   const handleFieldChange = (field: string, value: unknown) => {
     onChange({ ...values, [field]: value });
   };
@@ -32,7 +43,9 @@ export function SchemaForm({ schema, values, onChange, isLoading, className }: S
     );
   }
 
-  if (!schema) {
+  const resolvedFields = fields ?? (schema ? fieldsOfHostSchema(schema) : null);
+
+  if (!resolvedFields) {
     return (
       <div className="text-center py-8 text-grey-04 dark:text-grey-07">
         <p>No schema defined.</p>
@@ -40,12 +53,10 @@ export function SchemaForm({ schema, values, onChange, isLoading, className }: S
     );
   }
 
-  const fields = getZodShape(schema);
-
   return (
     <div className={className}>
       <div className="space-y-6">
-        {Object.entries(fields).map(([fieldName, fieldInfo]) => (
+        {Object.entries(resolvedFields).map(([fieldName, fieldInfo]) => (
           // Names the field, so a dialog can open at it (see PageMetadataDialog's focusField).
           <div key={fieldName} data-field-name={fieldName}>
             <SchemaField
@@ -86,7 +97,9 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
           id={inputId}
           type="datetime-local"
           value={formatDateValue(value)}
-          onChange={(e) => onChange(e.target.value || undefined)}
+          // The input's wall-clock digits carry no zone or seconds; a host's `Format<'date-time'>`
+          // validator needs a full timestamp, so the value saved is the instant those digits name.
+          onChange={(e) => onChange(fromDatetimeLocalValue(e.target.value)?.toISOString())}
         />
         {description && <p className="mt-1 text-sm text-grey-04 dark:text-grey-07">{description}</p>}
       </div>

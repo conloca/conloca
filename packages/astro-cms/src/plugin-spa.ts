@@ -113,11 +113,11 @@ export interface ConlocaCMSOptions extends Omit<UIConfig, 'basename'> {
   /**
    * Module exporting the `pageSchemas` and/or `dataSchemas` the content config
    * hands conlocaPages() and conlocaData(). A draft preview builds the same
-   * collection schemas from them and parses each draft as the build parses
-   * an entry, so host fields get their coerced and default values. It loads
-   * in the preview server, so it may import schema code only (Zod,
-   * definePageSchema) — the module the content config imports them from, not
-   * the editor's `schemasPath` barrel.
+   * entry parsers from them and parses each draft as the build parses an
+   * entry, so it gets the stored values and fails where the build would. It
+   * loads in the preview server, so it may import schema code only (Typia
+   * host schemas, definePageSchema) — the module the content config imports
+   * them from, not the editor's `schemasPath` barrel.
    *
    * @example './src/page-schemas.ts'
    */
@@ -984,7 +984,6 @@ initHydration(componentRegistry)
                 'clsx',
                 'tailwind-merge',
                 // Content processing
-                'zod',
                 'yaml',
                 'nanoid',
                 'sort-keys',

@@ -8,7 +8,7 @@ import type { CheckOutcome, DoctorProblem } from './doctor.js';
 const ASTRO_CONFIG_NAMES = ['astro.config.mjs', 'astro.config.ts', 'astro.config.js'];
 
 /** Peers @conloca/astro-cms declares that projects forget most often. */
-const CMS_PEERS = ['zod', '@vitejs/plugin-react'];
+const CMS_PEERS = ['@vitejs/plugin-react'];
 
 const PAGE_FILE_RE = /\.(?:astro|ts|md|mdx)$/;
 

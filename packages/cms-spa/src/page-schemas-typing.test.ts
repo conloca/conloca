@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { z } from 'zod';
+import { articleFields } from '../test/fixtures/typia/host-schemas.js';
+import type { HostSchemaType } from './host-schema.js';
 import { definePageSchema } from './page-schema-define.js';
 
 // True only when T is exactly `any`. A plain `T extends X ? A : B` conditional
@@ -10,22 +11,18 @@ type IsAny<T> = 0 extends 1 & T ? true : false;
 
 describe('definePageSchema typing', () => {
   test('preserves the concrete schema type through the descriptor', () => {
-    const descriptor = definePageSchema({
-      schema: z.object({ author: z.string().optional(), tags: z.array(z.string()).optional() }),
-    });
-    type Meta = z.infer<typeof descriptor.schema>;
+    const descriptor = definePageSchema({ schema: articleFields });
+    type Meta = HostSchemaType<typeof descriptor.schema>;
 
     // Guard against a silent decay to `any` for both fields (see IsAny above).
     const authorNotAny: IsAny<Meta['author']> = false;
     const tagsNotAny: IsAny<Meta['tags']> = false;
 
     // Round-trip a real value through the inferred type and read each field
-    // back out into its expected concrete type. Before the fix,
-    // definePageSchema widened the schema to z.ZodObject<z.ZodRawShape>, so
-    // both fields typed as `unknown` here — and `unknown` is not assignable
-    // to `string | undefined` / `string[] | undefined`, so these two lines
-    // would fail to typecheck. `tags` exercises array inference, a different
-    // path than the scalar `author` field.
+    // back out into its expected concrete type. If definePageSchema widened
+    // the schema to the default HostSchema, Meta would be `object` and these
+    // reads would fail to typecheck. `tags` exercises array inference, a
+    // different path than the scalar `author` field.
     const meta: Meta = { author: 'jane', tags: ['a', 'b'] };
     const author: string | undefined = meta.author;
     const tags: string[] | undefined = meta.tags;
@@ -38,6 +35,6 @@ describe('definePageSchema typing', () => {
     expect(tagsNotAny).toBe(false);
     expect(author).toBe('jane');
     expect(tags).toEqual(['a', 'b']);
-    expect(descriptor.schema.shape.author).toBeDefined();
+    expect(descriptor.schema.validate(meta).success).toBe(true);
   });
 });

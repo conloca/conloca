@@ -38,7 +38,7 @@ import {
   pageNotFoundResponse,
   resolvePuckData,
 } from '../ts/src/handlers/page-render-core.js';
-import { previewCollectionSchemas } from '../ts/src/internal/collection-schemas.js';
+import { previewEntryParsers } from '../ts/src/internal/collection-parsers.js';
 
 // prerender is controlled by injectRoute({ prerender }) in plugin-spa.ts
 // Do not hardcode here — it overrides the route-level config
@@ -150,14 +150,14 @@ if (!routeName || !collection || !pathname) {
 
 // Content-access seam. A caller can install a ContentAPI on
 // `Astro.locals.contentApi`; when present we read through it, so the page shows
-// what that reader serves, parsed with each collection's schema as the build
+// what that reader serves, parsed with each collection's entry parser as the build
 // parses its entries. Absent — the normal render — we read Astro content
 // collections, byte-for-byte identically to before the extraction.
 const previewContentApi = (Astro.locals as { contentApi?: ContentAPI }).contentApi;
 const source: PageContentSource = previewContentApi
   ? createReaderContentSource(previewContentApi, {
       renderLocale: config.locale,
-      schemas: previewCollectionSchemas(config, await loadContentSchemas()),
+      parsers: previewEntryParsers(config, await loadContentSchemas()),
     })
   : createCollectionContentSource({
       getCollection: (name) => getCollection(name as never) as Promise<{ data: unknown }[]>,

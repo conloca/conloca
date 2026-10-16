@@ -1,0 +1,16 @@
+{
+  "//": "The TypeScript program the ttsc/typia transform compiles for the Bun test lane (test-native-preload.ts): the Typia-authored host-schema fixtures and the modules they import.",
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "emitDeclarationOnly": false,
+    "noEmit": true,
+    "types": ["node", "bun"]
+  },
+  "include": ["test/fixtures/typia/**/*.ts"]
+}

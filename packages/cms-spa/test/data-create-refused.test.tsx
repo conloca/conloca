@@ -12,11 +12,11 @@
 import { afterEach, beforeEach, describe, expect, onTestFinished, spyOn, test } from 'bun:test';
 import { ErrorCodes, getContentAPIClient } from '@conloca/content-api-client';
 import { cleanup, fireEvent, screen } from '@testing-library/react';
-import { z } from 'zod';
 import { DataList } from '../src/components/pages/DataList.js';
+import { bioFields } from './fixtures/typia/host-schemas.js';
 import { API_ROUTES, mockAPIError, renderWithProviders, setupTestAPI, testApi } from './test-utils.js';
 
-const dataSchemas = { authors: z.object({ bio: z.string().optional() }) };
+const dataSchemas = { authors: bioFields };
 
 beforeEach(() => {
   setupTestAPI();

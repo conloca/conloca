@@ -1,0 +1,16 @@
+{
+  "//": "The TypeScript program the ttsc/typia transform compiles for the Bun test lane (test-native-preload.ts). Scoped to the schema module and its tests: ttsc reports the whole program's diagnostics, and this package's wider test tree is type-checked by its own `typecheck-tests` target under its own lib/types set.",
+  "extends": "./tsconfig.lib.json",
+  "compilerOptions": {
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "emitDeclarationOnly": false,
+    "noEmit": true,
+    "rootDir": ".",
+    "types": ["node", "bun"]
+  },
+  "include": ["src/schemas/**/*.ts", "test/schemas/**/*.ts"],
+  "exclude": [],
+  "references": []
+}

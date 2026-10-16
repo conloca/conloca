@@ -1,6 +1,6 @@
 /// <reference lib="dom" />
 import { afterEach, describe, expect, test } from 'bun:test';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup, fireEvent, render } from '@testing-library/react';
 import { HintForm } from '../src/components/forms/HintForm.js';
 import { pinTimeZone } from './time-zone.js';
 
@@ -31,5 +31,16 @@ describe('HintForm date fields', () => {
 
     const input = document.body.querySelector('input[type="datetime-local"]') as HTMLInputElement;
     expect(input.value).toBe('2026-09-15T09:00');
+  });
+
+  test('saves the picked digits as a full UTC timestamp a date-time validator accepts', () => {
+    const saved: Record<string, unknown>[] = [];
+    render(<HintForm hints={hints} values={{}} onChange={(values) => saved.push(values)} />);
+
+    const input = document.body.querySelector('input[type="datetime-local"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: '2026-09-15T09:00' } });
+
+    expect(saved.at(-1)?.date).toBe('2026-09-15T09:00:00.000Z');
+    expect(Number.isNaN(Date.parse(String(saved.at(-1)?.date)))).toBe(false);
   });
 });

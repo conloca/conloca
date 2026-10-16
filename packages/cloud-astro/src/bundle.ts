@@ -142,6 +142,13 @@ export interface BundleEditorAssetsInput {
    * hash churn).
    */
   descriptors?: EditorBundleDescriptors;
+  /**
+   * Extra esbuild plugins for the editor bundle (the `editorBundlePlugins`
+   * option), run after the built-in stylesheet compiler: the site's own Vite
+   * plugins never see this graph, so a source transform the schemas module or
+   * a component needs (e.g. Typia's) has to be supplied in esbuild form.
+   */
+  plugins?: Plugin[];
   logger: { info(message: string): void; warn(message: string): void };
 }
 
@@ -241,7 +248,7 @@ export async function bundleEditorAssets(input: BundleEditorAssetsInput): Promis
     // which is externalized and supplied by the editor.
     jsx: 'automatic',
     external: [...EDITOR_BUNDLE_EXTERNALS, ...STYLESHEET_ASSET_EXTERNALS],
-    plugins: [sassCompiler(input.logger)],
+    plugins: [sassCompiler(input.logger), ...(input.plugins ?? [])],
     // No compiler is wired for these preprocessors in the component graph;
     // strip them like all stylesheets used to be stripped (`{}` module, no
     // rules) rather than failing the site's registration over one exotic

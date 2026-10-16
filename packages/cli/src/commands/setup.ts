@@ -4,6 +4,7 @@ import { ensureSiteInSitesConfig } from '../lib/sites-config.js';
 // Kept as a real .md file so it stays editable markdown; Bun inlines it into
 // the bundle.
 import CONLOCA_SKILL_TEMPLATE from '../templates/conloca-skill.md' with { type: 'text' };
+import { TYPIA_TSCONFIG_TEMPLATE, TYPIA_VITE_TEMPLATE } from '../templates/project-files.js';
 
 /** Site name every other Conloca default assumes for a single-site project. */
 export const DEFAULT_SITE_NAME = 'default';
@@ -633,37 +634,55 @@ const puckConfig: Config<Components> = {
 export default puckConfig;
 `;
 
-const DATA_SCHEMAS_TEMPLATE = `import { z } from 'zod';
+const DATA_SCHEMAS_TEMPLATE = `import { defineHostSchema } from '@conloca/astro-cms/page-schemas';
+import typia, { type tags } from 'typia';
 
 /**
  * Data collection schemas for the CMS.
  *
- * Each key is a collection name (matching folders in content/data/).
- * The CMS auto-generates forms from these Zod schemas.
+ * Each key is a collection name (matching folders in content/data/). Each value
+ * is a TypeScript type plus what Typia generates for it at build time (wired by
+ * typia-vite.mjs in astro.config.mjs): \`validate\` checks every stored entry
+ * when the collection loads, and \`metadata\` is the JSON Schema the CMS renders
+ * the entry form from.
  *
  * Tips:
- * - Use .describe() to add labels/hints shown in the form
- * - Use .optional() for non-required fields
- * - Supported types: string, number, boolean, date, email, url, arrays
+ * - A JSDoc comment on a field becomes its help text in the form
+ * - Optional properties (\`?\`) are optional fields
+ * - Supported controls: string, number, boolean, date (\`string & tags.Format<'date-time'>\`),
+ *   email / url (\`tags.Format\`), string literal unions (select), arrays
  */
-export const dataSchemas = {
-  /**
-   * Authors collection - blog post authors, team members, etc.
-   */
-  authors: z.object({
-    name: z.string().describe('Full name'),
-    bio: z.string().describe('Short biography'),
-    avatar: z.string().url().optional().describe('Profile image URL'),
-    twitter: z.string().optional().describe('Twitter handle (e.g., @username)'),
-    email: z.string().email().optional().describe('Contact email'),
-  }),
 
-  /**
-   * Settings collection - site configuration, feature flags, etc.
-   */
-  settings: z.object({
-    siteName: z.string().optional().describe('Site name'),
-    contactEmail: z.string().email().optional().describe('Contact email address'),
+/** Authors collection - blog post authors, team members, etc. */
+export interface Author {
+  /** Full name */
+  name: string;
+  /** Short biography */
+  bio: string;
+  /** Profile image URL */
+  avatar?: string & tags.Format<'url'>;
+  /** Twitter handle (e.g., @username) */
+  twitter?: string;
+  /** Contact email */
+  email?: string & tags.Format<'email'>;
+}
+
+/** Settings collection - site configuration, feature flags, etc. */
+export interface Settings {
+  /** Site name */
+  siteName?: string;
+  /** Contact email address */
+  contactEmail?: string & tags.Format<'email'>;
+}
+
+export const dataSchemas = {
+  authors: defineHostSchema<Author>({
+    validate: typia.plain.createValidatePrune<Author>(),
+    metadata: typia.json.schema<Author>(),
+  }),
+  settings: defineHostSchema<Settings>({
+    validate: typia.plain.createValidatePrune<Settings>(),
+    metadata: typia.json.schema<Settings>(),
   }),
 };
 `;
@@ -762,8 +781,11 @@ export async function setup(projectPath = '.', siteName = DEFAULT_SITE_NAME): Pr
     // 4. Puck config
     await writeIfNotExists(join(srcDir, 'puck.config.tsx'), PUCK_CONFIG_TEMPLATE, 'src/puck.config.tsx');
 
-    // 5. Data schemas
+    // 5. Data schemas, and the native Typia transform that generates their
+    // validators and form metadata (astro.config.mjs names typia-vite.mjs).
     await writeIfNotExists(join(srcDir, 'schemas', 'data.ts'), DATA_SCHEMAS_TEMPLATE, 'src/schemas/data.ts');
+    await writeIfNotExists(join(absolutePath, 'typia-vite.mjs'), TYPIA_VITE_TEMPLATE, 'typia-vite.mjs');
+    await writeIfNotExists(join(absolutePath, 'tsconfig.typia.json'), TYPIA_TSCONFIG_TEMPLATE, 'tsconfig.typia.json');
 
     // 6. Page layout
     await writeIfNotExists(join(srcDir, 'layouts', 'Layout.astro'), PAGE_LAYOUT_TEMPLATE, 'src/layouts/Layout.astro');
@@ -816,6 +838,7 @@ export function printSetupNextSteps(): void {
   console.log('   they are listed here, and react() must come before conlocaCMS():\n');
   console.log(`     import react from '@astrojs/react';
      import { conlocaCMS } from '@conloca/astro-cms/node';
+     import { schemaTypia } from './typia-vite.mjs';
 
      export default defineConfig({
        integrations: [
@@ -827,7 +850,10 @@ export function printSetupNextSteps(): void {
            layout: './src/layouts/Layout.astro',
          }),
        ],
+       vite: { plugins: [...schemaTypia()] },
      });`);
+  console.log('\n   The schemas file is generated code: add typia, and ttsc + @ttsc/unplugin as dev');
+  console.log('   dependencies, so typia-vite.mjs can compile it.');
   console.log('\n   `layout` on its own turns on a catch-all /[...slug] route over the pages');
   console.log('   collection. Adding `routing` replaces that route, and the top-level `layout`');
   console.log('   is then ignored — name it under routing.routes.<name>.layout instead.');

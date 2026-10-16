@@ -1,5 +1,6 @@
-import { type DataEditable, dataEditableSchema } from '@conloca/content-api-client';
+import type { DataEditable } from '@conloca/content-api-client';
 import { useEffect, useMemo, useState } from 'react';
+import { dataEditableFields } from '../../content-form-fields.js';
 import { SchemaForm } from '../forms/SchemaForm.js';
 import { Button } from '../ui/index.js';
 
@@ -62,7 +63,7 @@ export function DataPropertiesDialog({ initialMeta, isPending, onClose, onSave }
         <h2 className="text-xl font-semibold text-grey-01 dark:text-grey-12 mb-4">Edit Data Properties</h2>
 
         <div className="mb-4">
-          <SchemaForm schema={dataEditableSchema} values={formValues} onChange={setFormValues} />
+          <SchemaForm fields={dataEditableFields} values={formValues} onChange={setFormValues} />
         </div>
 
         <div className="flex justify-end gap-3">

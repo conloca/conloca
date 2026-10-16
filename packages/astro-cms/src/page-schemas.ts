@@ -4,11 +4,15 @@
  */
 export {
   type CoreFieldsMode,
+  type DataSchemas,
+  defineHostSchema,
   definePageSchema,
   type FieldHint,
   type FieldHintCommon,
   type FieldHints,
   type FieldHintVariant,
+  type HostSchema,
+  type HostSchemaType,
   type PageSchemaDescriptor,
   type PageSchemaEntry,
   type PageSchemaGroup,

@@ -1,113 +1,39 @@
-import { z } from 'zod';
-
-// ===== Page Schemas =====
-
 /**
- * Base schema for page metadata - editable fields only.
- * Used by CMS forms for dynamic form generation.
- * Add .describe() for form field labels/hints.
- */
-export const pageEditableSchema = z.object({
-  title: z.string().describe('Page title for SEO and browser tab'),
-  description: z.string().optional().describe('Meta description for search engines'),
-  pathname: z.string().describe('URL path (e.g., /about)'),
-  publishAt: z.coerce.date().nullable().optional().describe('Schedule publish date/time'),
-  unpublishAt: z.coerce.date().nullable().optional().describe('Schedule unpublish date/time'),
-  robots: z.string().optional().describe('Robots meta tag (e.g., index, follow)'),
-  canonical: z.string().url().optional().describe('Canonical URL for duplicate content'),
-});
-
-export type PageEditable = z.infer<typeof pageEditableSchema>;
-
-/**
- * Full page schema with system fields.
- * Used by Astro Content Collections for validation.
- */
-export const pageMetaSchema = pageEditableSchema.extend({
-  id: z.string(),
-  locale: z.string(),
-});
-
-export type PageMeta = z.infer<typeof pageMetaSchema>;
-
-// ===== Fragment Schemas =====
-
-/**
- * Base schema for fragment metadata - editable fields only.
- * Used by CMS forms for dynamic form generation.
- * Add .describe() for form field labels/hints.
- */
-export const fragmentEditableSchema = z.object({
-  title: z.string().describe('Display name for the fragment'),
-  description: z.string().optional().describe('Brief description of this fragment'),
-  category: z.string().optional().describe('Category for organizing fragments (e.g., headers, cta, content)'),
-  tags: z.array(z.string()).optional().describe('Tags for filtering and organization'),
-});
-
-export type FragmentEditable = z.infer<typeof fragmentEditableSchema>;
-
-/**
- * Full fragment schema with system fields.
- * Used by Astro Content Collections for validation.
- */
-export const fragmentMetaSchema = fragmentEditableSchema.extend({
-  id: z.string(),
-  locale: z.string(),
-  name: z.string(),
-});
-
-export type FragmentMeta = z.infer<typeof fragmentMetaSchema>;
-
-// ===== MDX Page Schemas =====
-
-/**
- * Base schema for mdx-type page frontmatter — renderer-neutral.
+ * Content metadata shapes and their generated validators.
  *
- * Default for the CMS form when editing an mdx page; projects override via
- * `mdxPages.schema` when they want a renderer-specific shape (e.g. an
- * Astro-collection schema with extra fields).
+ * Zod is gone from this package: the shapes are plain TypeScript types
+ * (`./types`), the validators are Typia-generated (`./validators`), and the
+ * coercion/strip behaviour the Zod schemas performed implicitly is explicit and
+ * separately tested (`./normalize`).
  *
- * Permissive on purpose: `.passthrough()` lets unknown frontmatter keys flow
- * through unchanged so the file's existing fields are never lost on save.
+ * The `parseLoose*` variants are what `@conloca/astro-cms`'s loader validates
+ * collection entries with before they reach Astro's data store.
  */
-export const mdxPageFrontmatterSchema = z
-  .object({
-    title: z.string().describe('Page title for SEO and browser tab'),
-    description: z.string().optional().describe('Meta description for search engines'),
-    draft: z.boolean().optional().describe('Hide the page from production builds'),
-  })
-  .passthrough();
 
-export type MdxPageFrontmatter = z.infer<typeof mdxPageFrontmatterSchema>;
-
-// ===== Data Schemas =====
-
-/**
- * Base schema for data entry metadata - editable fields only.
- * Used by CMS forms for dynamic form generation.
- * Add .describe() for form field labels/hints.
- */
-export const dataEditableSchema = z.object({
-  title: z.string().describe('Display name for the entry'),
-  description: z.string().optional().describe('Brief description of this entry'),
-  category: z.string().optional().describe('Category for organizing entries'),
-  tags: z.array(z.string()).optional().describe('Tags for filtering and organization'),
-});
-
-export type DataEditable = z.infer<typeof dataEditableSchema>;
-
-/**
- * Zod schema for data entry metadata.
- * Covers common organizational fields for structured data collections.
- */
-export const dataMetaSchema = dataEditableSchema.extend({
-  // System fields (added by loader)
-  id: z.string(),
-  locale: z.string(),
-  name: z.string(),
-
-  // Actual data content (arbitrary JSON structure)
-  data: z.record(z.string(), z.unknown()).optional(),
-});
-
-export type DataMeta = z.infer<typeof dataMetaSchema>;
+export type {
+  DataEditable,
+  DataMeta,
+  FragmentEditable,
+  FragmentMeta,
+  LooseDataMeta,
+  LooseFragmentMeta,
+  LoosePageMeta,
+  MdxPageFrontmatter,
+  PageEditable,
+  PageMeta,
+  SchemaIssue,
+  SchemaParseResult,
+} from './types.js';
+export {
+  PAGE_META_KEYS,
+  parseDataEditable,
+  parseDataMeta,
+  parseFragmentEditable,
+  parseFragmentMeta,
+  parseLooseDataMeta,
+  parseLooseFragmentMeta,
+  parseLoosePageMeta,
+  parseMdxPageFrontmatter,
+  parsePageEditable,
+  parsePageMeta,
+} from './validators.js';

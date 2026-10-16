@@ -35,7 +35,8 @@ import type {
   UpdateResult,
 } from '@conloca/content-api';
 import type { ResolvedRoutingConfig } from '../types.js';
-import { ALL_FRAGMENTS_COLLECTION, rememberBuiltRecord } from './page-render-core.js';
+import { ALL_FRAGMENTS_COLLECTION } from './collection-names.js';
+import { rememberBuiltRecord } from './page-render-core.js';
 
 interface CollectionEntry {
   data: Record<string, unknown>;

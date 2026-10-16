@@ -8,12 +8,12 @@
  */
 import { afterEach, describe, expect, test } from 'bun:test';
 import { cleanup, fireEvent, screen } from '@testing-library/react';
-import { z } from 'zod';
 import { DataList } from '../src/components/pages/DataList.js';
 import { configureUI } from '../src/ui-config.js';
+import { bioFields } from './fixtures/typia/host-schemas.js';
 import { renderWithProviders, setupTestAPI, testApi } from './test-utils.js';
 
-const dataSchemas = { authors: z.object({ bio: z.string().optional() }) };
+const dataSchemas = { authors: bioFields };
 
 afterEach(() => {
   cleanup();

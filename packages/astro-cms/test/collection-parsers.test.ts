@@ -4,10 +4,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { definePageSchema } from '@conloca/cms-spa/page-schemas';
-import { z } from 'zod';
-import { pageCollectionSchema, previewCollectionSchemas } from '../src/internal/collection-schemas.js';
+import { previewEntryParsers } from '../src/internal/collection-parsers.js';
+import { createPageEntryParser } from '../src/internal/entry-validation.js';
 import { generateContentSchemasModule } from '../src/lib/virtual-module-generators.js';
 import type { ResolvedRoutingConfig } from '../src/types.js';
+import { optionalAuthorFields, testimonialPayload } from './fixtures/typia/host-schemas.js';
 
 // The generated module is what a preview render reads its schema inputs from,
 // so it is evaluated here as written, against a module on disk.
@@ -41,7 +42,7 @@ describe('generateContentSchemasModule', () => {
   });
 });
 
-describe('previewCollectionSchemas', () => {
+describe('previewEntryParsers', () => {
   const routing = {
     enabled: true,
     locale: 'en',
@@ -49,33 +50,38 @@ describe('previewCollectionSchemas', () => {
     fallback: '404',
     routes: { pages: { pattern: '/[...slug]', collection: 'pages', dataBindings: { collections: ['events'] } } },
   } as unknown as ResolvedRoutingConfig;
-  const pageSchemas = { '/blog/': definePageSchema({ schema: z.object({ author: z.string().optional() }) }) };
-  const dataSchemas = { events: z.object({ startsAt: z.coerce.date(), badge: z.string().default('new') }) };
+  const pageSchemas = { '/blog/': definePageSchema({ schema: optionalAuthorFields }) };
+  const dataSchemas = { events: testimonialPayload };
 
-  test('builds the page schema conlocaPages declares and parses publish dates', () => {
-    const schemas = previewCollectionSchemas(routing, { pageSchemas });
+  test('builds the page parser conlocaPages declares and parses publish dates', () => {
+    const parsers = previewEntryParsers(routing, { pageSchemas });
     const page = { id: 'p', locale: 'en', title: 'T', pathname: '/blog/p', publishAt: '2026-09-08T00:00:00.000Z' };
-    const parsed = schemas.pages.parse(page) as { publishAt: Date };
-    const built: unknown = pageCollectionSchema(pageSchemas).parse(page);
-    expect(parsed).toEqual(built as { publishAt: Date });
-    expect(parsed.publishAt).toBeInstanceOf(Date);
-    expect(schemas.pages.safeParse({ ...page, author: 42 }).success).toBe(false);
+    const parsed = parsers.pages(page);
+    expect(parsed).toEqual(createPageEntryParser(pageSchemas)(page));
+    expect(parsed.success && parsed.data.publishAt).toEqual(new Date('2026-09-08T00:00:00.000Z'));
+    expect(parsers.pages({ ...page, author: 42 }).success).toBe(false);
   });
 
-  test("runs a bound data collection's payload schema: coerced dates and defaults", () => {
-    const schemas = previewCollectionSchemas(routing, { dataSchemas });
-    const parsed = schemas.events.parse({
+  test("runs a bound data collection's payload validator", () => {
+    const parsers = previewEntryParsers(routing, { dataSchemas });
+    const entry = { id: 'e', locale: 'en', name: 'e', title: 'E' };
+    const parsed = parsers.events({ ...entry, data: { quote: 'Great', stray: 1 } });
+    expect(parsed.success && parsed.data.data).toEqual({ quote: 'Great' });
+    expect(parsers.events({ ...entry, data: { quote: 42 } }).success).toBe(false);
+  });
+
+  test('a bound data collection without a payload schema checks only Conloca fields', () => {
+    const parsed = previewEntryParsers(routing, {}).events({
       id: 'e',
       locale: 'en',
       name: 'e',
       title: 'E',
-      data: { startsAt: '2026-10-01' },
-    }) as { data: { startsAt: Date; badge: string } };
-    expect(parsed.data.startsAt).toBeInstanceOf(Date);
-    expect(parsed.data.badge).toBe('new');
+      data: { anything: 1 },
+    });
+    expect(parsed.success && parsed.data.data).toEqual({ anything: 1 });
   });
 
   test('declares the fragments aggregate', () => {
-    expect(Object.keys(previewCollectionSchemas(routing, {}))).toEqual(['__conloca_fragments', 'pages', 'events']);
+    expect(Object.keys(previewEntryParsers(routing, {}))).toEqual(['__conloca_fragments', 'pages', 'events']);
   });
 });

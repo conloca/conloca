@@ -26,19 +26,16 @@ import type { Config } from '@puckeditor/core';
 import { type Data, resolveAllData } from '@puckeditor/core';
 import type { ComponentType } from 'react';
 import React from 'react';
+import { describeEntryIssues } from '../internal/entry-issues.js';
+import type { EntryParser } from '../internal/entry-validation.js';
 import type { DataCollectionEntry, DataContext, PageReference, ResolvedRoutingConfig } from '../types.js';
+import { ALL_FRAGMENTS_COLLECTION } from './collection-names.js';
 
 // Re-exported so the copied `dist/internal/page-handler.astro` reaches
 // everything it renders with through this one module.
 export { findUnknownComponentTypes } from '../lib/unknown-components.js';
 
-/**
- * Synthetic collection every discovered fragment lands in (the loader flattens
- * all fragment collections into one). Owned here — rather than imported from
- * `collections.ts` — so this core stays free of the `astro:content` that module
- * pulls in; `collections.ts` re-exports it to keep the public name stable.
- */
-export const ALL_FRAGMENTS_COLLECTION = '__conloca_fragments';
+export { ALL_FRAGMENTS_COLLECTION };
 
 /**
  * The single content-access seam the render core depends on: give me the raw
@@ -396,24 +393,6 @@ export async function resolvePuckData(puckData: Data, puckConfig: Config, dataCo
   }
 }
 
-/**
- * The part of a collection's declared `schema` the preview path runs: Astro's
- * own parse of an entry's data (a Zod schema satisfies it). Structural rather
- * than `z.ZodType` so a host's zod copy and Astro's `astro/zod` both qualify.
- */
-interface CollectionSchema {
-  safeParseAsync(data: unknown): Promise<{ success: true; data: unknown } | { success: false; error: Error }>;
-}
-
-function isCollectionSchema(schema: unknown): schema is CollectionSchema {
-  return (
-    typeof schema === 'object' &&
-    schema !== null &&
-    'safeParseAsync' in schema &&
-    typeof schema.safeParseAsync === 'function'
-  );
-}
-
 export interface ReaderContentSourceOptions {
   /**
    * Every consumer filters records to one locale, and each shaped locale is
@@ -422,17 +401,17 @@ export interface ReaderContentSourceOptions {
    */
   renderLocale?: string;
   /**
-   * Each collection's declared `schema`, keyed by collection name — the
-   * site's content config `collections` projected to their schemas. The build
-   * runs every loader record through it (`parseData` in `loader.ts`), so a
+   * The entry parser of each collection, keyed by collection name — the ones
+   * the collection factories hand the loader (see `previewEntryParsers`). The
+   * build runs every loader record through its parser before storing it, so a
    * preview record must go through it too: otherwise a page gets ISO strings
-   * where the published one gets Dates, and misses its `.default()` values.
-   * A collection absent here has no schema to run; its records pass through.
+   * where the published one gets Dates. A collection absent here has no
+   * parser to run; its records pass through.
    * An entry the reader serves from the build's own parsed collections (see
    * {@link rememberBuiltRecord}) is not parsed again: it already is what the
-   * build made of it, and a transform to another type would reject its output.
+   * build made of it.
    */
-  schemas: Readonly<Record<string, unknown>>;
+  parsers: Readonly<Record<string, EntryParser<Record<string, unknown>>>>;
 }
 
 /**
@@ -453,8 +432,8 @@ export function rememberBuiltRecord(entry: LocalizedEntry, record: Record<string
  * caller installs on `Astro.locals.contentApi`. It projects the reader's
  * manifest listing + per-locale content into the SAME record shape the
  * collection-backed source (and the Astro loader) produce, then parses each
- * record with its collection's schema as the build does, so the render core
- * is oblivious to which backend served it: the page shows whatever that
+ * record with its collection's entry parser as the build does, so the render
+ * core is oblivious to which backend served it: the page shows whatever that
  * reader returns, with the values the published page would get.
  *
  * The synthetic `__conloca_fragments` collection is not a real ContentAPI
@@ -463,36 +442,19 @@ export function rememberBuiltRecord(entry: LocalizedEntry, record: Record<string
  * loader skips them (they belong to an external renderer).
  */
 export function createReaderContentSource(api: ContentAPI, options: ReaderContentSourceOptions): PageContentSource {
-  const { renderLocale, schemas } = options;
+  const { renderLocale, parsers } = options;
   const filtersFor = (collection: string) =>
     collection === ALL_FRAGMENTS_COLLECTION ? ({ kind: 'fragment' } as const) : { collection };
 
-  // Astro also accepts `schema: ({ image }) => …`, which only its content
-  // layer can call; such a collection's records cannot be parsed here.
-  const unparseable = new Set<string>();
-  const parseRecord = async (collection: string, record: Record<string, unknown>) => {
-    const schema = schemas[collection];
-    if (schema === undefined) return record;
-    if (!isCollectionSchema(schema)) {
-      if (!unparseable.has(collection)) {
-        unparseable.add(collection);
-        console.warn(
-          `[Conloca] Preview cannot run the schema of collection "${collection}" (it is not a Zod schema), ` +
-            'so its draft values reach the page unparsed.',
-        );
-      }
-      return record;
-    }
-    const parsed = await schema.safeParseAsync(record);
-    if (!parsed.success) {
-      throw new Error(
-        `[Conloca] Preview entry ${String(record.id)} (${String(record.locale)}) does not match the schema of ` +
-          `collection "${collection}", so the build would reject it too: ${parsed.error.message}`,
-      );
-    }
-    // The build stores this same parse output as the entry's `data` record
-    // (loader.ts), which is what the collection source hands out.
-    return parsed.data as Record<string, unknown>;
+  const parseRecord = (collection: string, record: Record<string, unknown>) => {
+    const parse = parsers[collection];
+    if (parse === undefined) return record;
+    const parsed = parse(record);
+    // The same error the loader fails the build with for this entry.
+    if (!parsed.success) throw new Error(describeEntryIssues(parsed.issues, { collection, id: String(record.id) }));
+    // The loader stores this same parse output as the entry's `data` record,
+    // which is what the collection source hands out.
+    return parsed.data;
   };
 
   const shapeEntry = async (

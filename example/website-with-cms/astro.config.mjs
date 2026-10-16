@@ -3,6 +3,7 @@ import node from '@astrojs/node';
 import react from '@astrojs/react';
 import { conlocaCMS } from '@conloca/astro-cms/node';
 import { defineConfig } from 'astro/config';
+import { schemaTypia } from './typia-vite.mjs';
 
 // https://astro.build/config
 export default defineConfig({
@@ -43,8 +44,10 @@ export default defineConfig({
       },
     }),
   ],
-  // Vite config for monorepo development (not needed for published packages)
   vite: {
+    // Generates the validators and form metadata in src/schemas/data.ts.
+    plugins: [...schemaTypia()],
+    // Monorepo development (not needed for published packages)
     server: {
       watch: {
         // Watch CMS dist folder for HMR during local development
