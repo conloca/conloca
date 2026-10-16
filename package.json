@@ -48,6 +48,7 @@
     "@nx/react": "23.2.1",
     "@nx/web": "23.2.1",
     "@nx/workspace": "23.2.1",
+    "@oxlint/plugins": "1.85.0",
     "@smoothbricks/nx-plugin": "^0.4.21",
     "@testing-library/dom": "10.4.1",
     "@testing-library/react": "^16.3.3",
@@ -67,6 +68,8 @@
     "jiti": "2.7.0",
     "jsdom": "^30.0.1",
     "nx": "23.2.1",
+    "oxlint": "1.85.0",
+    "oxlint-tsgolint": "7.0.2003",
     "prettier": "^3.9.6",
     "react": "19.2.8",
     "react-dom": "19.2.8",
@@ -75,7 +78,7 @@
     "ttsc": "0.30.4",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.69.0",
-    "verdaccio": "6.10.2",
+    "verdaccio": "6.10.4",
     "vite": "^7.3.6",
     "vitest": "^4.1.11",
     "wrangler": "^4.128.0"
@@ -101,7 +104,21 @@
     "name": "@conloca/source"
   },
   "overrides": {
-    "typia": "14.0.6"
+    "typia": "14.0.6",
+    "brace-expansion": "5.0.12",
+    "@verdaccio/config>js-yaml": "5.4.2",
+    "@mdxeditor/editor@3>js-yaml": "4.3.2",
+    "nx>smol-toml": "1.8.0",
+    "typed-rest-client>qs": "6.16.0",
+    "nx>axios": "1.20.0",
+    "sharp": "0.35.5",
+    "miniflare>undici": "7.29.1",
+    "verdaccio>compression": "1.8.2",
+    "http-cache-semantics": "4.3.0",
+    "solid-js>seroval": "1.6.3",
+    "solid-js>seroval-plugins": "1.6.3",
+    "source-map-js": "1.2.2",
+    "@verdaccio/hooks>handlebars": "4.7.10"
   },
   "patchedDependencies": {
     "ttsc@0.30.4": "patches/ttsc@0.30.4.patch",
