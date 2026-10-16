@@ -50,6 +50,9 @@ export default [
   // tsserver-style walk only finds tsconfig.json, so `*.test.ts(x)` under
   // src/ report "not found by the project service". Point them at the test
   // projects explicitly rather than widening the build tsconfig includes.
+  // Bun-run tests (`*.bun.test.ts(x)`) are excluded from tsconfig.test.json
+  // (it carries Vitest globals) and typed by a `tsconfig.<name>-test.json`
+  // program of their own, so those programs are listed too.
   {
     files: [
       'targets/*/src/**/*.test.ts',
@@ -63,7 +66,7 @@ export default [
       parser: tseslint.parser,
       parserOptions: {
         projectService: false,
-        project: ['targets/*/tsconfig.test.json'],
+        project: ['targets/*/tsconfig.test.json', 'targets/*/tsconfig.*-test.json'],
         tsconfigRootDir: import.meta.dirname,
       },
     },
