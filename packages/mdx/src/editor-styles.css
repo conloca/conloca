@@ -25,37 +25,39 @@
 /* L0 heading scale. Tailwind preflight sets `h1..h6 { font-size: inherit;
    font-weight: inherit }`, so BlockType → Heading looks identical to a
    paragraph unless something restores real sizes. Use :where() so specificity
-   stays (0,0,1) and later host-probe rules (also unlayered, same specificity)
-   can override when auto-match lands. */
+   stays (0,0,1) and host class selectors still win. Host-probe rules sit at
+   the same specificity, so head order alone would pick between them; the
+   probe also sets `--conloca-host-hN-*` on the heading, which these rules
+   read first, so the host's value wins whichever sheet loads last. */
 :where(.conloca-prose--editor) h1 {
-  font-size: 2.25em;
-  font-weight: 700;
-  line-height: 1.2;
+  font-size: var(--conloca-host-h1-font-size, 2.25em);
+  font-weight: var(--conloca-host-h1-font-weight, 700);
+  line-height: var(--conloca-host-h1-line-height, 1.2);
 }
 :where(.conloca-prose--editor) h2 {
-  font-size: 1.75em;
-  font-weight: 700;
-  line-height: 1.25;
+  font-size: var(--conloca-host-h2-font-size, 1.75em);
+  font-weight: var(--conloca-host-h2-font-weight, 700);
+  line-height: var(--conloca-host-h2-line-height, 1.25);
 }
 :where(.conloca-prose--editor) h3 {
-  font-size: 1.375em;
-  font-weight: 600;
-  line-height: 1.3;
+  font-size: var(--conloca-host-h3-font-size, 1.375em);
+  font-weight: var(--conloca-host-h3-font-weight, 600);
+  line-height: var(--conloca-host-h3-line-height, 1.3);
 }
 :where(.conloca-prose--editor) h4 {
-  font-size: 1.125em;
-  font-weight: 600;
-  line-height: 1.35;
+  font-size: var(--conloca-host-h4-font-size, 1.125em);
+  font-weight: var(--conloca-host-h4-font-weight, 600);
+  line-height: var(--conloca-host-h4-line-height, 1.35);
 }
 :where(.conloca-prose--editor) h5 {
-  font-size: 1em;
-  font-weight: 600;
-  line-height: 1.4;
+  font-size: var(--conloca-host-h5-font-size, 1em);
+  font-weight: var(--conloca-host-h5-font-weight, 600);
+  line-height: var(--conloca-host-h5-line-height, 1.4);
 }
 :where(.conloca-prose--editor) h6 {
-  font-size: 0.875em;
-  font-weight: 600;
-  line-height: 1.4;
+  font-size: var(--conloca-host-h6-font-size, 0.875em);
+  font-weight: var(--conloca-host-h6-font-weight, 600);
+  line-height: var(--conloca-host-h6-line-height, 1.4);
 }
 
 /* Editor chrome styles only. Prose typography is intentionally NOT

@@ -235,6 +235,20 @@ function waitForElement<T extends HTMLElement>(root: ParentNode, selector: strin
   return promise;
 }
 
+/** Wait for the host-style probe's `<style>` to carry its `h2` rule. */
+function probedHeadingTag(): Promise<HTMLStyleElement> {
+  return waitFor(
+    () => {
+      const tag = Array.from(
+        document.querySelectorAll<HTMLStyleElement>('[data-conloca-host-styles-conloca-host-defaults]'),
+      ).find((el) => el.textContent?.includes(':where(.conloca-prose--editor) h2 {'));
+      if (!tag) throw new Error('host-style probe never published its h2 rule');
+      return tag;
+    },
+    { timeout: 15000 },
+  );
+}
+
 /**
  * Inline-style sanity check. A measurement pipeline pointed at a stale or
  * detached element returns confident nonsense, so before trusting ANY
@@ -310,6 +324,10 @@ export const TypingSurfaceMatchesHostTypography: Story = {
     const code = await waitForElement<HTMLElement>(editable, 'code', 'inline code');
     assertReadableElement(code, 'inline code');
 
+    // The probe is asynchronous (an iframe load), so the heading paints the
+    // editor's own scale until its tag lands; measuring before that would
+    // record 28px no matter which rule wins once both are present.
+    const probeTag = (await probedHeadingTag()).textContent ?? '';
     // Measure everything before asserting anything, so a failure report
     // carries the whole surface rather than dying on the first property.
     const h2Styles = await settled(h2);
@@ -323,7 +341,6 @@ export const TypingSurfaceMatchesHostTypography: Story = {
     // the bridge no longer writes it at all, and where the bridge does write it
     // the layered tier paints the surround navy regardless of what the probe
     // captured.
-    const probeTag = document.querySelector('[data-conloca-host-styles-conloca-host-defaults]')?.textContent ?? '';
     // The probe owns the page surface, so the paper can be deleted with it.
     expect(probeTag).toContain('--conloca-host-body-bg: rgb(2, 6, 23)');
     // The host's own design tokens ride along RESOLVED, published onto the
@@ -336,13 +353,14 @@ export const TypingSurfaceMatchesHostTypography: Story = {
     expect(probeTag).toContain('--sl-color-bg: #020617');
     // The probe owns heading metrics too. `:where()` is deliberate upstream
     // (host-style-probe.ts) to hold the rule at (0,0,1) — the SAME specificity
-    // as editor-styles.css's own unlayered `:where(.conloca-prose--editor) h2
-    // { 1.75em; 700 }`. Both unlayered and equal, so head order breaks the tie.
-    // Once the tier is gone that tie is the only thing standing between 35px
-    // and 28px, which is why the rule text and the computed value are asserted
-    // together: text alone would not prove it wins, and the computed value
-    // alone would not prove the probe is what produced it.
-    expect(probeTag).toMatch(/:where\(\.conloca-prose--editor\) h2 \{[^}]*35px/);
+    // as editor-styles.css's own unlayered `:where(.conloca-prose--editor) h2`
+    // scale, so head order alone would break the tie. The probe therefore also
+    // publishes `--conloca-host-h2-*` on the heading, which that scale reads
+    // first. The rule text and the computed value are asserted together: text
+    // alone would not prove it wins, and the computed value alone would not
+    // prove the probe is what produced it.
+    expect(probeTag).toMatch(/:where\(\.conloca-prose--editor\) h2 \{(?:[^}]*;)? font-size: 35px/);
+    expect(probeTag).toMatch(/:where\(\.conloca-prose--editor\) h2 \{[^}]*--conloca-host-h2-font-size: 35px/);
     const surface = paintedBackground(editable);
     // Heading metrics come from the host sheet, not the editor's default
     // 1.75em/700 scale.
@@ -364,6 +382,63 @@ export const TypingSurfaceMatchesHostTypography: Story = {
     // Inline code: readable ink on the host's inline-code background.
     expect(codeStyles['background-color']).toBe('rgb(30, 41, 59)');
     expect(codeStyles.color).not.toBe('rgb(24, 24, 24)');
+  },
+};
+
+/** Top-level unlayered rules of the editor's own L0 heading scale for `h2`,
+ * read from the loaded same-origin sheets (a cross-origin sheet's rules are
+ * unreadable and cannot be the editor's) — the probe's rule shares the
+ * selector but never carries the `1.75em` fallback. */
+function editorHeadingRules(): string[] {
+  const found: string[] = [];
+  for (const sheet of Array.from(document.styleSheets)) {
+    if (sheet.href !== null && new URL(sheet.href).origin !== location.origin) continue;
+    for (const rule of Array.from(sheet.cssRules)) {
+      if (
+        rule instanceof CSSStyleRule &&
+        rule.selectorText === ':where(.conloca-prose--editor) h2' &&
+        rule.cssText.includes('1.75em')
+      ) {
+        found.push(rule.cssText);
+      }
+    }
+  }
+  return found;
+}
+
+/**
+ * The probe's heading metrics hold when the editor sheet loads AFTER it.
+ *
+ * The probe's `<style>` and the editor's L0 heading scale are both unlayered
+ * at (0,0,1), so on a page where the editor sheet arrives last (a lazily
+ * loaded chunk, a second bundled copy) that scale wins the tie. This story
+ * forces that order — the editor's heading rule re-inserted at the end of
+ * `<head>` — and the heading must still measure the host's 35px/600, not the
+ * editor's 28px/700.
+ */
+export const HostHeadingSurvivesALaterEditorSheet: Story = {
+  render: () => <EmbeddedEditorHarness />,
+  play: async ({ canvasElement }) => {
+    const surround = await waitForElement<HTMLElement>(canvasElement, '.conloca-mdx-editor-surround', 'surround');
+    const wrapper = await waitForElement<HTMLElement>(surround, `.${WRAPPER_CLASS}`, 'host wrapper class');
+    const editable = await waitForElement<HTMLElement>(wrapper, '.conloca-prose--editor', 'contenteditable');
+    const h2 = await waitForElement<HTMLElement>(editable, 'h2', 'typing-surface h2');
+    const probe = await probedHeadingTag();
+
+    const editorRules = editorHeadingRules();
+    expect(editorRules.length).toBeGreaterThan(0);
+    const later = document.createElement('style');
+    later.setAttribute('data-editor-sheet-after-probe', '');
+    later.textContent = editorRules.join('\n');
+    document.head.appendChild(later);
+    try {
+      expect(probe.compareDocumentPosition(later) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      const h2Styles = await settled(h2);
+      expect(h2Styles['font-size']).toBe('35px');
+      expect(h2Styles['font-weight']).toBe('600');
+    } finally {
+      later.remove();
+    }
   },
 };
 

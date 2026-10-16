@@ -406,15 +406,31 @@ function makeProbeEl(doc: Document, tag: string): HTMLElement {
  * numbers. Filtered out for any tag other than ul/ol. */
 const LIST_STYLE_PROPS = new Set(['list-style-type', 'list-style-position']);
 
+/** The properties `@conloca/mdx`'s L0 heading scale sets on `h1`..`h6`.
+ * Its `:where(.conloca-prose--editor) hN` rules are unlayered at (0,0,1),
+ * the same specificity as the rules emitted here, so the stylesheet that
+ * comes last in `<head>` would win the tie — and nothing orders the probe's
+ * `<style>` against a bundled or lazily loaded editor sheet. The probe
+ * therefore also publishes these values as `--conloca-host-hN-<prop>` on the
+ * heading itself, and the L0 rules read them through `var()`: whichever rule
+ * wins, the heading resolves to the host's value. */
+const HEADING_SCALE_PROPS: Partial<Record<(typeof PROBE_PROPS)[number], true>> = {
+  'font-size': true,
+  'font-weight': true,
+  'line-height': true,
+};
+
 function generateRule(view: Window, sample: HTMLElement, tag: string): string {
   const cs = view.getComputedStyle(sample);
   const decls: string[] = [];
   const isListContainer = tag === 'ul' || tag === 'ol';
+  const isHeading = /^h[1-6]$/.test(tag);
   for (const prop of PROBE_PROPS) {
     if (LIST_STYLE_PROPS.has(prop) && !isListContainer) continue;
     const value = cs.getPropertyValue(prop);
     if (value && value !== 'normal' && value !== 'none') {
       decls.push(`${prop}: ${value}`);
+      if (isHeading && HEADING_SCALE_PROPS[prop]) decls.push(`--conloca-host-${tag}-${prop}: ${value}`);
     }
   }
   if (decls.length === 0) return '';

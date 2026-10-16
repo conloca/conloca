@@ -228,6 +228,29 @@
           "killAfterMs": 10000
         }
       },
+      "build-storybook": {
+        "executor": "@smoothbricks/nx-plugin:bounded-exec",
+        "cache": true,
+        "dependsOn": [
+          "^build",
+          "bun-web"
+        ],
+        "inputs": [
+          "default",
+          "^production",
+          "{workspaceRoot}/package.json",
+          "{workspaceRoot}/bun.lock"
+        ],
+        "outputs": [
+          "{workspaceRoot}/dist/storybook/cms-spa"
+        ],
+        "options": {
+          "command": "bunx --no-install storybook build --config-dir .storybook --output-dir ../../dist/storybook/cms-spa --disable-telemetry",
+          "cwd": "{projectRoot}",
+          "timeoutMs": 300000,
+          "killAfterMs": 1e4
+        }
+      },
       "test-browser": {
         "executor": "@smoothbricks/nx-plugin:bounded-exec",
         "cache": true,
@@ -237,7 +260,8 @@
           "^production"
         ],
         "dependsOn": [
-          "^build"
+          "^build",
+          "build-storybook"
         ],
         "options": {
           "command": "smoo playwright ensure chromium && vitest run --config .storybook/vitest.config.ts",
