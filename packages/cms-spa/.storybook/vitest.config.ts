@@ -55,6 +55,10 @@ export default defineConfig({
       provider: playwright(...playwrightOptions),
       headless: true,
       instances: [{ browser: 'chromium' }],
+      // Storybook's runner sets 1200x900 before each story without its own viewport. Starting each
+      // file's frame there keeps that call from resizing it, whose `resize` event would otherwise
+      // fire during the file's first story.
+      viewport: { width: 1200, height: 900 },
     },
   },
 });
