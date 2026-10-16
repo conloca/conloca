@@ -56,3 +56,23 @@ export function generatePuckConfigModule(puckConfigPath: string): string {
 
   return `export { default } from '${absolutePath}';`;
 }
+
+/**
+ * Generate the virtual:conloca-content-schemas module: the site's
+ * `contentSchemasPath` module — the `pageSchemas` / `dataSchemas` its content
+ * config hands the collection factories — for a draft preview to build the
+ * same collection schemas from. Not the content config itself: that imports
+ * build-time loaders, which cannot be evaluated in a server runtime.
+ *
+ * Imported lazily, on the first call, so only a preview render evaluates it.
+ *
+ * @param contentSchemasPath - Absolute path of the module, or undefined when the site names none
+ * @returns JavaScript module code as a string
+ */
+export function generateContentSchemasModule(contentSchemasPath: string | undefined): string {
+  if (contentSchemasPath === undefined) {
+    return 'export function loadContentSchemas() { return Promise.resolve({}); }';
+  }
+
+  return `export function loadContentSchemas() { return import(${JSON.stringify(contentSchemasPath)}); }`;
+}

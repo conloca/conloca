@@ -35,7 +35,7 @@ import type {
   UpdateResult,
 } from '@conloca/content-api';
 import type { ResolvedRoutingConfig } from '../types.js';
-import { ALL_FRAGMENTS_COLLECTION } from './page-render-core.js';
+import { ALL_FRAGMENTS_COLLECTION, rememberBuiltRecord } from './page-render-core.js';
 
 interface CollectionEntry {
   data: Record<string, unknown>;
@@ -126,7 +126,11 @@ export async function createCollectionBackedContentAPI(opts: CollectionBackedCon
         if (locale === undefined) continue;
         const { version, content } = splitRecord(record);
         locales[locale] = version;
-        entries.set(`${id} ${locale}`, { ...identity, localized: { ...version, content } });
+        const entry: LocalizedEntry = { ...identity, localized: { ...version, content } };
+        // The record is the build's parse output; a reader source hands it
+        // out as is instead of parsing what was reconstructed from it.
+        rememberBuiltRecord(entry, record);
+        entries.set(`${id} ${locale}`, entry);
       }
       manifests.push({ ...identity, locales });
     }

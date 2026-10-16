@@ -178,6 +178,7 @@ Passed to `conlocaCMS({ ... })`. Only two are required.
 | `routing`              | no       | Full routing configuration, for sites with more than one content route.                                                                             |
 | `templates`            | no       | Page templates offered in the create-page dialog.                                                                                                   |
 | `schemasPath`          | no       | Module exporting `dataSchemas`, `pageSchemas` and `mdxComponents`. Drives the page-settings form and the MDX component registry.                    |
+| `contentSchemasPath`   | no       | Schema-only module exporting the `pageSchemas` / `dataSchemas` your content config passes to `conlocaPages()` / `conlocaData()`. Draft previews parse entries with the collection schemas built from it, as the build does. |
 | `componentPaths`       | no       | Extra folders to scan for components wrapped in `withHydration()`.                                                                                  |
 | `mdxComponentFolders`  | no       | Folders scanned for locally authored MDX components, whose `interface Props` becomes the editor's prop panel. Defaults to `['src/components/mdx']`. |
 | `assetsPath`           | no       | Upload directory; enables the Media Library. The site must serve it from `publicDir`, directly or through a link there, or dev and build fail.      |

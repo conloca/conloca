@@ -55,6 +55,7 @@ const ACORN_DEFAULT_SHIM_PATH = join(__dirname, '..', '..', 'internal', 'acorn-d
 const TIPTAP_HTML_SHIM_PATH = join(__dirname, 'tiptap-html-static.js');
 
 import {
+  generateContentSchemasModule,
   generateLayoutModule,
   generatePuckConfigModule,
   generateRoutingConfigModule,
@@ -69,11 +70,13 @@ const RESOLVED_VIRTUAL_CONFIG = `\0${VIRTUAL_CONFIG_MODULE}`;
 const VIRTUAL_ROUTING_CONFIG = 'virtual:conloca-routing-config';
 const VIRTUAL_LAYOUT = 'virtual:conloca-layout';
 const VIRTUAL_PUCK_CONFIG = 'virtual:conloca-puck-config';
+const VIRTUAL_CONTENT_SCHEMAS = 'virtual:conloca-content-schemas';
 
 // Resolved IDs (with \0 prefix to prevent file resolution)
 const RESOLVED_ROUTING_CONFIG = `\0${VIRTUAL_ROUTING_CONFIG}`;
 const RESOLVED_LAYOUT = `\0${VIRTUAL_LAYOUT}`;
 const RESOLVED_PUCK_CONFIG = `\0${VIRTUAL_PUCK_CONFIG}`;
+const RESOLVED_CONTENT_SCHEMAS = `\0${VIRTUAL_CONTENT_SCHEMAS}`;
 
 // Virtual modules for hydration system
 const VIRTUAL_HYDRATION_REGISTRY = 'virtual:conloca-hydration-registry';
@@ -106,6 +109,19 @@ export interface ConlocaCMSOptions extends Omit<UIConfig, 'basename'> {
   route?: string; // Default: /__cms
   puckConfigPath: string; // Path to the puck config module (should be .tsx file with React components)
   schemasPath?: string; // Path to the schemas module (exports { dataSchemas, pageSchemas, mdxComponents })
+
+  /**
+   * Module exporting the `pageSchemas` and/or `dataSchemas` the content config
+   * hands conlocaPages() and conlocaData(). A draft preview builds the same
+   * collection schemas from them and parses each draft as the build parses
+   * an entry, so host fields get their coerced and default values. It loads
+   * in the preview server, so it may import schema code only (Zod,
+   * definePageSchema) — the module the content config imports them from, not
+   * the editor's `schemasPath` barrel.
+   *
+   * @example './src/page-schemas.ts'
+   */
+  contentSchemasPath?: string;
 
   /**
    * Default layout for content pages.
@@ -815,6 +831,9 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
                   if (id === VIRTUAL_PUCK_CONFIG) {
                     return RESOLVED_PUCK_CONFIG;
                   }
+                  if (id === VIRTUAL_CONTENT_SCHEMAS) {
+                    return RESOLVED_CONTENT_SCHEMAS;
+                  }
                   // Hydration virtual modules
                   if (id === VIRTUAL_HYDRATION_REGISTRY) {
                     return RESOLVED_HYDRATION_REGISTRY;
@@ -838,6 +857,11 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
                   }
                   if (id === RESOLVED_PUCK_CONFIG) {
                     return generatePuckConfigModule(options.puckConfigPath);
+                  }
+                  if (id === RESOLVED_CONTENT_SCHEMAS) {
+                    return generateContentSchemasModule(
+                      options.contentSchemasPath ? resolve(options.contentSchemasPath) : undefined,
+                    );
                   }
                   // Hydration virtual modules
                   if (id === RESOLVED_HYDRATION_REGISTRY) {

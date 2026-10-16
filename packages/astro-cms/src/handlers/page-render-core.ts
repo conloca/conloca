@@ -17,6 +17,7 @@ import {
   type ContentManifest,
   type ContentMeta,
   isContentPublished,
+  type LocalizedEntry,
   type MDXHeading,
   pageTimestampsOf,
   selectPagesByPrefix,
@@ -396,26 +397,114 @@ export async function resolvePuckData(puckData: Data, puckConfig: Config, dataCo
 }
 
 /**
+ * The part of a collection's declared `schema` the preview path runs: Astro's
+ * own parse of an entry's data (a Zod schema satisfies it). Structural rather
+ * than `z.ZodType` so a host's zod copy and Astro's `astro/zod` both qualify.
+ */
+interface CollectionSchema {
+  safeParseAsync(data: unknown): Promise<{ success: true; data: unknown } | { success: false; error: Error }>;
+}
+
+function isCollectionSchema(schema: unknown): schema is CollectionSchema {
+  return (
+    typeof schema === 'object' &&
+    schema !== null &&
+    'safeParseAsync' in schema &&
+    typeof schema.safeParseAsync === 'function'
+  );
+}
+
+export interface ReaderContentSourceOptions {
+  /**
+   * Every consumer filters records to one locale, and each shaped locale is
+   * one getLocalized read, so with a render locale known, shaping the others
+   * is wasted work.
+   */
+  renderLocale?: string;
+  /**
+   * Each collection's declared `schema`, keyed by collection name — the
+   * site's content config `collections` projected to their schemas. The build
+   * runs every loader record through it (`parseData` in `loader.ts`), so a
+   * preview record must go through it too: otherwise a page gets ISO strings
+   * where the published one gets Dates, and misses its `.default()` values.
+   * A collection absent here has no schema to run; its records pass through.
+   * An entry the reader serves from the build's own parsed collections (see
+   * {@link rememberBuiltRecord}) is not parsed again: it already is what the
+   * build made of it, and a transform to another type would reject its output.
+   */
+  schemas: Readonly<Record<string, unknown>>;
+}
+
+/**
+ * The build's parsed record behind each entry a collection-backed ContentAPI
+ * hands out. A preview reader serves unchanged entries from that API, and
+ * the reader source uses the record the build already made instead of
+ * reshaping and parsing it again.
+ */
+const builtRecords = new WeakMap<LocalizedEntry, Record<string, unknown>>();
+
+/** Mark `entry` as projected from the build's parsed collection record `record`. */
+export function rememberBuiltRecord(entry: LocalizedEntry, record: Record<string, unknown>): void {
+  builtRecords.set(entry, record);
+}
+
+/**
  * Reader-backed {@link PageContentSource} over a {@link ContentAPI}, the one a
  * caller installs on `Astro.locals.contentApi`. It projects the reader's
  * manifest listing + per-locale content into the SAME record shape the
- * collection-backed source (and the Astro loader) produce, so the render core
+ * collection-backed source (and the Astro loader) produce, then parses each
+ * record with its collection's schema as the build does, so the render core
  * is oblivious to which backend served it: the page shows whatever that
- * reader returns.
+ * reader returns, with the values the published page would get.
  *
  * The synthetic `__conloca_fragments` collection is not a real ContentAPI
  * collection (the loader flattens every fragment collection into it), so it maps
  * to a `kind: 'fragment'` query; `type: 'mdx'` PAGES are skipped exactly as the
  * loader skips them (they belong to an external renderer).
  */
-export function createReaderContentSource(api: ContentAPI, renderLocale?: string): PageContentSource {
+export function createReaderContentSource(api: ContentAPI, options: ReaderContentSourceOptions): PageContentSource {
+  const { renderLocale, schemas } = options;
   const filtersFor = (collection: string) =>
     collection === ALL_FRAGMENTS_COLLECTION ? ({ kind: 'fragment' } as const) : { collection };
 
-  const shapeEntry = async (manifest: ContentManifest, locale: string): Promise<Record<string, unknown> | null> => {
+  // Astro also accepts `schema: ({ image }) => …`, which only its content
+  // layer can call; such a collection's records cannot be parsed here.
+  const unparseable = new Set<string>();
+  const parseRecord = async (collection: string, record: Record<string, unknown>) => {
+    const schema = schemas[collection];
+    if (schema === undefined) return record;
+    if (!isCollectionSchema(schema)) {
+      if (!unparseable.has(collection)) {
+        unparseable.add(collection);
+        console.warn(
+          `[Conloca] Preview cannot run the schema of collection "${collection}" (it is not a Zod schema), ` +
+            'so its draft values reach the page unparsed.',
+        );
+      }
+      return record;
+    }
+    const parsed = await schema.safeParseAsync(record);
+    if (!parsed.success) {
+      throw new Error(
+        `[Conloca] Preview entry ${String(record.id)} (${String(record.locale)}) does not match the schema of ` +
+          `collection "${collection}", so the build would reject it too: ${parsed.error.message}`,
+      );
+    }
+    // The build stores this same parse output as the entry's `data` record
+    // (loader.ts), which is what the collection source hands out.
+    return parsed.data as Record<string, unknown>;
+  };
+
+  const shapeEntry = async (
+    collection: string,
+    manifest: ContentManifest,
+    locale: string,
+  ): Promise<Record<string, unknown> | null> => {
     const localeVersion = manifest.locales[locale];
     if (!localeVersion) return null;
     const localized = await api.getLocalized(manifest.id, locale);
+    const built = localized ? builtRecords.get(localized) : undefined;
+    if (built) return built;
     const content = localized?.localized.content;
     const record: Record<string, unknown> = {
       id: manifest.id,
@@ -431,7 +520,7 @@ export function createReaderContentSource(api: ContentAPI, renderLocale?: string
     };
     if (content?.mdx !== undefined) record.mdx = content.mdx;
     if (content?.puckData !== undefined) record.puckData = content.puckData;
-    return record;
+    return parseRecord(collection, record);
   };
 
   return {
@@ -441,12 +530,9 @@ export function createReaderContentSource(api: ContentAPI, renderLocale?: string
         // Mirror the loader's skip: `type: 'mdx'` pages are owned by an
         // external renderer, not this puck-page handler.
         if (manifest.kind === 'page' && manifest.type === 'mdx') continue;
-        // Every consumer filters records to one locale, and each shaped
-        // locale is one getLocalized read, so with a render locale known,
-        // shaping the others is wasted work.
         for (const locale of Object.keys(manifest.locales)) {
           if (renderLocale !== undefined && locale !== renderLocale) continue;
-          const record = await shapeEntry(manifest, locale);
+          const record = await shapeEntry(collection, manifest, locale);
           if (record) records.push(record);
         }
       }

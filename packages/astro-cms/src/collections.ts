@@ -2,8 +2,9 @@ import { defineCollection } from 'astro:content';
 import type { DataSchemas, PageSchemas } from '@conloca/cms-spa/page-schema-define';
 import { createContentAPI } from '@conloca/content-api/reader';
 import { dataMetaSchema, fragmentMetaSchema, pageMetaSchema } from '@conloca/content-api/schemas';
-import { z } from 'zod';
+import type { z } from 'zod';
 import { ALL_FRAGMENTS_COLLECTION } from './handlers/page-render-core.js';
+import { dataCollectionSchema, fragmentCollectionSchema, pageCollectionSchema } from './internal/collection-schemas.js';
 import { declareConlocaCollection, withDeclarationCheck } from './internal/declared-collections.js';
 import { buildPageCollectionSchema, hostFieldsFromPageSchemas } from './internal/page-collection-schema.js';
 import { conlocaLoader } from './loader.js';
@@ -162,7 +163,7 @@ export function conlocaPages(options: ConlocaPagesOptions = {}) {
       contentRoot,
       site,
     }),
-    schema: buildPageCollectionSchema(pageSchemas ? hostFieldsFromPageSchemas(pageSchemas) : z.object({})),
+    schema: pageCollectionSchema(pageSchemas),
   });
   if (pageSchemas) pageSchemasByCollection.set(defined, pageSchemas);
   return defined;
@@ -201,9 +202,7 @@ function conlocaDataCollection<T extends z.ZodObject<z.ZodRawShape>>(
       contentRoot,
       site,
     }),
-    // Base meta plus this collection's payload under `data`. `data` stays
-    // optional: an entry saved before any payload exists is not an error.
-    schema: z.looseObject({ ...dataMetaSchema.shape, data: payload.optional() }),
+    schema: dataCollectionSchema(payload),
   });
 }
 
@@ -254,7 +253,7 @@ export function conlocaFragments<const N extends readonly string[]>(...names: N)
         contentRoot,
         site,
       }),
-      schema: fragmentMetaSchema.loose(),
+      schema: fragmentCollectionSchema,
     });
   const named = Object.fromEntries(
     names.map((name) => {

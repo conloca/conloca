@@ -58,6 +58,20 @@ declare module 'virtual:conloca-puck-config' {
 }
 
 /**
+ * Virtual module: virtual:conloca-content-schemas
+ *
+ * The site's `contentSchemasPath` module (the `pageSchemas` / `dataSchemas`
+ * its content config hands the collection factories), imported on the first
+ * call only; an empty object when the site names none. A preview render
+ * builds its collection schemas from it.
+ */
+declare module 'virtual:conloca-content-schemas' {
+  import type { DataSchemas, PageSchemas } from '@conloca/cms-spa/page-schema-define';
+
+  export function loadContentSchemas(): Promise<{ pageSchemas?: PageSchemas; dataSchemas?: DataSchemas }>;
+}
+
+/**
  * Virtual module: virtual:conloca-hydration-entry
  *
  * Client-side script that handles progressive hydration of interactive

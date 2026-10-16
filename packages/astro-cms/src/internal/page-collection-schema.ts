@@ -2,7 +2,22 @@ import { type PageSchemas, toPageSchemaDescriptor } from '@conloca/cms-spa/page-
 import type { ContentMeta } from '@conloca/content-api';
 import { type PageMeta, pageMetaSchema } from '@conloca/content-api/schemas';
 import { z } from 'zod';
-import { LOADER_RESERVED_FIELDS } from '../loader.js';
+
+/**
+ * Entry fields the content loader owns, written into every entry's data in
+ * its load().
+ *
+ * None of them belong to `pageMetaSchema`, so under a page collection's schema
+ * they survive only through the loose index signature. A host page-meta field
+ * of the same name would replace the loader's value — a host `puckData` shape
+ * would empty the page tree of every page in the built site.
+ * `buildPageCollectionSchema` refuses those names with an error.
+ *
+ * Adding a field to the record the loader builds also means reserving it here.
+ * Kept here, not in `loader.ts`, so this module stays free of the loader's
+ * filesystem reader: a draft preview builds page schemas in a server runtime.
+ */
+export const LOADER_RESERVED_FIELDS = ['created', 'modified', 'name', 'data', 'mdx', 'puckData'] as const;
 
 const CORE_FIELD_NAMES = new Set(Object.keys(pageMetaSchema.shape));
 const RESERVED_FIELD_NAMES = new Set<string>(LOADER_RESERVED_FIELDS);

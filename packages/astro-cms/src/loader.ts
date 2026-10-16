@@ -11,19 +11,6 @@ export interface ConlocaLoaderOptions {
 }
 
 /**
- * Entry fields this loader owns, written into every entry's data in load().
- *
- * None of them belong to `pageMetaSchema`, so under a page collection's schema
- * they survive only through the loose index signature. A host page-meta field
- * of the same name would replace the loader's value — a host `puckData` shape
- * would empty the page tree of every page in the built site.
- * `buildPageCollectionSchema` refuses those names with an error.
- *
- * Adding a field to the record built in load() also means reserving it here.
- */
-export const LOADER_RESERVED_FIELDS = ['created', 'modified', 'name', 'data', 'mdx', 'puckData'] as const;
-
-/**
  * Custom Astro content loader for Conloca CMS.
  * Loads content from the Conloca content directory into Astro collections.
  */
@@ -98,8 +85,8 @@ export function conlocaLoader(options: ConlocaLoaderOptions): Loader {
           }
 
           // Any key added here that is not part of pageMetaSchema must also be
-          // listed in LOADER_RESERVED_FIELDS, or a host page-meta field of the
-          // same name will replace it on every page.
+          // listed in LOADER_RESERVED_FIELDS (internal/page-collection-schema.ts),
+          // or a host page-meta field of the same name will replace it on every page.
           const data: Record<string, unknown> = {
             id: manifest.id,
             locale,
