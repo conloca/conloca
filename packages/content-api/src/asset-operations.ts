@@ -11,6 +11,8 @@ import { validateFetchUrl } from './url-validation.js';
 export interface AssetConfig {
   assetsPath: string;
   maxFileSize?: number;
+  /** Wall-clock budget for a URL import: every redirect hop plus reading the whole body */
+  importTimeoutMs?: number;
   acceptedFormats?: string[];
   /** The content root: it holds each asset's metadata record */
   contentRoot: string;
@@ -24,6 +26,8 @@ const SYSTEM_FILES = new Set(['.ds_store', 'thumbs.db', '.gitkeep', 'desktop.ini
 
 /** Max redirect hops a URL import may follow (each re-validated before it is requested) */
 const MAX_IMPORT_REDIRECTS = 5;
+
+const DEFAULT_IMPORT_TIMEOUT_MS = 30_000;
 
 /** Check if filename has a recognized web image extension */
 function isRecognizedImageExtension(filename: string): boolean {
@@ -55,6 +59,7 @@ export class AssetOperations {
     this.config = {
       assetsPath: config.assetsPath,
       maxFileSize: config.maxFileSize ?? DEFAULT_MAX_FILE_SIZE,
+      importTimeoutMs: config.importTimeoutMs ?? DEFAULT_IMPORT_TIMEOUT_MS,
       // Copy: the shared default is frozen, but AssetConfig stays a plain string[]
       acceptedFormats: config.acceptedFormats ?? [...DEFAULT_ACCEPTED_FORMATS],
       contentRoot: config.contentRoot,
@@ -378,8 +383,8 @@ export class AssetOperations {
 
   /**
    * Import an image from a URL (server-side fetch, no CORS issues)
-   * Validates the URL and every redirect hop against SSRF, enforces 30s timeout,
-   * and checks response size.
+   * Validates the URL and every redirect hop against SSRF, and bounds the whole
+   * transfer — headers and body — by one time budget and the max file size.
    */
   async importFromUrl(
     url: string,
@@ -392,76 +397,114 @@ export class AssetOperations {
       return { success: false, error: err instanceof Error ? err.message : 'Invalid URL' };
     }
 
-    // Fetch with 30-second timeout, following redirects MANUALLY so every hop's
-    // target runs through the SSRF guard BEFORE it is requested — otherwise a
-    // public URL can redirect into a loopback or link-local (cloud metadata)
-    // address that the initial check would have rejected.
+    // One wall-clock budget covers every hop AND the body read: a server that
+    // sends headers promptly and then trickles bytes must not hold the import
+    // open. Redirects are followed MANUALLY so every hop's target runs through
+    // the SSRF guard BEFORE it is requested — otherwise a public URL can
+    // redirect into a loopback or link-local (cloud metadata) address that the
+    // initial check would have rejected.
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30_000);
-    let response: Response | undefined;
-    let current = url;
+    const timeout = setTimeout(() => controller.abort(), this.config.importTimeoutMs);
     try {
-      for (let hop = 0; hop <= MAX_IMPORT_REDIRECTS; hop += 1) {
-        const hopResponse = await fetch(current, { signal: controller.signal, redirect: 'manual' });
-        if (hopResponse.status < 300 || hopResponse.status >= 400) {
-          response = hopResponse;
-          break;
+      let response: Response | undefined;
+      let current = url;
+      try {
+        for (let hop = 0; hop <= MAX_IMPORT_REDIRECTS; hop += 1) {
+          const hopResponse = await fetch(current, { signal: controller.signal, redirect: 'manual' });
+          if (hopResponse.status < 300 || hopResponse.status >= 400) {
+            response = hopResponse;
+            break;
+          }
+          // A redirect body is never read; release its connection now.
+          await hopResponse.body?.cancel().catch(() => {});
+          const location = hopResponse.headers.get('location');
+          if (location === null) {
+            return { success: false, error: 'Redirect missing Location header' };
+          }
+          try {
+            // A relative Location is legal and common; resolve it against the URL
+            // that produced it, then validate the absolute result.
+            current = validateFetchUrl(new URL(location, current).toString()).toString();
+          } catch (err) {
+            return { success: false, error: `Redirect blocked: ${err instanceof Error ? err.message : 'Invalid URL'}` };
+          }
         }
-        const location = hopResponse.headers.get('location');
-        if (location === null) {
-          return { success: false, error: 'Redirect missing Location header' };
-        }
+      } catch {
+        return { success: false, error: controller.signal.aborted ? 'URL import timed out' : 'Failed to fetch URL' };
+      }
+
+      // Budget exhausted without a final response — fail closed rather than
+      // treating the last redirect as content
+      if (!response) {
+        return { success: false, error: 'Too many redirects' };
+      }
+
+      const maxMB = Math.round(this.config.maxFileSize / (1024 * 1024));
+      const tooLarge = { success: false as const, error: `Remote file too large. Maximum: ${maxMB}MB` };
+
+      if (!response.ok) {
+        await response.body?.cancel().catch(() => {});
+        return { success: false, error: `Fetch failed with status ${response.status}` };
+      }
+
+      // Early size check from Content-Length header
+      const contentLength = response.headers.get('content-length');
+      if (contentLength && Number.parseInt(contentLength, 10) > this.config.maxFileSize) {
+        await response.body?.cancel().catch(() => {});
+        return tooLarge;
+      }
+
+      const contentType = response.headers.get('content-type') || '';
+      const lastSegment = new URL(url).pathname.split('/').pop() || 'imported-image.jpg';
+      let urlFilename = lastSegment;
+      try {
+        const decoded = decodeURIComponent(lastSegment);
+        if (!/\p{Cc}/u.test(decoded)) urlFilename = decoded.split(/[/\\]/).pop() || lastSegment;
+      } catch {
+        // A malformed escape keeps the filename as written in the address.
+      }
+
+      // Stream the body, stopping the moment it passes the limit: Content-Length
+      // is optional and may lie, so it cannot be trusted to bound memory.
+      const chunks: Uint8Array[] = [];
+      let received = 0;
+      if (response.body) {
+        const reader = response.body.getReader();
+        // A body that ignores the abort signal must still stop at the deadline.
+        const onAbort = () => void reader.cancel().catch(() => {});
+        controller.signal.addEventListener('abort', onAbort, { once: true });
         try {
-          // A relative Location is legal and common; resolve it against the URL
-          // that produced it, then validate the absolute result.
-          current = validateFetchUrl(new URL(location, current).toString()).toString();
-        } catch (err) {
-          return { success: false, error: `Redirect blocked: ${err instanceof Error ? err.message : 'Invalid URL'}` };
+          while (true) {
+            const { done, value } = await reader.read();
+            if (controller.signal.aborted) return { success: false, error: 'URL import timed out' };
+            if (done) break;
+            received += value.byteLength;
+            if (received > this.config.maxFileSize) {
+              await reader.cancel().catch(() => {});
+              return tooLarge;
+            }
+            chunks.push(value);
+          }
+        } catch {
+          await reader.cancel().catch(() => {});
+          return { success: false, error: controller.signal.aborted ? 'URL import timed out' : 'Failed to fetch URL' };
+        } finally {
+          controller.signal.removeEventListener('abort', onAbort);
         }
       }
-    } catch {
-      return { success: false, error: 'Failed to fetch URL' };
+
+      const bytes = new Uint8Array(received);
+      let offset = 0;
+      for (const chunk of chunks) {
+        bytes.set(chunk, offset);
+        offset += chunk.byteLength;
+      }
+      const file = new File([bytes], urlFilename, { type: contentType });
+
+      return this.upload(file, metadata);
     } finally {
       clearTimeout(timeout);
     }
-
-    // Budget exhausted without a final response — fail closed rather than
-    // treating the last redirect as content
-    if (!response) {
-      return { success: false, error: 'Too many redirects' };
-    }
-
-    if (!response.ok) {
-      return { success: false, error: `Fetch failed with status ${response.status}` };
-    }
-
-    // Early size check from Content-Length header
-    const contentLength = response.headers.get('content-length');
-    if (contentLength && Number.parseInt(contentLength, 10) > this.config.maxFileSize) {
-      const maxMB = Math.round(this.config.maxFileSize / (1024 * 1024));
-      return { success: false, error: `Remote file too large. Maximum: ${maxMB}MB` };
-    }
-
-    const contentType = response.headers.get('content-type') || '';
-    const lastSegment = new URL(url).pathname.split('/').pop() || 'imported-image.jpg';
-    let urlFilename = lastSegment;
-    try {
-      const decoded = decodeURIComponent(lastSegment);
-      if (!/\p{Cc}/u.test(decoded)) urlFilename = decoded.split(/[/\\]/).pop() || lastSegment;
-    } catch {
-      // A malformed escape keeps the filename as written in the address.
-    }
-
-    // Read response body and verify actual size
-    const arrayBuffer = await response.arrayBuffer();
-    if (arrayBuffer.byteLength > this.config.maxFileSize) {
-      const maxMB = Math.round(this.config.maxFileSize / (1024 * 1024));
-      return { success: false, error: `Remote file too large. Maximum: ${maxMB}MB` };
-    }
-
-    const file = new File([new Uint8Array(arrayBuffer)], urlFilename, { type: contentType });
-
-    return this.upload(file, metadata);
   }
 
   /**

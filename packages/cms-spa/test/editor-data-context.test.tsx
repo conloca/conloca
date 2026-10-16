@@ -6,7 +6,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import type { DataContext } from '@conloca/content-api-client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { PageEditorWrapper } from '../src/components/editor/PageEditorWrapper.js';
@@ -63,6 +63,71 @@ async function openPost(): Promise<string> {
   expect(await screen.findByTestId('mock-puck-editor')).toBeTruthy();
   return created.id!;
 }
+
+describe('the page editor opens a page in a locale the page has', () => {
+  test('opens a page that has no English variant in the locale it does have', async () => {
+    const created = await testApi.createContent({
+      kind: 'page',
+      site: 'default',
+      collection: 'pages',
+      type: 'puck',
+      meta: { title: 'Alleen Nederlands' },
+      locales: {
+        nl: {
+          pathname: '/alleen-nl',
+          meta: { title: 'Alleen Nederlands' },
+          content: { puckData: { content: [], root: { props: {} }, zones: {} } },
+        },
+      },
+    });
+    renderInDataRouter(<PageEditorWrapper puckConfig={{ components: {} }} />, '/pages/:id', `/pages/${created.id!}`);
+    expect(await screen.findByTestId('mock-puck-editor')).toBeTruthy();
+    expect(screen.queryByText(/Failed to load page/)).toBeNull();
+  });
+
+  test('opens the next page in its own locale after navigating from a page with no English variant', async () => {
+    const puckPage = (pathname: string, locale: string) =>
+      testApi.createContent({
+        kind: 'page',
+        site: 'default',
+        collection: 'pages',
+        type: 'puck',
+        meta: { title: pathname },
+        locales: {
+          [locale]: {
+            pathname,
+            meta: { title: pathname },
+            content: { puckData: { content: [], root: { props: {} }, zones: {} } },
+          },
+        },
+      });
+    const dutch = await puckPage('/alleen-nl', 'nl');
+    const english = await puckPage('/only-en', 'en');
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    // Both manifests cached, so the second page renders without a loading pass in between.
+    await queryClient.prefetchQuery({
+      queryKey: ['content', english.id!],
+      queryFn: () => testApi.getContent(english.id!),
+    });
+    const router = createMemoryRouter(
+      [{ path: '/pages/:id', element: <PageEditorWrapper puckConfig={{ components: {} }} /> }],
+      { initialEntries: [`/pages/${dutch.id!}`] },
+    );
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider>
+          <RouterProvider router={router} />
+        </ThemeProvider>
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByTestId('mock-puck-editor')).toBeTruthy();
+
+    await act(() => router.navigate(`/pages/${english.id!}`));
+
+    await waitFor(() => expect(canvasContext().page?.pathname).toBe('/only-en'));
+    expect(screen.queryByText(/Failed to load page/)).toBeNull();
+  });
+});
 
 describe('the page editor tells the canvas which page it edits', () => {
   test('hands the canvas the data context itself, with the page and its settings', async () => {

@@ -259,20 +259,30 @@ export function PageEditorWrapper({ puckConfig }: PageEditorWrapperProps) {
     return <MdxPageEditor />;
   }
 
-  return <PuckPageEditorInner puckConfig={puckConfig} />;
+  // Keyed by page: the route element survives navigation between pages, and
+  // the locale state must restart from the newly opened page's locales.
+  return <PuckPageEditorInner key={id} puckConfig={puckConfig} initialLocale={initialPageLocale(content.locales)} />;
 }
 
-function PuckPageEditorInner({ puckConfig }: PageEditorWrapperProps) {
+/**
+ * The locale the editor opens a page in: English when the page has it, as
+ * before, otherwise a locale the page actually has — opening on a locale with
+ * no variant fails the load with no way to reach the switcher.
+ */
+function initialPageLocale(locales: Record<string, unknown>): string {
+  if (locales.en) return 'en';
+  return Object.keys(locales).find((locale) => locales[locale]) ?? 'en';
+}
+
+function PuckPageEditorInner({ puckConfig, initialLocale }: PageEditorWrapperProps & { initialLocale: string }) {
   const { id } = useParams();
   const navigate = useNavigate();
   const updateContent = useUpdateLocalized();
 
   // Mirrors FragmentEditor / MdxPageEditor: derive the locale list from the
-  // host's sites config and let the editor switch between them. Initial
-  // value is `'en'` for parity with the sibling editors; on a site whose
-  // globalLocales don't include 'en', the user picks an available locale
-  // from the switcher PageEditor renders when availableLocales.length > 1.
-  const [currentLocale, setCurrentLocale] = useState<string>('en');
+  // host's sites config and let the editor switch between them. It opens on
+  // a locale the page has (see initialPageLocale).
+  const [currentLocale, setCurrentLocale] = useState<string>(initialLocale);
   const { data: sitesConfig } = useSitesConfig();
   const availableLocales = sitesConfig?.globalLocales || ['en'];
 

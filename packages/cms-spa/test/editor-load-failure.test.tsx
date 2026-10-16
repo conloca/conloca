@@ -95,34 +95,6 @@ describe('PageEditorWrapper load failure', () => {
     expect(await screen.findByTestId('dest-pages-list')).toBeTruthy();
   });
 
-  test('surfaces the failure when the requested locale has no variant instead of loading forever', async () => {
-    // A puck page that exists ONLY in nl: the inner editor starts on 'en',
-    // so its localized fetch fails — the live repro for switching the
-    // editor to a locale whose variant doesn't exist.
-    const created = await testApi.createContent({
-      kind: 'page',
-      site: 'default',
-      collection: 'pages',
-      type: 'puck',
-      meta: { title: 'Alleen Nederlands' },
-      locales: {
-        nl: {
-          pathname: '/alleen-nl',
-          meta: { title: 'Alleen Nederlands' },
-          content: { puckData: { content: [], root: { props: {} }, zones: {} } },
-        },
-      },
-    });
-
-    renderInRouter(<PageEditorWrapper puckConfig={{ components: {} }} />, [`/pages/${created.id!}`], '/pages/:id');
-
-    const failure = await screen.findByText(/Failed to load page/);
-    expect(failure).toBeTruthy();
-
-    fireEvent.click(screen.getByText('Back to Pages'));
-    expect(await screen.findByTestId('dest-pages-list')).toBeTruthy();
-  });
-
   test('says why the page cannot open when the data its blocks bind fails to load, rather than showing it without', async () => {
     // Resolving the blocks without their bound page feed would show a page
     // that differs from the published one, with nothing saying so.

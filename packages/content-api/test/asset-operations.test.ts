@@ -526,6 +526,43 @@ describe('AssetOperations', () => {
       }
     });
 
+    test('stops reading an endless body once it passes maxFileSize', async () => {
+      const smallOps = new AssetOperations({ assetsPath, contentRoot, maxFileSize: 50 });
+      let cancelled = false;
+      const endless = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          controller.enqueue(new Uint8Array(16));
+        },
+        cancel() {
+          cancelled = true;
+        },
+      });
+      mockFetch(() =>
+        Promise.resolve(new Response(endless, { status: 200, headers: { 'content-type': 'image/jpeg' } })),
+      );
+      const result = await smallOps.importFromUrl('https://example.com/endless.jpg');
+      expect(result.success).toBe(false);
+      if (!result.success) expect(result.error).toContain('Remote file too large');
+      expect(cancelled).toBe(true);
+    });
+
+    test('times out a body that stalls after the headers arrive', async () => {
+      const slowOps = new AssetOperations({ assetsPath, contentRoot, importTimeoutMs: 50 });
+      mockFetch((_url: unknown, init: unknown) => {
+        const signal = (init as RequestInit).signal as AbortSignal;
+        const stalled = new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new Uint8Array(4));
+            signal.addEventListener('abort', () => controller.error(signal.reason));
+          },
+        });
+        return Promise.resolve(new Response(stalled, { status: 200, headers: { 'content-type': 'image/jpeg' } }));
+      });
+      const result = await slowOps.importFromUrl('https://example.com/stalled.jpg');
+      expect(result.success).toBe(false);
+      if (!result.success) expect(result.error).toContain('timed out');
+    });
+
     test('succeeds for valid public URL with valid image response', async () => {
       const imageData = new Uint8Array([0xff, 0xd8, 0xff, 0xe0]);
       mockFetch(() =>
