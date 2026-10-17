@@ -63,10 +63,19 @@ export const UnsavedEdits: Story = {
 /**
  * A site that cannot preview keeps the control, marked unavailable with the
  * reason in its name and tooltip; a click still reaches the editor so it can
- * explain, which a `disabled` button would swallow.
+ * explain, which a `disabled` button would swallow. Puck mounts these actions
+ * inside its MenuBar, whose hashed class name the editor's global styles
+ * match, so the story mounts them the same way.
  */
 export const PreviewUnavailable: Story = {
   args: { previewDisabledReason: 'This site has no preview address yet.' },
+  decorators: [
+    (Story) => (
+      <div className="_MenuBar_story">
+        <Story />
+      </div>
+    ),
+  ],
   play: async ({ args, canvasElement }) => {
     const preview = within(canvasElement).getByRole('button', {
       name: 'Preview unavailable. This site has no preview address yet.',

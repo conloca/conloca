@@ -109,7 +109,7 @@ export function PageEditorHeaderActions({
             onClick={onSave}
             disabled={!isDirty && saveState !== 'error' && saveState !== 'conflict'}
             className={cn(
-              'w-[100px] px-4 py-2 rounded-md text-sm transition-all duration-150 flex items-center justify-center gap-1 whitespace-nowrap font-medium',
+              'w-[100px] px-4 py-2 rounded-md text-sm transition-all duration-150 flex items-center justify-center gap-1 whitespace-nowrap font-medium disabled:cursor-not-allowed',
               saveState === 'saved' && 'bg-green-10 text-green-06 cursor-pointer',
               saveState === 'error' && 'bg-red-10 text-red-06 hover:bg-red-09 cursor-pointer',
               saveState === 'conflict' && 'bg-yellow-10 text-yellow-06 hover:bg-yellow-09 cursor-pointer',
