@@ -300,7 +300,7 @@
         "remark-frontmatter": "^5.0.0",
         "remark-gfm": "^4.0.1",
         "remark-mdx": "^3.1.1",
-        "remark-mdx-frontmatter": "^5.2.0",
+        "remark-mdx-frontmatter": "^6.0.0",
         "remark-parse": "^11.0.0",
         "remark-rehype": "^11.1.2",
         "tslib": "^2.8.1",
@@ -3519,7 +3519,7 @@
 
     "remark-mdx": ["remark-mdx@3.1.1", "", { "dependencies": { "mdast-util-mdx": "^3.0.0", "micromark-extension-mdxjs": "^3.0.0" } }, "sha512-Pjj2IYlUY3+D8x00UJsIOg5BEvfMyeI+2uLPn9VO9Wg4MEtN/VTIq2NEJQfde9PnX15KgtHyl9S0BcTnWrIuWg=="],
 
-    "remark-mdx-frontmatter": ["remark-mdx-frontmatter@5.2.0", "", { "dependencies": { "@types/mdast": "^4.0.0", "estree-util-value-to-estree": "^3.0.0", "toml": "^3.0.0", "unified": "^11.0.0", "unist-util-mdx-define": "^1.0.0", "yaml": "^2.0.0" } }, "sha512-U/hjUYTkQqNjjMRYyilJgLXSPF65qbLPdoESOkXyrwz2tVyhAnm4GUKhfXqOOS9W34M3545xEMq+aMpHgVjEeQ=="],
+    "remark-mdx-frontmatter": ["remark-mdx-frontmatter@6.0.0", "", { "dependencies": { "@types/mdast": "^4.0.0", "estree-util-value-to-estree": "^3.0.0", "smol-toml": "^1.0.0", "unified": "^11.0.0", "unist-util-mdx-define": "^1.0.0", "yaml": "^2.0.0" } }, "sha512-Rz7oaxWwaKpWn/c+iqWOq5wQWPt8TdPyfUIZWBCGqwSqNZ7X8heHkPviy7/UHUXjtd8QTnEV6LXb+CKn9A+ZFA=="],
 
     "remark-parse": ["remark-parse@11.0.0", "", { "dependencies": { "@types/mdast": "^4.0.0", "mdast-util-from-markdown": "^2.0.0", "micromark-util-types": "^2.0.0", "unified": "^11.0.0" } }, "sha512-FCxlKLNGknS5ba/1lmpYijMUzX2esxW5xQqjWxw2eHFfS2MSdaHVINFmhjo+qN1WhZhNimq0dZATN9pH0IDrpA=="],
 
@@ -3792,8 +3792,6 @@
     "to-regex-range": ["to-regex-range@5.0.1", "", { "dependencies": { "is-number": "^7.0.0" } }, "sha512-65P7iz6X5yEr1cwcgvQxbbIw7Uk3gOy5dIdtZ4rDveLqhrdJP+Li/Hx6tyK0NEb+2GCyneCMJiGqrADCSNk8sQ=="],
 
     "toidentifier": ["toidentifier@1.0.1", "", {}, "sha512-o5sSPKEkg/DIQNmH43V0/uerLrpzVedkUh8tGNvaeXpfpuwjKenlSox/2O/BTlZUtEe+JG7s5YhEz608PlAHRA=="],
-
-    "toml": ["toml@3.0.0", "", {}, "sha512-y/mWCZinnvxjTKYhJ+pYxwD0mRLVvOtdS2Awbgxln6iEnt4rk0yBxeSBHkGJcPucRiG0e55mwWp+g/05rsrd6w=="],
 
     "toml-eslint-parser": ["toml-eslint-parser@1.0.3", "", { "dependencies": { "eslint-visitor-keys": "^5.0.0" } }, "sha512-A5F0cM6+mDleacLIEUkmfpkBbnHJFV1d2rprHU2MXNk7mlxHq2zGojA+SRvQD1RoMo9gqjZPWEaKG4v1BQ48lw=="],
 
