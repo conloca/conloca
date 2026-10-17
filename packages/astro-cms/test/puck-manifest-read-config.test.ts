@@ -1343,13 +1343,16 @@ describe('a config the reader cannot read to the end is refused, never thrown', 
     return `export default { components: { C: { fields: { f: { type: 'custom', ai: ${'['.repeat(depth)}1${']'.repeat(depth)} } } } } };`;
   }
 
-  test('a file nested deeper than the parser goes is refused for that, never called missing', async () => {
-    const { manifest } = await readAndTry({ 'puck.config.ts': nestedArrays(20_000) });
-    expect(manifest).toEqual({
-      ...refused(''),
-      unreadableReason: expect.stringMatching(
-        /^reading the config ran out of call stack \(RangeError: Maximum call stack size exceeded\.?\) — usually source nested thousands of levels deep — so its components are unknown$/,
-      ),
+  // Read, never run: given a little more call stack (a Linux CI runner, `ulimit -s 16384` here), Bun's own
+  // loader no longer refuses this file at once but spends a minute and gigabytes on it, then crashes.
+  test('a file nested deeper than the parser goes is refused for that, never called missing', () => {
+    withFiles({ 'puck.config.ts': nestedArrays(20_000) }, (root) => {
+      expect(readPuckConfig({ configPath: join(root, 'puck.config.ts') })).toEqual({
+        ...refused(''),
+        unreadableReason: expect.stringMatching(
+          /^reading the config ran out of call stack \(RangeError: Maximum call stack size exceeded\.?\) — usually source nested thousands of levels deep — so its components are unknown$/,
+        ),
+      });
     });
   });
 

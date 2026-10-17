@@ -204,6 +204,7 @@
         }
       },
       "test": {
+        "//": "CPU-bound: ~30 s locally, but every test runs about five times slower on GitHub's 2-core Ubuntu runners, which puts the suite near or past 120 s there. 300 s, like cli:test, covers that.",
         "executor": "@smoothbricks/nx-plugin:bounded-exec",
         "dependsOn": [
           "typecheck-tests",
@@ -219,7 +220,7 @@
         "options": {
           "command": "bun --conditions=production test --preload=./test-native-preload.ts",
           "cwd": "{projectRoot}",
-          "timeoutMs": 120000,
+          "timeoutMs": 300000,
           "killAfterMs": 1e4
         }
       },
