@@ -1,6 +1,18 @@
-import type { Dirent, Stats } from 'node:fs';
-import { lstat, mkdir, readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
-import { extname, join, parse, resolve, sep } from 'node:path';
+import { createReadStream, type Dirent, type Stats } from 'node:fs';
+import {
+  type FileHandle,
+  link,
+  lstat,
+  mkdir,
+  open,
+  readdir,
+  readFile,
+  stat,
+  unlink,
+  writeFile,
+} from 'node:fs/promises';
+import { basename, dirname, extname, join, parse, resolve, sep } from 'node:path';
+import { pipeline } from 'node:stream/promises';
 import { imageSizeFromFile } from 'image-size/fromFile';
 import { DEFAULT_ACCEPTED_FORMATS, DEFAULT_MAX_FILE_SIZE, IMAGE_EXTENSION_MIME } from './asset-constraints.js';
 import * as assetMetadata from './asset-metadata-store.js';
@@ -370,14 +382,16 @@ export class AssetOperations {
 
     const relativePath = folder === '/' ? filename : `${folder.slice(1)}/${filename}`;
 
-    // Delete file from disk (ignore if already gone)
-    try {
-      await unlink(assetPath);
-    } catch {
-      // File may already be gone, continue with metadata cleanup
-    }
-
-    await assetMetadata.remove(this.config, relativePath);
+    // Queued with moves: a delete landing mid-move could otherwise remove the only copy
+    // between the move's destination check and its removal of the source.
+    await withMoveQueue(async () => {
+      try {
+        await unlink(assetPath);
+      } catch {
+        // File may already be gone, continue with metadata cleanup
+      }
+      await assetMetadata.remove(this.config, relativePath);
+    });
     return { success: true };
   }
 
@@ -681,7 +695,7 @@ export class AssetOperations {
     filenames: string[],
     sourceFolder: string,
     targetFolder: string,
-  ): Promise<{ success: true; moved: number } | { success: false; error: string }> {
+  ): Promise<{ success: true; moved: number } | { success: false; error: string; moved?: number }> {
     // Normalize folder paths
     const normalizedSource = sourceFolder === '/' ? '/' : `/${sourceFolder.replace(/^\/+|\/+$/g, '')}`;
     const normalizedTarget = targetFolder === '/' ? '/' : `/${targetFolder.replace(/^\/+|\/+$/g, '')}`;
@@ -747,6 +761,7 @@ export class AssetOperations {
     // Move each file with its own record, so one failure cannot take the rest
     // of the folder's metadata with it
     let moved = 0;
+    const failed: string[] = [];
     for (const filename of filenames) {
       const oldRelativePath = normalizedSource === '/' ? filename : `${normalizedSource.slice(1)}/${filename}`;
       const newRelativePath = normalizedTarget === '/' ? filename : `${normalizedTarget.slice(1)}/${filename}`;
@@ -760,22 +775,23 @@ export class AssetOperations {
         to = this.getAssetPath(filename, normalizedTarget);
       } catch {
         console.error(`[AssetOperations] Refusing to move ${filename}: it points outside the media library`);
+        failed.push(`${filename} (outside the media library)`);
         continue;
       }
 
-      try {
-        // oxlint-disable-next-line no-await-in-loop -- each move is committed before its metadata follows; partial failure stays attributable to one filename.
-        await rename(from, to);
-      } catch (err) {
-        console.error(`[AssetOperations] Failed to move ${filename}:`, err);
-        continue;
+      // oxlint-disable-next-line no-await-in-loop -- each move settles before the next; partial failure stays attributable to one filename.
+      const outcome = await moveOneWithoutOverwrite(this.config, from, to, oldRelativePath, newRelativePath);
+      if (outcome === 'moved') {
+        moved += 1;
+      } else {
+        console.error(`[AssetOperations] Failed to move ${filename}: ${outcome}`);
+        failed.push(`${filename} (${outcome})`);
       }
-
-      // oxlint-disable-next-line no-await-in-loop -- metadata must follow the file that just moved before the next file starts.
-      await assetMetadata.move(this.config, oldRelativePath, newRelativePath);
-      moved += 1;
     }
 
+    if (failed.length > 0) {
+      return { success: false, moved, error: `Could not move: ${failed.join(', ')}` };
+    }
     return { success: true, moved };
   }
 
@@ -854,4 +870,118 @@ export class AssetOperations {
       },
     ];
   }
+}
+
+/**
+ * Asset moves and deletes in this process run one at a time: between claiming a destination
+ * and dropping its source, a move holds the asset at two paths, and a delete or second move
+ * acting on either path then could split bytes from metadata or remove the only copy.
+ * Module-wide because the router builds a fresh AssetOperations per request, and kept on
+ * globalThis (as the metadata store's locks are) because a dev server can load this module twice.
+ */
+declare global {
+  // Shared across duplicate module instances in one dev-server process.
+  var conlocaAssetMoveQueue: Promise<unknown> | undefined;
+}
+function withMoveQueue<T>(operation: () => Promise<T>): Promise<T> {
+  const result = (globalThis.conlocaAssetMoveQueue ?? Promise.resolve()).then(operation, operation);
+  globalThis.conlocaAssetMoveQueue = result.catch(() => undefined);
+  return result;
+}
+
+function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && 'code' in error;
+}
+
+/**
+ * Move one asset file and its metadata record without ever replacing a file at the destination.
+ * The listing check in moveAssets reports ordinary clashes up front; this closes the window in
+ * which an upload or another move claims the name afterwards. A hard link (or, where the
+ * filesystem has none, an exclusive copy) claims the destination name atomically, and the source
+ * stays until the metadata has followed. Any failure undoes what was done, leaving bytes and
+ * metadata where they were. Returns 'moved' or the reason the file stayed.
+ */
+function moveOneWithoutOverwrite(
+  roots: assetMetadata.MetadataRoots,
+  from: string,
+  to: string,
+  oldRelativePath: string,
+  newRelativePath: string,
+): Promise<string> {
+  return withMoveQueue(() => moveOneNow(roots, from, to, oldRelativePath, newRelativePath));
+}
+
+async function moveOneNow(
+  roots: assetMetadata.MetadataRoots,
+  from: string,
+  to: string,
+  oldRelativePath: string,
+  newRelativePath: string,
+): Promise<string> {
+  // Names differing only in letter case are one file on macOS and Windows. Moves run one at a
+  // time, so this re-check sees every earlier move, including earlier files of the same batch.
+  const wanted = basename(to).toLowerCase();
+  if ((await readdir(dirname(to))).some((name) => name.toLowerCase() === wanted)) {
+    return 'already in the target folder';
+  }
+  try {
+    await link(from, to);
+  } catch (err) {
+    const code = isErrnoException(err) ? err.code : undefined;
+    if (code === 'EEXIST') return 'already in the target folder';
+    if (code !== 'EPERM' && code !== 'ENOTSUP' && code !== 'EOPNOTSUPP' && code !== 'EXDEV' && code !== 'EMLINK') {
+      return err instanceof Error ? err.message : 'move failed';
+    }
+    // No hard links here: claim the name with an exclusive create first, so a failed copy
+    // only ever removes the file this move created, never one another request put there.
+    let claimed: FileHandle;
+    try {
+      claimed = await open(to, 'wx');
+    } catch (openErr) {
+      if (isErrnoException(openErr) && openErr.code === 'EEXIST') return 'already in the target folder';
+      return openErr instanceof Error ? openErr.message : 'move failed';
+    }
+    let copyError: unknown;
+    try {
+      // Streamed: an asset placed outside the upload route may be far larger than an upload.
+      await pipeline(createReadStream(from), claimed.createWriteStream({ autoClose: false }));
+    } catch (pipelineErr) {
+      copyError = pipelineErr;
+    } finally {
+      await claimed.close().catch(() => undefined);
+    }
+    if (copyError !== undefined) {
+      // Closed first: some platforms refuse to remove a file that is still open.
+      await unlink(to).catch(() => undefined);
+      return copyError instanceof Error ? copyError.message : 'move failed';
+    }
+  }
+
+  try {
+    await assetMetadata.move(roots, oldRelativePath, newRelativePath);
+  } catch (err) {
+    await unlink(to).catch(() => undefined);
+    return err instanceof Error ? err.message : 'metadata move failed';
+  }
+
+  // A delete aimed at the new path may have removed it meanwhile; dropping the source now
+  // would lose the only copy, so keep the source and put its metadata back.
+  if (
+    !(await lstat(to).then(
+      (s) => s.isFile(),
+      () => false,
+    ))
+  ) {
+    await assetMetadata.move(roots, newRelativePath, oldRelativePath).catch(() => undefined);
+    return 'removed from the target folder during the move';
+  }
+
+  try {
+    await unlink(from);
+  } catch (err) {
+    await assetMetadata.move(roots, newRelativePath, oldRelativePath).catch(() => undefined);
+    await unlink(to).catch(() => undefined);
+    return err instanceof Error ? err.message : 'move failed';
+  }
+  return 'moved';
 }

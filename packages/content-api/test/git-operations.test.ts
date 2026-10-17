@@ -6,6 +6,14 @@ import { join } from 'node:path';
 
 import { createGitOperations, setupGitLfsAttributes } from '../src/git-operations.js';
 
+/** `git ls-files --stage` output without the content entry the CMS commit adds. */
+function withoutContentEntry(index: string): string {
+  return index
+    .split('\n')
+    .filter((line) => line && !line.endsWith('content/page.json'))
+    .join('\n');
+}
+
 describe('setupGitLfsAttributes', () => {
   let tempDir: string;
 
@@ -229,6 +237,86 @@ describe('createGitOperations', () => {
       // Verify outside.txt still appears as untracked
       const statusOutput = execSync('git status --porcelain', { cwd: tempDir }).toString();
       expect(statusOutput).toContain('outside.txt');
+    });
+
+    test('commits only content and leaves staged, partly staged and unstaged work outside it exactly as it was', async () => {
+      await initGitRepo();
+      await writeFile(join(tempDir, 'app-config.txt'), 'v1\n');
+      await writeFile(join(tempDir, 'partly.txt'), 'base\n');
+      await writeFile(join(tempDir, 'unstaged.txt'), 'base\n');
+      execSync('git add -A && git commit -m init', { cwd: tempDir, stdio: 'ignore' });
+      // Fully staged, partly staged (index differs from both HEAD and worktree), and unstaged.
+      await writeFile(join(tempDir, 'app-config.txt'), 'v2\n');
+      await writeFile(join(tempDir, 'partly.txt'), 'staged half\n');
+      execSync('git add app-config.txt partly.txt', { cwd: tempDir, stdio: 'ignore' });
+      await writeFile(join(tempDir, 'partly.txt'), 'staged half\nworktree half\n');
+      await writeFile(join(tempDir, 'unstaged.txt'), 'edited\n');
+      await writeFile(join(contentPath, 'page.json'), '{}');
+      const indexBefore = execSync('git ls-files --stage', { cwd: tempDir }).toString();
+
+      const ops = createGitOperations({ contentPath });
+      const result = await ops.commitAll('test: scoped commit with foreign index entries');
+
+      expect(result.success).toBe(true);
+      expect(result.summary).toBe('1 files committed');
+      const committed = execSync('git show --name-only --format= HEAD', { cwd: tempDir }).toString().trim();
+      expect(committed).toBe('content/page.json');
+      // Foreign index entries keep their exact blobs; only the content entry is new.
+      const indexAfter = execSync('git ls-files --stage', { cwd: tempDir }).toString();
+      expect(withoutContentEntry(indexAfter)).toBe(withoutContentEntry(indexBefore));
+      expect(execSync('git diff --cached --name-only', { cwd: tempDir }).toString().trim().split('\n')).toEqual([
+        'app-config.txt',
+        'partly.txt',
+      ]);
+      expect(await readFile(join(tempDir, 'partly.txt'), 'utf-8')).toBe('staged half\nworktree half\n');
+      expect(await readFile(join(tempDir, 'unstaged.txt'), 'utf-8')).toBe('edited\n');
+      // The committed content file is clean in the shared index, not shown as a staged reversal.
+      expect(execSync('git status --porcelain -- content', { cwd: tempDir }).toString()).toBe('');
+    });
+
+    test('concurrent commits from separate requests each hold only their own snapshot, one after the other', async () => {
+      await initGitRepo();
+      await createInitialCommit();
+      // The router builds a fresh GitOperations per request, so the queue must span instances.
+      await writeFile(join(contentPath, 'first.json'), '1');
+      const first = createGitOperations({ contentPath }).commitAll('test: first');
+      const second = (async () => {
+        await writeFile(join(contentPath, 'second.json'), '2');
+        return createGitOperations({ contentPath }).commitAll('test: second');
+      })();
+      const results = await Promise.all([first, second]);
+
+      const succeeded = results.filter((r) => r.success);
+      expect(succeeded.length).toBeGreaterThanOrEqual(1);
+      for (const r of results) {
+        if (!r.success) expect(r.error).toBe('No changes to commit');
+      }
+      // History is linear and, together, the commits hold both files exactly once.
+      const log = execSync('git log --format=%H --name-only', { cwd: tempDir }).toString();
+      expect(log.match(/content\/first\.json/g)).toHaveLength(1);
+      expect(log.match(/content\/second\.json/g)).toHaveLength(1);
+      expect(execSync('git rev-list --merges HEAD', { cwd: tempDir }).toString()).toBe('');
+      expect(execSync('git status --porcelain', { cwd: tempDir }).toString()).toBe('');
+    });
+
+    test('does not report a clean success when the shared index stays locked after the commit', async () => {
+      await initGitRepo();
+      await createInitialCommit();
+      await writeFile(join(contentPath, 'page.json'), '{}');
+      // Another Git process holding the shared index: the private-index commit still lands,
+      // but the shared index cannot be lined up with it.
+      await writeFile(join(tempDir, '.git', 'index.lock'), '');
+      try {
+        const result = await createGitOperations({ contentPath }).commitAll('test: locked index');
+        expect(result.success).toBe(false);
+        expect(result.commit).toHaveLength(40);
+        expect(result.error).toContain(`Committed ${result.commit}`);
+        expect(execSync('git show --name-only --format= HEAD', { cwd: tempDir }).toString().trim()).toBe(
+          'content/page.json',
+        );
+      } finally {
+        await rm(join(tempDir, '.git', 'index.lock'), { force: true });
+      }
     });
 
     test('with author sets --author flag', async () => {

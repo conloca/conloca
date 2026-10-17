@@ -1,6 +1,11 @@
 import { spawn } from 'node:child_process';
-import { access, readFile, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
+import { setTimeout as sleep } from 'node:timers/promises';
+
+/** Tries at lining the shared index up after a commit; ~1.5s total covers a briefly held index.lock. */
+const INDEX_SYNC_ATTEMPTS = 6;
 
 export interface GitStatus {
   isRepo: boolean;
@@ -53,9 +58,15 @@ interface GitCommandResult {
   stderr: string;
 }
 
-function runGitCommand(cwd: string, args: string[]): Promise<GitCommandResult> {
+function runGitCommand(
+  cwd: string,
+  args: string[],
+  env?: NodeJS.ProcessEnv,
+  input?: string,
+): Promise<GitCommandResult> {
   return new Promise((resolveCommand, reject) => {
-    const process = spawn('git', args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+    const process = spawn('git', args, { cwd, env, stdio: 'pipe' });
+    process.stdin.end(input);
     let stdout = '';
     let stderr = '';
 
@@ -79,6 +90,66 @@ function runGitCommand(cwd: string, args: string[]): Promise<GitCommandResult> {
   });
 }
 
+/** One path a commit changed, from `git diff-tree -r -z` raw output. */
+interface TreeChange {
+  path: string;
+  oldBlob: string;
+  newMode: string;
+  newBlob: string;
+}
+
+function parseRawDiff(raw: string): TreeChange[] {
+  const fields = raw.split('\0');
+  const changes: TreeChange[] = [];
+  for (let i = 0; i + 1 < fields.length; i += 2) {
+    // ":oldmode newmode oldblob newblob status" then the path
+    const [, newMode, oldBlob, newBlob] = fields[i].replace(/^:/, '').split(' ');
+    if (!newBlob) continue;
+    changes.push({ path: fields[i + 1], oldBlob, newMode, newBlob });
+  }
+  return changes;
+}
+
+/**
+ * Point the shared index at the committed blobs, so committed files do not show as staged
+ * reversals — but only for entries that still hold what the parent commit had. An entry
+ * someone staged differently in the meantime is theirs and is left alone, as is everything
+ * outside the commit. Retries while another Git process briefly holds index.lock, re-reading
+ * the index each time so a `git add` made during the wait is not overwritten.
+ */
+async function syncSharedIndex(
+  repoRoot: string,
+  contentPath: string,
+  changes: TreeChange[],
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (changes.length === 0) return { ok: true };
+  let error = 'git update-index failed';
+  for (let attempt = 0; attempt < INDEX_SYNC_ATTEMPTS; attempt += 1) {
+    // oxlint-disable-next-line no-await-in-loop -- each retry waits for the lock holder to finish.
+    if (attempt > 0) await sleep(attempt * 100);
+    // A commit only ever changes paths under contentPath, so one pathspec covers them all
+    // without passing each path on the command line.
+    // oxlint-disable-next-line no-await-in-loop -- each attempt must see the index as it is now.
+    const staged = await runGitCommand(repoRoot, ['ls-files', '-s', '-z', '--', contentPath]);
+    const stagedBlob = new Map<string, string>();
+    for (const entry of staged.stdout.split('\0')) {
+      const tab = entry.indexOf('\t');
+      if (tab < 0) continue;
+      const [, blob, stage] = entry.slice(0, tab).split(' ');
+      if (stage === '0') stagedBlob.set(entry.slice(tab + 1), blob);
+    }
+    const lines = changes
+      .filter((c) => (stagedBlob.get(c.path) ?? '0'.repeat(c.oldBlob.length)) === c.oldBlob)
+      .map((c) => (/^0+$/.test(c.newBlob) ? `0 ${c.newBlob}\t${c.path}\0` : `${c.newMode} ${c.newBlob}\t${c.path}\0`));
+    if (lines.length === 0) return { ok: true };
+    // oxlint-disable-next-line no-await-in-loop -- retries are sequential by design.
+    const result = await runGitCommand(repoRoot, ['update-index', '-z', '--index-info'], undefined, lines.join(''));
+    if (result.exitCode === 0) return { ok: true };
+    error = result.stderr || error;
+  }
+  return { ok: false, error };
+}
+
 /**
  * Resolve the git repository root from a content path.
  * Uses `git rev-parse --show-toplevel` starting from the parent of the content directory.
@@ -91,6 +162,22 @@ async function resolveRepoRoot(contentPath: string): Promise<string | null> {
     return null;
   }
   return result.stdout;
+}
+
+/**
+ * Commits and pulls both move HEAD; queueing them per repository keeps one request's commit
+ * from landing inside another's. Module-wide and keyed by repo root because the router builds
+ * a fresh GitOperations for every request.
+ */
+const headQueues = new Map<string, Promise<unknown>>();
+function serializedOnRepo<T>(repoRoot: string, operation: () => Promise<T>): Promise<T> {
+  const run = (headQueues.get(repoRoot) ?? Promise.resolve()).then(operation, operation);
+  const settled = run.catch(() => undefined);
+  headQueues.set(repoRoot, settled);
+  void settled.then(() => {
+    if (headQueues.get(repoRoot) === settled) headQueues.delete(repoRoot);
+  });
+  return run;
 }
 
 /**
@@ -110,6 +197,100 @@ export function createGitOperations(config: GitConfig): GitOperations {
       cachedRepoRoot = await resolveRepoRoot(contentPath);
     }
     return cachedRepoRoot;
+  }
+
+  async function commitContent(repoRoot: string, message: string, author?: GitAuthor): Promise<GitCommitResult> {
+    // Build the commit in a private index seeded from HEAD. The shared index may hold work
+    // someone staged outside contentPath; it must neither ride along nor lose its staging.
+    // Writing the tree from the private index (not a pathspec commit, which re-reads the
+    // working tree) also pins the snapshot `git add` took against content writes meanwhile.
+    const indexDir = await mkdtemp(join(tmpdir(), 'conloca-git-index-'));
+    const privateIndex = { ...process.env, GIT_INDEX_FILE: join(indexDir, 'index') };
+    try {
+      const headResult = await runGitCommand(repoRoot, ['rev-parse', '--verify', '--quiet', 'HEAD']);
+      const parent = headResult.exitCode === 0 ? headResult.stdout : null;
+      const seed = await runGitCommand(
+        repoRoot,
+        parent ? ['read-tree', parent] : ['read-tree', '--empty'],
+        privateIndex,
+      );
+      if (seed.exitCode !== 0) {
+        return { success: false, error: seed.stderr || 'Failed to prepare commit' };
+      }
+
+      const addResult = await runGitCommand(repoRoot, ['add', '-A', '--', contentPath], privateIndex);
+      if (addResult.exitCode !== 0) {
+        return { success: false, error: addResult.stderr || 'Failed to stage changes' };
+      }
+
+      const treeResult = await runGitCommand(repoRoot, ['write-tree'], privateIndex);
+      if (treeResult.exitCode !== 0) {
+        return { success: false, error: treeResult.stderr || 'Failed to write tree' };
+      }
+      const tree = treeResult.stdout;
+      if (parent && (await runGitCommand(repoRoot, ['rev-parse', `${parent}^{tree}`])).stdout === tree) {
+        return { success: false, error: 'No changes to commit' };
+      }
+
+      // author.name/author.email set only the author; the committer stays the server's identity,
+      // as `git commit --author` left it.
+      const authorConfig = author ? ['-c', `author.name=${author.name}`, '-c', `author.email=${author.email}`] : [];
+      const commitResult = await runGitCommand(repoRoot, [
+        ...authorConfig,
+        'commit-tree',
+        tree,
+        ...(parent ? ['-p', parent] : []),
+        '-m',
+        message,
+      ]);
+      if (commitResult.exitCode !== 0) {
+        return { success: false, error: commitResult.stderr || 'Commit failed' };
+      }
+      const commitSha = commitResult.stdout;
+
+      // Move HEAD only if it still points where the tree was built from. A commit another
+      // process made meanwhile would otherwise be silently reverted by this stale tree.
+      const expected = parent ?? '0'.repeat(commitSha.length);
+      const moveHead = await runGitCommand(repoRoot, [
+        'update-ref',
+        '-m',
+        `commit: ${message}`,
+        'HEAD',
+        commitSha,
+        expected,
+      ]);
+      if (moveHead.exitCode !== 0) {
+        return { success: false, error: 'The branch moved while committing; nothing was committed. Try again.' };
+      }
+
+      // Count and sync from the commit just made, never from HEAD, which others may move again.
+      const changesResult = await runGitCommand(repoRoot, [
+        'diff-tree',
+        '-r',
+        '-z',
+        '--no-renames',
+        '--no-commit-id',
+        ...(parent ? [parent, commitSha] : ['--root', commitSha]),
+      ]);
+      const changes = parseRawDiff(changesResult.stdout);
+
+      const synced = await syncSharedIndex(repoRoot, contentPath, changes);
+      if (!synced.ok) {
+        return {
+          success: false,
+          commit: commitSha,
+          error: `Committed ${commitSha}, but the Git index could not be updated for the content folder (${synced.error}). Run \`git reset -- ${contentPath}\` before committing outside the CMS.`,
+        };
+      }
+
+      return {
+        success: true,
+        commit: commitSha,
+        summary: `${changes.length} files committed`,
+      };
+    } finally {
+      await rm(indexDir, { recursive: true, force: true });
+    }
   }
 
   return {
@@ -164,43 +345,7 @@ export function createGitOperations(config: GitConfig): GitOperations {
         if (!repoRoot) {
           return { success: false, error: 'Not a git repository' };
         }
-
-        // Stage all changes
-        const addResult = await runGitCommand(repoRoot, ['add', '-A', '--', contentPath]);
-        if (addResult.exitCode !== 0) {
-          return { success: false, error: addResult.stderr || 'Failed to stage changes' };
-        }
-
-        // Check if there's anything to commit after staging
-        const diffResult = await runGitCommand(repoRoot, ['diff', '--cached', '--quiet', '--', contentPath]);
-        if (diffResult.exitCode === 0) {
-          return { success: false, error: 'No changes to commit' };
-        }
-
-        // Count staged files for summary
-        const diffStatResult = await runGitCommand(repoRoot, ['diff', '--cached', '--numstat', '--', contentPath]);
-        const fileCount = diffStatResult.stdout ? diffStatResult.stdout.split('\n').filter((l) => l.trim()).length : 0;
-
-        // Build commit command
-        const commitArgs = ['commit', '-m', message];
-        if (author) {
-          commitArgs.push('--author', `${author.name} <${author.email}>`);
-        }
-
-        const commitResult = await runGitCommand(repoRoot, commitArgs);
-        if (commitResult.exitCode !== 0) {
-          return { success: false, error: commitResult.stderr || 'Commit failed' };
-        }
-
-        // Get the commit SHA
-        const shaResult = await runGitCommand(repoRoot, ['rev-parse', 'HEAD']);
-        const commitSha = shaResult.stdout || undefined;
-
-        return {
-          success: true,
-          commit: commitSha,
-          summary: `${fileCount} files committed`,
-        };
+        return await serializedOnRepo(repoRoot, () => commitContent(repoRoot, message, author));
       } catch (error) {
         return {
           success: false,
@@ -279,7 +424,9 @@ export function createGitOperations(config: GitConfig): GitOperations {
           targetBranch = branchResult.stdout;
         }
 
-        const pullResult = await runGitCommand(repoRoot, ['pull', '--autostash', '--rebase', 'origin', targetBranch]);
+        const pullResult = await serializedOnRepo(repoRoot, () =>
+          runGitCommand(repoRoot, ['pull', '--autostash', '--rebase', 'origin', targetBranch]),
+        );
 
         if (pullResult.exitCode !== 0) {
           return {

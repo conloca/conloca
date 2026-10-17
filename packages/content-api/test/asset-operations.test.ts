@@ -4,6 +4,7 @@ import { chmod, mkdir, readdir, readFile, rm, stat, symlink, writeFile } from 'n
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 
+import { recordPath } from '../src/asset-metadata-store.js';
 import { AssetOperations } from '../src/asset-operations.js';
 import { InMemoryContentAPI } from '../src/in-memory-content-api.js';
 import { createContentAPIRouter } from '../src/middleware.js';
@@ -1161,6 +1162,70 @@ describe('AssetOperations', () => {
       expect(await readFile(join(assetsPath, 'archive', 'banner.JPG'), 'utf8')).toBe('archived banner');
       expect(existsSync(join(assetsPath, 'Banner.jpg'))).toBe(true);
     });
+
+    test('two moves racing for one name in the target folder never overwrite each other', async () => {
+      // The listing check alone left a window: both moves could see the name free, and the
+      // second rename replaced the first file. The destination name is now claimed atomically.
+      await mkdir(join(assetsPath, 'a'), { recursive: true });
+      await mkdir(join(assetsPath, 'b'), { recursive: true });
+      await writeFile(join(assetsPath, 'a', 'race.jpg'), 'from a');
+      await writeFile(join(assetsPath, 'b', 'race.jpg'), 'from b');
+
+      const results = await Promise.all([
+        ops.moveAssets(['race.jpg'], '/a', '/archive'),
+        ops.moveAssets(['race.jpg'], '/b', '/archive'),
+      ]);
+
+      expect(results.filter((r) => r.success)).toHaveLength(1);
+      const landed = await readFile(join(assetsPath, 'archive', 'race.jpg'), 'utf8');
+      const stayed = landed === 'from a' ? 'b' : 'a';
+      expect(await readFile(join(assetsPath, stayed, 'race.jpg'), 'utf8')).toBe(`from ${stayed}`);
+      expect(existsSync(join(assetsPath, landed === 'from a' ? 'a' : 'b', 'race.jpg'))).toBe(false);
+    });
+
+    test('one batch carrying two names that differ only in capitals moves just the first', async () => {
+      await mkdir(join(assetsPath, 'fresh'), { recursive: true });
+      await writeFile(join(assetsPath, 'Logo.jpg'), 'first logo');
+      const second = 'logo.JPG';
+      try {
+        await writeFile(join(assetsPath, second), 'second logo', { flag: 'wx' });
+      } catch {
+        return; // A case-insensitive disk cannot hold both names to begin with.
+      }
+
+      const result = await ops.moveAssets(['Logo.jpg', second], '/', '/fresh');
+
+      expect(result).toEqual({
+        success: false,
+        moved: 1,
+        error: `Could not move: ${second} (already in the target folder)`,
+      });
+      expect(await readFile(join(assetsPath, 'fresh', 'Logo.jpg'), 'utf8')).toBe('first logo');
+      expect(await readFile(join(assetsPath, second), 'utf8')).toBe('second logo');
+    });
+  });
+
+  describe('a move whose metadata cannot follow the file', () => {
+    test('keeps the file and its alt text where they were and names it in a refusal', async () => {
+      await mkdir(join(assetsPath, 'target'), { recursive: true });
+      await writeFile(join(assetsPath, 'stuck.jpg'), 'stuck bytes');
+      await ops.updateMetadata('stuck.jpg', { alt: 'Stuck alt' }, '/');
+      // A file where the target's metadata folder belongs: the record cannot be carried there.
+      const recordsDir = dirname(recordPath({ assetsPath, contentRoot }, 'target/stuck.jpg'));
+      await mkdir(dirname(recordsDir), { recursive: true });
+      await writeFile(recordsDir, 'in the way');
+
+      const result = await ops.moveAssets(['stuck.jpg'], '/', '/target');
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.moved).toBe(0);
+        expect(result.error).toContain('stuck.jpg');
+      }
+      expect(await readFile(join(assetsPath, 'stuck.jpg'), 'utf8')).toBe('stuck bytes');
+      expect(existsSync(join(assetsPath, 'target', 'stuck.jpg'))).toBe(false);
+      expect(await ops.getAsset('stuck.jpg', '/')).toMatchObject({ alt: 'Stuck alt' });
+    });
   });
 
   describe('a moved name that is a folder rather than a file', () => {
@@ -1492,7 +1557,7 @@ describe('upgrading an existing .asset-manifest.json', () => {
     await writeFile(full, pngBytes(1200, 675));
   }
 
-  function recordPath(relativePath: string): string {
+  function recordFile(relativePath: string): string {
     return join(contentRoot, '.asset-metadata', `${relativePath}.json`);
   }
 
@@ -1525,18 +1590,18 @@ describe('upgrading an existing .asset-manifest.json', () => {
     const result = await perRequest().updateMetadata('fourth.png', { alt: 'the save that triggered it' });
     expect(result.success).toBe(true);
 
-    expect(JSON.parse(await readFile(recordPath('hero.png'), 'utf-8'))).toEqual({
+    expect(JSON.parse(await readFile(recordFile('hero.png'), 'utf-8'))).toEqual({
       alt: 'Our team at work',
       tags: ['hero', 'people'],
       originalName: 'Our Team At Work.PNG',
       uploadedAt: '2026-01-01T00:00:00.000Z',
     });
-    expect(JSON.parse(await readFile(recordPath('logo.png'), 'utf-8'))).toEqual({
+    expect(JSON.parse(await readFile(recordFile('logo.png'), 'utf-8'))).toEqual({
       alt: 'The company mark',
       tags: ['brand'],
       originalName: 'logo.png',
     });
-    expect(JSON.parse(await readFile(recordPath('uploads/deep.png'), 'utf-8'))).toEqual({
+    expect(JSON.parse(await readFile(recordFile('uploads/deep.png'), 'utf-8'))).toEqual({
       alt: 'In a subfolder',
       uploadedAt: '2026-02-02T00:00:00.000Z',
     });
@@ -1569,7 +1634,7 @@ describe('upgrading an existing .asset-manifest.json', () => {
     await seedImage('fourth.png');
     await seedLegacyManifest();
     await mkdir(join(contentRoot, '.asset-metadata'), { recursive: true });
-    await writeFile(recordPath('hero.png'), '');
+    await writeFile(recordFile('hero.png'), '');
 
     await perRequest().updateMetadata('fourth.png', { alt: 'trigger' });
 
@@ -1599,7 +1664,7 @@ describe('upgrading an existing .asset-manifest.json', () => {
   test('an upload replaces a stale record rather than inheriting its alt text', async () => {
     await mkdir(join(contentRoot, '.asset-metadata'), { recursive: true });
     await writeFile(
-      recordPath('hero.png'),
+      recordFile('hero.png'),
       JSON.stringify({ alt: 'metadata from the image that used to be here', tags: ['confidential'] }),
     );
 

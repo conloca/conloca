@@ -560,6 +560,11 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
 
         const result = await assetOps.moveAssets(filenames, sourceFolder, targetFolder);
 
+        // A partly finished move answers with the result itself, so the editor learns which
+        // assets stayed and can keep exactly those selected for a retry.
+        if (!result.success && result.moved) {
+          return c.json(result);
+        }
         if (!result.success) {
           return c.json(errorResponse(ErrorCodes.INVALID_REQUEST, result.error), 400);
         }
