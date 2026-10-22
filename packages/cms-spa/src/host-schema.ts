@@ -59,6 +59,32 @@ export function defineHostSchema<T extends object>(schema: HostSchema<T>): HostS
   return schema;
 }
 
+/**
+ * Whether a value is a generated host schema. A site's `dataSchemas` / `pageSchemas` reach the
+ * editor at runtime from the site's own bundle, so an entry written before the generated
+ * contract (a validator-library object, a hand-written descriptor) can arrive where the types
+ * promise a {@link HostSchema}; reading its `metadata` then throws. Check before reading.
+ */
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- this is the boundary check that turns an untyped bundle export into a HostSchema.
+export function isHostSchema(value: unknown): value is HostSchema {
+  if (typeof value !== 'object' || value === null) return false;
+  if (!('validate' in value) || typeof value.validate !== 'function') return false;
+  if (!('metadata' in value)) return false;
+  const { metadata } = value;
+  return (
+    typeof metadata === 'object' &&
+    metadata !== null &&
+    'version' in metadata &&
+    metadata.version === '3.1' &&
+    'schema' in metadata &&
+    typeof metadata.schema === 'object' &&
+    metadata.schema !== null &&
+    'components' in metadata &&
+    typeof metadata.components === 'object' &&
+    metadata.components !== null
+  );
+}
+
 /** Generated JSON Schema metadata, whatever type it was generated for. */
 export type HostSchemaMetadata = IJsonSchemaUnit.IV3_1<unknown>;
 type JsonSchema = HostSchemaMetadata['schema'];

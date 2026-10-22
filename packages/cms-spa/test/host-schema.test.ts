@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import fc from 'fast-check';
-import { defineHostSchema, hostSchemaFieldNames } from '../src/host-schema.js';
+import { defineHostSchema, hostSchemaFieldNames, isHostSchema } from '../src/host-schema.js';
 import { definePageSchema, toPageSchemaDescriptor } from '../src/page-schema-define.js';
 import { fieldsOfHostSchema } from '../src/utils/schema-fields.js';
 import { articleFields, profileFields, publishedAtFields, starlightFields } from './fixtures/typia/host-schemas.js';
@@ -135,5 +135,39 @@ describe('defineHostSchema / definePageSchema declaration guards', () => {
       'editUrl',
       'sidebar',
     ]);
+  });
+});
+
+describe('isHostSchema — telling a generated host schema from what a site bundle can export instead', () => {
+  it('accepts a generated schema', () => {
+    expect(isHostSchema(articleFields)).toBe(true);
+  });
+
+  it.each([
+    ['a validator-library object with no metadata', { parse: () => ({}), shape: {} }],
+    ['an object with a validator and no metadata', { validate: articleFields.validate }],
+    ['metadata with no validator', { metadata: articleFields.metadata }],
+    ['metadata of another JSON Schema version', { validate: articleFields.validate, metadata: { version: '3.0' } }],
+    [
+      'metadata with no components',
+      { validate: articleFields.validate, metadata: { version: '3.1', schema: articleFields.metadata.schema } },
+    ],
+    ['null metadata', { validate: articleFields.validate, metadata: null }],
+    [
+      'metadata with no schema',
+      { validate: articleFields.validate, metadata: { version: '3.1', components: articleFields.metadata.components } },
+    ],
+    [
+      'metadata with null components',
+      {
+        validate: articleFields.validate,
+        metadata: { version: '3.1', schema: articleFields.metadata.schema, components: null },
+      },
+    ],
+    ['a validator that is not a function', { validate: 'yes', metadata: articleFields.metadata }],
+    ['null', null],
+    ['a string', 'article'],
+  ])('refuses %s', (_name, value) => {
+    expect(isHostSchema(value)).toBe(false);
   });
 });

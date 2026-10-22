@@ -182,6 +182,7 @@ export {
   type HostSchemaMetadata,
   type HostSchemaType,
   hostSchemaFieldNames,
+  isHostSchema,
   resolveHostJsonSchema,
   rootObjectOf,
 } from './host-schema.js';

@@ -1,6 +1,6 @@
 import { Loader2 } from 'lucide-react';
 import { useId } from 'react';
-import type { HostSchema } from '../../host-schema.js';
+import { type HostSchema, isHostSchema } from '../../host-schema.js';
 import { fromDatetimeLocalValue, toDatetimeLocalValue } from '../../utils/pageMetadata.js';
 import { type FieldInfo, type FormFields, fieldsOfHostSchema } from '../../utils/schema-fields.js';
 import { ImageFieldRender } from '../fields/ImageField.js';
@@ -39,6 +39,22 @@ export function SchemaForm({ schema, fields, values, onChange, isLoading, classN
     return (
       <div className="flex items-center justify-center py-8">
         <Loader2 className="h-6 w-6 animate-spin text-azure-04 dark:text-azure-08" />
+      </div>
+    );
+  }
+
+  if (!fields && schema && !isHostSchema(schema)) {
+    return (
+      <div
+        role="alert"
+        data-testid="schema-form-outdated-schema"
+        className="text-center py-8 text-grey-04 dark:text-grey-07"
+      >
+        <p className="mb-2 font-medium text-grey-01 dark:text-grey-12">This form cannot be shown.</p>
+        <p>
+          This schema is out of date: it is not a generated host schema. Ask whoever maintains the site to declare it
+          with defineHostSchema and Typia, then rebuild the site.
+        </p>
       </div>
     );
   }
