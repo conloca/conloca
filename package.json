@@ -49,12 +49,13 @@
     "@nx/web": "23.2.1",
     "@nx/workspace": "23.2.1",
     "@oxlint/plugins": "1.85.0",
-    "@smoothbricks/nx-plugin": "^0.4.21",
+    "@smoothbricks/cowshed": "^0.3.0",
+    "@smoothbricks/nx-plugin": "^0.5.7",
     "@testing-library/dom": "10.4.1",
     "@testing-library/react": "^16.3.3",
     "@ttsc/unplugin": "^0.30.4",
     "@types/bun": "1.4.2",
-    "@types/node": "^26.6.2",
+    "@types/node": "^26.6.5",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.7",
     "@typescript-eslint/parser": "^8.69.0",
@@ -119,11 +120,13 @@
     "solid-js>seroval": "1.6.3",
     "solid-js>seroval-plugins": "1.6.3",
     "source-map-js": "1.2.2",
-    "@verdaccio/hooks>handlebars": "4.7.10"
+    "@verdaccio/hooks>handlebars": "4.7.10",
+    "nx": "23.2.1"
   },
   "patchedDependencies": {
     "ttsc@0.30.4": "patches/ttsc@0.30.4.patch",
-    "@ttsc/unplugin@0.30.4": "patches/@ttsc%2Funplugin@0.30.4.patch"
+    "@ttsc/unplugin@0.30.4": "patches/@ttsc%2Funplugin@0.30.4.patch",
+    "nx@23.2.1": "patches/nx@23.2.1.patch"
   },
   "sherif": {
     "ignoreDependency": [

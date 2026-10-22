@@ -15,12 +15,13 @@
         "@nx/web": "23.2.1",
         "@nx/workspace": "23.2.1",
         "@oxlint/plugins": "1.85.0",
-        "@smoothbricks/nx-plugin": "^0.4.21",
+        "@smoothbricks/cowshed": "^0.3.0",
+        "@smoothbricks/nx-plugin": "^0.5.7",
         "@testing-library/dom": "10.4.1",
         "@testing-library/react": "^16.3.3",
         "@ttsc/unplugin": "^0.30.4",
         "@types/bun": "1.4.2",
-        "@types/node": "^26.6.2",
+        "@types/node": "^26.6.5",
         "@types/react": "19.2.18",
         "@types/react-dom": "19.2.7",
         "@typescript-eslint/parser": "^8.69.0",
@@ -372,6 +373,7 @@
   "patchedDependencies": {
     "@ttsc/unplugin@0.30.4": "patches/@ttsc%2Funplugin@0.30.4.patch",
     "ttsc@0.30.4": "patches/ttsc@0.30.4.patch",
+    "nx@23.2.1": "patches/nx@23.2.1.patch",
   },
   "overrides": {
     "@mdxeditor/editor@3": {
@@ -389,6 +391,7 @@
       "undici": "7.29.1",
     },
     "nx": {
+      ".": "23.2.1",
       "axios": "1.20.0",
       "smol-toml": "1.8.0",
     },
@@ -1657,11 +1660,15 @@
 
     "@sindresorhus/merge-streams": ["@sindresorhus/merge-streams@4.0.0", "", {}, "sha512-tlqY9xq5ukxTUZBmoOp+m61cqwQD5pHJtFY3Mn8CA8ps6yghLH/Hw8UPdqg4OLmFW3IFlcXnQNmo/dh8HzXYIQ=="],
 
-    "@smoothbricks/cli": ["@smoothbricks/cli@0.12.2", "", { "dependencies": { "@arethetypeswrong/core": "^0.18.2", "@smoothbricks/nx-plugin": "0.4.22", "@smoothbricks/validation": "0.1.10", "commander": "^14.0.3", "nx": "latest", "prettier": "^3.9.8", "publint": "^0.3.18", "semver": "^7.7.4", "sherif": "^1.11.1", "toml-eslint-parser": "^1.0.3", "tslib": "^2.8.1", "typia": "14.0.6" }, "bin": { "smoo": "bin/smoo" } }, "sha512-DK3tj3vLt0/2A1RSzRatjaDntfAQhJtr9pgRib3ved/WQEvYrtdnw+cq8sBYXRFe0vYhdAfFMMrGum7L+xM2dg=="],
+    "@smoothbricks/cli": ["@smoothbricks/cli@0.12.21", "", { "dependencies": { "@arethetypeswrong/core": "^0.18.2", "@smoothbricks/nx-plugin": "0.5.7", "@smoothbricks/validation": "0.1.12", "commander": "^14.0.3", "nx": "latest", "prettier": "^3.9.8", "publint": "^0.3.18", "semver": "^7.7.4", "sherif": "^1.11.1", "toml-eslint-parser": "^1.0.3", "tslib": "^2.8.1", "typia": "14.0.6" }, "bin": { "smoo": "bin/smoo" } }, "sha512-a/6y16GosIPXZXa+KPlUkKveF/RBOSCvw+PThWCoxnt/JREDK50LDx3FrjYM9DRdpC13qEifzWhI1pzhOMTMdg=="],
 
-    "@smoothbricks/nx-plugin": ["@smoothbricks/nx-plugin@0.4.21", "", { "dependencies": { "@nx/js": "latest", "nx": "latest", "prettier": "^3.9.8", "smol-toml": "^1.6.1", "tslib": "^2.8.1", "typia": "14.0.6", "yaml": "^2.9.0" }, "bin": { "smoo-nx-exec": "dist/bin/smoo-nx-exec.js", "smoo-nx-cargo-hash": "dist/bin/smoo-nx-cargo-hash.js" } }, "sha512-nkHNKdbuBQYbz32AFwDtaiTqVji/lg+PZXBMVjCrfLjyG0u4Ki6qX0+k4owiWmFOl2NvovSCE/E+x2s9hsCZWg=="],
+    "@smoothbricks/cowshed": ["@smoothbricks/cowshed@0.3.0", "", { "dependencies": { "@smoothbricks/nx-cache-server": "0.1.2", "typia": "14.0.6" }, "bin": { "cowshed": "bin/cowshed" } }, "sha512-v1CNXQ4jEc72EIjYqujssmgoGYT20vP7Vq0Fk85OtzUbpETGjY5o9zz5hXraPcNz/5CrGrTByy9l2jfYuqlsPQ=="],
 
-    "@smoothbricks/validation": ["@smoothbricks/validation@0.1.10", "", { "dependencies": { "@ttsc/unplugin": "0.30.4", "tslib": "^2.8.1", "ttsc": "0.30.4", "typescript": "^6.0.3", "typia": "14.0.6" } }, "sha512-C5lcVvLMMP2Zt6Odgh+FU5LhARDtrjxs3Okx/U6iGRpY3NU4PioZp9Qsgz0QhdsHuQEb96wPaOnCFezbWs8Z5A=="],
+    "@smoothbricks/nx-cache-server": ["@smoothbricks/nx-cache-server@0.1.2", "", { "dependencies": { "tslib": "^2.8.1" }, "bin": { "nx-cache-server": "dist/ts/main.js" } }, "sha512-1P3JKCWU+IJwzj6wJs/bkG43IxBBbfZiSJtd0yX7DIJ0OhdJA5vIrpSHSH59ioL3DPdftHtcW+bFHIIlq2QhgQ=="],
+
+    "@smoothbricks/nx-plugin": ["@smoothbricks/nx-plugin@0.5.7", "", { "dependencies": { "@nx/js": "23.2.1", "jsonc-parser": "^3.3.1", "nx": "latest", "prettier": "^3.9.8", "smol-toml": "^1.6.1", "tslib": "^2.8.1", "typescript": "^6.0.3", "typia": "14.0.6", "yaml": "^2.9.0" }, "bin": { "smoo-nx-exec": "dist/bin/smoo-nx-exec.js", "smoo-nx-failures": "dist/bin/smoo-nx-failures.js", "smoo-nx-cargo-hash": "dist/bin/smoo-nx-cargo-hash.js", "smoo-nx-test-walks": "dist/bin/smoo-nx-test-walks.js", "smoo-nx-test-clocks": "dist/bin/smoo-nx-test-clocks.js", "smoo-nx-bound-failures": "dist/bin/smoo-nx-bound-failures.js", "smoo-nx-nextest-extract": "dist/bin/smoo-nx-nextest-extract.js" } }, "sha512-DxYuTeNaWn4qAzV5uVAJJhoKkz5lQC3a4tJkehvYHYUYWdkyFJo7S7YOzuSrE3El1AXM0SVCp3fgXHOmNeiKRg=="],
+
+    "@smoothbricks/validation": ["@smoothbricks/validation@0.1.12", "", { "dependencies": { "@ttsc/unplugin": "0.30.4", "tslib": "^2.8.1", "ttsc": "0.30.4", "typescript": "^6.0.3", "typia": "14.0.6" } }, "sha512-sKpNemLB0GQE06cKNL7PBupcFSL1UPT+GnmBv38Uf/AIZ8iSLN2Dn1DcoL0qER2hrJtak99TQF9gjPNRm70s7g=="],
 
     "@solid-primitives/event-listener": ["@solid-primitives/event-listener@2.4.6", "", { "dependencies": { "@solid-primitives/utils": "^6.4.1" }, "peerDependencies": { "solid-js": "^1.6.12" } }, "sha512-5I0YJcTVYIWoMmgBSROBZGcz+ymhew/pGTg2dHW74BUjFKsV8Li4bOZYl0YAGP4mHw5o4UBd9/BEesqBci3wxw=="],
 
@@ -1889,7 +1896,7 @@
 
     "@types/nlcst": ["@types/nlcst@2.0.3", "", { "dependencies": { "@types/unist": "*" } }, "sha512-vSYNSDe6Ix3q+6Z7ri9lyWqgGhJTmzRjZRqyq15N0Z/1/UnVsno9G/N40NBijoYx2seFDIl0+B2mgAb9mezUCA=="],
 
-    "@types/node": ["@types/node@26.6.3", "", { "dependencies": { "undici-types": "~8.9.0" } }, "sha512-dsqMQQoeTLqu9wynDD00q573mNzso3IdQOAfHRJqLCcmCFPoGo9A1bDpUcv/9tnKpErQWv9uKeGfl37EIS02Yg=="],
+    "@types/node": ["@types/node@26.6.5", "", { "dependencies": { "undici-types": "~8.9.0" } }, "sha512-uMzsv9stDdofIZBx4UGh4Z9ZgXnGC9seRDscilBcTHAeOFk67MZg/k9bWVfO+bk4qZmG+l52hRnLwUiH2LnJTg=="],
 
     "@types/parse-json": ["@types/parse-json@4.0.2", "", {}, "sha512-dISoDXWWQwUquiKsyZ4Ng+HX2KsPL7LyHKHQwgGFEA3IaKac4Obd+h2a/a6waisAoepJlBcx9paWqjA8/HVjCw=="],
 
@@ -4420,8 +4427,6 @@
     "@rollup/pluginutils/estree-walker": ["estree-walker@2.0.2", "", {}, "sha512-Rfkk/Mp/DL7JVje3u18FxFujQlTNR2q6QfMSMB7AvCBx91NGj/ba3kCfza0f6dVDbw7YlRf/nDrn7pQrCCyQ/w=="],
 
     "@rollup/pluginutils/picomatch": ["picomatch@4.0.7", "", {}, "sha512-qcJu88Q2IWqJsDD529JKMdwGm/dvInW4HvQnRwiH9JtihJvzGOscDtHE3x1pBKeUOTysQ8kVmLnJ2kJu7yhcGA=="],
-
-    "@smoothbricks/cli/@smoothbricks/nx-plugin": ["@smoothbricks/nx-plugin@0.4.22", "", { "dependencies": { "@nx/js": "latest", "nx": "latest", "prettier": "^3.9.8", "smol-toml": "^1.6.1", "tslib": "^2.8.1", "typia": "14.0.6", "yaml": "^2.9.0" }, "bin": { "smoo-nx-exec": "dist/bin/smoo-nx-exec.js", "smoo-nx-cargo-hash": "dist/bin/smoo-nx-cargo-hash.js" } }, "sha512-Cd/E2jlD/1mevEzT8O6RvPx3WqbxNhw/bFmFF24PafyJMcxhYlStwTy9/BfpVM9RtVIKZHcRHnWqEymi74TmCg=="],
 
     "@smoothbricks/cli/commander": ["commander@14.0.3", "", {}, "sha512-H+y0Jo/T1RZ9qPP4Eh1pkcQcLRglraJaSLoyOtHxu6AapkjWVCy2Sit1QQ4x3Dng8qDlSsZEet7g5Pq06MvTgw=="],
 

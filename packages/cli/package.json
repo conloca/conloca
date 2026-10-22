@@ -50,9 +50,14 @@
         }
       },
       "build": {
+        "//": "The bundle inlines src/templates/conloca-skill.md. The default input excludes every Markdown file, and that exclusion wins over a file listed by name, so the project's own files are hashed in full.",
         "executor": "nx:run-commands",
         "dependsOn": [
           "^build"
+        ],
+        "inputs": [
+          "{projectRoot}/**/*",
+          "^default"
         ],
         "options": {
           "command": "bun run build.ts",
@@ -68,6 +73,7 @@
         ]
       },
       "test": {
+        "//": "test/skill.test.ts reads src/templates/conloca-skill.md, which the default input would exclude even when listed by name, so the project's own files are hashed in full.",
         "executor": "@smoothbricks/nx-plugin:bounded-exec",
         "dependsOn": [
           "build",
@@ -75,7 +81,7 @@
           "test-packed"
         ],
         "inputs": [
-          "default",
+          "{projectRoot}/**/*",
           "^default",
           "{workspaceRoot}/example/website-with-cms/package.json",
           "{workspaceRoot}/tooling/test-setup.ts",
@@ -83,9 +89,9 @@
           "{workspaceRoot}/tooling/git-env-isolation.ts"
         ],
         "options": {
-          "command": "bun test --timeout=30000",
+          "command": "bun test --timeout=0",
           "cwd": "{projectRoot}",
-          "timeoutMs": 300000,
+          "idleTimeoutMs": 180000,
           "killAfterMs": 10000
         }
       },

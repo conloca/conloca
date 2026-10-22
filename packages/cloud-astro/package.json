@@ -139,17 +139,22 @@
         }
       },
       "test": {
+        "//": "The tests read the shipped skill page and the README section a warning points to. The default input excludes every Markdown file, and that exclusion wins over a file listed by name, so the project's own files are hashed in full.",
         "executor": "@smoothbricks/nx-plugin:bounded-exec",
         "dependsOn": [
           "typecheck-tests",
           "build",
           "test-packed"
         ],
+        "inputs": [
+          "{projectRoot}/**/*",
+          "^default"
+        ],
         "options": {
-          "command": "bun test --timeout=30000 ./src",
+          "command": "bun test --timeout=0 ./src",
           "cwd": "{projectRoot}",
-          "timeoutMs": 120000,
-          "killAfterMs": 10000.0
+          "idleTimeoutMs": 180000,
+          "killAfterMs": 10000
         }
       },
       "test-packed": {

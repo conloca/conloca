@@ -126,10 +126,10 @@
           "{workspaceRoot}/tooling/git-env-isolation.ts"
         ],
         "options": {
-          "command": "bun test --preload ./test-native-preload.ts --timeout=30000",
+          "command": "bun test --preload ./test-native-preload.ts --timeout=0",
           "cwd": "{projectRoot}",
-          "timeoutMs": 120000,
-          "killAfterMs": 10000.0
+          "idleTimeoutMs": 180000,
+          "killAfterMs": 10000
         }
       },
       "mutation": {

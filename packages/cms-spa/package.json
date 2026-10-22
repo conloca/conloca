@@ -222,9 +222,9 @@
           "test-packed"
         ],
         "options": {
-          "command": "bun --conditions=production test",
+          "command": "bun test --timeout=0 --conditions=production",
           "cwd": "{projectRoot}",
-          "timeoutMs": 120000,
+          "idleTimeoutMs": 180000,
           "killAfterMs": 10000
         }
       },

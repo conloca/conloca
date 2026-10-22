@@ -26,7 +26,8 @@
     "src/**/__tests__/**/*.tsx",
     "src/test-suite-tracer.ts",
     "test/**/*.ts",
-    "test/**/*.tsx"
+    "test/**/*.tsx",
+    "src/**/*.spec.tsx"
   ],
   "references": [
     {

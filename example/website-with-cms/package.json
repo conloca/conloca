@@ -40,6 +40,10 @@
         "dependsOn": [
           "^build"
         ],
+        "inputs": [
+          "default",
+          "^default"
+        ],
         "options": {
           "command": "astro check",
           "cwd": "{projectRoot}"
@@ -69,6 +73,10 @@
       "lint": {
         "executor": "nx:run-commands",
         "cache": true,
+        "inputs": [
+          "default",
+          "^default"
+        ],
         "options": {
           "commands": [
             "biome lint --files-ignore-unknown=true .",

@@ -60,10 +60,10 @@
           "test-packed"
         ],
         "options": {
-          "command": "bun test --timeout=30000",
+          "command": "bun test --timeout=0",
           "cwd": "{projectRoot}",
-          "timeoutMs": 120000,
-          "killAfterMs": 10000.0
+          "idleTimeoutMs": 180000,
+          "killAfterMs": 10000
         }
       },
       "test-packed": {

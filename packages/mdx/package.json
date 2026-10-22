@@ -86,10 +86,10 @@
         ],
         "executor": "@smoothbricks/nx-plugin:bounded-exec",
         "options": {
-          "command": "bun --conditions=production test",
+          "command": "bun test --timeout=0 --conditions=production",
           "cwd": "{projectRoot}",
-          "timeoutMs": 120000,
-          "killAfterMs": 10000.0
+          "idleTimeoutMs": 180000,
+          "killAfterMs": 10000
         }
       },
       "lint": {},

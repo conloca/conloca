@@ -10,14 +10,15 @@
   },
   "namedInputs": {
     "typescriptGlobals": ["{workspaceRoot}/tsconfig.base.json", "{workspaceRoot}/packages/tsconfig.base.json"],
-    "default": ["{projectRoot}/**/*", "sharedGlobals"],
+    "default": ["{projectRoot}/**/*", "!{projectRoot}/**/*.md"],
     "production": [
       "{projectRoot}/src/**/*",
       "{projectRoot}/package.json",
       "typescriptGlobals",
       "!{projectRoot}/**/__tests__/**",
       "!{projectRoot}/**/*.test.*",
-      "!{projectRoot}/**/*.spec.*"
+      "!{projectRoot}/**/*.spec.*",
+      "!{projectRoot}/**/*.md"
     ],
     "sharedGlobals": ["{workspaceRoot}/.github/workflows/ci.yml"]
   },
@@ -54,10 +55,18 @@
       "cache": true
     },
     "build": {
-      "cache": true
+      "cache": true,
+      "inputs": ["default", "^default"]
     },
     "test": {
-      "cache": true
+      "cache": true,
+      "inputs": ["default", "^default"]
+    },
+    "cargo-test": {
+      "inputs": ["default", "^default"]
+    },
+    "cargo-wasm": {
+      "defaultConfiguration": "production"
     }
   },
   "generators": {
@@ -102,5 +111,6 @@
       }
     }
   },
-  "analytics": false
+  "analytics": false,
+  "cacheDirectory": ".nx/cache"
 }

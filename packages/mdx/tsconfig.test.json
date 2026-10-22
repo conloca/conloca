@@ -19,7 +19,9 @@
     "src/**/*.spec.ts",
     "src/**/__tests__/**/*.ts",
     "src/**/__tests__/**/*.tsx",
-    "src/test-suite-tracer.ts"
+    "src/test-suite-tracer.ts",
+    "src/**/*.test.tsx",
+    "src/**/*.spec.tsx"
   ],
   "references": [
     {
