@@ -9,6 +9,7 @@ import { DataList } from './components/pages/DataList.js';
 import { FragmentList } from './components/pages/FragmentList.js';
 import { MediaPage } from './components/pages/MediaPage.js';
 import { PageList } from './components/pages/PageList.js';
+import { RouteErrorPage } from './components/RouteErrorPage.js';
 import { type DataSchemas, useDataSchemas } from './data-schemas.js';
 import { usePuckConfig } from './puck-config.js';
 
@@ -24,7 +25,11 @@ export interface RouteDeps {
  *
  * `/pages/:id` and `/fragments/:id` sit OUTSIDE the CMSLayout shell so the
  * editors occupy the full viewport — the page-route equivalent of "modal
- * takes over the screen".
+ * takes over the screen". Each of the three top-level routes carries the
+ * `RouteErrorPage` `errorElement`, so a failing screen never falls through to
+ * react-router's developer screen. An address that matches no route is answered
+ * by the FIRST route's `errorElement` (react-router's choice), so the layout
+ * route must stay first and keep its `errorElement`.
  *
  * Exported so tests that need `useBlocker` (the unsaved-changes guard hooks
  * inside the page/fragment editors) can plug the same routes into
@@ -34,15 +39,19 @@ export interface RouteDeps {
 export function routeElements({ puckConfig, dataSchemas }: RouteDeps) {
   return (
     <>
-      <Route path="/" element={<CMSLayout />}>
+      <Route path="/" element={<CMSLayout />} errorElement={<RouteErrorPage />}>
         <Route index element={<CMSDashboard />} />
         <Route path="pages" element={<PageList />} />
         <Route path="fragments" element={<FragmentList />} />
         <Route path="data" element={<DataList dataSchemas={dataSchemas} />} />
         <Route path="media" element={<MediaPage />} />
       </Route>
-      <Route path="/pages/:id" element={<PageEditorWrapper puckConfig={puckConfig} />} />
-      <Route path="/fragments/:id" element={<FragmentEditor />} />
+      <Route
+        path="/pages/:id"
+        element={<PageEditorWrapper puckConfig={puckConfig} />}
+        errorElement={<RouteErrorPage />}
+      />
+      <Route path="/fragments/:id" element={<FragmentEditor />} errorElement={<RouteErrorPage />} />
     </>
   );
 }
