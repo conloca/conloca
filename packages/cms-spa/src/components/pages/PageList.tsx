@@ -1,20 +1,12 @@
-import {
-  APIClientError,
-  localesOf,
-  pageStatusOf,
-  useCreateContent,
-  useDeleteContent,
-  useSitePages,
-} from '@conloca/content-api-client';
+import { localesOf, pageStatusOf, useDeleteContent, useSitePages } from '@conloca/content-api-client';
 import { AlertCircle, Clock, Edit, FileCode, FileText, Loader2, Plus, Search, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useErrorModal, useSiteBaseUrl } from '../../hooks/index.js';
-import type { CreatePageData, Page } from '../../types.js';
-import { getUIConfig } from '../../ui-config.js';
+import type { Page } from '../../types.js';
 import { contentFailureMessage, isStaleWrite } from '../../utils/content-failure.js';
 import { formatDate } from '../../utils/format-date.js';
-import { CreatePageDialog } from '../dialogs/CreatePageDialog.js';
+import { CreatePageFlow } from '../dialogs/CreatePageFlow.js';
 import { DeleteConfirmDialog } from '../dialogs/DeleteConfirmDialog.js';
 import { ErrorModal } from '../dialogs/ErrorModal.js';
 import { Tooltip } from '../ui/Tooltip.js';
@@ -44,7 +36,6 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
   const { buildUrl } = useSiteBaseUrl();
 
   const navigate = useNavigate();
-  const createContent = useCreateContent();
   const deleteContent = useDeleteContent();
 
   const getPreviewUrl = (pagePath: string) => {
@@ -200,91 +191,6 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
 
   const handleNewPage = () => {
     setShowCreateDialog(true);
-  };
-
-  const createTemplateContent = (componentName: string) => [
-    {
-      type: componentName,
-      props: {
-        id: `${componentName}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      },
-    },
-  ];
-
-  const handleCreatePage = async (data: CreatePageData) => {
-    try {
-      const config = getUIConfig();
-      const templateConfig = config.templates?.[data.template];
-
-      // Shared metadata. Description is only added when MDX picked it
-      // up — Puck pages don't render it today, so the manifest stays
-      // clean for them.
-      const meta: { title: string; description?: string } = { title: data.title };
-      if (data.format === 'mdx' && data.description) {
-        meta.description = data.description;
-      }
-
-      // Build a type-specific content payload. MDX pages send an empty
-      // body — the editor opens to a blank canvas. Puck pages keep the
-      // existing template-driven payload.
-      const templateContent =
-        data.format !== 'mdx' && templateConfig?.component ? createTemplateContent(templateConfig.component) : [];
-      const result = await (data.format === 'mdx'
-        ? createContent.mutateAsync({
-            kind: 'page',
-            site: currentSite,
-            collection: 'pages',
-            type: 'mdx',
-            meta,
-            locales: {
-              [data.locale]: {
-                meta,
-                pathname: data.path,
-                // Empty body — backend stamps id/created/modified into
-                // frontmatter automatically (see
-                // filesystem-content-api.ts createContent, type === 'mdx'
-                // branch).
-                content: { mdx: '' },
-              },
-            },
-          })
-        : createContent.mutateAsync({
-            kind: 'page',
-            site: currentSite,
-            collection: 'pages',
-            type: 'puck',
-            meta,
-            locales: {
-              [data.locale]: {
-                meta,
-                pathname: data.path,
-                content: {
-                  puckData: {
-                    root: {},
-                    content: templateContent,
-                    zones: {},
-                  },
-                },
-              },
-            },
-          }));
-
-      if (result.success && result.id) {
-        // Navigate to the new page editor with the actual ID.
-        // PageEditorWrapper dispatches by content.type so MDX pages
-        // land on MdxPageEditor and Puck pages on the Puck canvas.
-        navigate(`/pages/${result.id}`);
-      } else {
-        // The dialog has already closed, so this is the author's only answer:
-        // say why (a path taken since the check), not just "try again".
-        showError(contentFailureMessage(result, 'Failed to create page. Please try again.'), result.error);
-      }
-    } catch (error) {
-      console.error('Failed to create page:', error);
-      // The content-API router answers a refusal, such as a path another page took since the check,
-      // with an error status, which the client throws: say why, as for a refusal the result carries.
-      showError(error instanceof APIClientError ? error.message : 'Failed to create page. Please try again.', error);
-    }
   };
 
   const handleEditPage = (pageId: string) => {
@@ -640,13 +546,8 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
         </div>
       )}
 
-      {/* Create Page Dialog */}
-      <CreatePageDialog
-        open={showCreateDialog}
-        onOpenChange={setShowCreateDialog}
-        onCreatePage={handleCreatePage}
-        site={currentSite}
-      />
+      {/* Create Page Flow: the dialog plus its own create-error modal */}
+      <CreatePageFlow open={showCreateDialog} onOpenChange={setShowCreateDialog} site={currentSite} />
 
       {/* Delete Confirmation Dialog */}
       <DeleteConfirmDialog
