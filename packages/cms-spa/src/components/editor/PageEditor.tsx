@@ -46,6 +46,20 @@ const viewports = [
 ];
 
 /**
+ * The canvas options, a module constant on purpose. `<Puck>` re-runs its canvas viewport effect whenever `iframe`
+ * changes identity (https://github.com/puckeditor/puck/pull/1864, open against 0.23), and while the undo history
+ * still holds only its first entry that effect overwrites the entry with the page as it is by then. This editor
+ * re-renders on every edit, so an inline object would replace the loaded page in the history with the result of the
+ * first edit before Puck records that edit: Undo would then flip the history buttons and leave the edit on the canvas.
+ *
+ * The canvas shows the SITE, so it gets the site's stylesheets and nothing else. Puck's default mirrors this admin
+ * document's head into the iframe, which for a consumer whose editor and site are separate apps means the CMS
+ * chrome's own CSS lands on top of the page being edited — Tailwind's preflight there flattens headings the site
+ * styles by element rather than by utility class.
+ */
+const CANVAS_IFRAME = { syncHostStyles: false };
+
+/**
  * Stable field type overrides for Puck.
  * Defined at module level to maintain referential stability across renders.
  * This prevents Puck from re-creating field components on every render,
@@ -150,12 +164,11 @@ function usePageCanTakeAnInsert(): boolean {
  *    rules (e.g. `body { color: var(...) }`) cannot cascade into Puck's
  *    chrome — the iframe is the only intended consumer.
  *
- *    The `<Puck>` below turns off Puck's host-style mirror
- *    (`iframe={{ syncHostStyles: false }}`), so the iframe head holds only
- *    Puck's own interaction CSS, the empty-drop-area rule (point 3), the
- *    page-setting cursor rule (point 4) and these tags. Nothing else touches
- *    them, so they are appended on every `siteStyles` change and removed on
- *    cleanup.
+ *    The `<Puck>` below turns off Puck's host-style mirror (`CANVAS_IFRAME`),
+ *    so the iframe head holds only Puck's own interaction CSS, the
+ *    empty-drop-area rule (point 3), the page-setting cursor rule (point 4)
+ *    and these tags. Nothing else touches them, so they are appended on
+ *    every `siteStyles` change and removed on cleanup.
  *
  * 3. Injects `EMPTY_DROP_AREA_CSS` once per iframe document.
  *
@@ -536,13 +549,7 @@ export function PageEditor({
             headerTitle={entry.localized.meta.title || 'Untitled Page'}
             viewports={viewports}
             overrides={overrides}
-            // The canvas shows the SITE, so it gets the site's stylesheets and
-            // nothing else. Puck's default mirrors this admin document's head
-            // into the iframe, which for a consumer whose editor and site are
-            // separate apps means the CMS chrome's own CSS lands on top of the
-            // page being edited — Tailwind's preflight there flattens headings
-            // the site styles by element rather than by utility class.
-            iframe={{ syncHostStyles: false }}
+            iframe={CANVAS_IFRAME}
           />
         </PageSettingTargetsProvider>
       </div>

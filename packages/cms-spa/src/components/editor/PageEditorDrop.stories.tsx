@@ -17,6 +17,9 @@ import { PageEditorHarness } from './PageEditorCanvas.stories.js';
  * sends: Puck captures the pointer on the page body once a drag starts, so the moves and the release go there. The
  * real Puck drag-and-drop code decides whether the drag starts. Only `setPointerCapture` is stubbed: it rejects a
  * pointer that is not a real device pointer, and a story cannot move the real mouse.
+ *
+ * An added block is also a step of the editor's history, whichever way it was added: Undo takes it off the page and
+ * Redo puts it back.
  */
 
 /** Two blocks and a root `title` field: the shape of a site's Puck config. */
@@ -155,6 +158,56 @@ async function dragTo(item: HTMLElement, to: Point): Promise<void> {
   }
 }
 
+/** The blocks of one kind on the canvas: `hero` is the one the stories here add, `services` one a page starts with. */
+function blocksOnCanvas(canvas: Document, block: 'hero' | 'services'): NodeListOf<Element> {
+  return canvas.querySelectorAll(`[data-testid="block-${block}"]`);
+}
+
+/** Waits for the canvas to show exactly `count` heroes. */
+async function waitForHeroes(canvas: Document, count: number): Promise<void> {
+  await waitFor(() => expect(blocksOnCanvas(canvas, 'hero')).toHaveLength(count), { timeout: 5_000 });
+}
+
+/**
+ * Presses Puck's header Undo or Redo (labelled `undo` and `redo`) once it is enabled. Puck records an edit in its
+ * history 250 ms after it is made, so Undo only enables after that, as it does for an author.
+ */
+async function pressHistoryButton(canvasElement: HTMLElement, label: 'undo' | 'redo'): Promise<void> {
+  const button = await waitFor(
+    async () => {
+      const found = within(canvasElement).getByRole('button', { name: label });
+      await expect(found).toBeEnabled();
+      return found;
+    },
+    { timeout: 5_000 },
+  );
+  await userEvent.click(button);
+}
+
+/** How far down a block a drop falls, as a fraction of its height: in the lower half, where Puck inserts after it. */
+const DROP_DEPTH_IN_BLOCK = 0.9;
+
+/** The screen point just below the lower half of the block the page already has. */
+async function pointBelowTheExistingBlock(canvasElement: HTMLElement): Promise<Point> {
+  const canvas = await canvasDocument(canvasElement);
+  const existing = await waitFor(
+    () => {
+      const found = blocksOnCanvas(canvas, 'services')[0];
+      if (!found) throw new Error('the existing block has not rendered yet');
+      return found;
+    },
+    { timeout: 10_000 },
+  );
+  const box = existing.getBoundingClientRect();
+  const frame = canvasFrame(canvasElement);
+  const frameBox = frame.getBoundingClientRect();
+  const scale = frameBox.width / frame.offsetWidth;
+  return {
+    x: frameBox.x + (box.x + box.width / 2) * scale,
+    y: frameBox.y + (box.y + box.height * DROP_DEPTH_IN_BLOCK) * scale,
+  };
+}
+
 /** A page with no blocks yet takes a block dragged from the list onto its canvas. */
 export const DraggingABlockOntoAnEmptyPage: Story = {
   name: 'dragging a block from the list onto an empty page adds it',
@@ -183,27 +236,75 @@ export const DraggingABlockOntoAPageWithBlocks: Story = {
   ),
   play: async ({ canvasElement }) => {
     const canvas = await canvasDocument(canvasElement);
-    const existing = await waitFor(
-      () => {
-        const found = canvas.querySelector('[data-testid="block-services"]');
-        if (!found) throw new Error('the existing block has not rendered yet');
-        return found;
-      },
-      { timeout: 10_000 },
-    );
-    const box = existing.getBoundingClientRect();
-    const frame = canvasFrame(canvasElement);
-    const frameBox = frame.getBoundingClientRect();
-    const scale = frameBox.width / frame.offsetWidth;
-    // Just below the existing block's lower half, where Puck inserts after it.
-    const to = { x: frameBox.x + (box.x + box.width / 2) * scale, y: frameBox.y + (box.y + box.height * 0.9) * scale };
+    const to = await pointBelowTheExistingBlock(canvasElement);
 
     await dragTo(drawerItem(canvasElement, 'Hero'), to);
 
-    await waitFor(() => expect(canvas.querySelectorAll('[data-testid="block-hero"]')).toHaveLength(1), {
-      timeout: 5_000,
-    });
-    await expect(canvas.querySelectorAll('[data-testid="block-services"]')).toHaveLength(1);
+    await waitForHeroes(canvas, 1);
+    await expect(blocksOnCanvas(canvas, 'services')).toHaveLength(1);
+  },
+};
+
+/** Undo takes a block dragged onto an empty page off it again, and Redo puts it back. */
+export const UndoingABlockDraggedOntoAnEmptyPage: Story = {
+  name: 'undo removes a block dragged onto an empty page and redo brings it back',
+  render: () => <PageEditorHarness entry={pageWith([])} config={SITE_CONFIG} onOpenMetadata={() => {}} />,
+  play: async ({ canvasElement }) => {
+    const canvas = await canvasDocument(canvasElement);
+
+    await dragTo(drawerItem(canvasElement, 'Hero'), centreOf(canvasFrame(canvasElement)));
+    await waitForHeroes(canvas, 1);
+
+    await pressHistoryButton(canvasElement, 'undo');
+    await waitForHeroes(canvas, 0);
+
+    await pressHistoryButton(canvasElement, 'redo');
+    await waitForHeroes(canvas, 1);
+  },
+};
+
+/** The same holds for a block added by double-clicking it in the list. */
+export const UndoingADoubleClickedBlockOnAnEmptyPage: Story = {
+  name: 'undo removes a block added by double-click and redo brings it back',
+  render: () => <PageEditorHarness entry={pageWith([])} config={SITE_CONFIG} onOpenMetadata={() => {}} />,
+  play: async ({ canvasElement }) => {
+    const canvas = await canvasDocument(canvasElement);
+
+    await userEvent.dblClick(drawerItem(canvasElement, 'Hero'));
+    await waitForHeroes(canvas, 1);
+
+    await pressHistoryButton(canvasElement, 'undo');
+    await waitForHeroes(canvas, 0);
+
+    await pressHistoryButton(canvasElement, 'redo');
+    await waitForHeroes(canvas, 1);
+  },
+};
+
+/** Undo takes back only the block that was dragged in: the one the page had when it was opened stays. */
+export const UndoingABlockDraggedOntoAPageWithBlocks: Story = {
+  name: 'undo removes only the block dragged onto a page that has blocks, and redo brings it back',
+  render: () => (
+    <PageEditorHarness
+      entry={pageWith([{ type: 'Services', props: { id: 'Services-existing' } }])}
+      config={SITE_CONFIG}
+      onOpenMetadata={() => {}}
+    />
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = await canvasDocument(canvasElement);
+    const to = await pointBelowTheExistingBlock(canvasElement);
+
+    await dragTo(drawerItem(canvasElement, 'Hero'), to);
+    await waitForHeroes(canvas, 1);
+
+    await pressHistoryButton(canvasElement, 'undo');
+    await waitForHeroes(canvas, 0);
+    await expect(blocksOnCanvas(canvas, 'services')).toHaveLength(1);
+
+    await pressHistoryButton(canvasElement, 'redo');
+    await waitForHeroes(canvas, 1);
+    await expect(blocksOnCanvas(canvas, 'services')).toHaveLength(1);
   },
 };
 
