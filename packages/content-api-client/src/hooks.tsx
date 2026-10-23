@@ -216,13 +216,15 @@ export function useUpdateLocalized() {
           };
         });
 
-        // Update list queries to reflect the server data
+        // Update list queries to reflect the server data. A locale the list item does not hold yet is not
+        // added from the saved version: the version cannot say whether it was ever published, and a list
+        // item that gains an unmarked locale reads as live. The lists holding such an item are refetched.
         const updateListQueries = (old: ContentListResult | undefined) => {
           if (!isContentListResult(old)) return old;
           return {
             ...old,
             items: old.items.map((item) =>
-              item.id === variables.id
+              item.id === variables.id && Object.hasOwn(item.locales, variables.locale)
                 ? {
                     ...item,
                     locales: {
@@ -251,6 +253,13 @@ export function useUpdateLocalized() {
         queryClient.setQueriesData({ queryKey: ['fragments'], exact: false }, updateListQueries);
 
         queryClient.setQueriesData({ queryKey: ['data'], exact: false }, updateListQueries);
+
+        void queryClient.invalidateQueries({
+          predicate: ({ queryKey, state }) =>
+            (queryKey[0] === 'sites' || queryKey[0] === 'fragments' || queryKey[0] === 'data') &&
+            isContentListResult(state.data) &&
+            state.data.items.some((item) => item.id === variables.id && !Object.hasOwn(item.locales, variables.locale)),
+        });
       }
     },
   });

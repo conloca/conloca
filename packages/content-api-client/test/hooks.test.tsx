@@ -37,6 +37,7 @@ import {
   useUpdateLocalized,
   useUploadAsset,
 } from '../src/hooks.js';
+import { pageStatusOf } from '../src/page-status.js';
 import { jsonResponse } from '../src/test-helpers.js';
 
 /** The `unpublished` marker on the first listed page's English version. */
@@ -968,6 +969,17 @@ describe('Content API Hooks', () => {
       };
     }
 
+    function germanVersion(): LocaleVersion {
+      return {
+        locale: 'de',
+        pathname: '/de/fresh',
+        etag: 'etag-de',
+        created: FRESH_AT,
+        modified: FRESH_AT,
+        meta: { title: 'Frisch' },
+      };
+    }
+
     function savedLocalized(): LocalizedEntry {
       return {
         id: 'fresh',
@@ -985,6 +997,26 @@ describe('Content API Hooks', () => {
           content: { puckData: {} },
         },
       };
+    }
+
+    function germanLocalized(): LocalizedEntry {
+      return { ...savedLocalized(), localized: { ...germanVersion(), content: { puckData: {} } } };
+    }
+
+    /** A server that lists the page in English only until the German save, then in both, each never published. */
+    function serveListing(refetchGate: () => Promise<void>) {
+      let germanSaved = false;
+      mockClient.getSitePages = mock(async () => {
+        if (germanSaved) await refetchGate();
+        const page = freshPage();
+        if (germanSaved) page.locales.de = { ...germanVersion(), unpublished: true };
+        return { items: [page], total: 1 };
+      });
+      mockClient.updateLocalized = mock(() => {
+        germanSaved = true;
+        return Promise.resolve({ success: true, etag: 'etag-de', modified: new Date() });
+      });
+      mockClient.getLocalized = mock(() => Promise.resolve(germanLocalized()));
     }
 
     it('keeps the marker on a page after one of its locales is saved', async () => {
@@ -1081,6 +1113,60 @@ describe('Content API Hooks', () => {
 
       await waitFor(() => expect(unpublishedOfFresh(result.current.all.data)).toBe(true));
       await waitFor(() => expect(unpublishedOfFresh(result.current.english.data)).toBe(true));
+    });
+
+    describe('a locale the listed page does not have yet', () => {
+      it('keeps a never-published page a draft while the server has not yet listed the saved locale', async () => {
+        let release: (() => void) | undefined;
+        const refetchHeld = new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        serveListing(() => refetchHeld);
+        const { result } = renderHook(
+          () => ({
+            all: useSitePages('test-site'),
+            english: useSitePages('test-site', 'en'),
+            save: useUpdateLocalized(),
+          }),
+          { wrapper },
+        );
+        await waitFor(() => expect(result.current.all.isSuccess && result.current.english.isSuccess).toBe(true));
+
+        result.current.save.mutate({ id: 'fresh', locale: 'de', etag: '', data: { meta: { title: 'Frisch' } } });
+        await waitFor(() => expect(result.current.save.isSuccess).toBe(true));
+
+        for (const list of [result.current.all.data, result.current.english.data]) {
+          const listed = list?.items[0];
+          if (!listed) throw new Error('the page list lost the page');
+          expect(pageStatusOf(listed)).toBe('draft');
+        }
+
+        release?.();
+        await waitFor(() => expect(result.current.all.data?.items[0]?.locales.de?.unpublished).toBe(true));
+        expect(pageStatusOf(result.current.all.data?.items[0] ?? { locales: {} })).toBe('draft');
+      });
+
+      it('adds no unmarked entry for it when it is saved in a batch', async () => {
+        serveListing(() => Promise.resolve());
+        mockClient.batchUpdate = mock(() =>
+          Promise.resolve({
+            success: true,
+            updated: 1,
+            failed: 0,
+            operations: [{ id: 'fresh', locale: 'de', updated: true }],
+          }),
+        );
+        const { result } = renderHook(() => ({ pages: useSitePages('test-site'), batch: useBatchUpdate() }), {
+          wrapper,
+        });
+        await waitFor(() => expect(result.current.pages.isSuccess).toBe(true));
+
+        result.current.batch.mutate([{ id: 'fresh', locale: 'de', etag: '', data: { meta: { title: 'Frisch' } } }]);
+        await waitFor(() => expect(result.current.batch.isSuccess).toBe(true));
+
+        const german = result.current.pages.data?.items[0]?.locales.de;
+        expect(german === undefined || german.unpublished === true).toBe(true);
+      });
     });
   });
 });
