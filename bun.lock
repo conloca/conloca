@@ -192,7 +192,7 @@
         "@types/mdast": "^4.0.4",
         "@typia/interface": "^14.0.5",
         "clsx": "^2.1.1",
-        "dompurify": "^3.4.14",
+        "dompurify": "^3.4.17",
         "lexical": "^0.48.0",
         "lucide-react": "^0.564.0",
         "mdast-util-from-markdown": "^2.0.3",
