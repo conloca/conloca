@@ -1,7 +1,7 @@
 import {
   APIClientError,
-  isContentPublished,
   localesOf,
+  pageStatusOf,
   useCreateContent,
   useDeleteContent,
   useSitePages,
@@ -83,7 +83,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
           title: firstLocale.meta.title || entry.id,
           path: firstLocale.pathname || '/',
           type: entry.type === 'mdx' ? 'mdx' : 'puck',
-          status: 'published', // We'll determine this from publishAt dates
+          status: pageStatusOf(entry),
           modified: new Date(firstLocale.modified),
           locales: Array.from(localesOf(entry)).map((v) => v.locale),
           etags: {},
@@ -94,7 +94,6 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
 
       const page = pageMap.get(entry.id)!;
 
-      // Update status based on publish dates
       for (const localeData of localesOf(entry)) {
         // Store etag for each locale
         page.etags[localeData.locale] = localeData.etag;
@@ -102,16 +101,6 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
         page.localeTitles[localeData.locale] = localeData.meta.title || entry.id;
         // Store path for each locale
         page.localePaths[localeData.locale] = localeData.pathname || '/';
-
-        const now = new Date();
-        const publishAt = localeData.publishAt ? new Date(localeData.publishAt) : null;
-
-        if (publishAt && publishAt > now) {
-          page.status = 'scheduled';
-        } else if (!isContentPublished(localeData, now)) {
-          page.status = 'draft';
-        }
-
         // Update modified date to the most recent
         const modifiedDate = new Date(localeData.modified);
         if (modifiedDate > page.modified) {

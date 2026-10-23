@@ -50,4 +50,5 @@ export {
 
 export * from './client.js';
 export * from './hooks.js';
+export { type PageStatus, pageStatusOf } from './page-status.js';
 export { API_ROUTES } from './test-helpers.js';

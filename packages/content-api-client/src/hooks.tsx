@@ -15,6 +15,7 @@ import type {
   GitPushResult,
   GitStatus,
   GlobalFilters,
+  LocaleVersion,
   LocalizedEntry,
   MDXCompileResponse,
   PageReference,
@@ -62,6 +63,15 @@ function hashString(value: string): string {
   return hash.toString(36);
 }
 
+/**
+ * A listing entry rebuilt from a saved version keeps the `unpublished` marker
+ * the list carried: saving publishes nothing, and the fetched version does not
+ * say. The next refetch of the list replaces it with the server's answer.
+ */
+function keepUnpublishedMarker(previous: LocaleVersion | undefined, saved: LocaleVersion): LocaleVersion {
+  return previous?.unpublished ? { ...saved, unpublished: true } : saved;
+}
+
 // ===== Query Keys =====
 const queryKeys = {
   currentUser: () => ['auth', 'user'] as const,
@@ -69,6 +79,8 @@ const queryKeys = {
   content: (id: string) => ['content', id] as const,
   localized: (id: string, locale: string) => ['content', id, locale] as const,
   sitePages: (site: string, locale?: string) => ['sites', site, 'pages', locale] as const,
+  /** Every page list of a site, whatever locale it is filtered to. */
+  sitePagesOfSite: (site: string) => ['sites', site, 'pages'] as const,
   pageByPathname: (site: string, pathname: string, locale?: string) =>
     ['sites', site, 'pathname', pathname, locale] as const,
   pathnameAvailability: (site: string, pathname: string, excludeId?: string, locale?: string) =>
@@ -156,35 +168,11 @@ export function useCreateContent() {
         // Cache the server's response
         queryClient.setQueryData(queryKeys.content(result.id), result.fullContent);
 
-        // Update list queries by adding the new item from server data
-        const newManifest: ContentManifest = {
-          id: result.fullContent.id,
-          type: result.fullContent.type,
-          kind: result.fullContent.kind,
-          site: result.fullContent.site,
-          collection: result.fullContent.collection,
-          locales: Object.entries(result.fullContent.locales).reduce(
-            (acc, [locale, localeData]) => {
-              const { content, ...manifestData } = localeData;
-              acc[locale] = manifestData;
-              return acc;
-            },
-            {} as ContentManifest['locales'],
-          ),
-        };
-
         if (variables.kind === 'page' && variables.site) {
-          queryClient.setQueriesData(
-            { queryKey: queryKeys.sitePages(variables.site) },
-            (old: ContentListResult | undefined) => {
-              if (!isContentListResult(old)) return old;
-              return {
-                ...old,
-                items: [...old.items, newManifest],
-                total: old.total + 1,
-              };
-            },
-          );
+          // Refetch the page lists (any locale filter) instead of appending the fetched entry: the list says
+          // whether the page is published and the entry does not, so an appended page would read as live
+          // until the refetch anyway.
+          void queryClient.invalidateQueries({ queryKey: queryKeys.sitePagesOfSite(variables.site) });
         } else if (variables.kind === 'fragment') {
           // Invalidate all fragment queries to ensure the new fragment appears everywhere
           queryClient.invalidateQueries({ queryKey: ['fragments'] });
@@ -239,7 +227,7 @@ export function useUpdateLocalized() {
                     ...item,
                     locales: {
                       ...item.locales,
-                      [variables.locale]: {
+                      [variables.locale]: keepUnpublishedMarker(item.locales[variables.locale], {
                         locale: result.updatedContent!.localized.locale,
                         etag: result.updatedContent!.localized.etag,
                         created: result.updatedContent!.localized.created,
@@ -250,7 +238,7 @@ export function useUpdateLocalized() {
                         publishAt: result.updatedContent!.localized.publishAt,
                         unpublishAt: result.updatedContent!.localized.unpublishAt,
                         meta: result.updatedContent!.localized.meta,
-                      },
+                      }),
                     },
                   }
                 : item,
@@ -711,7 +699,7 @@ export function useBatchUpdate() {
                   const updated = updatedMap.get(`${item.id}:${locale}`);
                   if (updated) {
                     const { content, ...manifestData } = updated.localized;
-                    newLocales[locale] = manifestData;
+                    newLocales[locale] = keepUnpublishedMarker(newLocales[locale], manifestData);
                   }
                 });
                 return { ...item, locales: newLocales };

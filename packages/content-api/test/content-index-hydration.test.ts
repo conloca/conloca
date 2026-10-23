@@ -235,3 +235,20 @@ describe('ContentIndex.indexAll', () => {
     expect(idx.getManifest('p-c')).toBeDefined();
   });
 });
+
+describe('listing a page the reader backend indexed', () => {
+  it('never carries the unpublished marker, which only a backend with unpublished session work sets', async () => {
+    const idx = ContentIndex.createUncached(sitesConfig);
+    await idx.indexAll(
+      fakeBackend([
+        { path: 'shop/pages/a.en.vxjson', bytes: validVxjsonBytes('p-a', 'A') },
+        { path: 'shop/pages/a.nl.vxjson', bytes: validVxjsonBytes('p-a', 'A') },
+      ]),
+    );
+
+    const versions = Array.from(idx.listAllContent(), (manifest) => Object.values(manifest.locales)).flat();
+
+    expect(versions).toHaveLength(2);
+    for (const version of versions) expect(version).not.toHaveProperty('unpublished');
+  });
+});

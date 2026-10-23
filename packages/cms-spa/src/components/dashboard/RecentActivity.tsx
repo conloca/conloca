@@ -1,4 +1,4 @@
-import { isContentPublished, localesOf, useSitePages } from '@conloca/content-api-client';
+import { localesOf, type PageStatus, pageStatusOf, useSitePages } from '@conloca/content-api-client';
 import { AlertCircle, Clock, FileText, Loader2 } from 'lucide-react';
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
@@ -10,7 +10,7 @@ interface RecentPage {
   title: string;
   path: string;
   modified: Date;
-  status: 'published' | 'draft' | 'scheduled';
+  status: PageStatus;
 }
 
 export function RecentActivity() {
@@ -32,11 +32,7 @@ export function RecentActivity() {
         if (d > latestModified) latestModified = d;
       }
 
-      let status: RecentPage['status'] = 'published';
-      const now = new Date();
-      const publishAt = firstLocale.publishAt ? new Date(firstLocale.publishAt) : null;
-      if (publishAt && publishAt > now) status = 'scheduled';
-      else if (!isContentPublished(firstLocale, now)) status = 'draft';
+      const status = pageStatusOf(entry);
 
       pages.push({
         id: entry.id,

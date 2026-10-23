@@ -178,6 +178,13 @@ export interface LocaleVersion extends LocalePathData {
   modified: string;
   publishAt?: string;
   unpublishAt?: string;
+  /**
+   * Set to true when this locale has never been published: it exists only as
+   * saved editing work, not on the branch the site is built from. Absent when
+   * published, and absent on backends that keep no such state, where a saved
+   * file is the published content.
+   */
+  unpublished?: true;
   previousPathnames?: Record<string, string>; // pages only
   meta: ContentMeta; // title, description, seo, etc.
   /**

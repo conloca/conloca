@@ -4,8 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import type {
   AssetEntry,
   ContentEntry,
+  ContentListResult,
   ContentManifest,
   FolderTreeNode,
+  LocaleVersion,
   LocalizedEntry,
   PageReference,
 } from '@conloca/content-api';
@@ -15,6 +17,7 @@ import type { ReactNode } from 'react';
 import { ContentAPIClient } from '../src/client.js';
 import {
   setContentAPIClient,
+  useBatchUpdate,
   useBulkDeleteAssets,
   useCompileMDX,
   useContent,
@@ -35,6 +38,11 @@ import {
   useUploadAsset,
 } from '../src/hooks.js';
 import { jsonResponse } from '../src/test-helpers.js';
+
+/** The `unpublished` marker on the first listed page's English version. */
+function unpublishedOfFresh(data: ContentListResult | undefined) {
+  return data?.items[0]?.locales.en?.unpublished;
+}
 
 // Cleanup after each test
 afterEach(() => {
@@ -932,6 +940,147 @@ describe('Content API Hooks', () => {
       serverTree = rootWith(0, [{ name: 'blog', path: '/blog', assetCount: 0, children: [] }]);
       result.current.change.mutate('/blog');
       await waitFor(() => expect(result.current.tree.data?.tree[0].children.map((c) => c.path)).toEqual(['/blog']));
+    });
+  });
+
+  describe('page lists keep what the server says about a never-published page', () => {
+    const FRESH_AT = '2026-10-21T10:00:00.000Z';
+
+    function freshPage(overrides: Partial<LocaleVersion> = {}): ContentManifest {
+      return {
+        id: 'fresh',
+        site: 'test-site',
+        kind: 'page',
+        type: 'puck',
+        collection: 'pages',
+        locales: {
+          en: {
+            locale: 'en',
+            pathname: '/fresh',
+            etag: 'etag-1',
+            created: FRESH_AT,
+            modified: FRESH_AT,
+            meta: { title: 'Fresh' },
+            unpublished: true,
+            ...overrides,
+          },
+        },
+      };
+    }
+
+    function savedLocalized(): LocalizedEntry {
+      return {
+        id: 'fresh',
+        site: 'test-site',
+        kind: 'page',
+        type: 'puck',
+        collection: 'pages',
+        localized: {
+          locale: 'en',
+          pathname: '/fresh',
+          etag: 'etag-2',
+          created: FRESH_AT,
+          modified: '2026-10-22T10:00:00.000Z',
+          meta: { title: 'Fresh, edited' },
+          content: { puckData: {} },
+        },
+      };
+    }
+
+    it('keeps the marker on a page after one of its locales is saved', async () => {
+      mockClient.getSitePages = mock(() => Promise.resolve({ items: [freshPage()], total: 1 }));
+      mockClient.getLocalized = mock(() => Promise.resolve(savedLocalized()));
+      const { result } = renderHook(() => ({ pages: useSitePages('test-site'), save: useUpdateLocalized() }), {
+        wrapper,
+      });
+      await waitFor(() => expect(result.current.pages.isSuccess).toBe(true));
+
+      result.current.save.mutate({
+        id: 'fresh',
+        locale: 'en',
+        etag: 'etag-1',
+        data: { meta: { title: 'Fresh, edited' } },
+      });
+      await waitFor(() => expect(result.current.save.isSuccess).toBe(true));
+
+      expect(result.current.pages.data?.items[0].locales.en?.meta.title).toBe('Fresh, edited');
+      expect(unpublishedOfFresh(result.current.pages.data)).toBe(true);
+    });
+
+    it('keeps the marker on a page after a batch save', async () => {
+      mockClient.getSitePages = mock(() => Promise.resolve({ items: [freshPage()], total: 1 }));
+      mockClient.getLocalized = mock(() => Promise.resolve(savedLocalized()));
+      mockClient.batchUpdate = mock(() =>
+        Promise.resolve({
+          success: true,
+          updated: 1,
+          failed: 0,
+          operations: [{ id: 'fresh', locale: 'en', updated: true }],
+        }),
+      );
+      const { result } = renderHook(() => ({ pages: useSitePages('test-site'), batch: useBatchUpdate() }), {
+        wrapper,
+      });
+      await waitFor(() => expect(result.current.pages.isSuccess).toBe(true));
+
+      result.current.batch.mutate([
+        { id: 'fresh', locale: 'en', etag: 'etag-1', data: { meta: { title: 'Fresh, edited' } } },
+      ]);
+      await waitFor(() => expect(result.current.batch.isSuccess).toBe(true));
+
+      expect(result.current.pages.data?.items[0].locales.en?.meta.title).toBe('Fresh, edited');
+      expect(unpublishedOfFresh(result.current.pages.data)).toBe(true);
+    });
+
+    it('lists a newly created page as the server lists it, marker included, in every locale filter', async () => {
+      const fetched: ContentEntry = {
+        id: 'fresh',
+        site: 'test-site',
+        kind: 'page',
+        type: 'puck',
+        collection: 'pages',
+        locales: {
+          en: {
+            locale: 'en',
+            pathname: '/fresh',
+            etag: 'etag-1',
+            created: FRESH_AT,
+            modified: FRESH_AT,
+            meta: { title: 'Fresh' },
+            content: { puckData: {} },
+          },
+        },
+      };
+      // The server lists pages only once the create has reached it.
+      let serverHasPage = false;
+      mockClient.getSitePages = mock(() =>
+        Promise.resolve(serverHasPage ? { items: [freshPage()], total: 1 } : { items: [], total: 0 }),
+      );
+      mockClient.createContent = mock(() => {
+        serverHasPage = true;
+        return Promise.resolve({ success: true, id: 'fresh', etag: 'etag-1' });
+      });
+      mockClient.getContent = mock(() => Promise.resolve(fetched));
+      const { result } = renderHook(
+        () => ({
+          all: useSitePages('test-site'),
+          english: useSitePages('test-site', 'en'),
+          create: useCreateContent(),
+        }),
+        { wrapper },
+      );
+      await waitFor(() => expect(result.current.all.isSuccess && result.current.english.isSuccess).toBe(true));
+
+      result.current.create.mutate({
+        kind: 'page',
+        site: 'test-site',
+        collection: 'pages',
+        type: 'puck',
+        locales: { en: { pathname: '/fresh', meta: { title: 'Fresh' }, content: { puckData: {} } } },
+      });
+
+      await waitFor(() => expect(unpublishedOfFresh(result.current.all.data)).toBe(true));
+      await waitFor(() => expect(unpublishedOfFresh(result.current.english.data)).toBe(true));
     });
   });
 });

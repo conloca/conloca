@@ -35,7 +35,7 @@ function page(
   id: string,
   title: string,
   pathname: string,
-  schedule: { publishAt?: string; unpublishAt?: string } = {},
+  schedule: { publishAt?: string; unpublishAt?: string; unpublished?: true } = {},
 ) {
   const entry: ContentManifest = {
     id,
@@ -221,6 +221,40 @@ export const FilterAndSearchOnTablet: Story = {
 export const FilterAndSearchOnPhone: Story = {
   ...FilterAndSearch,
   globals: { viewport: { value: 'mobile1', isRotated: false } },
+};
+
+const NEW_WORKSPACE_PAGES = [
+  page('vx-home', 'Home', '/'),
+  page('vx-new', 'homepage 2', '/homepage-2', { unpublished: true }),
+];
+
+/** A page created and not yet published reads Draft in the list, beside a live page that reads Published. */
+export const NeverPublishedPageReadsDraft: Story = {
+  render: () => <PageListStory pages={{ kind: 'pages', items: NEW_WORKSPACE_PAGES }} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const statusBadges = async (id: string) => {
+      const row = (await canvas.findByTestId(`page-title-${id}`)).closest('tr');
+      if (!row) throw new Error(`${id} has no row`);
+      return within(row);
+    };
+    await expect((await statusBadges('vx-new')).getAllByText('draft').length).toBeGreaterThan(0);
+    await expect((await statusBadges('vx-new')).queryByText('published')).toBeNull();
+    await expect((await statusBadges('vx-home')).getAllByText('published').length).toBeGreaterThan(0);
+  },
+};
+
+/** The Draft filter lists the never-published page and leaves the live one out. */
+export const DraftFilterListsNeverPublishedPage: Story = {
+  render: () => <PageListStory pages={{ kind: 'pages', items: NEW_WORKSPACE_PAGES }} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const table = await canvas.findByRole('table');
+    await userEvent.selectOptions(canvas.getByDisplayValue('All Status'), 'draft');
+    await waitFor(() => expect(within(table).getAllByRole('row')).toHaveLength(2));
+    await expect(canvas.getByTestId('page-title-vx-new')).toBeVisible();
+    await expect(canvas.queryByTestId('page-title-vx-home')).toBeNull();
+  },
 };
 
 /** Delete asks first; confirming removes the page through the client. */
