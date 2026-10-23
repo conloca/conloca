@@ -85,6 +85,13 @@ mock.module('@puckeditor/core', () => ({
     ),
   registerOverlayPortal: () => undefined,
   resolveAllData: async (data: unknown) => data,
+  // The editor reads Puck's state through a selector hook; the mock editor has no blocks and nothing may be inserted.
+  createUsePuck:
+    () =>
+    <Selected>(
+      select: (state: { config: { components: object }; getPermissions: () => { insert: boolean } }) => Selected,
+    ): Selected =>
+      select({ config: { components: {} }, getPermissions: () => ({ insert: false }) }),
   useGetPuck: () => () => ({
     appState: {
       data: {

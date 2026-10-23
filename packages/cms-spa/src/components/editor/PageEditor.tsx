@@ -1,5 +1,5 @@
 import type { DataContext, LocalizedEntry, UpdateResult } from '@conloca/content-api-client';
-import type { Config } from '@puckeditor/core';
+import { type Config, createUsePuck } from '@puckeditor/core';
 import { Monitor, Smartphone, Tablet } from 'lucide-react';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { notifyEditorDirtyChanged, registerEditorFlushHandler } from '../../editor-flush.js';
@@ -14,7 +14,7 @@ import { ConflictDialog } from '../dialogs/ConflictDialog.js';
 import { UnsavedChangesDialog } from '../dialogs/UnsavedChangesDialog.js';
 import { ImageFieldRender } from '../fields/ImageField.js';
 import { toast } from '../toast.js';
-import { DrawerItemOverride } from './DrawerItemOverride.js';
+import { DrawerItemOverride, PUCK_ROOT_DROP_ZONE } from './DrawerItemOverride.js';
 import { withDraftMediaRendering } from './draft-media-config.js';
 import { PageEditorHeaderActions } from './PageEditorHeaderActions.js';
 import { PuckWithUntouchedMetadata } from './PuckWithUntouchedMetadata.js';
@@ -78,6 +78,29 @@ const drawerItemOverride = ({ children, name }: { children: React.ReactNode; nam
   <DrawerItemOverride name={name}>{children}</DrawerItemOverride>
 );
 
+/** On the canvas's scaled-down view (about half size) this still reads at a normal text size. */
+const EMPTY_PAGE_HINT_FONT_SIZE = '24px';
+
+const EMPTY_PAGE_HINT = 'Drag a block here, or double-click one in the list';
+
+const EMPTY_PAGE_HINT_DECLARATIONS = [
+  `content: ${JSON.stringify(EMPTY_PAGE_HINT)}`,
+  'display: flex',
+  'align-items: center',
+  'justify-content: center',
+  'box-sizing: border-box',
+  'height: 100%',
+  'min-height: inherit',
+  'padding: 16px',
+  'text-align: center',
+  'font-family: var(--puck-font-family)',
+  `font-size: ${EMPTY_PAGE_HINT_FONT_SIZE}`,
+  'color: var(--puck-color-grey-05)',
+].join('; ');
+
+const CAN_INSERT_ATTRIBUTE = 'data-conloca-can-insert';
+const CAN_INSERT_SELECTOR = `html[${CAN_INSERT_ATTRIBUTE}]`;
+
 /**
  * An editing rule the preview canvas gets from the CMS. The <Puck> below
  * opts out of Puck's host-style mirror, so main.css never reaches the canvas;
@@ -92,9 +115,27 @@ const drawerItemOverride = ({ children, name }: { children: React.ReactNode; nam
  * a child), keeps Puck's highlight. `[data-puck-dropzone]` is the attribute
  * Puck puts on every drop area; matching class names would also catch Puck's
  * drop-position line and hide it.
+ *
+ * A page with no blocks also says how to add one: the empty root area is the
+ * whole canvas, so a line of text centred in it is where an author looks first.
+ * It is the area's `::before`, so it goes as soon as the area holds a block or
+ * a drop preview, and it never becomes content that can be saved. It is sized
+ * for the canvas's scaled-down view, where it must stay readable. It shows in
+ * edit mode only (the interactive preview renders the published page) and only
+ * while the editor marks the canvas as one that can take a block, because both
+ * ways the hint names do nothing when no block may be inserted.
  */
-const EMPTY_DROP_AREA_CSS =
-  '[data-puck-dropzone]:empty { --puck-slot-color-bg: transparent; --puck-slot-color-border: var(--puck-color-grey-07); }';
+const EMPTY_DROP_AREA_CSS = [
+  '[data-puck-dropzone]:empty { --puck-slot-color-bg: transparent; --puck-slot-color-border: var(--puck-color-grey-07); }',
+  `${CAN_INSERT_SELECTOR} [data-puck-entry][data-puck-preview-mode="edit"] [data-puck-dropzone="${PUCK_ROOT_DROP_ZONE}"]:empty::before { ${EMPTY_PAGE_HINT_DECLARATIONS} }`,
+].join('\n');
+
+const usePuck = createUsePuck();
+
+/** Whether any block may be added to the page: the hint's two ways of adding one both need it. */
+function usePageCanTakeAnInsert(): boolean {
+  return usePuck((state) => Object.keys(state.config.components).some((type) => state.getPermissions({ type }).insert));
+}
 
 /**
  * Bridges CMS editor state into Puck's preview iframe.
@@ -187,6 +228,23 @@ export function IframeBridge({ children, document: iframeDoc }: { children: Reac
   }, [iframeDoc]);
 
   return <>{children}</>;
+}
+
+/**
+ * `IframeBridge` for the canvas inside <Puck>: also marks the canvas document while the page can take a block, which
+ * the empty-page hint in `EMPTY_DROP_AREA_CSS` waits for. Separate because the marker reads Puck's state, so it only
+ * works inside <Puck>, while the bridge also renders on its own.
+ */
+function IframeWithInsertMarker({ children, document: iframeDoc }: { children: React.ReactNode; document?: Document }) {
+  const canTakeAnInsert = usePageCanTakeAnInsert();
+  React.useEffect(() => {
+    const html = iframeDoc?.documentElement;
+    if (!html) return undefined;
+    html.toggleAttribute(CAN_INSERT_ATTRIBUTE, canTakeAnInsert);
+    return () => html.removeAttribute(CAN_INSERT_ATTRIBUTE);
+  }, [iframeDoc, canTakeAnInsert]);
+
+  return <IframeBridge document={iframeDoc}>{children}</IframeBridge>;
 }
 
 export function PageEditor({
@@ -442,7 +500,7 @@ export function PageEditor({
       },
       drawerItem: drawerItemOverride,
       fields: FieldsWithPageSettingsHint,
-      iframe: IframeBridge,
+      iframe: IframeWithInsertMarker,
     }),
     [],
   );
