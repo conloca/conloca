@@ -152,7 +152,7 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "@happy-dom/global-registrator": "20.13.2",
+    "@happy-dom/global-registrator": "21.0.4",
     "@storybook/addon-vitest": "^10.6.2",
     "@storybook/react-vite": "^10.6.2",
     "@tailwindcss/cli": "4.3.3",

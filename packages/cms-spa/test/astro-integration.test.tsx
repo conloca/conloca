@@ -9,10 +9,18 @@ import { ThemeProvider } from '../src/hooks/useTheme.js';
 import { usePuckConfig } from '../src/puck-config.js';
 import { setupTestAPI, testApi } from './test-utils.js';
 
+// Bun shares one Happy DOM window across files; keep this location stub local.
+const ORIGINAL_LOCATION = Object.getOwnPropertyDescriptor(window, 'location');
+
 // Cleanup after each test
 afterEach(() => {
   cleanup();
   testApi?.clear();
+  if (ORIGINAL_LOCATION) {
+    Object.defineProperty(window, 'location', ORIGINAL_LOCATION);
+  } else {
+    Reflect.deleteProperty(window, 'location');
+  }
 });
 
 describe('Astro CMS Integration', () => {

@@ -9,6 +9,9 @@ const mockFetch = mock();
 (mockFetch as any).preconnect = () => {};
 global.fetch = mockFetch as any;
 
+// Bun shares one Happy DOM window across files; keep this location stub local.
+const ORIGINAL_LOCATION = Object.getOwnPropertyDescriptor(window, 'location');
+
 describe('API Configuration', () => {
   beforeEach(() => {
     // Reset window config
@@ -27,6 +30,11 @@ describe('API Configuration', () => {
 
   afterEach(() => {
     mockFetch.mockClear();
+    if (ORIGINAL_LOCATION) {
+      Object.defineProperty(window, 'location', ORIGINAL_LOCATION);
+    } else {
+      Reflect.deleteProperty(window, 'location');
+    }
   });
 
   test('default configuration uses /__cms/api as base URL', () => {

@@ -7,7 +7,9 @@ import React from 'react';
 
 // Configure Happy DOM before importing jest-dom. Its testing-library dependency
 // binds `screen` to the global document at module evaluation time.
-GlobalRegistrator.register();
+// Editor and host-style probe tests need browser-like iframe documents;
+// Happy DOM 21 disables iframe page loading by default.
+GlobalRegistrator.register({ settings: { enableIframePageLoading: true } });
 // jest-dom ships one CommonJS-shaped declaration for both conditions, so the
 // namespace carries a synthetic `default` that dist/matchers.mjs — the file Bun
 // loads — does not, and `expect.extend` rejects it as a matcher.
