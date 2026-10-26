@@ -28,7 +28,9 @@ defaults:
 jobs:
   main:
     name: Validate
-    runs-on: ubuntu-latest
+    runs-on:
+      ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) &&
+      fromJSON('["nixos-latest-x64","self-hosted"]') || 'ubuntu-latest' }}
     timeout-minutes: 45
     env:
       GH_TOKEN: ${{ github.token }}
@@ -36,10 +38,11 @@ jobs:
       # Step 1: GitHub adds "Set up job" automatically
       # Step 2
       - name: 📥 Checkout
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          filter: blob:none
+          # Full history includes blobs needed by nx affected after checkout credentials are removed.
           fetch-depth: 0
+          persist-credentials: false
 
       # Step 3. Composite action internals do not affect top-level job step
       # anchors; update the nx-smart --step values below if top-level steps move.
@@ -53,7 +56,7 @@ jobs:
       # Sets the base and head SHAs required for the nx affected commands
       - name: 🧭 Set Nx SHAs
         if: github.server_url == 'https://github.com' || endsWith(github.api_url, '/api/v3')
-        uses: nrwl/nx-set-shas@v5.0.1
+        uses: nrwl/nx-set-shas@afb73a62d26e41464e9254689e1fd6122ee683c1 # v5.0.1
         with:
           workflow-id: ci.yml
 
@@ -65,7 +68,7 @@ jobs:
 
       # Step 6
       - name: 🔨 Build
-        run: smoo github-ci nx-smart --target build --name "Build" --step 6
+        run: NX_VERBOSE_LOGGING=true smoo github-ci nx-smart --target build --name "Build" --step 6
 
       # Step 7
       - name: 🔍 Lint
@@ -80,16 +83,16 @@ jobs:
         run: smoo github-ci nx-smart --target test-browser --name "Browser Tests" --step 9
 
       # Step 10
-      - name: 🩺 Check managed-file drift
+      - name: 🩺 Check monorepo policies and managed-file drift
         id: managed-drift
-        if:
-          ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}',
-          github.event.repository.default_branch) }}
         run: smoo monorepo check --warn
 
       # Step 11
       - name: 🔁 Dispatch managed-file drift healing
-        if: steps.managed-drift.outputs.drifted != '' && steps.managed-drift.outputs.drifted != '0'
+        if: >-
+          ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}',
+          github.event.repository.default_branch) && steps.managed-drift.outputs.drifted != '' &&
+          steps.managed-drift.outputs.drifted != '0' }}
         run: smoo github-ci dispatch-workflow --workflow managed-files.yml --ref "$GITHUB_REF_NAME"
 
       # Step 12
@@ -107,7 +110,7 @@ jobs:
           ${{ steps.setup.outputs.host-runner != 'true' && github.event_name == 'push' && github.ref ==
           format('refs/heads/{0}', github.event.repository.default_branch) && steps.nx-cache.outputs.cache-hit != 'true'
           }}
-        uses: actions/cache/save@v5.0.5
+        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: |
             .nx/cache
@@ -117,10 +120,13 @@ jobs:
       # Step 13
       - name: 📎 Upload trace DBs
         if: always()
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: trace-results-${{ github.run_id }}
-          path: packages/*/.cache/trace-results.db*
+          path: |
+            packages/*/.cache/lmao/trace-results.db*
+            ${{ job.status == 'failure' && format('{0}/project-graph.json', env.NX_WORKSPACE_DATA_DIRECTORY || '.nx/workspace-data') || '' }}
+            ${{ job.status == 'failure' && format('{0}/d/daemon.log', env.NX_WORKSPACE_DATA_DIRECTORY || '.nx/workspace-data') || '' }}
           if-no-files-found: ignore
           retention-days: 14
           include-hidden-files: true

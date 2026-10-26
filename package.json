@@ -140,5 +140,16 @@
     "ignorePackage": [
       "conloca-website"
     ]
+  },
+  "smoo": {
+    "github": {
+      "pushBranches": [
+        "main"
+      ],
+      "runsOn": [
+        "nixos-latest-x64",
+        "self-hosted"
+      ]
+    }
   }
 }

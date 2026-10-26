@@ -36,7 +36,9 @@ defaults:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     env:
+      LMAO_GIT_REVISION: ${{ github.sha }}
       GH_TOKEN: ${{ github.token }}
     steps:
       # --- Setup --------------------------------------------------------------
@@ -44,10 +46,11 @@ jobs:
       # Step 1: GitHub adds "Set up job" automatically
       # Step 2
       - name: 📥 Checkout
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          filter: blob:none
           fetch-depth: 0
+          # smoo publish and pending-release repair push release refs.
+          persist-credentials: true
 
       # Step 3. Composite action internals do not affect top-level job step
       # anchors; update these comments if top-level steps move.
@@ -68,8 +71,10 @@ jobs:
       # Step 6
       - name: 🧭 Plan release
         id: plan
+        env:
+          SMOO_RELEASE_PROJECTS: ${{ inputs.projects }}
         run:
-          smoo release version --bump "${{ inputs.bump }}" --projects "${{ inputs.projects }}" --dry-run "true"
+          smoo release version --bump "${{ inputs.bump }}" --projects "$SMOO_RELEASE_PROJECTS" --dry-run "true"
           --github-output "$GITHUB_OUTPUT"
 
       # --- Validation ---------------------------------------------------------
@@ -97,22 +102,26 @@ jobs:
       # Step 10
       - name: 🔢 Version release
         id: version
+        env:
+          SMOO_RELEASE_PROJECTS: ${{ inputs.projects }}
         run:
-          smoo release version --bump "${{ inputs.bump }}" --projects "${{ inputs.projects }}" --dry-run "${{
+          smoo release version --bump "${{ inputs.bump }}" --projects "$SMOO_RELEASE_PROJECTS" --dry-run "${{
           inputs.dry_run }}" --github-output "$GITHUB_OUTPUT"
 
       # Step 11
       - name: 🔨 Build (${{ steps.version.outputs.mode }})
         if: steps.version.outputs.mode != 'none'
-        run: smoo github-ci nx-run-many --targets build --projects "${{ steps.version.outputs.projects }}"
+        run:
+          smoo github-ci nx-run-many --targets build --projects "${{ steps.version.outputs.projects }}" --configuration
+          production
 
       # Step 12
       - name: 📎 Upload trace DBs
         if: failure()
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: trace-results-${{ github.run_id }}
-          path: packages/*/.cache/trace-results.db*
+          path: packages/*/.cache/lmao/trace-results.db*
           if-no-files-found: ignore
           retention-days: 14
           include-hidden-files: true

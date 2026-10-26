@@ -1,9 +1,10 @@
 # Managed by @smoothbricks/cli (smoo monorepo update) - do not edit by hand.
 #
 # Self-healing loop for smoo-managed files: ci.yml runs the authoritative
-# `smoo monorepo check` on every default-branch push (devenv is already up
-# there, so the check is ~free) and dispatches THIS workflow only when real
-# drift exists - typically after a @smoothbricks/cli pin bump. It runs
+# `smoo monorepo check --warn` on every event (devenv is already up there, so
+# the check is ~free; package policies fail the job, drift only warns) and, on
+# a default-branch push, dispatches THIS workflow only when real drift exists -
+# typically after a @smoothbricks/cli pin bump. It runs
 # `smoo monorepo update` and pushes the result to ONE persistent review branch
 # (chore/managed-files) with ONE PR. The PR is NEVER auto-merged: a template
 # change is upstream code that deserves a human look before it lands. Re-runs
@@ -39,13 +40,14 @@ defaults:
 
 jobs:
   update:
-    runs-on: ubuntu-latest
+    runs-on:
+      ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) &&
+      fromJSON('["nixos-latest-x64","self-hosted"]') || 'ubuntu-latest' }}
     timeout-minutes: 30
     steps:
       - name: 📥 Checkout
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          filter: blob:none
           fetch-depth: 0
           persist-credentials: true
           # Prefer MANAGED_FILES_TOKEN so push can update workflow files.

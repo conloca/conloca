@@ -30,6 +30,12 @@ The shell builds the pinned native TypeScript compiler and exports
 `SMOO_TYPECHECK_TSC` for the typecheck targets. A missing export means the
 environment setup must be updated; installing another npm compiler does not fix it.
 
+CI and managed-file updates use the repository's configured runners for trusted
+events. Pull requests from external forks use GitHub-hosted runners. The release
+workflow stays on a GitHub-hosted runner for npm trusted publishing and provenance.
+Change runner selection through `smoo.github.runsOn` in `package.json` and regenerate
+the managed workflows rather than editing them by hand.
+
 ## Documentation
 
 Coming soon.
