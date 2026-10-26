@@ -366,7 +366,7 @@
       "name": "@conloca/tooling",
       "version": "0.0.1",
       "dependencies": {
-        "@smoothbricks/cli": "^0.12.0",
+        "@smoothbricks/cli": "^0.12.21",
       },
     },
   },

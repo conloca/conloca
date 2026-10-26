@@ -3,12 +3,10 @@ cd "$(git rev-parse --show-toplevel)"
 TOOLING="$PWD/tooling"
 
 export PATH="$("$TOOLING/direnv/repo-path")"
-# ttsc compiles with the native TypeScript compiler, which the dev shell names in
-# TTSC_TSGO_BINARY. A hook runs outside that shell, where ttsc would resolve the
-# JavaScript compiler a package's `typescript` dependency names and refuse to run.
-if [ -z "${TTSC_TSGO_BINARY:-}" ] && [ -x "$PWD/node_modules/@typescript/native/bin/tsc" ]; then
-  export TTSC_TSGO_BINARY="$PWD/node_modules/@typescript/native/bin/tsc"
-fi
+# ttsc compiles with this checkout's native TypeScript compiler into this
+# checkout's plugin cache, which the dev shell names. A hook runs outside that
+# shell, in whatever environment ran `git`; ttsc-env.sh names them the same way.
+. "$TOOLING/direnv/ttsc-env.sh"
 
 set -e -o pipefail
 
@@ -18,6 +16,9 @@ set -e -o pipefail
 # that index and the working tree file, and post-commit then drops the
 # pre-format entry a partial commit strands in the real index.
 git-format-staged
+
+# Judge the formatted added lines from that same index, not unstaged edits.
+smoo monorepo check-public-denylist --staged
 
 # Adding a workspace package is rare and easy to leave half-wired. Run the
 # full monorepo validator only for newly staged package manifests.

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Single source of truth for repo-local PATH entries.
+# Single source of truth for repo-local PATH and the installed cowshed's place in it.
 # All tooling that sets up PATH must call this instead of hardcoding paths.
 #
 # Usage:
@@ -10,14 +10,29 @@ set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
+# The devenv profile's bin. Inside this checkout's own devenv shell it is the profile that shell evaluated,
+# DEVENV_PROFILE: an immutable store path, so `bun` there is the one devenv declared for this shell. The
+# checkout's `.devenv/profile` link is a place, not that declaration: every activation of the checkout re-points
+# it, and a fork inherits its source's. Outside a shell of this checkout — a git hook run from a plain terminal
+# or from another checkout's shell — the link is the only name for this checkout's profile.
+profile="$root/tooling/direnv/.devenv/profile"
+if [[ -n "${DEVENV_PROFILE:-}" && "${DEVENV_ROOT:-}" -ef "$root/tooling/direnv" ]]; then
+  profile="$DEVENV_PROFILE"
+fi
+
 # Order: most-specific → least-specific.
 entries=(
-  "$root/tooling/direnv/.devenv/profile/bin"
+  "$profile/bin"
   "$root/tooling/git-hooks"
   "$root/tooling"
   "$root/tooling/node_modules/.bin"
   "$root/node_modules/.bin"
 )
+
+# Keep an activated Python environment ahead of the profile, including later hook calls.
+if [[ -n "${VIRTUAL_ENV:-}" ]]; then
+  entries=("$VIRTUAL_ENV/bin" "${entries[@]}")
+fi
 
 case "${1:-}" in
   --github-path)
@@ -30,5 +45,15 @@ case "${1:-}" in
     printf '%s\n' "${entries[@]}" ;;
   *)
     IFS=:
-    echo "${entries[*]}:$PATH" ;;
+    export PATH="${entries[*]}:$PATH"
+    if [[ -f "$root/.cowshed/env" ]]; then
+      source "$root/.cowshed/env"
+    fi
+    if [[ -z "${COWSHED_RUNTIME_LINK:-}" ]]; then
+      # Bash expands `~` to HOME, or with HOME unset to the passwd home of the real uid: a caller that passes
+      # only PATH, such as a formatter or a hook under `env -i`, still reaches the installed cowshed.
+      home=~
+      export PATH="$home/Library/Application Support/dev.cowshed/bin:$PATH"
+    fi
+    printf '%s\n' "$PATH" ;;
 esac

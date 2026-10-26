@@ -9,7 +9,7 @@ runs:
   using: composite
   steps:
     - name: Cache ttsc plugin binaries
-      uses: actions/cache@v5.0.5
+      uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         # Only the compiled plugin binaries (~30MB each). Path is relative to the
         # workspace; devenv sets TTSC_CACHE_DIR to <repo>/.cache/ttsc.

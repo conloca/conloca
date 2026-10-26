@@ -159,6 +159,46 @@ runs:
       shell: bash
       run: echo "DEVENV_WORKDIR=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
 
+    # GitHub's hosted Ubuntu images promise only 14 GB free and fill the rest of
+    # the disk with toolchains a Nix-built shell never uses. The store can need
+    # more: the largest measured is 17.1 GB unpacked, and a restore or save also
+    # holds its 4.9 GB archive in RUNNER_TEMP. A 2-vCPU runner ran out of disk
+    # with about 15 GB of store on it, and nothing had printed free space.
+    # Delete those trees, most GiB per second first, until / has 32 GiB free.
+    # That is an estimate: the store at its peak with its archive, node_modules
+    # and build scratch, plus a few GiB of margin; the df lines record what a
+    # run really had. A runner that already has it deletes nothing, and the
+    # Android SDK, which alone takes minutes to delete, goes only when the rest
+    # was not enough.
+    # What goes stays gone for the rest of the job: a later actions/setup-*
+    # step downloads its runtime instead of finding it in the tool cache, a
+    # pwsh step loses the image's PowerShell modules (pwsh itself stays), and
+    # a step that runs the image's .NET, GHCup, Swift or Android SDK directly
+    # fails. Only a runner that started short of space deletes anything, so
+    # such a step would fail on some runs and pass on others.
+    # Synchronous on purpose: a background rm would race the store extraction
+    # for space and disk I/O. A failed delete warns and the job goes on: this
+    # is an optimisation, never a gate. Self-hosted machines keep everything.
+    - name: 🧹 Free runner disk
+      if: steps.runner-kind.outputs.host != 'true' && runner.os == 'Linux' && runner.environment == 'github-hosted'
+      shell: bash
+      run: |
+        want_kib=$((32 * 1024 * 1024))
+        free_kib() { df -k --output=avail / | tail -n 1 | tr -d ' '; }
+        df -h /
+        for dir in /usr/share/swift /usr/local/share/powershell /usr/local/.ghcup \
+          /usr/share/dotnet "${AGENT_TOOLSDIRECTORY:-}" /usr/local/lib/android; do
+          [ "$(free_kib)" -lt "$want_kib" ] || break
+          [ -n "$dir" ] && [ -d "$dir" ] || continue
+          start=$SECONDS
+          if sudo rm -rf "$dir"; then
+            echo "removed $dir in $((SECONDS - start)) s"
+          else
+            echo "::warning::could not remove $dir; going on without its space"
+          fi
+        done
+        df -h /
+
     # Devenv segment (own key): tooling/direnv/.devenv + .direnv — includes
     # nix-eval-cache.db. Independent of the store cache; restored on ephemeral
     # runners whether or not the store cache hit. Missing store paths are fine:
@@ -221,7 +261,7 @@ runs:
     # still finds them.
     - name: ❄️ Install Nix
       if: steps.runner-kind.outputs.host != 'true'
-      uses: nixbuild/nix-quick-install-action@v35
+      uses: nixbuild/nix-quick-install-action@9f63be77f412a248c9d9a65a4c82cf066cdf8f0c # v35
       with:
         nix_conf: |
           keep-outputs = true
@@ -252,31 +292,65 @@ runs:
     # arrives inside /nix, so install-devenv's `nix profile add` of the locked
     # rev is a link rather than a download, and the devenv in play is the one
     # devenv.lock names instead of whichever run last populated the prefix.
+    #
+    # The key is two hashes: the pins (devenv.lock, devenv.yaml), then the files
+    # that choose and override packages on top of them (devenv.nix,
+    # devenv.smoo.nix, the nixpkgs overlay). The restore prefix ends after the
+    # pins, so a miss falls back only to a store saved from the same pins. Once
+    # nixpkgs or devenv moved, a store built from other pins is mostly dead
+    # weight that still costs its full unpacked size: measured, a pull request
+    # whose pins differed from the default branch's restored 7.55 GB, then
+    # fetched the same 1319 paths as a cold run, and the runner ran out of
+    # disk. The overlay is hashed itself because devenv.lock locks it as a
+    # relative path with no narHash: an overlay edit moved neither the lock nor
+    # the key, so every later run got an exact hit on a stale store that was
+    # never saved again. nix-v7 keeps the bare nix-v6- prefix of the old layout
+    # from restoring a store saved under this one.
     - name: 🧊 Cache Nix store
       id: nix-cache
       if: steps.runner-kind.outputs.host != 'true'
-      uses: nix-community/cache-nix-action@v7
+      uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7
       with:
         paths: |
           /nix
           ~/.cache/nix
         # prettier-ignore
-        primary-key: ${{ runner.os }}-${{ runner.arch }}-nix-v6-${{ hashFiles('tooling/direnv/devenv.yaml', 'tooling/direnv/devenv.nix', 'tooling/direnv/devenv.smoo.nix', 'tooling/direnv/devenv.lock') }}
-        restore-prefixes-first-match: ${{ runner.os }}-${{ runner.arch }}-nix-v6-
+        primary-key: ${{ runner.os }}-${{ runner.arch }}-nix-v7-${{ hashFiles('tooling/direnv/devenv.lock', 'tooling/direnv/devenv.yaml') }}-${{ hashFiles('tooling/direnv/devenv.nix', 'tooling/direnv/devenv.smoo.nix', 'tooling/direnv/nixpkgs-overlay/**') }}
+        # prettier-ignore
+        restore-prefixes-first-match: ${{ runner.os }}-${{ runner.arch }}-nix-v7-${{ hashFiles('tooling/direnv/devenv.lock', 'tooling/direnv/devenv.yaml') }}-
         gc-max-store-size: 1G
+
+    # cache-nix-action unpacks through sudo, so the directory it creates on the
+    # way to ~/.cache/nix, ~/.cache itself, belongs to root. Every later step runs
+    # as the runner, and the first one that makes something there (smoo's
+    # cargo-fetch stamp under ~/.cache/smoo) fails with EACCES. ~/.cache/nix inside
+    # it stays the runner's.
+    - name: 🏠 Give ~/.cache back to the runner
+      if: steps.runner-kind.outputs.host != 'true'
+      shell: bash
+      run: |
+        mkdir -p "$HOME/.cache"
+        if [ -O "$HOME/.cache" ]; then
+          echo "$HOME/.cache is already the runner's"
+        else
+          ls -ld "$HOME/.cache"
+          sudo chown "$(id -u):$(id -g)" "$HOME/.cache"
+          echo "gave ~/.cache to $(id -un)"
+        fi
 
     - name: ⚡ Enable Cachix
       if: steps.runner-kind.outputs.host != 'true'
-      uses: cachix/cachix-action@v17
+      uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
       with:
         name: devenv
 
     # A host runner's devenv belongs to its image, so install-devenv accepts
-    # whatever is on PATH there. On an ephemeral runner the devenv came out of a
-    # cache this workflow wrote, so it is held to devenv.lock's rev: the store
-    # cache restores ~/.nix-profile wholesale and a prefix match hands the job
-    # the CLI of whichever run last populated the key, which outlived a lock bump
-    # until the check existed.
+    # whatever is on PATH there. On an ephemeral runner it is held to
+    # devenv.lock's rev. The store cache once restored ~/.nix-profile, and a
+    # prefix match handed the job the CLI of whichever run last populated the
+    # key, which outlived a lock bump until the check existed. It now restores
+    # no profiles, and only a store saved from the same pins (devenv.lock,
+    # devenv.yaml).
     - name: 🧰 Install devenv
       shell: bash
       working-directory: ${{ env.DEVENV_WORKDIR }}/tooling/direnv

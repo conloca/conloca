@@ -5,13 +5,24 @@ runs:
   using: composite
   steps:
     - name: Cache node_modules
-      uses: actions/cache@v5.0.5
+      uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
-        # Dependencies only. ttsc plugin/GOCACHE live under $TTSC_CACHE_DIR
-        # (.cache/ttsc), not inside node_modules.
+        # Isolated Bun links and their targets are one dependency tree.
+        # ttsc plugin/GOCACHE stay under $TTSC_CACHE_DIR (.cache/ttsc).
         # v2 isolates restore-keys from older Darwin caches with a broken TS dual-package hoist.
-        path: node_modules
+        path: |
+          node_modules
+          ~/.bun/install/cache/links
         # prettier-ignore
         key: ${{ runner.os }}-${{ runner.arch }}-node-v2-${{ hashFiles('.npmrc', 'bun.lock', 'package.json', 'packages/*/package.json') }}
         restore-keys: |
           ${{ runner.os }}-${{ runner.arch }}-node-v2-
+
+    # The archive holds node_modules/.smoo-install, the stamp devenv's smoo:install watches, but not the
+    # workspace members' own node_modules links. A restored tree is a seed: only an install in this
+    # checkout may claim it current. A `!node_modules/.smoo-install` path cannot do this: actions/cache
+    # archives a listed directory whole and drops excludes inside it (actions/toolkit#713), so Publish
+    # run 39143439571 still restored the stamp and skipped the install.
+    - name: Drop the restored install stamp
+      shell: bash
+      run: rm -f node_modules/.smoo-install
