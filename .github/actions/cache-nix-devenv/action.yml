@@ -20,26 +20,26 @@ runs:
     - name: Restore devenv and direnv state
       id: restore-devenv
       if: inputs.mode == 'restore'
-      uses: actions/cache/restore@v5.0.5
+      uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         path: |
           ${{ github.workspace }}/tooling/direnv/.devenv
           ${{ github.workspace }}/tooling/direnv/.direnv
         key:
           ${{ runner.os }}-${{ runner.arch }}-devenv-v3-${{ hashFiles('tooling/direnv/devenv.yaml',
-          'tooling/direnv/devenv.nix', 'tooling/direnv/devenv.smoo.nix', 'tooling/direnv/devenv.lock',
-          'tooling/direnv/envrc.sh', 'tooling/direnv/setup-environment.ts') }}
+          'tooling/direnv/devenv.nix', 'tooling/direnv/devenv.smoo.nix', 'tooling/direnv/devenv.lock', '.envrc',
+          'tooling/direnv/setup-environment.ts') }}
         restore-keys: |
           ${{ runner.os }}-${{ runner.arch }}-devenv-v3-
 
     - name: Save devenv and direnv state
       if: inputs.mode == 'save'
-      uses: actions/cache/save@v5.0.5
+      uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         path: |
           ${{ github.workspace }}/tooling/direnv/.devenv
           ${{ github.workspace }}/tooling/direnv/.direnv
         key:
           ${{ runner.os }}-${{ runner.arch }}-devenv-v3-${{ hashFiles('tooling/direnv/devenv.yaml',
-          'tooling/direnv/devenv.nix', 'tooling/direnv/devenv.smoo.nix', 'tooling/direnv/devenv.lock',
-          'tooling/direnv/envrc.sh', 'tooling/direnv/setup-environment.ts') }}
+          'tooling/direnv/devenv.nix', 'tooling/direnv/devenv.smoo.nix', 'tooling/direnv/devenv.lock', '.envrc',
+          'tooling/direnv/setup-environment.ts') }}

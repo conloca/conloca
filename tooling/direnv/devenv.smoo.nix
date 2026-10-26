@@ -13,6 +13,7 @@
 # Every explanation lives out here in Nix comments. Hook bodies are exported as
 # shell text, so a comment inside one becomes part of an environment variable.
 {
+  config,
   inputs,
   lib,
   pkgs,
@@ -45,8 +46,8 @@
   # while they are upstreamed. Its Go module (tsc/, Go 1.27) builds with the
   # nixpkgs-go input's go_1_27 inside this derivation; the shell's own Go stays the
   # one ttsc vendors. The sparse checkout keeps the ~61k test baselines out of
-  # the store, and GOWORK=off builds the compiler module independently of
-  # the repository's Go workspace.
+  # the store, and GOWORK=off keeps the repository's go.work (tools/) out of
+  # the module build.
   typecheckTsc = goPkgs.buildGo127Module {
     pname = "tsc";
     version = "7.1.0-dev-c1ae0cde";
@@ -69,12 +70,118 @@
     # sparse source omits; the revision is the tested artifact.
     doCheck = false;
   };
+
+  # A repository that enables uv under languages.python gets its uv workspace
+  # synced and activated by this contract (enterShell item 5), never by
+  # devenv's own python tasks.
+  python = config.languages.python;
+  uvProject = python.enable && python.uv.enable;
+
+  # The Rust toolchain's own store bin, put ahead of this checkout's profile on
+  # PATH (enterShell item 2). `cargo clippy` runs `cargo-clippy`, which sets
+  # RUSTC_WORKSPACE_WRAPPER to the clippy-driver beside its own executable path
+  # (current_exe, which on Darwin is the path that was executed, symlinks
+  # unresolved), and cargo hashes that wrapper path into the identity of every
+  # workspace unit it checks. Reached through
+  # `<checkout>/tooling/direnv/.devenv/profile/bin`, the wrapper names the
+  # checkout, so a copy-on-write clone at another path re-checks every
+  # workspace crate under fresh unit directories although its target/ arrived
+  # warm, and the stale ones pile up per checkout. Resolved here, cargo,
+  # cargo-clippy and clippy-driver are one store path in every checkout.
+  # rustc resolves here too, but cargo keys units on its `-vV` output and not
+  # its path, so plain builds keep their units. The profile still carries the
+  # same files for anything that names it.
+  rustToolchainBin = "${config.languages.rust.toolchainPackage}/bin";
+
+  # Expose pyflakes without propagating a second interpreter into the shell.
+  pyflakesBin = pkgs.runCommandLocal "pyflakes-${pkgs.python3Packages.pyflakes.version}" {} ''
+    mkdir -p "$out/bin"
+    ln -s ${pkgs.python3Packages.pyflakes}/bin/pyflakes "$out/bin/pyflakes"
+  '';
+
+  # Builds every Linux artifact and the cross clippy; see `profiles.linux-cross`
+  # below for where it applies and why. The rust-std set is every Linux triple
+  # an artifact ships for except x86_64-unknown-linux-gnu, which the base shell
+  # already carries.
+  linuxToolchain = {
+    packages = [pkgs.zig pkgs.cargo-zigbuild];
+    languages.rust.targets = [
+      "aarch64-unknown-linux-gnu"
+      "x86_64-unknown-linux-musl"
+      "aarch64-unknown-linux-musl"
+    ];
+  };
 in {
+  # nixpkgs carries actionlint, not the jdx fork. Supply the immutable upstream
+  # release as a normal package, with the same pin in developer shells and CI.
+  # Nix fetches/verifies it once; validation never installs or compiles a tool.
+  overlays = [
+    (_final: prev: let
+      sources = {
+        aarch64-darwin = {
+          platform = "darwin_arm64";
+          hash = "sha256-GtIQvSH0xwqB4L/+zG0iPayo3RPlf6aJl4cGT4tyTHw=";
+        };
+        x86_64-darwin = {
+          platform = "darwin_amd64";
+          hash = "sha256-A8y1LzvzxrG2NYaJpNMeXwXVWLMsC47a6sfEUqvn//Q=";
+        };
+        aarch64-linux = {
+          platform = "linux_arm64";
+          hash = "sha256-l4qfMsxO0dgblFY/xJZDuLOkjcuk0eoInZugX34X56c=";
+        };
+        x86_64-linux = {
+          platform = "linux_amd64";
+          hash = "sha256-AmvObQ7xlvWyK/Q6yxNI1HxdClrmHW7DvboSKagjFhs=";
+        };
+      };
+      system = prev.stdenv.hostPlatform.system;
+      source = sources.${system} or (throw "jactionlint: unsupported managed shell platform ${system}");
+    in {
+      jactionlint = prev.stdenvNoCC.mkDerivation rec {
+        pname = "jactionlint";
+        version = "2.0.2";
+        src = prev.fetchurl {
+          url = "https://github.com/jdx/jactionlint/releases/download/v${version}/jactionlint_${version}_${source.platform}.tar.gz";
+          inherit (source) hash;
+        };
+        sourceRoot = ".";
+        dontConfigure = true;
+        dontBuild = true;
+        # Preserve the upstream signed macOS executable; no strip/patch phase.
+        dontFixup = true;
+        installPhase = ''
+          runHook preInstall
+          install -Dm755 jactionlint "$out/bin/jactionlint"
+          runHook postInstall
+        '';
+        meta = {
+          description = "Static correctness, security and policy checker for GitHub Actions";
+          homepage = "https://github.com/jdx/jactionlint";
+          license = lib.licenses.mit;
+          mainProgram = "jactionlint";
+          platforms = builtins.attrNames sources;
+        };
+      };
+    })
+  ];
+
   env = lib.mkMerge [
     {
       # Nx otherwise defaults to three workers. Scale to the cores available in each
       # developer shell or CI runner; explicit --parallel flags still take precedence.
       NX_PARALLEL = "100%";
+      # Every Nx daemon, when it starts, installs nx@latest from the registry
+      # into a temporary directory to ask the newest release whether to prompt
+      # for Nx Console and whether AI agent configuration is outdated, and
+      # `nx configure-ai-agents` and `nx init` do the same. NX_USE_LOCAL answers
+      # from the installed nx, so starting Nx installs nothing from the registry.
+      # (A daemon still runs `git ls-remote` against GitHub's
+      # nrwl/nx-ai-agents-config when an agent has both rules and Nx's MCP
+      # configured; a cowshed sandbox runs Nx without a daemon.) It also makes
+      # `nx migrate` run with the installed CLI instead of the newest one;
+      # `NX_USE_LOCAL=false nx migrate` restores that for the one command.
+      NX_USE_LOCAL = "true";
       TTSC_TYPESCRIPT_GO_DIR = "${typescriptGo}";
       SMOO_TYPECHECK_TSC = "${typecheckTsc}/bin/tsc";
     }
@@ -86,6 +193,17 @@ in {
       PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH = lib.getExe pkgs.chromium;
     })
   ];
+
+  # devenv's Cachix integration adds one substituter, devenv.cachix.org, whose
+  # signing key it fetches from the Cachix API whenever its per-user key file
+  # (cachix_trusted_keys.json) lacks it. That cache holds nothing this shell
+  # pulls: its packages come from devenv-nixpkgs, whose store paths
+  # cache.nixos.org already serves, and the rest are built here. Off, devenv
+  # makes no network call before evaluating, which matters wherever the API is
+  # unreachable (a cowshed sandbox's gateway, an offline host). A host that
+  # wants the cache anyway names it in its own nix.conf.
+  cachix.enable = false;
+
   # sccache is deliberately absent from this shell. It used to export
   # RUSTC_WRAPPER=sccache as a BARE NAME, which PATH then resolved per project —
   # which is precisely how an unpatched binary from one profile came to serve
@@ -128,62 +246,49 @@ in {
     # CI validates on Linux, so a macOS shell carries Linux's std and can
     # type-check the arm CI compiles. rust-std alone reaches every crate whose
     # dependency graph is pure Rust; a dependency that compiles C for the target
-    # — ring, openssl-sys, libgit2-sys, libz-sys — additionally needs a cross C
-    # compiler, which is 0.4 GiB and so lives in the opt-in `linux-cross` profile
-    # below rather than here, keeping it off every macOS shell and macOS runner.
+    # — ring, openssl-sys, libgit2-sys, libz-sys — additionally needs a C
+    # compiler for the target, which is zig in the `linux-cross` toolchain
+    # below, kept off every macOS shell and macOS runner.
     #
     # The reverse direction is not available at any price: type-checking an Apple
     # target from Linux needs an Apple SDK for those same C-building
     # dependencies, which is a licensing boundary rather than a missing package.
-    targets = [
-      "wasm32-unknown-unknown"
-      "x86_64-unknown-linux-gnu"
-    ];
+    targets =
+      [
+        "wasm32-unknown-unknown"
+        "x86_64-unknown-linux-gnu"
+      ]
+      ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux linuxToolchain.languages.rust.targets;
   };
 
-  # Opt-in Linux cross toolchain, activated by `devenv -P linux-cross` and driven
-  # by the root `check:linux` script. devenv 2.2.3 has first-class profiles, so
-  # this is one gated module in the shared file rather than a second config
-  # directory that would have to re-import and re-pin everything here.
+  # The Linux toolchain: zig, driven through cargo-zigbuild, plus the Linux
+  # rust-std set. It builds every published Linux artifact — static musl CLIs,
+  # glibc 2.17 N-API addons — and `check:linux`'s cross clippy, with the same
+  # command on every host. zig carries glibc symbol-version stubs for every
+  # glibc and the musl sources inside its own store path, so nothing on the
+  # build machine reaches the artifact: no loader path, no RUNPATH, no build
+  # host's glibc floor. cargo-zigbuild supplies the `zig cc` shims and per-triple
+  # compiler variables itself, so this module sets no environment.
   #
-  # It is a profile and NOT a default package because pkgsCross.gnu64's cc
-  # closure is 0.4 GiB against a default shell closure of ~5.4 GiB — a 7% tax on
-  # every shell entry and every CI cache restore, to serve one command that a
-  # macOS laptop runs deliberately. Nothing on Darwin links a Linux object.
+  # A Linux host carries it in the base shell, because its ordinary `build`
+  # includes its own platform's artifacts. A macOS host opts in through the
+  # `linux-cross` profile, activated by `devenv -P linux-cross` and driven by
+  # the root `check:linux` script: zig is a 380 MiB closure, about 0.9 GiB with
+  # the three rust-std targets, and nothing else on Darwin needs it. devenv 2.2.3
+  # has first-class profiles, so this is one gated module in the shared file
+  # rather than a second config directory that would re-import and re-pin
+  # everything here.
   #
-  # Why a C compiler is needed at all, when rust-std above is already installed:
-  # ring, openssl-sys, libgit2-sys and libz-sys compile C for the target from
-  # their build scripts, and build scripts are compiled and run even under
-  # `cargo check`, so std alone stops at `ToolNotFound: failed to find tool
-  # "x86_64-linux-gnu-gcc"`. The `cc` crate probes triple-prefixed tool names,
-  # which is precisely what this wrapper's bin/ exports.
-  #
-  # Each tool path is derived from the wrapper's own `targetPrefix` instead of
-  # being written out, so a nixpkgs bump that renames the prefix carries these
-  # with it rather than leaving four stale strings that fail at build-script time.
-  #
-  # This profile supplies the toolchain and nothing else. CARGO_BUILD_TARGET is
+  # The profile supplies the toolchain and nothing else. CARGO_BUILD_TARGET is
   # deliberately NOT set: the triple belongs to the Nx target that asks for it
-  # (`cargo-lint-x64-linux` passes `--target` explicitly), not to the ambient
+  # (`cargo-lint-cross` passes `--target` explicitly), not to the ambient
   # environment. An ambient triple would make the check silently host-local
-  # whenever the profile was forgotten — reporting green having compiled macOS —
-  # and that false green is the precise failure this whole profile exists to end.
+  # whenever the profile was forgotten — reporting green having compiled macOS.
   # With the flag on the target instead, running it outside this profile fails
-  # loudly at `ToolNotFound` and a host lint can never be mistaken for a cross one.
-  profiles.linux-cross.module = let
-    crossCC = pkgs.pkgsCross.gnu64.stdenv.cc;
-    crossLibc = lib.getDev crossCC.libc;
-    tool = name: "${crossCC}/bin/${crossCC.targetPrefix}${name}";
-  in {
-    packages = [crossCC];
-    env = {
-      CC_x86_64_unknown_linux_gnu = tool "cc";
-      CXX_x86_64_unknown_linux_gnu = tool "c++";
-      AR_x86_64_unknown_linux_gnu = tool "ar";
-      CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER = tool "cc";
-      # bindgen runs host libclang, which cannot infer the cross compiler's headers.
-      BINDGEN_EXTRA_CLANG_ARGS_x86_64_unknown_linux_gnu = "--target=x86_64-unknown-linux-gnu -isystem ${crossLibc}/include -isystem ${pkgs.pkgsCross.gnu64.linuxHeaders}/include";
-    };
+  # loudly on the missing cargo-zigbuild, and a host lint can never be mistaken
+  # for a cross one.
+  profiles.linux-cross.module = {
+    config = lib.mkIf (!pkgs.stdenv.hostPlatform.isLinux) linuxToolchain;
   };
 
   # linux-cross is the only profile here, and the shape of the publish job is
@@ -215,24 +320,25 @@ in {
   # before it is packed. A lean publish shell removes those tools silently, from
   # the one step that exists to refuse a bad artifact.
   #
-  # And it would not even pay: the Actions nix segment is keyed on
-  # os+arch+hash(devenv.yaml, devenv.nix, devenv.lock) and is blind to the
-  # profile, so a restore ships the whole NAR regardless, while the save exports
-  # the closure that job realized. A lean publish job that won that immutable
-  # key would hand the CI workflow a NAR with no toolchain in it. On any run
-  # where repair has work the saving is zero anyway, because repair realizes the
-  # historical default shell inside the same job.
+  # And it would not even pay: the Actions store cache is keyed on os+arch and
+  # the devenv files and is blind to the profile, so a restore ships the whole
+  # store regardless, while the save keeps the closure that job realized. A lean
+  # publish job that won that immutable key would hand the CI workflow a store
+  # with no toolchain in it. On any run where repair has work the saving is zero
+  # anyway, because repair realizes the historical default shell inside the
+  # same job.
 
   # One Go for every repository, same reasoning as the Rust toolchain: a compiler
   # is part of a cache key, so two of them mean two caches.
+  # The typecheck compiler's Go 1.27 above is a build input of that one
+  # derivation only: no shell, plugin or repository build ever runs it.
   #
-  # Pinned to the patch release ttsc vendors inside its native package, because
-  # that SDK is not overridable — ttsc exposes cache locations and
-  # TTSC_TSGO_BINARY, never the Go it builds plugins with — so matching it is the
-  # only way to have ONE Go rather than ours plus a dependency's. `smoo monorepo
-  # check` enforces the match and fails with both versions when they diverge,
-  # which is what makes this pin a maintained invariant instead of a comment that
-  # rots.
+  # Pinned to the patch release ttsc vendors inside its native package: ttsc
+  # builds plugins with that SDK unless TTSC_GO_BINARY names another, so matching
+  # it is how there is ONE Go rather than ours plus a dependency's. `smoo
+  # monorepo check` enforces the match and fails with both versions when they
+  # diverge, which is what makes this pin a maintained invariant instead of a
+  # comment that rots.
   #
   # It needs its own input because the fleet's nixpkgs does not carry that patch:
   # devenv-nixpkgs rolling ships go 1.26.5, while ttsc 0.30.4 vendors go1.26.8.
@@ -275,9 +381,14 @@ in {
   # `nixpkgs_2`.
   packages =
     [
-      (import inputs.nixpkgs-go {inherit (pkgs.stdenv.hostPlatform) system;}).go
+      goPkgs.go
       pkgs.nodejs_26
       pkgs.binaryen
+      # Smoo's GitHub Actions validator uses the managed prebuilt package above.
+      pkgs.jactionlint
+      # Keep jactionlint's default shell and Python checks in the same pinned closure.
+      pkgs.shellcheck-minimal
+      pyflakesBin
       # Test runner for inferred Cargo test targets. Generated targets must never
       # depend on an ambient host installation that CI does not reproduce.
       pkgs.cargo-nextest
@@ -293,7 +404,129 @@ in {
       # `cargo hakari verify` for a workspace that took that route.
       pkgs.cargo-hakari
     ]
-    ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [pkgs.chromium];
+    ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux ([pkgs.chromium] ++ linuxToolchain.packages);
+
+  # devenv wraps the Python interpreter to find native libraries in
+  # `languages.python.libraries`, whose default is this checkout's
+  # `.devenv/profile`. That path then lands in the interpreter's store path, the
+  # profile that holds it, PKG_CONFIG_PATH and the uv environment built with it,
+  # so every clone evaluates and builds its own interpreter and profile on first
+  # entry, every cache keyed on the build environment misses — ttsc hashes
+  # PKG_CONFIG_PATH into its plugin key and rebuilds the Go plugin per clone —
+  # and a copied uv environment names another checkout's interpreter. Cleared,
+  # the interpreter is one store path in every checkout. devenv still adds the
+  # C++ runtime; a wheel that needs another library names that library here.
+  languages.python.libraries = lib.mkDefault [];
+
+  # The stdenv build variables the shell derivation leaks beyond the ones devenv
+  # already drops: generic names (`name`, `system`) that collide with any
+  # script's own, and builder-only settings (NIX_CFLAGS_COMPILE,
+  # SOURCE_DATE_EPOCH, the sandbox profiles) that change what a compiler run
+  # from the shell produces. The shell is a place to run tools, not a builder.
+  # mkOptionDefault: devenv's own default list stays, this one joins it.
+  unsetEnvVars = lib.mkOptionDefault [
+    "CONFIG_SHELL"
+    "DETERMINISTIC_BUILD"
+    "IN_NIX_SHELL"
+    "MACOSX_DEPLOYMENT_TARGET"
+    "NIX_CFLAGS_COMPILE"
+    "NIX_COREFOUNDATION_RPATH"
+    "NIX_DONT_SET_RPATH"
+    "NIX_DONT_SET_RPATH_FOR_BUILD"
+    "NIX_ENFORCE_NO_NATIVE"
+    "NIX_IGNORE_LD_THROUGH_GCC"
+    "NIX_INDENT_MAKE"
+    "NIX_NO_SELF_RPATH"
+    "NIX_STORE"
+    "PATH_LOCALE"
+    "SOURCE_DATE_EPOCH"
+    "__darwinAllowLocalNetworking"
+    "__impureHostDeps"
+    "__propagatedImpureHostDeps"
+    "__propagatedSandboxProfile"
+    "__sandboxProfile"
+    "cmakeFlags"
+    "configureFlags"
+    "mesonFlags"
+    "name"
+    "system"
+  ];
+
+  # Shell entry's installs are devenv tasks ordered before devenv:enterShell, so
+  # devenv decides when they run and an unchanged checkout starts no installer.
+  #
+  # smoo:install runs `bun install` (and `uv sync` for a uv project) through
+  # setup-environment.ts when anything they read changed: execIfModified keys
+  # each file by content hash, by its path relative to tooling/direnv (so a
+  # copy-on-write clone at another path is unchanged), honouring .gitignore.
+  # The globs over-match (a fixture's package.json), which costs a no-op
+  # install. node_modules/.smoo-install is the stamp a successful install
+  # writes; named literally it is checked although node_modules is ignored, so
+  # deleting node_modules reinstalls. The script keeps its own per-installer
+  # digest under the install lock, so two shells entering at once install once.
+  # The scripts themselves are inputs: a new setup-environment.ts reruns.
+  #
+  # smoo:cargo-fetch establishes what the Nx plugin's offline `cargo metadata
+  # --locked` needs: every Cargo workspace's locked packages in CARGO_HOME. Its
+  # stamps live in smoo's user cache and count only while CARGO_HOME names the
+  # directory they were fetched into, which differs per host and per sandbox
+  # and no checkout path can name, so it is gated by `status` (exit 0 when
+  # CARGO_HOME holds them) rather than execIfModified.
+  #
+  # smoo:developer-links points the packages the root package.json's
+  # `smoo.developerLinks` declares at their local checkouts, after an install
+  # and in every tree that installed them (tooling/direnv/developer-links.ts).
+  # Gated by `status` too: a clone or an install can lose a link without any
+  # file devenv watches changing. Stale install links, including external Nx
+  # aliases, run the managed Bun installer before declarations are applied.
+  # A runner links nothing.
+  #
+  # A failed task does not fail shell entry (devenv reports it and the shell
+  # still loads, so the tools to repair it stay available). CI runs both with
+  # `devenv tasks run`, which does fail; setup-environment.ts is strict there.
+  tasks = let
+    setup = ''bun "$DEVENV_ROOT/setup-environment.ts"'';
+  in {
+    "smoo:install" = {
+      description = "bun install / uv sync when what they read changed";
+      exec = setup + lib.optionalString uvProject " --python ${python.package.interpreter}";
+      execIfModified = [
+        "../../package.json"
+        "../../bun.lock"
+        "../../bun.lockb"
+        "../../bunfig.toml"
+        "../../**/package.json"
+        "../../**/*.patch"
+        "../../pyproject.toml"
+        "../../uv.lock"
+        "../../**/pyproject.toml"
+        "../../tooling/workspace.gitconfig"
+        "setup-environment.ts"
+        "developer-links.ts"
+        "linked-snapshots.ts"
+        "secret-references.ts"
+        "../../node_modules/.smoo-install"
+        "../../node_modules/@typescript/native/bin/tsc"
+      ];
+      before = ["devenv:enterShell"];
+      showOutput = true;
+    };
+    "smoo:cargo-fetch" = {
+      description = "cargo fetch --locked into CARGO_HOME for each Cargo workspace";
+      exec = "${setup} --cargo";
+      status = "${setup} --cargo --check";
+      before = ["devenv:enterShell"];
+      showOutput = true;
+    };
+    "smoo:developer-links" = {
+      description = "repair stale install links and link declared local checkouts";
+      exec = "${setup} --links";
+      status = "${setup} --links --check";
+      after = ["smoo:install"];
+      before = ["devenv:enterShell"];
+      showOutput = true;
+    };
+  };
 
   enterShell = lib.mkMerge [
     # Prologue, in order:
@@ -301,50 +534,44 @@ in {
     # 1. The devenv wrapper runs from tooling/direnv; every later step expects the
     #    workspace root.
     # 2. PATH order is most-specific → least-specific, the same list the git hooks
-    #    use, so a hook and a shell resolve one binary the same way.
+    #    use, so a hook and a shell resolve one binary the same way. The Rust
+    #    toolchain's store bin then goes ahead of all of it (rustToolchainBin
+    #    above): the same files the profile links, named by a path no checkout
+    #    owns.
     # 3. ttsc drives the native TypeScript 7 binary while Nx imports the TypeScript
     #    6 API, so the two must be named separately.
-    # 4. On a cowshed host, Go and ttsc caches point at the shared store, so every
-    #    workspace reads one warm cache instead of growing its own copy inside its
-    #    image. Without one, ttsc stays in-tree for the CI cache action while Go
-    #    keeps its normal per-user defaults. Both Go caches are content-addressed,
-    #    so sharing them needs no patch — unlike Rust, Go keys on content and flags
-    #    rather than on where the files live. An inherited value always wins so CI
-    #    can place any of these caches itself. GOFLAGS carries -trimpath because it
-    #    is Go's stable way to keep absolute build paths out of the artifact, and
-    #    unlike Rust's trim-paths it costs no cache reuse.
+    # 4. ttsc caches in the checkout's .cache/ttsc (the path the CI ttsc-plugin
+    #    cache restores), its Go build cache in a directory of its own so
+    #    `ttsc clean` can reclaim it: ttsc never deletes a GOCACHE it did not
+    #    resolve itself, and sharing GOCACHE once left 35G nothing could empty.
+    #    GOFLAGS carries -trimpath, Go's stable way to keep absolute build paths
+    #    out of an artifact. A value the caller exported wins for each. Where Go
+    #    and the machine-wide caches live otherwise is the host's or the
+    #    sandbox's business, not this shell's.
+    # 5. Dependencies are installed by the smoo:install and smoo:cargo-fetch
+    #    tasks above, which devenv runs before this prologue; the prologue only
+    #    activates what they installed.
     #
-    #    ttsc's plugin builds use the Go it bundles rather than ours, so the
-    #    repository's own Go work and ttsc's plugin builds are two toolchains by
-    #    construction. Placing both caches in the shared store is what keeps that
-    #    from costing a rebuild per workspace.
+    #    The uv project environment is devenv's UV_PROJECT_ENVIRONMENT, synced
+    #    with the interpreter devenv would use and activated here after the
+    #    sync. It lives under this checkout and names no path of it: uv creates
+    #    it relocatable, setup-environment.ts rewrites the editable installs of
+    #    workspace members relative to it, and the interpreter is the same
+    #    store path everywhere (languages.python.libraries above). A
+    #    copy-on-write clone copies it along with everything else, installed.
+    #    devenv's own virtualenv and uv sync tasks are refused below: they
+    #    activate the environment from its own activation script — which in a
+    #    clone names the original checkout — before this prologue runs, and key
+    #    their skip on pyproject.toml alone.
     #
-    #    TTSC_GO_CACHE_DIR and GOCACHE stay separate for ownership, not
-    #    correctness: both caches are content-addressed, so one directory would
-    #    compile the same bytes to the same entries. What sharing loses is an
-    #    owner. ttsc reclaims a Go build cache only when it resolved that
-    #    directory itself — `ttsc clean` takes the cache whose source is
-    #    TTSC_GO_CACHE_DIR and never one whose source is a user GOCACHE, which it
-    #    treats as someone else's property. Pointing ttsc at GOCACHE therefore
-    #    produced a directory ttsc filled and no repository verb could empty,
-    #    measured at 35G here. A dedicated directory gives ttsc's half back to
-    #    `ttsc clean` and leaves GOCACHE holding only Go work this repository does
-    #    itself, which is one module.
-    #
-    #    That buys ownership, not automatic GC: ttsc prunes opportunistically only
-    #    when it owns the whole cache root, which requires TTSC_CACHE_DIR unset,
-    #    and a pinned shared root is the point of the block below. The trade is
-    #    deliberate — one warm cache every workspace shares, reclaimed by an
-    #    explicit verb, over per-workspace caches that self-trim. Go's own build
-    #    cache trimming belongs to the go command and still applies to both.
-    # 5. The shared setup-environment.ts bootstraps repository dependencies; a
-    #    failure aborts shell entry instead of yielding a half-working shell.
-    #    Repo-owned enterShell bodies merge after this prologue.
-    # 6. Shell entry resolves the `shell` group of `smoo.secrets` and nothing
-    #    else. Shell entry happens on every direnv reload and every
-    #    `devenv shell -- <command>`, and a provider command that runs then is a
-    #    credential prompt on every one of them (1Password authorises per
-    #    requesting process lineage, and this one is new each time). A
+    #    A local install failure is reported and the shell still loads, so the
+    #    tools to repair it stay available; CI fails. Repo-owned enterShell
+    #    bodies merge after this prologue.
+    # 6. Shell entry resolves the `shell` group of `smoo.secrets`, only when it
+    #    installs, and nothing else. Shell entry happens on every direnv reload
+    #    and every `devenv shell -- <command>`, and a provider command that runs
+    #    then is a credential prompt on every one of them (1Password authorises
+    #    per requesting process lineage, and this one is new each time). A
     #    credential only one deliberate command needs belongs to that command:
     #    `smoo secrets run <group> <command...>`. The full statement, and the
     #    derivation below, live in tooling/direnv/secret-references.ts.
@@ -378,41 +605,26 @@ in {
     #    resolves its own GOROOT from its own binary, which makes "whose Go is
     #    whose" a property of which binary is invoked — the only thing that can
     #    actually be reasoned about.
-    # 8. On Darwin, drop nix CC/CXX so xcodebuild finds Xcode's clang (it supports
-    #    -index-store-path); bun/node native addons find compilers through
-    #    node-gyp. CC/CXX are what xcodebuild reads, which is why they go rather
-    #    than being pointed somewhere else.
-    #
-    #    The Apple SDK is the same boundary, and dropping CC/CXX alone does not
-    #    hold it. An outer nix stdenv exports SDKROOT and DEVELOPER_DIR pointing
-    #    at nixpkgs' RECONSTRUCTED apple-sdk, so Xcode's own clang goes on to
-    #    compile against that sysroot. It is not a substitute for the licensed
-    #    SDK: apple-sdk-14.4 carries usr/include and the frameworks but NO libc++
-    #    whatsoever — no usr/include/c++/v1 and no usr/lib/libc++* — so any C++
-    #    build script that resolves the SDK by name dies at `ld: library 'c++'
-    #    not found`, which a CMake `*-sys` crate reaches before compiling a line
-    #    of the project. DEVELOPER_DIR is the half that hides: `xcrun
-    #    --show-sdk-path` honours it, so even code that correctly asks xcrun for
-    #    the SDK is handed the nix one, while `xcrun --find clang` and
-    #    `xcodebuild -version` keep reporting Xcode and look healthy. It also
-    #    defeats any later guard that unsets a nix SDKROOT and then re-resolves
-    #    it through xcrun, because xcrun answers with the same tree again.
-    #
-    #    Only a /nix/store value is dropped. An SDKROOT the operator exported
-    #    deliberately — the documented way to link Darwin from a Linux host — is
-    #    left exactly as given. Each drop is announced, so a shell never silently
-    #    swaps the SDK a build was compiled against.
-    # Nx's fallback includes HOME or TMPDIR, either of which can exceed the
-    # Unix socket limit in a checkout. Reuse devenv's short runtime directory,
-    # which is keyed on this checkout's devenv root and so is one per
-    # workspace. Unconditionally: an inherited value is another workspace's
-    # shell (a shed entered from the host, a second repository from the first,
-    # a subprocess of either), and one socket dir for two workspaces makes the
-    # daemon refuse whichever came second ("received a message from a
-    # different workspace"). Nobody supplies this deliberately.
+    # 8. On Darwin, Xcode answers for the Apple toolchain: nix CC/CXX, a
+    #    nix-store SDKROOT and DEVELOPER_DIR, and every store PATH entry carrying
+    #    nixpkgs xcbuild's `xcrun` are dropped, each one announced, so Xcode's
+    #    clang compiles against the licensed SDK and `xcrun` is Apple's.
+    #    tooling/direnv/apple-developer.sh does it and states why.
+    # Nx's own socket fallback (under HOME or TMPDIR) can exceed the Unix socket
+    # limit in a checkout, and an inherited NX_SOCKET_DIR may be another
+    # workspace's: tooling/direnv/nx-socket-dir.sh, sourced below, names this
+    # workspace's own, and binds NX_WORKSPACE_ROOT_PATH, which the smoo Nx
+    # wrappers read to decide whether inherited Nx overrides belong to the root
+    # they run.
     (lib.mkBefore ''
       cd "$DEVENV_ROOT/../.."
+      # Direct `devenv shell` skips .envrc. Reuse cowshed's one environment writer
+      # before project hooks, rather than restating its CI/compiler-cache policy.
+      if [ -f .cowshed/env ]; then
+        . "$PWD/.cowshed/env"
+      fi
       export PATH="$("$PWD/tooling/direnv/repo-path")"
+      export PATH="${rustToolchainBin}:$PATH"
       # devenv enters the shell with TMPDIR unset (not empty) on every platform.
       # Tools then fall back to /tmp, which on Darwin is not the per-user
       # temporary directory the OS hands out, and a test that asserts the
@@ -422,54 +634,50 @@ in {
         TMPDIR="$(getconf DARWIN_USER_TEMP_DIR 2>/dev/null || true)"
         export TMPDIR="''${TMPDIR:-/tmp}"
       fi
-      export TTSC_TSGO_BINARY="$PWD/node_modules/@typescript/native/bin/tsc"
-      if [ -d "$HOME/.cowshed/caches" ]; then
-        export TTSC_CACHE_DIR="''${TTSC_CACHE_DIR:-$HOME/.cowshed/caches/ttsc}"
-        export GOCACHE="''${GOCACHE:-$HOME/.cowshed/caches/go/build}"
-        export GOMODCACHE="''${GOMODCACHE:-$HOME/.cowshed/caches/go/mod}"
-        mkdir -p "$GOCACHE" "$GOMODCACHE"
-      else
-        export TTSC_CACHE_DIR="''${TTSC_CACHE_DIR:-$PWD/.cache/ttsc}"
-      fi
-      export TTSC_GO_CACHE_DIR="''${TTSC_GO_CACHE_DIR:-$TTSC_CACHE_DIR/go-build}"
-      mkdir -p "$TTSC_CACHE_DIR" "$TTSC_GO_CACHE_DIR"
+      # ttsc's compiler and caches: tooling/direnv/ttsc-env.sh, shared with the
+      # git hooks, which run outside this shell. It reads the inherited
+      # NX_WORKSPACE_ROOT_PATH, so it runs before nx-socket-dir.sh rebinds it.
+      . "$DEVENV_ROOT/ttsc-env.sh"
       export GOFLAGS="''${GOFLAGS:--trimpath}"
       unset GOROOT
-      bun "$DEVENV_ROOT/setup-environment.ts" || exit $?
-      # One socket dir per Nx workspace. DEVENV_RUNTIME is keyed to the devenv
-      # ROOT, so every workspace sharing one devenv - a sibling repository, a
-      # copy-on-write clone, a scratch workspace created inside this shell -
-      # would land on one socket. The first daemon to claim it then refuses
-      # every message from the others ("received a message from a different
-      # workspace"), which reads as a hung Nx in a workspace that did nothing
-      # wrong. Nx's own diagnostic names this exact cause.
-      nx_workspace_root="$(cd "$DEVENV_ROOT/../.." >/dev/null 2>&1 && pwd || printf '%s' "$PWD")"
-      export NX_SOCKET_DIR="$DEVENV_RUNTIME/nx-$(printf '%s' "$nx_workspace_root" | cksum | cut -d' ' -f1)"
-      mkdir -p "$NX_SOCKET_DIR"
+      ${lib.optionalString uvProject ''
+        if [ -f pyproject.toml ]; then
+          export VIRTUAL_ENV="$UV_PROJECT_ENVIRONMENT"
+          export PATH="$VIRTUAL_ENV/bin:$PATH"
+        fi
+      ''}
+      # Nx's workspace root and socket dir: tooling/direnv/nx-socket-dir.sh
+      # gives every workspace its own socket dir, and in a cowshed checkout the
+      # one literal path its host shells and sandboxed jobs all share, and
+      # states why.
+      . "$DEVENV_ROOT/nx-socket-dir.sh"
       ${lib.optionalString pkgs.stdenv.isDarwin ''
-        unset CC CXX
-        case "''${SDKROOT:-}" in
-          /nix/store/*)
-            echo "devenv: dropping nix-store SDKROOT ($SDKROOT); Xcode holds the licensed macOS SDK" >&2
-            unset SDKROOT NIX_APPLE_SDK_VERSION
-            ;;
-        esac
-        case "''${DEVELOPER_DIR:-}" in
-          /nix/store/*)
-            echo "devenv: dropping nix-store DEVELOPER_DIR ($DEVELOPER_DIR); xcrun must answer from Xcode" >&2
-            unset DEVELOPER_DIR NIX_APPLE_SDK_VERSION
-            ;;
-        esac
+        . "$DEVENV_ROOT/apple-developer.sh" /nix/store
       ''}
     '')
     # Epilogue, after every project step (a project's own enterShell may resolve
     # SDKROOT/compilers; the toolchain identity must see the final values). The
     # stamp logic lives in toolchain-stamp.ts; see its header for why.
     (lib.mkAfter ''
+          # Project hooks may prepend real Cargo. Reuse the managed PATH writer
+      # last: its served install identity is the host's, not the private HOME.
+      export PATH="$("$DEVENV_ROOT/repo-path")"
       bun "$DEVENV_ROOT/toolchain-stamp.ts" || exit $?
       if [ -n "$DEVENV_SHELL_PWD" ]; then
         cd "$DEVENV_SHELL_PWD"
       fi
     '')
+  ];
+
+  assertions = [
+    {
+      assertion = !(uvProject && (python.venv.enable || python.uv.sync.enable));
+      message = ''
+        devenv.smoo.nix syncs and activates the uv project environment itself (enterShell item 5).
+        Set languages.python.venv.enable and languages.python.uv.sync.enable to false in devenv.nix:
+        devenv's tasks activate the environment from its own activation script, which in a
+        copy-on-write clone names the original checkout, and skip the sync while uv.lock changes.
+      '';
+    }
   ];
 }

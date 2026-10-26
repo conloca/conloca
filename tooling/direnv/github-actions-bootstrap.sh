@@ -18,11 +18,20 @@ add_repo_paths() {
 }
 
 # The CLI that evaluates the shell must be the commit whose modules the shell is
-# locked to. devenv writes its own source rev into devenv.lock's `devenv` node,
-# so the lock already names one coherent pair (CLI 2.3.1+190959a evaluating the
-# 190959a modules) and nothing here restates it. Note `original` carries no rev:
-# that node is HEAD-at-lock-time rather than a release tag, so this pin buys
-# coherence, not blessing.
+# locked to, so this installs the commit devenv.lock's `devenv` node names and
+# nothing here restates it. `smoo monorepo check` holds that node to a release:
+# its `original.ref` is `latest` or a tag from v2.0.4 on, which devenv.yaml
+# declares as `github:cachix/devenv/v2.3.1?dir=src/modules`. devenv.cachix.org
+# has pinned the aarch64-darwin, aarch64-linux and x86_64-linux builds of every
+# release from v2.0.4 on for good, so on those three systems the install
+# substitutes rather than compiles. From v2.2 on devenv builds nothing for
+# x86_64-darwin, so on an Intel macOS runner installing such a release fails
+# rather than compiles; there only v2.0.4 to v2.1.2 are pinned. Some older tags,
+# such as v2.0.3, have no pin, and their builds are already gone. An input
+# nobody declared locks devenv's main as it was that minute, and the cache drops
+# such a build after about six weeks, after which every cold runner compiles
+# devenv from source (a build of main commit 4ed83c00, which reported 2.1.3 but
+# was never tagged, was pushed on 2026-07-15 and was gone by 2026-10-13).
 #
 # An unpinned `github:cachix/devenv` instead installs whatever HEAD is on the day
 # a cold runner misses the store cache — a version that moves with no commit
@@ -77,22 +86,28 @@ install_devenv() {
   # `nix profile remove --all` on a host would take the fleet's other roots with
   # it. SMOO_HOST_RUNNER comes from setup-devenv's runner-kind detection.
   #
-  # With none present these runners install from the FLOATING branch, not the
-  # locked rev, which is the one place this script deliberately accepts drift.
-  # The pin exists to make the ephemeral runners' cached devenv reproducible;
-  # a host installs into a long-lived shared profile whose blast radius is the
-  # whole fleet, and pinning it down to an older CLI than the fleet had been
-  # running broke it: run 34374650577 segfaulted the Rust linker
+  # With none present these runners install a devenv RELEASE, not the locked
+  # rev. The lock pin exists to make the ephemeral runners' cached devenv
+  # reproducible; a host installs into a long-lived shared profile whose blast
+  # radius is the whole fleet, and pinning it down to an older CLI than the
+  # fleet had been running broke it: run 34374650577 segfaulted the Rust linker
   # (devenv-rust-linker, clang exit 139) building cowshed-cli tests, where run
   # 34371205556 on the same commit range was green with floating 2a399e9.
   # 190959a is TWO COMMITS OLDER than what these hosts had been getting, so the
-  # pin was moving them backwards. A host's toolchain moves when its image or
-  # the lock moves, not when a repository decides to hold it back.
+  # pin was moving them backwards.
+  #
+  # Floating `github:cachix/devenv` (devenv's main) was no better: on
+  # 2026-10-16 main moved to a nix 2.35.2 that devenv.cachix.org does not
+  # serve, every host compiled 65 derivations, and nix-store-2.35.2 failed to
+  # build — CI went red fleet-wide with no commit here to bisect. A release
+  # tag fixes both: devenv.cachix.org pins every release from v2.0.4 on for
+  # good, so it always substitutes, and it moves only when this line does.
+  # Keep it at or above what the consuming locks name.
   if [ "${SMOO_HOST_RUNNER:-false}" = true ]; then
     if command -v devenv >/dev/null 2>&1; then
       echo "using host devenv: $(command -v devenv) ($(devenv version))"
     else
-      flake="${DEVENV_FLAKE:-github:cachix/devenv}"
+      flake="${DEVENV_FLAKE:-github:cachix/devenv/v2.4.0}"
       echo "host runner has no devenv; nix profile add ${flake}"
       nix profile add --accept-flake-config "$flake"
     fi
@@ -142,8 +157,11 @@ devenv_path_and_caches() {
 build_devenv_shell() {
   local since
   since="$(date +%s)"
-  # One evaluation: the shell that captures the environment is the shell
-  # build. A separate `devenv shell -- date` evaluated everything twice.
+  # The installs are devenv tasks, and a failed task does not fail
+  # `devenv shell`; `devenv tasks run` does, so CI runs them first and the
+  # shell capture below then finds them current. Its evaluation is the one
+  # the capture reuses from devenv's eval cache.
+  devenv tasks run smoo:install smoo:cargo-fetch
   persist_devenv_environment
   # Only the ephemeral-runner path of setup-devenv opts in: the scan walks the
   # whole store, which on a developer host or a host runner is large and not

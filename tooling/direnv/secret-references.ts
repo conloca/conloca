@@ -393,7 +393,9 @@ async function routeSecret(
   }
   const requested = group === context.group;
   if (requested || context.dependsOn.includes(group)) {
-    if (isNonemptyEnvValue(env.CI)) {
+    // A CI runner (GitHub or Forgejo Actions, which sets GITHUB_ACTIONS too), never
+    // `CI`: agent harnesses set CI=true on every command they run.
+    if (env.GITHUB_ACTIONS === 'true') {
       return {
         name,
         group,
