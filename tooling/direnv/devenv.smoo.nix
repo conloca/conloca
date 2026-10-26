@@ -29,6 +29,46 @@
     rev = "56ab4af42157";
     hash = "sha256-ebjX+1+9axEqsnZXCRZSumA38gPNdmoz98tMt2oftN4=";
   };
+
+  # The nixpkgs the Go pin below comes from (devenv.yaml `nixpkgs-go`).
+  goPkgs = import inputs.nixpkgs-go {inherit (pkgs.stdenv.hostPlatform) system;};
+
+  # The native TypeScript compiler typecheck targets run, built from a pinned
+  # source revision rather than taken from the npm `@typescript/native` binary
+  # that emit, editors and ttsc plugins keep using. The Nx plugin's inferred
+  # `typecheck` and `typecheck-tests` run it directly (not through ttsc, whose
+  # auto-loaded typia host checks with its own compiler) and hash this path as
+  # an input, so a revision bump is a cache miss.
+  #
+  # The revision is can1357/TypeScript perf/checker-speedups-v3: 36 checker,
+  # arena and scheduler commits on microsoft/TypeScript main 6ad8c56f9b5a,
+  # while they are upstreamed. Its Go module (tsc/, Go 1.27) builds with the
+  # nixpkgs-go input's go_1_27 inside this derivation; the shell's own Go stays the
+  # one ttsc vendors. The sparse checkout keeps the ~61k test baselines out of
+  # the store, and GOWORK=off builds the compiler module independently of
+  # the repository's Go workspace.
+  typecheckTsc = goPkgs.buildGo127Module {
+    pname = "tsc";
+    version = "7.1.0-dev-c1ae0cde";
+    src = pkgs.fetchFromGitHub {
+      owner = "can1357";
+      repo = "TypeScript";
+      rev = "c1ae0cde041b8aa08600198fad014d869c83b602";
+      sparseCheckout = ["tsc/cmd" "tsc/internal"];
+      hash = "sha256-X4wKd/+b4EGMGwXGpfQ5YHkgfqqtPgfyf3x1maEuE+4=";
+    };
+    modRoot = "tsc";
+    subPackages = ["cmd/tsc"];
+    vendorHash = "sha256-XmN6VfL922FqKUHRnBfGTuEUFbPELf8F6JINVMTz1/w=";
+    env = {
+      CGO_ENABLED = "0";
+      GOWORK = "off";
+    };
+    ldflags = ["-s" "-w"];
+    # Upstream's tests run against the full checkout's baselines, which the
+    # sparse source omits; the revision is the tested artifact.
+    doCheck = false;
+  };
 in {
   env = lib.mkMerge [
     {
@@ -36,6 +76,7 @@ in {
       # developer shell or CI runner; explicit --parallel flags still take precedence.
       NX_PARALLEL = "100%";
       TTSC_TYPESCRIPT_GO_DIR = "${typescriptGo}";
+      SMOO_TYPECHECK_TSC = "${typecheckTsc}/bin/tsc";
     }
     # Playwright's downloaded Ubuntu browser has no runtime closure on NixOS
     # (CI reached the executable, then failed loading libglib-2.0.so.0). Use
@@ -194,13 +235,12 @@ in {
   # rots.
   #
   # It needs its own input because the fleet's nixpkgs does not carry that patch:
-  # devenv-nixpkgs rolling ships go 1.26.5 and its `go_1_27` is a release
-  # candidate, while ttsc 0.28.3 vendors go1.26.7. Same idiom, and same reason,
-  # for any single-package pin — one leaf package from a nixpkgs that has it,
-  # lock-pinned, prebuilt, rather than a fleet-wide bump that would move rustc,
-  # bun and node too. Not every pairing is reachable: ttsc 0.28.1/0.28.2 vendor
-  # go1.26.6, which NO channel packages, so when no revision offers the vendored
-  # patch the ttsc pin is what moves.
+  # devenv-nixpkgs rolling ships go 1.26.5, while ttsc 0.30.4 vendors go1.26.8.
+  # Same idiom, and same reason, for any single-package pin — one leaf package
+  # from a nixpkgs that has it, lock-pinned, prebuilt, rather than a fleet-wide
+  # bump that would move rustc, bun and node too. Not every pairing is
+  # reachable: ttsc 0.28.1/0.28.2 vendor go1.26.6, which NO channel packages, so
+  # when no revision offers the vendored patch the ttsc pin is what moves.
   #
   # The ownership boundary this pin sits inside, unchanged by it: our code is
   # built with the Go devenv provides, a dependency may vendor its own SDK, and

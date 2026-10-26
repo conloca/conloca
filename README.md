@@ -18,6 +18,18 @@ This repository contains the private packages from the Conloca monorepo:
 npm install @conloca/astro-cms
 ```
 
+## Development
+
+Run validation in this checkout's devenv shell:
+
+```bash
+tooling/devenv shell -- bun nx run-many -t lint test build
+```
+
+The shell builds the pinned native TypeScript compiler and exports
+`SMOO_TYPECHECK_TSC` for the typecheck targets. A missing export means the
+environment setup must be updated; installing another npm compiler does not fix it.
+
 ## Documentation
 
 Coming soon.
