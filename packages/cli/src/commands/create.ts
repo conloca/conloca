@@ -49,7 +49,7 @@ async function assertEmptyDirectory(directory: string): Promise<void> {
     throw error;
   });
   if (entries.some((entry) => entry !== '.git')) {
-    throw new Error(`${directory} is not empty — for an existing Astro site run 'conloca astro setup' instead`);
+    throw new Error(`${directory} is not empty — for an existing Astro site run 'conloca connect' instead`);
   }
 }
 

@@ -1,15 +1,24 @@
 import { createRemoteJWKSet, customFetch, type JWTPayload, type JWTVerifyGetKey, jwtVerify } from 'jose';
 import { parseCookies, serializePreviewCookie } from './cookie.js';
+import { previewLabel } from './label.js';
 import { renderNoPreviewLanding } from './landing.js';
-import { stripPreviewPrefix } from './preview-path.js';
+import {
+  PREVIEW_COOKIE_NAME,
+  PREVIEW_LABEL_HEADER,
+  PREVIEW_QUERY_PARAM,
+  previewRoutePrefix,
+  stripPreviewPrefix,
+} from './preview-path.js';
 
 /**
  * Options consumed by {@link handlePreviewRequest}.
  *
- * `secret` is the per-branch preview secret the endpoint issued at
- * registration time. It scopes both the query-parameter name
- * (`?conloca_preview_${secret}=`) and the cookie name, and must never land in
- * a browser bundle.
+ * `repo`, `siteId` and `branch` name what the preview build was made from. A
+ * pass is accepted only when it names the same repository and site, and either
+ * the same branch or, in `served_by`, this build's branch (a branch with no
+ * build of its own borrows the default branch's server; a branch's own build
+ * serves its own passes). `base` is Astro's `base`; the fixed preview route
+ * sits under it.
  *
  * `getKey` is an optional JWKS resolver injection seam. When omitted, the
  * middleware constructs a `createRemoteJWKSet` pointed at
@@ -18,10 +27,17 @@ import { stripPreviewPrefix } from './preview-path.js';
  * deterministically without touching the network.
  */
 export interface PreviewMiddlewareOptions {
-  secret: string;
   saasEndpoint: string;
   saasIssuer: string;
   saasAudience: string;
+  /** The repository the preview build was made from, as passes name it (`owner/name`). */
+  repo: string;
+  /** The site the preview build serves. */
+  siteId: string;
+  /** The branch the preview build was made from. */
+  branch: string;
+  /** Astro's `base`; the preview route and its redirects stay under it. */
+  base: string;
   /**
    * The commit this preview artifact was built from. Page-status compares the
    * branch's committed head with it; absent (an older artifact) ⇒ the
@@ -40,7 +56,7 @@ export interface PreviewMiddlewareOptions {
    * What to do when the request carries no valid preview credential.
    *
    * - `'landing'` (default) — the no-preview landing page. Correct for the
-   *   secret-prefixed entry route, which nobody reaches by accident.
+   *   preview entry route, which nobody reaches by accident.
    * - `'pass-through'` — let the request continue to the ordinary page. Correct
    *   for the site-wide interceptor, which sees every request in the preview
    *   build: an uncredentialed visitor must get the normal site, not a landing
@@ -89,8 +105,8 @@ declare global {
  * - `pass-through` — the caller MAY delegate to the ordinary page or
  *   static-asset handler. Returned when `onMiss: 'pass-through'` is set —
  *   the site-wide interceptor's mode, where an uncredentialed request must
- *   get the normal site. The secret-prefixed entry route omits `onMiss`
- *   and never sees this verdict.
+ *   get the normal site. The preview entry route omits `onMiss` and never
+ *   sees this verdict.
  */
 export type PreviewVerdict =
   | { kind: 'pass-through' }
@@ -103,52 +119,58 @@ export type PreviewVerdict =
  * the caller contract.
  *
  * Order of checks:
- *   1. `?conloca_preview_${secret}=<JWT>` query param → validate; on
- *      success issue a 302 with the cookie set and the query stripped.
- *   2. `conloca_preview_${secret}=<JWT>` cookie → validate; on success
- *      return a `preview` verdict with the decoded context.
+ *   0. `<base>/_conloca/preview/__exit` → expire the cookie and redirect,
+ *      carrying this build's public label.
+ *   1. `?conloca_preview=<JWT>` query param → validate; on success issue a
+ *      302 with the cookie set and the query stripped.
+ *   2. `__Host-conloca_preview=<JWT>` cookie → validate; on success return a
+ *      `preview` verdict with the decoded context.
  *   3. Neither present → no-preview landing page response.
  *
  * Invalid JWTs (tampered signature, expired, missing required claim, wrong
- * issuer/audience/scope) fall through to the landing page. We deliberately do
+ * issuer/audience/scope, or naming another repository, site or branch than
+ * this build serves) fall through to the landing page. We deliberately do
  * NOT return 401 — a 401 to an unauthenticated caller would confirm that
  * a particular path is preview-only, which leaks information about what
  * the branch contains.
  */
 export async function handlePreviewRequest(request: Request, opts: PreviewMiddlewareOptions): Promise<PreviewVerdict> {
   const url = new URL(request.url);
-  const queryName = previewParamName(opts.secret);
-  const cookieName = previewParamName(opts.secret);
 
   // 0. Exit route: the banner's "Exit Preview" target. The cookie is HttpOnly
   // on purpose, so leaving preview needs a server response that expires it.
   // Handled before the credential checks — an expired cookie must not strand
-  // the visitor in a preview they can no longer exit.
-  if (url.pathname === `/${previewParamName(opts.secret)}/__exit`) {
-    return { kind: 'response', response: makeExitRedirect(url, opts.secret) };
+  // the visitor in a preview they can no longer exit. Its label lets the
+  // endpoint's probe tell which repository, site and branch this server serves.
+  if (url.pathname === `${previewRoutePrefix(opts.base)}/__exit`) {
+    const label = await previewLabel(opts.repo, opts.siteId, opts.branch);
+    return { kind: 'response', response: makeExitRedirect(url, opts.base, label) };
   }
 
   // 1. Query-param init path.
-  const queryToken = url.searchParams.get(queryName);
+  const queryToken = url.searchParams.get(PREVIEW_QUERY_PARAM);
   if (queryToken !== null) {
     const ctx = await tryValidate(queryToken, opts);
     if (ctx) {
       return {
         kind: 'response',
-        response: makeInitRedirect(url, queryName, queryToken, opts.secret, ctx.expiresInSeconds),
+        response: makeInitRedirect(url, queryToken, opts.base, ctx.expiresInSeconds),
       };
     }
     // Invalid query-param JWT — fall through to the landing page rather than
     // issuing a 401 (see docstring).
     return {
       kind: 'response',
-      response: renderNoPreviewLanding({ pathname: stripPreviewPrefix(url.pathname), saasEndpoint: opts.saasEndpoint }),
+      response: renderNoPreviewLanding({
+        pathname: stripPreviewPrefix(url.pathname, opts.base),
+        saasEndpoint: opts.saasEndpoint,
+      }),
     };
   }
 
   // 2. Cookie path.
   const cookies = parseCookies(request.headers.get('cookie'));
-  const cookieToken = cookies.get(cookieName);
+  const cookieToken = cookies.get(PREVIEW_COOKIE_NAME);
   if (cookieToken !== undefined) {
     const ctx = await tryValidate(cookieToken, opts);
     if (ctx) {
@@ -163,19 +185,12 @@ export async function handlePreviewRequest(request: Request, opts: PreviewMiddle
   return {
     kind: 'response',
     // Stripped: the landing's "Go to production" link is the same path
-    // relative — rendered with the secret prefix it loops back to itself.
-    response: renderNoPreviewLanding({ pathname: stripPreviewPrefix(url.pathname), saasEndpoint: opts.saasEndpoint }),
+    // relative — rendered under the preview route it loops back to itself.
+    response: renderNoPreviewLanding({
+      pathname: stripPreviewPrefix(url.pathname, opts.base),
+      saasEndpoint: opts.saasEndpoint,
+    }),
   };
-}
-
-/**
- * Derives the query-param / cookie name from the per-branch secret. The
- * name doubles as a load guard: a same-domain request-runtime wrapper
- * checks for this exact string before invoking the SSR handler, so random
- * `?conloca_preview_*` query strings cannot wake the preview path.
- */
-export function previewParamName(secret: string): string {
-  return `conloca_preview_${secret}`;
 }
 
 /**
@@ -191,7 +206,7 @@ async function tryValidate(token: string, opts: PreviewMiddlewareOptions): Promi
       issuer: opts.saasIssuer,
       audience: opts.saasAudience,
     });
-    return projectContext(payload, token);
+    return projectContext(payload, token, opts);
   } catch {
     return null;
   }
@@ -224,14 +239,19 @@ function defaultJwksResolver(endpoint: string, fetchFn?: typeof fetch): JWTVerif
  * Project a verified JWT payload into the preview context envelope. Returns
  * `null` if any required claim is missing or wrong type — a JWT that
  * validates cryptographically but lacks `branch` names no branch to read,
- * so it is treated as invalid here.
+ * so it is treated as invalid here — and when the pass is for another build:
+ * its `repo` and `site_id` must be the ones this build serves, and its
+ * `branch` must be this build's branch unless `served_by` names it (only
+ * Conloca sets `served_by`, and only to the default branch).
  */
-function projectContext(payload: JWTPayload, jwt: string): PreviewContext | null {
+function projectContext(payload: JWTPayload, jwt: string, opts: PreviewMiddlewareOptions): PreviewContext | null {
   if (payload.scope !== 'preview') return null;
   const branch = readStringClaim(payload, 'branch');
   const org = readStringClaim(payload, 'org');
   const repo = readStringClaim(payload, 'repo');
   if (!branch || !org || !repo) return null;
+  if (repo !== opts.repo || readStringClaim(payload, 'site_id') !== opts.siteId) return null;
+  if (branch !== opts.branch && readStringClaim(payload, 'served_by') !== opts.branch) return null;
   // Remaining token lifetime, so the cookie can be bounded to the credential
   // it carries rather than living for the whole browser session. `exp` is
   // already verified by `jwtVerify` above, so it is present and in the future.
@@ -246,50 +266,41 @@ function readStringClaim(payload: JWTPayload, name: string): string | undefined 
 }
 
 /**
- * Builds the 302 response that strips the preview query parameter from
- * the requested URL and sets the preview cookie. Preserves every other
- * query parameter so analytics / utm tags survive the redirect.
- *
- * The caller passes both the query-param name (so we know which key to
- * strip) and the raw secret (so we can derive the cookie name without a
- * roundtrip parse). The two are bound by `previewParamName(secret)` ===
- * `queryName` at the call site.
- */
-/**
  * Builds the 302 that expires the preview cookie and returns the visitor to
  * the published page. `?to=` names the page the banner was on; only a
  * same-origin absolute path is accepted (a full URL or `//host` would turn
- * this route into an open redirect), anything else falls back to `/`.
+ * this route into an open redirect), anything else falls back to the site's
+ * base. The `conloca-preview` header carries this build's public label.
  */
-function makeExitRedirect(url: URL, secret: string): Response {
-  const to = url.searchParams.get('to') ?? '/';
-  const target = to.startsWith('/') && !to.startsWith('//') ? to : '/';
+function makeExitRedirect(url: URL, base: string, label: string): Response {
+  const to = url.searchParams.get('to') ?? base;
+  const target = to.startsWith('/') && !to.startsWith('//') ? to : base;
   return new Response(null, {
     status: 302,
     headers: {
       location: target,
-      'set-cookie': serializePreviewCookie(previewParamName(secret), '', 0),
+      'set-cookie': serializePreviewCookie(PREVIEW_COOKIE_NAME, '', 0),
       'cache-control': 'private, no-store',
+      [PREVIEW_LABEL_HEADER]: label,
     },
   });
 }
 
-function makeInitRedirect(
-  url: URL,
-  queryName: string,
-  token: string,
-  secret: string,
-  maxAgeSeconds?: number,
-): Response {
+/**
+ * Builds the 302 response that strips the preview query parameter from
+ * the requested URL and sets the preview cookie. Preserves every other
+ * query parameter so analytics / utm tags survive the redirect.
+ */
+function makeInitRedirect(url: URL, token: string, base: string, maxAgeSeconds?: number): Response {
   const cleaned = new URL(url.toString());
-  cleaned.searchParams.delete(queryName);
-  // Land the browser on the REAL site path, not the secret-prefixed one.
-  // The prefix is an entry door: it exists so the endpoint has a URL to link to
+  cleaned.searchParams.delete(PREVIEW_QUERY_PARAM);
+  // Land the browser on the REAL site path, not the preview route.
+  // The route is an entry door: it exists so the endpoint has a URL to link to
   // before any cookie exists. Once the cookie is set (Path=/), every
   // same-origin request carries the credential, so the visitor belongs on the
   // canonical path — otherwise the first internal link they click drops the
-  // prefix, escapes preview, and silently shows published content.
-  cleaned.pathname = stripPreviewPrefix(cleaned.pathname);
+  // route, escapes preview, and silently shows published content.
+  cleaned.pathname = stripPreviewPrefix(cleaned.pathname, base);
   // Normalise the search string: when the only param was the preview JWT,
   // URL.search becomes '' but URL.toString() still emits a trailing `?` only
   // if it was already empty. Re-serialising via URL strips that automatically;
@@ -302,7 +313,7 @@ function makeInitRedirect(
     status: 302,
     headers: {
       location,
-      'set-cookie': serializePreviewCookie(previewParamName(secret), token, maxAgeSeconds),
+      'set-cookie': serializePreviewCookie(PREVIEW_COOKIE_NAME, token, maxAgeSeconds),
       'cache-control': 'private, no-store',
     },
   });

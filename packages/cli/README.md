@@ -22,16 +22,59 @@ conloca create <directory> [--site <site>] [--pm <manager>] [--no-install] [--no
 
 This writes a complete project — `package.json`, `astro.config.mjs` with `conlocaCMS()` wired, `tsconfig.json`,
 `src/content.config.ts`, the starter components and Puck config, a first page at `/`, the agent skill, and a GitHub
-Actions workflow that passes a `CONLOCA_BUILD_TOKEN` secret from the repository to the doctor and build steps (never to
-dependency install scripts) and builds a pull request's own commit. Nothing in this scaffold reads that secret; the slot
-is there for an integration that builds with a token. Then it installs dependencies, runs `git init`, and runs
-`conloca doctor` on the result. It refuses a non-empty directory; for an existing site use `conloca astro setup`.
+Actions workflow that runs the doctor and the build and builds a pull request's own commit. Then it installs
+dependencies, runs `git init`, and runs `conloca doctor` on the result. It refuses a non-empty directory; for an
+existing site use `conloca connect`.
 
 `--site` defaults to `default`. `--pm` takes `bun`, `npm`, `pnpm` or `yarn` and defaults to the package manager that
 launched the CLI — `bunx` selects bun, `npx` npm, `pnpm dlx` pnpm — falling back to `npm`. Installing and `git init` are
 on unless you pass `--no-install` or `--no-git`, and the command never prompts.
 
 `--json` prints one object: `{ok, directory, packageManager, created, install, git, doctor: {ok, problems}}`.
+
+### Connect a site
+
+Set up an existing Astro site's editor page, so your workspace editor at `<slug>.conloca.com` can edit it:
+
+```bash
+conloca connect [path] [--project <dir>] [--site-url <url>] [--yes] [--dry-run] [--no-install] [--no-build] [--json]
+```
+
+An agent can do it in one line:
+`In my Astro site's folder, run npx @conloca/cli@<version> connect, then commit, push and deploy.`
+
+Run it in the site's folder or the repository holding it. In order, it:
+
+1. **Finds the project:** the Astro project in `[path]`. A repository with several asks which one in a terminal; without
+   one it lists them and stops, so you pass `--project <dir>`. The editor needs the repository on GitHub; without a
+   GitHub `origin` it continues and says so.
+2. **Adds packages:** `@conloca/astro-cms`, `@conloca/cloud-astro`, `@astrojs/react` and `@vitejs/plugin-react`,
+   whichever `package.json` lacks, with the package manager of the nearest lockfile. `--no-install` prints the command
+   instead.
+3. **Wires `astro.config`:** `react()`, then `conlocaCMS()`, then `conlocaCloud({ repoUri })`, with their imports. A
+   site without `conlocaCMS()` also gets the `conloca astro setup` starter files and a `src/content.config.ts`. A config
+   that is not a plain `defineConfig({ integrations: [...] })` is left alone: `connect` prints the lines to add. It
+   never adds an adapter or `output`.
+4. **Writes the address:** the host of Astro's `site` (or `--site-url`) into `sites.json` under the site's default
+   locale, and Astro's `base` when it is not `/`. It never writes Astro's `site` itself.
+5. **Allows framing:** only where a committed header file (`public/_headers`, `netlify.toml`, `vercel.json`) forbids
+   framing today, it adds a rule for `/_conloca/editor/`. A site-wide `frame-ancestors` policy is left to you.
+6. **Builds once:** runs the project's `build` script and checks that the output holds `_conloca/editor/index.html` and
+   a `conloca.json` with the site's id. `--no-build` skips it.
+7. **Removes the old build key:** workflow lines that still pass `CONLOCA_BUILD_TOKEN`, which the editor page does not
+   need.
+
+Every change is printed as a diff first. In a terminal `connect` asks once; `--yes` accepts without asking; `--dry-run`,
+or no terminal and no `--yes`, writes nothing. A value you set yourself (another domain, your own `conlocaCloud()`
+options, your own `/_conloca/editor/` header rule) is kept and reported as `differs`; only an explicit answer in a
+terminal replaces it, never `--yes`. A second run on a connected site changes nothing.
+
+`connect` never commits, pushes or deploys, and the package install is its only network use. Next steps: commit, push to
+the default branch, deploy as usual, then open your workspace editor at `<slug>.conloca.com`.
+
+Exit codes: `0` every step is done, changed, skipped or kept; `1` a step failed; `2` a step needs you. `--json` prints
+one object: `{ok, project, siteId, packageManager, steps: [{id, state, files?, message}], next}`, where `state` is
+`done`, `changed`, `needs-you`, `differs`, `failed` or `skipped`.
 
 ### Initialize Content Structure
 

@@ -13,6 +13,7 @@
     "@astrojs/node": "^11.1.5",
     "@astrojs/react": "^6.0.5",
     "@conloca/astro-cms": "workspace:*",
+    "@conloca/cloud-astro": "workspace:*",
     "@conloca/content-api": "workspace:*",
     "@conloca/mdx": "workspace:*",
     "@node-rs/xxhash": "^1.7.7",

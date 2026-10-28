@@ -4,27 +4,22 @@ import { useEffect, useState } from 'react';
 import { expect, userEvent, waitFor, within } from 'storybook/test';
 import '../../main.css';
 import { ThemeProvider, useTheme } from '../../hooks/useTheme.js';
-import { setHostDiscovery } from '../../host-discovery.js';
 import { filterProseSurfaceCss } from '../../prose-surface-css.js';
-import { setSiteStyles, useInjectHostStyles } from '../../site-styles.js';
+import { setEditorStyles, setSiteStyles, useInjectHostStyles } from '../../site-styles.js';
 import { THEME_STORAGE_KEY } from '../../theme.js';
+import { configureUI, getUIConfig } from '../../ui-config.js';
 import { CMSMDXEditor } from './CMSMDXEditor.js';
 
 /**
- * Host parity for the MDX typing surface when a host app that embeds the
- * editor supplies the discovery facts, measured in a real browser.
+ * Host parity for the MDX typing surface when the editor shares the site's
+ * origin and probes its real rendered page, measured in a real browser.
  *
- * This story sets up that style path on its own, which is the only one where
- * the defect lives:
+ *   - `previewRouteUrl` is a same-origin page (a `blob:` URL inherits this
+ *     document's origin) carrying the site's CSS and a content wrapper, so the
+ *     computed-style probe reads it the way it reads a site page;
+ *   - `setSiteStyles(...)` supplies the same CSS as the siteStyles option.
  *
- *   - no `previewRouteUrl`, so `/api/styles` and `/api/content-wrapper` are
- *     never consulted (a host app need not serve them, and they contribute
- *     nothing) and the computed-style probe stays inert;
- *   - `setHostDiscovery(...)` supplies the discovery facts (`routeCss` +
- *     `hostWrappers`) a host app writes into the registry after `configureUI`,
- *     so the registered-discovery tier is the active one.
- *
- * `ROUTE_CSS` below is an example host app's route CSS: a reduced Starlight
+ * `ROUTE_CSS` below is an example site's page CSS: a reduced Starlight
  * sheet whose selectors, custom-property values and — critically —
  * cascade-layer nesting follow Starlight's built output for a dark
  * documentation theme. The values it resolves to are: h2 35px/600
@@ -111,35 +106,37 @@ const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false 
 // first would leave `<html>` on the light scheme.
 if (typeof localStorage !== 'undefined') localStorage.setItem(THEME_STORAGE_KEY, 'dark');
 
+/** The site's rendered page: its CSS and a content wrapper with prose in it. */
+function hostPageUrl(routeCss: string): string {
+  const html = `<!doctype html><html><head><meta charset="utf-8"><style>${routeCss}</style></head><body><main class="${WRAPPER_CLASS}"><h2>Heading</h2><p>Paragraph with <code>code</code>.</p></main></body></html>`;
+  return URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+}
+
 /**
  * Mounts the editor the way `MdxPageEditor` does — inside the
  * `conloca-mdx-editor-surround` region, which is the `@scope` root the
  * layered host tier is rebased onto (`:root`/`body` → `:scope`).
  */
 function EmbeddedEditorHarness({ themeControls = false }: { themeControls?: boolean }) {
-  const [ready, setReady] = useState(false);
+  const [pageUrl, setPageUrl] = useState<string>();
 
   useEffect(() => {
-    // Both registries a host writes after `configureUI` has run — the same
-    // post-configure swap point `setSiteStyles` uses: the registered discovery
-    // tier (route CSS + wrapper shape) and siteStyles.
+    // siteStyles is written after `configureUI` has run, the same
+    // post-configure swap point a site uses.
     const routeCss = themeControls ? `${ROUTE_CSS}${LIGHT_ROUTE_CSS}` : ROUTE_CSS;
     setSiteStyles([routeCss]);
-    setHostDiscovery({
-      routeCss,
-      wrappers: { content: { tagName: 'div', className: WRAPPER_CLASS }, codeBlock: null },
-    });
-    setReady(true);
+    const url = hostPageUrl(routeCss);
+    setPageUrl(url);
     return () => {
       setSiteStyles([]);
-      setHostDiscovery({});
+      URL.revokeObjectURL(url);
     };
   }, [themeControls]);
 
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        <EmbeddedEditorSurface ready={ready} themeControls={themeControls} />
+        <EmbeddedEditorSurface pageUrl={pageUrl} themeControls={themeControls} />
       </ThemeProvider>
     </QueryClientProvider>
   );
@@ -166,7 +163,7 @@ const LIGHT_ROUTE_CSS = `
  * so reopening proves what the editor serialized, not what it still had in
  * memory.
  */
-function EmbeddedEditorSurface({ ready, themeControls }: { ready: boolean; themeControls: boolean }) {
+function EmbeddedEditorSurface({ pageUrl, themeControls }: { pageUrl?: string; themeControls: boolean }) {
   const [value, setValue] = useState(MARKDOWN);
   const [mounted, setMounted] = useState(true);
   const { resolvedTheme, setTheme } = useTheme();
@@ -200,7 +197,7 @@ function EmbeddedEditorSurface({ ready, themeControls }: { ready: boolean; theme
         data-testid="surround"
         style={{ height: 520 }}
       >
-        {ready && mounted && <CMSMDXEditor value={value} onChange={setValue} />}
+        {pageUrl && mounted && <CMSMDXEditor value={value} onChange={setValue} previewRouteUrl={pageUrl} />}
       </div>
     </>
   );
@@ -311,11 +308,7 @@ export const TypingSurfaceMatchesHostTypography: Story = {
   play: async ({ canvasElement }) => {
     const surround = await waitForElement<HTMLElement>(canvasElement, '.conloca-mdx-editor-surround', 'surround');
 
-    // The discovered wrapper class must exist INSIDE the typing surface and
-    // be an ancestor of the prose, or the host's `.sl-markdown-content …`
-    // rules match nothing no matter how faithfully they are kept.
-    const wrapper = await waitForElement<HTMLElement>(surround, `.${WRAPPER_CLASS}`, 'host wrapper class');
-    const editable = await waitForElement<HTMLElement>(wrapper, '.conloca-prose--editor', 'contenteditable');
+    const editable = await waitForElement<HTMLElement>(surround, '.conloca-prose--editor', 'contenteditable');
     const h2 = await waitForElement<HTMLElement>(editable, 'h2', 'typing-surface h2');
 
     assertReadableElement(h2, 'typing-surface h2');
@@ -385,6 +378,96 @@ export const TypingSurfaceMatchesHostTypography: Story = {
   },
 };
 
+/** The site bundle a frame registers as editor styles: one route's blog-list rule, which the editor's own `conloca-prose` class also carries. */
+const SITE_BUNDLE_CSS = '.conloca-prose ul > li { display: flex; gap: 20px; padding: 18px 0; }';
+/**
+ * A docs route's own sheet: prose spacing rooted at the route's wrapper, at a
+ * value no default margin has, and one unlayered rule `editorCSS` contests.
+ */
+const DOCS_ROUTE_CSS =
+  '@layer starlight.content { .sl-markdown-content p + p { margin-top: 27px; } } .conloca-prose--editor { word-spacing: 3px; }';
+/** The route's print-only sheet, which must not reach the screen. */
+const DOCS_PRINT_CSS = '.sl-markdown-content p { --story-print-only: on; }';
+/** The site's `editorCSS`, delivered by the frame's page data: the route's selector, a conflicting value. */
+const SITE_EDITOR_CSS = '.conloca-prose--editor { word-spacing: 7px; }';
+
+/**
+ * The editor inside a parent frame, where the site has no dev endpoints: the
+ * probe's load of the real page is its only discovery. A header carrying
+ * `conloca-prose` sits before the content so a probe that skips discovery
+ * measures in the wrong place.
+ */
+function FramedEditorHarness() {
+  const [pageUrl, setPageUrl] = useState<string>();
+
+  useEffect(() => {
+    const previous = getUIConfig();
+    configureUI({
+      ...previous,
+      memoryRouter: { initialPath: '/', onNavigate() {}, subscribe: () => () => {} },
+      editorCss: SITE_EDITOR_CSS,
+    });
+    setEditorStyles([SITE_BUNDLE_CSS]);
+    const html = `<!doctype html><html><head><meta charset="utf-8"><style>${DOCS_ROUTE_CSS}</style><style media="print">${DOCS_PRINT_CSS}</style></head><body><header class="conloca-prose"><p>Site nav</p></header><main><div class="${WRAPPER_CLASS}"><h2>Heading</h2><p>One.</p><p>Two.</p></div></main></body></html>`;
+    const url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+    setPageUrl(url);
+    return () => {
+      configureUI(previous);
+      setEditorStyles([]);
+      URL.revokeObjectURL(url);
+    };
+  }, []);
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+        <div className="conloca-mdx-editor-surround" data-testid="framed-surround" style={{ height: 520 }}>
+          {pageUrl && (
+            <CMSMDXEditor
+              value={'## Heading\n\nOne.\n\nTwo.\n\n- First item\n- Second item\n'}
+              onChange={() => {}}
+              previewRouteUrl={pageUrl}
+            />
+          )}
+        </div>
+      </ThemeProvider>
+    </QueryClientProvider>
+  );
+}
+
+/**
+ * A framed canvas gets what a local one gets from the dev endpoints: the
+ * route's wrapper around the contenteditable, the route's own CSS in place of
+ * the site bundle, the probe measured inside that wrapper, and `editorCSS` last.
+ */
+export const FramedCanvasAdoptsTheProbedPage: Story = {
+  render: () => <FramedEditorHarness />,
+  play: async ({ canvasElement }) => {
+    const surround = await waitForElement<HTMLElement>(canvasElement, '[data-testid="framed-surround"]', 'surround');
+    const editable = await waitForElement<HTMLElement>(
+      surround,
+      `.${WRAPPER_CLASS} .conloca-prose--editor`,
+      "contenteditable inside the page's wrapper",
+    );
+    const second = await waitForElement<HTMLElement>(editable, 'p + p', 'second paragraph');
+    const item = await waitForElement<HTMLElement>(editable, 'li', 'list item');
+    await probedHeadingTag();
+
+    await waitFor(
+      async () => {
+        // The site bundle's blog-list rule stays out, as it does locally.
+        await expect(getComputedStyle(item).display).toBe('list-item');
+        // The route's spacing, which a probe measuring in the header would undo.
+        await expect(getComputedStyle(second).marginTop).toBe('27px');
+        await expect(getComputedStyle(second).getPropertyValue('--story-print-only')).toBe('');
+        // Same layer, same specificity: `editorCSS` wins because it comes after the route's CSS.
+        await expect(getComputedStyle(editable).wordSpacing).toBe('7px');
+      },
+      { timeout: 5000 },
+    );
+  },
+};
+
 /** Top-level unlayered rules of the editor's own L0 heading scale for `h2`,
  * read from the loaded same-origin sheets (a cross-origin sheet's rules are
  * unreadable and cannot be the editor's) — the probe's rule shares the
@@ -420,8 +503,7 @@ export const HostHeadingSurvivesALaterEditorSheet: Story = {
   render: () => <EmbeddedEditorHarness />,
   play: async ({ canvasElement }) => {
     const surround = await waitForElement<HTMLElement>(canvasElement, '.conloca-mdx-editor-surround', 'surround');
-    const wrapper = await waitForElement<HTMLElement>(surround, `.${WRAPPER_CLASS}`, 'host wrapper class');
-    const editable = await waitForElement<HTMLElement>(wrapper, '.conloca-prose--editor', 'contenteditable');
+    const editable = await waitForElement<HTMLElement>(surround, '.conloca-prose--editor', 'contenteditable');
     const h2 = await waitForElement<HTMLElement>(editable, 'h2', 'typing-surface h2');
     const probe = await probedHeadingTag();
 
@@ -455,8 +537,10 @@ export const HostCssNeverReachesAdminChrome: Story = {
   render: () => <EmbeddedEditorHarness />,
   play: async ({ canvasElement }) => {
     const surround = await waitForElement<HTMLElement>(canvasElement, '.conloca-mdx-editor-surround', 'surround');
-    // Wait for the tiers to land before judging what escaped.
-    await waitForElement(surround, `.${WRAPPER_CLASS} .conloca-prose--editor h2`, 'typing surface');
+    // Wait for the tiers to land before judging what escaped: the probe's
+    // heading rule is the last of them, and the one that could escape.
+    await waitForElement(surround, '.conloca-prose--editor h2', 'typing surface');
+    await probedHeadingTag();
 
     const adminHeading = await waitForElement<HTMLElement>(
       canvasElement,

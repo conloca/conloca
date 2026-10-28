@@ -42,6 +42,46 @@ describe('resolveBuildRef', () => {
     ).toStrictEqual({ gitSha: 'sha' });
     expect(resolveBuildRef({}, gitAnswering({}))).toStrictEqual({});
   });
+
+  it('reads Cloudflare Workers Builds, Netlify and Vercel branch and commit variables', () => {
+    const git = gitAnswering({ 'rev-parse HEAD': 'git-sha', 'rev-parse --abbrev-ref HEAD': 'git-branch' });
+    expect(resolveBuildRef({ WORKERS_CI_BRANCH: 'wb', WORKERS_CI_COMMIT_SHA: 'wb-sha' }, git)).toStrictEqual({
+      gitSha: 'wb-sha',
+      branch: 'wb',
+    });
+    expect(resolveBuildRef({ NETLIFY: 'true', HEAD: 'nf', COMMIT_REF: 'nf-sha' }, git)).toStrictEqual({
+      gitSha: 'nf-sha',
+      branch: 'nf',
+    });
+    expect(resolveBuildRef({ VERCEL_GIT_COMMIT_REF: 'vc', VERCEL_GIT_COMMIT_SHA: 'vc-sha' }, git)).toStrictEqual({
+      gitSha: 'vc-sha',
+      branch: 'vc',
+    });
+  });
+
+  it('takes the Render and Amplify commit and branch', () => {
+    const git = gitAnswering({ 'rev-parse HEAD': 'git-sha', 'rev-parse --abbrev-ref HEAD': 'git-branch' });
+    expect(resolveBuildRef({ RENDER_GIT_COMMIT: 'rd-sha', RENDER_GIT_BRANCH: 'rd' }, git)).toStrictEqual({
+      gitSha: 'rd-sha',
+      branch: 'rd',
+    });
+    expect(resolveBuildRef({ AWS_COMMIT_ID: 'aws-sha', AWS_BRANCH: 'aws' }, git)).toStrictEqual({
+      gitSha: 'aws-sha',
+      branch: 'aws',
+    });
+    // Empty counts as unset, and GitHub's branch name comes after them.
+    expect(
+      resolveBuildRef({ RENDER_GIT_COMMIT: '', RENDER_GIT_BRANCH: '', AWS_BRANCH: 'aws', GITHUB_REF_NAME: 'gh' }, git),
+    ).toStrictEqual({ gitSha: 'git-sha', branch: 'aws' });
+  });
+
+  it('ignores HEAD and COMMIT_REF outside Netlify', () => {
+    const git = gitAnswering({ 'rev-parse HEAD': 'git-sha', 'rev-parse --abbrev-ref HEAD': 'git-branch' });
+    expect(resolveBuildRef({ HEAD: 'nf', COMMIT_REF: 'nf-sha' }, git)).toStrictEqual({
+      gitSha: 'git-sha',
+      branch: 'git-branch',
+    });
+  });
 });
 
 describe('resolveRepositoryUri', () => {

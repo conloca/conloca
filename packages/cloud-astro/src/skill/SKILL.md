@@ -1,69 +1,65 @@
 ---
 name: conloca-cloud
-description: Load when a Conloca site uses @conloca/cloud-astro — editor endpoint, build token, registrations, preview.
+description: Load when a Conloca site uses @conloca/cloud-astro — conloca connect, the editor page, framing, doctor.
 ---
 
-# Connecting a site to an editor endpoint
+# Connecting a site to the workspace editor
 
-`conlocaCloud(...)` from `@conloca/cloud-astro` is an add-on to `conlocaCMS(...)` — keep both in `integrations`. It
-hooks the site's `astro build` to compile the Puck config into an editor bundle, register that build at `endpoint`, and
-produce a draft-preview app. Nothing from it runs on the published site.
+`conlocaCloud()` from `@conloca/cloud-astro` is an add-on to `conlocaCMS(...)` — keep both in `integrations`, after
+`react()`. It needs no options: it takes `puckConfigPath` and `siteStyles` from `conlocaCMS` and builds for the
+workspace editor at `https://app.conloca.com`. Each `astro build` adds the editor page under `_conloca/editor/` in the
+output; the workspace editor at `<slug>.conloca.com` opens the deployed page in a frame. Nothing else of it runs on the
+published site. There is no build key, secret or environment variable.
+
+## Set up: connect → commit → push → deploy → open
+
+```bash
+npx @conloca/cli connect          # in the site's folder; add --yes when no terminal can answer
+```
+
+`connect` installs the packages, wires `astro.config` (writing `repoUri` from a GitHub `origin`), writes the site's host
+into `sites.json`, adds a framing rule only where a committed header file forbids framing, builds once to check the
+editor page, and removes old build key lines from workflows. It shows diffs first, keeps values you set (`differs`), and
+exits `2` with the lines to add when a step needs a person (`--site-url https://…` when `astro.config` has no `site`).
+It never commits, pushes or deploys: commit, push to the default branch, deploy as usual, then open the workspace
+editor. Editing needs the deployed site; before that, `astro dev` serves the local editor at `/__cms`.
 
 ## First move: `conloca doctor --live`
 
-For any question about the editor at `endpoint` — editor not loading, a stale editor after a deploy, "is this branch
-registered?" — run this before reading source:
+For any question about the workspace editor — "Connect this site" stays, the frame stays blank, old components after a
+deploy — run this before reading source:
 
 ```bash
-CONLOCA_BUILD_TOKEN=cbt_... conloca doctor --live     # add CONLOCA_ENDPOINT=https://... when the config computes endpoint
-conloca doctor                                        # offline: config, token, endpoint, inert options
+conloca doctor --live     # sends no credential: only your site's host and the editor's /host/protocols.json
+conloca doctor            # offline: wiring, sites.json host, committed framing headers, key leftovers
 ```
 
-This package's checks are `CC1`–`CC8`. Offline: the wiring, the build token, the endpoint and public base URL,
-`conlocaCMS` options the endpoint's editor ignores, and (CC8) whether a static project keeps the preview build off. With
-`--live` (the token goes only to the configured endpoint): the endpoint answers the token, a registration serves this
-branch and site, and the editor bundle that registration names is still deployed.
+This package's checks are `CC1` and `CC8`–`CC14`:
 
-## The one secret: the build token
+- **CC9** — `sites.json`: the site named `default` (or the only one) has a bare host in `domains[defaultLocale]` and a
+  valid `base`. The editor opens `https://<host><base>_conloca/editor/`; it refuses IPs, `localhost`, `*.conloca.com`.
+- **CC10** — a committed `public/_headers`, `netlify.toml` or `vercel.json` sets `X-Frame-Options` or `frame-ancestors`
+  site-wide with no `/_conloca/editor/` rule. Fix: `connect`, or the rule the error prints.
+- **CC11** (live) — `conloca.json` is deployed, public, and names this repository and site. "names no repository" → set
+  `repoUri` in `conlocaCloud(...)`. Serving an older commit than HEAD is a warning: deploy.
+- **CC12** (live) — the deployed page may be framed by `https://*.conloca.com`, and its `script-src` allows the editor's
+  origin. Headers from host settings or a proxy show up only here.
+- **CC13** (live) — the page's protocol is in the editor's range; too old → rebuild with a newer `@conloca/cloud-astro`.
+- **CC14** — a workflow or the config still names `CONLOCA_BUILD_TOKEN`, `buildToken`, `publicBaseUrl`, `previewDomain`
+  or `requireRegistration`. Remove them; nothing reads them for the editor page.
 
-`CONLOCA_BUILD_TOKEN=cbt_<id>.<secret>` is issued by the endpoint and set as a CI secret. It authenticates the build —
-no other setup, no OIDC. Repository identity comes from CI metadata (`GITHUB_REPOSITORY`, Vercel, GitLab) or the git
-remote; `repoUri` is only for non-standard checkouts. The `endpoint` is an https URL with no trailing slash.
+## Framing: only when the site forbids it
 
-**Whole-line gotcha:** the endpoint shows and copies the token as the line `CONLOCA_BUILD_TOKEN=cbt_…`. Pasted whole
-into a secret's value, doctor CC2 reports it and the build's registration answers `401`; the token is fine — store only
-the part from `cbt_`.
+A site sending no `X-Frame-Options` and no `frame-ancestors` needs nothing (GitHub Pages included). Otherwise
+`/_conloca/editor/*` needs `Content-Security-Policy: frame-ancestors 'self' https://*.conloca.com`, plus
+`/_conloca/editor/sandbox-frame.html` → `Content-Security-Policy: sandbox allow-scripts`. Cloudflare `_headers` also
+detaches the site's headers on that path (`! X-Frame-Options`, `! Content-Security-Policy`); Netlify cannot detach;
+Vercel uses `source: "/_conloca/editor/:path*"`. A site-wide CSP with `frame-ancestors` must be narrowed by hand — a
+second policy cannot loosen it.
 
-**Rotation gotcha:** creating a new token invalidates the old one. A `401` from the endpoint for a value that does start
-with `cbt_` (doctor CC5) means the CI secret still holds a rotated token — create a new one and update the secret.
+## Components come from the branch's deploy
 
-## The pipeline: build → register → editor
-
-1. `astro build` with the token compiles `dist/_conloca/editor-bundle.<hash>.js` and POSTs a registration naming the
-   repo, git sha, branch, site id, and the bundle URL + hash.
-2. The editor at `endpoint`, opened on a branch, loads the NEWEST registration for `(branch, site)`.
-3. A build without a prerequisite (token, repo identity, sha/branch, public base URL) does not register; it warns and
-   ends with a summary block. Set `requireRegistration: true` in CI to fail such builds. A registration the endpoint
-   REJECTS always fails the build.
-
-## Three states of a branch (doctor CC6)
-
-- **Own registration** — the branch was built with the token; the editor loads its bundle.
-- **Inherited** — no registration for this branch, but the default branch has one: the editor works from that bundle and
-  draft preview is degraded. Build the branch with the token to register it.
-- **None** — neither: the editor will not load for this branch. Build it with the token.
-
-Doctor may also report older registrations that are not active yet. They become active the next time the editor opens,
-so a branch served only by them is a warning rather than "will not load" — it fails only if that branch has since grown
-a second site.
-
-## A deleted bundle (CC7)
-
-A registration can outlive its bytes: a later deploy from another branch replaces `dist/`, and the registration still
-points at a bundle URL that now 404s. Nothing else notices — the editor just fails to load. `conloca doctor --live`
-probes the bundle URL the registration names and says so: rebuild and deploy from that branch.
-
-## Options with no effect on the endpoint's editor
-
-`conlocaCMS`'s `editorStyles` and `editorCSS` configure the local dev editor only. `templates`, `schemasPath`, and
-`mdxComponentFolders` reach the endpoint's editor automatically.
+On other branches the editor offers the components of the deploy whose code is closest to the branch's latest commit:
+the branch's own deploy, the default branch's, or a build of the branch it was created from (labelled in the editor), on
+a tie in that order, with a warning when the components may differ from the branch's code. Doctor's CC11 warning still
+says which commit is live.

@@ -2,15 +2,15 @@
  * Site-wide preview middleware for the recursive preview build — the SERVING
  * SURFACE of draft preview.
  *
- * WHY THIS EXISTS — the secret path prefix is an entry door, not the serving
+ * WHY THIS EXISTS — the fixed preview route is an entry door, not the serving
  * surface. Without this, preview survives exactly one page view: the visitor
- * lands on `/conloca_preview_<secret>/about`, clicks a link, and the
- * root-absolute `/blog` the site's template emitted drops the prefix and
- * silently serves the PUBLISHED page. The preview cookie is already `Path=/`,
+ * lands on `/_conloca/preview/about`, clicks a link, and the root-absolute
+ * `/blog` the site's template emitted drops the route and silently serves the
+ * PUBLISHED page. The preview cookie is already `Path=/`,
  * so the browser is sending the credential on that request — this listens.
  *
  * WHY THE RENDER HAPPENS HERE, VIA `next()` — a middleware rewrite onto the
- * secret-prefixed handler (the previous design) forced the render through
+ * preview route's handler (an earlier design) forced the render through
  * `Astro.rewrite`, whose route matching does not fall through prerendered
  * routes: with two root catch-alls (the CMS pages route on demand, a docs
  * integration's route prerendered) the rewrite matched the prerendered one
@@ -31,13 +31,8 @@ import { fetchPageStatus, type PageStatus } from './_dispatch.js';
 import { injectPreviewBanner } from './banner.js';
 import { PreviewContentAPI } from './content-api.js';
 import { applyPreviewHeaders } from './headers.js';
-import {
-  handlePreviewRequest,
-  type PreviewContext,
-  type PreviewMiddlewareOptions,
-  previewParamName,
-} from './middleware.js';
-import { normalizeTrailingSlash, stripPreviewPrefix } from './preview-path.js';
+import { handlePreviewRequest, type PreviewContext, type PreviewMiddlewareOptions } from './middleware.js';
+import { normalizeTrailingSlash, previewRoutePrefix, stripPreviewPrefix } from './preview-path.js';
 
 /** The subset of Astro's middleware context this middleware touches. */
 export interface PreviewMiddlewareContext {
@@ -86,8 +81,8 @@ export function createPreviewSiteMiddleware(resolveOpts: () => PreviewMiddleware
     // ALSO at build time, where Astro runs middleware while prerendering pages
     // and the deployer's runtime vars do not exist yet. Neither is a reason to
     // break the site's build or the whole site over a feature it may
-    // not use, so pass through and warn once. The secret-prefixed entry route
-    // still fails loudly: reaching it means someone explicitly asked to preview.
+    // not use, so pass through and warn once. The preview entry route still
+    // fails loudly: reaching it means someone explicitly asked to preview.
     let opts: PreviewMiddlewareOptions;
     try {
       opts = resolveOpts();
@@ -104,12 +99,12 @@ export function createPreviewSiteMiddleware(resolveOpts: () => PreviewMiddleware
     if (verdict.kind === 'response') return verdict.response;
     if (verdict.kind !== 'preview') return next();
 
-    // A valid credential on the LITERAL secret-prefixed URL: canonicalize to
-    // the clean site path instead of rendering under the prefix — links,
-    // assets and the page lookup all assume clean paths.
+    // A valid credential on the preview route itself: canonicalize to the
+    // clean site path instead of rendering under the route — links, assets
+    // and the page lookup all assume clean paths.
     const rawPath = context.url.pathname;
-    const path = normalizeTrailingSlash(stripPreviewPrefix(rawPath));
-    if (stripPreviewPrefix(rawPath) !== rawPath) {
+    const path = normalizeTrailingSlash(stripPreviewPrefix(rawPath, opts.base));
+    if (stripPreviewPrefix(rawPath, opts.base) !== rawPath) {
       return new Response(null, {
         status: 302,
         headers: { location: path, 'cache-control': 'private, no-store' },
@@ -184,7 +179,7 @@ export function createPreviewSiteMiddleware(resolveOpts: () => PreviewMiddleware
       await rendered.text(),
       verdict.ctx,
       opts.saasEndpoint,
-      `/${previewParamName(opts.secret)}/__exit`,
+      `${previewRoutePrefix(opts.base)}/__exit`,
     );
     return applyPreviewHeaders(new Response(html, { status: rendered.status, headers: rendered.headers }));
   };
@@ -204,7 +199,7 @@ function warnUnconfiguredOnce(error: unknown): void {
   console.warn(
     `[@conloca/cloud-astro] draft preview is INERT — ${detail}\n` +
       '  Requests are being served as the ordinary published site.\n' +
-      '  Draft previews on your own deployment are not available yet: keep previewBuild: false ' +
+      '  The preview server is missing its baked settings: rebuild with previewBuild given as an object ' +
       '(see the cloud-astro README "Draft previews").',
   );
 }

@@ -8,13 +8,14 @@
  * `@lexical`.
  */
 
-/** Toast heading when the site cannot show a preview. */
-export const PREVIEW_UNAVAILABLE_TITLE = 'Preview is not available for this site';
+/** Toast heading when the branch cannot show a preview. */
+export const PREVIEW_UNAVAILABLE_TITLE = 'Preview is not available for this branch';
 
 /**
  * The explanation, used both as the toast body and as the disabled control's
- * reason. States the fact about the site, reassures that nothing they
- * did is broken, and never implies user error.
+ * reason. Preview support is checked per branch (one origin can serve one
+ * branch's drafts and not another's), so it names the branch, never the whole
+ * site; it reassures that nothing they did is broken.
  */
 export const PREVIEW_UNAVAILABLE_DETAIL =
-  'This site does not serve draft previews, so there is no preview page to open. Your draft is still saved, and publishing and the live site are unaffected.';
+  'This branch has no preview server, so there is no preview page to open. Your draft is still saved, and publishing and the live site are unaffected.';

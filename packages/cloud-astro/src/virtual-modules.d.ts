@@ -11,11 +11,14 @@
  */
 declare module 'virtual:conloca-preview-opts' {
   const baked: {
-    secret?: string;
     saasEndpoint?: string;
     saasIssuer?: string;
     saasAudience?: string;
     buildCommit?: string;
+    repo?: string;
+    siteId?: string;
+    branch?: string;
+    base?: string;
   };
   export default baked;
 }

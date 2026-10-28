@@ -11,7 +11,17 @@
   },
   "dependencies": {
     "@conloca/astro-cms": "workspace:*",
-    "@conloca/content-api": "workspace:*"
+    "@conloca/content-api": "workspace:*",
+    "diff": "^9.0.0",
+    "magicast": "^0.5.5"
+  },
+  "peerDependencies": {
+    "@conloca/cloud-astro": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@conloca/cloud-astro": {
+      "optional": true
+    }
   },
   "bin": {
     "conloca": "./dist/conloca.js"
@@ -26,6 +36,7 @@
     "!**/*.tsbuildinfo"
   ],
   "devDependencies": {
+    "@conloca/cloud-astro": "workspace:*",
     "@types/bun": "1.4.2",
     "commander": "^15.0.0"
   },

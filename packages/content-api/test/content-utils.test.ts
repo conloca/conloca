@@ -5,10 +5,17 @@ import {
   getCurrentISODate,
   isContentPublished,
   isMetadataTooLarge,
+  isValidPathname,
   resolvePublishDate,
 } from '../src/content-utils.js';
 
 describe('content-utils', () => {
+  describe('isValidPathname', () => {
+    test('rejects a path under the reserved /_conloca prefix', () => {
+      expect(isValidPathname('/_conloca/editor')).toBe(false);
+    });
+  });
+
   describe('isContentPublished', () => {
     test('returns true when no publish dates are set', () => {
       const meta = {};

@@ -9,6 +9,14 @@ import type { SitesConfig } from '@conloca/content-api';
  */
 const DEFAULT_LOCALES = ['en'];
 
+/** A sites.json listing only `siteName`, with the locales and default locale a new site gets. */
+export function newSitesConfig(siteName: string): SitesConfig {
+  return {
+    sites: { [siteName]: { locales: [...DEFAULT_LOCALES], defaultLocale: 'en' } },
+    globalLocales: [...DEFAULT_LOCALES],
+  };
+}
+
 export type EnsureSiteResult = {
   /** Path of the sites.json that was read or written. */
   path: string;

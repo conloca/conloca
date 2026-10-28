@@ -8,7 +8,9 @@ Universal MDX package for both browser and Node.js environments.
 
 - **MDXEditor** - Embeddable MDX editor component (the page-route editor in the CMS SPA uses this directly)
 - **BaseMDXEditor** - Lower-level editor primitive that accepts the image-dialog hook used by the CMS SPA's
-  media-library integration
+  media-library integration, and an optional `imagePreviewHandler(src) => Promise<string>` that maps an image's `src` to
+  the URL the editor canvas shows (for example an object URL of unpublished bytes); the saved markdown keeps the
+  original `src`
 - **codeBlockWrapperInfo$** - Editor realm cell a host publishes so the editor's fenced code blocks inherit the host
   site's own code-block classes
 
@@ -32,7 +34,9 @@ Compiled MDX is evaluated in an opaque-origin iframe, never in the page that hos
 
 - **buildSandboxSrcdoc** - Build the preview frame's HTML document, with its runtime inlined
 - **SANDBOX_FRAME_CSP** - The content-security policy that confines the MDX evaluation to that frame
-- **SANDBOX_FRAME_PATH** - The path a host serves the frame document from
+- **MDX_SANDBOX_FRAME_POLICY** - The policy a server sends with the frame document: `SANDBOX_FRAME_CSP` plus
+  `sandbox allow-scripts` and `frame-ancestors 'self'`, which a meta policy cannot carry
+- **SANDBOX_FRAME_PATH** - The path a dev server serves the frame document from
 - **SandboxRenderMessage** / **SandboxOutboundMessage** - The messages the host and the frame exchange
 
 ## Usage
@@ -50,16 +54,27 @@ MDXEditor's own stylesheet in first, so that is the only stylesheet import a hos
 
 ### Browser (Preview)
 
-Serve the frame document at `SANDBOX_FRAME_PATH`, point an iframe at it, and post the compiled MDX to the frame:
+In development, serve the frame document at `SANDBOX_FRAME_PATH` only to iframe loads, point an iframe at it, and post
+the compiled MDX to the frame. A built site can ship `buildSandboxSrcdoc()` as a static file instead; without the
+response policy below the frame then relies on its own opaque-origin check, unless the site's headers send
+`Content-Security-Policy: sandbox allow-scripts` for that file:
 
 ```typescript
-import { buildSandboxSrcdoc, SANDBOX_FRAME_CSP, SANDBOX_FRAME_PATH } from '@conloca/mdx/sandbox-frame';
+import { buildSandboxSrcdoc, MDX_SANDBOX_FRAME_POLICY, SANDBOX_FRAME_PATH } from '@conloca/mdx/sandbox-frame';
 
 // In the host's request handler for SANDBOX_FRAME_PATH
-new Response(buildSandboxSrcdoc(), {
+if (request.headers.get('sec-fetch-dest') !== 'iframe') {
+  return new Response('The MDX preview frame loads only inside an editor frame.', {
+    status: 403,
+    headers: { 'cache-control': 'no-store' },
+  });
+}
+return new Response(buildSandboxSrcdoc(), {
   headers: {
     'content-type': 'text/html; charset=utf-8',
-    'content-security-policy': `${SANDBOX_FRAME_CSP}; frame-ancestors 'self'`,
+    'content-security-policy': MDX_SANDBOX_FRAME_POLICY,
+    'x-content-type-options': 'nosniff',
+    'cache-control': 'no-store',
   },
 });
 
@@ -68,7 +83,30 @@ new Response(buildSandboxSrcdoc(), {
 frame.contentWindow?.postMessage({ __conlocaSandbox: true, kind: 'render', mode: 'mdx', payload: compiledMdx }, '*');
 ```
 
-`@conloca/astro-cms` already serves this route; a host that mounts the editor itself has to serve it.
+An image `src` the opaque-origin frame cannot load itself, such as an unpublished upload, can travel in the optional
+`images` field of the render message: a map from that `src`, exactly as the compiled MDX names it, to a `data:` URL. The
+frame shows the data URL in place of a matching `<img>` `src` and leaves every other `src` alone. Blob URLs do not work
+here, because the frame's origin cannot read the host page's blobs.
+
+```typescript
+frame.contentWindow?.postMessage(
+  {
+    __conlocaSandbox: true,
+    kind: 'render',
+    mode: 'mdx',
+    payload: compiledMdx,
+    images: { '/assets/hero.png': 'data:image/png;base64,…' },
+  },
+  '*'
+);
+```
+
+`@conloca/astro-cms` serves this route under `astro dev`; `@conloca/cloud-astro` writes the static copy to
+`/_conloca/editor/sandbox-frame.html` in builds. A host that mounts the editor itself has to serve it.
+
+Browsers send `Sec-Fetch-Dest` only to `https` and `localhost` addresses. Under `astro dev --host`, opened at a
+plain-HTTP LAN or IP address such as `http://192.168.1.20:4321/__cms`, the frame route answers 403 to every preview;
+open the editor at `localhost` instead.
 
 ### Node.js (Server-side)
 

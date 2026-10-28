@@ -3,12 +3,24 @@ import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type { AstroIntegrationLogger } from 'astro';
+import type { AstroIntegration, AstroIntegrationLogger } from 'astro';
 import { PREVIEW_BUILD_ENV_FLAG } from '../constants.js';
 import { conlocaCloud } from '../index.js';
 import { findClaudeHome, SKILL_RELATIVE_PATH, scaffoldSkill, skillTemplateUrl } from '../skill.js';
 
 const silent = { info: () => {}, debug: () => {}, warn: () => {} };
+
+/** The config:setup hook, called with only the fields it reads. */
+type SetupHook = (args: {
+  logger: AstroIntegrationLogger;
+  config: { root: URL; adapter: AstroIntegration };
+  injectRoute: () => void;
+  updateConfig: () => void;
+  addMiddleware: () => void;
+}) => void;
+function isSetupHook(hook: unknown): hook is SetupHook {
+  return typeof hook === 'function';
+}
 
 describe('findClaudeHome', () => {
   let root: string;
@@ -112,27 +124,39 @@ describe('scaffoldSkill', () => {
 
 describe('the integration scaffolds the skill at config:setup', () => {
   let root: string;
-  let restore: string | undefined;
+  let restore: [string | undefined, string | undefined];
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), 'agent-skill-hook-'));
     await mkdir(join(root, '.git'));
     await mkdir(join(root, '.claude'));
-    restore = process.env[PREVIEW_BUILD_ENV_FLAG];
+    restore = [process.env[PREVIEW_BUILD_ENV_FLAG], process.env.CF_PAGES_BRANCH];
     delete process.env[PREVIEW_BUILD_ENV_FLAG];
+    // The branch a preview child build serves, so its setup gets past the
+    // preview checks.
+    process.env.CF_PAGES_BRANCH = 'main';
   });
   afterEach(async () => {
-    if (restore === undefined) delete process.env[PREVIEW_BUILD_ENV_FLAG];
-    else process.env[PREVIEW_BUILD_ENV_FLAG] = restore;
+    for (const [key, value] of [
+      [PREVIEW_BUILD_ENV_FLAG, restore[0]],
+      ['CF_PAGES_BRANCH', restore[1]],
+    ] as const) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
     await rm(root, { recursive: true, force: true });
   });
 
   function runConfigSetup(): void {
-    const hook = conlocaCloud({ endpoint: 'https://cms.example.test', puckConfigPath: './src/puck.config.tsx' }).hooks[
-      'astro:config:setup'
-    ] as (args: Record<string, unknown>) => void;
+    const hook = conlocaCloud({
+      endpoint: 'https://app.example.test',
+      puckConfigPath: './src/puck.config.tsx',
+      repoUri: 'acme/site',
+      siteId: 'website',
+    }).hooks['astro:config:setup'];
+    if (!isSetupHook(hook)) throw new Error('the integration has no astro:config:setup hook');
     hook({
       logger: silent as unknown as AstroIntegrationLogger,
-      config: { root: pathToFileURL(`${root}/`) },
+      config: { root: pathToFileURL(`${root}/`), adapter: { name: '@astrojs/node', hooks: {} } },
       injectRoute: () => {},
       updateConfig: () => {},
       addMiddleware: () => {},

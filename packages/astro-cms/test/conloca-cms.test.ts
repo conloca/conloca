@@ -65,12 +65,16 @@ interface HookRunOptions {
   locales?: ConlocaCMSOptions['locales'];
   siteStyles?: ConlocaCMSOptions['siteStyles'];
   editorStyles?: ConlocaCMSOptions['editorStyles'];
+  editorCSS?: string;
   assetsPath?: string;
   /** The site's resolved public folder, as the hook's `config` reports it. */
   publicDir?: URL;
   /** The site's Astro `base`, as the hook's `config` reports it. */
   base?: string;
+  /** The Astro project root, as the hook's `config` reports it. Defaults to the folder the run starts in. */
+  root?: URL;
   route?: string;
+  fragmentPreviewRoute?: string;
 }
 
 /** Runs the astro:config:setup hook with stub args and collects updateConfig calls. */
@@ -86,10 +90,13 @@ async function collectConfigUpdates({
   locales,
   siteStyles,
   editorStyles,
+  editorCSS,
   assetsPath,
   publicDir,
   base,
+  root = pathToFileURL(`${process.cwd()}/`),
   route,
+  fragmentPreviewRoute,
 }: HookRunOptions = {}): Promise<Record<string, unknown>[]> {
   const updates: Record<string, unknown>[] = [];
   const integration = conlocaCMS({
@@ -101,17 +108,22 @@ async function collectConfigUpdates({
     ...(locales ? { locales } : {}),
     ...(siteStyles ? { siteStyles } : {}),
     ...(editorStyles ? { editorStyles } : {}),
+    ...(editorCSS ? { editorCSS } : {}),
     ...(assetsPath ? { assetsPath } : {}),
     ...(route ? { route } : {}),
+    ...(fragmentPreviewRoute ? { fragmentPreviewRoute } : {}),
   });
   const noop = () => {};
+  // SAFETY: the setup hook reads only the config fields, callbacks, command and logger stubbed here.
+  // oxlint-disable typescript/no-unsafe-type-assertion -- same reason as the SAFETY note.
   await integration.hooks['astro:config:setup']?.({
-    config: { output, publicDir, base },
+    config: { output, publicDir, base, root },
     updateConfig: (config: Record<string, unknown>) => updates.push(config),
     injectRoute: ({ pattern }: { pattern: string }) => routes.push(pattern),
     command,
     logger: { info: noop, warn: (message: string) => warnings.push(message), error: noop, debug: noop },
   } as never);
+  // oxlint-enable typescript/no-unsafe-type-assertion
   return updates;
 }
 
@@ -356,6 +368,39 @@ describe('@conloca/astro-cms', () => {
         routes: { pages: { pages: { prefix: '/' } } },
       });
     });
+
+    it('should publish the editor-build options a build add-on inherits, as absolute paths', async () => {
+      await collectConfigUpdates({
+        contentRoot: './test',
+        siteStyles: './src/styles/site.css',
+        editorStyles: ['./src/styles/asides.css'],
+        editorCSS: '.x{}',
+      });
+
+      const channel = readEditorDescriptors(process.env);
+      expect(channel?.puckConfigPath).toBe(resolve('./src/puck.config.tsx'));
+      // A single stylesheet arrives as a one-entry list, so an add-on never
+      // handles the string-or-list shape of the option again.
+      expect(channel?.siteStyles).toEqual([resolve('./src/styles/site.css')]);
+      expect(channel?.editorStyles).toEqual([resolve('./src/styles/asides.css')]);
+      expect(channel?.editorCSS).toBe('.x{}');
+    });
+
+    it('should resolve the inherited stylesheets against the Astro root when the build starts in another folder', async () => {
+      // `astro build --root site` run from the folder above it: the dev editor
+      // loads './src/…' stylesheets from the Astro root, so the add-on must
+      // compile those same files, not ones under the starting folder.
+      const siteRoot = join(process.cwd(), 'site');
+      await collectConfigUpdates({
+        siteStyles: ['./src/styles/site.css'],
+        editorStyles: './src/styles/asides.css',
+        root: pathToFileURL(`${siteRoot}/`),
+      });
+
+      const channel = readEditorDescriptors(process.env);
+      expect(channel?.siteStyles).toEqual([join(siteRoot, 'src', 'styles', 'site.css')]);
+      expect(channel?.editorStyles).toEqual([join(siteRoot, 'src', 'styles', 'asides.css')]);
+    });
   });
 
   describe('schemas-entry virtual module', () => {
@@ -559,11 +604,12 @@ describe('@conloca/astro-cms', () => {
   describe('the MDX sandbox frame route', () => {
     const SANDBOX_FRAME = '/api/v1/mdx/sandbox-frame';
 
-    it('should be injected for a site that renders on demand', async () => {
+    it('does not inject the frame route into a site that renders on demand', async () => {
+      // A built site ships the frame as a static file beside its editor page.
       const routes: string[] = [];
-      await collectConfigUpdates({ output: 'server', routes });
+      await collectConfigUpdates({ command: 'build', output: 'server', routes });
 
-      expect(routes).toContain(SANDBOX_FRAME);
+      expect(routes).not.toContain(SANDBOX_FRAME);
     });
 
     it('should be skipped when building a fully static site', async () => {

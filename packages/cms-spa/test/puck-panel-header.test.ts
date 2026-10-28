@@ -6,7 +6,7 @@ import { join } from 'node:path';
 // shrink, so on a narrow panel a long parent name runs over the heading or past the panel's edge. main.css wraps the
 // row and truncates the link; these checks fail when a Puck upgrade renames or restyles the classes it relies on.
 
-const puckCss = readFileSync(Bun.resolveSync('@puckeditor/core/puck.css', import.meta.dir), 'utf8');
+const puckCss = readFileSync(Bun.resolveSync('@puckeditor/core/no-external.css', import.meta.dir), 'utf8');
 const mainCss = readFileSync(join(import.meta.dir, '../src/main.css'), 'utf8');
 
 describe('right panel header on a narrow panel', () => {

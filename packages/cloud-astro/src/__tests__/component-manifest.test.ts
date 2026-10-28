@@ -4,6 +4,7 @@ import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { COMPONENT_MANIFEST_LIMITS } from '@conloca/content-api/component-vocabulary';
+import { EDITOR_PAGE_INFO_FORMATS } from '@conloca/content-api/editor-host';
 import { emitComponentManifest } from '../component-manifest.js';
 
 function makeLogger() {
@@ -71,6 +72,21 @@ describe('emitComponentManifest', () => {
     expect(logger.warnings.some((m) => m.startsWith('component Hero could not be read'))).toBe(true);
   });
 
+  it('writes into the folder it is given', async () => {
+    await writeFile(join(root, 'puck.config.tsx'), 'export default { components: {} };\n');
+    const artifact = await emitComponentManifest({
+      dir: join(root, 'dist'),
+      folder: '_conloca/editor',
+      puckConfigPath: 'puck.config.tsx',
+      projectRoot: root,
+      logger: makeLogger(),
+    });
+    if (artifact === undefined) throw new Error('expected an artifact');
+    expect(artifact.filename).toMatch(EDITOR_PAGE_INFO_FORMATS.manifestPath);
+    expect(artifact.url).toBe(`/_conloca/editor/${artifact.filename}`);
+    expect(await readdir(join(root, 'dist', '_conloca', 'editor'))).toEqual([artifact.filename]);
+  });
+
   it('costs the manifest, never the build, when it cannot be written', async () => {
     await writeFile(join(root, 'puck.config.tsx'), 'export default { components: {} };\n');
     await writeFile(join(root, 'dist'), 'a file where the build directory should be');
@@ -118,7 +134,7 @@ describe('emitComponentManifest', () => {
     30_000,
   );
   it.each(['nodes', 'depth'])(
-    'refuses a manifest beyond the endpoint %s budget before registration',
+    'refuses a manifest beyond the endpoint %s budget and writes nothing',
     async (kind) => {
       let value: unknown = Array.from({ length: 100_001 }, () => 0);
       if (kind === 'depth') {

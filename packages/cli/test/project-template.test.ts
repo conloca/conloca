@@ -103,7 +103,7 @@ describe('packageNameOf', () => {
 
 describe('renderWorkflow', () => {
   test.each<PackageManager>([...PACKAGE_MANAGERS])(
-    'renders a parseable workflow for %s with the build token on doctor and build only and a pull request built from its own commit',
+    'renders a parseable workflow for %s with doctor and build, no build key, and a pull request built from its own commit',
     (pm) => {
       const workflow = Bun.YAML.parse(renderWorkflow(pm)) as {
         on: unknown;
@@ -127,12 +127,8 @@ describe('renderWorkflow', () => {
       const build = steps.find((step) => step.run?.endsWith('run build') || step.run === 'yarn build');
       const install = steps.find((step) => step.run === packageManagerCommands(pm).frozenInstall);
       expect(install).toBeDefined();
-      // Doctor checks the token and the build uses it; dependency install scripts must never see it.
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: a GitHub Actions expression the workflow must carry literally
-      const token = '${{ secrets.CONLOCA_BUILD_TOKEN }}';
-      expect(doctor?.env?.CONLOCA_BUILD_TOKEN).toBe(token);
-      expect(build?.env?.CONLOCA_BUILD_TOKEN).toBe(token);
-      expect(install?.env).toBeUndefined();
+      expect(doctor).toBeDefined();
+      expect(build).toBeDefined();
       expect(job.env).toBeUndefined();
       const checkout = steps.find((step) => step.uses?.startsWith('actions/checkout@'));
       // A pull request builds the branch's own commit, not GitHub's temporary merge commit.
@@ -145,9 +141,9 @@ describe('renderWorkflow', () => {
           steps.some((step) => step.uses?.startsWith('pnpm/action-setup@') && step.with?.version !== undefined),
         ).toBe(true);
       }
-      // The comment must not promise what the scaffold cannot do: the
-      // integration that reads this secret is not among the packages it installs.
-      expect(renderWorkflow(pm)).toContain('not part of this scaffold');
+      // The workflow no longer names a build key: the editor page needs none.
+      expect(renderWorkflow(pm)).not.toContain('CONLOCA_BUILD_TOKEN');
+      expect(renderWorkflow(pm)).not.toContain('Slot for a build integration');
     },
   );
 });

@@ -259,6 +259,14 @@ describe('Conloca CLI', () => {
     expect(result.exitCode).toBe(0);
   });
 
+  test('connect --help lists every connect flag', async () => {
+    const result = await $`./dist/conloca.js connect --help`.cwd(`${import.meta.dir}/..`).quiet();
+    for (const flag of ['--project', '--site-url', '--yes', '--dry-run', '--no-install', '--no-build', '--json']) {
+      expect(result.stdout.toString()).toContain(flag);
+    }
+    expect(result.exitCode).toBe(0);
+  });
+
   test('init does not double the content segment', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'conloca-init-'));
     try {

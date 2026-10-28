@@ -1,4 +1,4 @@
-import { buildSandboxSrcdoc, SANDBOX_FRAME_CSP } from '@conloca/mdx/sandbox-frame';
+import { buildSandboxSrcdoc, MDX_SANDBOX_FRAME_POLICY } from '@conloca/mdx/sandbox-frame';
 import type { APIRoute } from 'astro';
 
 /**
@@ -11,7 +11,8 @@ import type { APIRoute } from 'astro';
  * that serves the editor must serve this path too. astro-cms routes otherwise
  * live under the cmsRoute prefix, so without this route the frame 404s and
  * chips render the site's 404 page. Response headers are the frame's contract
- * (`SANDBOX_FRAME_CSP`); any other server of the frame must match them.
+ * (`MDX_SANDBOX_FRAME_POLICY`); any other server of the frame must match them,
+ * including the 403 for anything but an iframe load.
  *
  * No auth gate: the document is static boilerplate — content only ever enters
  * the frame via postMessage from the editor.
@@ -19,13 +20,23 @@ import type { APIRoute } from 'astro';
 
 export const prerender = false;
 
-export const GET: APIRoute = () =>
-  new Response(buildSandboxSrcdoc(), {
+/** The frame route's answer to a request with these headers. */
+export function sandboxFrameResponse(request: Pick<Request, 'headers'>): Response {
+  if (request.headers.get('sec-fetch-dest') !== 'iframe') {
+    return new Response('The MDX preview frame loads only inside an editor frame.', {
+      status: 403,
+      headers: { 'cache-control': 'no-store' },
+    });
+  }
+  return new Response(buildSandboxSrcdoc(), {
     status: 200,
     headers: {
       'content-type': 'text/html; charset=utf-8',
-      'content-security-policy': `${SANDBOX_FRAME_CSP}; frame-ancestors 'self'`,
+      'content-security-policy': MDX_SANDBOX_FRAME_POLICY,
       'x-content-type-options': 'nosniff',
       'cache-control': 'no-store',
     },
   });
+}
+
+export const GET: APIRoute = ({ request }) => sandboxFrameResponse(request);

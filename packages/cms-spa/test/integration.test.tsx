@@ -1,9 +1,14 @@
 /// <reference lib="dom" />
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import { ErrorCodes } from '@conloca/content-api-client';
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { AppRoutes } from '../src/App.js';
-import { PREVIEW_UNAVAILABLE_DETAIL } from '../src/components/editor/preview-availability.js';
+import {
+  PREVIEW_UNAVAILABLE_DETAIL,
+  PREVIEW_UNAVAILABLE_TITLE,
+} from '../src/components/editor/preview-availability.js';
+import { Toaster, toast } from '../src/components/toast.js';
+import { RpcError } from '../src/frame/channel.js';
 import { configureUI, type OpenPreviewResult } from '../src/ui-config.js';
 import {
   API_ROUTES,
@@ -33,6 +38,27 @@ function renderApp() {
   console.log('[Integration Test] Rendering app');
 
   return renderWithProviders(<AppRoutes />, {}, false);
+}
+
+// Toasts of earlier tests stay active and would replay into a new toaster.
+function mountFreshToaster() {
+  toast.dismiss();
+  renderWithProviders(<Toaster />, {}, false);
+}
+
+async function createPuckPage(pathname: string, title: string): Promise<string> {
+  const result = await testApi.createContent({
+    kind: 'page',
+    site: 'default',
+    collection: 'pages',
+    type: 'puck',
+    meta: { title },
+    locales: {
+      en: { pathname, meta: { title }, content: { puckData: { content: [], root: {}, zones: {} } } },
+    },
+  });
+  if (!result.id) throw new Error(`creating ${pathname} returned no id`);
+  return result.id;
 }
 
 describe('CMS Integration Tests', () => {
@@ -598,7 +624,7 @@ describe('CMS Integration Tests', () => {
       const button = await screen.findByTestId('preview-button');
 
       expect(button.getAttribute('aria-disabled')).toBe('true');
-      // Plain English, states the fact about the site, never blames the user.
+      // Plain English, states the fact about this branch, never blames the user.
       expect(button.getAttribute('title')).toBe(PREVIEW_UNAVAILABLE_DETAIL);
       // Still clickable on purpose: a `disabled` button shows no tooltip and
       // fires no handler, which would hide the reason entirely.
@@ -629,6 +655,141 @@ describe('CMS Integration Tests', () => {
 
       expect(button.getAttribute('aria-disabled')).toBe('false');
       expect(button.getAttribute('aria-label')).toBe('Preview');
+    });
+
+    // ------------------------------------------------------------------
+    // A parent frame opens the tabs itself, so the preview address never
+    // enters the editor page and no tab is born inside a sandboxed frame.
+    // ------------------------------------------------------------------
+    test('with the parent opening the tab, Preview opens no tab and asks the parent once', async () => {
+      const inputs: { path: string }[] = [];
+      configureUI({
+        apiBaseUrl: '/__cms/api',
+        previewTab: 'parent',
+        openPreview: async (input) => {
+          inputs.push(input);
+          return { ok: true };
+        },
+      });
+      const mockOpen = spyOn(window, 'open').mockImplementation(() => null);
+
+      try {
+        const id = await createPuckPage('/parent-preview', 'Parent Preview');
+        renderAppWithDataRouter([`/pages/${id}`], undefined, false);
+        fireEvent.click(await screen.findByTestId('preview-button'));
+
+        await waitFor(() => expect(inputs).toEqual([{ path: '/parent-preview' }]));
+        expect(mockOpen).not.toHaveBeenCalled();
+      } finally {
+        mockOpen.mockRestore();
+      }
+    });
+
+    test('with the parent opening the tab, a not-deployed answer disables Preview and explains why', async () => {
+      const message = 'example.com does not serve draft preview.';
+      configureUI({
+        apiBaseUrl: '/__cms/api',
+        previewTab: 'parent',
+        openPreview: async () => ({ ok: false as const, reason: 'not-deployed' as const, message }),
+      });
+      const mockOpen = spyOn(window, 'open').mockImplementation(() => null);
+
+      try {
+        const id = await createPuckPage('/parent-undeployed', 'Parent Undeployed');
+        renderAppWithDataRouter([`/pages/${id}`], undefined, false);
+        mountFreshToaster();
+        const button = await screen.findByTestId('preview-button');
+        fireEvent.click(button);
+
+        expect(await screen.findByText(PREVIEW_UNAVAILABLE_TITLE)).toBeInTheDocument();
+        expect(PREVIEW_UNAVAILABLE_TITLE).toBe('Preview is not available for this branch');
+        await waitFor(() => expect(button.getAttribute('aria-disabled')).toBe('true'));
+        expect(button.getAttribute('title')).toBe(message);
+        expect(mockOpen).not.toHaveBeenCalled();
+      } finally {
+        mockOpen.mockRestore();
+      }
+    });
+
+    test('with the parent opening the tab, a blocked popup shows nothing in the editor', async () => {
+      let answered = false;
+      configureUI({
+        apiBaseUrl: '/__cms/api',
+        previewTab: 'parent',
+        openPreview: async () => {
+          answered = true;
+          return { ok: false as const, reason: 'popup-blocked' as const };
+        },
+      });
+      const mockOpen = spyOn(window, 'open').mockImplementation(() => null);
+
+      try {
+        const id = await createPuckPage('/parent-blocked', 'Parent Blocked');
+        renderAppWithDataRouter([`/pages/${id}`], undefined, false);
+        mountFreshToaster();
+        const button = await screen.findByTestId('preview-button');
+        fireEvent.click(button);
+
+        await waitFor(() => expect(answered).toBe(true));
+        // Let the answer settle before checking that nothing was shown.
+        await Bun.sleep(50);
+        expect(document.querySelector('[data-sonner-toast]')).toBeNull();
+        expect(button.getAttribute('aria-disabled')).toBe('false');
+        expect(mockOpen).not.toHaveBeenCalled();
+      } finally {
+        mockOpen.mockRestore();
+      }
+    });
+
+    test('live-site links go through openSiteUrl when the parent offers it', async () => {
+      const opened: { path: string }[] = [];
+      configureUI({
+        apiBaseUrl: '/__cms/api',
+        openSiteUrl: async (input) => {
+          opened.push(input);
+        },
+      });
+      const mockOpen = spyOn(window, 'open').mockImplementation(() => null);
+
+      try {
+        const id = await createPuckPage('/about', 'About');
+        renderAppWithDataRouter(['/pages'], undefined, false);
+        fireEvent.click(await screen.findByTestId(`page-title-${id}`));
+        fireEvent.click(screen.getByRole('link', { name: '/about' }));
+
+        await waitFor(() => expect(opened).toEqual([{ path: '/about' }, { path: '/about' }]));
+        expect(mockOpen).not.toHaveBeenCalled();
+      } finally {
+        mockOpen.mockRestore();
+      }
+    });
+
+    test('a refused live-site link only logs', async () => {
+      configureUI({
+        apiBaseUrl: '/__cms/api',
+        openSiteUrl: () => Promise.reject(new RpcError('path refused', 'bad_arguments')),
+      });
+      const mockOpen = spyOn(window, 'open').mockImplementation(() => null);
+      const loggedErrors: unknown[][] = [];
+      const consoleError = spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+        loggedErrors.push(args);
+      });
+
+      try {
+        const id = await createPuckPage('/refused', 'Refused');
+        renderAppWithDataRouter(['/pages'], undefined, false);
+        mountFreshToaster();
+        fireEvent.click(await screen.findByTestId(`page-title-${id}`));
+
+        await waitFor(() =>
+          expect(loggedErrors.some(([message]) => message === '[PageList] openSiteUrl failed:')).toBe(true),
+        );
+        expect(document.querySelector('[data-sonner-toast]')).toBeNull();
+        expect(mockOpen).not.toHaveBeenCalled();
+      } finally {
+        mockOpen.mockRestore();
+        consoleError.mockRestore();
+      }
     });
   });
 

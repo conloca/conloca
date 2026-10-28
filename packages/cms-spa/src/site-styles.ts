@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { ContentWrapperInfo, DiscoveredWrappers } from './content-wrapper.js';
 import { IMPORT_RE } from './site-css-layer.js';
 import { getCmsRoute } from './ui-config.js';
 
@@ -217,28 +218,9 @@ export function useFetchedSiteStyles(routeUrl: string | undefined, options: { cm
   return styles;
 }
 
-/**
- * Shape returned by the `/api/content-wrapper?url=…` endpoint — the
- * tag name and class list of the host page's content-root element.
- * Kept in lock-step with `ContentWrapperInfo` in
- * `packages/astro-cms/src/site-styles/content-wrapper-endpoint.ts`.
- */
-export interface HostContentWrapper {
-  tagName: string;
-  className: string;
-}
-
-/**
- * Discovered host wrappers for a given route. `content` is the
- * prose-content wrapper (eg `.sl-markdown-content`). `codeBlock` is
- * the ordered chain of classed wrappers between the content wrapper
- * and `<pre>`, outermost first (eg `[.expressive-code, .frame ...]`).
- * Either may be null when not present on the page.
- */
-export interface HostWrappers {
-  content: HostContentWrapper | null;
-  codeBlock: HostContentWrapper[] | null;
-}
+/** The shape `/api/content-wrapper?url=…` answers: see `content-wrapper.ts`. */
+export type HostContentWrapper = ContentWrapperInfo;
+export type HostWrappers = DiscoveredWrappers;
 
 /**
  * Fetches the host page's wrappers for the given route URL. The

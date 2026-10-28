@@ -1,9 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { SITE_ID_RE } from '@conloca/content-api/editor-host';
 import { PACKAGE_NAME } from './constants.js';
-
-/** The site-id grammar: lowercase alphanumerics and dashes, 1-64 chars, alphanumeric first. */
-export const SITE_ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 /**
  * Resolve the build's deployable-site id. STRICT: malformed input fails the
@@ -55,7 +53,7 @@ export function resolveBuildSiteId(opts: {
     typeof record.sites !== 'object' ||
     Array.isArray(record.sites)
   ) {
-    throw new Error(`${PACKAGE_NAME}: ${path} has no "sites" object — refusing to register a broken content model`);
+    throw new Error(`${PACKAGE_NAME}: ${path} has no "sites" object — refusing to build on a broken content model`);
   }
 
   let resolved: string;

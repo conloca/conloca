@@ -1,9 +1,15 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, mock, test } from 'bun:test';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { compileMDX } from '../mdx/compile.js';
 import { evaluateMDXToComponent } from '../mdx/evaluate.js';
-import { createSandboxRuntime, runCompiledMdx } from '../sandbox-frame.js';
+import {
+  createSandboxRuntime,
+  MDX_SANDBOX_FRAME_POLICY,
+  runCompiledMdx,
+  SANDBOX_FRAME_CSP,
+  sandboxFrameMain,
+} from '../sandbox-frame.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const HTML_NS = 'http://www.w3.org/1999/xhtml';
@@ -90,5 +96,95 @@ describe('preview frame runtime — what React would draw', () => {
     const serialized = new Function(`return (${createSandboxRuntime.toString()})`)() as typeof createSandboxRuntime;
     const host = await renderPreview('<svg><circle r="5" /></svg>', serialized());
     expect(host.querySelector('circle')?.namespaceURI).toBe(SVG_NS);
+  });
+
+  test('an image the host sent bytes for shows them; every other image keeps its src', async () => {
+    // The host page's blob URLs are unreadable from the frame's opaque origin, so draft images arrive as data URLs.
+    const images = { '/assets/hero.png': 'data:image/png;base64,iVBORw0KGgo=' };
+    const host = await renderPreview(
+      '![Hero](/assets/hero.png) ![Other](/assets/other.png) ![Inherited](constructor)',
+      createSandboxRuntime(images),
+    );
+    expect([...host.querySelectorAll('img')].map((img) => img.getAttribute('src'))).toEqual([
+      'data:image/png;base64,iVBORw0KGgo=',
+      '/assets/other.png',
+      'constructor',
+    ]);
+    const plain = await renderPreview('![Hero](/assets/hero.png)');
+    expect(plain.querySelector('img')?.getAttribute('src')).toBe('/assets/hero.png');
+  });
+});
+
+/** Puts the test window at `origin`, inside a frame whose parent records what it is posted when `framed`. */
+function frameAs(origin: string, framed: boolean) {
+  document.body.innerHTML = '<div id="__sandbox_root"></div>';
+  const spy = mock((_message: { kind: string }) => {});
+  Object.defineProperty(self, 'origin', { value: origin, configurable: true });
+  if (framed) Object.defineProperty(window, 'parent', { value: { postMessage: spy }, configurable: true });
+  return spy;
+}
+
+describe('the preview frame refuses to run unless it is sandboxed', () => {
+  const renderMessage = { __conlocaSandbox: true, kind: 'render', mode: 'html', payload: '<b>x</b>' };
+
+  // The test DOM registers `origin` and `parent` as own globals, so deleting an
+  // override would delete the global itself; put the originals back instead.
+  const originals = {
+    origin: Object.getOwnPropertyDescriptor(self, 'origin'),
+    parent: Object.getOwnPropertyDescriptor(window, 'parent'),
+  };
+  afterEach(() => {
+    for (const [name, descriptor] of Object.entries(originals)) {
+      if (descriptor) Object.defineProperty(window, name, descriptor);
+      else Reflect.deleteProperty(window, name);
+    }
+  });
+
+  // The refusing cases run first: a frame that does start keeps its window
+  // listeners, which would answer the messages later tests dispatch.
+  test('does nothing on a real origin, even when framed', () => {
+    const spy = frameAs('https://site.example', true);
+    sandboxFrameMain({ createSandboxRuntime, runCompiledMdx });
+    window.dispatchEvent(new MessageEvent('message', { data: renderMessage }));
+    expect(spy).not.toHaveBeenCalled();
+    expect(document.getElementById('__sandbox_root')?.innerHTML).toBe('');
+  });
+
+  test('does nothing when opened top level with an opaque origin', () => {
+    frameAs('null', false);
+    sandboxFrameMain({ createSandboxRuntime, runCompiledMdx });
+    window.dispatchEvent(new MessageEvent('message', { data: renderMessage }));
+    expect(document.getElementById('__sandbox_root')?.innerHTML).toBe('');
+  });
+
+  test('posts ready and renders inside a frame with an opaque origin', () => {
+    const spy = frameAs('null', true);
+    sandboxFrameMain({ createSandboxRuntime, runCompiledMdx });
+    expect(spy.mock.calls.some(([message]) => message.kind === 'ready')).toBe(true);
+    window.dispatchEvent(new MessageEvent('message', { data: renderMessage }));
+    expect(document.getElementById('__sandbox_root')?.innerHTML).toBe('<b>x</b>');
+  });
+
+  test('a render message carries the image data URLs into the runtime', async () => {
+    const spy = frameAs('null', true);
+    const rendered = Promise.withResolvers<void>();
+    // A frame started by an earlier test still listens, rendering into its own detached root.
+    spy.mockImplementation((message) => {
+      if (message.kind === 'rendered' && document.querySelector('#__sandbox_root img')) rendered.resolve();
+    });
+    sandboxFrameMain({ createSandboxRuntime, runCompiledMdx });
+    const { code } = await compileMDX('![Hero](/assets/hero.png)');
+    const images = { '/assets/hero.png': 'data:image/png;base64,iVBORw0KGgo=' };
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: { __conlocaSandbox: true, kind: 'render', mode: 'mdx', payload: code, images },
+      }),
+    );
+    await rendered.promise;
+    expect(document.querySelector('#__sandbox_root img')?.getAttribute('src')).toBe(images['/assets/hero.png']);
+  });
+
+  test('the response policy adds the sandbox directive', () => {
+    expect(MDX_SANDBOX_FRAME_POLICY).toBe(`${SANDBOX_FRAME_CSP}; sandbox allow-scripts; frame-ancestors 'self'`);
   });
 });

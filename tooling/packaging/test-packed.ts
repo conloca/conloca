@@ -40,7 +40,7 @@ if (!projectName) {
 
 // Entries that must load under plain Node. Browser-only entries (React
 // components) are covered by the typecheck and by the site builds instead.
-const NODE_ENTRIES: Record<string, string[] | 'all'> = {
+const NODE_ENTRIES = {
   'content-api': 'all',
   // `./testing` ships real helpers that import nothing at all — no test runner
   // is pulled in — so it loads under Node like the main entry.
@@ -52,17 +52,26 @@ const NODE_ENTRIES: Record<string, string[] | 'all'> = {
   // they exist only inside an Astro dev/build process, so the site builds cover
   // them.
   'astro-cms': ['.', './node', './checks', './page-schemas', './components'],
-  // The editor's own entries need React and a DOM. These import neither: the
-  // schema and theme helpers a server or config file uses, and the helper
-  // blocks call as they render on the server.
-  'cms-spa': ['./mdx-components-define', './page-schema-define', './page-setting-attributes', './theme'],
+  // The editor's own entries need React and a DOM. These need no DOM: the
+  // schema and theme helpers a server or config file uses, the helper blocks
+  // call as they render on the server, and the frame protocol and channel a
+  // parent frame imports (they reach React only through content-api-client,
+  // which loads).
+  'cms-spa': [
+    './mdx-components-define',
+    './page-schema-define',
+    './page-setting-attributes',
+    './theme',
+    './frame-protocol',
+    './frame-channel',
+  ],
   cli: [],
   // `./site-middleware` imports Astro's `astro:content` and this package's own
   // `virtual:*` modules, and `./preview-handler` is an Astro component; both
   // exist only inside an Astro dev/build process, so the site builds cover
   // them.
-  'cloud-astro': ['.', './node', './preview', './bundle', './doctor', './satteri-workerd'],
-};
+  'cloud-astro': ['.', './node', './preview', './doctor', './satteri-workerd'],
+} satisfies Record<string, string[] | 'all'>;
 
 const SCOPE = '@conloca/';
 
@@ -82,7 +91,7 @@ const readManifest = (project: string) =>
 const unscoped = (name: string) => name.slice(name.lastIndexOf('/') + 1);
 
 const manifest = readManifest(projectName);
-const nodeEntries: string[] | 'all' | undefined = NODE_ENTRIES[projectName];
+const nodeEntries = new Map<string, string[] | 'all'>(Object.entries(NODE_ENTRIES)).get(projectName);
 assert.ok(nodeEntries !== undefined, `${projectName}: add it to NODE_ENTRIES first`);
 
 // TypeScript source, as opposed to declarations. A release prunes conditions

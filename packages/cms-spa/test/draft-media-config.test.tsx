@@ -1,9 +1,12 @@
 /** Site renderers receive draft URLs while editable data stays canonical. */
-import { describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import type { Config } from '@puckeditor/core';
 import { createElement, memo, useState } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { withDraftMediaRendering } from '../src/components/editor/draft-media-config.js';
+import { clearMediaCache } from '../src/frame/media-cache.js';
+import type { MediaLoadInput } from '../src/frame/protocol.js';
+import { configureUI } from '../src/ui-config.js';
 
 const BASE = 'https://editor.example/api/v1/assets/draft';
 const config: Config = {
@@ -162,5 +165,47 @@ describe('workspace-scoped draft renderer bases', () => {
     expect(originalHtml).toContain(`${BASE}/hero.png?editorWorkspace=scopeA`);
     expect(originalHtml).not.toContain('scopeB');
     expect(props.image.url).toBe('/assets/hero.png');
+  });
+});
+
+describe('canvas images loaded through the page loader', () => {
+  let loads: MediaLoadInput[] = [];
+
+  beforeEach(() => {
+    loads = [];
+    configureUI({
+      loadMedia: async (input) => {
+        loads.push(input);
+        return new Blob(['png']);
+      },
+    });
+  });
+
+  afterEach(() => {
+    clearMediaCache();
+    configureUI({});
+  });
+
+  test('with a loader the canvas shows the site copy first, then the branch bytes', async () => {
+    const wrapped = withDraftMediaRendering(config, BASE);
+    const first = renderToStaticMarkup(createElement(wrapped.components.Hero.render, propsFor('/assets/hero.png')));
+    expect(first).toContain('data-image="/assets/hero.png"');
+    await Bun.sleep(0);
+    const second = renderToStaticMarkup(createElement(wrapped.components.Hero.render, propsFor('/assets/hero.png')));
+    expect(second).toMatch(/data-image="blob:/);
+    expect(loads).toContainEqual({ route: 'draft', path: 'hero.png' });
+  });
+
+  test('with a loader, unsafe or non-image values stay canonical and load nothing', async () => {
+    const wrapped = withDraftMediaRendering(config, undefined);
+    for (const url of ['/assets/../x.png', '/assets/a.txt']) {
+      const props = { ...propsFor(url), items: [] };
+      renderToStaticMarkup(createElement(wrapped.components.Hero.render, props));
+      // oxlint-disable-next-line no-await-in-loop -- each value must get its chance to load before it is checked.
+      await Bun.sleep(0);
+      const html = renderToStaticMarkup(createElement(wrapped.components.Hero.render, props));
+      expect(html).toContain(`data-image="${url}"`);
+    }
+    expect(loads).toEqual([]);
   });
 });

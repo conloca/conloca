@@ -3,17 +3,18 @@ import bakedPreviewOpts from 'virtual:conloca-preview-opts';
 import { resolveEndpointFetch, resolveFromBaked } from './preview/_resolve-opts.js';
 import { stripPreviewPrefix } from './preview/preview-path.js';
 /**
- * Secret-prefixed entry route injected by the recursive preview build at
- * `/conloca_preview_${SECRET}/[...path]`. The secret in the path is a
- * load guard — JWT validation is the actual auth boundary.
+ * Entry route injected by the recursive preview build at the fixed, public
+ * `/_conloca/preview/[...path]` (under Astro's `base`). The route guards
+ * nothing: the signed pass is the lock, checked against the repository, site
+ * and branch this build was made from.
  *
  * This route is the ENTRY DOOR only; the site-wide middleware
  * (`./site-middleware.ts`) is the serving surface. Three verdicts:
  *
  *   1. `response` — the query-token init hop (302 that sets the preview
  *      cookie and points at the clean path) or the no-preview landing page.
- *   2. `preview` — a valid cookie on the literal prefixed URL: canonicalize
- *      with a 302 to the clean path. Rendering under the prefix is never
+ *   2. `preview` — a valid cookie on the preview route itself: canonicalize
+ *      with a 302 to the clean path. Rendering under the route is never
  *      correct (links/assets assume clean paths), and after the redirect the
  *      middleware serves the draft. Normally the middleware canonicalizes
  *      before this route runs — this branch is the defense-in-depth for an
@@ -25,8 +26,9 @@ import { stripPreviewPrefix } from './preview/preview-path.js';
 import { handlePreviewRequest } from './preview.js';
 
 // Same baked-then-env resolution the middleware uses, so the entry route and
-// the serving surface can never disagree about the secret. Throws loudly on a
-// missing var: reaching this route means someone explicitly asked to preview.
+// the serving surface can never disagree about what this build serves. Throws
+// loudly on a missing value: reaching this route means someone explicitly
+// asked to preview.
 const opts = resolveFromBaked(bakedPreviewOpts, (name) => process.env[name]);
 const verdict = await handlePreviewRequest(Astro.request, {
   ...opts,
@@ -46,7 +48,7 @@ if (verdict.kind === 'pass-through') {
 }
 
 // verdict.kind === 'preview' — canonicalize to the clean site path.
-const cleanPath = stripPreviewPrefix(Astro.originPathname ?? Astro.url.pathname);
+const cleanPath = stripPreviewPrefix(Astro.originPathname ?? Astro.url.pathname, opts.base);
 const canonical: Response = new Response(null, {
   status: 302,
   headers: { location: cleanPath, 'cache-control': 'private, no-store' },

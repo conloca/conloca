@@ -669,12 +669,39 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
         // descriptors dev loads from `schemasPath`, `/api/registry` and
         // `virtual:conloca-config` instead of taking these options again.
         // schemasPath is absolutized because a reader may use it as an import
-        // specifier.
+        // specifier. Readers inherit the puck config, the site and editor
+        // stylesheets, the editor CSS and the fragment preview route from here
+        // too, so the site writes each of them once. The stylesheets resolve
+        // against the Astro root, where the dev editor's Vite imports find
+        // them, so a build started from another folder (`astro build --root
+        // site`) still hands on the same files.
+        const configuredStyles = options.siteStyles;
+        const siteStyles = configuredStyles
+          ? (Array.isArray(configuredStyles) ? configuredStyles : [configuredStyles]).map((path) =>
+              resolve(fileURLToPath(config.root), path),
+            )
+          : undefined;
+        const configuredEditorStyles = options.editorStyles;
+        const editorStyles = configuredEditorStyles
+          ? (Array.isArray(configuredEditorStyles) ? configuredEditorStyles : [configuredEditorStyles]).map((path) =>
+              resolve(fileURLToPath(config.root), path),
+            )
+          : undefined;
         const editorDescriptors: EditorDescriptorChannel = {
           ...(options.schemasPath ? { schemasPath: resolve(options.schemasPath) } : {}),
+          puckConfigPath: resolve(options.puckConfigPath),
+          ...(siteStyles === undefined ? {} : { siteStyles }),
+          ...(editorStyles === undefined ? {} : { editorStyles }),
+          ...(options.editorCSS ? { editorCSS: options.editorCSS } : {}),
           registry: registryScan,
           ...(options.templates ? { templates: options.templates } : {}),
           ...(spaConfig.dataBindings ? { dataBindings: spaConfig.dataBindings } : {}),
+          // Every folder the content API writes to, resolved as it resolves them (the build's working directory).
+          contentPaths: [
+            resolve(options.contentRoot),
+            ...(resolvedMdxPages ? [resolve(resolvedMdxPages)] : []),
+            ...(options.assetsPath ? [resolve(options.assetsPath)] : []),
+          ],
         };
         process.env[EDITOR_DESCRIPTORS_ENV_VAR] = JSON.stringify(editorDescriptors);
 
@@ -913,17 +940,12 @@ initHydration(componentRegistry)
           }
         }
 
-        // The sandbox frame document ContentSandbox loads for MDX previews.
-        // Root-absolute by contract (SANDBOX_FRAME_PATH in @conloca/mdx) and
-        // needed wherever the editor runs — anything that serves the editor
-        // serves the same path. Injected outside the dev-only block: a
-        // production editor build needs the frame too.
-        //
-        // On-demand by necessity — the response carries the sandbox CSP, which
-        // a prerendered file cannot — so injecting it into a fully static site
-        // fails that build with NoAdapterInstalled. Such a site has no runtime
-        // editor to serve it to; dev serves it whatever the output mode.
-        if (command === 'dev' || config.output !== 'static') {
+        // The sandbox frame document ContentSandbox loads for MDX previews in
+        // the dev editor. Root-absolute by contract (SANDBOX_FRAME_PATH in
+        // @conloca/mdx). On-demand by necessity — the response carries the
+        // sandbox CSP, which a prerendered file cannot. A built site never
+        // gets it: its editor page ships the frame as a static file.
+        if (command === 'dev') {
           injectRoute({
             pattern: '/api/v1/mdx/sandbox-frame',
             entrypoint: SANDBOX_FRAME_HANDLER_PATH,

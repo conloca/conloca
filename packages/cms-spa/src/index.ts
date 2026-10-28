@@ -21,6 +21,9 @@ export {
   notifyEditorDirtyChanged,
   registerEditorFlushHandler,
 } from './editor-flush.js';
+// The editor page's side of a parent frame
+export { connectEditorFrame, type EditorFrame } from './frame/editor-frame.js';
+export { awaitParentHello } from './frame/parent-hello.js';
 // Export types from hooks (AssetEntry, etc.)
 export type { AssetEntry, AssetUsage, FolderListing, FolderTreeNode } from './hooks/index.js';
 // Export configuration function
@@ -28,6 +31,7 @@ export {
   configureUI,
   type EditorWriteAccess,
   type EditorWriteRefusal,
+  type MemoryRouterConfig,
   type OpenPreviewResult,
   type PreviewCapability,
   setDataBindings,
@@ -38,5 +42,6 @@ export {
   type TemplateConfig,
   type UIConfig,
 } from './ui-config.js';
-// Export the read-only enforcement a host installs through `setEditorReadOnly`
-export { ContentWriteRefusedError, editorWriteAccess } from './write-access.js';
+// Export the read-only enforcement a host installs through `setEditorReadOnly`, and the guard a parent frame wraps
+// its own content client in
+export { ContentWriteRefusedError, editorWriteAccess, guardContentWrites } from './write-access.js';

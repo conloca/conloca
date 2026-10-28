@@ -4,13 +4,14 @@ import { join } from 'node:path';
 import { endpointReaderOptions, type PuckManifest, readPuckConfig } from '@conloca/astro-cms/puck-manifest';
 import { COMPONENT_MANIFEST_LIMITS, measureJson } from '@conloca/content-api/component-vocabulary';
 
-/** The emitted manifest: its site-relative URL and the full sha-256 hex of its bytes. */
+/** The emitted manifest: its site-relative URL, its file name and the full sha-256 hex of its bytes. */
 export interface ComponentManifestArtifact {
   url: string;
+  filename: string;
   hash: string;
 }
 
-/** Metadata transport ceiling; larger metadata must not be registered as a usable artifact. */
+/** Metadata transport ceiling; larger metadata must not ship as a usable artifact. */
 const MAX_MANIFEST_BYTES = COMPONENT_MANIFEST_LIMITS.bytes;
 
 type Logger = { info(message: string): void; warn(message: string): void };
@@ -19,8 +20,7 @@ type Logger = { info(message: string): void; warn(message: string): void };
  * Writes the site's component vocabulary — every Puck component the config
  * declares and what each accepts, read from source and never executed — as a
  * content-addressed artifact beside the editor bundle:
- * `_conloca/component-manifest.<hash16>.json`. The `/_conloca/*` CORS rule the
- * bundle wrote already covers it, and `mirrorEditorAssets` copies the dir.
+ * `<folder>/component-manifest.<hash16>.json`.
  *
  * Fail-soft: the manifest is metadata for agents, so a failure costs the
  * manifest and warns — never the build. A config the reader cannot fully read
@@ -29,10 +29,13 @@ type Logger = { info(message: string): void; warn(message: string): void };
  */
 export async function emitComponentManifest(input: {
   dir: string;
+  /** Folder below `dir` to write into; `_conloca` unless given. */
+  folder?: string;
   puckConfigPath: string;
   projectRoot: string;
   logger: Logger;
 }): Promise<ComponentManifestArtifact | undefined> {
+  const folder = input.folder ?? '_conloca';
   try {
     const manifest = readPuckConfig(
       endpointReaderOptions({ puckConfigPath: input.puckConfigPath, projectRoot: input.projectRoot }),
@@ -47,10 +50,10 @@ export async function emitComponentManifest(input: {
     measureJson(manifest, COMPONENT_MANIFEST_LIMITS);
     const hash = createHash('sha256').update(bytes).digest('hex');
     const filename = `component-manifest.${hash.slice(0, 16)}.json`;
-    await mkdir(join(input.dir, '_conloca'), { recursive: true });
-    await writeFile(join(input.dir, '_conloca', filename), bytes);
-    reportManifest(manifest, `/_conloca/${filename}`, input.logger);
-    return { url: `/_conloca/${filename}`, hash };
+    await mkdir(join(input.dir, folder), { recursive: true });
+    await writeFile(join(input.dir, folder, filename), bytes);
+    reportManifest(manifest, `/${folder}/${filename}`, input.logger);
+    return { url: `/${folder}/${filename}`, filename, hash };
   } catch (error) {
     input.logger.warn(
       'component manifest skipped — agents get no component vocabulary from this build ' +

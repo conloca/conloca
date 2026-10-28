@@ -1,6 +1,6 @@
 /**
  * Minimal cookie-header parser. We only need to look up cookies by exact name
- * (the secret-derived preview cookie); a full RFC 6265 parser would be
+ * (the fixed `__Host-conloca_preview` cookie); a full RFC 6265 parser would be
  * overkill, and pulling in a dependency for this would be YAGNI.
  *
  * The parser intentionally rejects malformed segments silently rather than
@@ -30,7 +30,10 @@ export function parseCookies(cookieHeader: string | null | undefined): Map<strin
  *
  * Splitting this out from the middleware keeps the request handler
  * declarative and lets the cookie defaults be reviewed in one place: the
- * secret must never leak into a script-readable cookie.
+ * pass must never leak into a script-readable cookie.
+ *
+ * These defaults meet the `__Host-` prefix rules the cookie name relies on:
+ * Secure, `Path=/` and no `Domain`, so no other host can set or read it.
  *
  * `SameSite=Lax`, not `Strict`: the share link always arrives from the editor
  * origin, and Chrome withholds a `Strict` cookie on the request that FOLLOWS a

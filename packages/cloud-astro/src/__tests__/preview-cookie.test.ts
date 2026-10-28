@@ -47,8 +47,8 @@ describe('parseCookies', () => {
     // Bug bait: `split('=')` would chop the JWT. The implementation must
     // split only on the first `=`.
     const jwt = 'header.payload.sig==';
-    const c = parseCookies(`conloca_preview_X=${jwt}`);
-    expect(c.get('conloca_preview_X')).toBe(jwt);
+    const c = parseCookies(`__Host-conloca_preview=${jwt}`);
+    expect(c.get('__Host-conloca_preview')).toBe(jwt);
   });
 });
 

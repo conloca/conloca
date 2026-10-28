@@ -55,15 +55,15 @@
       "import": "./dist/ts/merge-default-props.js",
       "default": "./dist/ts/merge-default-props.js"
     },
+    "./content-wrapper": {
+      "types": "./dist/ts/content-wrapper.d.ts",
+      "import": "./dist/ts/content-wrapper.js",
+      "default": "./dist/ts/content-wrapper.js"
+    },
     "./puck-config": {
       "types": "./dist/ts/puck-config.d.ts",
       "import": "./dist/ts/puck-config.js",
       "default": "./dist/ts/puck-config.js"
-    },
-    "./host-discovery": {
-      "types": "./dist/ts/host-discovery.d.ts",
-      "import": "./dist/ts/host-discovery.js",
-      "default": "./dist/ts/host-discovery.js"
     },
     "./site-styles": {
       "types": "./dist/ts/site-styles.d.ts",
@@ -74,6 +74,16 @@
       "types": "./dist/ts/theme.d.ts",
       "import": "./dist/ts/theme.js",
       "default": "./dist/ts/theme.js"
+    },
+    "./frame-protocol": {
+      "types": "./dist/ts/frame/protocol.d.ts",
+      "import": "./dist/ts/frame/protocol.js",
+      "default": "./dist/ts/frame/protocol.js"
+    },
+    "./frame-channel": {
+      "types": "./dist/ts/frame/channel.d.ts",
+      "import": "./dist/ts/frame/channel.js",
+      "default": "./dist/ts/frame/channel.js"
     },
     "./mock-puck-config": {
       "types": "./dist/ts/mock-puck-config.d.ts",

@@ -2,12 +2,26 @@ import type { PreviewMiddlewareOptions } from './middleware.js';
 
 /** Values the preview build can bake into the artifact at build time. */
 export interface BakedPreviewOpts {
-  secret?: string;
   saasEndpoint?: string;
   saasIssuer?: string;
   saasAudience?: string;
   /** The commit the preview build was built from; page-status compares the branch's latest commit with it. */
   buildCommit?: string;
+  /** The repository, site and branch the preview build was made from: what every pass must match. */
+  repo?: string;
+  siteId?: string;
+  branch?: string;
+  /** Astro's `base` at build time. */
+  base?: string;
+}
+
+/** A value only the build can bake; the deployment cannot supply it. */
+function bakedOnly(name: string, bakedValue: string | undefined): string {
+  if (bakedValue) return bakedValue;
+  throw new Error(
+    `@conloca/cloud-astro: the preview server is missing the baked ${name}; the preview build bakes it ` +
+      'when previewBuild is given as an object, so rebuild',
+  );
 }
 
 /**
@@ -15,17 +29,18 @@ export interface BakedPreviewOpts {
  * falling back to the runtime environment.
  *
  * Baking is what removes the deployer's setup burden: every value is already
- * known while the preview build runs — the secret arrived with registration,
- * the endpoint and audience are integration options — so a correctly built
- * preview artifact needs NO env vars on the deployment. It also removes a
- * chicken-and-egg loop: the secret is generated during the build but the
- * deployment that would carry it happens afterwards.
+ * known while the preview build runs — the endpoint and audience are
+ * integration options, the repository, site and branch are what the build
+ * was made from — so a correctly built preview artifact needs NO env vars on
+ * the deployment.
  *
- * The environment still wins when set, so one artifact can be promoted across
- * environments without a rebuild.
+ * For the endpoint, issuer and audience the environment still wins when set,
+ * so one artifact can be promoted across environments without a rebuild. The
+ * repository, site and branch come only from the build: they are what a pass
+ * must match, and the deployment cannot change what the artifact serves.
  *
- * Throws naming the missing variable — a misconfigured preview runtime must
- * not silently accept requests.
+ * Throws naming the missing value — a misconfigured preview runtime must not
+ * silently accept requests.
  */
 export function resolveFromBaked(
   baked: BakedPreviewOpts,
@@ -42,10 +57,13 @@ export function resolveFromBaked(
     );
   };
   return {
-    secret: pick('CONLOCA_PREVIEW_SECRET', baked.secret),
     saasEndpoint: pick('CONLOCA_SAAS_ENDPOINT', baked.saasEndpoint),
     saasIssuer: pick('CONLOCA_SAAS_ISSUER', baked.saasIssuer),
     saasAudience: pick('CONLOCA_SAAS_AUDIENCE', baked.saasAudience),
+    repo: bakedOnly('repo', baked.repo),
+    siteId: bakedOnly('siteId', baked.siteId),
+    branch: bakedOnly('branch', baked.branch),
+    base: baked.base || '/',
     // Optional: an artifact built before this was baked has none, and the
     // endpoint then falls back to the branch's registered build.
     ...(baked.buildCommit ? { buildCommit: baked.buildCommit } : {}),

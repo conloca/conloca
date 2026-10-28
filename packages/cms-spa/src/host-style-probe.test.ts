@@ -1,8 +1,9 @@
 /// <reference lib="dom" />
-import { afterEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import { cleanup, render, waitFor } from '@testing-library/react';
 import { createElement, useEffect } from 'react';
-import { findWrapperByClass, useProbedHostStyles } from './host-style-probe.js';
+import { findWrapperByClass, keepUnchanged, readProbedPage, useProbedHostStyles } from './host-style-probe.js';
+import { setSiteBaseUrl } from './ui-config.js';
 
 function doc(html: string): Document {
   const d = document.implementation.createHTMLDocument('probe');
@@ -42,6 +43,65 @@ describe('findWrapperByClass', () => {
   });
 });
 
+// An editor in a parent frame has no dev endpoints for the route's CSS and
+// content wrapper, so the probe's page load must yield both, the way those
+// endpoints yield them locally.
+describe('readProbedPage', () => {
+  test("finds the page's content wrapper and code-block chain by the dev endpoint's rule", () => {
+    const d = doc(
+      '<main><div class="sl-markdown-content"><h2>h</h2><p>a</p><div class="expressive-code"><figure class="frame"><pre>x</pre></figure></div></div></main>',
+    );
+    expect(readProbedPage(d, null, true).wrappers).toEqual({
+      content: { tagName: 'div', className: 'sl-markdown-content' },
+      codeBlock: [
+        { tagName: 'div', className: 'expressive-code' },
+        { tagName: 'figure', className: 'frame' },
+      ],
+    });
+  });
+
+  // Media-bound sheets and where the samples are measured are checked in the
+  // browser (MdxEditorHostParity stories): Happy DOM leaves `sheet.media`
+  // empty and cannot iterate a computed style.
+  test("returns the page's stylesheets as one text", () => {
+    const d = doc(
+      '<style>.sl-markdown-content p { margin-top: 16px; }</style><style>.nav { color: red; }</style><main><p>a</p></main>',
+    );
+    expect(readProbedPage(d, null, true).styles).toEqual([
+      '.sl-markdown-content p { margin-top: 16px; }\n.nav { color: red; }',
+    ]);
+  });
+
+  test('an editor with dev endpoints asks for no discovery, so none is read', () => {
+    const d = doc('<style>.x { color: red; }</style><main><div class="sl-markdown-content"><p>a</p></div></main>');
+    const probe = readProbedPage(d, null, false);
+    expect(probe.styles).toEqual([]);
+    expect(probe.wrappers).toEqual({ content: null, codeBlock: null });
+  });
+});
+
+// A theme toggle re-probes the same page: unchanged styles and wrappers must
+// keep their identity, or the editor reinjects the route sheet and rebuilds
+// its plugins for nothing.
+describe('keepUnchanged', () => {
+  const wrappers = { content: { tagName: 'div', className: 'w' }, codeBlock: null };
+  const prev = { css: 'a', styles: ['S'], wrappers };
+
+  test('keeps the previous styles and wrappers when their content is the same', () => {
+    const next = keepUnchanged(prev, { css: 'b', styles: ['S'], wrappers: structuredClone(wrappers) });
+    expect(next.css).toBe('b');
+    expect(next.styles).toBe(prev.styles);
+    expect(next.wrappers).toBe(prev.wrappers);
+  });
+
+  test('takes the new ones when their content differs', () => {
+    const nextWrappers = { content: { tagName: 'div', className: 'v' }, codeBlock: null };
+    const next = keepUnchanged(prev, { css: 'a', styles: ['T'], wrappers: nextWrappers });
+    expect(next.styles).toEqual(['T']);
+    expect(next.wrappers).toBe(nextWrappers);
+  });
+});
+
 /**
  * Captures successive hook snapshots without mounting the full editor.
  * The flash bug is "settled starts false while css is empty" — that is a
@@ -50,18 +110,16 @@ describe('findWrapperByClass', () => {
 function ProbeSnapshot({
   routeUrl,
   wrapperClass,
-  routeCss,
   onSnap,
 }: {
   routeUrl?: string;
   wrapperClass: string | null;
-  routeCss?: string;
   onSnap: (snap: { css: string; settled: boolean }) => void;
 }) {
-  const snap = useProbedHostStyles(routeUrl, wrapperClass, { routeCss });
+  const { css, settled } = useProbedHostStyles(routeUrl, wrapperClass);
   useEffect(() => {
-    onSnap(snap);
-  }, [snap, onSnap]);
+    onSnap({ css, settled });
+  }, [css, settled, onSnap]);
   return null;
 }
 
@@ -83,6 +141,20 @@ describe('useProbedHostStyles settled flag', () => {
     expect(snaps[0]).toEqual({ css: '', settled: false });
   });
 
+  test('probes the route under the site base, not at the origin root', () => {
+    setSiteBaseUrl('https://s.example/docs/');
+    // Keep the probe frame out of the document: only its address matters, and loading it would reach for the network.
+    const append = spyOn(document.body, 'appendChild').mockImplementation((node) => node);
+    try {
+      render(createElement(ProbeSnapshot, { routeUrl: '/blog/x', wrapperClass: null, onSnap: () => {} }));
+      const probe = append.mock.calls.map(([node]) => node).find((node) => node instanceof HTMLIFrameElement);
+      expect(probe?.getAttribute('src')).toBe('https://s.example/docs/blog/x');
+    } finally {
+      append.mockRestore();
+      setSiteBaseUrl('');
+    }
+  });
+
   test('no probe source settles empty immediately (definitive: nothing to probe)', async () => {
     const snaps: Array<{ css: string; settled: boolean }> = [];
     render(
@@ -97,13 +169,11 @@ describe('useProbedHostStyles settled flag', () => {
   });
 
   test('settles true with css once the iframe probe resolves', async () => {
-    // happy-dom fires iframe load for srcdoc; the reconstruction path is
-    // the cross-origin path this flag exists to protect.
     const snaps: Array<{ css: string; settled: boolean }> = [];
     render(
       createElement(ProbeSnapshot, {
+        routeUrl: 'about:blank',
         wrapperClass: 'prose',
-        routeCss: '.prose p{font-size:18px}',
         onSnap: (s) => snaps.push(s),
       }),
     );

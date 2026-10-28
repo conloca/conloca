@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { findContentWrapper } from '../src/site-styles/content-wrapper-endpoint.js';
+import { findContentWrapper } from './content-wrapper.js';
 
 /**
  * Tests for the wrapper-discovery rule the editor relies on. The

@@ -170,6 +170,19 @@ describe('normalizeAndValidatePathname', () => {
       expect(r.valid).toBe(false);
       expect(r.reason).toBe('disallowed_char');
     });
+
+    test('rejects the reserved /_conloca prefix', () => {
+      for (const input of ['/_conloca', '_conloca/editor', '/_conloca/preview/x']) {
+        const r = normalizeAndValidatePathname(input);
+        expect(r.valid).toBe(false);
+        expect(r.reason).toBe('reserved_prefix');
+        expect(r.message).toBe('Paths under `/_conloca/` are reserved for the editor page');
+      }
+    });
+
+    test('accepts a path that only starts like it', () => {
+      expect(normalizeAndValidatePathname('/_conlocax')).toEqual({ value: '/_conlocax', valid: true });
+    });
   });
 
   describe('happy path', () => {

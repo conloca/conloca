@@ -330,9 +330,28 @@ function PuckPageEditorInner({ puckConfig, initialLocale }: PageEditorWrapperPro
   const puckData = content?.localized?.content?.puckData;
 
   // Resolving again replaces the editor, unsaved block edits included, so it
-  // runs when the blocks or the data their route binds change, and reads the
-  // page when it runs: a Page settings save changes only the page, which the
-  // canvas takes from `metadata` without remounting.
+  // runs when the blocks change other than by the editor's own save, or the
+  // data their route binds changes, and reads the page when it runs: a Page
+  // settings save changes only the page, which the canvas takes from
+  // `metadata` without remounting.
+  //
+  // The editor's own save puts the page it read back into the cache, but the
+  // editor already holds that page, and anything typed while the save was
+  // out, which a new editor would drop. So a change to the blocks counts only
+  // when it is not that page: another etag, or another locale than the one the
+  // editor holds.
+  const ownSaveRef = useRef<{ locale: string; etag: string } | null>(null);
+  const blocksRef = useRef({ puckData, locale: currentLocale, changes: 0 });
+  if (puckData !== blocksRef.current.puckData) {
+    const own = ownSaveRef.current;
+    const ownSave =
+      own !== null &&
+      own.locale === currentLocale &&
+      blocksRef.current.locale === currentLocale &&
+      own.etag === content?.localized?.etag;
+    blocksRef.current = { puckData, locale: currentLocale, changes: blocksRef.current.changes + (ownSave ? 0 : 1) };
+  }
+  const blockChanges = blocksRef.current.changes;
   const dataContextRef = useRef(dataContext);
   dataContextRef.current = dataContext;
   const routeCollections = dataContext?.collections;
@@ -341,7 +360,7 @@ function PuckPageEditorInner({ puckConfig, initialLocale }: PageEditorWrapperPro
   // Pre-resolve component data using resolveAllData.
   // This runs each component's resolveData with the data context as its
   // metadata, ensuring data-bound components have their data BEFORE Puck mounts.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the route's bound data is the event; the page is read through the ref.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the blocks' changes and the route's bound data are the events; the page and its data context are read when it runs.
   useEffect(() => {
     let cancelled = false;
 
@@ -375,7 +394,7 @@ function PuckPageEditorInner({ puckConfig, initialLocale }: PageEditorWrapperPro
     return () => {
       cancelled = true;
     };
-  }, [puckData, enhancedConfig, routeCollections, routePages]);
+  }, [blockChanges, enhancedConfig, routeCollections, routePages]);
 
   const pageMetadata = useMemo(() => (content?.localized ? extractPageMetadata(content) : null), [content]);
 
@@ -438,6 +457,16 @@ function PuckPageEditorInner({ puckConfig, initialLocale }: PageEditorWrapperPro
 
             if (result.success && result.etag) {
               setCurrentEtag(result.etag);
+            }
+            // Recorded before this component renders the page the save read back: the cache tells its readers
+            // on a later task, and `mutateAsync` settles first. Only a read-back of exactly this write is the
+            // editor's own; one someone else saved since must open, or the next save would write over it.
+            if (
+              'updatedContent' in result &&
+              result.updatedContent &&
+              result.updatedContent.localized.etag === result.etag
+            ) {
+              ownSaveRef.current = { locale: currentLocale, etag: result.updatedContent.localized.etag };
             }
 
             return result;

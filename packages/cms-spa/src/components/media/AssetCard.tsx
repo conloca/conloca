@@ -1,9 +1,9 @@
+import { useAssetServeSrc } from '../../frame/media-cache.js';
 import type { AssetEntry } from '../../hooks/index.js';
 import { AssetScopePill } from '../../media/AssetScopePill.js';
 import { MediaIssueBadge } from '../../media/MediaIssueBadge.js';
 import { useAssetScope } from '../../media/use-asset-scope.js';
 import { useMediaIssue } from '../../media/use-media-issue.js';
-import { buildAssetServeUrl } from '../../utils/asset-url.js';
 import { cn } from '../../utils/cn.js';
 
 interface AssetCardProps {
@@ -33,6 +33,7 @@ export function AssetCard({
   // reports. Returns null when the host has no opinion — surfaces
   // degrade exactly like the scope pill in standalone mounts.
   const issue = useMediaIssue(asset.filename, asset.folder);
+  const src = useAssetServeSrc(assetsBasePath, asset.folder, asset.filename);
 
   const handleClick = () => {
     onClick?.();
@@ -55,12 +56,14 @@ export function AssetCard({
     >
       {/* Thumbnail */}
       <div className="relative aspect-square bg-grey-11 dark:bg-grey-03 flex items-center justify-center overflow-hidden">
-        <img
-          src={buildAssetServeUrl(assetsBasePath, asset.folder, asset.filename)}
-          alt={asset.alt || asset.originalName}
-          className="w-full h-full object-contain"
-          loading="lazy"
-        />
+        {src ? (
+          <img
+            src={src}
+            alt={asset.alt || asset.originalName}
+            className="w-full h-full object-contain"
+            loading="lazy"
+          />
+        ) : null}
         {/* Scope pill — renders only when a host bridge supplied a
             non-null scope. Top-left corner so it sits above the
             asset's own visual focus point without clipping the

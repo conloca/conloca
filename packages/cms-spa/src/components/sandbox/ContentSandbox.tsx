@@ -1,5 +1,7 @@
 import cn from 'clsx';
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { getUIConfig } from '../../ui-config.js';
+import { draftImageData } from '../editor/draft-media-config.js';
 import { SANDBOX_FRAME_PATH, type SandboxOutboundMessage } from './frame-runtime.js';
 
 /**
@@ -22,8 +24,29 @@ function ensureSandboxHeightBus(win: Window): void {
     if (!data.k || !(data.px > 0)) return;
     const doc = win.document;
     const el = doc.querySelector(`iframe[data-sandbox-k="${data.k}"]`) as HTMLIFrameElement | null;
-    if (el) el.style.height = `${Math.ceil(data.px)}px`;
+    if (el && event.source === el.contentWindow) el.style.height = `${Math.ceil(data.px)}px`;
   });
+}
+
+/**
+ * Data URLs of the draft images in `code`, which the opaque-origin frame cannot fetch from the site or read as
+ * this page's blob URLs; `null` while they load (bounded by `draftImageData`), `undefined` when `code` is `undefined`.
+ */
+function useDraftImageData(code: string | undefined): Record<string, string> | null | undefined {
+  const [loaded, setLoaded] = useState<{ code: string; images: Record<string, string> }>();
+  useEffect(() => {
+    let live = true;
+    if (code !== undefined) {
+      void draftImageData(code).then((images) => {
+        if (live) setLoaded({ code, images });
+      });
+    }
+    return () => {
+      live = false;
+    };
+  }, [code]);
+  if (code === undefined) return undefined;
+  return loaded?.code === code ? loaded.images : null;
 }
 
 export interface ContentSandboxProps {
@@ -69,7 +92,7 @@ export function ContentSandbox({
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const reactId = useId().replace(/:/g, '');
   const frameKeyRef = useRef(`sf_${reactId}_${Math.random().toString(36).slice(2, 10)}`);
-  const frameSrc = `${SANDBOX_FRAME_PATH}?k=${encodeURIComponent(frameKeyRef.current)}`;
+  const frameSrc = `${getUIConfig().sandboxFramePath ?? SANDBOX_FRAME_PATH}?k=${encodeURIComponent(frameKeyRef.current)}`;
 
   const modeRef = useRef(mode);
   const contentRef = useRef(content);
@@ -77,13 +100,16 @@ export function ContentSandbox({
   modeRef.current = mode;
   contentRef.current = content;
   stylesRef.current = styles;
+  const images = useDraftImageData(mode === 'mdx' && getUIConfig().loadMedia ? content : undefined);
+  const imagesRef = useRef(images);
+  imagesRef.current = images;
 
   const [height, setHeight] = useState(0);
   const [ready, setReady] = useState(false);
   const readyRef = useRef(false);
 
   const deliver = useCallback(() => {
-    if (!readyRef.current) return;
+    if (!readyRef.current || imagesRef.current === null) return;
     const payload = contentRef.current;
     iframeRef.current?.contentWindow?.postMessage(
       {
@@ -92,6 +118,7 @@ export function ContentSandbox({
         mode: modeRef.current,
         payload,
         styles: stylesRef.current,
+        ...(imagesRef.current ? { images: imagesRef.current } : {}),
       },
       '*',
     );
@@ -114,6 +141,8 @@ export function ContentSandbox({
       const data = event.data as SandboxOutboundMessage | undefined;
       if (data?.__conlocaSandbox !== true) return;
       if (data.k !== frameKey) return;
+      // The key is readable by anything that saw the frame URL; the source is not forgeable.
+      if (event.source === null || event.source !== iframeRef.current?.contentWindow) return;
       switch (data.kind) {
         case 'ready':
           markReady();
@@ -160,11 +189,11 @@ export function ContentSandbox({
     };
   }, [ready, deliver]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Mode, content, and styles are delivery events; deliver reads their current values from refs to keep message listeners stable.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Mode, content, styles and images are delivery events; deliver reads their current values from refs to keep message listeners stable.
   useEffect(() => {
     if (!ready) return;
     deliver();
-  }, [ready, mode, content, styles, deliver]);
+  }, [ready, mode, content, styles, images, deliver]);
 
   return (
     <iframe

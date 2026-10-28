@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { useEffect, useMemo } from 'react';
 import App from './App.js';
+import { clearMediaCache } from './frame/media-cache.js';
 import { CanvasThemeProvider } from './hooks/useCanvasTheme.js';
 import { ThemeProvider } from './hooks/useTheme.js';
 import { getUIConfig } from './ui-config.js';
@@ -40,6 +41,9 @@ export function CmsSpaApp() {
     };
   }, [queryClient]);
 
+  // Loaded media belongs to this mount's site and branch.
+  useEffect(() => clearMediaCache, []);
+
   // Every content write in the editor goes through this one client, so the
   // read-only seam is installed here and nowhere else: a surface added later
   // is gated whether or not its author knew the seam existed. Reads are
@@ -54,7 +58,7 @@ export function CmsSpaApp() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <CanvasThemeProvider>
-          <App basename={config.basename} />
+          <App basename={config.basename} memoryRouter={config.memoryRouter} />
         </CanvasThemeProvider>
       </ThemeProvider>
       {config.enableDevtools && <ReactQueryDevtools initialIsOpen={false} />}

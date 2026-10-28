@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import type { ContentAPI } from '@conloca/content-api';
 import { generateKeyPair, type JWTVerifyGetKey, SignJWT } from 'jose';
 import type { PreviewMiddlewareOptions } from '../preview/middleware.js';
+import { PREVIEW_COOKIE_NAME, PREVIEW_QUERY_PARAM } from '../preview/preview-path.js';
 import {
   createPreviewSiteMiddleware,
   type PreviewMiddlewareContext,
@@ -17,7 +18,6 @@ import {
 // preview cookie is sent on every same-origin request and nothing reads it.
 // ---------------------------------------------------------------------------
 
-const SECRET = 'abcdef1234567890';
 const ISSUER = 'https://cms.example.test';
 const AUDIENCE = 'conloca-preview';
 
@@ -33,7 +33,7 @@ beforeAll(async () => {
 
 async function mintJwt(scope: 'preview' | 'editor' = 'preview'): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
-  return new SignJWT({ org: 'acme', repo: 'site', branch: 'feature/x', scope })
+  return new SignJWT({ org: 'acme', repo: 'acme/site', site_id: 'website', branch: 'feature/x', scope })
     .setProtectedHeader({ alg: 'RS256' })
     .setIssuedAt(now)
     .setExpirationTime(now + 300)
@@ -43,7 +43,16 @@ async function mintJwt(scope: 'preview' | 'editor' = 'preview'): Promise<string>
 }
 
 function opts(): PreviewMiddlewareOptions {
-  return { secret: SECRET, saasEndpoint: ISSUER, saasIssuer: ISSUER, saasAudience: AUDIENCE, getKey };
+  return {
+    saasEndpoint: ISSUER,
+    saasIssuer: ISSUER,
+    saasAudience: AUDIENCE,
+    repo: 'acme/site',
+    siteId: 'website',
+    branch: 'feature/x',
+    base: '/',
+    getKey,
+  };
 }
 
 function fakeBaseline(): ContentAPI {
@@ -160,7 +169,7 @@ describe('createPreviewSiteMiddleware — credential handling', () => {
       .setAudience(AUDIENCE)
       .sign(foreign.privateKey);
     const onRequest = createPreviewSiteMiddleware(opts, seams());
-    const context = contextFor('https://site.test/blog', `conloca_preview_${SECRET}=${badJwt}`);
+    const context = contextFor('https://site.test/blog', `${PREVIEW_COOKIE_NAME}=${badJwt}`);
 
     const response = await onRequest(context, next);
 
@@ -172,7 +181,7 @@ describe('createPreviewSiteMiddleware — credential handling', () => {
     const jwt = await mintJwt('editor');
     const fetchSpy = makeFetch([]);
     const onRequest = createPreviewSiteMiddleware(opts, seams(fetchSpy.fn));
-    const context = contextFor('https://site.test/blog', `conloca_preview_${SECRET}=${jwt}`);
+    const context = contextFor('https://site.test/blog', `${PREVIEW_COOKIE_NAME}=${jwt}`);
 
     const response = await onRequest(context, next);
 
@@ -185,23 +194,23 @@ describe('createPreviewSiteMiddleware — credential handling', () => {
   it('returns the init redirect when a token arrives in the query param', async () => {
     const jwt = await mintJwt();
     const onRequest = createPreviewSiteMiddleware(opts, seams());
-    const context = contextFor(`https://site.test/blog?conloca_preview_${SECRET}=${jwt}`);
+    const context = contextFor(`https://site.test/blog?${PREVIEW_QUERY_PARAM}=${jwt}`);
 
     const response = await onRequest(context, next);
 
     expect(response.status).toBe(302);
-    expect(response.headers.get('set-cookie')).toContain('conloca_preview_');
+    expect(response.headers.get('set-cookie')).toContain(`${PREVIEW_COOKIE_NAME}=`);
   });
 
-  it('canonicalizes a valid cookie on the literal secret-prefixed URL to the clean path', async () => {
+  it('canonicalizes a valid cookie on the fixed preview path to the clean path', async () => {
     const jwt = await mintJwt();
     const onRequest = createPreviewSiteMiddleware(opts, seams());
-    const context = contextFor(`https://site.test/conloca_preview_${SECRET}/blog`, `conloca_preview_${SECRET}=${jwt}`);
+    const context = contextFor('https://site.test/_conloca/preview/about', `${PREVIEW_COOKIE_NAME}=${jwt}`);
 
     const response = await onRequest(context, next);
 
     expect(response.status).toBe(302);
-    expect(response.headers.get('location')).toBe('/blog');
+    expect(response.headers.get('location')).toBe('/about');
   });
 
   it('does not re-run when a preview render is already in flight', async () => {
@@ -220,7 +229,7 @@ describe('createPreviewSiteMiddleware — verdict rendering', () => {
     const jwt = await mintJwt();
     const fetchSpy = makeFetch([changed(), emptyListing()]);
     const onRequest = createPreviewSiteMiddleware(opts, seams(fetchSpy.fn));
-    const context = contextFor('https://site.test/blog', `conloca_preview_${SECRET}=${jwt}`);
+    const context = contextFor('https://site.test/blog', `${PREVIEW_COOKIE_NAME}=${jwt}`);
 
     const response = await onRequest(context, htmlNext('draft body'));
 
@@ -238,11 +247,22 @@ describe('createPreviewSiteMiddleware — verdict rendering', () => {
     expect(String(fetchSpy.calls[0].input)).toBe(`${ISSUER}/preview/page-status/blog?locale=en&site=default`);
   });
 
+  it('points the banner exit link at the fixed exit route', async () => {
+    const jwt = await mintJwt();
+    const fetchSpy = makeFetch([changed(), emptyListing()]);
+    const onRequest = createPreviewSiteMiddleware(opts, seams(fetchSpy.fn));
+    const context = contextFor('https://site.test/blog', `${PREVIEW_COOKIE_NAME}=${jwt}`);
+
+    const html = await (await onRequest(context, htmlNext('draft body'))).text();
+
+    expect(html).toContain('"exitPath":"/_conloca/preview/__exit"');
+  });
+
   it('normalizes a trailing slash out of the page-status path (site nav links carry them)', async () => {
     const jwt = await mintJwt();
     const fetchSpy = makeFetch([new Response(null, { status: 304 })]);
     const onRequest = createPreviewSiteMiddleware(opts, seams(fetchSpy.fn));
-    const context = contextFor('https://site.test/faq/', `conloca_preview_${SECRET}=${jwt}`);
+    const context = contextFor('https://site.test/faq/', `${PREVIEW_COOKIE_NAME}=${jwt}`);
 
     await onRequest(context, htmlNext('published'));
 
@@ -253,7 +273,7 @@ describe('createPreviewSiteMiddleware — verdict rendering', () => {
     const jwt = await mintJwt();
     const fetchSpy = makeFetch([new Response(null, { status: 304 })]);
     const onRequest = createPreviewSiteMiddleware(opts, seams(fetchSpy.fn));
-    const context = contextFor('https://site.test/blog', `conloca_preview_${SECRET}=${jwt}`);
+    const context = contextFor('https://site.test/blog', `${PREVIEW_COOKIE_NAME}=${jwt}`);
 
     const response = await onRequest(context, htmlNext('published body'));
 
@@ -268,7 +288,7 @@ describe('createPreviewSiteMiddleware — verdict rendering', () => {
     const jwt = await mintJwt();
     const fetchSpy = makeFetch([new Response(null, { status: 302, headers: { location: '/moved' } })]);
     const onRequest = createPreviewSiteMiddleware(opts, seams(fetchSpy.fn));
-    const context = contextFor('https://site.test/old', `conloca_preview_${SECRET}=${jwt}`);
+    const context = contextFor('https://site.test/old', `${PREVIEW_COOKIE_NAME}=${jwt}`);
 
     const response = await onRequest(context, next);
 
@@ -284,7 +304,7 @@ describe('createPreviewSiteMiddleware — verdict rendering', () => {
     // fallback — a 307 the middleware passes through with preview headers.
     const fetchSpy = makeFetch([new Response(null, { status: 404 }), emptyListing()]);
     const onRequest = createPreviewSiteMiddleware(opts, seams(fetchSpy.fn));
-    const context = contextFor('https://site.test/gone', `conloca_preview_${SECRET}=${jwt}`);
+    const context = contextFor('https://site.test/gone', `${PREVIEW_COOKIE_NAME}=${jwt}`);
 
     const response = await onRequest(context, async () => {
       // The reader must be installed so the render reflects the deletion.
@@ -306,7 +326,7 @@ describe('createPreviewSiteMiddleware — endpoint degradation', () => {
     const jwt = await mintJwt();
     const fetchSpy = makeFetch([new Response('deploying', { status: 503 })]);
     const onRequest = createPreviewSiteMiddleware(opts, seams(fetchSpy.fn));
-    const context = contextFor('https://site.test/blog', `conloca_preview_${SECRET}=${jwt}`);
+    const context = contextFor('https://site.test/blog', `${PREVIEW_COOKIE_NAME}=${jwt}`);
 
     const response = await onRequest(context, htmlNext('published body'));
 
@@ -322,7 +342,7 @@ describe('createPreviewSiteMiddleware — endpoint degradation', () => {
     const jwt = await mintJwt();
     const rejecting = (() => Promise.reject(new Error('connection reset'))) as unknown as typeof fetch;
     const onRequest = createPreviewSiteMiddleware(opts, seams(rejecting));
-    const context = contextFor('https://site.test/blog', `conloca_preview_${SECRET}=${jwt}`);
+    const context = contextFor('https://site.test/blog', `${PREVIEW_COOKIE_NAME}=${jwt}`);
 
     const response = await onRequest(context, htmlNext('published body'));
 
@@ -337,7 +357,7 @@ describe('createPreviewSiteMiddleware — unconfigured runtime', () => {
     // where the deployer's runtime env vars do not exist yet — and on any
     // deployment where preview was never configured. Throwing there breaks the
     // site's build or the site itself over a feature it may not even use. The
-    // secret-prefixed entry route still fails loudly, because reaching it
+    // preview entry route still fails loudly, because reaching it
     // means someone explicitly asked for a preview.
     const onRequest = createPreviewSiteMiddleware(() => {
       throw new Error('missing required env var CONLOCA_SAAS_ENDPOINT');
@@ -351,6 +371,9 @@ describe('createPreviewSiteMiddleware — unconfigured runtime', () => {
 
     expect(await response.text()).toBe(NEXT_BODY);
     expect(context.locals.conlocaPreview).toBeUndefined();
+    // It asks for a rebuild with the preview build opted in, never for opting out.
+    expect(warning).toContain('rebuild with previewBuild given as an object');
+    expect(warning).not.toContain('previewBuild: false');
     // The warning sends the reader to a README section, which has to exist.
     const section = /README "([^"]+)"/.exec(warning)?.[1];
     const readme = await readFile(new URL('../../README.md', import.meta.url), 'utf8');

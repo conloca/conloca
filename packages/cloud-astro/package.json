@@ -9,8 +9,13 @@
     "url": "git+https://github.com/conloca/conloca.git",
     "directory": "packages/cloud-astro"
   },
+  "keywords": [
+    "astro-integration",
+    "withastro",
+    "conloca"
+  ],
   "license": "FSL-1.1-ALv2",
-  "description": "Astro integration that registers each build's editor bundle at an editor endpoint",
+  "description": "Astro integration that writes your site's editor page to /_conloca/editor/, plus the modules that serve draft previews",
   "type": "module",
   "sideEffects": false,
   "main": "./dist/src/index.js",
@@ -37,11 +42,6 @@
       "types": "./dist/src/site-middleware.d.ts",
       "import": "./dist/src/site-middleware.js",
       "default": "./dist/src/site-middleware.js"
-    },
-    "./bundle": {
-      "types": "./dist/src/bundle.d.ts",
-      "import": "./dist/src/bundle.js",
-      "default": "./dist/src/bundle.js"
     },
     "./doctor": {
       "types": "./dist/src/doctor.d.ts",
@@ -75,7 +75,7 @@
   },
   "dependencies": {
     "@conloca/content-api": "workspace:*",
-    "esbuild": "^0.28.2",
+    "@conloca/mdx": "workspace:*",
     "hast-util-from-html": "^2.0.3",
     "jose": "^6.2.10",
     "sass": "^1.103.1",
@@ -83,10 +83,13 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
+    "@astrojs/cloudflare": "14.3.2",
+    "@astrojs/sitemap": "^3.7.3",
     "@conloca/astro-cms": "workspace:*",
     "astro": "^7.3.1",
     "typescript": "^6.0.3",
-    "vite": "^8.2.2"
+    "vite": "^8.2.2",
+    "wrangler": "^4.130.0"
   },
   "engines": {
     "node": ">=20.0.0"
@@ -144,7 +147,8 @@
         "dependsOn": [
           "typecheck-tests",
           "build",
-          "test-packed"
+          "test-packed",
+          "test-editor-build"
         ],
         "inputs": [
           "{projectRoot}/**/*",
@@ -154,6 +158,26 @@
           "command": "bun test --timeout=0 ./src",
           "cwd": "{projectRoot}",
           "idleTimeoutMs": 180000,
+          "killAfterMs": 10000
+        }
+      },
+      "test-editor-build": {
+        "//": "Real Astro builds of generated fixture sites: slower than the unit lane, and about five times slower on GitHub's 2-core runners, so it has its own budget.",
+        "executor": "@smoothbricks/nx-plugin:bounded-exec",
+        "cache": true,
+        "inputs": [
+          "default",
+          "^production",
+          "{workspaceRoot}/bun.lock"
+        ],
+        "dependsOn": [
+          "build",
+          "^build"
+        ],
+        "options": {
+          "command": "bun test --timeout=180000 ./test-editor-build",
+          "cwd": "{projectRoot}",
+          "timeoutMs": 900000,
           "killAfterMs": 10000
         }
       },

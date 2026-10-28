@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { connect } from './commands/connect.js';
 import { create } from './commands/create.js';
 import { doctor } from './commands/doctor.js';
 import { init } from './commands/init.js';
@@ -47,9 +48,9 @@ program
     `
 Writes a complete Astro project into <directory>: package.json, astro.config
 with conlocaCMS wired, tsconfig, content config, starter components, a first
-page, the agent skill and a CI workflow with an inert build-token slot.
+page, the agent skill and a CI workflow that runs the doctor and the build.
 Then installs dependencies, initialises git, and runs the doctor on the result.
-Refuses a non-empty directory — for an existing site use 'conloca astro setup'.`,
+Refuses a non-empty directory — for an existing site use 'conloca connect'.`,
   )
   .action(
     async (
@@ -91,6 +92,56 @@ the retired verify command.`,
   .action(async (path: string, options: { json?: boolean; live?: boolean }) => {
     await doctor(path, { json: options.json === true, live: options.live === true });
   });
+
+program
+  .command('connect')
+  .argument('[path]', 'Folder of the Astro site, or of the repository holding it', '.')
+  .option('--project <dir>', 'Astro project to set up, when the repository has several')
+  .option('--site-url <url>', 'The address the site is deployed at, when astro.config sets no `site`')
+  .option('--yes', 'Accept every change without asking (no terminal needed)')
+  .option('--dry-run', 'Show the changes, write nothing')
+  .option('--no-install', 'Do not install packages; print the command instead')
+  .option('--no-build', 'Skip the local build check')
+  .option('--json', 'One JSON report on stdout')
+  .description("Set up an Astro site's editor page for your workspace editor")
+  .addHelpText(
+    'after',
+    `
+Adds @conloca/astro-cms, @conloca/cloud-astro and their React peers with the
+project's own package manager, wires react(), conlocaCMS() and conlocaCloud()
+into astro.config, writes the site's domain into sites.json, allows the
+workspace editor to frame the editor page where a committed header forbids
+it, builds the site once to prove the editor page is there, and removes the
+old build key from workflows. Every change is shown as a diff first; in a
+terminal it asks once, --yes accepts, and without a terminal or --yes nothing
+is written. A value you set yourself is kept and reported as "differs".
+Never commits, pushes or deploys. Exits 0 when done, 1 when a step failed,
+2 when a step needs you.`,
+  )
+  .action(
+    async (
+      path: string,
+      options: {
+        project?: string;
+        siteUrl?: string;
+        yes?: boolean;
+        dryRun?: boolean;
+        install: boolean;
+        build: boolean;
+        json?: boolean;
+      },
+    ) => {
+      await connect(path, {
+        project: options.project,
+        siteUrl: options.siteUrl,
+        yes: options.yes === true,
+        dryRun: options.dryRun === true,
+        install: options.install,
+        build: options.build,
+        json: options.json === true,
+      });
+    },
+  );
 
 const page = program
   .command('page')

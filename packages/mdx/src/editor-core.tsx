@@ -115,6 +115,8 @@ export interface BaseMDXEditorProps {
    * library/picker `imageDialog` flow — both can be active simultaneously.
    */
   imageUploadHandler?: (file: File) => Promise<string>;
+  /** Maps an image's `src` to the URL the editor canvas shows; the document keeps the original `src`. */
+  imagePreviewHandler?: (src: string) => Promise<string>;
   jsxComponentDescriptors?: JsxComponentDescriptor[];
   /**
    * Additional @mdxeditor/editor RealmPlugins appended to the built-in
@@ -214,6 +216,7 @@ export const BaseMDXEditor = React.forwardRef<MDXEditorMethods, BaseMDXEditorPro
       onImageShortcut,
       imageButtonRef,
       imageUploadHandler,
+      imagePreviewHandler,
       jsxComponentDescriptors,
       extraPlugins,
       extraToolbarItems,
@@ -346,6 +349,7 @@ export const BaseMDXEditor = React.forwardRef<MDXEditorMethods, BaseMDXEditorPro
           imagePlugin({
             ...(imageDialog ? { ImageDialog: imageDialog, disableImageSettingsButton } : {}),
             ...(imageUploadHandler ? { imageUploadHandler } : {}),
+            ...(imagePreviewHandler ? { imagePreviewHandler } : {}),
           }),
           ...(extraPlugins ?? []),
           toolbarPlugin({

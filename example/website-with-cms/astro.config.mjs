@@ -2,6 +2,7 @@
 import node from '@astrojs/node';
 import react from '@astrojs/react';
 import { conlocaCMS } from '@conloca/astro-cms/node';
+import { conlocaCloud } from '@conloca/cloud-astro';
 import { defineConfig } from 'astro/config';
 import { schemaTypia } from './typia-vite.mjs';
 
@@ -43,6 +44,9 @@ export default defineConfig({
         locale: 'en',
       },
     }),
+    // Writes the editor page to /_conloca/editor/. CONLOCA_ENDPOINT points it at another editor
+    // (a local one during development); unset, the default endpoint applies.
+    conlocaCloud({ endpoint: process.env.CONLOCA_ENDPOINT, repoUri: 'dev/dev-site' }),
   ],
   vite: {
     // Generates the validators and form metadata in src/schemas/data.ts.

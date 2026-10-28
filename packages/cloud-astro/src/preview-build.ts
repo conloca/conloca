@@ -1,10 +1,36 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { PACKAGE_NAME, PREVIEW_BUILD_ENV_FLAG, PREVIEW_SECRET_ENV_FLAG } from './constants.js';
+import { PACKAGE_NAME, PREVIEW_BUILD_ENV_FLAG, REFUSED_PREVIEW_ADAPTERS } from './constants.js';
 import type { PreviewBuildOptions } from './types.js';
 
-export { PREVIEW_SECRET_ENV_FLAG };
+/**
+ * Whether the recursive preview build runs: only when `previewBuild` is given
+ * as an object (strict opt-in, so a plain deploy never gets a second build),
+ * and then only with an SSR adapter that is not refused. Throws for a refused
+ * adapter or a missing one, so the build fails before it deploys anything.
+ */
+export function previewBuildMode(
+  previewBuild: PreviewBuildOptions | false | undefined,
+  adapterName: string | undefined,
+): 'off' | 'on' {
+  if (!previewBuild) return 'off';
+  if (adapterName === undefined) {
+    throw new Error(
+      `${PACKAGE_NAME}: the preview build needs an SSR adapter — the project is static and ` +
+        'previewBuild.adapter is not set. Pass one (e.g. previewBuild: { adapter: cloudflare() }) ' +
+        'or remove previewBuild.',
+    );
+  }
+  if (REFUSED_PREVIEW_ADAPTERS.includes(adapterName)) {
+    throw new Error(
+      `${PACKAGE_NAME}: previewBuild is not supported with ${adapterName} yet: that adapter writes its deployable ` +
+        'output at the project root, so the preview build could replace the live site. ' +
+        'Remove previewBuild from conlocaCloud(...).',
+    );
+  }
+  return 'on';
+}
 
 /**
  * The minimal child-process surface this module relies on. Letting
@@ -25,18 +51,18 @@ export type PreviewBuildSpawn = (
 
 /**
  * Pure constructor for the child-process environment passed to the recursive
- * preview build. Extracted so tests can verify the contract (env flag + secret
- * + parent-env inheritance) without spinning up a child process — and so the
+ * preview build. Extracted so tests can verify the contract (env flag +
+ * parent-env inheritance) without spinning up a child process — and so the
  * real-process smoke test can call it the same way the integration does.
  *
  * Inherits the parent environment so PATH, credentials, and any host-specific
- * build vars (CF_PAGES_*, GITHUB_*) reach the child.
+ * build vars (CF_PAGES_*, WORKERS_CI_*, GITHUB_*) reach the child, which reads
+ * the branch and commit it serves from them.
  */
-export function buildPreviewChildEnv(parentEnv: NodeJS.ProcessEnv, previewSecret: string): NodeJS.ProcessEnv {
+export function buildPreviewChildEnv(parentEnv: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   return {
     ...parentEnv,
     [PREVIEW_BUILD_ENV_FLAG]: '1',
-    [PREVIEW_SECRET_ENV_FLAG]: previewSecret,
   };
 }
 
@@ -71,13 +97,10 @@ export function resolveAstroBin(cwd: string = process.cwd()): string {
  * Spawns the recursive preview `astro build` from the primary build's
  * `astro:build:done` hook.
  *
- * The child process inherits the parent environment and additionally receives:
- *   - {@link PREVIEW_BUILD_ENV_FLAG} set to `'1'` so the integration's own
- *     `astro:build:done` short-circuits inside the child (recursion guard
- *     contract).
- *   - {@link PREVIEW_SECRET_ENV_FLAG} set to the per-branch secret so the
- *     child's `astro:config:setup` can inject the literal secret-scoped
- *     preview route (`/conloca_preview_${SECRET}/[...path]`).
+ * The child process inherits the parent environment and additionally receives
+ * {@link PREVIEW_BUILD_ENV_FLAG} set to `'1'`: the child's `astro:config:setup`
+ * mounts the preview route on it, and its `astro:build:done` short-circuits
+ * on it (recursion guard contract).
  *
  * If this function is itself called from within a recursive build (i.e. the
  * env flag is already set to `'1'`), it returns immediately without spawning,
@@ -88,8 +111,8 @@ export function resolveAstroBin(cwd: string = process.cwd()): string {
  *   - `false` → resolves and logs a warning so onboarding setups can continue
  *     when the preview build is not yet wired correctly.
  */
-export async function spawnPreviewBuild(previewSecret: string, opts: PreviewBuildOptions): Promise<void> {
-  await _spawnPreviewBuildWith(spawn, previewSecret, opts);
+export async function spawnPreviewBuild(opts: PreviewBuildOptions): Promise<void> {
+  await _spawnPreviewBuildWith(spawn, opts);
 }
 
 /**
@@ -100,11 +123,8 @@ export async function spawnPreviewBuild(previewSecret: string, opts: PreviewBuil
  * and not part of the package's public surface; it is not re-exported from
  * `src/index.ts` or `src/node.ts`.
  */
-export async function _spawnPreviewBuildWith(
-  spawnFn: PreviewBuildSpawn,
-  previewSecret: string,
-  opts: PreviewBuildOptions,
-): Promise<void> {
+// oxlint-disable-next-line no-underscore-dangle -- the internal test seam.
+export async function _spawnPreviewBuildWith(spawnFn: PreviewBuildSpawn, opts: PreviewBuildOptions): Promise<void> {
   // Recursion guard: bail out before doing any work if we're already inside
   // a recursive preview build. This matches the short-circuit in the
   // integration's `astro:build:done` hook.
@@ -112,15 +132,11 @@ export async function _spawnPreviewBuildWith(
     return;
   }
 
-  if (!previewSecret) {
-    throw new Error(`${PACKAGE_NAME}: preview secret is required to spawn the preview build`);
-  }
-
   const required = opts.required ?? true;
 
   const astroBin = resolveAstroBin();
   const child = spawnFn(astroBin, ['build'], {
-    env: buildPreviewChildEnv(process.env, previewSecret),
+    env: buildPreviewChildEnv(process.env),
     stdio: 'inherit',
   });
 

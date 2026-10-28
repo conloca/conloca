@@ -963,4 +963,12 @@ describe('Content API Middleware', () => {
       }
     });
   });
+
+  describe('Site.isPathnameAvailable', () => {
+    test('refuses a path under the reserved /_conloca prefix', () => {
+      const site = api.getSite('shop');
+      assertDefined(site);
+      expect(site.isPathnameAvailable('/_conloca/editor', 'en')).toBe(false);
+    });
+  });
 });

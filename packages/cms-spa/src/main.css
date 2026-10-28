@@ -80,7 +80,8 @@
    host's CSS doesn't reach. */
 @layer base, theme, components, utilities, cms-admin, conloca-host-defaults, conloca-host-preview;
 
-@import "@puckeditor/core/puck.css" layer(cms-admin);
+/* Puck's styles without their remote Inter @import: the editor sets its own font stack (--puck-font-family). */
+@import "@puckeditor/core/no-external.css" layer(cms-admin);
 /* Granular Tailwind v4 imports (see the preflight note in the header):
  * theme + utilities keep their exact pre-split homes — the
  * `cms-admin.theme` / `cms-admin.utilities` sublayers the monolithic

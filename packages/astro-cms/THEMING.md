@@ -25,6 +25,10 @@ When the editor opens a doc at route `/foo/`:
    page background. `useInjectHostStyles` reads `getComputedStyle(body).backgroundColor` after host CSS lands and
    exposes it as `--conloca-host-body-bg` on `:root`, which the surround region reads.
 
+On the editor page that `@conloca/cloud-astro` builds into your site, there is no dev server to ask. The editor loads
+the published page at `/foo/` in a hidden same-origin frame and reads both facts from it: the page's own stylesheets
+take the place of step 1, and the same wrapper rule runs on its HTML for step 2.
+
 ## Opt-ins
 
 ### Content-root marker

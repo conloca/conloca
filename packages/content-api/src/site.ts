@@ -1,5 +1,5 @@
 import type { ContentAPI } from './content-api.interface.js';
-import { localesOf } from './content-utils.js';
+import { isReservedPathname, localesOf } from './content-utils.js';
 import type { SiteIndex } from './site-index.js';
 import type { ContentManifest, CreatePageInput, CreateResult, MoveResult, SiteFilters } from './types.js';
 
@@ -134,6 +134,8 @@ export class Site {
 
   // Validate pathname is available (not taken or in redirects)
   isPathnameAvailable(pathname: string, locale: string, excludeId?: string): boolean {
+    if (isReservedPathname(pathname)) return false;
+
     // Check if pathname is already taken
     const existing = this.getByPathname(pathname, locale);
     if (existing && existing.id !== excludeId) {

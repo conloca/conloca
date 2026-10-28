@@ -1,42 +1,52 @@
 # `@conloca/cloud-astro`
 
-Astro integration that connects a Conloca CMS site to an editor endpoint. Add it to the site's `astro.config.mjs` next
-to `conlocaCMS` to:
+Astro integration that adds the editor page for Conloca's workspace editor to a site's build. Add it to the site's
+`astro.config.mjs` next to `conlocaCMS` to:
 
-1. Compile the site's Puck config into a single editor bundle under `_conloca/` in the build output
-   (react/react-dom/jsx-runtime/`@puckeditor/core` stay external — the editor supplies them at runtime) and register the
-   build at `endpoint`, so the editor there loads this build's bundle for the branch it was built from.
-2. Run a recursive preview build that emits SSR routes for draft content.
-3. Wire preview SSR middleware that checks `/conloca_preview_<secret>/*` requests against the endpoint's token issuer
-   and serves draft pages.
+1. Write the editor page to `/_conloca/editor/` in every build: the site's Puck config compiled into one bundle
+   (react/react-dom/jsx-runtime/`@puckeditor/core` stay external — the workspace editor supplies them at runtime), its
+   styles, the MDX sandbox frame and `conloca.json`. The page carries no credential.
+2. When `previewBuild` is given as an object, run a recursive preview build that emits SSR routes for draft content.
+3. Wire preview SSR middleware that serves `/_conloca/preview/*` under the site's `base` and admits only passes, signed
+   by the endpoint's token issuer, for the repository, site and branch the preview build was made from.
 4. Expose `PreviewContentAPI` for `.astro` pages to fetch draft content.
 
-Items 2 to 4 serve draft previews, which are not available on your own deployment yet. The setup below keeps them off
-with `previewBuild: false` (see [Draft previews](#draft-previews)).
+Items 2 to 4 serve draft previews, which are not available on your own deployment yet. They stay off unless
+`previewBuild` is given as an object (see [Draft previews](#draft-previews)).
 
 ## Setup
 
 Before you start you need:
 
-- An Astro site that already runs `@conloca/astro-cms` (its README covers that), in a GitHub repository.
-- The repository connected to the editor at `endpoint`: sign in there with **Continue with GitHub**, choose **Connect
-  GitHub**, and pick the repository on GitHub's installation screen. If a GitHub organization owns the repository and
-  you are not one of its owners, an owner has to approve the installation; until then the editor shows **Waiting for
-  approval**.
-- An owner or admin role in the editor's workspace: only they can create the build token in step 3. Whoever sets the
-  workspace up becomes its first owner.
+- An Astro site in a GitHub repository.
+- The repository connected to your workspace editor at `<slug>.conloca.com`: sign in there with **Continue with
+  GitHub**, choose **Connect GitHub**, and pick the repository on GitHub's installation screen. If a GitHub organization
+  owns the repository and you are not one of its owners, an owner has to approve the installation; until then the editor
+  shows **Waiting for approval**.
+- A place the site is deployed to, at an address visitors reach without signing in. The workspace editor edits the
+  deployed site: it opens the editor page your build adds under `/_conloca/editor/`, so editing starts after the first
+  deploy. For editing before that, `astro dev` keeps the local editor at `/__cms`.
 
-### 1. Install
+### 1. Run `conloca connect`
+
+In the site's folder, or the repository holding it:
 
 ```sh
-bun add @conloca/cloud-astro
+npx @conloca/cli connect
 ```
 
-It needs Astro 7.3.1 or a later 7.x release, and `@conloca/astro-cms` at its own version: the `@conloca/*` packages are
-released together, so keep them on one version and update them together. Its other peers (`@astrojs/react`, `vite`) are
-already in a site that runs `@conloca/astro-cms`.
+A coding agent can do the whole setup from one line:
+`In my Astro site's folder, run npx @conloca/cli@<version> connect, then commit, push and deploy.`
 
-### 2. Add it next to `conlocaCMS`
+`connect` adds `@conloca/astro-cms`, `@conloca/cloud-astro`, `@astrojs/react` and `@vitejs/plugin-react` with the
+package manager of the nearest lockfile, wires `astro.config`, writes the site's host into `sites.json` (step 2), adds a
+framing rule only where a committed header file forbids framing (step 3), builds the site once to check that the editor
+page is there, and removes old build key lines from workflows. Every change is shown as a diff first: in a terminal it
+asks once, `--yes` accepts without asking, and `--dry-run` writes nothing. A value you set yourself is kept and reported
+as `differs`. It exits `2` with the lines to add when a step needs you, such as a config that is not a plain
+`defineConfig({ integrations: [...] })`. `npx @conloca/cli connect --help` lists every option.
+
+The config it wires:
 
 ```js
 // astro.config.mjs
@@ -46,6 +56,7 @@ import { conlocaCloud } from '@conloca/cloud-astro';
 import { defineConfig } from 'astro/config';
 
 export default defineConfig({
+  site: 'https://www.example.com',
   // Keep your existing settings (output, adapter, ...) as they are.
   integrations: [
     react(),
@@ -54,124 +65,116 @@ export default defineConfig({
       puckConfigPath: './src/puck.config.tsx',
       layout: './src/layouts/Layout.astro',
     }),
-    conlocaCloud({
-      endpoint: 'https://cms.example.com',
-      puckConfigPath: './src/puck.config.tsx',
-      publicBaseUrl: 'https://www.example.com',
-      previewBuild: false,
-    }),
+    conlocaCloud({ repoUri: 'your-org/your-site' }),
   ],
 });
 ```
 
+- `conlocaCloud()` needs no options. It takes `puckConfigPath` and `siteStyles` from `conlocaCMS`, and builds for the
+  workspace editor at `https://app.conloca.com` (`endpoint`'s default).
+- `connect` writes `repoUri` when the checkout's `origin` is on GitHub, so the editor page names its repository even
+  where the build has no git remote. Without it, the build reads the repository from GitHub Actions, Vercel or GitLab,
+  else from the checkout's `remote.origin.url`.
 - `conlocaCloud` is an add-on to `conlocaCMS`, not a replacement: keep both, with `react()` first. Doctor reports a
   config without `conlocaCMS` as an error.
-- `endpoint` is only the scheme and host of the address you open the editor at, such as `https://cms.example.com`. Leave
-  out any path the browser's address bar shows after the host, and the trailing slash.
-- `puckConfigPath` is the value you already gave `conlocaCMS`. If your `conlocaCMS` options also set `siteStyles` or
-  `fragmentPreviewRoute`, give `conlocaCloud` the same values, so the editor renders your pages with your site's styles.
-- `publicBaseUrl` is the address your deployed site is served from: the editor loads this build's editor files from
-  there. The integration does **not** read Astro's `site` option, so set `publicBaseUrl` even when `site` holds the same
-  address. Its only fallback is `CF_PAGES_URL`, which Cloudflare Pages sets when it runs the build itself. Without
-  either, the build succeeds but does not register, and the editor never updates.
-- `previewBuild: false` keeps off the second build, the one that serves draft previews. Draft previews on your own
-  deployment are not available yet, so keep this line: without it, every build that registers also runs that second
-  build, which fails on a static site that has no SSR adapter.
+- Nothing changes `output` or adds an adapter: a static site stays static.
 
-### 3. Give the build a token
+By hand: on a site without `conlocaCMS`, run `npx @conloca/cli astro setup` first. Then
+`bun add @conloca/astro-cms @conloca/cloud-astro` (plus the React peers), add `conlocaCloud()` right after
+`conlocaCMS(...)`, and follow steps 2 and 3. `@conloca/cloud-astro` needs Astro 7.3.1 or a later 7.x release, and
+`@conloca/astro-cms` at its own version: the `@conloca/*` packages are released together, so keep them on one version
+and update them together.
 
-In the editor at `endpoint`, open the account menu (the round button with your initial), choose **Workspace settings**,
-and go to **Build token**. The **Connect this site** screen of a site that has no build yet shows the same section.
-Choose **Create build token**. The token is shown once, as the line `CONLOCA_BUILD_TOKEN=cbt_…`, and **Copy environment
-variable** copies that whole line. Store it wherever `astro build` runs:
+### 2. Your site's host in `sites.json`
 
-- Where the name and the value are separate fields — a GitHub Actions secret, a Cloudflare Pages variable, most hosts'
-  settings — the name is `CONLOCA_BUILD_TOKEN` and the value is **only** the part after `CONLOCA_BUILD_TOKEN=`, starting
-  with `cbt_`. Do not paste the whole copied line as the value.
-- Where the input takes `NAME=value` lines, like a `.env` file, paste the whole line.
+The workspace editor opens `https://<host><base>_conloca/editor/`. `<host>` is `domains[defaultLocale]` of the site
+named `default` in `sites.json` (or of the only site), and `<base>` is that site's `base`, `/` when unset:
 
-Give the secret only to the steps that need it: `conloca doctor` and the build (see the
-[CI example](#ci-example-github-actions)), not to install scripts or deploy actions. Never write it into the config:
-doctor warns when `buildToken` is committed.
-
-One token serves the whole workspace. **Replace build token** creates a new one, and the old one stops working at once,
-so update every place that holds it.
-
-No Conloca-specific GitHub Action or OIDC setup is required. GitHub Actions, Vercel and GitLab provide the repository
-automatically; elsewhere the integration reads the checkout's `remote.origin.url`. Use `repoUri` only for a checkout
-where neither is available.
-
-A build without the token still succeeds; it only skips registration (see
-[When registration is skipped](#when-registration-is-skipped)). Once your CI is wired, set `requireRegistration: true`
-so a deploy can never silently leave the editor behind.
-
-### 4. Push, then build
-
-A build registers the exact commit it was built from, and the endpoint refuses a commit it has not received from GitHub
-yet. Push first, then build the pushed commit; a CI build that starts on push does this for you. A build of a commit the
-endpoint does not have retries for about two and a half minutes and then fails with an error that says the commit
-`is not ingested`. A local `astro build` of an unpushed commit with the token set fails the same way.
-
-If you also build pull requests on GitHub Actions, give `actions/checkout` the pull request's own commit
-(`ref: ${{ github.event.pull_request.head.sha || github.sha }}`). By default it checks out a merge commit that GitHub
-makes for the pull request and never pushes, so the endpoint never receives it and the registration fails.
-
-A pull-request build deployed somewhere other than `publicBaseUrl`, such as a host's preview deploy, must set
-`publicBaseUrl` to the address that build is served from, for example from your host's deploy-URL variable (a full
-`https://` address). The editor on that branch loads the build's editor files from `publicBaseUrl`, and your production
-site does not serve the files only a pull request's build produced, so the editor would report that the bundle could not
-be loaded or verified.
-
-### 5. Deploy, and serve `/_conloca/*` cross-origin
-
-The build writes the editor files under `_conloca/` in its output: `dist/_conloca/` for a static site, or the client
-folder such as `dist/client/_conloca/` for a server-rendered one. Deploy the build the way you already do, to the
-`publicBaseUrl` address.
-
-The editor runs on another origin and fetches those files from your site, so every `/_conloca/*` response must be public
-and carry `Access-Control-Allow-Origin: *`. Without the header the editor reports that this build's editor bundle could
-not be loaded or verified, and rebuilding does not help.
-
-The build writes that rule to a `_headers` file next to `_conloca/` (`dist/_headers`, or `dist/client/_headers` for a
-server-rendered site): one rule for `/_conloca/*`, plus one for each folder of fonts and images your site styles
-reference.
-
-- **Cloudflare Pages and Netlify** apply `_headers` themselves. Nothing else to do.
-- **Everywhere else**, `_headers` is ignored — including a Node server built with `@astrojs/node`, which has no setting
-  for headers on static files. Set the header for every path the generated `_headers` lists, in whatever serves the
-  site. A site made by `conloca create` is such a Node server: add the header in a proxy in front of it, or switch the
-  site to static output (remove `output: 'server'` and the adapter from `astro.config.mjs`) and deploy it to Cloudflare
-  Pages or Netlify. With Caddy in front of the Node server:
-
-  ```caddyfile
-  www.example.com {
-  	header /_conloca/* Access-Control-Allow-Origin *
-  	reverse_proxy localhost:4321
-  }
-  ```
-
-  With nginx in front of it:
-
-  ```nginx
-  location /_conloca/ {
-      add_header Access-Control-Allow-Origin * always;
-      proxy_pass http://127.0.0.1:4321;
-  }
-  ```
-
-  If nginx serves the files itself, keep your `root` or `try_files` lines in that `location` instead of `proxy_pass`. A
-  `location` with its own `add_header` drops the ones it would inherit from the `server` block, so repeat any you rely
-  on.
-
-Check it after the deploy, with the file name from the build log line
-`editor bundle written: /_conloca/editor-bundle.<hash>.js`:
-
-```sh
-curl -sI -H 'Origin: https://cms.example.com' https://www.example.com/_conloca/editor-bundle.<hash>.js
+```json
+"default": {
+  "locales": ["en"],
+  "defaultLocale": "en",
+  "domains": { "en": "www.example.com" }
+}
 ```
 
-The answer must be `200` and include `access-control-allow-origin: *`. `conloca doctor --live` checks that the file is
-deployed, not this header.
+- `connect` writes `domains` from Astro's `site`, and `base` from Astro's `base` when it is not `/`. When `astro.config`
+  sets no plain `site`, pass the address: `npx @conloca/cli connect --site-url https://www.example.com`. `connect` never
+  writes Astro's `site` itself, since that changes canonical URLs and sitemaps.
+- The host is a bare host such as `www.example.com`: no scheme, port or path. The editor never opens an IP address,
+  `localhost` or a host under `conloca.com`.
+- Use the address visitors reach. A deploy that asks visitors to sign in, such as a Vercel preview behind Deployment
+  Protection, cannot be opened by the editor.
+
+### 3. Framing headers, only if your site forbids framing
+
+The workspace editor shows `/_conloca/editor/` in a frame. A site that sends no `X-Frame-Options` and no
+`frame-ancestors` can already be framed, so there is nothing to do; GitHub Pages sends neither. When a committed
+`public/_headers`, `netlify.toml` or `vercel.json` sets one of them for the whole site, `connect` adds a rule for
+`/_conloca/editor/`, and until one exists the build warns and `conloca doctor` reports CC10. The rules:
+
+- **Cloudflare Pages and Cloudflare Workers static assets**, in `public/_headers` after any site-wide `/*` rule:
+
+  ```plain
+  /_conloca/editor/*
+    ! X-Frame-Options
+    ! Content-Security-Policy
+    Content-Security-Policy: frame-ancestors 'self' https://*.conloca.com
+
+  /_conloca/editor/sandbox-frame.html
+    Content-Security-Policy: sandbox allow-scripts
+  ```
+
+  `! Name` removes a header an earlier rule set. The site's own policy has to come off this path: two policies are both
+  enforced, and the editor page carries its own.
+
+- **Netlify**, in `public/_headers`. Netlify cannot remove a header, so the rule only adds the policy; a site-wide
+  `X-Frame-Options` is then ignored by browsers, because `frame-ancestors` wins:
+
+  ```plain
+  /_conloca/editor/*
+    Content-Security-Policy: frame-ancestors 'self' https://*.conloca.com
+
+  /_conloca/editor/sandbox-frame.html
+    Content-Security-Policy: sandbox allow-scripts
+  ```
+
+- **Vercel**, in the `headers` list of `vercel.json`:
+
+  ```json
+  [
+    {
+      "source": "/_conloca/editor/:path*",
+      "headers": [{ "key": "Content-Security-Policy", "value": "frame-ancestors 'self' https://*.conloca.com" }]
+    },
+    {
+      "source": "/_conloca/editor/sandbox-frame.html",
+      "headers": [{ "key": "Content-Security-Policy", "value": "sandbox allow-scripts" }]
+    }
+  ]
+  ```
+
+- **A site-wide `Content-Security-Policy` with `frame-ancestors`**, on any host: a second policy cannot loosen it.
+  Narrow it yourself so it does not cover `/_conloca/editor/`, then add the rule above. `connect` reports this case
+  instead of editing a policy.
+- **Headers set in host settings or by a server**, such as a proxy in front of an `@astrojs/node` server: exempt
+  `/_conloca/editor/` there the same way. `connect` cannot see them; `conloca doctor --live` reads the deployed page's
+  real headers (CC12).
+
+### 4. Commit, push and deploy
+
+`connect` never commits, pushes or deploys. Commit its changes, push to the default branch, and deploy the way you
+always do. The build writes the editor page under `_conloca/editor/` in its output (`dist/_conloca/editor/` for a static
+site, the client folder such as `dist/client/_conloca/editor/` for a server-rendered one) and logs
+`editor page written: /_conloca/editor/`. It needs no secret and no environment variable.
+
+On the default branch the workspace editor uses the components of the default branch's deploy. On any other branch it
+uses the deploy whose code is closest to the branch's latest commit, among the branch's own deploys, the default
+branch's and a build of the branch it was created from (on a tie, in that order), and the editor says which; see
+[Branch deploys](#branch-deploys).
+
+`/_conloca/editor/conloca.json` publishes the repository's name and the build's branch and commit. If the repository is
+not public, its name becomes public with the deploy.
 
 ### CI example (GitHub Actions)
 
@@ -190,75 +193,140 @@ jobs:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
-      # The token goes to doctor and the build only, not to install scripts or the deploy.
       - run: bunx @conloca/cli doctor
-        env:
-          CONLOCA_BUILD_TOKEN: ${{ secrets.CONLOCA_BUILD_TOKEN }}
       - run: bun run build
-        env:
-          CONLOCA_BUILD_TOKEN: ${{ secrets.CONLOCA_BUILD_TOKEN }}
       # Deploy the build the way you already do.
 ```
 
-### Check it
+### Branch deploys
 
-After the deploy finishes, run this in your repository, on the branch you built:
+On a branch other than the default one, the editor looks for that branch's own build: through the host's records on
+GitHub (deployments, commit statuses, Cloudflare check runs) or its branch address. The deploy must be public for the
+editor to frame it. Reading the records needs Conloca's GitHub App to have **Deployments**, **Commit statuses** and
+**Checks** read access; an organization owner accepts that update on GitHub. Until then only the records go unread: a
+Cloudflare Pages branch address still works. When no build of the branch is found, the editor uses an earlier build from
+the branch's history (labelled as such), else the default branch's deploy, and says so.
 
-```sh
-CONLOCA_BUILD_TOKEN=cbt_... bunx @conloca/cli doctor --live
+| Host                                                                                         | Works when                                                                                                      | By default                                                                                                                                 | Found through                                                           |
+| -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
+| Cloudflare Pages                                                                             | previews public (Access off) and branch builds not excluded                                                     | **works**                                                                                                                                  | check-run summary (needs permissions) or branch address (no permission) |
+| Netlify                                                                                      | an open pull request from the same repository; previews public                                                  | PR deploy previews only, through commit statuses (needs permissions). Branch deploys are off; credit-based plans can make previews private | commit statuses (needs permissions)                                     |
+| Vercel                                                                                       | Deployment Protection off for previews                                                                          | **protected**: the editor uses the default branch's deploy. Protection has been on by default since 2023-11                                | Deployment (needs permissions)                                          |
+| Cloudflare Workers Builds                                                                    | previews enabled, an open pull request from the same repository, preview URL on Cloudflare's own preview domain | PR only                                                                                                                                    | bot PR comment (needs permissions)                                      |
+| Render                                                                                       | PR previews enabled                                                                                             | off (manual trigger by default)                                                                                                            | Deployment created by a person (needs permissions)                      |
+| S3, your own server or other static hosting with a public address per branch                 | an opt-in Actions job that posts a Deployment **on push**, for the built commit                                 | the default branch's deploy                                                                                                                | Deployment by `github-actions`                                          |
+| GitHub Pages (no per-branch deploys), Amplify, Cloudflare Workers Previews on custom domains | —                                                                                                               | the default branch's deploy                                                                                                                | not supported                                                           |
+
+**Cloudflare Pages not connected to a Git repository** (`wrangler pages deploy`): set `CONLOCA_PAGES_PROJECT` to the
+first label of the site's `pages.dev` address (`my-site-4k2` for `my-site-4k2.pages.dev`) in the production build's
+environment, so branch addresses are found. Use the address label, not the project name you gave `wrangler`: when that
+name is taken, Cloudflare adds a suffix to the address, and setting the project name then silently finds no branch
+address.
+
+When two branch names clean up to the same Cloudflare Pages branch address, Pages gives the second one a random suffix.
+The editor can't predict that address, so that branch shows the default branch's components unless its deploy is also
+reported to GitHub (the Deployment step below).
+
+**Vercel:** Deployment Protection has been on for previews by default since 2023-11. Turn it off for previews to let the
+editor frame them, knowing that anyone with a preview URL can then see it.
+
+**Any other host:** the editor frames a branch build at its own address with the site's production base, so a preview
+under a subpath of one site can't work. Publish each branch build at its own public address (a second host or bucket
+works), then add a step that posts a GitHub Deployment for the built commit, on `push`, with `GITHUB_TOKEN` and no other
+secret:
+
+```yaml
+on: push
+permissions:
+  contents: read
+  deployments: write
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      # … your build and deploy steps; the step with id `deploy` outputs `url` (https)
+      - uses: actions/github-script@v7
+        env:
+          PREVIEW_URL: ${{ steps.deploy.outputs.url }}
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const { data } = await github.rest.repos.createDeployment({
+              owner, repo, ref: context.sha, environment: `preview/${context.ref_name}`,
+              auto_merge: false, required_contexts: [],
+            });
+            await github.rest.repos.createDeploymentStatus({
+              owner, repo, deployment_id: data.id, state: 'success', environment_url: process.env.PREVIEW_URL,
+            });
 ```
 
-`--live` asks the endpoint what it knows about this repository: whether it accepts the token, which commit registered
-the editor for this branch and site and which version of this package built it, and whether that editor bundle is still
-deployed. The token goes only to the `endpoint` in your config. If you did not keep a copy of the token, skip this step
-rather than replacing the token (that stops the CI secret working at once); reloading the editor is enough.
+A `pull_request` build checks out a merge commit, which never matches the branch's commit: build on `push`, or check out
+`github.event.pull_request.head.sha` and pass that commit as `ref` instead of `context.sha`.
 
-Then reload the editor: it opens your site instead of **Connect this site**, and the **Build registration** row under
-**Workspace settings → Build token** turns from **Waiting for Astro build** to **Connected**.
+### Check it
+
+After the deploy finishes, run this in your repository:
+
+```sh
+npx @conloca/cli doctor --live
+```
+
+`--live` reads the deployed `<host><base>_conloca/editor/conloca.json` and the page's headers, and the protocol range
+the editor publishes at `https://app.conloca.com/host/protocols.json`, and judges them by the same rules the workspace
+editor applies. It sends no credential, so it runs anywhere, pull requests from forks included.
+
+Then open your workspace editor at `<slug>.conloca.com`. Until the editor page is live, **Connect this site** lists the
+steps the site still needs: each row says what is done, whom it waits on, or what failed and how to fix it.
 
 ### Troubleshooting
 
-- **The build log ends with `editor at … NOT updated by this build`.** Prerequisites were missing, and each `missing:`
-  line names one: `public base URL` means `publicBaseUrl` is not set (step 2), `build token` means the
-  `CONLOCA_BUILD_TOKEN` secret does not reach the build (step 3). See
-  [When registration is skipped](#when-registration-is-skipped).
-- **Doctor says the build token value starts with `"CONLOCA_BUILD_TOKEN="`, or the build fails with
-  `registration rejected: HTTP 401` and the secret holds the whole copied line.** Change the value to the part starting
-  with `cbt_` and rebuild. The token itself is fine; you do not need a new one.
-- **`registration rejected: HTTP 401` with a `cbt_…` value.** The token was replaced, which invalidates the old one at
-  once. Put the new token in the `CONLOCA_BUILD_TOKEN` secret everywhere the site builds, then rebuild.
-- **The build fails with an error that says the commit `is not ingested`.** It built a commit the endpoint has not
-  received. Push the commit, then rebuild (step 4).
-- **`registration rejected: HTTP 403` saying the repository is not covered by the workspace's GitHub installation.** Add
-  the repository to that installation in your GitHub settings, then rebuild.
-- **The build log shows `registration complete`, but the editor still shows Connect this site.** Wait for the deploy to
-  finish, then reload the editor.
-- **The editor says the editor bundle could not be loaded or verified.** `/_conloca/*` lacks the cross-origin header,
-  `publicBaseUrl` does not serve this build's files, or the deploy has not finished (step 5).
+Doctor names each check; the checklist in the workspace editor reports the same causes.
+
+- **`sites.json` has no `domains` for the default locale, or not a bare host** (CC9). Run `connect`, or add your site's
+  host there (step 2). A host under `conloca.com`, an IP address or `localhost` is refused.
+- **A committed header file sets `X-Frame-Options` or `frame-ancestors` for the whole site** (CC10). Run `connect`, or
+  add the rule from step 3.
+- **The address cannot be reached, or answers 5xx or 429** (CC11). The site is down or limiting requests: check that it
+  is deployed and serving, then try again later.
+- **`conloca.json` is not deployed** (CC11). The address answers 404 or an HTML page: deploy the commit that adds
+  `conlocaCloud()`, and check that `domains` names the address it is deployed to.
+- **The address asks visitors to sign in** (CC11), for example Vercel Deployment Protection. Put the public production
+  address in `sites.json`, or let visitors through.
+- **The page names no repository** (CC11). The build could not read the git remote: set `repoUri` in `conlocaCloud(...)`
+  (`connect` writes it from a checkout with a GitHub `origin`).
+- **The address serves another repository's editor page, or another site** (CC11). Check `domains` and `siteId` in
+  `sites.json`.
+- **`conloca.json` is not one the editor can read** (CC11). The host changed the built file; serve it unchanged.
+- **The page is serving an older commit than your checkout** (CC11, a warning). Deploy to see your latest components.
+- **The deployed page sends `X-Frame-Options`, or a `frame-ancestors` that leaves out `https://*.conloca.com`** (CC12).
+  Run `connect` again, or exempt `/_conloca/editor/` in your host settings (step 3).
+- **The deployed page sends a `script-src` that does not allow `https://app.conloca.com`** (CC12). The page cannot load
+  the editor, and the workspace editor stops waiting for it. Detach the site's policy on `/_conloca/editor/` (step 3),
+  or add `https://app.conloca.com` to its `script-src` there.
+- **The page's protocol is outside the range the editor speaks** (CC13). Rebuild with a newer `@conloca/cloud-astro` and
+  deploy; if the page is newer than the editor, the editor does not speak that version yet.
+- **A workflow or the config still names `CONLOCA_BUILD_TOKEN`, `buildToken`, `publicBaseUrl`, `previewDomain` or
+  `requireRegistration`** (CC14). The editor page needs none of them: remove those lines. `connect` removes the workflow
+  lines that only pass the key.
 
 ## Options
 
-| Name                   | Required | Description                                                                                                                          |
-| ---------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `endpoint`             | yes      | Editor endpoint, scheme and host only, e.g. `https://cms.example.com`: no path, no trailing slash. URL-shape validated.              |
-| `puckConfigPath`       | yes      | Puck config entry to compile (same option name and value as in `@conloca/astro-cms`).                                                |
-| `publicBaseUrl`        | no       | Where the deployed site is served; the editor loads the bundle from there. Astro's `site` is not read. Falls back to `CF_PAGES_URL`. |
-| `repoUri`              | no       | Advanced `owner/repo` override; normally detected from CI or the Git remote.                                                         |
-| `siteId`               | no       | Advanced site-id override for CMS-less builds; sites.json is authoritative.                                                          |
-| `buildToken`           | no       | Build token issued by the endpoint; use the `CONLOCA_BUILD_TOKEN` environment variable instead, so it is never committed.            |
-| `siteStyles`           | no       | Site CSS compiled into the canvas stylesheet, as in `conlocaCMS`.                                                                    |
-| `editorBundlePlugins`  | no       | esbuild plugins for the editor bundle, which is built outside Vite: pass e.g. the Typia transform your page schemas need.            |
-| `fragmentPreviewRoute` | no       | Content route for build-time style discovery, as in `conlocaCMS`.                                                                    |
-| `previewDomain`        | no       | Dedicated preview domain. When set, switches to `preview-domain` mode and is used instead of `publicBaseUrl`.                        |
-| `previewBuild`         | no       | `PreviewBuildOptions` or `false`. On by default; set `false`, since draft previews on your own deployment are not available yet.     |
-| `saasIssuer`           | no       | Draft previews only. JWT `iss` the preview middleware pins (the endpoint's token issuer). Baked in; else set at runtime.             |
-| `requireRegistration`  | no       | Fail the build when registration is skipped for a missing prerequisite. Recommended in CI once setup is done.                        |
+| Name             | Required | Description                                                                                                                                      |
+| ---------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `endpoint`       | no       | The workspace editor's address, scheme and host only, no trailing slash; its host must start with `app.`. Defaults to `https://app.conloca.com`. |
+| `puckConfigPath` | no       | Puck config entry to compile. Defaults to the value `conlocaCMS` was given.                                                                      |
+| `repoUri`        | no       | Advanced `owner/repo` override; normally detected from CI or the Git remote.                                                                     |
+| `siteId`         | no       | Advanced site-id override for CMS-less builds; sites.json is authoritative.                                                                      |
+| `siteStyles`     | no       | Site CSS compiled into the canvas stylesheet, as in `conlocaCMS`.                                                                                |
+| `previewBuild`   | no       | `PreviewBuildOptions` or `false`. Off unless given as an object; refused under `@astrojs/vercel` and `@astrojs/netlify`.                         |
+| `saasIssuer`     | no       | Draft previews only. JWT `iss` the preview middleware pins (the endpoint's token issuer). Baked in; else set at runtime.                         |
 
-The `conlocaCMS` options `schemasPath` and `mdxComponentFolders` reach the editor at `endpoint` automatically: the CMS
-publishes what it resolved and this integration compiles the schemas and the discovered MDX components into the editor
-bundle each build registers. The `conlocaCMS` options `editorStyles` and `editorCSS` have no effect on the editor at
-`endpoint` (they configure the local dev editor only); `templates` and the `routing` data bindings reach it through the
-same channel as `schemasPath`.
+The `conlocaCMS` options `schemasPath`, `mdxComponentFolders`, `templates`, the `routing` data bindings, `editorStyles`
+and `editorCSS` reach the editor page automatically: the CMS publishes what it resolved, and the editor page renders
+your pages with them as the local editor at `/__cms` does.
+
+`buildToken`, `requireRegistration`, `publicBaseUrl`, `previewDomain`, `editorBundlePlugins` and `fragmentPreviewRoute`
+were removed: a config that still names one fails at load. Run `npx @conloca/cli connect` to update it.
 
 ## Public render path
 
@@ -271,40 +339,25 @@ they did before.
 Draft previews on your own deployment are not available yet. Keep `previewBuild: false` in your config: the preview
 build stays off, and a build produces only your normal site.
 
-## When registration is skipped
-
-A build that lacks a prerequisite — no `CONLOCA_BUILD_TOKEN`, no repository identity, no git sha/branch, or no public
-base URL — completes without registering and ends with one summary block, with a `missing:` line for each prerequisite
-it lacks:
-
-```plain
-[@conloca/cloud-astro] editor at https://cms.example.com NOT updated by this build
-  missing: build token (set buildToken or CONLOCA_BUILD_TOKEN)
-  consequence: registration was skipped, so the editor keeps serving the previous build of this branch (or the default branch's, or nothing, if neither was ever registered)
-  check: conloca doctor --live
-```
-
-Set `requireRegistration: true` in CI to turn that into a build failure. An attempted registration that the endpoint
-rejects always fails the build; there is no switch for that.
-
 ## Doctor
 
 This package is a `conloca doctor` extension (`conloca.doctor` in package.json): `conloca doctor` in a project that
 depends on it runs this package's checks after the CMS ones, offline by default.
 
-| Check | What it verifies                                                                                                                                                                                                              |
-| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| CC1   | `conlocaCloud(...)` is wired next to `conlocaCMS(...)` (an absent `conlocaCMS` is an error)                                                                                                                                   |
-| CC2   | A build token is available (`CONLOCA_BUILD_TOKEN`; missing = error under CI, info locally) and parses as `cbt_…`, with its own message for a pasted `CONLOCA_BUILD_TOKEN=` prefix (skipped when `conlocaCloud` is not called) |
-| CC3   | `endpoint` is a valid https URL (no trailing slash); `publicBaseUrl`/`previewDomain` when set, or `CF_PAGES_URL` under CI; skipped likewise                                                                                   |
-| CC4   | `conlocaCMS` options the endpoint's editor ignores (`editorStyles`, `editorCSS`)                                                                                                                                              |
-| CC5   | `--live`: the endpoint accepts the token (a 401 means a replaced token — put the new one in the CI secret — or an endpoint without the status route)                                                                          |
-| CC6   | `--live`: a registration serves this branch and site — own row, inherited from the default branch, or none                                                                                                                    |
-| CC7   | `--live`: the editor bundle the registration names is still deployed (catches a later deploy deleting it) and how stale it is; it does not check the cross-origin header                                                      |
-| CC8   | `previewBuild` is `false`, or the preview build has an SSR adapter (the project's own or `previewBuild.adapter`); a static project with neither is an error, because every build that registers would fail                    |
+| Check | What it verifies                                                                                                                                                                                             |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| CC1   | `conlocaCloud(...)` is wired next to `conlocaCMS(...)` (an absent `conlocaCMS` is an error); notes that the deployed `conloca.json` publishes the repository's name                                          |
+| CC8   | `previewBuild` is absent or `false`, or the preview build has an SSR adapter (the project's own or `previewBuild.adapter`); `previewBuild` on a static project with neither is an error: `astro build` fails |
+| CC9   | `sites.json` gives the site named `default` (or the only site) a bare host in `domains[defaultLocale]` and a valid `base`; Astro's `site` and `base`, when the config shows them, agree (warnings)           |
+| CC10  | No committed `public/_headers`, `netlify.toml` or `vercel.json` sets `X-Frame-Options` or `frame-ancestors` for the whole site without a `/_conloca/editor/` rule; the error carries the rule to add         |
+| CC11  | `--live`: `<host><base>_conloca/editor/conloca.json` is deployed, public, and names this repository and site; warns when it serves another commit than your checkout                                         |
+| CC12  | `--live`: the deployed `/_conloca/editor/` may be framed by `https://*.conloca.com` and its `script-src` allows the editor's origin                                                                          |
+| CC13  | `--live`: the page's protocol is in the range the editor publishes at `/host/protocols.json`                                                                                                                 |
+| CC14  | No tracked workflow and not the astro config still names `CONLOCA_BUILD_TOKEN`, `buildToken`, `publicBaseUrl`, `previewDomain` or `requireRegistration` (warnings)                                           |
 
-`conloca doctor --live` sends the build token ONLY to the configured endpoint. When the config computes `endpoint` (for
-example from an environment variable), set `CONLOCA_ENDPOINT` so doctor can read it.
+`conloca doctor --live` sends no credential: it contacts only your site's host and the editor's public
+`/host/protocols.json`. When the config computes `endpoint` (for example from an environment variable), set
+`CONLOCA_ENDPOINT` so doctor can read it.
 
 The integration also scaffolds a one-page agent skill at `.claude/skills/conloca-cloud/SKILL.md` — in the nearest
 `.claude/` directory between the Astro project and the git root — on any Astro command that loads the config (build,

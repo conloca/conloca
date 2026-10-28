@@ -18,5 +18,4 @@ export {
   type PreviewContext,
   type PreviewMiddlewareOptions,
   type PreviewVerdict,
-  previewParamName,
 } from './preview/middleware.js';

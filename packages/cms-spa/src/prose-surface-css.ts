@@ -2,11 +2,9 @@ import type { SiteStyles } from './site-styles.js';
 
 /**
  * The fallback styles tier for the MDX typing surface, used when no dev-server
- * discovery endpoint answers (a host app on another origin, or a production
- * build). Derived from the siteStyles registry: the route CSS a host app set
- * with `setHostDiscovery`, or the `siteStyles` option's CSS, reduced to
- * prose-safe rules, plus a paper base sheet. Lives in cms-spa so every setup
- * runs one derivation.
+ * discovery endpoint answers (a production build). Derived from the siteStyles
+ * registry (the `siteStyles` option's CSS), reduced to prose-safe rules, plus
+ * a paper base sheet. Lives in cms-spa so every setup runs one derivation.
  *
  * CMSMDXEditor consumes it as the fallback below endpoint discovery: when the
  * `/api/styles` fetch delivers (dev server), this tier stays out of the

@@ -26,9 +26,14 @@ const bundleResult = await build({
     'node:fs/promises',
     // Keep this external as it has native/heavy transitive deps
     'fast-glob',
+    // npm dependencies, installed with the CLI
+    'magicast',
+    'diff',
     // Workspace dependencies - resolved via npm at install time
     '@conloca/content-api',
     '@conloca/astro-cms',
+    // Optional peer: framing helpers load from the project's own install, never from the bundle
+    '@conloca/cloud-astro',
   ],
   naming: {
     entry: 'conloca.js',

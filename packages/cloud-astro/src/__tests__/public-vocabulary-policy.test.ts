@@ -7,7 +7,7 @@ test('the distributable build integration reads the vocabulary policy from publi
   const manifest = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
   const emitter = readFileSync(resolve(root, 'src/component-manifest.ts'), 'utf8');
   const scoped = Object.keys(manifest.dependencies).filter((name) => name.startsWith('@conloca/'));
-  expect(scoped).toEqual(['@conloca/content-api']);
+  expect(scoped).toEqual(['@conloca/content-api', '@conloca/mdx']);
   expect(emitter).toContain("from '@conloca/content-api/component-vocabulary'");
   const imported = [...emitter.matchAll(/from '(@conloca\/[^/']+)/g)].map((match) => match[1]);
   expect([...new Set(imported)].sort()).toEqual(['@conloca/astro-cms', '@conloca/content-api']);

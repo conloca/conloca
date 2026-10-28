@@ -1,6 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import type { PackageManager } from '../src/lib/package-manager.js';
-import { detectPackageManager, packageManagerCommands } from '../src/lib/package-manager.js';
+import {
+  detectPackageManager,
+  lockfileInstall,
+  PACKAGE_MANAGERS,
+  packageManagerCommands,
+} from '../src/lib/package-manager.js';
 
 describe('detectPackageManager', () => {
   test('an explicit --pm wins over the user agent', () => {
@@ -27,22 +32,65 @@ describe('detectPackageManager', () => {
 });
 
 describe('packageManagerCommands', () => {
-  test('knows the install, frozen install, and run forms of each manager', () => {
+  test('knows the install, frozen install, run, and add forms of each manager', () => {
     expect(packageManagerCommands('bun')).toEqual({
       install: 'bun install',
       frozenInstall: 'bun install --frozen-lockfile',
       run: 'bun run',
+      add: 'bun add',
     });
-    expect(packageManagerCommands('npm')).toEqual({ install: 'npm install', frozenInstall: 'npm ci', run: 'npm run' });
+    expect(packageManagerCommands('npm')).toEqual({
+      install: 'npm install',
+      frozenInstall: 'npm ci',
+      run: 'npm run',
+      add: 'npm install',
+    });
     expect(packageManagerCommands('pnpm')).toEqual({
       install: 'pnpm install',
       frozenInstall: 'pnpm install --frozen-lockfile',
       run: 'pnpm run',
+      add: 'pnpm add',
     });
     expect(packageManagerCommands('yarn')).toEqual({
       install: 'yarn install',
       frozenInstall: 'yarn install --frozen-lockfile',
       run: 'yarn',
+      add: 'yarn add',
     });
+  });
+
+  test('gives an add command per manager', () => {
+    expect(PACKAGE_MANAGERS.map((pm) => packageManagerCommands(pm).add)).toEqual([
+      'bun add',
+      'npm install',
+      'pnpm add',
+      'yarn add',
+    ]);
+  });
+});
+
+/** A file-existence check that finds exactly the given paths. */
+const files = (paths: string[]) => (path: string) => paths.includes(path);
+
+describe('lockfileInstall', () => {
+  test('picks the nearest lockfile walking up to the repository root', () => {
+    expect(lockfileInstall('/repo/project/a', '/repo', files(['/repo/pnpm-lock.yaml']))).toEqual({
+      packageManager: 'pnpm',
+      lockfile: '/repo/pnpm-lock.yaml',
+      installDir: '/repo',
+    });
+    expect(
+      lockfileInstall('/repo/site', '/repo', files(['/repo/site/package-lock.json', '/repo/bun.lock']))?.installDir,
+    ).toBe('/repo/site');
+  });
+
+  test('prefers bun.lock over package-lock.json in the same folder', () => {
+    expect(
+      lockfileInstall('/repo', '/repo', files(['/repo/package-lock.json', '/repo/bun.lock']))?.packageManager,
+    ).toBe('bun');
+  });
+
+  test('returns null when no folder up to the root has a lockfile', () => {
+    expect(lockfileInstall('/repo/site', '/repo', files(['/bun.lock']))).toBeNull();
   });
 });

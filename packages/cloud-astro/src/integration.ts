@@ -1,21 +1,16 @@
-import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { readEditorDescriptors } from '@conloca/astro-cms/node';
-import type { AstroIntegration, AstroIntegrationLogger } from 'astro';
+import { DEFAULT_EDITOR_ENDPOINT, editorUiOrigin } from '@conloca/content-api/editor-host';
+import type { AstroIntegration } from 'astro';
 import type { UserConfig as ViteUserConfig } from 'vite';
-import { registrationCommits } from './build-commit.js';
-import type { BundledStylesheet, BundleEditorAssetsResult } from './bundle.js';
-import { bundleEditorAssets, emitRouteCssArtifact, mirrorEditorAssets } from './bundle.js';
-import { type ComponentManifestArtifact, emitComponentManifest } from './component-manifest.js';
-import { BUILD_TOKEN_ENV_VAR, PACKAGE_NAME, PREVIEW_BUILD_ENV_FLAG, PREVIEW_SECRET_ENV_FLAG } from './constants.js';
-import { resolveEditorDescriptors } from './descriptors.js';
-import type { DiscoveredStyleContext } from './discovery.js';
-import { discoverStyleContext } from './discovery.js';
+import { PACKAGE_NAME, PREVIEW_BUILD_ENV_FLAG } from './constants.js';
+import { emitEditorPage, mirrorEditorPage } from './editor-page/emit.js';
 import { gitOutput, resolveBuildRef, resolveRepositoryUri } from './git.js';
-import { packageVersion } from './package-version.js';
-import { spawnPreviewBuild } from './preview-build.js';
-import { postRegistration } from './register.js';
+import type { BakedPreviewOpts } from './preview/_resolve-opts.js';
+import { PREVIEW_ROUTE_SEGMENT } from './preview/preview-path.js';
+import { previewBuildMode, spawnPreviewBuild } from './preview-build.js';
+import { type InheritedOptions, resolveInheritedOptions } from './resolve-options.js';
 import { resolveBuildSiteId } from './site-id.js';
 import { scaffoldSkill } from './skill.js';
 import type { ConlocaCloudOptions } from './types.js';
@@ -27,226 +22,233 @@ export { PACKAGE_NAME, PREVIEW_BUILD_ENV_FLAG };
 
 /**
  * Returns the site's Astro integration that hooks into `astro:build:done`
- * to bundle editor assets, register the build at `endpoint`, and
- * (optionally) trigger a recursive preview build.
+ * to write the editor page and, when the site opts in, trigger a recursive
+ * preview build.
  *
  * The build:done pipeline:
  *
- *   1. esbuild the site's puck config into one browser ESM bundle under
- *      `dist/_conloca/` with react/react-dom/jsx-runtime/puck externalized
- *      (the editor supplies them at runtime), plus a `_headers` CORS
- *      rule so the editor's origin can load it cross-origin. For a conlocaCMS
- *      build it also writes the component manifest there (what each
- *      component accepts, read from source) and registers its URL + hash
- *      with the bundle.
- *   2. POST the registration (repo, git sha, branch, bundle URL + hash) to the
- *      endpoint, authenticated by the build token. An ATTEMPTED
- *      registration that is rejected FAILS THE BUILD — the error carries the
- *      endpoint's exact status and body. Only a never-attempted registration (no
- *      build token, repo identity, git sha/branch, or public base URL) skips,
- *      ending the build with one summary block — or failing it when
- *      `requireRegistration` is set.
- *   3. Spawn the recursive preview build with the preview secret
- *      returned by registration (or the env override).
+ *   0. Write the editor page to `dist/_conloca/editor/`: `index.html`, the
+ *      site's compiled puck config and styles, the MDX sandbox frame and
+ *      `conloca.json`. Every build does this; the page carries no credential.
+ *   1. Only when `previewBuild` is given as an object and an SSR adapter
+ *      exists (refused under @astrojs/vercel and @astrojs/netlify, checked
+ *      already at `astro:config:done`), spawn the recursive preview build
+ *      and copy the editor page into its
+ *      client folder. It mounts `/_conloca/preview/` and
+ *      bakes in the repository, site and branch it serves (every pass must
+ *      match them), Astro's base and the commit it was built from.
  */
 const VIRTUAL_PREVIEW_OPTS = 'virtual:conloca-preview-opts';
 const RESOLVED_PREVIEW_OPTS = `\0${VIRTUAL_PREVIEW_OPTS}`;
 
-export function conlocaCloud(options: ConlocaCloudOptions): AstroIntegration {
+export function conlocaCloud(options: ConlocaCloudOptions = {}): AstroIntegration {
   validateOptions(options);
   const repoUri = resolveRepositoryUri(options.repoUri, process.env);
   // Populated during the preview build's config:setup and read by the virtual
   // module below. Server-only — never reaches a browser bundle.
-  let previewOptsModule: Record<string, string> | undefined;
+  let previewOptsModule: BakedPreviewOpts | undefined;
+  // The Astro command, recorded in config:setup: only `astro build` starts
+  // the preview build, so only it checks the preview adapter at config:done.
+  let astroCommand: string | undefined;
   // The project root, captured in config:setup: astro:build:done only hands
   // over the build's own outDir, but the siteStyles resolve against the root,
-  // and locating the CHILD build's client dir (for the editor-asset mirror)
+  // and locating the CHILD build's client dir (for the editor page mirror)
   // needs the root the child resolves against.
   let projectRoot: URL | undefined;
-  // Adapter name, finalized only at config:done. Discovery boots the built
-  // server entry for `output: 'server'` sites, and only the node adapter's
-  // entry is a plain bootable process (see discovery.ts).
+  // Adapter name, finalized only at config:done: the preview build reads it
+  // when previewBuild names no adapter of its own.
   let adapterName: string | undefined;
-  // The site's Vite config, finalized at config:done: the siteStyles compile
-  // through it, as they do in conlocaCMS's dev editor.
+  // The site's Vite config, finalized at config:done: the editor page and the
+  // siteStyles compile through it, as they do in conlocaCMS's dev editor. It
+  // holds the site's and integrations' plugins only; Astro adds its own core
+  // plugins to a separate config when it builds, so none reach the editor page.
   let viteConfig: ViteUserConfig | undefined;
+  // Astro's base, as written: the editor page's URLs sit below it.
+  let astroBase = '/';
+  // The editor options, settled at config:done: conlocaCMS publishes its
+  // channel from its own config:setup, which may run after ours.
+  let inherited: InheritedOptions | undefined;
+  // Whether the parent build starts the preview build, read with the adapter
+  // the child will use: previewBuild.adapter, else the project's own.
+  const previewMode = () =>
+    previewBuildMode(options.previewBuild, (options.previewBuild || undefined)?.adapter?.name ?? adapterName);
 
   return {
     name: PACKAGE_NAME,
     hooks: {
-      'astro:config:setup': ({ logger, injectRoute, updateConfig, config, addMiddleware }) => {
+      'astro:config:setup': ({ logger, injectRoute, updateConfig, config, addMiddleware, command }) => {
         // Optional-chained: unit tests drive this hook with a bare { logger }.
         projectRoot = config?.root;
+        astroCommand = command;
         // The agent skill: write-if-not-exists, fail-soft, and
         // never from the recursive preview child (it would race the parent).
         if (process.env[PREVIEW_BUILD_ENV_FLAG] !== '1' && config?.root) {
           scaffoldSkill(fileURLToPath(config.root), logger);
         }
-        logger.info(
-          `integration registered (endpoint=${options.endpoint}, previewMode=${
-            options.previewDomain ? 'preview-domain' : 'same-domain-runtime'
-          })`,
-        );
+        logger.info(`integration registered (endpoint=${options.endpoint ?? DEFAULT_EDITOR_ENDPOINT})`);
 
         // Only the recursive preview build (which sets PREVIEW_BUILD_ENV_FLAG)
-        // mounts the secret-scoped SSR catch-all that renders previews. A
-        // site's normal build must never expose it; the per-branch secret in
-        // the path is the load guard (JWT validation in the handler is the real
-        // auth boundary). Without a secret there is nothing to scope, so skip.
+        // mounts the SSR catch-all that renders previews; a site's normal
+        // build never exposes it. The route is fixed and public: the signed
+        // pass, checked against what this build bakes in, is the lock.
         if (process.env[PREVIEW_BUILD_ENV_FLAG] === '1') {
-          const secret = process.env[PREVIEW_SECRET_ENV_FLAG];
-          if (secret) {
-            if (!repoUri) {
-              throw new Error(
-                `${PACKAGE_NAME}: could not determine repository identity for the preview build ` +
-                  '(build in a Git checkout or set repoUri as an advanced override)',
-              );
-            }
-            injectRoute({
-              pattern: `/conloca_preview_${secret}/[...path]`,
-              entrypoint: '@conloca/cloud-astro/preview-handler',
-              prerender: false,
-            });
-            // The prefixed route above is the ENTRY DOOR — the only URL the
-            // endpoint can link to before a cookie exists. This interceptor is the
-            // serving surface: once the init hop sets the `Path=/` cookie, the
-            // browser sends the credential on every same-origin request, so
-            // internal links keep rendering drafts instead of silently falling
-            // back to published content after one page view. Fail-open — an
-            // uncredentialed visitor gets the ordinary page.
-            addMiddleware({ entrypoint: '@conloca/cloud-astro/site-middleware', order: 'pre' });
-            // Bake the middleware's configuration into the artifact. Every
-            // value is already known here — the secret arrived with
-            // registration, endpoint/audience are integration options — so a
-            // correctly built preview deployment needs NO env vars set on it.
-            // That also closes a chicken-and-egg loop: the secret is generated
-            // DURING this build, but the deployment that would carry it as an
-            // env var only happens afterwards. `saasIssuer` stays unbaked
-            // unless configured: it is a property of the endpoint, not of the site.
-            // The commit this preview build's checkout holds: a PR build may
-            // check out a merge commit rather than the PR commit it registers.
-            // Page-status compares the branch's latest commit with it, so the
-            // endpoint diffs against the content actually serving, not a newer
-            // registration whose deploy never landed. A checkout commit the
-            // endpoint does not have makes it render from the branch instead.
-            const buildCommit = registrationCommits({
-              eventCommitSha: process.env.CF_PAGES_COMMIT_SHA,
-              checkoutCommitSha: gitOutput(['rev-parse', 'HEAD']),
-            }).buildId;
-            previewOptsModule = {
-              secret,
-              saasEndpoint: options.endpoint,
-              // The token's `aud` is the repo URI as registered — the same
-              // string this integration posts at registration time.
-              saasAudience: repoUri,
-              ...(options.saasIssuer ? { saasIssuer: options.saasIssuer } : {}),
-              ...(buildCommit ? { buildCommit } : {}),
-            };
-            // Preview-build path: the child build must emit an SSR
-            // artifact even when the primary build is fully static. Switch to
-            // server output, apply the preview adapter (the project's own
-            // adapter stays in force when it already has one), and write to a
-            // SEPARATE outDir so the child never clobbers the primary dist/.
-            const previewBuild = options.previewBuild === false ? {} : (options.previewBuild ?? {});
-            const adapter = previewBuild.adapter ?? config.adapter;
-            if (!adapter) {
-              throw new Error(
-                `${PACKAGE_NAME}: the preview build needs an SSR adapter — the project is static and ` +
-                  'previewBuild.adapter is not set. Pass one (e.g. previewBuild: { adapter: cloudflare() }) ' +
-                  'or set previewBuild: false to opt out of draft preview.',
-              );
-            }
-            // Astro allows exactly one deployment integration. Adding
-            // previewBuild.adapter next to the project's own would make the
-            // child build die on Astro's adapter-conflict error, which names
-            // neither this integration nor the option — fail here with the
-            // actual cause. The child inherits the project adapter, so the
-            // option is unnecessary on SSR projects.
-            if (previewBuild.adapter && config.adapter) {
-              const projectAdapterName = (config.adapter as { name?: string }).name ?? 'the project adapter';
-              throw new Error(
-                `${PACKAGE_NAME}: previewBuild.adapter conflicts with the project's own adapter ` +
-                  `(${projectAdapterName}) — Astro allows only one deployment integration per build. ` +
-                  'Remove previewBuild.adapter; the preview build inherits the project adapter.',
-              );
-            }
-            // Trailing slash so URL-joining treats it as a directory. Astro
-            // derives build.client/build.server from outDir BEFORE hooks run,
-            // so overriding outDir alone still writes into the primary dist/ —
-            // all three must move together.
-            // OUTSIDE dist/ on purpose, against the original design: the
-            // artifact bakes the preview secret, so a wholesale static upload
-            // of dist/ must never be able to publish it — and Astro clears
-            // dist/ at the start of a build, which would wipe a sibling
-            // artifact parked inside it.
-            const previewOut = new URL(`${previewBuild.outDir ?? '.conloca/preview-server'}/`, config.root);
-            // The site's extra config goes through its OWN updateConfig
-            // call: Astro deep-merges successive calls (concatenating
-            // vite.plugins and integrations), whereas spreading it into the
-            // object below would shallow-replace whole keys — a user `vite`
-            // entry silently dropped the required virtual-module plugin.
-            // Ours comes second so the required scalars (output, outDir,
-            // build dirs) always win; previewBuild.outDir is the supported
-            // override for the artifact location.
-            if (previewBuild.config) {
-              updateConfig(previewBuild.config);
-            }
-            updateConfig({
-              output: 'server',
-              outDir: previewOut,
-              build: { client: new URL('client/', previewOut), server: new URL('server/', previewOut) },
-              vite: {
-                // The middleware dynamically imports Cloudflare's runtime
-                // module (binding transport). The Cloudflare adapter resolves
-                // the scheme itself; every other adapter's Rollup pass fails
-                // the child build on it unless externalized. Off Cloudflare
-                // Workers the runtime import rejects and the middleware falls
-                // back to the global fetch.
-                build: { rollupOptions: { external: [/^cloudflare:/] } },
-                // Starlight renders Steps, Tabs and FileTree with satteri's
-                // htmlToHast. On Cloudflare Workers satteri resolves to a
-                // binding that can be neither installed nor run on workerd, so the child
-                // build fails to resolve it — swap in a stand-in there. The
-                // target is an absolute path: a bare name would be looked up
-                // from the Starlight file, which cannot see this package in an
-                // isolated (non-hoisted) node_modules layout.
-                ...(adapter.name === '@astrojs/cloudflare'
-                  ? {
-                      resolve: {
-                        alias: [
-                          {
-                            find: /^satteri$/,
-                            replacement: resolveSatteriStandIn(),
-                          },
-                        ],
-                      },
-                    }
-                  : {}),
-                plugins: [
-                  {
-                    name: 'conloca-preview-opts',
-                    resolveId(id: string) {
-                      return id === VIRTUAL_PREVIEW_OPTS ? RESOLVED_PREVIEW_OPTS : undefined;
-                    },
-                    load(id: string) {
-                      if (id !== RESOLVED_PREVIEW_OPTS) return undefined;
-                      // Read lazily so the values assigned above are captured.
-                      return `export default ${JSON.stringify(previewOptsModule ?? {})};`;
-                    },
-                  },
-                ],
-              },
-              // The adapter must ride in BOTH ways: as `adapter` because the
-              // build gate checks `config.adapter` before creating the SSR
-              // bundle, and as an integration because only the adapter's own
-              // astro:config:done hook calls setAdapter — which is what the
-              // build pipeline actually renders through. (Astro unshifts
-              // config.adapter into the integration list BEFORE any hook runs,
-              // so setting `adapter` alone here is too late for the hooks.)
-              // A project that is already SSR keeps its own adapter untouched.
-              ...(previewBuild.adapter ? { adapter: previewBuild.adapter, integrations: [previewBuild.adapter] } : {}),
-            });
+          if (!repoUri) {
+            throw new Error(
+              `${PACKAGE_NAME}: could not determine repository identity for the preview build ` +
+                '(build in a Git checkout or set repoUri as an advanced override)',
+            );
           }
+          // The project's own checkout answers git, not the directory the
+          // build was started from.
+          const projectGit = (args: string[]) => gitOutput(args, fileURLToPath(config.root));
+          const buildRef = resolveBuildRef(process.env, projectGit);
+          if (!buildRef.branch) {
+            throw new Error(
+              `${PACKAGE_NAME}: could not determine the branch the preview build serves (set CF_PAGES_BRANCH, ` +
+                'WORKERS_CI_BRANCH, VERCEL_GIT_COMMIT_REF or GITHUB_REF_NAME, or build in a git checkout on a branch)',
+            );
+          }
+          const siteId = resolveBuildSiteId({
+            contentRoot: process.env.CONLOCA_CONTENT_ROOT,
+            override: options.siteId,
+          });
+          injectRoute({
+            pattern: `${PREVIEW_ROUTE_SEGMENT}/[...path]`,
+            entrypoint: '@conloca/cloud-astro/preview-handler',
+            prerender: false,
+          });
+          // The route above is the ENTRY DOOR — the only URL the endpoint can
+          // link to before a cookie exists. This interceptor is the serving
+          // surface: once the init hop sets the `Path=/` cookie, the browser
+          // sends the credential on every same-origin request, so internal
+          // links keep rendering drafts instead of silently falling back to
+          // published content after one page view. Fail-open — an
+          // uncredentialed visitor gets the ordinary page.
+          addMiddleware({ entrypoint: '@conloca/cloud-astro/site-middleware', order: 'pre' });
+          // The commit this preview build's checkout holds: a PR build may
+          // check out a merge commit rather than the commit CI hands over.
+          // Page-status compares the branch's latest commit with it, so the
+          // endpoint diffs against the content actually serving, not a newer
+          // commit whose deploy never landed. A checkout commit the
+          // endpoint does not have makes it render from the branch instead.
+          const buildCommit = projectGit(['rev-parse', 'HEAD']) ?? buildRef.gitSha;
+          // Bake the middleware's configuration into the artifact. Every value
+          // is already known here — endpoint and audience are integration
+          // options; repository, site, branch, base and commit are what this
+          // build was made from, and every pass must match the first three —
+          // so a correctly built preview deployment needs NO env vars set on
+          // it. `saasIssuer` stays unbaked unless configured: it is a property
+          // of the endpoint, not of the site.
+          previewOptsModule = {
+            saasEndpoint: options.endpoint ?? DEFAULT_EDITOR_ENDPOINT,
+            // The token's `aud` is the repo URI this build resolved.
+            saasAudience: repoUri,
+            ...(options.saasIssuer ? { saasIssuer: options.saasIssuer } : {}),
+            ...(buildCommit ? { buildCommit } : {}),
+            repo: repoUri,
+            siteId,
+            branch: buildRef.branch,
+            base: config.base ?? '/',
+          };
+          // Preview-build path: the child build must emit an SSR
+          // artifact even when the primary build is fully static. Switch to
+          // server output, apply the preview adapter (the project's own
+          // adapter stays in force when it already has one), and write to a
+          // SEPARATE outDir so the child never clobbers the primary dist/.
+          const previewBuild = options.previewBuild || {};
+          const adapter = previewBuild.adapter ?? config.adapter;
+          // Throws for a missing adapter, or one the preview build is refused
+          // under — the parent already checked, this keeps the child honest.
+          previewBuildMode(previewBuild, adapter?.name);
+          // Astro allows exactly one deployment integration. Adding
+          // previewBuild.adapter next to the project's own would make the
+          // child build die on Astro's adapter-conflict error, which names
+          // neither this integration nor the option — fail here with the
+          // actual cause. The child inherits the project adapter, so the
+          // option is unnecessary on SSR projects.
+          if (previewBuild.adapter && config.adapter) {
+            const projectAdapterName = config.adapter.name;
+            throw new Error(
+              `${PACKAGE_NAME}: previewBuild.adapter conflicts with the project's own adapter ` +
+                `(${projectAdapterName}) — Astro allows only one deployment integration per build. ` +
+                'Remove previewBuild.adapter; the preview build inherits the project adapter.',
+            );
+          }
+          // Trailing slash so URL-joining treats it as a directory. Astro
+          // derives build.client/build.server from outDir BEFORE hooks run,
+          // so overriding outDir alone still writes into the primary dist/ —
+          // all three must move together.
+          // OUTSIDE dist/ on purpose, against the original design: a
+          // wholesale static upload of dist/ must never publish the preview
+          // server — and Astro clears dist/ at the start of a build, which
+          // would wipe a sibling artifact parked inside it.
+          const previewOut = new URL(`${previewBuild.outDir ?? '.conloca/preview-server'}/`, config.root);
+          // The site's extra config goes through its OWN updateConfig
+          // call: Astro deep-merges successive calls (concatenating
+          // vite.plugins and integrations), whereas spreading it into the
+          // object below would shallow-replace whole keys — a user `vite`
+          // entry silently dropped the required virtual-module plugin.
+          // Ours comes second so the required scalars (output, outDir,
+          // build dirs) always win; previewBuild.outDir is the supported
+          // override for the artifact location.
+          if (previewBuild.config) {
+            updateConfig(previewBuild.config);
+          }
+          updateConfig({
+            output: 'server',
+            outDir: previewOut,
+            build: { client: new URL('client/', previewOut), server: new URL('server/', previewOut) },
+            vite: {
+              // The middleware dynamically imports Cloudflare's runtime
+              // module (binding transport). The Cloudflare adapter resolves
+              // the scheme itself; every other adapter's Rollup pass fails
+              // the child build on it unless externalized. Off Cloudflare
+              // Workers the runtime import rejects and the middleware falls
+              // back to the global fetch.
+              build: { rollupOptions: { external: [/^cloudflare:/] } },
+              // Starlight renders Steps, Tabs and FileTree with satteri's
+              // htmlToHast. On Cloudflare Workers satteri resolves to a
+              // binding that can be neither installed nor run on workerd, so the child
+              // build fails to resolve it — swap in a stand-in there. The
+              // target is an absolute path: a bare name would be looked up
+              // from the Starlight file, which cannot see this package in an
+              // isolated (non-hoisted) node_modules layout.
+              ...(adapter?.name === '@astrojs/cloudflare'
+                ? {
+                    resolve: {
+                      alias: [
+                        {
+                          find: /^satteri$/,
+                          replacement: resolveSatteriStandIn(),
+                        },
+                      ],
+                    },
+                  }
+                : {}),
+              plugins: [
+                {
+                  name: 'conloca-preview-opts',
+                  resolveId(id: string) {
+                    return id === VIRTUAL_PREVIEW_OPTS ? RESOLVED_PREVIEW_OPTS : undefined;
+                  },
+                  load(id: string) {
+                    if (id !== RESOLVED_PREVIEW_OPTS) return undefined;
+                    // Read lazily so the values assigned above are captured.
+                    return `export default ${JSON.stringify(previewOptsModule ?? {})};`;
+                  },
+                },
+              ],
+            },
+            // The adapter must ride in BOTH ways: as `adapter` because the
+            // build gate checks `config.adapter` before creating the SSR
+            // bundle, and as an integration because only the adapter's own
+            // astro:config:done hook calls setAdapter — which is what the
+            // build pipeline actually renders through. (Astro unshifts
+            // config.adapter into the integration list BEFORE any hook runs,
+            // so setting `adapter` alone here is too late for the hooks.)
+            // A project that is already SSR keeps its own adapter untouched.
+            ...(previewBuild.adapter ? { adapter: previewBuild.adapter, integrations: [previewBuild.adapter] } : {}),
+          });
         }
       },
       /**
@@ -268,13 +270,11 @@ export function conlocaCloud(options: ConlocaCloudOptions): AstroIntegration {
        * record, runs AFTER the `export const prerender` source parse, and
        * Astro reads `prerender` back after every integration has run.
        *
-       * Gated on the secret as well as the flag, mirroring the config hook: no
-       * secret means no interceptor was mounted, so stripping the site's
-       * static output would buy nothing.
+       * Gated on the flag, as the config hook is: only the preview build
+       * mounts the interceptor these routes must reach.
        */
       'astro:route:setup': ({ route, logger }) => {
         if (process.env[PREVIEW_BUILD_ENV_FLAG] !== '1') return;
-        if (!process.env[PREVIEW_SECRET_ENV_FLAG]) return;
         // `type` exists at runtime but is absent from the public RouteOptions
         // type. Endpoints keep their prerendered data files: they emit no HTML
         // to intercept, and one built from getStaticPaths would break on demand.
@@ -296,120 +296,59 @@ export function conlocaCloud(options: ConlocaCloudOptions): AstroIntegration {
       'astro:config:done': ({ config }) => {
         adapterName = config.adapter?.name;
         viteConfig = config.vite;
+        astroBase = config.base ?? '/';
+        inherited = resolveInheritedOptions(options, readEditorDescriptors());
+        // A refused or missing preview adapter fails `astro build` here,
+        // before the site builds, rather than after it. `astro dev`, `sync`
+        // and `preview` never start the preview build, so they are left
+        // alone. The child build checks its own.
+        if (astroCommand === 'build' && process.env[PREVIEW_BUILD_ENV_FLAG] !== '1') previewMode();
       },
       'astro:build:done': async ({ dir, logger }) => {
         if (process.env[PREVIEW_BUILD_ENV_FLAG] === '1') {
           // The recursive preview build sets this flag on the child
-          // Astro process. Re-entering registration there would create an
-          // infinite build loop, so we short-circuit.
-          logger.info('skipping registration: recursive preview build detected');
+          // Astro process. Writing the editor page there again would race
+          // the parent, which mirrors its own copy in, so we short-circuit.
+          logger.info('skipping the editor page: recursive preview build detected');
           return;
         }
 
         // Astro always runs the config hooks first. No fallback: compiling
         // against the working directory would build the canvas stylesheet for
         // the wrong project without a word.
-        if (projectRoot === undefined || viteConfig === undefined) {
+        if (projectRoot === undefined || viteConfig === undefined || inherited === undefined) {
           throw new Error(
             `${PACKAGE_NAME}: astro:build:done ran before the config hooks recorded the project root and Vite config`,
           );
         }
 
-        // Editor descriptors (the bundle's third leg): the host's schemas
-        // module and the auto-discovered MDX registry, both resolved by
-        // conlocaCMS and read off its channel. The scan runs here because the
-        // editor at the endpoint has no dev server to serve `/api/registry` from.
-        const descriptors = await resolveEditorDescriptors(logger);
-
-        const bundle = await bundleEditorAssets({
+        // The editor page: every build writes it.
+        await emitEditorPage({
           dir: fileURLToPath(dir),
           root: fileURLToPath(projectRoot),
+          base: astroBase,
           vite: viteConfig,
-          puckConfigPath: options.puckConfigPath,
-          siteStyles: options.siteStyles,
-          ...(options.editorBundlePlugins ? { plugins: options.editorBundlePlugins } : {}),
-          publicBaseUrl: resolveDeploymentUrl(options),
-          ...(descriptors === undefined ? {} : { descriptors }),
+          endpoint: options.endpoint,
+          inherited,
+          repoUri,
+          siteIdOverride: options.siteId,
           logger,
         });
 
-        // The component vocabulary for agents, read from the config the bundle
-        // just compiled. Only a build conlocaCMS is part of carries one (its
-        // descriptor channel is how this add-on knows): without the CMS there
-        // are no pages for an agent to compose. Gated on the channel itself,
-        // not on `descriptors` — that is also undefined for a CMS build with
-        // no schemas module, MDX components or templates, which still has a
-        // Puck vocabulary. An unreadable channel already warned above.
-        const componentManifest =
-          readEditorDescriptors(process.env) === undefined
-            ? undefined
-            : await emitComponentManifest({
-                dir: fileURLToPath(dir),
-                puckConfigPath: options.puckConfigPath,
-                projectRoot: process.cwd(),
-                logger,
-              });
-
-        // Build-time style discovery: read the discovery
-        // route's rendered page, collect its CSS, run the shared wrapper
-        // heuristic; results ride registration below. Opt-in via the option —
-        // and fail-soft throughout: a build must never die over preview
-        // styling.
-        let discovery: Awaited<ReturnType<typeof discoverStyleContext>>;
-        let routeCssArtifact: Awaited<ReturnType<typeof emitRouteCssArtifact>>;
-        if (options.fragmentPreviewRoute) {
-          const clientDir = fileURLToPath(dir);
-          const nodeEntry = fileURLToPath(new URL('../server/entry.mjs', dir));
-          discovery = await discoverStyleContext({
-            clientDir,
-            serverEntry: adapterName === '@astrojs/node' && existsSync(nodeEntry) ? nodeEntry : undefined,
-            route: options.fragmentPreviewRoute,
-            logger,
-          });
-          if (discovery?.routeCss) {
-            routeCssArtifact = await emitRouteCssArtifact(
-              clientDir,
-              discovery.routeCss,
-              resolveDeploymentUrl(options),
-              logger,
-            );
-          }
-        }
-
-        const registration = await registerBuild(options, repoUri, bundle, logger, {
-          hostWrappers: discovery?.hostWrappers,
-          routeCssArtifact: routeCssArtifact?.stylesheet,
-          componentManifest,
-        });
-        let registeredSecret: string | undefined;
-        if ('missing' in registration) reportSkippedRegistration(registration.missing, options, logger);
-        else registeredSecret = registration.previewSecret;
-
-        if (options.previewBuild === false) {
-          // The site explicitly opted out of the recursive preview build.
-          return;
-        }
-        // Prefer the secret returned by registration; the env override lets
-        // CI smoke-test the recursive build path without a reachable endpoint.
-        const previewSecret = registeredSecret ?? process.env[PREVIEW_SECRET_ENV_FLAG];
-        if (!previewSecret) {
-          return;
-        }
-        await spawnPreviewBuild(previewSecret, options.previewBuild ?? {});
-        // The child build cannot compile the editor bundle itself (it
+        // Strict opt-in: only a previewBuild given as an object starts the
+        // second build.
+        const previewBuild = options.previewBuild || undefined;
+        if (previewBuild === undefined || previewMode() === 'off') return;
+        await spawnPreviewBuild(previewBuild);
+        // The child build cannot write the editor files itself (it
         // short-circuits this hook — see the recursion guard above), but in
         // a deployment that serves the site and the preview from one
         // Cloudflare Worker its client dir is THE asset set serving the site,
-        // so the editor at the endpoint loads `/_conloca/*` from it. Mirror
-        // the bundle + its CORS rule from this build's dist into it.
-        // previewBuild === false already returned above, so only the options
-        // object (or undefined) reaches this point.
-        const previewOut = new URL(`${options.previewBuild?.outDir ?? '.conloca/preview-server'}/`, projectRoot);
-        await mirrorEditorAssets(fileURLToPath(dir), fileURLToPath(new URL('client/', previewOut)), [
-          ...bundle.assetCorsPaths,
-          ...(routeCssArtifact?.assetCorsPaths ?? []),
-        ]);
-        logger.info('editor assets mirrored into the preview client dir');
+        // so the editor files must be there too. Mirror them from this build's dist.
+        const previewOut = new URL(`${previewBuild.outDir ?? '.conloca/preview-server'}/`, projectRoot);
+        const previewClient = fileURLToPath(new URL('client/', previewOut));
+        await mirrorEditorPage(fileURLToPath(dir), previewClient);
+        logger.info('editor page mirrored into the preview client dir');
       },
     },
   };
@@ -428,180 +367,35 @@ function resolveSatteriStandIn(): string {
   }
 }
 
-/**
- * The origin the deployed site answers on. Used for two things that must agree:
- * absolutizing the bundle/stylesheet URLs a registration carries, and re-pointing the
- * stylesheet's own asset URLs at the site (they would otherwise resolve
- * against the editor's origin — see `rewriteStylesheetAssetUrls`).
- */
-function resolveDeploymentUrl(options: ConlocaCloudOptions): string | undefined {
-  if (!options.previewDomain) {
-    return options.publicBaseUrl ?? process.env.CF_PAGES_URL;
-  }
-  const previewUrl = new URL(
-    options.previewDomain.includes('://') ? options.previewDomain : `https://${options.previewDomain}`,
-  );
-  return previewUrl.origin;
-}
+/** The options the editor page made obsolete; naming one fails the build so the config gets updated. */
+const REMOVED_OPTIONS = [
+  'buildToken',
+  'requireRegistration',
+  'publicBaseUrl',
+  'previewDomain',
+  'editorBundlePlugins',
+  'fragmentPreviewRoute',
+] as const;
 
-/**
- * ONE end-of-build block for a skipped registration — every prerequisite that
- * was missing and what it costs — the last thing the integration prints.
- * With `requireRegistration` it fails the build instead.
- */
-function reportSkippedRegistration(
-  missing: string[],
-  options: ConlocaCloudOptions,
-  logger: AstroIntegrationLogger,
-): void {
-  const summary = [
-    `editor at ${options.endpoint} NOT updated by this build`,
-    ...missing.map((prerequisite) => `  missing: ${prerequisite}`),
-    "  consequence: registration was skipped, so the editor keeps serving the previous build of this branch (or the default branch's, or nothing, if neither was ever registered)",
-    '  check: conloca doctor --live',
-  ].join('\n');
-  if (options.requireRegistration) {
-    throw new Error(`${PACKAGE_NAME}: ${summary}\n  requireRegistration is on, so this build fails.`);
-  }
-  logger.warn(summary);
-}
-
-/** What `registerBuild` ended with: the preview secret, or every prerequisite whose absence made it skip. */
-type RegistrationOutcome = { previewSecret: string } | { missing: string[] };
-
-/**
- * Registers the freshly built editor bundle at the endpoint. Soft-skip ONLY
- * when registration was never attempted: the pre-request guards (no build
- * token, no repo identity, no sha/branch, no base URL) each warn, and every
- * missing prerequisite is returned at once, so one build names all that setup
- * still lacks and an unregistered deploy still completes — the hook turns
- * that into one end-of-build summary (or a failure under
- * `requireRegistration`). Once a registration IS attempted, its failure
- * FAILS THE BUILD: postRegistration throws on any
- * deterministic 4xx and after exhausting the ≥500 retry backoff, and that
- * error — carrying the HTTP status and response body — propagates. A green
- * deploy whose registration silently went missing is the "deployed but
- * editor unregistered" class this project exists to kill.
- */
-async function registerBuild(
-  options: ConlocaCloudOptions,
-  repoUri: string | undefined,
-  bundle: BundleEditorAssetsResult,
-  logger: AstroIntegrationLogger,
-  discovery: {
-    hostWrappers?: DiscoveredStyleContext['hostWrappers'];
-    routeCssArtifact?: BundledStylesheet;
-    componentManifest?: ComponentManifestArtifact;
-  } = {},
-): Promise<RegistrationOutcome> {
-  const missing: string[] = [];
-  const buildToken = options.buildToken ?? process.env[BUILD_TOKEN_ENV_VAR];
-  if (!buildToken) {
-    logger.warn(`skipping registration: no build token (set buildToken or ${BUILD_TOKEN_ENV_VAR})`);
-    missing.push(`build token (set buildToken or ${BUILD_TOKEN_ENV_VAR})`);
-  }
-
-  if (!repoUri) {
-    logger.warn(
-      'skipping registration: could not determine repository identity ' +
-        '(build in a supported CI environment or Git checkout, or set repoUri)',
-    );
-    missing.push('repository identity (build in a supported CI environment or Git checkout, or set repoUri)');
-  }
-
-  const { branch } = resolveBuildRef();
-  // CI may hand over the branch's latest commit to register; the checkout is what was built.
-  const commits = registrationCommits({
-    eventCommitSha: process.env.CF_PAGES_COMMIT_SHA,
-    checkoutCommitSha: gitOutput(['rev-parse', 'HEAD']),
-  });
-  const gitSha = commits.gitSha;
-  if (!gitSha || !branch) {
-    logger.warn(
-      'skipping registration: could not resolve the git sha/branch ' +
-        '(set CF_PAGES_COMMIT_SHA and CF_PAGES_BRANCH, or build inside a git checkout)',
-    );
-    missing.push('git sha/branch (set CF_PAGES_COMMIT_SHA and CF_PAGES_BRANCH, or build inside a git checkout)');
-  }
-
-  const deploymentUrl = resolveDeploymentUrl(options);
-  const baseUrl = deploymentUrl;
-  if (!baseUrl) {
-    logger.warn(
-      'skipping registration: no public base URL for the editor bundle (set previewDomain, publicBaseUrl, or CF_PAGES_URL)',
-    );
-    missing.push('public base URL for the editor bundle (set previewDomain, publicBaseUrl, or CF_PAGES_URL)');
-  }
-  // Restates the guards above, so the values below are typed as set.
-  if (!buildToken || !repoUri || !gitSha || !branch || !baseUrl) return { missing };
-
-  // Resolve the deployable-site id (STRICT): a throw here FAILS THE BUILD —
-  // after the soft skip guards above, so only a build that is actually
-  // registering can die on it. A silently mis-attached registration points
-  // the editor at the wrong site, which is the same miss as never having
-  // registered at all. The channel is CONLOCA_CONTENT_ROOT (published by
-  // conlocaCMS); options.siteId is the CMS-less-build override.
-  const siteId = resolveBuildSiteId({
-    contentRoot: process.env.CONLOCA_CONTENT_ROOT,
-    override: options.siteId,
-  });
-
-  // NO catch: from here on the registration is ATTEMPTED, and an attempted
-  // registration's failure fails the build. postRegistration already retried
-  // transient (≥500 / network) failures with backoff; what escapes is either
-  // a deterministic 4xx (unknown siteId, bad token — fix and rebuild) or an
-  // exhausted retry budget, and the error message carries the HTTP status +
-  // response body verbatim.
-  logger.info(
-    'registering at the endpoint (transient failures retry, with up to ~2.5 minutes of waiting between attempts)',
-  );
-  const { previewSecret } = await postRegistration({
-    endpoint: options.endpoint,
-    buildToken,
-    repoUri,
-    gitSha,
-    siteId,
-    branch,
-    editorBundleUrl: new URL(bundle.url, baseUrl).toString(),
-    bundleHash: bundle.hash,
-    ...(bundle.stylesheet === undefined
-      ? {}
-      : {
-          stylesheetUrl: new URL(bundle.stylesheet.url, baseUrl).toString(),
-          stylesheetHash: bundle.stylesheet.hash,
-        }),
-    ...(discovery.hostWrappers === undefined ? {} : { hostWrappers: discovery.hostWrappers }),
-    ...(discovery.routeCssArtifact === undefined
-      ? {}
-      : {
-          routeCssUrl: new URL(discovery.routeCssArtifact.url, baseUrl).toString(),
-          routeCssHash: discovery.routeCssArtifact.hash,
-        }),
-    ...(discovery.componentManifest === undefined
-      ? {}
-      : {
-          componentManifestUrl: new URL(discovery.componentManifest.url, baseUrl).toString(),
-          componentManifestHash: discovery.componentManifest.hash,
-        }),
-    deploymentUrl,
-    buildId: commits.buildId,
-    clientVersion: packageVersion(),
-  });
-  logger.info(`registration complete (gitSha=${gitSha}, branch=${branch}, buildId=${commits.buildId})`);
-  return { previewSecret };
-}
-
+/** Refuses a removed option, a malformed endpoint, or one that is not an `app.` address, at config load. */
 function validateOptions(options: ConlocaCloudOptions): void {
-  if (!options.endpoint) {
-    throw new Error(`${PACKAGE_NAME}: endpoint is required`);
+  for (const name of REMOVED_OPTIONS) {
+    if (name in options) {
+      throw new Error(
+        `${PACKAGE_NAME}: option "${name}" was removed — run \`npx @conloca/cli connect\` to update this config`,
+      );
+    }
   }
-  if (!options.puckConfigPath) {
-    throw new Error(`${PACKAGE_NAME}: puckConfigPath is required`);
-  }
+  if (options.endpoint === undefined) return;
   try {
     // Throws on malformed URLs; we don't keep the parsed value.
     new URL(options.endpoint);
   } catch {
     throw new Error(`${PACKAGE_NAME}: endpoint must be a valid URL, got ${options.endpoint}`);
+  }
+  if (editorUiOrigin(options.endpoint) === null) {
+    throw new Error(
+      `${PACKAGE_NAME}: endpoint must be the workspace editor's app. address (for example https://app.conloca.com), got ${options.endpoint}`,
+    );
   }
 }

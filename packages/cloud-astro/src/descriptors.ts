@@ -5,11 +5,11 @@ import {
   readEditorDescriptors,
   toPortableImports,
 } from '@conloca/astro-cms/node';
-import type { EditorBundleDescriptors } from './bundle.js';
+import type { EditorBundleDescriptors } from './editor-page/bundle.js';
 
 /**
  * The MDX discovery seam, so tests can drive the failure path without a
- * fixture project (same convention as `_postRegistrationWith` in register.ts).
+ * fixture project.
  */
 export type MdxDescriptorScan = (options: MdxRegistryScanOptions) => Promise<readonly unknown[]>;
 

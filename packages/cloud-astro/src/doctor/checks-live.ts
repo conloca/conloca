@@ -1,8 +1,16 @@
-import { PACKAGE_NAME } from '../constants.js';
-import { resolveBuildRef, resolveRepositoryUri } from '../git.js';
+import {
+  classifyEditorHostResponse,
+  classifyFrameHeaders,
+  EDITOR_HOST_PROTOCOL,
+  EDITOR_PAGE_PATH,
+  type EditorPageInfo,
+  editorUiOrigin,
+  isFromVercel,
+  parentRoot,
+} from '@conloca/content-api/editor-host';
 import { messageOf } from '../message-of.js';
 import { resolveBuildSiteId } from '../site-id.js';
-import { ENDPOINT_ENV_VAR, INTEGRATION_NOT_CALLED, suppliedBuildToken, suppliedEndpoint } from './checks-offline.js';
+import { INTEGRATION_NOT_CALLED, suppliedEndpoint } from './checks-offline.js';
 import { type ConfigScan, optionLiteral } from './config-scan.js';
 import {
   type CheckId,
@@ -13,312 +21,292 @@ import {
   skipped,
 } from './types.js';
 
-const LIVE_CHECK_IDS: readonly CheckId[] = ['CC5', 'CC6', 'CC7'];
+const LIVE_CHECK_IDS: readonly CheckId[] = ['CC11', 'CC12', 'CC13'];
 
 /** Every doctor request is bounded: a hanging host must never hang `conloca doctor` (the CLI seam has no timer of its own). */
 const REQUEST_TIMEOUT_MS = 10_000;
-
-/** Version strings come from whatever build registered; only a value shaped like a version reaches the terminal. */
-const VERSION_SHAPE = /^[0-9A-Za-z.+-]{1,64}$/;
-
-function builtWithNote(value: string | null | undefined): string {
-  return typeof value === 'string' && VERSION_SHAPE.test(value) ? ` (built with ${PACKAGE_NAME} ${value})` : '';
-}
-
-/** One row of the endpoint's status route (`GET /api/v1/registrations/status`). */
-interface StatusRegistration {
-  /**
-   * Absent on the wire for active rows; true for an older row with no site id yet, which becomes active the next
-   * time the editor opens.
-   */
-  parked?: boolean;
-  branch: string;
-  siteId: string | null;
-  gitSha: string;
-  registeredAt: number;
-  editorBundleUrl: string;
-  /** Absent when the endpoint predates the field; null when the build that registered sent none. */
-  clientVersion?: string | null;
-}
-
-interface StatusResponse {
-  defaultBranch: string | null;
-  registrations: StatusRegistration[];
-}
+/** The server probe's conloca.json cap; a longer answer reads as `invalid` here as there. */
+const CONLOCA_JSON_CAP_BYTES = 16 * 1024;
+/** CC11 judges everything but the protocol; CC13 holds that against the range the editor publishes. */
+const ANY_PROTOCOL = { min: Number.NEGATIVE_INFINITY, max: Number.POSITIVE_INFINITY };
 
 interface LiveInput {
   context: CloudDoctorContext;
   deps: DoctorDeps;
   scan: ConfigScan;
-  /** CC2's verdict: the token once it parses; undefined when missing or malformed. */
-  token: string | undefined;
-  /** CC3's verdict: the endpoint once it parses as a URL. */
-  endpoint: string | undefined;
+  /** CC9's verdict: `https://<host><base>`, undefined when CC9 failed. */
+  address: string | undefined;
+  /** What the build writes as `repo`, undefined when it cannot tell. */
+  repoUri: string | undefined;
 }
 
 const skipAll = (reason: string): CheckOutcome[] => LIVE_CHECK_IDS.map((id) => skipped(id, reason));
 
-function isStatusRegistration(value: unknown): value is StatusRegistration {
-  if (typeof value !== 'object' || value === null) return false;
-  const row = value as Record<string, unknown>;
-  return (
-    typeof row.branch === 'string' &&
-    typeof row.gitSha === 'string' &&
-    typeof row.editorBundleUrl === 'string' &&
-    typeof row.registeredAt === 'number' &&
-    (row.siteId === null || typeof row.siteId === 'string') &&
-    (row.parked === undefined || typeof row.parked === 'boolean') &&
-    (row.clientVersion === undefined || row.clientVersion === null || typeof row.clientVersion === 'string')
-  );
-}
-
-/** Every field the checks read, so an endpoint drift fails CC5 loudly instead of surfacing as a broken CC6/CC7. */
-function isStatusResponse(value: unknown): value is StatusResponse {
-  if (typeof value !== 'object' || value === null) return false;
-  const body = value as Record<string, unknown>;
-  return (
-    (body.defaultBranch === null || typeof body.defaultBranch === 'string') &&
-    Array.isArray(body.registrations) &&
-    body.registrations.every(isStatusRegistration)
-  );
-}
-
-type StatusProbe = { outcome: CheckOutcome } & ({ body: StatusResponse } | { skipReason: string });
-
-interface StatusTarget {
-  token: string;
-  endpoint: string;
-  repoUri: string;
-}
-
-function statusFailed(outcome: CheckOutcome, message: string, skipReason: string): StatusProbe {
-  outcome.problems.push({ check: 'CC5', level: 'error', message });
-  return { outcome, skipReason };
-}
-
-/**
- * CC5 — GET the status route with the token, joining the path exactly as the
- * build does (register.ts) so --live reproduces the build's own request. 200
- * and 401 both prove reachability; only 200 yields rows.
- */
-async function probeStatus(fetchFn: DoctorDeps['fetch'], target: StatusTarget): Promise<StatusProbe> {
-  const outcome = outcomeOf('CC5');
-  const url = `${target.endpoint}/api/v1/registrations/status?repoUri=${encodeURIComponent(target.repoUri)}`;
-  let response: Response;
+/** GET with no credential and no followed redirect: the answer the server's probe would see. */
+async function request(fetchFn: DoctorDeps['fetch'], url: string): Promise<Response | Error> {
   try {
-    response = await fetchFn(url, {
-      headers: { authorization: `Bearer ${target.token}` },
+    return await fetchFn(url, {
+      method: 'GET',
+      redirect: 'manual',
+      credentials: 'omit',
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   } catch (error) {
-    return statusFailed(
-      outcome,
-      `endpoint ${target.endpoint} is unreachable (${messageOf(error)}) — check the endpoint option and network access from this machine`,
-      'the endpoint is unreachable',
-    );
-  }
-  if (response.status === 401) {
-    return statusFailed(
-      outcome,
-      'the build token is rejected by the endpoint — most likely rotated (a new token invalidates the old one); create a new token and update the CI secret — or the endpoint predates the registration status route, in which case update the endpoint first',
-      'the endpoint rejected the build token',
-    );
-  }
-  if (response.status === 403) {
-    return statusFailed(
-      outcome,
-      `the token does not cover ${target.repoUri} — give the endpoint access to that repository or fix repoUri`,
-      'the repository is not covered by the token',
-    );
-  }
-  if (!response.ok) {
-    return statusFailed(
-      outcome,
-      `endpoint answered HTTP ${response.status} for the registration status — the endpoint may predate this check; update it or retry`,
-      `the status route answered HTTP ${response.status}`,
-    );
-  }
-  let body: unknown;
-  try {
-    body = await response.json();
-  } catch {
-    return statusFailed(
-      outcome,
-      'the endpoint answered 200 but not with JSON — does endpoint point at the site itself instead of the editor endpoint?',
-      'the endpoint did not answer with JSON',
-    );
-  }
-  if (!isStatusResponse(body)) {
-    return statusFailed(
-      outcome,
-      'the registration status response has an unexpected shape — update the endpoint or this package',
-      'the status response was unreadable',
-    );
-  }
-  outcome.detail = `${target.endpoint} reachable — ${body.registrations.length} registration(s) for ${target.repoUri}`;
-  return { outcome, body };
-}
-
-/** CC6 — own row → probe; default-branch row → warn + probe; neither → error. Returns the row the editor would load. */
-function diagnoseRegistrations(
-  body: StatusResponse,
-  branch: string | undefined,
-  siteId: string,
-): { outcome: CheckOutcome; row: StatusRegistration | undefined } {
-  const outcome = outcomeOf('CC6');
-  if (!branch) {
-    outcome.problems.push({
-      check: 'CC6',
-      level: 'warn',
-      message:
-        'could not determine the current branch (detached HEAD?) — set CF_PAGES_BRANCH or GITHUB_REF_NAME, or check out a branch',
-    });
-    return { outcome, row: undefined };
-  }
-  // Newest first, whatever order the route returned: the editor loads the newest row.
-  const live = body.registrations.filter((row) => row.parked !== true).sort((a, b) => b.registeredAt - a.registeredAt);
-  // Activation is branch-scoped, so only rows parked for THIS branch say anything about it. They carry no siteId:
-  // the site stays undetermined until the editor's next open reads the branch's tree.
-  const parkedHere = body.registrations.filter((row) => row.parked === true && row.branch === branch);
-  // A branch without its own row is served by the default branch's row for that site — the editor's own lookup
-  // rule, which reads an empty default branch as none (the route relays the repository record as is).
-  const defaultBranch = body.defaultBranch === '' ? null : body.defaultBranch;
-  const inheritable = defaultBranch !== null && defaultBranch !== branch;
-  const own = live.find((row) => row.branch === branch && row.siteId === siteId);
-  const inherited =
-    own === undefined && inheritable
-      ? live.find((row) => row.branch === defaultBranch && row.siteId === siteId)
-      : undefined;
-  const details: string[] = [];
-  if (own) {
-    details.push(`site "${siteId}": own registration ${own.gitSha}${builtWithNote(own.clientVersion)}`);
-  } else if (inherited) {
-    outcome.problems.push({
-      check: 'CC6',
-      level: 'warn',
-      message: `site "${siteId}": no registration for branch ${branch} — the editor inherits the default branch's (${defaultBranch}) registration; it works, preview is degraded. Build ${branch} with the token to register it`,
-    });
-  } else if (parkedHere.length > 0) {
-    // The next editor open activates these rows, so the editor does load. It only fails when the branch has since
-    // grown a second site, which the doctor cannot foresee: resolveBuildSiteId answers with one id, never a count.
-    outcome.problems.push({
-      check: 'CC6',
-      level: 'warn',
-      message: `site "${siteId}": no active registration serves branch ${branch} — ${parkedHere.length} older registration(s) for it become active the next time the editor opens, unless this branch now declares more than one site (the editor answers 409 then). Build ${branch} with CONLOCA_BUILD_TOKEN set to replace them`,
-    });
-  } else {
-    const fallback = inheritable ? ` (nor the default branch ${defaultBranch})` : '';
-    outcome.problems.push({
-      check: 'CC6',
-      level: 'error',
-      message: `site "${siteId}": no registration serves branch ${branch}${fallback} — the editor will not load; build ${branch} with CONLOCA_BUILD_TOKEN set`,
-    });
-  }
-  // Only a footnote when something already serves the branch; the parked-only warning above carries the count itself.
-  if (parkedHere.length > 0 && (own ?? inherited)) {
-    details.push(
-      `${parkedHere.length} older registration(s) not active yet — they become active the next time the editor opens`,
-    );
-  }
-  if (details.length > 0) outcome.detail = details.join('; ');
-  return { outcome, row: own ?? inherited };
-}
-
-/** HEAD the URL; a host that refuses HEAD (405/501) gets a GET. */
-async function reachable(
-  fetchFn: DoctorDeps['fetch'],
-  url: string,
-): Promise<{ ok: true } | { ok: false; answer: string }> {
-  try {
-    let response = await fetchFn(url, { method: 'HEAD', signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
-    if (response.status === 405 || response.status === 501) {
-      // A one-byte range keeps the probe from downloading the whole bundle; the 206 it earns is `ok`.
-      response = await fetchFn(url, {
-        method: 'GET',
-        headers: { range: 'bytes=0-0' },
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      });
-    }
-    return response.ok ? { ok: true } : { ok: false, answer: `HTTP ${response.status}` };
-  } catch (error) {
-    return { ok: false, answer: `unreachable (${messageOf(error)})` };
+    return new Error(messageOf(error));
   }
 }
 
-/** CC7 — the bundle a registration names must still be deployed: the row serving this branch needs its bytes. */
-async function probeBundle(
-  siteId: string,
-  row: StatusRegistration | undefined,
-  localSha: string | undefined,
-  fetchFn: DoctorDeps['fetch'],
-): Promise<CheckOutcome> {
-  if (row === undefined) return skipped('CC7', 'no registration to probe');
-  const outcome = outcomeOf('CC7');
-  const result = await reachable(fetchFn, row.editorBundleUrl);
-  if (!result.ok) {
-    outcome.problems.push({
-      check: 'CC7',
-      level: 'error',
-      message: `site "${siteId}": the registration for ${row.branch} points at deleted editor assets — ${row.editorBundleUrl} answers ${result.answer} (a later deploy replaced them); rebuild and deploy from ${row.branch}`,
-    });
-  } else if (localSha && localSha !== row.gitSha) {
-    outcome.detail = `site "${siteId}": registered ${row.gitSha.slice(0, 7)}, local HEAD ${localSha.slice(0, 7)} — the editor at the endpoint lags this checkout`;
-  } else {
-    outcome.detail = `site "${siteId}": ${row.editorBundleUrl} reachable`;
+/** A 200 body as text when it fits in `CONLOCA_JSON_CAP_BYTES`, else null; reading stops at the cap, as the probe's does. */
+async function cappedText(answer: Response): Promise<string | null> {
+  if (answer.status !== 200) {
+    await answer.body?.cancel().catch(() => {});
+    return null;
   }
-  return outcome;
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  // Leaving the loop early cancels the stream.
+  for await (const chunk of answer.body ?? []) {
+    size += chunk.byteLength;
+    if (size > CONLOCA_JSON_CAP_BYTES) return null;
+    chunks.push(chunk);
+  }
+  return new TextDecoder().decode(Buffer.concat(chunks));
 }
 
-/** CC5–CC7. Networks only under --live, and the token goes ONLY to the configured endpoint. */
-export async function runLiveChecks(input: LiveInput): Promise<CheckOutcome[]> {
-  const { context, deps, scan, token, endpoint } = input;
-  if (!context.live) return skipAll('live checks run only with --live');
-  // The live trio diagnoses this integration: an unwired one is the reason, exactly as CC2/CC3 say.
-  if (scan.kind === 'read' && scan.config.conlocaCloud === 'absent') return skipAll(INTEGRATION_NOT_CALLED);
-  if (token === undefined) {
-    // CC2 already said why a supplied token is unusable; only a missing one gets the how-to here.
-    return skipAll(
-      suppliedBuildToken(scan, deps.env) === undefined
-        ? 'no build token — set CONLOCA_BUILD_TOKEN'
-        : 'no usable build token (see CC2)',
-    );
-  }
-  if (endpoint === undefined) {
-    // Likewise CC3 already said why a supplied endpoint is unusable.
-    return skipAll(
-      suppliedEndpoint(scan, deps.env) === undefined
-        ? `endpoint could not be determined — set ${ENDPOINT_ENV_VAR}`
-        : 'no usable endpoint (see CC3)',
-    );
-  }
-  // The doctor diagnoses the project it was handed, not whatever checkout the CLI happens to be standing in:
-  // `conloca doctor ./site` from a wrapper repo would otherwise read that repo's branch and call the site broken.
-  const git = (args: string[]) => deps.git(args, context.projectDir);
-  const repoUri = resolveRepositoryUri(optionLiteral(scan, 'repoUri'), deps.env, git);
+/** CC11 — conloca.json at the address, through the server's classifier; the commit is held against local HEAD. */
+async function checkEditorPage(
+  input: LiveInput,
+  address: string,
+): Promise<{ outcome: CheckOutcome; info?: EditorPageInfo }> {
+  const { context, deps, scan, repoUri } = input;
   if (repoUri === undefined) {
-    return skipAll(
-      'repository identity could not be determined — build in a CI environment or Git checkout, or set repoUri',
-    );
+    return {
+      outcome: skipped(
+        'CC11',
+        'repository identity could not be determined — build in a CI environment or Git checkout, or set repoUri',
+      ),
+    };
   }
-
-  const status = await probeStatus(deps.fetch, { token, endpoint, repoUri });
-  if (!('body' in status)) {
-    return [status.outcome, skipped('CC6', status.skipReason), skipped('CC7', status.skipReason)];
-  }
-
+  const outcome = outcomeOf('CC11');
+  const error = (message: string) => {
+    outcome.problems.push({ check: 'CC11', level: 'error', message });
+    return { outcome };
+  };
   let siteId: string;
   try {
     siteId = resolveBuildSiteId({
       contentRoot: context.contentRoot,
       override: optionLiteral(scan, 'siteId'),
-      readFile: deps.readFile,
+      readFile: (path) => deps.readFile(path),
     });
-  } catch (error) {
-    const outcome = outcomeOf('CC6');
-    outcome.problems.push({ check: 'CC6', level: 'error', message: messageOf(error) });
-    return [status.outcome, outcome, skipped('CC7', 'the site id could not be resolved')];
+  } catch (cause) {
+    return error(messageOf(cause));
   }
-  const ref = resolveBuildRef(deps.env, git);
-  const diagnosis = diagnoseRegistrations(status.body, ref.branch, siteId);
-  return [status.outcome, diagnosis.outcome, await probeBundle(siteId, diagnosis.row, ref.gitSha, deps.fetch)];
+  const url = `${address}${EDITOR_PAGE_PATH.slice(1)}conloca.json`;
+  const answer = await request(deps.fetch, url);
+  if (answer instanceof Error) return error(`${url} could not be reached (${answer.message})`);
+  const body = await cappedText(answer);
+  const vercel = isFromVercel(answer.headers);
+  const verdict = classifyEditorHostResponse(
+    {
+      status: answer.status,
+      contentType: answer.headers.get('content-type'),
+      location: answer.headers.get('location'),
+      vercel,
+      body,
+    },
+    { repoUri, siteId, protocols: ANY_PROTOCOL },
+  );
+  const { info } = verdict;
+  switch (verdict.status) {
+    case 'ready':
+      break;
+    case 'unreachable':
+      return error(`${url} answers HTTP ${answer.status} — the site is down or limiting requests; try again later`);
+    case 'protected':
+      return error(
+        `${url} asks visitors to sign in${vercel ? ' (Vercel Deployment Protection)' : ''} — put the public production address in sites.json, or let visitors through`,
+      );
+    case 'not-found':
+      return error(`${url} is not deployed — deploy the commit that adds conlocaCloud() to astro.config`);
+    case 'wrong-repo':
+      // A page built without a git remote names no repository, so no workspace can claim it.
+      if (verdict.reason === 'repo-missing') {
+        return {
+          ...error(
+            `${url} names no repository because the build could not read the git remote — set repoUri in conlocaCloud(...)`,
+          ),
+          info,
+        };
+      }
+      return {
+        ...error(`${address} serves the editor page of ${info?.repo}, not ${repoUri} — check domains in sites.json`),
+        info,
+      };
+    case 'wrong-site':
+      return {
+        ...error(`${address} serves site "${info?.siteId}", not "${siteId}" — check siteId in sites.json`),
+        info,
+      };
+    default:
+      return error(
+        `${url} is not a conloca.json the editor can read — check that the host serves the built file unchanged`,
+      );
+  }
+  if (info === undefined) return { outcome };
+  const local = deps.git(['rev-parse', 'HEAD'], context.projectDir);
+  const served = info.commit?.slice(0, 7) ?? 'an unknown commit';
+  if (local !== undefined && info.commit !== local) {
+    outcome.problems.push({
+      check: 'CC11',
+      level: 'warn',
+      message: `${address} is serving ${served}, your checkout is at ${local.slice(0, 7)} — deploy to see your latest components in the editor`,
+    });
+  }
+  outcome.detail = `${address}${EDITOR_PAGE_PATH.slice(1)} serves site "${siteId}" of ${info.repo} at ${served}`;
+  return { outcome, info };
+}
+
+/** The sources that govern module scripts, per policy: script-src-elem, else script-src, else default-src. */
+function scriptSources(csp: string): string[][] {
+  return csp.split(',').flatMap((policy) => {
+    const directives = policy.split(';').map((directive) => directive.trim().toLowerCase().split(/\s+/));
+    const found = ['script-src-elem', 'script-src', 'default-src']
+      .map((wanted) => directives.find(([name]) => name === wanted))
+      .find((directive) => directive !== undefined);
+    return found === undefined ? [] : [found.slice(1)];
+  });
+}
+
+const HOST_SOURCE = /^(?:([a-z][a-z0-9+.-]*):\/\/)?(\*|(?:\*\.)?[a-z0-9.-]+)(?::(\d+|\*))?(\/\S*)?$/;
+
+/**
+ * Whether one CSP source expression admits an https `target` (CSP3 "does url match expression"). Keywords, nonces and
+ * hashes never admit a cross-origin file here; `'strict-dynamic'` is not modelled.
+ */
+function sourceAllows(source: string, target: URL): boolean {
+  if (source === '*' || source === 'https:' || source === 'http:') return true;
+  const match = HOST_SOURCE.exec(source);
+  if (match === null) return false;
+  const [, scheme, host = '', port, path] = match;
+  if (scheme !== undefined && scheme !== 'https' && scheme !== 'http') return false;
+  const hostMatches =
+    host === '*' || (host.startsWith('*.') ? target.hostname.endsWith(host.slice(1)) : host === target.hostname);
+  const portMatches = port === undefined || port === '*' || Number(port) === Number(target.port || 443);
+  const pathMatches =
+    path === undefined || (path.endsWith('/') ? target.pathname.startsWith(path) : target.pathname === path);
+  return hostMatches && portMatches && pathMatches;
+}
+
+/** CC12 — the editor page's own headers, through the server's frame classifier, and whether it may load the editor UI. */
+async function checkFrameHeaders(
+  address: string,
+  origin: string | null,
+  fetchFn: DoctorDeps['fetch'],
+): Promise<CheckOutcome> {
+  const editorRoot = origin === null ? null : parentRoot(origin);
+  if (origin === null || editorRoot === null) return skipped('CC12', 'no editor UI origin');
+  const outcome = outcomeOf('CC12');
+  const error = (message: string) => {
+    outcome.problems.push({ check: 'CC12', level: 'error', message });
+    return outcome;
+  };
+  const url = `${address}${EDITOR_PAGE_PATH.slice(1)}`;
+  const answer = await request(fetchFn, url);
+  if (answer instanceof Error) return error(`${url} could not be reached (${answer.message})`);
+  await answer.body?.cancel().catch(() => {});
+  if (answer.status >= 500 || answer.status === 429) {
+    return error(`${url} answers HTTP ${answer.status} — the site is down or limiting requests; try again later`);
+  }
+  // A 404 or a redirect carries the host's headers, not the page's, so it proves nothing about framing.
+  if (!answer.ok) {
+    return error(
+      `${url} answers HTTP ${answer.status}, not the editor page, so its headers say nothing yet — deploy it first (see CC11)`,
+    );
+  }
+  const headers = {
+    xFrameOptions: answer.headers.get('x-frame-options'),
+    csp: answer.headers.get('content-security-policy'),
+  };
+  const ancestor = `https://*.${editorRoot}`;
+  const hint = 'run conloca connect again, or exempt /_conloca/editor/ in your host settings';
+  if (classifyFrameHeaders(headers, [ancestor]) === 'frame-blocked') {
+    const seen = /frame-ancestors/i.test(headers.csp ?? '')
+      ? `a Content-Security-Policy whose frame-ancestors excludes ${ancestor}`
+      : `X-Frame-Options: ${headers.xFrameOptions}`;
+    error(`${url} sends ${seen}, so the workspace editor cannot frame it — ${hint}`);
+  }
+  // The editor UI modules live under /host/v<protocol>/ on the editor UI origin.
+  const editorUi = new URL(`/host/v${EDITOR_HOST_PROTOCOL}/`, origin);
+  const blocksEditor = scriptSources(headers.csp ?? '').some(
+    (sources) => !sources.some((source) => sourceAllows(source, editorUi)),
+  );
+  if (blocksEditor) {
+    error(
+      `${url} sends a Content-Security-Policy whose script-src does not allow ${origin}, so the editor page cannot load the editor — add ${origin} to script-src for /_conloca/editor/`,
+    );
+  }
+  if (outcome.problems.length === 0) outcome.detail = `${url} may be framed by ${ancestor}`;
+  return outcome;
+}
+
+function isProtocolRange(value: unknown): value is { min: number; max: number } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'min' in value &&
+    'max' in value &&
+    Number.isSafeInteger(value.min) &&
+    Number.isSafeInteger(value.max)
+  );
+}
+
+/** CC13 — the page's protocol against the range the editor UI publishes at `<origin>/host/protocols.json`. */
+async function checkProtocol(
+  info: EditorPageInfo | undefined,
+  origin: string | null,
+  fetchFn: DoctorDeps['fetch'],
+): Promise<CheckOutcome> {
+  if (origin === null) return skipped('CC13', 'no editor UI origin');
+  if (info === undefined) return skipped('CC13', 'no conloca.json to read (see CC11)');
+  const outcome = outcomeOf('CC13');
+  const error = (message: string) => {
+    outcome.problems.push({ check: 'CC13', level: 'error', message });
+    return outcome;
+  };
+  const url = `${origin}/host/protocols.json`;
+  const answer = await request(fetchFn, url);
+  if (answer instanceof Error) return error(`${url} could not be reached (${answer.message})`);
+  let range: unknown;
+  try {
+    range = answer.ok ? await answer.json() : undefined;
+  } catch {
+    range = undefined;
+  }
+  if (!isProtocolRange(range)) {
+    return error(`${url} did not answer the editor's protocol range as JSON (HTTP ${answer.status})`);
+  }
+  const { protocol } = info;
+  const speaks = `the editor page speaks protocol ${protocol} and the editor speaks ${range.min}–${range.max}`;
+  if (protocol < range.min) return error(`${speaks} — rebuild with a newer @conloca/cloud-astro and deploy`);
+  if (protocol > range.max) return error(`${speaks} — the editor does not speak this version yet`);
+  outcome.detail = `protocol ${protocol}, the editor speaks ${range.min}–${range.max}`;
+  return outcome;
+}
+
+/**
+ * CC11–CC13. Networks only under --live, sends no credential, and contacts only the site's own domain and the editor UI's
+ * public protocols.json — so it runs anywhere, forks and Dependabot included.
+ */
+export async function runLiveChecks(input: LiveInput): Promise<CheckOutcome[]> {
+  const { context, deps, scan, address } = input;
+  if (!context.live) return skipAll('live checks run only with --live');
+  if (scan.kind === 'read' && scan.config.conlocaCloud === 'absent') return skipAll(INTEGRATION_NOT_CALLED);
+  if (address === undefined) return skipAll('no site domain (see CC9)');
+  const origin = editorUiOrigin(suppliedEndpoint(scan, deps.env));
+  const [page, frame] = await Promise.all([
+    checkEditorPage(input, address),
+    checkFrameHeaders(address, origin, deps.fetch),
+  ]);
+  return [page.outcome, frame, await checkProtocol(page.info, origin, deps.fetch)];
 }

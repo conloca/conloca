@@ -6,7 +6,7 @@ import { join } from 'node:path';
 // If a Puck upgrade renames one, the override stops applying without any error
 // and the text falls back to Puck's dark blue on a near-black background.
 
-const puckCss = readFileSync(Bun.resolveSync('@puckeditor/core/puck.css', import.meta.dir), 'utf8');
+const puckCss = readFileSync(Bun.resolveSync('@puckeditor/core/no-external.css', import.meta.dir), 'utf8');
 const mainCss = readFileSync(join(import.meta.dir, '../src/main.css'), 'utf8');
 const darkBlock = mainCss.match(/^\.dark \{([^}]*)\}/m)?.[1] ?? '';
 

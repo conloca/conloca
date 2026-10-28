@@ -19,7 +19,7 @@ import { FileSystemContentAPI } from '../src/filesystem-content-api.js';
  */
 
 interface SitesConfig {
-  sites: Record<string, { locales: string[]; defaultLocale: string }>;
+  sites: Record<string, { locales: string[]; defaultLocale: string; domains?: Record<string, string>; base?: string }>;
   globalLocales: string[];
 }
 
@@ -131,7 +131,7 @@ describe('mdx-pages locale detection', () => {
     // sites.json says only `en` is supported, but the integration option
     // says `en` and `de`. The option wins.
     await writeSites(contentRoot, {
-      sites: { default: { locales: ['en'], defaultLocale: 'en' } },
+      sites: { default: { locales: ['en'], defaultLocale: 'en', domains: { en: 'example.com' }, base: '/docs/' } },
       globalLocales: ['en'],
     });
     await writeMdxPage(mdxPagesRoot, 'de/guide.mdx');
@@ -147,6 +147,8 @@ describe('mdx-pages locale detection', () => {
     const parsed = api.parseFilePath(join(mdxPagesRoot, 'de/guide.mdx'));
     expect(parsed?.locale).toBe('de');
     expect(parsed?.pathname).toBe('/guide');
+    // The override keeps the site's domains and base.
+    expect(api.sitesConfig.sites.default).toMatchObject({ domains: { en: 'example.com' }, base: '/docs/' });
   });
 
   test('round-trips a locale-prefixed file: getFilePath then parseFilePath', async () => {

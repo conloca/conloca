@@ -129,6 +129,9 @@ function callArgs(configText: string, name: string): CallArgs {
 interface SiteSettings {
   output: 'static' | 'server' | 'unknown';
   adapter: boolean;
+  /** Astro's `site` and `base` as plain string literals: undefined when absent, null when computed or spread in. */
+  url: string | null | undefined;
+  base: string | null | undefined;
 }
 
 interface ScannedConfig {
@@ -138,15 +141,24 @@ interface ScannedConfig {
   site: SiteSettings;
 }
 
-/** Astro's output and adapter, read without conlocaCloud's options: their previewBuild.adapter is not the site's. */
+/** Astro's own settings, read without conlocaCloud's options: their previewBuild.adapter is not the site's. */
 function siteSettings(configText: string, conlocaCloud: CallArgs): SiteSettings {
   const text = typeof conlocaCloud === 'string' ? configText : configText.replace(conlocaCloud.text, '');
   const adapter = containsOutsideStrings(text, 'adapter');
-  if (containsOutsideStrings(text, '...')) return { output: 'unknown', adapter };
+  const spread = containsOutsideStrings(text, '...');
+  // shortcut: the first `site:`/`base:` outside conlocaCloud's options counts, so a nested `vite: { base }` would read
+  // as Astro's; parse the top-level object if a real config trips it.
+  const setting = (key: string) => {
+    const match = new RegExp(`\\b${key}\\s*:\\s*(?:'([^'\\\\]*)'|"([^"\\\\]*)")?`).exec(text);
+    if (match === null) return spread ? null : undefined;
+    return match[1] ?? match[2] ?? null;
+  };
+  const strings = { url: setting('site'), base: setting('base') };
+  if (spread) return { output: 'unknown', adapter, ...strings };
   const key = /\boutput\s*:/.exec(text);
-  if (key === null) return { output: 'static', adapter };
+  if (key === null) return { output: 'static', adapter, ...strings };
   const value = /^(['"])(static|server)\1/.exec(text.slice(key.index + key[0].length).trimStart())?.[2];
-  return { output: value === 'static' || value === 'server' ? value : 'unknown', adapter };
+  return { output: value === 'static' || value === 'server' ? value : 'unknown', adapter, ...strings };
 }
 
 export type ConfigScan =
@@ -190,16 +202,16 @@ export function hasOption(scan: ConfigScan, key: string): boolean {
 }
 
 /**
- * conlocaCloud's previewBuild as the text shows it: 'off' when written as false, 'adapter' when the options name an
- * adapter (previewBuild.adapter, written out or as shorthand), 'on' when absent or an options object without one,
- * and 'unknown' when computed or when a spread could set it.
+ * conlocaCloud's previewBuild as the text shows it: 'off' when absent or written as false (the preview build is
+ * opt-in), 'adapter' when the options name an adapter (previewBuild.adapter, written out or as shorthand), 'on' for
+ * an options object without one, and 'unknown' when computed or when a spread could set it.
  */
 export function previewBuildSetting(scan: ConfigScan): 'off' | 'adapter' | 'on' | 'unknown' {
   if (scan.kind !== 'read' || typeof scan.config.conlocaCloud === 'string') return 'unknown';
   const { text, spread } = scan.config.conlocaCloud;
   const value = /\bpreviewBuild\s*:\s*(false\b|\{)?/.exec(text);
-  if (value?.[1] === 'false') return 'off';
+  if (value === null) return spread || containsOutsideStrings(text, 'previewBuild') ? 'unknown' : 'off';
+  if (value[1] === 'false') return 'off';
   if (containsOutsideStrings(text, 'adapter')) return 'adapter';
-  if (value === null) return spread || containsOutsideStrings(text, 'previewBuild') ? 'unknown' : 'on';
   return value[1] === '{' ? 'on' : 'unknown';
 }

@@ -16,7 +16,8 @@
     "src/**/*.spec.ts",
     "src/**/__tests__/**/*.ts",
     "src/**/__tests__/**/*.tsx",
-    "src/test-suite-tracer.ts"
+    "src/test-suite-tracer.ts",
+    "test-editor-build/**/*.ts"
   ],
   "references": [
     {
@@ -27,6 +28,7 @@
     },
     {
       "path": "../content-api/tsconfig.lib.json"
-    }
+    },
+    { "path": "../mdx/tsconfig.lib.json" }
   ]
 }

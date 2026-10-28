@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { createRoot } from 'react-dom/client';
 import App from './App.js';
+import { Toaster } from './components/toast.js';
 import { CanvasThemeProvider } from './hooks/useCanvasTheme.js';
 import { ThemeProvider } from './hooks/useTheme.js';
 import { installDiscoveredMdxComponents, type MdxComponents } from './mdx-components.js';
@@ -62,6 +63,7 @@ export function mountSpa(): void {
           <App basename={config.basename} />
         </CanvasThemeProvider>
       </ThemeProvider>
+      <Toaster />
       {config.enableDevtools && <ReactQueryDevtools initialIsOpen={false} />}
     </QueryClientProvider>,
   );

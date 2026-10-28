@@ -384,6 +384,8 @@ export interface SitesConfig {
       domains?: {
         [locale: string]: string;
       };
+      /** Path the site is served under, as Astro's `base`: starts and ends with `/`; default `/`. */
+      base?: string;
       /**
        * Optional filesystem path for this site's mdx-type pages.
        * When set, .mdx files under this path are surfaced in the CMS

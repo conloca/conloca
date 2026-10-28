@@ -22,6 +22,8 @@ export interface SandboxRenderMessage {
   payload: string;
   /** Optional stylesheet text injected into the frame for preview fidelity. */
   styles?: string;
+  /** Data URLs to show instead of an `<img>` `src` the frame cannot load itself, keyed by that `src` (mode `mdx`). */
+  images?: Record<string, string>;
 }
 
 export type SandboxOutboundMessage =
@@ -32,7 +34,7 @@ export type SandboxOutboundMessage =
   | { __conlocaSandbox: true; k: string; kind: 'rendered' }
   | { __conlocaSandbox: true; k: string; kind: 'error'; message: string };
 
-export function createSandboxRuntime(): {
+export function createSandboxRuntime(images?: Record<string, string>): {
   Fragment: symbol;
   jsx: (type: unknown, props: Record<string, unknown>) => Node;
   jsxs: (type: unknown, props: Record<string, unknown>) => Node;
@@ -46,6 +48,7 @@ export function createSandboxRuntime(): {
   // it again as SVG from what each HTML element was made of, kept here, which
   // is the namespace React would have given it.
   const madeOf = new WeakMap<Node, { type: string; props: Record<string, unknown> }>();
+  // oxlint-disable-next-line unicorn/consistent-function-scoping -- the frame receives this function as source text, so its helpers stay inside it.
   const toNodes = (value: unknown): Node[] => {
     if (value == null || value === true || value === false) return [];
     if (Array.isArray(value)) return value.flatMap(toNodes);
@@ -60,6 +63,8 @@ export function createSandboxRuntime(): {
     for (const key in p) {
       if (key === 'children' || key === 'key') continue;
       const value = p[key];
+      // Inherited keys are never strings, so only a src the host sent is swapped.
+      const sent = type === 'img' && key === 'src' && typeof value === 'string' ? images?.[value] : undefined;
       if (/^on/i.test(key)) continue; // never wire an event handler
       if (key === 'className') {
         el.setAttribute('class', String(value));
@@ -69,6 +74,8 @@ export function createSandboxRuntime(): {
         Object.assign((el as HTMLElement).style, value as Record<string, string>);
       } else if (value === true) {
         el.setAttribute(key, '');
+      } else if (typeof sent === 'string') {
+        el.setAttribute('src', sent);
       } else if (value != null && value !== false) {
         el.setAttribute(key, String(value));
       }
@@ -123,6 +130,8 @@ export function sandboxFrameMain(deps: {
   createSandboxRuntime: typeof createSandboxRuntime;
   runCompiledMdx: typeof runCompiledMdx;
 }): void {
+  // MDX runs only where it has no origin of its own: an opaque origin inside a parent frame.
+  if (self.origin !== 'null' || window.parent === window) return;
   const root = document.getElementById('__sandbox_root');
   if (!root) return;
   // Per-instance key from ?k= so the host can accept messages without relying
@@ -179,8 +188,8 @@ export function sandboxFrameMain(deps: {
     }
     style.textContent = css;
   };
-  const renderMdx = (code: string): void => {
-    const runtime = deps.createSandboxRuntime();
+  const renderMdx = (code: string, images: Record<string, string> | undefined): void => {
+    const runtime = deps.createSandboxRuntime(images);
     deps
       .runCompiledMdx(code, runtime as unknown as Record<string, unknown>)
       .then((module) => {
@@ -216,7 +225,7 @@ export function sandboxFrameMain(deps: {
     if (data?.__conlocaSandbox !== true || data.kind !== 'render') return;
     if (typeof data.styles === 'string') applyStyles(data.styles);
     try {
-      if (data.mode === 'mdx') renderMdx(data.payload);
+      if (data.mode === 'mdx') renderMdx(data.payload, data.images);
       else renderHtml(data.payload);
     } catch (error: unknown) {
       post({ __conlocaSandbox: true, kind: 'error', message: error instanceof Error ? error.message : String(error) });
@@ -255,6 +264,13 @@ export function sandboxFrameMain(deps: {
  */
 export const SANDBOX_FRAME_CSP =
   "default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline'; img-src data: https: blob:; font-src data: https:";
+
+/**
+ * The policy a server sends with the frame document. It adds what a meta
+ * policy cannot carry: `sandbox allow-scripts` (an opaque origin even when the
+ * document is not loaded by a sandboxed iframe) and `frame-ancestors`.
+ */
+export const MDX_SANDBOX_FRAME_POLICY = `${SANDBOX_FRAME_CSP}; sandbox allow-scripts; frame-ancestors 'self'`;
 
 /**
  * esbuild-style bundlers inject `/* @__PURE__ *\/ __name(fn, "id")` around

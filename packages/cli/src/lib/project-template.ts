@@ -31,6 +31,8 @@ const MANIFEST_CANDIDATES = ['../package.json', '../../package.json'];
 export interface CliManifest {
   version: string;
   dependencies?: Record<string, string>;
+  /** Optional peers the CLI names a matching release of without installing it, e.g. `@conloca/cloud-astro`. */
+  peerDependencies?: Record<string, string>;
 }
 
 /** Reads this CLI's own manifest: it names both the CLI version and the Conloca releases a created project must pin. */
@@ -43,7 +45,11 @@ export async function readCliManifest(): Promise<CliManifest> {
       continue;
     }
     if (typeof manifest.version === 'string') {
-      return { version: manifest.version, dependencies: manifest.dependencies };
+      return {
+        version: manifest.version,
+        dependencies: manifest.dependencies,
+        peerDependencies: manifest.peerDependencies,
+      };
     }
   }
   throw new Error('could not read the version of @conloca/cli from its own package.json');
@@ -65,10 +71,10 @@ const SCAFFOLD_CONLOCA_PACKAGES = ['@conloca/astro-cms', '@conloca/content-api']
  * What a created project should ask npm for. The CLI's own dependency range is the only version
  * of a sibling package known to exist: releases are independent, so the CLI can be published on
  * its own and its own version then names a release nobody ever cut. Inside this repo the range is
- * still `workspace:*`, which becomes a real version only at pack time, so it falls back.
+ * still `workspace:*`, which becomes a real version only at pack time, so it falls back. Optional peers count too.
  */
-function conlocaRange(manifest: CliManifest, name: string): string {
-  const declared = manifest.dependencies?.[name];
+export function conlocaRange(manifest: CliManifest, name: string): string {
+  const declared = manifest.dependencies?.[name] ?? manifest.peerDependencies?.[name];
   return declared === undefined || declared.startsWith('workspace:') ? manifest.version : declared;
 }
 
@@ -122,7 +128,7 @@ const SETUP_STEPS: Record<PackageManager, string> = {
 `,
 };
 
-/** GitHub Actions workflow: doctor + build, both with the build-token slot (unused until a site adds an integration that reads it). */
+/** GitHub Actions workflow: doctor + build. */
 export function renderWorkflow(pm: PackageManager): string {
   const commands = packageManagerCommands(pm);
   return `name: Conloca
@@ -139,14 +145,7 @@ jobs:
           # temporary merge commit, so a build that reports its commit names a real one.
           ref: \${{ github.event.pull_request.head.sha || github.sha }}
 ${SETUP_STEPS[pm]}      - run: ${commands.frozenInstall}
-      # Slot for a build integration that is not part of this scaffold; nothing reads
-      # this secret until you add one. Given to doctor and the build only, never to
-      # dependency install scripts.
       - run: ${commands.run} doctor
-        env:
-          CONLOCA_BUILD_TOKEN: \${{ secrets.CONLOCA_BUILD_TOKEN }}
       - run: ${commands.run} build
-        env:
-          CONLOCA_BUILD_TOKEN: \${{ secrets.CONLOCA_BUILD_TOKEN }}
 `;
 }

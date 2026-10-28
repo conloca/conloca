@@ -70,7 +70,7 @@ describe('conloca create', () => {
     expect(result.exitCode).toBe(0);
   });
 
-  test('refuses a non-empty directory and points at astro setup', async () => {
+  test('refuses a non-empty directory and points at connect', async () => {
     const parent = await tempParent('conloca-create-nonempty-');
     try {
       const dir = join(parent, 'site');
@@ -78,7 +78,7 @@ describe('conloca create', () => {
       const result = await $`${CLI} create --no-install --no-git ${dir}`.quiet().nothrow();
       expect(result.exitCode).toBe(1);
       expect(result.stderr.toString()).toContain('not empty');
-      expect(result.stderr.toString()).toContain('conloca astro setup');
+      expect(result.stderr.toString()).toContain('conloca connect');
       expect(await exists(join(dir, 'astro.config.mjs'))).toBe(false);
     } finally {
       await rm(parent, { recursive: true, force: true });

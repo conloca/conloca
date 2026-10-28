@@ -1,12 +1,13 @@
 import { beforeAll, describe, expect, it } from 'bun:test';
-import { generateKeyPair, type JWTVerifyGetKey, SignJWT } from 'jose';
-import { handlePreviewRequest, type PreviewMiddlewareOptions } from '../preview/middleware.js';
+import { generateKeyPair, type JWTPayload, type JWTVerifyGetKey, SignJWT } from 'jose';
+import { previewLabel } from '../preview/label.js';
+import { handlePreviewRequest, type PreviewMiddlewareOptions, type PreviewVerdict } from '../preview/middleware.js';
+import { PREVIEW_COOKIE_NAME, PREVIEW_QUERY_PARAM } from '../preview/preview-path.js';
 
 // ---------------------------------------------------------------------------
 // Test scaffolding
 // ---------------------------------------------------------------------------
 
-const SECRET = 'abcdef1234567890';
 const ISSUER = 'https://cms.example.test';
 const AUDIENCE = 'conloca-preview';
 const ENDPOINT = 'https://cms.example.test';
@@ -40,6 +41,8 @@ interface MintOptions {
   branch?: string;
   org?: string;
   repo?: string;
+  siteId?: string;
+  servedBy?: string;
   expiresInSeconds?: number;
   issuedAt?: number;
   issuer?: string;
@@ -50,13 +53,17 @@ interface MintOptions {
 }
 
 async function mintJwt(opts: MintOptions = {}): Promise<string> {
-  const payload: Record<string, unknown> = {
+  const payload: JWTPayload = {
     org: opts.org ?? 'acme',
-    repo: opts.repo ?? 'site',
+    repo: opts.repo ?? 'acme/site',
+    site_id: opts.siteId ?? 'website',
     scope: opts.scope ?? 'preview',
   };
   if (!opts.omitBranch) {
-    payload.branch = opts.branch ?? 'feature/preview';
+    payload.branch = opts.branch ?? 'main';
+  }
+  if (opts.servedBy !== undefined) {
+    payload.served_by = opts.servedBy;
   }
   const now = Math.floor(Date.now() / 1000);
   const iat = opts.issuedAt ?? now;
@@ -72,10 +79,13 @@ async function mintJwt(opts: MintOptions = {}): Promise<string> {
 
 function makeOptions(overrides: Partial<PreviewMiddlewareOptions> = {}): PreviewMiddlewareOptions {
   return {
-    secret: SECRET,
     saasEndpoint: ENDPOINT,
     saasIssuer: ISSUER,
     saasAudience: AUDIENCE,
+    repo: 'acme/site',
+    siteId: 'website',
+    branch: 'main',
+    base: '/',
     getKey,
     ...overrides,
   };
@@ -85,14 +95,24 @@ function makeRequest(url: string, init: RequestInit = {}): Request {
   return new Request(url, init);
 }
 
+const cookieRequest = (jwt: string, path = '/about') =>
+  new Request(`https://site.test${path}`, { headers: { cookie: `${PREVIEW_COOKIE_NAME}=${jwt}` } });
+
+async function expectLanding(v: PreviewVerdict): Promise<void> {
+  if (v.kind !== 'response') throw new Error(`expected the landing page, got ${v.kind}`);
+  expect(v.response.status).toBe(200);
+  expect(v.response.headers.get('set-cookie')).toBeNull();
+  expect((await v.response.text()).toLowerCase()).toContain('login');
+}
+
 // ---------------------------------------------------------------------------
 // Query-param init path → 302 + cookie + clean-URL redirect
 // ---------------------------------------------------------------------------
 
 describe('handlePreviewRequest — query-param init', () => {
-  it('valid JWT in the secret-named query param yields a 302 to the cleaned URL with the cookie set', async () => {
+  it('valid JWT in the conloca_preview query param yields a 302 to the cleaned URL with the cookie set', async () => {
     const jwt = await mintJwt();
-    const url = `https://example.com/blog/post?conloca_preview_${SECRET}=${jwt}&utm=keep`;
+    const url = `https://example.com/blog/post?${PREVIEW_QUERY_PARAM}=${jwt}&utm=keep`;
     const verdict = await handlePreviewRequest(makeRequest(url), makeOptions());
     expect(verdict.kind).toBe('response');
     if (verdict.kind !== 'response') return;
@@ -100,9 +120,9 @@ describe('handlePreviewRequest — query-param init', () => {
     // Location strips ONLY the preview query param; other params survive.
     const location = verdict.response.headers.get('location');
     expect(location).toBe('https://example.com/blog/post?utm=keep');
-    // Cookie carries the JWT and uses the secret-derived name.
+    // Cookie carries the JWT under the fixed __Host- name.
     const setCookie = verdict.response.headers.get('set-cookie');
-    expect(setCookie).toContain(`conloca_preview_${SECRET}=${jwt}`);
+    expect(setCookie).toContain(`${PREVIEW_COOKIE_NAME}=${jwt}`);
     // The cookie must be browser-safe by default.
     expect(setCookie).toContain('HttpOnly');
     expect(setCookie).toContain('Secure');
@@ -112,7 +132,7 @@ describe('handlePreviewRequest — query-param init', () => {
 
   it('strips only the preview query param even when it is the only param', async () => {
     const jwt = await mintJwt();
-    const url = `https://example.com/posts?conloca_preview_${SECRET}=${jwt}`;
+    const url = `https://example.com/posts?${PREVIEW_QUERY_PARAM}=${jwt}`;
     const verdict = await handlePreviewRequest(makeRequest(url), makeOptions());
     if (verdict.kind !== 'response') throw new Error('expected response verdict');
     // The cleaned URL should NOT carry a dangling `?` (the only param was removed).
@@ -122,7 +142,7 @@ describe('handlePreviewRequest — query-param init', () => {
   it('tampered JWT (signature does not verify) returns the no-preview landing page, no cookie set', async () => {
     // Sign with a key the middleware does not trust → signature mismatch.
     const tampered = await mintJwt({ signWith: foreignPrivateKey });
-    const url = `https://example.com/?conloca_preview_${SECRET}=${tampered}`;
+    const url = `https://example.com/?${PREVIEW_QUERY_PARAM}=${tampered}`;
     const verdict = await handlePreviewRequest(makeRequest(url), makeOptions());
     expect(verdict.kind).toBe('response');
     if (verdict.kind !== 'response') return;
@@ -141,7 +161,7 @@ describe('handlePreviewRequest — query-param init', () => {
       issuedAt: Math.floor(Date.now() / 1000) - 600,
       expiresInSeconds: 300,
     });
-    const url = `https://example.com/?conloca_preview_${SECRET}=${expired}`;
+    const url = `https://example.com/?${PREVIEW_QUERY_PARAM}=${expired}`;
     const verdict = await handlePreviewRequest(makeRequest(url), makeOptions());
     expect(verdict.kind).toBe('response');
     if (verdict.kind !== 'response') return;
@@ -151,7 +171,7 @@ describe('handlePreviewRequest — query-param init', () => {
 
   it('JWT signed by the wrong issuer is rejected as the no-preview landing', async () => {
     const wrongIssuer = await mintJwt({ issuer: 'https://attacker.example.com' });
-    const url = `https://example.com/?conloca_preview_${SECRET}=${wrongIssuer}`;
+    const url = `https://example.com/?${PREVIEW_QUERY_PARAM}=${wrongIssuer}`;
     const verdict = await handlePreviewRequest(makeRequest(url), makeOptions());
     expect(verdict.kind).toBe('response');
     if (verdict.kind !== 'response') return;
@@ -164,19 +184,22 @@ describe('handlePreviewRequest — query-param init', () => {
 // ---------------------------------------------------------------------------
 
 describe('handlePreviewRequest — cookie path', () => {
-  it('valid JWT in the secret-named cookie yields a preview verdict with decoded ctx', async () => {
-    const jwt = await mintJwt({ branch: 'feature/x', org: 'acme', repo: 'site' });
+  it('valid JWT in the preview cookie yields a preview verdict with decoded ctx', async () => {
+    const jwt = await mintJwt({ branch: 'feature/x', org: 'acme', repo: 'acme/site' });
     const url = 'https://example.com/blog/post';
-    const cookie = `conloca_preview_${SECRET}=${jwt}; theme=dark`;
-    const verdict = await handlePreviewRequest(makeRequest(url, { headers: { cookie } }), makeOptions());
+    const cookie = `${PREVIEW_COOKIE_NAME}=${jwt}; theme=dark`;
+    const verdict = await handlePreviewRequest(
+      makeRequest(url, { headers: { cookie } }),
+      makeOptions({ branch: 'feature/x' }),
+    );
     expect(verdict.kind).toBe('preview');
     if (verdict.kind !== 'preview') return;
-    expect(verdict.ctx).toMatchObject({ branch: 'feature/x', org: 'acme', repo: 'site', jwt });
+    expect(verdict.ctx).toMatchObject({ branch: 'feature/x', org: 'acme', repo: 'acme/site', jwt });
   });
 
   it('rejects a correctly signed editor-scope JWT before it can create preview context', async () => {
     const jwt = await mintJwt({ scope: 'editor' });
-    const cookie = `conloca_preview_${SECRET}=${jwt}`;
+    const cookie = `${PREVIEW_COOKIE_NAME}=${jwt}`;
 
     const verdict = await handlePreviewRequest(
       makeRequest('https://example.com/blog/post', { headers: { cookie } }),
@@ -191,7 +214,7 @@ describe('handlePreviewRequest — cookie path', () => {
       issuedAt: Math.floor(Date.now() / 1000) - 600,
       expiresInSeconds: 300,
     });
-    const cookie = `conloca_preview_${SECRET}=${expired}`;
+    const cookie = `${PREVIEW_COOKIE_NAME}=${expired}`;
     const verdict = await handlePreviewRequest(
       makeRequest('https://example.com/', { headers: { cookie } }),
       makeOptions(),
@@ -206,7 +229,7 @@ describe('handlePreviewRequest — cookie path', () => {
     // The preview context requires `branch`; without it the endpoint can't tell
     // which branch to read from. A missing claim must not silently default.
     const missingBranch = await mintJwt({ omitBranch: true });
-    const cookie = `conloca_preview_${SECRET}=${missingBranch}`;
+    const cookie = `${PREVIEW_COOKIE_NAME}=${missingBranch}`;
     const verdict = await handlePreviewRequest(
       makeRequest('https://example.com/', { headers: { cookie } }),
       makeOptions(),
@@ -214,16 +237,16 @@ describe('handlePreviewRequest — cookie path', () => {
     expect(verdict.kind).toBe('response');
   });
 
-  it('an unrelated cookie of the same prefix is ignored (must match the exact secret-derived name)', async () => {
-    // High-entropy secret in the cookie name is the load guard; a similarly
-    // named but-not-matching cookie must not trigger validation.
-    const jwt = await mintJwt();
-    const cookie = `conloca_preview_DIFFERENT_SECRET=${jwt}`;
-    const verdict = await handlePreviewRequest(
-      makeRequest('https://example.com/', { headers: { cookie } }),
-      makeOptions(),
+  it('reads only the exact __Host-conloca_preview cookie', async () => {
+    // A valid pass under a look-alike name must not be read: only the exact
+    // name carries the __Host- guarantees (Secure, Path=/, no Domain).
+    const lookAlike = `${PREVIEW_COOKIE_NAME}_x=${await mintJwt()}`;
+    await expectLanding(
+      await handlePreviewRequest(
+        makeRequest('https://example.com/', { headers: { cookie: lookAlike } }),
+        makeOptions(),
+      ),
     );
-    expect(verdict.kind).toBe('response');
   });
 });
 
@@ -409,25 +432,25 @@ describe('renderNoPreviewLanding CSP', () => {
 // ---------------------------------------------------------------------------
 
 describe('handlePreviewRequest — cookie handoff', () => {
-  it('redirects off the secret prefix onto the real site path', async () => {
+  it('redirects off the preview route onto the real site path', async () => {
     const jwt = await mintJwt();
     const verdict = await handlePreviewRequest(
-      makeRequest(`https://site.test/conloca_preview_${SECRET}/about?utm=x&conloca_preview_${SECRET}=${jwt}`),
+      makeRequest(`https://site.test/_conloca/preview/about?utm=x&${PREVIEW_QUERY_PARAM}=${jwt}`),
       makeOptions(),
     );
 
     expect(verdict.kind).toBe('response');
     const location = (verdict as { response: Response }).response.headers.get('location');
-    // The prefix is an entry door, not the serving surface: once the cookie is
+    // The route is an entry door, not the serving surface: once the cookie is
     // set the browser belongs on /about, so every same-origin link the page
     // emits stays inside preview.
     expect(new URL(location ?? '').pathname + new URL(location ?? '').search).toBe('/about?utm=x');
   });
 
-  it('keeps the browser at the site root when the prefix is the whole path', async () => {
+  it('keeps the browser at the site root when the route is the whole path', async () => {
     const jwt = await mintJwt();
     const verdict = await handlePreviewRequest(
-      makeRequest(`https://site.test/conloca_preview_${SECRET}?conloca_preview_${SECRET}=${jwt}`),
+      makeRequest(`https://site.test/_conloca/preview?${PREVIEW_QUERY_PARAM}=${jwt}`),
       makeOptions(),
     );
     const loc = (verdict as { response: Response }).response.headers.get('location');
@@ -437,7 +460,7 @@ describe('handlePreviewRequest — cookie handoff', () => {
   it('sets a cookie that survives the cross-site hop from the editor', async () => {
     const jwt = await mintJwt();
     const verdict = await handlePreviewRequest(
-      makeRequest(`https://site.test/conloca_preview_${SECRET}/?conloca_preview_${SECRET}=${jwt}`),
+      makeRequest(`https://site.test/_conloca/preview/?${PREVIEW_QUERY_PARAM}=${jwt}`),
       makeOptions(),
     );
     const setCookie = (verdict as { response: Response }).response.headers.get('set-cookie') ?? '';
@@ -471,7 +494,7 @@ describe('handlePreviewRequest — cookie handoff', () => {
 describe('exit route', () => {
   it('expires the preview cookie and redirects to the requested page', async () => {
     const verdict = await handlePreviewRequest(
-      makeRequest(`https://site.test/conloca_preview_${SECRET}/__exit?to=%2Fabout`),
+      makeRequest('https://site.test/_conloca/preview/__exit?to=%2Fabout'),
       makeOptions(),
     );
 
@@ -480,14 +503,14 @@ describe('exit route', () => {
     expect(response.status).toBe(302);
     expect(response.headers.get('location')).toBe('/about');
     const setCookie = response.headers.get('set-cookie') ?? '';
-    expect(setCookie).toContain(`conloca_preview_${SECRET}=;`);
+    expect(setCookie).toContain(`${PREVIEW_COOKIE_NAME}=;`);
     expect(setCookie).toContain('Max-Age=0');
   });
 
   it('rejects non-path exit targets so the route cannot open-redirect', async () => {
     for (const target of ['https%3A%2F%2Fevil.test', '%2F%2Fevil.test']) {
       const verdict = await handlePreviewRequest(
-        makeRequest(`https://site.test/conloca_preview_${SECRET}/__exit?to=${target}`),
+        makeRequest(`https://site.test/_conloca/preview/__exit?to=${target}`),
         makeOptions(),
       );
       const response = (verdict as { response: Response }).response;
@@ -497,15 +520,15 @@ describe('exit route', () => {
 });
 
 describe('no-preview landing links', () => {
-  it('builds both links from the clean path, not the secret-prefixed one', async () => {
+  it('builds both links from the clean path, not the preview route', async () => {
     const verdict = await handlePreviewRequest(
-      makeRequest(`https://site.test/conloca_preview_${SECRET}/pricing`),
+      makeRequest('https://site.test/_conloca/preview/pricing'),
       makeOptions(),
     );
 
     const body = await (verdict as { response: Response }).response.text();
     expect(body).toContain('href="/pricing"');
-    expect(body).not.toContain(`conloca_preview_${SECRET}`);
+    expect(body).not.toContain('_conloca/preview');
   });
 });
 
@@ -515,10 +538,111 @@ describe('preview banner links', () => {
     const html = '<html><body><p>x</p></body></html>';
     const ctx = { branch: 'main', org: 'acme', repo: 'site', jwt: 'tok' };
 
-    const out = injectPreviewBanner(html, ctx, ENDPOINT, `/conloca_preview_${SECRET}/__exit`);
+    const out = injectPreviewBanner(html, ctx, ENDPOINT, '/_conloca/preview/__exit');
 
     expect(out).toContain('__conlocaPreview.exitPath');
     expect(out).toContain('/login?return=');
     expect(out).not.toContain("href = '#'");
+  });
+});
+
+describe('handlePreviewRequest — the pass must match the build', () => {
+  it('refuses a pass for another repository with the landing page', async () => {
+    await expectLanding(
+      await handlePreviewRequest(cookieRequest(await mintJwt({ repo: 'acme/other' })), makeOptions()),
+    );
+  });
+
+  it('refuses a pass for another site', async () => {
+    await expectLanding(await handlePreviewRequest(cookieRequest(await mintJwt({ siteId: 'docs' })), makeOptions()));
+  });
+
+  it('refuses a pass for another branch', async () => {
+    await expectLanding(
+      await handlePreviewRequest(cookieRequest(await mintJwt({ branch: 'feature/y' })), makeOptions()),
+    );
+  });
+
+  it("accepts a borrowing branch whose served_by names this build's branch", async () => {
+    const v = await handlePreviewRequest(
+      cookieRequest(await mintJwt({ branch: 'draft-1', servedBy: 'main' })),
+      makeOptions(),
+    );
+    expect(v).toMatchObject({ kind: 'preview', ctx: { branch: 'draft-1' } });
+  });
+
+  it('refuses served_by on a server built from another branch', async () => {
+    const pass = await mintJwt({ branch: 'draft-1', servedBy: 'main' });
+    await expectLanding(await handlePreviewRequest(cookieRequest(pass), makeOptions({ branch: 'feature/y' })));
+  });
+
+  it('reads the pass from ?conloca_preview= and sets the __Host- cookie', async () => {
+    const v = await handlePreviewRequest(
+      new Request(`https://site.test/_conloca/preview/about?conloca_preview=${await mintJwt()}`),
+      makeOptions(),
+    );
+    if (v.kind !== 'response') throw new Error('expected the init redirect');
+    expect(v.response.status).toBe(302);
+    expect(v.response.headers.get('location')).toBe('https://site.test/about');
+    const cookie = v.response.headers.get('set-cookie') ?? '';
+    expect(cookie.startsWith('__Host-conloca_preview=')).toBe(true);
+    expect(cookie).toContain('HttpOnly; Secure; SameSite=Lax; Path=/');
+    expect(cookie).not.toContain('Domain=');
+  });
+
+  it('ignores a query or cookie left over from the secret route', async () => {
+    const pass = await mintJwt();
+    const opts = makeOptions({ onMiss: 'pass-through' });
+    const requests = [
+      new Request(`https://site.test/about?conloca_preview_abc=${pass}`),
+      new Request('https://site.test/about', { headers: { cookie: `conloca_preview_abc=${pass}` } }),
+      new Request(`https://site.test/conloca_preview_abc/about?conloca_preview_abc=${pass}`),
+    ];
+    const verdicts = await Promise.all(requests.map((request) => handlePreviewRequest(request, opts)));
+    expect(verdicts.map((v) => v.kind)).toEqual(['pass-through', 'pass-through', 'pass-through']);
+  });
+
+  it('answers the exit route with its label and an expired cookie', async () => {
+    const v = await handlePreviewRequest(
+      new Request('https://site.test/_conloca/preview/__exit?to=/blog'),
+      makeOptions(),
+    );
+    if (v.kind !== 'response') throw new Error('expected the exit redirect');
+    expect(v.response.headers.get('location')).toBe('/blog');
+    expect(v.response.headers.get('conloca-preview')).toBe(await previewLabel('acme/site', 'website', 'main'));
+    expect(v.response.headers.get('set-cookie')).toContain(
+      '__Host-conloca_preview=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0',
+    );
+  });
+
+  it('honours Astro base for the entry, the exit route and the canonical redirect', async () => {
+    const opts = makeOptions({ base: '/docs/' });
+    const exit = await handlePreviewRequest(
+      new Request('https://site.test/docs/_conloca/preview/__exit?to=/docs/a'),
+      opts,
+    );
+    if (exit.kind !== 'response') throw new Error('expected the exit redirect');
+    expect(exit.response.headers.get('location')).toBe('/docs/a');
+    expect(exit.response.headers.get('conloca-preview')).toBe(await previewLabel('acme/site', 'website', 'main'));
+    for (const query of ['', '?to=https%3A%2F%2Fevil.test']) {
+      // oxlint-disable-next-line no-await-in-loop -- one case at a time keeps a failure attributable.
+      const fallback = await handlePreviewRequest(
+        new Request(`https://site.test/docs/_conloca/preview/__exit${query}`),
+        opts,
+      );
+      if (fallback.kind !== 'response') throw new Error('expected the exit redirect');
+      expect(fallback.response.headers.get('location')).toBe('/docs/');
+    }
+    const init = await handlePreviewRequest(
+      new Request(`https://site.test/docs/_conloca/preview/a?conloca_preview=${await mintJwt()}`),
+      opts,
+    );
+    if (init.kind !== 'response') throw new Error('expected the init redirect');
+    expect(init.response.headers.get('location')).toBe('https://site.test/docs/a');
+    const outside = await handlePreviewRequest(
+      new Request('https://site.test/_conloca/preview/__exit'),
+      makeOptions({ base: '/docs/', onMiss: 'pass-through' }),
+    );
+    expect(outside.kind).toBe('pass-through');
   });
 });

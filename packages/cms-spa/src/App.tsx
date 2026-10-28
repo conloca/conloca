@@ -1,6 +1,13 @@
 import type { Config } from '@puckeditor/core';
-import { useMemo } from 'react';
-import { createBrowserRouter, createRoutesFromElements, Route, RouterProvider, Routes } from 'react-router-dom';
+import { useEffect, useMemo } from 'react';
+import {
+  createBrowserRouter,
+  createMemoryRouter,
+  createRoutesFromElements,
+  Route,
+  RouterProvider,
+  Routes,
+} from 'react-router-dom';
 import { CMSDashboard } from './components/CMSDashboard.js';
 import { CMSLayout } from './components/CMSLayout.js';
 import { FragmentEditor } from './components/editor/FragmentEditor.js';
@@ -11,7 +18,9 @@ import { MediaPage } from './components/pages/MediaPage.js';
 import { PageList } from './components/pages/PageList.js';
 import { RouteErrorPage } from './components/RouteErrorPage.js';
 import { type DataSchemas, useDataSchemas } from './data-schemas.js';
+import { syncMemoryRouter } from './frame/memory-router.js';
 import { usePuckConfig } from './puck-config.js';
+import type { MemoryRouterConfig } from './ui-config.js';
 
 export interface RouteDeps {
   puckConfig: Config;
@@ -70,18 +79,21 @@ export function AppRoutes() {
 /**
  * Production app entry. Uses the Data Router API so v7's `useBlocker` works
  * for the unsaved-changes navigation guard in MdxPageEditor / FragmentEditor.
+ * With `memoryRouter` the route lives in memory and is mirrored to the parent
+ * frame instead of the address bar.
  */
-export default function App({ basename }: { basename?: string } = {}) {
+export default function App({ basename, memoryRouter }: { basename?: string; memoryRouter?: MemoryRouterConfig } = {}) {
   const puckConfig = usePuckConfig();
   const dataSchemas = useDataSchemas();
 
-  const router = useMemo(
-    () =>
-      createBrowserRouter(createRoutesFromElements(routeElements({ puckConfig, dataSchemas })), {
-        basename,
-      }),
-    [puckConfig, dataSchemas, basename],
-  );
+  const router = useMemo(() => {
+    const routes = createRoutesFromElements(routeElements({ puckConfig, dataSchemas }));
+    return memoryRouter
+      ? createMemoryRouter(routes, { initialEntries: [memoryRouter.initialPath] })
+      : createBrowserRouter(routes, { basename });
+  }, [puckConfig, dataSchemas, basename, memoryRouter]);
+
+  useEffect(() => (memoryRouter ? syncMemoryRouter(router, memoryRouter) : undefined), [router, memoryRouter]);
 
   return <RouterProvider router={router} />;
 }

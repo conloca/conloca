@@ -28,10 +28,8 @@ export function getBannerScriptText(ctx: PreviewContext, endpoint?: string, exit
   // cookie is HttpOnly, so the button reads the JWT from here). Absent an
   // endpoint the button is inert. `endpoint: undefined` drops out of the JSON.
   //
-  // `exitPath` is the server-side exit route (secret-prefixed). Embedding it
-  // here does not widen the secret's exposure: this script is served only to
-  // credentialed preview visitors, who already hold the secret — it is in the
-  // entry/share URL they arrived through — and the response is no-store.
+  // `exitPath` is the server-side exit route, the fixed public
+  // `<base>/_conloca/preview/__exit`; it reveals nothing.
   const ctxJson = JSON.stringify({ ...ctx, endpoint, exitPath }).replace(/</g, '\\u003c');
   return [
     `var __conlocaPreview = ${ctxJson};`,

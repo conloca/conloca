@@ -48,6 +48,13 @@ export {
   pageReferenceOf,
 } from '@conloca/content-api';
 
+export {
+  EDITOR_HOST_PROTOCOL,
+  EDITOR_HOST_PROTOCOLS,
+  type EditorFrameFailure,
+  type EditorHostPageData,
+} from '@conloca/content-api/editor-host';
+
 export * from './client.js';
 export * from './hooks.js';
 export { type PageStatus, pageStatusOf } from './page-status.js';

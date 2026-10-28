@@ -27,6 +27,7 @@ import {
   useRouteError,
 } from 'react-router-dom';
 import { routeElements } from '../src/App.js';
+import { CmsSpaApp } from '../src/CmsSpaApp.js';
 import { getDataSchemas, setDataSchemas } from '../src/data-schemas.js';
 import { ThemeProvider } from '../src/hooks/useTheme.js';
 import type { HostSchema } from '../src/host-schema.js';
@@ -414,6 +415,7 @@ describeRoute('/data', () => {
 describeRoute('/media', () => {
   let root: string;
   let assetsPath: string;
+  let mediaClient: ContentAPIClient;
 
   /**
    * The media routes need an assets folder, which the shared in-memory API does not serve: use a real one.
@@ -431,13 +433,12 @@ describeRoute('/media', () => {
     });
     const router = createContentAPIRouter(api, { assetsPath, contentRoot });
     const fetchRouter = async (input: RequestInfo | URL, init?: RequestInit) => router.request(input, init);
-    setContentAPIClient(
-      new ContentAPIClient({
-        baseUrl: 'http://localhost:4321',
-        // Bun's `typeof fetch` also carries `preconnect`, which the client never calls.
-        fetch: Object.assign(fetchRouter, { preconnect: () => {} }),
-      }),
-    );
+    mediaClient = new ContentAPIClient({
+      baseUrl: 'http://localhost:4321',
+      // Bun's `typeof fetch` also carries `preconnect`, which the client never calls.
+      fetch: Object.assign(fetchRouter, { preconnect: () => {} }),
+    });
+    setContentAPIClient(mediaClient);
   });
 
   afterEach(async () => {
@@ -473,6 +474,20 @@ describeRoute('/media', () => {
 
     await settled(() => screen.getByTitle('Campaign'));
     expect((await stat(join(assetsPath, 'Campaign'))).isDirectory()).toBe(true);
+  });
+
+  describe('in an editor inside a parent frame', () => {
+    test('opens at the path the parent gave and leaves the address bar alone', async () => {
+      const addressBefore = window.location.pathname;
+      configureUI({
+        contentClient: mediaClient,
+        memoryRouter: { initialPath: '/media', onNavigate() {}, subscribe: () => () => {} },
+      });
+      render(<CmsSpaApp />);
+
+      await showingHeading('Media');
+      expect(window.location.pathname).toBe(addressBefore);
+    });
   });
 });
 

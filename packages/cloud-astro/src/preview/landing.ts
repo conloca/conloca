@@ -1,7 +1,7 @@
 /**
  * Renders the "no preview context" landing page returned when a request
- * hits the secret-scoped preview route but carries neither a fresh query
- * param nor a valid cookie.
+ * hits the preview route but carries neither a fresh query param nor a
+ * valid cookie, or carries a pass for another repository, site or branch.
  *
  * With no preview context the page must offer two routes out:
  *   - "Log in to edit" deep-link, preserving the requested pathname so

@@ -2,7 +2,6 @@ import { describe, expect, it } from 'bun:test';
 import type { LocalizedEntry } from '@conloca/content-api';
 import { fetchPageStatus, type PageStatus } from '../preview/_dispatch.js';
 import type { PreviewContext } from '../preview/middleware.js';
-import { stripPreviewPrefix } from '../preview/preview-path.js';
 
 type FetchInput = Parameters<typeof fetch>[0];
 
@@ -173,34 +172,5 @@ describe('PageStatus union', () => {
   it('pins the four spec verdicts as the union members so a stray kind is a type error', () => {
     const kinds: PageStatus['kind'][] = ['unchanged', 'changed', 'deleted', 'redirect'];
     expect(kinds.sort()).toEqual(['changed', 'deleted', 'redirect', 'unchanged']);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// stripPreviewPrefix — defence-in-depth when the SSR handler is reached
-// without a rewrite (so astro.originPathname is unset and astro.url.pathname
-// still carries the secret prefix).
-// ---------------------------------------------------------------------------
-
-describe('stripPreviewPrefix', () => {
-  it('strips the leading /conloca_preview_<secret>/ segment', () => {
-    expect(stripPreviewPrefix('/conloca_preview_abc123/about')).toBe('/about');
-    expect(stripPreviewPrefix('/conloca_preview_abc123/blog/post')).toBe('/blog/post');
-  });
-
-  it('returns "/" when the prefix is the only segment', () => {
-    expect(stripPreviewPrefix('/conloca_preview_abc123')).toBe('/');
-    expect(stripPreviewPrefix('/conloca_preview_abc123/')).toBe('/');
-  });
-
-  it('leaves a pathname without the prefix untouched', () => {
-    expect(stripPreviewPrefix('/about')).toBe('/about');
-    expect(stripPreviewPrefix('/')).toBe('/');
-  });
-
-  it('only matches a prefix at the start, not embedded in a deeper segment', () => {
-    // A page that happens to mention the preview path mid-tree must not get
-    // re-anchored to root — that would leak a different page's content.
-    expect(stripPreviewPrefix('/posts/conloca_preview_xxx/about')).toBe('/posts/conloca_preview_xxx/about');
   });
 });

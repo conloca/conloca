@@ -1,6 +1,7 @@
 /* oxlint-disable no-underscore-dangle -- __UI_CONFIG__ is the existing browser-global compatibility contract read by embedded hosts. */
 import type { ContentAPIClient, EditorDataBindings } from '@conloca/content-api-client';
 import type { QueryClientConfig } from '@tanstack/react-query';
+import type { MediaLoadInput, PreviewOpenResult } from './frame/protocol.js';
 import type { MediaBridge } from './media/types.js';
 
 export interface TemplateConfig {
@@ -161,7 +162,20 @@ export interface UIConfig {
    * about that site — not a failure of the call. The two must
    * stay distinguishable: one is the site's setup, the other is a fault.
    */
-  openPreview?: (input: { path: string }) => Promise<OpenPreviewResult>;
+  openPreview?: (input: { path: string }) => Promise<OpenPreviewResult | PreviewOpenResult>;
+  /**
+   * Who opens the preview tab. Default `'editor'`. With `'parent'` the parent
+   * frame opens the tab during the click, so the editor opens none and only
+   * asks through `openPreview`.
+   */
+  previewTab?: 'editor' | 'parent';
+  /**
+   * Opens the published page at `path` from outside the editor frame, so the
+   * tab is not born inside a sandboxed frame. Without it the editor keeps
+   * `window.open`. Whoever opens the tab explains a blocked popup, so the
+   * editor only waits for the request to settle.
+   */
+  openSiteUrl?: (input: { path: string }) => Promise<void>;
   /**
    * Whether the site actually serves draft preview.
    * `'unknown'` (the default) means not established yet and the editor leaves
@@ -181,6 +195,43 @@ export interface UIConfig {
    * is refused with {@link EditorWriteRefusal.reason}.
    */
   readOnly?: EditorWriteRefusal;
+  /**
+   * Path the MDX sandbox frame loads from. An editor page that ships its own
+   * static copy of the frame sets it; default `SANDBOX_FRAME_PATH`.
+   */
+  sandboxFramePath?: string;
+  /**
+   * The site's `editorCSS` text, appended after the MDX canvas styles so it
+   * wins. An editor page that loads it at run time sets it; otherwise the
+   * build's copy applies.
+   */
+  editorCss?: string;
+  /**
+   * Loads the bytes of a media file. When set, media surfaces never hand media
+   * URLs to `<img>`; they show object URLs of the loaded bytes.
+   */
+  loadMedia?: (input: MediaLoadInput) => Promise<Blob>;
+  /**
+   * Set by a parent frame: the editor routes in memory and reports each route
+   * to it. It also marks the editor as running in a parent frame, where the
+   * dev-server endpoints do not exist.
+   */
+  memoryRouter?: MemoryRouterConfig;
+}
+
+/** How the editor routes when a parent frame owns the address bar. */
+export interface MemoryRouterConfig {
+  /** The editor route to open first, `pathname + search`. */
+  initialPath: string;
+  /** Called with each route the editor commits, `pathname + search`. */
+  onNavigate(path: string, replace: boolean): void;
+  /** Listens for routes the parent asks for; returns the function that stops listening. */
+  subscribe(navigate: (path: string) => void): () => void;
+}
+
+/** Whether the editor runs inside a parent frame (see `UIConfig.memoryRouter`). */
+export function inEditorFrame(config: UIConfig = getUIConfig()): boolean {
+  return config.memoryRouter !== undefined;
 }
 
 const defaultConfig: UIConfig = {

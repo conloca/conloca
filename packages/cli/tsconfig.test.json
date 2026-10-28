@@ -23,6 +23,7 @@
     },
     {
       "path": "../content-api/tsconfig.lib.json"
-    }
+    },
+    { "path": "../cloud-astro/tsconfig.lib.json" }
   ]
 }

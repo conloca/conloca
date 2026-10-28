@@ -5,6 +5,8 @@
  * For Node.js-specific APIs (filesystem, in-memory, middleware, etc.), import from '@conloca/content-api/node'
  */
 
+// The address site and its base path, shared by every host that reads a sites.json.
+export { addressSiteName, isValidSiteBase } from './address-site.js';
 // Upload ceiling + image allowlist. Pure data, no node deps — the source of
 // truth other asset backends read through this entry.
 // DEFAULT_ACCEPTED_FORMATS deliberately stays off the barrel — it is just the map's keys.

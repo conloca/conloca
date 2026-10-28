@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import { type DiscoveredWrappers, findContentWrapper } from './content-wrapper.js';
+import { buildSiteUrl } from './lib/utils.js';
+import type { SiteStyles } from './site-styles.js';
 
 /**
  * Host-style probe — captures the host's computed styles for prose
@@ -159,6 +162,68 @@ export function findWrapperByClass(doc: Document, className: string | null): HTM
   const selector = `.${className.split(/\s+/).filter(Boolean).join('.')}`;
   const found = doc.querySelector(selector);
   return (found as HTMLElement) ?? fallback();
+}
+
+/** What one load of the real page yields. */
+export interface HostProbe {
+  /** The measured prose rules, unlayered; empty when nothing was probable. */
+  css: string;
+  /** The page's own stylesheets as one text: what the dev styles endpoint answers for its route. */
+  styles: SiteStyles;
+  /** The page's content and code-block wrappers, by the dev wrapper endpoint's rule. */
+  wrappers: DiscoveredWrappers;
+}
+
+const EMPTY_PROBE: HostProbe = { css: '', styles: [], wrappers: { content: null, codeBlock: null } };
+
+/**
+ * Read a loaded page. An editor in a parent frame has no dev endpoints, so
+ * with `discover` this is where it gets the route CSS and wrappers they give a
+ * local editor, and with no `wrapperClass` from the caller the samples go
+ * inside the wrapper the page's own markup names. Without `discover` only the
+ * measured rules are read. Exported for tests.
+ */
+export function readProbedPage(doc: Document, wrapperClass: string | null, discover: boolean): HostProbe {
+  if (!discover) return { ...EMPTY_PROBE, css: buildProbeStylesheet(doc, wrapperClass) };
+  // Read before measuring: the samples are added under the wrapper.
+  const wrappers = findContentWrapper(doc.documentElement.outerHTML);
+  return {
+    css: buildProbeStylesheet(doc, wrapperClass ?? wrappers.content?.className ?? null),
+    styles: pageStyles(doc),
+    wrappers,
+  };
+}
+
+/**
+ * `next`, with `prev`'s styles and wrappers wherever their content is the same,
+ * so a re-probe of an unchanged page (a theme toggle) changes no identity the
+ * editor's injected sheet and plugins depend on. Exported for tests.
+ */
+export function keepUnchanged(prev: HostProbe, next: HostProbe): HostProbe {
+  const sameStyles =
+    prev.styles.length === next.styles.length && prev.styles.every((text, index) => text === next.styles[index]);
+  return {
+    css: next.css,
+    styles: sameStyles ? prev.styles : next.styles,
+    wrappers: JSON.stringify(prev.wrappers) === JSON.stringify(next.wrappers) ? prev.wrappers : next.wrappers,
+  };
+}
+
+/** The page's stylesheets in document order, each under its own media. Another origin's sheet is unreadable and left out. */
+function pageStyles(doc: Document): SiteStyles {
+  const sheets: string[] = [];
+  for (const sheet of Array.from(doc.styleSheets)) {
+    let rules: string;
+    try {
+      rules = Array.from(sheet.cssRules, (rule) => rule.cssText).join('\n');
+    } catch {
+      continue;
+    }
+    const media = sheet.media.mediaText;
+    sheets.push(media && media !== 'all' ? `@media ${media} {\n${rules}\n}` : rules);
+  }
+  const css = sheets.join('\n');
+  return css ? [css] : [];
 }
 
 /**
@@ -463,59 +528,24 @@ function probeInlineTag(view: Window, parent: HTMLElement, tag: string): string 
 }
 
 /**
- * Where the probe reads from. Two delivery routes, ONE mechanism:
- *
- *   - `{ url }` — the site's real rendered page, for when the editor and the
- *     site share an origin, so `contentDocument` is readable.
- *   - `{ srcdoc }` — a same-origin reconstruction assembled from what the host
- *     set with `setHostDiscovery` (its `routeCss` plus the discovered wrapper
- *     class). For a site on a DIFFERENT origin, where no header on either side
- *     can make its document readable: the same-origin
- *     policy is not a permission, it is the boundary. An `srcdoc` frame
- *     inherits the parent's origin, so the probe runs against it normally, and
- *     a CSP of `frame-src 'self'` already covers `srcdoc`.
- *
- * A reconstruction sees the stylesheet but not the markup, so it cannot
- * observe utility-class or inline-style typography on real elements — the very
- * thing the probe exists for on utility-first hosts.
- */
-export type ProbeSource = { url: string } | { srcdoc: string };
-
-/**
- * Build the reconstruction document for `{ srcdoc }` probing: the host's route
- * CSS inlined, and an empty clone of its content wrapper for the probe's
- * sample elements to be injected into. Nothing else — no shell, no scripts.
- */
-export function buildProbeReconstruction(routeCss: string, wrapperClass: string | null): string {
-  const wrapper = wrapperClass ? `<div class="${wrapperClass.replace(/"/g, '&quot;')}"></div>` : '<main></main>';
-  // Neutralise a literal `</style` in the site's CSS. It is legal inside a
-  // `content:` string, and because a srcdoc frame inherits THIS origin, an
-  // early close would let the remainder parse as HTML in the app's own origin.
-  // Escaping the slash keeps the bytes valid CSS while making the sequence
-  // unable to terminate the element. Paired with the `sandbox` attribute in
-  // `probeHostStyles`: a document built from site CSS is a different trust
-  // boundary than this probe's original job of loading the site's own
-  // already-trusted page, so it gets belt and braces.
-  const inert = routeCss.replace(/<\/(style)/gi, '<\\/$1');
-  return `<!doctype html><html><head><meta charset="utf-8"><style>${inert}</style></head><body>${wrapper}</body></html>`;
-}
-
-/**
- * Run a one-shot probe against `source`. Returns the generated stylesheet, or
- * an empty string when the frame failed to load or there was nothing probable.
+ * Run a one-shot probe against the site's real rendered page at `url`, which
+ * shares the editor's origin so `contentDocument` is readable. Resolves to
+ * what the page yields (see `readProbedPage`), or an empty probe when the
+ * frame failed to load.
  *
  * `signal` lets the caller cancel a probe (eg the user navigated to
  * a different page mid-fetch). Cleanup is best-effort.
  */
 export function probeHostStyles(
-  source: ProbeSource,
+  url: string,
   wrapperClass: string | null,
   theme: 'light' | 'dark' | null,
+  discover: boolean,
   signal?: AbortSignal,
-): Promise<string> {
+): Promise<HostProbe> {
   return new Promise((resolve) => {
     if (typeof document === 'undefined') {
-      resolve('');
+      resolve(EMPTY_PROBE);
       return;
     }
 
@@ -530,24 +560,14 @@ export function probeHostStyles(
     iframe.setAttribute('aria-hidden', 'true');
     iframe.setAttribute('tabindex', '-1');
     iframe.setAttribute('data-conloca-probe-iframe', '');
-    if ('srcdoc' in source) {
-      // `allow-same-origin` ONLY: `contentDocument` stays readable, which the
-      // probe needs, while no script in the reconstruction can execute. Applied
-      // to the srcdoc route alone — sandboxing the real-page route would stop
-      // the site's own scripts running and silently change what the
-      // same-origin probe measures, which is the path that already works.
-      iframe.setAttribute('sandbox', 'allow-same-origin');
-      iframe.srcdoc = source.srcdoc;
-    } else {
-      iframe.src = source.url;
-    }
+    iframe.src = url;
 
     let settled = false;
     let timeout: number | undefined;
     const cleanup = () => {
       if (iframe.parentElement) iframe.parentElement.removeChild(iframe);
     };
-    const settle = (css: string) => {
+    const settle = (result: HostProbe = EMPTY_PROBE) => {
       if (settled) return;
       settled = true;
       // Cancel the deadline as well. A superseded probe (re-render, theme or
@@ -556,15 +576,15 @@ export function probeHostStyles(
       // resolved and is no longer in flight.
       if (timeout !== undefined) window.clearTimeout(timeout);
       cleanup();
-      resolve(css);
+      resolve(result);
     };
 
-    const abortHandler = () => settle('');
+    const abortHandler = () => settle();
     signal?.addEventListener('abort', abortHandler);
 
     timeout = window.setTimeout(() => {
-      console.warn('[Conloca] Host style probe timed out for', 'srcdoc' in source ? '<reconstruction>' : source.url);
-      settle('');
+      console.warn('[Conloca] Host style probe timed out for', url);
+      settle();
     }, IFRAME_TIMEOUT_MS);
 
     iframe.addEventListener('load', () => {
@@ -602,20 +622,19 @@ export function probeHostStyles(
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           if (signal?.aborted) {
-            settle('');
+            settle();
             return;
           }
           try {
             const doc = iframe.contentDocument;
             if (!doc) {
-              settle('');
+              settle();
               return;
             }
-            const css = buildProbeStylesheet(doc, wrapperClass);
-            settle(css);
+            settle(readProbedPage(doc, wrapperClass, discover));
           } catch (err) {
             console.warn('[Conloca] Host style probe failed:', err);
-            settle('');
+            settle();
           }
         });
       });
@@ -623,7 +642,7 @@ export function probeHostStyles(
 
     iframe.addEventListener('error', () => {
       window.clearTimeout(timeout);
-      settle('');
+      settle();
     });
 
     document.body.appendChild(iframe);
@@ -634,44 +653,39 @@ export function probeHostStyles(
  * React hook wrapper. Re-probes whenever its inputs change (so dark/light
  * swaps refresh the captured styles).
  *
- * `routeCss` selects the delivery route. When the registered route CSS is
- * present — the site is on another origin, so its page cannot be read — the
- * probe measures a same-origin reconstruction of it. Otherwise it measures the
- * real page at `routeUrl`, which is the same-origin path and strictly better:
- * real markup means utility classes and inline styles are observed.
+ * Probes the real page at `routeUrl`: real markup means utility classes and
+ * inline styles are observed.
  *
- * Returns both the stylesheet and whether the current inputs have settled
+ * Returns what the page yielded and whether the current inputs have settled
  * once. Callers must gate fallback tiers on `settled`, not on `css === ''`:
  * the empty string is the initial state AND the definitive "nothing probable"
  * outcome, and treating them the same paints the derived tier then restyles
  * when the probe lands.
  *
- * During a re-probe (theme toggle, route change) prior `css` stays visible
+ * During a re-probe (theme toggle, route change) the prior result stays visible
  * and `settled` stays true until the new result arrives, so fallback tiers
  * do not flash back in.
  */
 export function useProbedHostStyles(
   routeUrl: string | undefined,
   wrapperClass: string | null,
-  options: { theme?: 'light' | 'dark' | null; routeCss?: string } = {},
-): { css: string; settled: boolean } {
-  const [css, setCss] = useState<string>('');
+  options: { theme?: 'light' | 'dark' | null; discover?: boolean } = {},
+): HostProbe & { settled: boolean } {
+  const [probe, setProbe] = useState<HostProbe>(EMPTY_PROBE);
   const [settled, setSettled] = useState(false);
-  // Mirror of `css` for the effect body — reading state inside the effect
+  // Mirror of `probe.css` for the effect body — reading state inside the effect
   // would stale-close over the mount value and mis-handle re-probes.
-  const cssRef = useRef(css);
+  const cssRef = useRef(probe.css);
   const theme = options.theme ?? null;
-  const routeCss = options.routeCss ?? '';
+  // Only an editor without the dev endpoints needs the page's styles and wrappers.
+  const discover = options.discover ?? false;
+  // The route is a site path; the page lives under the site's base, which need not be this document's origin root.
+  const pageUrl = routeUrl ? buildSiteUrl(routeUrl) : undefined;
 
   useEffect(() => {
-    const source: ProbeSource | null = routeCss
-      ? { srcdoc: buildProbeReconstruction(routeCss, wrapperClass) }
-      : routeUrl
-        ? { url: routeUrl }
-        : null;
-    if (!source) {
+    if (!pageUrl) {
       cssRef.current = '';
-      setCss('');
+      setProbe(EMPTY_PROBE);
       setSettled(true);
       return;
     }
@@ -684,17 +698,17 @@ export function useProbedHostStyles(
     }
 
     const controller = new AbortController();
-    probeHostStyles(source, wrapperClass, theme, controller.signal).then((result) => {
+    void probeHostStyles(pageUrl, wrapperClass, theme, discover, controller.signal).then((result) => {
       if (controller.signal.aborted) return;
-      cssRef.current = result;
-      setCss(result);
+      cssRef.current = result.css;
+      setProbe((prev) => keepUnchanged(prev, result));
       setSettled(true);
     });
 
     return () => {
       controller.abort();
     };
-  }, [routeUrl, routeCss, wrapperClass, theme]);
+  }, [pageUrl, wrapperClass, theme, discover]);
 
-  return { css, settled };
+  return { ...probe, settled };
 }

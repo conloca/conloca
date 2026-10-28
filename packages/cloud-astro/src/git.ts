@@ -17,8 +17,9 @@ export function gitOutput(args: string[], cwd?: string): string | undefined {
 }
 
 /**
- * The resolved pair. An empty commit variable is passed through unchanged
- * (`CF_PAGES_COMMIT_SHA=''` yields `gitSha: ''`); callers treat a falsy value
+ * The resolved pair. An empty `CF_PAGES_COMMIT_SHA` is passed through
+ * unchanged (`CF_PAGES_COMMIT_SHA=''` yields `gitSha: ''`; the other hosts'
+ * empty commit variables count as unset); callers treat a falsy value
  * as unresolved, exactly as the build hook's guard does. An empty BRANCH
  * variable counts as unset instead: GitHub Actions exports GITHUB_HEAD_REF=''
  * on every push build, which would otherwise hide GITHUB_REF_NAME.
@@ -29,27 +30,45 @@ interface BuildRef {
 }
 
 /**
- * The commit and branch this checkout stands on — the pair a registration is
- * keyed by. CI metadata first, most-specific source per provider. GitHub
+ * The commit and branch this checkout stands on — the pair conloca.json
+ * names, and the branch a preview build serves. CI metadata first,
+ * most-specific source per provider: Cloudflare Pages, Cloudflare Workers
+ * Builds, Netlify (whose `HEAD` and `COMMIT_REF` count only when `NETLIFY` is
+ * set, since other shells may export a `HEAD`), Vercel, Render, Amplify, then GitHub Actions. GitHub
  * Actions checkouts are DETACHED, so the git fallback returns the literal
  * 'HEAD' there — GITHUB_HEAD_REF (PR builds) / GITHUB_REF_NAME cover that
- * case, and a surviving literal 'HEAD' is treated as unresolvable: a
- * registration under branch 'HEAD' would never match the editor's
- * branch-keyed lookup, silently registering dead weight.
+ * case, and a surviving literal 'HEAD' is treated as unresolvable: branch
+ * 'HEAD' would never match the editor's branch-keyed lookup.
  */
 export function resolveBuildRef(
   env: RepositoryEnvironment = process.env,
   git: (args: string[]) => string | undefined = gitOutput,
 ): BuildRef {
-  const gitSha = env.CF_PAGES_COMMIT_SHA ?? git(['rev-parse', 'HEAD']);
+  const netlify = env.NETLIFY === 'true';
+  const gitSha =
+    env.CF_PAGES_COMMIT_SHA ??
+    (env.WORKERS_CI_COMMIT_SHA || undefined) ??
+    (netlify ? env.COMMIT_REF || undefined : undefined) ??
+    (env.VERCEL_GIT_COMMIT_SHA || undefined) ??
+    (env.RENDER_GIT_COMMIT || undefined) ??
+    (env.AWS_COMMIT_ID || undefined) ??
+    git(['rev-parse', 'HEAD']);
   const rawBranch =
-    env.CF_PAGES_BRANCH || env.GITHUB_HEAD_REF || env.GITHUB_REF_NAME || git(['rev-parse', '--abbrev-ref', 'HEAD']);
+    env.CF_PAGES_BRANCH ||
+    env.WORKERS_CI_BRANCH ||
+    (netlify ? env.HEAD : undefined) ||
+    env.VERCEL_GIT_COMMIT_REF ||
+    env.RENDER_GIT_BRANCH ||
+    env.AWS_BRANCH ||
+    env.GITHUB_HEAD_REF ||
+    env.GITHUB_REF_NAME ||
+    git(['rev-parse', '--abbrev-ref', 'HEAD']);
   const branch = rawBranch === 'HEAD' ? undefined : rawBranch;
   return { ...(gitSha === undefined ? {} : { gitSha }), ...(branch === undefined ? {} : { branch }) };
 }
 
 /**
- * The repository a registration is filed under: the explicit option and CI
+ * The repository the editor page names: the explicit option and CI
  * metadata are free to read; git is spawned ONLY when neither resolved it.
  * Config loading is a hot path in Astro and must not start a subprocess on
  * every integration instance.

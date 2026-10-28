@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useErrorModal, useSiteBaseUrl } from '../../hooks/index.js';
 import type { Page } from '../../types.js';
+import { getUIConfig } from '../../ui-config.js';
 import { contentFailureMessage, isStaleWrite } from '../../utils/content-failure.js';
 import { formatDate } from '../../utils/format-date.js';
 import { CreatePageFlow } from '../dialogs/CreatePageFlow.js';
@@ -38,9 +39,16 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
   const navigate = useNavigate();
   const deleteContent = useDeleteContent();
 
-  const getPreviewUrl = (pagePath: string) => {
+  const openLiveSite = (pagePath: string) => {
+    const openSiteUrl = getUIConfig().openSiteUrl;
+    if (openSiteUrl) {
+      void openSiteUrl({ path: pagePath }).catch((error: unknown) =>
+        console.error('[PageList] openSiteUrl failed:', error),
+      );
+      return;
+    }
     const previewUrl = buildUrl(pagePath);
-    return `${previewUrl}${previewUrl.includes('?') ? '&' : '?'}_t=${Date.now()}`;
+    window.open(`${previewUrl}${previewUrl.includes('?') ? '&' : '?'}_t=${Date.now()}`, '_blank');
   };
 
   // Use provided site or default
@@ -398,7 +406,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
                         data-testid={`page-title-${page.id}`}
                         onClick={(e) => {
                           e.preventDefault();
-                          window.open(getPreviewUrl(page.path), '_blank');
+                          openLiveSite(page.path);
                         }}
                       >
                         {page.title}
@@ -429,7 +437,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
                       className="text-grey-04 dark:text-grey-07 hover:text-azure-04 dark:hover:text-azure-06 hover:underline transition-colors font-mono text-xs"
                       onClick={(e) => {
                         e.preventDefault();
-                        window.open(getPreviewUrl(page.path), '_blank');
+                        openLiveSite(page.path);
                       }}
                     >
                       {page.path}

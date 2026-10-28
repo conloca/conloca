@@ -88,6 +88,11 @@
       "types": "./dist/component-vocabulary.d.ts",
       "import": "./dist/component-vocabulary.js",
       "default": "./dist/component-vocabulary.js"
+    },
+    "./editor-host": {
+      "types": "./dist/editor-host.d.ts",
+      "import": "./dist/editor-host.js",
+      "default": "./dist/editor-host.js"
     }
   },
   "scripts": {

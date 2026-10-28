@@ -431,8 +431,8 @@ export class FileSystemContentAPI implements ContentAPI {
     // site's locales array) both have slots for every option-declared
     // locale. Without this, the parser would correctly identify a file's
     // locale but `addContent` would crash on a missing index bucket.
-    // We preserve the resolved site's existing `mdxPages` and `domains`
-    // through the rewrite so the locale-override doesn't clobber the
+    // We preserve the resolved site's existing `mdxPages`, `domains` and
+    // `base` through the rewrite so the locale-override doesn't clobber the
     // per-site content config.
     if (options.availableLocales && options.availableLocales.length > 0) {
       const optionDefaultLocale = options.defaultLocale ?? options.availableLocales[0];
@@ -445,6 +445,7 @@ export class FileSystemContentAPI implements ContentAPI {
             locales: options.availableLocales,
             defaultLocale: optionDefaultLocale,
             ...(existingSite?.domains && { domains: existingSite.domains }),
+            ...(existingSite?.base && { base: existingSite.base }),
             ...(existingSite?.mdxPages && { mdxPages: existingSite.mdxPages }),
           },
         },

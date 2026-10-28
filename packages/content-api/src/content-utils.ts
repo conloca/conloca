@@ -193,12 +193,18 @@ export function getMetadataSize(meta: ContentMeta): number {
  * - Must start with /
  * - Cannot contain spaces (should be URL-encoded)
  * - Cannot contain special characters that would break URLs
+ * - Cannot be under the reserved `/_conloca/` prefix
  */
 export function isValidPathname(pathname: string): boolean {
   if (!pathname?.startsWith('/')) return false;
   if (pathname.includes(' ')) return false;
   if (pathname.includes('?') || pathname.includes('#')) return false;
-  return true;
+  return !isReservedPathname(pathname);
+}
+
+/** True for `/_conloca` and everything under it: the editor page a site build writes there owns those paths. */
+export function isReservedPathname(pathname: string): boolean {
+  return pathname === '/_conloca' || pathname.startsWith('/_conloca/');
 }
 
 /**
@@ -241,7 +247,8 @@ export type PathnameValidationReason =
   | 'non_ascii'
   | 'traversal_segment'
   | 'index_segment'
-  | 'disallowed_char';
+  | 'disallowed_char'
+  | 'reserved_prefix';
 
 export interface PathnameValidationResult {
   /** When valid: the normalized pathname. When invalid: the raw (trimmed) input. */
@@ -301,6 +308,15 @@ export function normalizeAndValidatePathname(input: string | undefined | null): 
   if (!value.startsWith('/')) value = `/${value}`;
   value = value.replace(/\/+/g, '/');
   if (value !== '/' && value.endsWith('/')) value = value.slice(0, -1);
+
+  if (isReservedPathname(value)) {
+    return {
+      value,
+      valid: false,
+      reason: 'reserved_prefix',
+      message: 'Paths under `/_conloca/` are reserved for the editor page',
+    };
+  }
 
   // Segment-level check: `.` and `..` are never valid path segments.
   // Run before the generic disallowed-char check so the user gets the

@@ -4,8 +4,8 @@ import { PREVIEW_BUILD_ENV_FLAG } from '../integration.js';
 import {
   _spawnPreviewBuildWith,
   buildPreviewChildEnv,
-  PREVIEW_SECRET_ENV_FLAG,
   type PreviewBuildSpawn,
+  previewBuildMode,
   spawnPreviewBuild,
 } from '../preview-build.js';
 
@@ -51,32 +51,61 @@ function restoreFlag(): void {
 }
 
 // ---------------------------------------------------------------------------
+// previewBuildMode — the opt-in and the adapters it refuses.
+// ---------------------------------------------------------------------------
+
+describe('previewBuildMode', () => {
+  it('is off unless previewBuild is given as an object', () => {
+    expect(previewBuildMode(undefined, '@astrojs/cloudflare')).toBe('off');
+    expect(previewBuildMode(false, '@astrojs/cloudflare')).toBe('off');
+    // A Vercel or Netlify site that never opted in still builds.
+    expect(previewBuildMode(undefined, '@astrojs/vercel')).toBe('off');
+    expect(previewBuildMode(false, '@astrojs/netlify')).toBe('off');
+    expect(previewBuildMode({}, '@astrojs/cloudflare')).toBe('on');
+    expect(previewBuildMode({}, '@astrojs/node')).toBe('on');
+  });
+
+  it('refuses the Vercel and Netlify adapters', () => {
+    expect(() => previewBuildMode({}, '@astrojs/vercel')).toThrow(
+      'previewBuild is not supported with @astrojs/vercel yet',
+    );
+    expect(() => previewBuildMode({}, '@astrojs/netlify')).toThrow(
+      'previewBuild is not supported with @astrojs/netlify yet',
+    );
+  });
+
+  it('fails a static project with no adapter', () => {
+    expect(() => previewBuildMode({}, undefined)).toThrow('the preview build needs an SSR adapter');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // buildPreviewChildEnv — pure env merge.
 // ---------------------------------------------------------------------------
 
 describe('buildPreviewChildEnv', () => {
   it('sets CONLOCA_PREVIEW_BUILD=1 — the recursion guard contract', () => {
-    expect(buildPreviewChildEnv({}, 'sec')[PREVIEW_BUILD_ENV_FLAG]).toBe('1');
+    expect(buildPreviewChildEnv({})[PREVIEW_BUILD_ENV_FLAG]).toBe('1');
   });
 
-  it('sets CONLOCA_PREVIEW_SECRET to the supplied secret verbatim', () => {
-    expect(buildPreviewChildEnv({}, 'sec-XYZ-123')[PREVIEW_SECRET_ENV_FLAG]).toBe('sec-XYZ-123');
+  it('adds only CONLOCA_PREVIEW_BUILD=1 to the parent environment', () => {
+    expect(buildPreviewChildEnv({ PATH: '/bin', CF_PAGES_BRANCH: 'main' })).toEqual({
+      PATH: '/bin',
+      CF_PAGES_BRANCH: 'main',
+      CONLOCA_PREVIEW_BUILD: '1',
+    });
+    expect(buildPreviewChildEnv({ PATH: '/bin' })).toEqual({ PATH: '/bin', CONLOCA_PREVIEW_BUILD: '1' });
   });
 
   it('inherits parent env entries (PATH, credentials, host vars)', () => {
     const parent = { PATH: '/usr/bin', CF_PAGES_BRANCH: 'main' };
-    const child = buildPreviewChildEnv(parent, 'sec');
+    const child = buildPreviewChildEnv(parent);
     expect(child.PATH).toBe('/usr/bin');
     expect(child.CF_PAGES_BRANCH).toBe('main');
   });
 
-  it('overrides any pre-existing build/secret env entries (own injection wins)', () => {
-    const child = buildPreviewChildEnv(
-      { [PREVIEW_BUILD_ENV_FLAG]: 'stale', [PREVIEW_SECRET_ENV_FLAG]: 'old' },
-      'fresh',
-    );
-    expect(child[PREVIEW_BUILD_ENV_FLAG]).toBe('1');
-    expect(child[PREVIEW_SECRET_ENV_FLAG]).toBe('fresh');
+  it('overrides a stale build flag (own injection wins)', () => {
+    expect(buildPreviewChildEnv({ [PREVIEW_BUILD_ENV_FLAG]: 'stale' })[PREVIEW_BUILD_ENV_FLAG]).toBe('1');
   });
 });
 
@@ -93,7 +122,7 @@ describe('spawnPreviewBuild — recursion guard', () => {
   it('does not spawn a child when CONLOCA_PREVIEW_BUILD=1 is already set', async () => {
     process.env[PREVIEW_BUILD_ENV_FLAG] = '1';
     const { calls, fn } = makeRecordingSpawn(0);
-    await _spawnPreviewBuildWith(fn, 'secret-abc', {});
+    await _spawnPreviewBuildWith(fn, {});
     expect(calls).toHaveLength(0);
   });
 
@@ -101,14 +130,14 @@ describe('spawnPreviewBuild — recursion guard', () => {
     // Defensive: any non-"1" value must not block the first level of recursion.
     process.env[PREVIEW_BUILD_ENV_FLAG] = 'true';
     const { calls, fn } = makeRecordingSpawn(0);
-    await _spawnPreviewBuildWith(fn, 'secret-abc', {});
+    await _spawnPreviewBuildWith(fn, {});
     expect(calls).toHaveLength(1);
   });
 
   it('spawns exactly once for a single primary build (no internal retries)', async () => {
     delete process.env[PREVIEW_BUILD_ENV_FLAG];
     const { calls, fn } = makeRecordingSpawn(0);
-    await _spawnPreviewBuildWith(fn, 'secret-abc', {});
+    await _spawnPreviewBuildWith(fn, {});
     expect(calls).toHaveLength(1);
   });
 });
@@ -125,7 +154,7 @@ describe('spawnPreviewBuild — child command and environment', () => {
 
   it('invokes the resolved astro binary directly (never npx/bunx/bun x — those auto-fetch)', async () => {
     const { calls, fn } = makeRecordingSpawn(0);
-    await _spawnPreviewBuildWith(fn, 'secret-abc', {});
+    await _spawnPreviewBuildWith(fn, {});
     // The pattern: resolve the CLI binary out of node_modules/.bin and spawn
     // it directly, instead of relying on a package-runner shim. Asserting the
     // *shape* (endsWith) keeps the test stable across different repo roots.
@@ -139,21 +168,15 @@ describe('spawnPreviewBuild — child command and environment', () => {
 
   it('passes CONLOCA_PREVIEW_BUILD=1 in the child env — the recursion guard contract', async () => {
     const { calls, fn } = makeRecordingSpawn(0);
-    await _spawnPreviewBuildWith(fn, 'secret-abc', {});
+    await _spawnPreviewBuildWith(fn, {});
     expect(calls[0].options.env[PREVIEW_BUILD_ENV_FLAG]).toBe('1');
-  });
-
-  it('passes the per-branch preview secret to the child as CONLOCA_PREVIEW_SECRET', async () => {
-    const { calls, fn } = makeRecordingSpawn(0);
-    await _spawnPreviewBuildWith(fn, 'sec-XYZ-123', {});
-    expect(calls[0].options.env[PREVIEW_SECRET_ENV_FLAG]).toBe('sec-XYZ-123');
   });
 
   it('inherits the parent environment so PATH and credentials reach the child', async () => {
     process.env.CONLOCA_TEST_INHERIT = 'inherited-value';
     try {
       const { calls, fn } = makeRecordingSpawn(0);
-      await _spawnPreviewBuildWith(fn, 'secret', {});
+      await _spawnPreviewBuildWith(fn, {});
       expect(calls[0].options.env.CONLOCA_TEST_INHERIT).toBe('inherited-value');
     } finally {
       delete process.env.CONLOCA_TEST_INHERIT;
@@ -162,13 +185,8 @@ describe('spawnPreviewBuild — child command and environment', () => {
 
   it('uses stdio inherit so child build output streams to the parent build log', async () => {
     const { calls, fn } = makeRecordingSpawn(0);
-    await _spawnPreviewBuildWith(fn, 'secret', {});
+    await _spawnPreviewBuildWith(fn, {});
     expect(calls[0].options.stdio).toBe('inherit');
-  });
-
-  it('rejects an empty preview secret — without it the child cannot mount the secret-scoped route', async () => {
-    const { fn } = makeRecordingSpawn(0);
-    await expect(_spawnPreviewBuildWith(fn, '', {})).rejects.toThrow(/preview secret/i);
   });
 });
 
@@ -185,31 +203,33 @@ describe('spawnPreviewBuild — exit handling', () => {
   it('resolves on exit code 0 regardless of `required`', async () => {
     const { fn: required } = makeRecordingSpawn(0);
     const { fn: optional } = makeRecordingSpawn(0);
-    await expect(_spawnPreviewBuildWith(required, 'secret', { required: true })).resolves.toBeUndefined();
-    await expect(_spawnPreviewBuildWith(optional, 'secret', { required: false })).resolves.toBeUndefined();
+    await Promise.resolve(expect(_spawnPreviewBuildWith(required, { required: true })).resolves.toBeUndefined());
+    await Promise.resolve(expect(_spawnPreviewBuildWith(optional, { required: false })).resolves.toBeUndefined());
   });
 
   it('rejects on non-zero exit when required (default)', async () => {
     const { fn } = makeRecordingSpawn(2);
     // Default `required` is true.
-    await expect(_spawnPreviewBuildWith(fn, 'secret', {})).rejects.toThrow(/preview build failed.*2/);
+    await Promise.resolve(expect(_spawnPreviewBuildWith(fn, {})).rejects.toThrow(/preview build failed.*2/));
   });
 
   it('rejects on non-zero exit when required: true explicitly', async () => {
     const { fn } = makeRecordingSpawn(1);
-    await expect(_spawnPreviewBuildWith(fn, 'secret', { required: true })).rejects.toThrow(/preview build failed.*1/);
+    await Promise.resolve(
+      expect(_spawnPreviewBuildWith(fn, { required: true })).rejects.toThrow(/preview build failed.*1/),
+    );
   });
 
   it('resolves on non-zero exit when required: false', async () => {
     const { fn } = makeRecordingSpawn(7);
-    await expect(_spawnPreviewBuildWith(fn, 'secret', { required: false })).resolves.toBeUndefined();
+    await Promise.resolve(expect(_spawnPreviewBuildWith(fn, { required: false })).resolves.toBeUndefined());
   });
 
   it('rejects on signal-style null exit when required (treated as failure)', async () => {
     // Spawned process killed by signal exits with code === null; that must
     // not silently look like success.
     const { fn } = makeRecordingSpawn(null);
-    await expect(_spawnPreviewBuildWith(fn, 'secret', {})).rejects.toThrow(/preview build failed/);
+    await Promise.resolve(expect(_spawnPreviewBuildWith(fn, {})).rejects.toThrow(/preview build failed/));
   });
 });
 
@@ -218,10 +238,10 @@ describe('spawnPreviewBuild — exit handling', () => {
 // ---------------------------------------------------------------------------
 
 describe('spawnPreviewBuild — public entrypoint', () => {
-  it('exists as an async function and accepts (secret, opts)', () => {
+  it('exists as an async function and accepts (opts)', () => {
     expect(typeof spawnPreviewBuild).toBe('function');
-    // Length excludes optional/destructured params; both args are required positional.
-    expect(spawnPreviewBuild.length).toBe(2);
+    // Length excludes optional/destructured params; the options are required positional.
+    expect(spawnPreviewBuild.length).toBe(1);
   });
 
   it('short-circuits via the public entry without ever calling node:child_process when env=1', async () => {
@@ -231,7 +251,7 @@ describe('spawnPreviewBuild — public entrypoint', () => {
       // No spawn-fn injection here: if the recursion guard ever regresses, the
       // public entrypoint would attempt to spawn `bun x astro build` for real
       // and hang the test runner. Reaching `resolves` proves the short-circuit.
-      await expect(spawnPreviewBuild('secret', {})).resolves.toBeUndefined();
+      await Promise.resolve(expect(spawnPreviewBuild({})).resolves.toBeUndefined());
     } finally {
       if (original === undefined) delete process.env[PREVIEW_BUILD_ENV_FLAG];
       else process.env[PREVIEW_BUILD_ENV_FLAG] = original;
@@ -249,13 +269,12 @@ describe('spawnPreviewBuild — public entrypoint', () => {
 
 describe('spawnPreviewBuild — real-process env propagation (smoke)', () => {
   it('the env constructed by buildPreviewChildEnv reaches a real child process', () => {
-    const env = buildPreviewChildEnv(process.env, 'real-secret-42');
-    const result = spawnSync(
-      'node',
-      ['-e', 'process.stdout.write(process.env.CONLOCA_PREVIEW_BUILD + "|" + process.env.CONLOCA_PREVIEW_SECRET)'],
-      { env, stdio: ['ignore', 'pipe', 'inherit'] },
-    );
+    const env = buildPreviewChildEnv(process.env);
+    const result = spawnSync('node', ['-e', 'process.stdout.write(String(process.env.CONLOCA_PREVIEW_BUILD))'], {
+      env,
+      stdio: ['ignore', 'pipe', 'inherit'],
+    });
     expect(result.status).toBe(0);
-    expect(result.stdout.toString('utf8')).toBe('1|real-secret-42');
+    expect(result.stdout.toString('utf8')).toBe('1');
   });
 });

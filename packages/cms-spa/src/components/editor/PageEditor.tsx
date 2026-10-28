@@ -3,6 +3,7 @@ import { type Config, createUsePuck } from '@puckeditor/core';
 import { Monitor, Smartphone, Tablet } from 'lucide-react';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { notifyEditorDirtyChanged, registerEditorFlushHandler } from '../../editor-flush.js';
+import { useCanvasSaveShortcut } from '../../frame/save-shortcut.js';
 import { useSiteBaseUrl } from '../../hooks/index.js';
 import { useCanvasTheme } from '../../hooks/useCanvasTheme.js';
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard.js';
@@ -185,6 +186,7 @@ export function IframeBridge({ children, document: iframeDoc }: { children: Reac
   const { canvasTheme } = useCanvasTheme();
   const siteStyles = useSiteStyles();
   usePageSettingTargets(iframeDoc);
+  useCanvasSaveShortcut(iframeDoc);
 
   React.useEffect(() => {
     if (!iframeDoc?.documentElement) return;
@@ -258,6 +260,17 @@ function IframeWithInsertMarker({ children, document: iframeDoc }: { children: R
   }, [iframeDoc, canTakeAnInsert]);
 
   return <IframeBridge document={iframeDoc}>{children}</IframeBridge>;
+}
+
+/**
+ * A genuine preview failure, which is a DIFFERENT situation and must not read as though the site is misconfigured.
+ * Not latched: a transient fault must not disable a working button.
+ */
+function reportPreviewFailure(error: unknown) {
+  toast.error('Could not open preview', {
+    description: 'Something went wrong creating the preview link. Please try again.',
+  });
+  console.error('[PageEditor] openPreview failed:', error);
 }
 
 export function PageEditor({
@@ -404,12 +417,32 @@ export function PageEditor({
 
   const handlePreview = useCallback(() => {
     const pathname = entry.localized.pathname || '/';
-    const openPreview = getUIConfig().openPreview;
+    const { openPreview, openSiteUrl, previewTab: previewTabOwner } = getUIConfig();
     if (openPreview) {
       // Already known to be impossible: explain it without flashing a blank
       // tab open and shut, which reads as a bug even when it is correct.
       if (previewBlockedReason !== null) {
         toast.error(PREVIEW_UNAVAILABLE_TITLE, { description: previewBlockedReason, duration: 10_000 });
+        return;
+      }
+      // The site does not serve draft preview, so no URL exists that could
+      // work. Say so where the user is looking instead of navigating a tab to
+      // a 404 on their own domain, and remember it so the control goes
+      // disabled rather than staying a trap.
+      const markPreviewUnavailable = (message: string) => {
+        const detail = message !== '' ? message : PREVIEW_UNAVAILABLE_DETAIL;
+        setPreviewBlockedReason(detail);
+        setPreviewCapability('unavailable');
+        toast.error(PREVIEW_UNAVAILABLE_TITLE, { description: detail, duration: 10_000 });
+      };
+      // The parent frame opens the tab during the click itself; a blocked
+      // popup is the parent's to explain, so the editor shows nothing for it.
+      if (previewTabOwner === 'parent') {
+        void openPreview({ path: pathname })
+          .then((result) => {
+            if (!result.ok && result.reason === 'not-deployed') markPreviewUnavailable(result.message);
+          })
+          .catch(reportPreviewFailure);
         return;
       }
       // Popup blockers only allow window creation during the click itself.
@@ -424,29 +457,24 @@ export function PageEditor({
       void openPreview({ path: pathname })
         .then((result) => {
           if (result.ok) {
-            previewTab.location.href = result.url;
+            if ('url' in result) previewTab.location.href = result.url;
+            else previewTab.close();
             return;
           }
-          // The site does not serve draft preview, so no URL exists that could
-          // work. Say so where the user is looking instead of navigating the
-          // tab to a 404 on their own domain, and remember it so the control
-          // goes disabled rather than staying a trap.
           previewTab.close();
-          const detail = result.message !== '' ? result.message : PREVIEW_UNAVAILABLE_DETAIL;
-          setPreviewBlockedReason(detail);
-          setPreviewCapability('unavailable');
-          toast.error(PREVIEW_UNAVAILABLE_TITLE, { description: detail, duration: 10_000 });
+          // `popup-blocked` cannot happen here, the editor holds the tab.
+          if (result.reason === 'not-deployed') markPreviewUnavailable(result.message);
         })
         .catch((error: unknown) => {
-          // A genuine failure, which is a DIFFERENT situation and must not
-          // read as though the site is misconfigured. Not latched:
-          // a transient fault must not disable a working button.
           previewTab.close();
-          toast.error('Could not open preview', {
-            description: 'Something went wrong creating the preview link. Please try again.',
-          });
-          console.error('[PageEditor] openPreview failed:', error);
+          reportPreviewFailure(error);
         });
+      return;
+    }
+    if (openSiteUrl) {
+      void openSiteUrl({ path: pathname }).catch((error: unknown) =>
+        console.error('[PageEditor] openSiteUrl failed:', error),
+      );
       return;
     }
     const previewUrl = buildUrl(pathname);

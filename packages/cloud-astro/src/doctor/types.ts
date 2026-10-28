@@ -50,13 +50,13 @@ export interface DoctorDeps {
 /** Insertion order is the report order. */
 const CHECK_LABELS = {
   CC1: 'conlocaCloud is wired next to conlocaCMS',
-  CC2: 'build token is available and well-formed',
-  CC3: 'endpoint and public base URL are usable',
-  CC4: "conlocaCMS options the endpoint's editor ignores",
-  CC5: 'the endpoint answers the build token',
-  CC6: 'a registration serves this branch and site',
-  CC7: 'the registered editor assets are still deployed',
-  CC8: 'the preview build has an SSR adapter, or is off',
+  CC9: 'the site domain is declared in sites.json',
+  CC10: 'committed headers allow framing the editor page',
+  CC14: 'no build key leftovers',
+  CC8: 'the preview build, when previewBuild is set, has an SSR adapter',
+  CC11: 'the deployed editor page answers',
+  CC12: 'the deployed editor page may be framed',
+  CC13: "the editor speaks this page's protocol",
 } as const;
 
 /** A typo in a check id fails tsc here; the CLI would otherwise drop a label-less outcome silently. */

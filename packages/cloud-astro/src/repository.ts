@@ -13,7 +13,7 @@ const REPO_SEGMENT = /^[A-Za-z0-9_.-]+$/;
 
 /**
  * Normalize a provider full_name or common Git remote into `owner/repo`.
- * Deliberately rejects local paths and nested groups: a registration names
+ * Deliberately rejects local paths and nested groups: the editor page names
  * its repository GitHub-style, as two segments.
  */
 export function normalizeRepositoryUri(input: string | undefined): string | undefined {

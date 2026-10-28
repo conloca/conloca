@@ -1,13 +1,14 @@
 import { formatFileSize } from '@conloca/content-api-client';
 import { FolderInput, Loader2, Trash2, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { useAssetServeSrc } from '../../frame/media-cache.js';
 import type { AssetEntry } from '../../hooks/index.js';
 import { useAssetUsage, useDeleteAsset, useMoveAssets, useUpdateAssetMetadata } from '../../hooks/index.js';
 import { AssetScopePill } from '../../media/AssetScopePill.js';
 import { MediaIssueBadge } from '../../media/MediaIssueBadge.js';
 import { useAssetScope } from '../../media/use-asset-scope.js';
 import { useMediaIssue } from '../../media/use-media-issue.js';
-import { buildAssetPath, buildAssetServeUrl } from '../../utils/asset-url.js';
+import { buildAssetPath } from '../../utils/asset-url.js';
 import { MoveFolderDialog } from '../dialogs/index.js';
 import { Button, IconButton, Input } from '../ui/index.js';
 
@@ -55,6 +56,7 @@ export function AssetDetailSidebar({
   // Returns null when the host has no opinion or the asset is
   // healthy; the badge collapses to nothing in either case.
   const issue = useMediaIssue(asset.filename, asset.folder);
+  const src = useAssetServeSrc(assetsBasePath, asset.folder, asset.filename);
   // Folder + filename is the asset identity used by metadata, usage and delete routes.
   const path = useMemo(() => buildAssetPath(asset.folder, asset.filename), [asset.folder, asset.filename]);
 
@@ -177,11 +179,9 @@ export function AssetDetailSidebar({
         <div className="flex-1 overflow-y-auto">
           {/* Thumbnail preview */}
           <div className="aspect-square bg-subtle flex items-center justify-center overflow-hidden border-b border-line">
-            <img
-              src={buildAssetServeUrl(assetsBasePath, asset.folder, asset.filename)}
-              alt={asset.alt || asset.originalName}
-              className="max-w-full max-h-full object-contain"
-            />
+            {src ? (
+              <img src={src} alt={asset.alt || asset.originalName} className="max-w-full max-h-full object-contain" />
+            ) : null}
           </div>
 
           {/* File info (read-only) */}

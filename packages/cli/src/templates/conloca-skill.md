@@ -27,8 +27,9 @@ when an astro.config is present, the Astro wiring: content config, conlocaCMS im
 dependencies, tsconfig jsx, prerender under server output, and home-page shadowing. Each problem names the broken file
 and the fix. It is read-only and exits 1 on errors; warnings alone exit 0.
 
-New project from an empty directory? `conloca create <dir>` writes and installs the whole wired site;
-`conloca astro setup` is for adding Conloca to an existing Astro site.
+New project from an empty directory? `conloca create <dir>` writes and installs the whole wired site. An existing Astro
+site: `conloca connect` installs the packages, wires `astro.config` and writes the site's domain for the workspace
+editor; `conloca astro setup` only scaffolds the starter files.
 
 ## The files a working site needs
 
@@ -42,7 +43,8 @@ New project from an empty directory? `conloca create <dir>` writes and installs 
 Run `conloca astro setup` inside an existing Astro project. It scaffolds the content config, components, schemas, page
 layout, and content directories, preserving existing generated files. It adds the default site to `sites.json` when
 missing. It prints the `astro.config` wiring rather than writing that file: merge the printed options into the existing
-config, then run `conloca doctor` to verify the result. `conloca init . <site-name>` adds another site to sites.json.
+config, then run `conloca doctor` to verify the result — or run `conloca connect`, which writes the wiring itself.
+`conloca init . <site-name>` adds another site to sites.json.
 
 ## Install: the exact package set
 
