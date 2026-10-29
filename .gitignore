@@ -56,6 +56,9 @@ Thumbs.db
 .github/instructions/nx.instructions.md
 .github/instructions/copilot-instructions.md
 
+# ttsc's bundler adapter keeps its project records in <host root>/.ttsc
+.ttsc/
+
 # Vite
 vite.config.*.timestamp*
 vitest.config.*.timestamp*

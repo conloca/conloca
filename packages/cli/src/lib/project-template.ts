@@ -17,8 +17,8 @@ export const THIRD_PARTY_VERSIONS = {
   'react-dom': '19.2.8',
   typia: '^14.0.4',
   '@astrojs/check': '^0.9.10',
-  '@ttsc/unplugin': '^0.30.4',
-  ttsc: '0.30.4',
+  '@ttsc/unplugin': '^0.34.1',
+  ttsc: '0.34.1',
 } as const;
 
 const DEV_ONLY = new Set(['@astrojs/check', '@ttsc/unplugin', 'ttsc']);

@@ -51,12 +51,12 @@
     "@nx/workspace": "23.2.1",
     "@oxlint/plugins": "1.85.0",
     "@smoothbricks/cowshed": "^0.3.0",
-    "@smoothbricks/nx-plugin": "^0.5.7",
+    "@smoothbricks/nx-plugin": "^0.6.2",
     "@testing-library/dom": "10.4.1",
     "@testing-library/react": "^16.3.3",
-    "@ttsc/unplugin": "^0.30.4",
+    "@ttsc/unplugin": "^0.34.1",
     "@types/bun": "1.4.2",
-    "@types/node": "^26.6.5",
+    "@types/node": "^26.6.6",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.7",
     "@typescript-eslint/parser": "^8.69.0",
@@ -78,13 +78,13 @@
     "react-dom": "19.2.8",
     "react-router-dom": "^7.18.3",
     "tslib": "^2.8.1",
-    "ttsc": "0.30.4",
+    "ttsc": "0.34.1",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.69.0",
     "verdaccio": "6.10.4",
     "vite": "^7.3.6",
     "vitest": "^4.1.11",
-    "wrangler": "^4.128.0"
+    "wrangler": "^4.130.0"
   },
   "workspaces": [
     "packages/*",
@@ -119,6 +119,8 @@
   },
   "overrides": {
     "typia": "14.0.6",
+    "@smoothbricks/cli>typia": "15.2.1",
+    "@smoothbricks/nx-plugin>typia": "15.2.1",
     "brace-expansion": "5.0.12",
     "@verdaccio/config>js-yaml": "5.4.2",
     "@mdxeditor/editor@3>js-yaml": "4.3.2",
@@ -134,16 +136,15 @@
     "@puckeditor/core>happy-dom": "21.0.4",
     "verdaccio>compression": "1.8.2",
     "http-cache-semantics": "4.3.0",
-    "solid-js>seroval": "1.6.3",
-    "solid-js>seroval-plugins": "1.6.3",
+    "solid-js>seroval": "1.6.12",
+    "solid-js>seroval-plugins": "1.6.12",
     "source-map-js": "1.2.2",
     "@verdaccio/hooks>handlebars": "4.7.10",
     "nx": "23.2.1"
   },
   "patchedDependencies": {
-    "ttsc@0.30.4": "patches/ttsc@0.30.4.patch",
-    "@ttsc/unplugin@0.30.4": "patches/@ttsc%2Funplugin@0.30.4.patch",
-    "nx@23.2.1": "patches/nx@23.2.1.patch"
+    "nx@23.2.1": "patches/nx@23.2.1.patch",
+    "ttsc@0.34.1": "patches/ttsc@0.34.1.patch"
   },
   "sherif": {
     "ignoreDependency": [

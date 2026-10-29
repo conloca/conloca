@@ -26,10 +26,10 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
-    "@ttsc/unplugin": "^0.30.4",
+    "@ttsc/unplugin": "^0.34.1",
     "@types/bun": "1.4.2",
     "extensionless": "^2.0.6",
-    "ttsc": "0.30.4"
+    "ttsc": "0.34.1"
   },
   "nx": {
     "targets": {

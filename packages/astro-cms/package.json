@@ -137,11 +137,11 @@
     "@tiptap/extension-text-align": "3.31.2",
     "@tiptap/extension-underline": "3.31.2",
     "@tiptap/html": "3.31.2",
-    "@ttsc/unplugin": "^0.30.4",
+    "@ttsc/unplugin": "^0.34.1",
     "@vitejs/plugin-react": "^5.2.0",
     "astro": "^7.3.1",
     "fast-check": "^4.9.0",
-    "ttsc": "0.30.4",
+    "ttsc": "0.34.1",
     "typia": "^14.0.4",
     "vite": "^7.3.6"
   },
