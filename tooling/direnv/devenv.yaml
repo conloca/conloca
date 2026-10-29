@@ -9,11 +9,11 @@ inputs:
   nixpkgs:
     url: github:cachix/devenv-nixpkgs/rolling
   # Leaf package source for the Go patch release matched to ttsc's vendored SDK
-  # (ttsc 0.30.4 -> go1.26.8; this revision's `go` is go_1_26 1.26.8 and its
-  # go_1_27 builds the typecheck tsc). An exact revision so `devenv update` cannot
+  # (ttsc 0.34.1 -> go1.27.3; this revision's go_1_27 is 1.27.3, the shell's Go
+  # and the one that builds the typecheck tsc). An exact revision so `devenv update` cannot
   # slide Go away from the vendored SDK; it moves when the ttsc pin does.
   nixpkgs-go:
-    url: github:NixOS/nixpkgs/39ad350a0602fa0a58a544344e3e9187526ea45c
+    url: github:NixOS/nixpkgs/40b7966096659ec072bc0ca0d1a102165f1509eb
     flake: true
   nixpkgs-overlay:
     url: path:../../tooling/direnv/nixpkgs-overlay
