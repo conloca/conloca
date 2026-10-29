@@ -3,7 +3,7 @@
 # All tooling that sets up PATH must call this instead of hardcoding paths.
 #
 # Usage:
-#   export PATH="$(tooling/direnv/repo-path)"         # shell
+#   PATH="$(tooling/direnv/repo-path)" || exit $?   # shell; serves an unserved cowshed workspace, refuses if it cannot
 #   tooling/direnv/repo-path --github-path             # CI — appends to $GITHUB_PATH
 #   tooling/direnv/repo-path --print                   # debug — one entry per line
 set -euo pipefail
@@ -46,14 +46,76 @@ case "${1:-}" in
   *)
     IFS=:
     export PATH="${entries[*]}:$PATH"
-    if [[ -f "$root/.cowshed/env" ]]; then
+    # Bash expands `~` to HOME, or with HOME unset to the passwd home of the real uid: a caller that passes
+    # only PATH, such as a formatter or a hook under `env -i`, still reaches the installed cowshed.
+    home=~
+    installed="$home/Library/Application Support/dev.cowshed/bin"
+    if [[ -f "$root/.cowshed/workspace.json" ]]; then
+      # A cowshed workspace is entered only once its supervisor has served it (specs/cowshed/02_workspaces.md,
+      # "Workspace environment"). A mint publishes .cowshed/env without TMPDIR and COWSHED_RUNTIME_LINK; the
+      # supervisor start that serves the workspace adds both, after its mount has settled the checkout's build link
+      # (16_build_volumes.md, "One link per checkout"). A fork interrupted before that start still links its
+      # source's build volume, so Nx entered here writes the source checkout's daemon record and task database, and
+      # a TMPDIR or Nx socket dir the caller inherited is the source's too. Both values are therefore read from the
+      # file alone, never from the caller. A workspace whose file lacks either is served here, once, by the start an
+      # operator would run, and entered on the file that start wrote; it is refused, named, only when that start
+      # fails or leaves the file still lacking an entry.
+      entered="$PATH"
+      read_served() {
+        PATH="$entered"
+        unset TMPDIR COWSHED_RUNTIME_LINK
+        if [[ -f "$root/.cowshed/env" ]]; then
+          source "$root/.cowshed/env"
+        fi
+        missing=()
+        [[ "${TMPDIR:-}" == /* ]] || missing+=(TMPDIR)
+        [[ "${COWSHED_RUNTIME_LINK:-}" == /* ]] || missing+=(COWSHED_RUNTIME_LINK)
+        if ((${#missing[@]} > 0)); then
+          printf -v unset_names '%s, ' "${missing[@]}"
+          unset_names="${unset_names%, }"
+        fi
+      }
+      read_served
+      if ((${#missing[@]} > 0)); then
+        named='"workspace": *"([^"]+)"'
+        if [[ ! "$(<"$root/.cowshed/workspace.json")" =~ $named ]]; then
+          printf 'repo-path: cowshed workspace at %s is not served: its .cowshed/env sets no %s, and its .cowshed/workspace.json names no workspace to serve.\n' \
+            "$root" "$unset_names" >&2
+          exit 1
+        fi
+        workspace="${BASH_REMATCH[1]}"
+        printf 'repo-path: cowshed workspace %s at %s is not served: its .cowshed/env sets no %s. Serving it: cowshed exec %s -- true\n' \
+          "$workspace" "$root" "$unset_names" "$workspace" >&2
+        # The installed cowshed's stable name, by its path (05_gateway.md, "The installed cowshed"), never a checkout's
+        # launcher, which runs whatever that checkout last built (06_cli.md, "Launcher"): a missing install fails by
+        # name rather than finding the launcher this PATH puts first. It gets neither the caller's TMPDIR and runtime
+        # link nor the unserved file's, and not the caller's stdin, where pre-push reads its refs. Everything it
+        # prints goes to stderr: stdout is this script's PATH.
+        serve_status=0
+        serve_output="$(
+          unset TMPDIR COWSHED_RUNTIME_LINK
+          { cd "$root" && "$installed/cowshed" exec "$workspace" -- true </dev/null; } 2>&1
+        )" || serve_status=$?
+        if ((serve_status != 0)); then
+          printf 'repo-path: serving cowshed workspace %s at %s failed: cowshed exec %s -- true exited %d: %s\nUntil it is served, the checkout may still link the build volume, Nx daemon record and task database of the checkout it was forked from, so it is not entered.\nnext: cowshed exec %s -- true\n' \
+            "$workspace" "$root" "$workspace" "$serve_status" "${serve_output:-no output}" "$workspace" >&2
+          exit 1
+        fi
+        if [[ -n "$serve_output" ]]; then
+          printf '%s\n' "$serve_output" >&2
+        fi
+        read_served
+        if ((${#missing[@]} > 0)); then
+          printf 'repo-path: cowshed exec %s -- true succeeded, but cowshed workspace %s at %s is still not served: its .cowshed/env sets no %s.\n' \
+            "$workspace" "$workspace" "$root" "$unset_names" >&2
+          exit 1
+        fi
+      fi
+    elif [[ -f "$root/.cowshed/env" ]]; then
       source "$root/.cowshed/env"
     fi
     if [[ -z "${COWSHED_RUNTIME_LINK:-}" ]]; then
-      # Bash expands `~` to HOME, or with HOME unset to the passwd home of the real uid: a caller that passes
-      # only PATH, such as a formatter or a hook under `env -i`, still reaches the installed cowshed.
-      home=~
-      export PATH="$home/Library/Application Support/dev.cowshed/bin:$PATH"
+      export PATH="$installed:$PATH"
     fi
     printf '%s\n' "$PATH" ;;
 esac

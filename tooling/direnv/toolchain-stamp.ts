@@ -29,7 +29,9 @@
  * cargo re-runs those scripts against the current toolchain, and every target
  * directory's `.rustc_info.json`, so cargo asks the current rustc again.
  * Nothing else under target/ is touched; a checkout without target/ has
- * nothing to do.
+ * nothing to do. The DEVENV_SKIP_TASKS environment-capture pass only needs
+ * exported variables: leave probes and cache invalidation to final shell entry,
+ * after tasks and project hooks have settled the toolchain.
  */
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -37,7 +39,7 @@ import { $ } from 'bun';
 
 const root = resolve(`${process.env.DEVENV_ROOT ?? process.cwd()}/../..`);
 const target = join(root, 'target');
-if (existsSync(target)) {
+if (!process.env.DEVENV_SKIP_TASKS && existsSync(target)) {
   const stamp = join(target, '.toolchain-stamp');
   const identity = await toolchainIdentity();
   const recorded = existsSync(stamp) ? readFileSync(stamp, 'utf8') : null;

@@ -129,7 +129,7 @@ jobs:
       # Step 13
       - name: ✅ Validate monorepo config (${{ steps.version.outputs.mode }})
         if: steps.version.outputs.mode != 'none'
-        run: smoo monorepo validate --projects "${{ steps.version.outputs.projects }}"
+        run: smoo monorepo validate --projects "${{ steps.version.outputs.projects }}" --repairs-pending
 
       # --- Release ------------------------------------------------------------
 

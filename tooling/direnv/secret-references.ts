@@ -52,9 +52,9 @@
  *        provider commands never run there. Missing variables refuse with
  *        injected-secret guidance instead of a confusing auth failure later.
  *     b. A `registry` variable inside a cowshed workspace
- *        (`COWSHED_WORKSPACE_TOKEN` set) refuses with names-only
- *        gateway-enrollment guidance: such a workspace holds no provider
- *        session, and the gateway exists to be the thing that does.
+ *        (`.cowshed/workspace.json` at the repository root) refuses with
+ *        names-only gateway-enrollment guidance: such a workspace holds no
+ *        provider session, and the gateway exists to be the thing that does.
  *  3. A variable outside the requested group is deferred — named in the
  *     result, not resolved, and not a failure.
  *  4. Otherwise the command argv executes directly, without a shell; stdout
@@ -148,6 +148,12 @@ export interface SecretResolutionRequest {
   readonly group: SecretGroup;
   /** Environment consulted for existing values and mode flags; read, never written. */
   readonly env: Readonly<Record<string, string | undefined>>;
+  /**
+   * Whether the repository root is a cowshed workspace: `.cowshed/workspace.json`
+   * exists there (specs/cowshed/00_overview.md). A non-secret marker; the
+   * workspace token is not exported.
+   */
+  readonly cowshedWorkspace: boolean;
   /** Overrides the default direct-argv runner (test seam). */
   readonly runCommand?: SecretCommandRunner;
 }
@@ -383,6 +389,7 @@ async function routeSecret(
     readonly env: Readonly<Record<string, string | undefined>>;
     readonly group: SecretGroup;
     readonly dependsOn: readonly SecretGroup[];
+    readonly cowshedWorkspace: boolean;
     readonly run: SecretCommandRunner;
   },
 ): Promise<SecretOutcome> {
@@ -404,7 +411,7 @@ async function routeSecret(
           'CI does not run secret provider commands — inject this variable into the job environment from the CI secret store',
       };
     }
-    if (group === REGISTRY_GROUP && isNonemptyEnvValue(env.COWSHED_WORKSPACE_TOKEN)) {
+    if (group === REGISTRY_GROUP && context.cowshedWorkspace) {
       return {
         name,
         group,
@@ -444,6 +451,7 @@ export async function resolveSecrets(request: SecretResolutionRequest): Promise<
     env: request.env,
     group: request.group,
     dependsOn: dependentGroups(request.group),
+    cowshedWorkspace: request.cowshedWorkspace,
     run: request.runCommand ?? runSecretCommand,
   };
   const outcomes = await Promise.all(request.secrets.map(async (secret) => routeSecret(secret, context)));
@@ -607,6 +615,7 @@ export async function resolveSecretEnvironment(options: SecretResolutionOptions)
     secrets: readSecretGroups(options.root),
     group: options.group,
     env: options.env ?? process.env,
+    cowshedWorkspace: existsSync(join(options.root, '.cowshed', 'workspace.json')),
     runCommand: options.runCommand,
   });
 }

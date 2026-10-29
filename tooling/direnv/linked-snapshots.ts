@@ -179,8 +179,9 @@ type ProducerRecord = Extract<EnsureBuiltProbeResult, { readonly disposition: 'h
 const PRODUCER_VERSION = 1;
 
 /**
- * A snapshot ID resolves only from the consumer's store. A capture declaration instead probes, copies and attests
- * the provider's current state. A refusal names its cause and leaves every binding as it was.
+ * A snapshot ID resolves from the consumer's store, which imports it from its main checkout's store when it lacks it.
+ * A capture declaration instead probes, copies and attests the provider's current state. A refusal names its cause and
+ * leaves every binding as it was.
  */
 export async function snapshotBinding(
   root: string,
@@ -207,7 +208,7 @@ export async function snapshotBinding(
 /** Resolve an explicit content pin, never reading provider bytes or asking its producer to run. */
 export function pinnedSnapshot(root: string, name: string, source: string, id: string): SealedSnapshot {
   if (!/^[0-9a-f]{64}$/.test(id)) throw new SnapshotRefusal(`snapshot pin ${id} must be 64 lowercase hex digits`);
-  const sealed = path.resolve(root, SNAPSHOT_STORE, id);
+  const sealed = storedPin(root, id);
   const receipt = verifySnapshot(sealed);
   if (receipt.name !== name) throw new SnapshotRefusal(`snapshot ${id} contains ${receipt.name}, not ${name}`);
   if (!contained(receipt.packagePath))
@@ -866,6 +867,114 @@ function publish(incoming: string, sealed: string, id: string): void {
   }
 }
 
+/**
+ * The project's main checkout: the anchor of genuine sibling directories (developer-links.ts `declaredTarget`), and
+ * the checkout whose store a fork imports a pin from. A cowshed marker names it without reading main's tree.
+ */
+export function linkAnchor(root: string): string {
+  let marker: unknown;
+  try {
+    marker = JSON.parse(readFileSync(path.join(root, '.cowshed', 'workspace.json'), 'utf8'));
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+      return root;
+    }
+    throw error;
+  }
+  const projectRoot = typeof marker === 'object' && marker !== null ? Reflect.get(marker, 'projectRoot') : undefined;
+  return typeof projectRoot === 'string' && path.isAbsolute(projectRoot) ? projectRoot : root;
+}
+
+/**
+ * Where pin `id` is sealed in `root`'s store. A store that lacks it imports it from the store of the project's main
+ * checkout (`linkAnchor`): a snapshot is content-addressed, so the import copies it into a temporary entry of this
+ * store, verifies its census and identity there under its name, and renames it into place. A pin neither store holds
+ * refuses, naming both.
+ */
+function storedPin(root: string, id: string): string {
+  const sealed = path.resolve(root, SNAPSHOT_STORE, id);
+  if (lstatSync(sealed, { throwIfNoEntry: false }) !== undefined) return sealed;
+  const main = path.resolve(linkAnchor(root), SNAPSHOT_STORE, id);
+  if (main === sealed) throw new SnapshotRefusal(`${path.dirname(sealed)} holds no snapshot ${id}`);
+  if (lstatSync(main, { throwIfNoEntry: false }) === undefined) {
+    throw new SnapshotRefusal(
+      `neither ${path.dirname(sealed)} nor the main checkout's ${path.dirname(main)} holds snapshot ${id}`,
+    );
+  }
+  const incoming = mkdtempSync(path.join(snapshotStore(root), '.incoming-'));
+  try {
+    const copy = path.join(incoming, id);
+    copySealed(main, copy);
+    verifySnapshot(copy);
+    publish(copy, sealed, id);
+  } finally {
+    rmSync(incoming, { recursive: true, force: true });
+  }
+  return sealed;
+}
+
+/** `from`'s tree made again at `to`: directories, files cloned with their modes, and links by their text. */
+function copySealed(from: string, to: string): void {
+  mkdirSync(to);
+  for (const entry of readdirSync(from, { withFileTypes: true })) {
+    const source = path.join(from, entry.name);
+    const destination = path.join(to, entry.name);
+    if (entry.isDirectory()) copySealed(source, destination);
+    else if (entry.isSymbolicLink()) symlinkSync(readlinkSync(source), destination);
+    else copyFileSync(source, destination, constants.COPYFILE_FICLONE);
+  }
+}
+
+/**
+ * The newest sealed snapshot of `name` this checkout's store, or else its link anchor's (the main checkout's), holds,
+ * newest by the commit time of the HEAD it captured, as `source`'s repository knows it; or null when there is none.
+ * What a live developer link serves while the live checkout's build does not describe its sources (developer-links.ts):
+ * the last revision that was built and sealed, never the stale build, and never a refusal that stops shell entry.
+ */
+export function newestSealedSnapshot(
+  root: string,
+  name: string,
+  source: string,
+): (SealedSnapshot & { readonly head: string }) | null {
+  const stores = [...new Set([path.join(root, SNAPSHOT_STORE), path.join(linkAnchor(root), SNAPSHOT_STORE)])];
+  const candidates: { readonly directory: string; readonly receipt: SnapshotReceipt; readonly time: number }[] = [];
+  for (const store of stores) {
+    let entries: string[];
+    try {
+      entries = readdirSync(store);
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      const directory = path.join(store, entry);
+      const receipt = readSealed(directory);
+      if (receipt === null || receipt.name !== name || !contained(receipt.packagePath)) continue;
+      const committed = spawnSync('git', ['-C', source, 'log', '-1', '--format=%ct', receipt.provenance.head], {
+        encoding: 'utf8',
+        env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' },
+      });
+      const time = Number.parseInt(committed.stdout.trim(), 10);
+      if (committed.status === 0 && Number.isFinite(time)) candidates.push({ directory, receipt, time });
+    }
+  }
+  candidates.sort((left, right) => right.time - left.time);
+  for (const { directory, receipt } of candidates) {
+    try {
+      verifySnapshot(directory);
+    } catch (error) {
+      if (error instanceof SnapshotRefusal) continue;
+      throw error;
+    }
+    return {
+      kind: 'snapshot',
+      id: receipt.id,
+      directory: path.join(directory, receipt.packagePath),
+      head: receipt.provenance.head,
+    };
+  }
+  return null;
+}
+
 /** A sealed snapshot's receipt, or null when `directory` holds none. Its census is not verified here. */
 export function readSealed(directory: string): SnapshotReceipt | null {
   let input: unknown;
@@ -880,19 +989,6 @@ export function readSealed(directory: string): SnapshotReceipt | null {
     throw new SnapshotRefusal(`${directory} holds the receipt of snapshot ${receipt.id}`);
   }
   return receipt;
-}
-
-/** The sealed snapshot `target` lies in, found by its receipt above it, or null. */
-export function sealedSnapshotOf(
-  target: string,
-): { readonly directory: string; readonly receipt: SnapshotReceipt } | null {
-  for (let at = path.dirname(target); ; at = path.dirname(at)) {
-    if (lstatSync(path.join(at, SNAPSHOT_RECEIPT), { throwIfNoEntry: false }) !== undefined) {
-      const receipt = readSealed(at);
-      return receipt === null ? null : { directory: at, receipt };
-    }
-    if (path.dirname(at) === at) return null;
-  }
 }
 
 /**

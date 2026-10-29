@@ -1,18 +1,96 @@
 name: Cache ttsc plugins
 description: >
-  Restore/save compiled ttsc native plugin binaries (typia, etc.). These are content-keyed under TTSC_CACHE_DIR/plugins
-  and skip the multi-minute `go build` when the cache key matches. The Go object cache (go-build/) is NOT cached — it is
-  multi-GB and only helps when the plugin key misses. Do not use restore-keys: a prefix hit restores plugins built for a
-  different lock/patch, then ttsc still compiles any missing plugin against a cold GOMODCACHE.
+  Restore or save the compiled ttsc native plugin binaries (typia, etc.) under TTSC_CACHE_DIR/plugins. ttsc names every
+  entry by a hash of what it was compiled from and skips the multi-minute `go build` when one matches. Setup restores
+  them, and save-nix-devenv saves the entries the job used when the job ends, red or green. The Go object cache
+  (go-build/) is NOT cached: it is multi-GB and only helps when the plugin key misses.
+
+inputs:
+  mode:
+    description: Restore the plugin cache before the shell is built, or save it when the job ends.
+    required: false
+    default: restore
 
 runs:
   using: composite
   steps:
-    - name: Cache ttsc plugin binaries
-      uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+    # The binaries are compiled from ttsc's own packages and from each package that ships a ttsc plugin, which declares
+    # ttsc as a dependency or peer (typia does). Those bun.lock entries, with the ttsc patch and the Go toolchain pins,
+    # are the whole key: a dependency change no plugin reaches, such as a release commit rewriting a workspace package's
+    # version, keeps the binaries. No match fails the step: this action only runs where bun.lock locks ttsc.
+    - name: Select ttsc lock entries
+      if: inputs.mode == 'restore'
+      shell: bash
+      run: |
+        mkdir -p .cache/ttsc
+        grep -E '^ +"(@ttsc/[^"]+|ttsc(/[^"]+)?)": |"ttsc": "' bun.lock > .cache/ttsc/plugin-lock-entries
+
+    # A prefix hit is safe. ttsc names every entry by a hash of what it was compiled from (the ttsc and tsgo versions,
+    # platform and architecture, the Go toolchain and its build environment, the plugin sources) and runs an entry only
+    # when its name is the one it computes for this checkout, so a restored entry of other inputs is dead weight and
+    # never a wrong binary.
+    - name: Restore ttsc plugin binaries
+      id: restore
+      if: inputs.mode == 'restore'
+      uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         # Only the compiled plugin binaries (~30MB each). Path is relative to the
         # workspace; devenv sets TTSC_CACHE_DIR to <repo>/.cache/ttsc.
         path: .cache/ttsc/plugins
         # prettier-ignore
-        key: ${{ runner.os }}-${{ runner.arch }}-ttsc-plugins-v1-${{ hashFiles('bun.lock', 'package.json', 'patches/ttsc@*.patch', 'tooling/direnv/devenv.lock', 'tooling/direnv/devenv.smoo.nix') }}
+        key: ${{ runner.os }}-${{ runner.arch }}-ttsc-plugins-v1-${{ hashFiles('.cache/ttsc/plugin-lock-entries', 'patches/ttsc@*.patch', 'tooling/direnv/devenv.lock', 'tooling/direnv/devenv.smoo.nix') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ runner.arch }}-ttsc-plugins-v1-
+
+    # A composite action has no post step, so the save is a second call of this action, made by save-nix-devenv when
+    # the job ends. It then sees every plugin the job compiled, Nx tasks included, and it still runs after a red job:
+    # actions/cache saves in its own post step only after a green one. The save needs the key looked up here and the
+    # time of this restore. An exact hit, or a runner without a cache service, has nothing to save and leaves both unset.
+    - name: Note the key and time for the job-end save
+      if: steps.restore.outputs.cache-primary-key != '' && steps.restore.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        PRIMARY_KEY: ${{ steps.restore.outputs.cache-primary-key }}
+      run: |
+        {
+          echo "SMOO_TTSC_PLUGINS_SAVE_KEY=$PRIMARY_KEY"
+          echo "SMOO_TTSC_PLUGINS_RESTORED_AT_MS=$(($(date +%s) * 1000))"
+        } >> "$GITHUB_ENV"
+        echo "no exact hit: the job end saves the ttsc plugins it used under $PRIMARY_KEY"
+
+    # Each prefix hit restores the entries of earlier inputs, and saving them under the new key would carry every
+    # generation forward. ttsc evicts only from a cache it owns; one named by TTSC_CACHE_DIR belongs to the caller, so
+    # nothing else does. ttsc writes the epoch milliseconds into <entry>/.last-used on every hit and build, so an entry
+    # stamped before this job restored is one the job never used: it goes, with the lock directories ttsc keeps beside
+    # it (<entry>.lock*, which are not entries). A job that used no entry (it failed before ttsc ran) keeps none, and
+    # saving an emptied cache would pin it to the exact key for every later run, so it saves nothing.
+    - name: Drop ttsc plugin entries this job did not use
+      id: prune
+      if: inputs.mode == 'save' && env.SMOO_TTSC_PLUGINS_SAVE_KEY != ''
+      shell: bash
+      run: |
+        set -euo pipefail
+        shopt -s nullglob
+        : "${SMOO_TTSC_PLUGINS_RESTORED_AT_MS:?the restore of this action records when the job restored the cache}"
+        kept=0
+        for entry in "$GITHUB_WORKSPACE"/.cache/ttsc/plugins/*/; do
+          entry="${entry%/}"
+          case "$entry" in *.lock | *.lock.*) continue ;; esac
+          used=0
+          if [ -f "$entry/.last-used" ]; then used="$(<"$entry/.last-used")"; fi
+          if [ "$used" -ge "$SMOO_TTSC_PLUGINS_RESTORED_AT_MS" ]; then
+            kept=$((kept + 1))
+          else
+            echo "dropping ${entry##*/} (last used $used, job restored at $SMOO_TTSC_PLUGINS_RESTORED_AT_MS)"
+            rm -rf "$entry" "$entry".lock*
+          fi
+        done
+        echo "kept=$kept" >> "$GITHUB_OUTPUT"
+        echo "ttsc plugin entries this job used: $kept"
+
+    - name: Save ttsc plugin binaries
+      if: inputs.mode == 'save' && steps.prune.outputs.kept > 0
+      uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      with:
+        path: .cache/ttsc/plugins
+        key: ${{ env.SMOO_TTSC_PLUGINS_SAVE_KEY }}

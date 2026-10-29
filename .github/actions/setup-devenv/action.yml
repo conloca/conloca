@@ -364,6 +364,8 @@ runs:
       if: steps.runner-kind.outputs.host != 'true'
       uses: ./.github/actions/cache-node-modules
 
+    # Only the restore is here: save-nix-devenv saves the plugins when the job ends, after the tasks that run later
+    # have compiled theirs too.
     - name: 🧊 Cache ttsc plugins
       if: steps.runner-kind.outputs.host != 'true'
       uses: ./.github/actions/cache-ttsc-plugins

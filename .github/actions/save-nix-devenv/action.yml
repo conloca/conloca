@@ -1,7 +1,9 @@
 name: Save Nix/devenv caches
 description: >
-  Save the devenv/direnv eval-cache segment after the job, on every ephemeral runner where setup missed and build-shell
-  produced nix-eval-cache.db. The Nix store cache saves itself in setup-devenv's post phase (ephemeral runners only).
+  Save what must outlive the job, after it ends and whatever its result: the devenv/direnv eval-cache segment, on every
+  ephemeral runner where setup missed and build-shell produced nix-eval-cache.db, and the ttsc plugin binaries the job
+  used, when setup's restore was not an exact hit. The Nix store cache saves itself in setup-devenv's post phase
+  (ephemeral runners only).
 
 inputs:
   devenv-cache-hit:
@@ -28,5 +30,13 @@ runs:
     - name: 🧊 Save devenv and direnv
       if: ${{ inputs.devenv-cache-hit != 'true' && steps.devenv-save.outputs.ready == 'true' }}
       uses: ./.github/actions/cache-nix-devenv
+      with:
+        mode: save
+
+    # The plugins ttsc compiled during the whole job, Nx tasks included, which is why the save is here and not in setup,
+    # which returns before any of them runs. Setup's restore leaves the key to save under; where it left none (a host
+    # runner, an exact hit) this does nothing.
+    - name: 🧊 Save ttsc plugins
+      uses: ./.github/actions/cache-ttsc-plugins
       with:
         mode: save

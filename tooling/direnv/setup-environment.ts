@@ -4,7 +4,6 @@ import {
   chmodSync,
   closeSync,
   cpSync,
-  type Dirent,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -13,7 +12,6 @@ import {
   readdirSync,
   readFileSync,
   readlinkSync,
-  readSync,
   realpathSync,
   renameSync,
   rmSync,
@@ -27,13 +25,21 @@ import path from 'node:path';
 import { getSystemErrorName, parseArgs } from 'node:util';
 import { $ } from 'bun';
 import {
+  boundedFetchEnv,
+  CARGO_FETCH_DEADLINE_ENV,
+  describeDeadline,
+  fetchDeadline,
+  smooCacheDirectory,
+} from './cargo-fetch-bound.ts';
+import { type BoundedOutcome, runBounded } from './cargo-fetch-run.ts';
+import {
   applyDeclaredLinks,
   hasStaleDeveloperLinks,
   keepDeveloperLinks,
   planDeclaredLinks,
   reportDeveloperLinks,
-  unreadableDeveloperLinks,
 } from './developer-links.ts';
+import { type BunInstallIntegrityError, danglingStoreLinks, verifyInstalledBunLinks } from './installed-bun-links.ts';
 import {
   type DeferredSecret,
   dependentGroups,
@@ -41,6 +47,7 @@ import {
   resolveSecretEnvironment,
   SHELL_GROUP,
 } from './secret-references.ts';
+import { relativizeCheckoutPaths, uvEnvironmentRelocatable } from './uv-relocation.ts';
 
 // DEVENV_ROOT is set by the devenv shell. It is only checked against the checkout this script runs
 // in, never trusted to select the root: see resolveProjectRoot.
@@ -63,25 +70,18 @@ class CapturedCommandError extends Error {
   }
 }
 
-type BunInstallIntegrityOperation =
-  | 'inspect isolated store'
-  | 'resolve installed path'
-  | 'list installed package aliases'
-  | 'read installed package manifest';
-
-class BunInstallIntegrityError extends Error {
-  readonly code = 'BUN_INSTALL_INTEGRITY';
-
+/**
+ * A setup command that outlived its deadline and was killed with its process group. It has no exit code: `message`
+ * says what it held while it ran, and what it printed until the kill is kept for the replay.
+ */
+class CommandDeadlineError extends Error {
   constructor(
-    public readonly operation: BunInstallIntegrityOperation,
-    public readonly actualPath: string,
-    public readonly expectedTarget: string,
-    cause: unknown,
+    public readonly command: string,
+    message: string,
+    public readonly stdout: Uint8Array,
+    public readonly stderr: Uint8Array,
   ) {
-    super(
-      `Bun install integrity: ${operation} failed for ${actualPath}; expected target ${expectedTarget}: ${cause instanceof Error ? cause.message : String(cause)}`,
-      { cause },
-    );
+    super(message);
   }
 }
 
@@ -201,10 +201,12 @@ const POST_COMMIT_BLOCK = [
 // environment uv builds does not name this checkout's profile as its home.
 // `--cargo` runs the Cargo fetches instead of the installs: they are devenv's
 // smoo:cargo-fetch task, whose `status` is `--cargo --check` (exit 0 when
-// CARGO_HOME already holds every workspace's locked packages). Their stamps
-// (cargoFetcher) live in smoo's user cache and count only while CARGO_HOME
-// names the directory they were fetched into, which no checkout-relative
-// change detection can see.
+// CARGO_HOME already holds every workspace's locked packages). Each fetch runs
+// under a deadline, and under git's low-speed limits: while it runs it holds
+// Cargo's package-cache lock, so one that stalls stops every cargo that shares
+// CARGO_HOME (cargo-fetch-bound.ts). Their stamps (cargoFetcher) live in smoo's
+// user cache and count only while CARGO_HOME names the directory they were
+// fetched into, which no checkout-relative change detection can see.
 // `--links` repairs stale install links (including external Nx aliases and
 // store links whose install-cache entry is gone), then
 // points the packages `smoo.developerLinks` declares at their local checkouts.
@@ -221,6 +223,11 @@ const { values: flags } = parseArgs({
   },
 });
 const cargoMode = flags.cargo === true;
+// What a `--links` exec that refused leaves for the enterShell prologue (devenv.smoo.nix), which then fails shell entry
+// with its reason: a shell must not run on links the declaration does not describe (a live checkout whose build is
+// stale with no sealed snapshot to serve, a declaration smoo refuses), and the repair is in the provider checkout, not
+// in this shell. Every `--links` run that finds the links current, or makes them so, removes it.
+const linksRefusal = path.join(projectRoot, 'node_modules', '.smoo-links-refused');
 
 // The Nx plugin's test for a Cargo workspace root manifest (CARGO_WORKSPACE_PATTERN), which
 // cargoWorkspaces applies during the bootstrap block; declared above it for the same reason.
@@ -251,9 +258,12 @@ try {
         plan.changes.length === 0 && plan.unavailable.every((unavailable) => unavailable.kind === 'absent');
       // A stale pin is informational, not a stale install: say it even when devenv skips the exec.
       if (current && plan.reports.length > 0) applyDeclaredLinks(projectRoot, plan);
-      process.exit(
-        current && !hasStaleDeveloperLinks(projectRoot, ['nx']) && danglingStoreLinks(projectRoot).length === 0 ? 0 : 1,
-      );
+      const linked =
+        current &&
+        !hasStaleDeveloperLinks(projectRoot, ['nx']) &&
+        danglingStoreLinks(projectRoot, () => workspaceMemberModules(projectRoot)).length === 0;
+      if (linked) rmSync(linksRefusal, { force: true });
+      process.exit(linked ? 0 : 1);
     }
     // Planning reads, apart from a snapshot it may capture, which seals by an atomic rename (linked-snapshots.ts),
     // and applying a plan with no changes only says what this machine cannot honour. So an entry with nothing to
@@ -262,16 +272,17 @@ try {
     const plan = await planDeclaredLinks(projectRoot);
     if (
       plan.changes.length === 0 &&
-      danglingStoreLinks(projectRoot).length === 0 &&
+      danglingStoreLinks(projectRoot, () => workspaceMemberModules(projectRoot)).length === 0 &&
       !hasStaleDeveloperLinks(projectRoot, ['nx'])
     ) {
       applyDeclaredLinks(projectRoot, plan);
+      rmSync(linksRefusal, { force: true });
       process.exit(0);
     }
     await withInstallLock(async () => {
       // Recheck under the install lock: another shell may already have repaired
       // the aliases. Use the same installer as smoo:install, never a second linker.
-      const store = danglingStoreLinks(projectRoot);
+      const store = danglingStoreLinks(projectRoot, () => workspaceMemberModules(projectRoot));
       for (const link of store) {
         console.error(
           `! ${link} -> ${readlinkSync(link)}: that Bun install-cache entry no longer exists; reinstalling`,
@@ -284,6 +295,7 @@ try {
       }
       applyDeclaredLinks(projectRoot, await planDeclaredLinks(projectRoot));
     });
+    rmSync(linksRefusal, { force: true });
     process.exit(0);
   }
   // Bootstrap only: install deps + wire local git hooks/config.
@@ -299,12 +311,11 @@ try {
   // variable as GITHUB_*. Not `CI`: agent harnesses set CI=true on every command
   // they run, and this branch installs unconditionally.
   if (process.env.GITHUB_ACTIONS === 'true' && cargoMode) {
-    await withInstallLock(async () => {
-      for (const fetch of cargoFetches) {
-        const error = await fetch.install({ quiet: false });
-        if (error !== undefined) reportSetupFailure(error);
-      }
-    });
+    // Cargo owns CARGO_HOME's package-cache locks; this task never mutates node_modules.
+    for (const fetch of cargoFetches) {
+      const error = await fetch.install({ quiet: false });
+      if (error !== undefined) reportSetupFailure(error);
+    }
   } else if (process.env.GITHUB_ACTIONS === 'true') {
     const uv = uvInstaller(uvInputs, { locked: true });
     await resolveSecrets();
@@ -366,9 +377,7 @@ try {
     });
   } else if (cargoMode) {
     // A failed fetch loads the shell like a failed install; the graph then names Cargo's refusal.
-    const fetchError = await withInstallLock(() =>
-      installLocalDependencies(cargoFetches.filter((fetch) => !fetch.isCurrent())),
-    );
+    const fetchError = await installLocalDependencies(cargoFetches.filter((fetch) => !fetch.isCurrent()));
     if (fetchError !== undefined) {
       reportDegradedSetup(fetchError);
     }
@@ -407,6 +416,11 @@ try {
     }
   }
 } catch (error) {
+  // Thrown out of a `--links` exec, an error is the links refused (an install failure reports itself and exits).
+  if (flags.links === true && flags.check !== true) {
+    mkdirSync(path.dirname(linksRefusal), { recursive: true });
+    writeFileSync(linksRefusal, `${error instanceof Error ? error.message : String(error)}\n`);
+  }
   reportSetupFailure(error);
 }
 
@@ -437,9 +451,9 @@ async function resolveSecrets(): Promise<void> {
 
 /**
  * Runs every installer whose inputs changed since its last successful run.
- * Returned, not thrown: the caller still keeps the git config, then reports a
- * degraded shell. The caller selects them under the install lock, so an
- * installer another shell entry just ran is already current there.
+ * Returned, not thrown: the caller reports a degraded shell after any remaining
+ * checkout setup. Bun/uv callers select under the install lock so another
+ * entry's completed install is current; Cargo uses its own package-cache locks.
  */
 async function installLocalDependencies(pending: readonly Installer[]): Promise<unknown> {
   if (pending.length === 0) {
@@ -462,13 +476,12 @@ async function installLocalDependencies(pending: readonly Installer[]): Promise<
 }
 
 /**
- * One install at a time per checkout, across processes. Shell entries race
- * whenever two shells load at once — a shell pool warming several, two
- * terminals, an editor beside a terminal — and two installs into one
- * node_modules collide on its links (`EEXIST … symlink`). The second entry
- * waits, then finds the first entry's stamps current and installs nothing.
- * The repository's git config and hooks are kept under the same lock, for the
- * same reason.
+ * One Bun/uv install or installed-package mutation at a time per checkout,
+ * across processes. Shell entries race whenever two shells load at once, and
+ * two installs into one node_modules collide on its links (EEXIST symlink).
+ * The second entry waits, then finds the first entry's stamps current.
+ * Alias/link repair and repository git config/hooks share this lock. Cargo
+ * fetch changes CARGO_HOME instead and uses Cargo's own package-cache locks.
  *
  * flock(2), not a lock directory or file the script creates and removes: the
  * kernel releases it when the holder exits however it exits, so a killed
@@ -593,13 +606,13 @@ async function repairMissingPayload(requested: string): Promise<Error | undefine
       }
       return undefined;
     };
-    const admissionError = verifyInstalledBunLinks(projectRoot);
+    const admissionError = verifyInstalledBunLinks(projectRoot, workspaceMemberModules(projectRoot));
     if (admissionError !== undefined) return admissionError;
     // Let Bun resolve the registry using the checkout's existing npm/bun configuration.
     const metadata = await runSetupCommand(`bun info ${identity} dist --json`, $`bun info ${identity} dist --json`, {
       quiet: true,
     });
-    const dist: unknown = JSON.parse(metadata.stdout);
+    const dist: unknown = JSON.parse(new TextDecoder().decode(metadata.stdout));
     if (
       !payloadObject(dist) ||
       typeof dist.tarball !== 'string' ||
@@ -917,246 +930,12 @@ function bunInstallStamp(inputs: readonly string[]): {
       );
     },
     record: () => {
-      const error = verifyInstalledBunLinks(projectRoot);
+      const error = verifyInstalledBunLinks(projectRoot, workspaceMemberModules(projectRoot));
       if (error !== undefined) return error;
       writeInstallStamp(stampPath, { inputs: inputsDigest(identity, inputs), lockfiles: lockDigests() });
       return undefined;
     },
   };
-}
-
-/** Link/manifest admission only, once before an install writes its success receipt. */
-function verifyInstalledBunLinks(root: string): BunInstallIntegrityError | undefined {
-  const store = path.join(root, 'node_modules', '.bun');
-  let actualPath = store;
-  let expectedTarget = store;
-  let operation: BunInstallIntegrityOperation = 'inspect isolated store';
-  // Developer links whose target this process may not read (developer-links.ts): the install
-  // did not make them and nothing here can read what they name, so they are not admitted here.
-  let unreadable: ReadonlySet<string> = new Set();
-
-  const select = (candidate: string, symbolicLink: boolean): void => {
-    actualPath = candidate;
-    expectedTarget = candidate;
-    operation = 'resolve installed path';
-    if (symbolicLink) {
-      const target = readlinkSync(candidate);
-      expectedTarget = path.resolve(path.dirname(candidate), target);
-      expectedTarget = path.resolve(realpathSync(path.dirname(candidate)), target);
-    }
-    realpathSync(candidate);
-  };
-  const manifest = (candidate: string, symbolicLink: boolean): void => {
-    if (unreadable.has(candidate)) return;
-    select(candidate, symbolicLink);
-    operation = 'read installed package manifest';
-    JSON.parse(readFileSync(path.join(candidate, 'package.json'), 'utf8'));
-  };
-  const aliases = (tree: string, symbolicLink = false): void => {
-    select(tree, symbolicLink);
-    operation = 'list installed package aliases';
-    for (const entry of readdirSync(tree, { withFileTypes: true })) {
-      if (entry.name.startsWith('.')) continue;
-      const candidate = path.join(tree, entry.name);
-      if (entry.name.startsWith('@')) {
-        select(candidate, entry.isSymbolicLink());
-        operation = 'list installed package aliases';
-        for (const scoped of readdirSync(candidate, { withFileTypes: true })) {
-          if (!scoped.name.startsWith('.')) manifest(path.join(candidate, scoped.name), scoped.isSymbolicLink());
-        }
-      } else {
-        manifest(candidate, entry.isSymbolicLink());
-      }
-    }
-  };
-
-  // Admission walks the live closure, not every directory in the store. A restored store can
-  // carry superseded peer variants of packages the install also wrote under other variants:
-  // their links point into the install cache of the machine that wrote them and dangle here,
-  // and their own dependency aliases dangle with them. Nothing the install produced references
-  // those variants, so they are not broken live links. An entry is walked strictly when a link
-  // in the live tree resolves into it, or when it is the only variant of its package and
-  // version — a sole dangling variant still refuses, because there is no replacement to point
-  // at. Same package and version alone is never reachability proof.
-  const identityOf = (name: string): string | null => /^(.+@\d[^+]*)(\+.*)?$/.exec(name)?.[1] ?? null;
-  try {
-    unreadable = new Set(unreadableDeveloperLinks(root));
-    const state = lstatSync(store, { throwIfNoEntry: false });
-    // A hoisted install has no isolated store to admit.
-    if (state === undefined) return undefined;
-    select(store, state.isSymbolicLink());
-    operation = 'inspect isolated store';
-    const entries = readdirSync(store, { withFileTypes: true }).filter((entry) => !entry.name.startsWith('.'));
-    const identityCounts = new Map<string, number>();
-    for (const entry of entries) {
-      if (entry.name === 'node_modules' || !(entry.isDirectory() || entry.isSymbolicLink())) continue;
-      const identity = identityOf(entry.name) ?? entry.name;
-      identityCounts.set(identity, (identityCounts.get(identity) ?? 0) + 1);
-    }
-    const members = workspaceMemberModules(root);
-    const referenced = referencedStoreEntries(root, store, entries, members);
-    // Package aliases are what every consumer actually resolves: each package they name must
-    // resolve to a readable manifest, wherever it points — into the store, into the install
-    // cache, or at a workspace member. The same strict walk applies at the root and in every
-    // workspace member's node_modules; member links seeded the closure above, and seeding is
-    // not validation. No identity waiver applies: an alias whose target does not exist is a
-    // broken import, however intact a same-version sibling is.
-    const checkPackage = (candidate: string, symbolicLink: boolean): void => {
-      try {
-        // Only a plain metadata file is skipped; a package alias that resolves to a regular
-        // file is a broken package and manifest() refuses it below.
-        if (!symbolicLink && !statSync(candidate).isDirectory()) return;
-      } catch {
-        // Dangling: manifest() refuses it with the path named.
-      }
-      manifest(candidate, symbolicLink);
-    };
-    const walkPackageAliases = (modules: string): void => {
-      for (const child of readdirSync(modules, { withFileTypes: true })) {
-        if (child.name.startsWith('.')) continue;
-        const childPath = path.join(modules, child.name);
-        if (child.name.startsWith('@')) {
-          // A scope is a namespace, symlinked or not: the same strict alias walk as the store's.
-          aliases(childPath, child.isSymbolicLink());
-        } else {
-          checkPackage(childPath, child.isSymbolicLink());
-        }
-      }
-    };
-    walkPackageAliases(path.join(root, 'node_modules'));
-    for (const modules of members) {
-      // A member with nothing installed has no aliases to validate; a present directory is
-      // walked with the root's strictness.
-      if (existsSync(modules)) walkPackageAliases(modules);
-    }
-    for (const entry of entries) {
-      const candidate = path.join(store, entry.name);
-      if (entry.name === 'node_modules') {
-        aliases(candidate, entry.isSymbolicLink());
-      } else if (entry.isDirectory() || entry.isSymbolicLink()) {
-        const identity = identityOf(entry.name) ?? entry.name;
-        // An unreferenced variant beside others of its package and version is superseded
-        // garbage the install left behind; nothing live resolves through it, so it is not
-        // walked. A sole variant is walked: there is no replacement to point at.
-        if (!referenced.has(entry.name) && (identityCounts.get(identity) ?? 0) > 1) continue;
-        select(candidate, entry.isSymbolicLink());
-        aliases(path.join(candidate, 'node_modules'));
-      }
-    }
-    return undefined;
-  } catch (cause) {
-    return new BunInstallIntegrityError(operation, actualPath, expectedTarget, cause);
-  }
-}
-
-/**
- * The store entries the installed tree reaches. Every link in the root's node_modules, the
- * store's own and each workspace member's that resolves into an entry makes that entry live,
- * and so does every link in a live entry's own node_modules, to a fixed point. Member links
- * are as live as root links.
- */
-function referencedStoreEntries(
-  root: string,
-  store: string,
-  entries: readonly Dirent[],
-  members: readonly string[],
-): Set<string> {
-  const referenced = new Set<string>();
-  const knownEntries = new Set(entries.filter((entry) => entry.name !== 'node_modules').map((entry) => entry.name));
-  // Where each store entry actually lives: a link can reach an entry through its install
-  // cache target (whose basename carries a cache suffix the entry name does not), so live
-  // reachability is also containment inside an entry's real directory, not name matching.
-  const entryReals = new Map<string, string>();
-  for (const entry of entries) {
-    if (entry.name === 'node_modules' || !(entry.isDirectory() || entry.isSymbolicLink())) continue;
-    try {
-      entryReals.set(entry.name, realpathSync(path.join(store, entry.name)));
-    } catch {
-      // A dangling entry has no real directory for a live alias to land inside.
-    }
-  }
-  const scanLinks = (dir: string, owner: string | null): void => {
-    let children: Dirent[];
-    try {
-      children = readdirSync(dir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const child of children) {
-      if (child.name.startsWith('.')) continue;
-      const childPath = path.join(dir, child.name);
-      if (child.name.startsWith('@')) {
-        // A scope is a namespace, symlinked or not: traverse it, never treat it as a package.
-        let isDirectory = false;
-        try {
-          isDirectory = statSync(childPath).isDirectory();
-        } catch {
-          isDirectory = false;
-        }
-        if (isDirectory) {
-          scanLinks(childPath, owner);
-          continue;
-        }
-      }
-      if (!child.isSymbolicLink()) continue;
-      let target: string;
-      try {
-        target = readlinkSync(childPath);
-      } catch {
-        continue;
-      }
-      // The alias's canonical endpoint is what it actually reaches — through intermediate
-      // symlinks as well as its literal target — and is what select() already witnesses.
-      // A dangling alias has no endpoint; fall back to resolving its literal target
-      // against the physical parent, so a live reference to a broken entry still marks
-      // that entry referenced.
-      let physicalDir = path.dirname(childPath);
-      try {
-        physicalDir = realpathSync(physicalDir);
-      } catch {
-        // Keep the lexical parent; the segment mark below still applies.
-      }
-      let endpoint: string | null = null;
-      try {
-        endpoint = realpathSync(childPath);
-      } catch {
-        endpoint = null;
-      }
-      const resolved = endpoint ?? path.resolve(physicalDir, target);
-      if (endpoint !== null) {
-        // The canonical endpoint is authoritative: the entry whose real directory
-        // contains it is the live target, whatever any path segment happens to name.
-        for (const [name, real] of entryReals) {
-          if (name !== owner && (endpoint === real || endpoint.startsWith(`${real}${path.sep}`))) {
-            referenced.add(name);
-            break;
-          }
-        }
-      } else {
-        for (const segment of resolved.split(path.sep)) {
-          if (knownEntries.has(segment) && segment !== owner) {
-            referenced.add(segment);
-            break;
-          }
-        }
-      }
-    }
-  };
-  scanLinks(path.join(root, 'node_modules'), null);
-  scanLinks(path.join(store, 'node_modules'), null);
-  for (const modules of members) scanLinks(modules, null);
-  let grew = true;
-  while (grew) {
-    grew = false;
-    for (const entry of entries) {
-      if (entry.name === 'node_modules' || !(entry.isDirectory() || entry.isSymbolicLink())) continue;
-      if (!referenced.has(entry.name)) continue;
-      const before = referenced.size;
-      scanLinks(path.join(store, entry.name, 'node_modules'), entry.name);
-      if (referenced.size > before) grew = true;
-    }
-  }
-  return referenced;
 }
 
 /**
@@ -1170,34 +949,6 @@ function workspaceMemberModules(root: string): string[] {
   return workspaceFiles(memberPatterns, 'package.json').map((manifestPath) =>
     path.join(root, path.dirname(manifestPath), 'node_modules'),
   );
-}
-
-/**
- * The store links the installed tree reaches whose target in Bun's install cache is gone. Under
- * `globalStore` each node_modules/.bun/<entry> is a link into that cache, and one that dangles
- * names a cache entry that no longer exists: the install is out of date, as it is while a
- * developer link dangles, and `bun install` links the entry again (measured, Bun 1.4.3). A
- * dangling variant nothing live reaches is superseded garbage the install leaves in place (see
- * verifyInstalledBunLinks), so it never makes the install stale: no install would change it.
- * The closure is walked only when some store link dangles.
- */
-function danglingStoreLinks(root: string): string[] {
-  const store = path.join(root, 'node_modules', '.bun');
-  let entries: Dirent[];
-  try {
-    entries = readdirSync(store, { withFileTypes: true }).filter((entry) => !entry.name.startsWith('.'));
-  } catch (error) {
-    // A hoisted install, or none yet, has no store to link from.
-    if (error instanceof Error && 'code' in error && (error.code === 'ENOENT' || error.code === 'ENOTDIR')) return [];
-    throw error;
-  }
-  const dangling = entries.filter(
-    (entry) =>
-      entry.isSymbolicLink() && statSync(path.join(store, entry.name), { throwIfNoEntry: false }) === undefined,
-  );
-  if (dangling.length === 0) return [];
-  const referenced = referencedStoreEntries(root, store, entries, workspaceMemberModules(root));
-  return dangling.filter((entry) => referenced.has(entry.name)).map((entry) => path.join(store, entry.name));
 }
 
 /**
@@ -1229,7 +980,7 @@ function bunInstaller(inputs: readonly string[]): Installer {
       (!declaresNativeTypeScript(projectRoot) ||
         existsSync(path.join(projectRoot, 'node_modules', '@typescript', 'native', 'bin', 'tsc'))) &&
       !hasStaleDeveloperLinks(projectRoot, ['nx']) &&
-      danglingStoreLinks(projectRoot).length === 0,
+      danglingStoreLinks(projectRoot, () => workspaceMemberModules(projectRoot)).length === 0,
     install: async ({ quiet }) => {
       await keepDeveloperLinks(
         projectRoot,
@@ -1283,178 +1034,6 @@ function bunInstaller(inputs: readonly string[]): Installer {
  * in the checkout is part of the identity: the relative `.pth` lines hold only
  * there.
  */
-function sitePackagesDirectories(environment: string): string[] {
-  const lib = path.join(environment, 'lib');
-  const directories: string[] = [];
-  for (const python of existsSync(lib) ? readdirSync(lib) : []) {
-    if (!python.startsWith('python')) continue;
-    const sitePackages = path.join(lib, python, 'site-packages');
-    if (existsSync(sitePackages)) directories.push(sitePackages);
-  }
-  return directories;
-}
-
-/**
- * Whether an existing environment is the relocatable one install would leave: its config says
- * so, no launcher or interpreter link names an environment or a checkout (its own, a foreign
- * one, or a checkout's .devenv profile, in a shebang, a wrapper's exec argv, or the link
- * itself), and no `.pth` line is an absolute path. The stamp alone cannot witness this — a
- * copied checkout carries a matching
- * stamp and an old absolute launcher together, and admits the launcher forever.
- */
-/** One shell command line as its words: quotes group, backslash escapes, no expansion. */
-function shellWords(line: string): string[] {
-  const words: string[] = [];
-  let word = '';
-  let quote: string | null = null;
-  let started = false;
-  for (let index = 0; index < line.length; index += 1) {
-    const char = line[index] ?? '';
-    if (quote !== null) {
-      if (char === quote) quote = null;
-      else if (char === '\\' && quote === '"' && index + 1 < line.length) word += line[++index];
-      else word += char;
-      continue;
-    }
-    if (char === "'" || char === '"') {
-      quote = char;
-      started = true;
-    } else if (char === '\\' && index + 1 < line.length) {
-      word += line[++index];
-      started = true;
-    } else if (/\s/.test(char)) {
-      if (started || word !== '') words.push(word);
-      word = '';
-      started = false;
-    } else {
-      word += char;
-    }
-  }
-  if (started || word !== '') words.push(word);
-  return words;
-}
-
-function uvEnvironmentRelocatable(environment: string): boolean {
-  const config = readFileIfPresent(path.join(environment, 'pyvenv.cfg'));
-  if (config === null || !/^relocatable\s*=\s*true\s*$/m.test(config.toString('utf8'))) return false;
-  const environmentReal = realpathSync(environment);
-  // Whether an absolute interpreter path names an environment or a checkout, as opposed to a
-  // store or system interpreter, which names neither: it is inside this environment, inside
-  // another environment (its home carries pyvenv.cfg), under a checkout's .devenv state, or
-  // it no longer exists at all.
-  const namesEnvironment = (interpreter: string): boolean => {
-    if (interpreter.startsWith(`${environment}/`) || interpreter.startsWith(`${environmentReal}/`)) return true;
-    if (!existsSync(interpreter)) return true;
-    if (interpreter.split(path.sep).includes('.devenv')) return true;
-    const home = path.dirname(path.dirname(interpreter));
-    return existsSync(path.join(home, 'pyvenv.cfg')) && home !== environment && home !== environmentReal;
-  };
-  const bin = path.join(environment, 'bin');
-  if (existsSync(bin)) {
-    const buffer = Buffer.alloc(256);
-    for (const name of readdirSync(bin)) {
-      const file = path.join(bin, name);
-      let size: number;
-      let isFile: boolean;
-      let isLink = false;
-      try {
-        const stat = statSync(file);
-        size = stat.size;
-        isFile = stat.isFile();
-        isLink = lstatSync(file).isSymbolicLink();
-      } catch {
-        return false;
-      }
-      if (!isFile) continue;
-      if (isLink) {
-        // The interpreter link itself is witnessed lexically, but only when it leaves the
-        // environment: a relative alias (bin/python3 -> python) is the layout uv itself
-        // writes and stays inside it. An absolute link into another checkout's .devenv
-        // state names that checkout even when its final target is a store interpreter,
-        // and no shebang reading ever sees it.
-        let linkTarget: string;
-        try {
-          linkTarget = readlinkSync(file);
-        } catch {
-          return false;
-        }
-        if (path.isAbsolute(linkTarget)) {
-          const lexical = path.resolve(bin, linkTarget);
-          if (lexical.split(path.sep).includes('.devenv')) return false;
-          const linkHome = path.dirname(path.dirname(lexical));
-          if (existsSync(path.join(linkHome, 'pyvenv.cfg')) && linkHome !== environment && linkHome !== environmentReal)
-            return false;
-        } else {
-          // A relative alias that resolves outside the environment is judged by where it
-          // lands, like an absolute one; only aliases staying inside are uv's own layout.
-          const lexical = path.resolve(bin, linkTarget);
-          if (
-            !lexical.startsWith(`${environment}${path.sep}`) &&
-            !lexical.startsWith(`${environmentReal}${path.sep}`) &&
-            namesEnvironment(lexical)
-          )
-            return false;
-        }
-      }
-      let head: string;
-      try {
-        const fd = openSync(file, 'r');
-        try {
-          head = buffer.toString('utf8', 0, readSync(fd, buffer, 0, buffer.length, 0));
-        } finally {
-          closeSync(fd);
-        }
-      } catch {
-        return false;
-      }
-      const shebang = /^#!\s*(\/\S+)(?:\s+(.*))?$/.exec(head.split('\n')[0] ?? '');
-      if (shebang === null) continue;
-      const interpreter = shebang[1] ?? '';
-      const program = path.basename(interpreter);
-      if (program === 'env') {
-        // An env trampoline naming a bare program resolves through PATH; one naming an
-        // absolute interpreter (after any flags, -S included) is judged as that interpreter.
-        const tokens = shellWords(shebang[2] ?? '');
-        let index = 0;
-        while (index < tokens.length && tokens[index]?.startsWith('-')) index += tokens[index] === '-u' ? 2 : 1;
-        const target = tokens[index];
-        if (target !== undefined && target.startsWith('/') && namesEnvironment(target)) return false;
-        continue;
-      }
-      if (['sh', 'bash', 'dash', 'zsh'].includes(program)) {
-        // A relocatable wrapper execs a self-locating interpreter; a legacy one execs an
-        // absolute environment path. Only exec lines are judged, tokenized as shell words
-        // (quotes group, so spaced paths stay whole; a $VAR expansion is not an absolute
-        // path and is never classified).
-        if (size > 262_144) return false;
-        let body: string;
-        try {
-          body = readFileSync(file, 'utf8');
-        } catch {
-          return false;
-        }
-        for (const line of body.split('\n')) {
-          // Producer headers are shell words too: a uv console script's polyglot first
-          // line tokenizes to the same exec argv as a plain exec line.
-          const words = shellWords(line);
-          if (words[0] !== 'exec') continue;
-          const target = words.find((word) => word.includes('/bin/python')) ?? words[1];
-          if (target !== undefined && target.startsWith('/') && namesEnvironment(target)) return false;
-        }
-        continue;
-      }
-      if (namesEnvironment(interpreter)) return false;
-    }
-  }
-  for (const sitePackages of sitePackagesDirectories(environment)) {
-    for (const name of readdirSync(sitePackages).filter((entry) => entry.endsWith('.pth'))) {
-      const content = readFileSync(path.join(sitePackages, name), 'utf8');
-      if (content.split('\n').some((line) => path.isAbsolute(line))) return false;
-    }
-  }
-  return true;
-}
-
 function uvInstaller(inputs: readonly string[], options: { locked: boolean }): Installer | null {
   const python = flags.python;
   if (python === undefined || !existsSync(path.join(projectRoot, 'pyproject.toml'))) {
@@ -1496,7 +1075,7 @@ function uvInstaller(inputs: readonly string[], options: { locked: boolean }): I
         await runSetupCommand(`uv ${create.join(' ')}`, $`uv ${create}`.env(env), { quiet });
       }
       await runSetupCommand(`uv ${argv.join(' ')}`, $`uv ${argv}`.env(env), { quiet });
-      relativizeCheckoutPaths(environment);
+      relativizeCheckoutPaths(environment, projectRoot);
       writeInstallStamp(stampPath, { inputs: inputsDigest(identity, inputs) });
     },
   };
@@ -1515,9 +1094,10 @@ function uvInstaller(inputs: readonly string[], options: { locked: boolean }): I
  * `registry` and `git` caches), so a stamp directory fails the entry with
  * EPERM. It lives in smoo's user cache instead — `$XDG_CACHE_HOME/smoo`, or
  * `~/.cache/smoo` when the variable is unset, empty or not absolute, as the XDG
- * base directory rule has it; a cowshed sandbox owns XDG_CACHE_HOME — named by
- * the digest of the Cargo binary, the CARGO_HOME path, and the workspace's
- * Cargo.lock, manifest and Cargo configuration.
+ * base directory rule has it (smooCacheDirectory, cargo-fetch-bound.ts); a
+ * cowshed sandbox owns XDG_CACHE_HOME — named by the digest of the Cargo
+ * binary, the CARGO_HOME path, and the workspace's Cargo.lock, manifest and
+ * Cargo configuration.
  *
  * A stamp outside CARGO_HOME no longer dies with it, and a stamp that outlived
  * its packages would promise ones that are gone. So it also records which
@@ -1528,6 +1108,13 @@ function uvInstaller(inputs: readonly string[], options: { locked: boolean }): I
  * this checkout sharing that CARGO_HOME enters fetched. `--locked` makes a
  * stale Cargo.lock fail here, in Cargo's words, rather than fetch a graph the
  * lockfile does not name.
+ *
+ * The fetch holds Cargo's package-cache lock while it runs, so a fetch that
+ * stalls would stop every cargo that shares CARGO_HOME. It is bounded
+ * (cargo-fetch-bound.ts): it runs in a process group of its own under a
+ * deadline that kills the group, with git's low-speed limits for the git
+ * transfers Cargo starts. A fetch that is killed records no stamp, like one
+ * that failed.
  */
 function cargoFetcher(workspace: string): Installer {
   const manifest = path.posix.join(workspace, 'Cargo.toml');
@@ -1535,13 +1122,7 @@ function cargoFetcher(workspace: string): Installer {
   const cargoHome = path.resolve(process.env.CARGO_HOME ?? path.join(homedir(), '.cargo'));
   const identity = ['cargo fetch --locked', cargo === null ? 'cargo not on PATH' : realpathSync(cargo), cargoHome];
   const digest = inputsDigest(identity, cargoWorkspaceInputs(workspace));
-  const cacheHome = process.env.XDG_CACHE_HOME;
-  const stampPath = path.join(
-    cacheHome !== undefined && path.isAbsolute(cacheHome) ? cacheHome : path.join(homedir(), '.cache'),
-    'smoo',
-    'cargo-fetched',
-    digest,
-  );
+  const stampPath = path.join(smooCacheDirectory(process.env.XDG_CACHE_HOME, homedir()), 'cargo-fetched', digest);
   // What a stamp promises: these inputs were fetched into the directory CARGO_HOME names now.
   // A CARGO_HOME with nothing at it is an identity of its own.
   const fetched = () => {
@@ -1551,43 +1132,22 @@ function cargoFetcher(workspace: string): Installer {
   return {
     isCurrent: () => readInstallStamp(stampPath)?.inputs === fetched(),
     install: async ({ quiet }) => {
-      await runSetupCommand(
+      const deadline = fetchDeadline(process.env[CARGO_FETCH_DEADLINE_ENV]);
+      if (deadline.kind === 'refused') throw new Error(deadline.message);
+      await runBoundedSetupCommand(
         `cargo fetch --locked --manifest-path ${manifest}`,
-        $`cargo fetch --locked --manifest-path ${manifest}`,
-        { quiet },
+        ['cargo', 'fetch', '--locked', '--manifest-path', manifest],
+        {
+          quiet,
+          deadlineMs: deadline.ms,
+          env: boundedFetchEnv(process.env),
+          lockPath: path.join(cargoHome, '.package-cache'),
+        },
       );
       // After the fetch, not before: the fetch may be what created CARGO_HOME.
       writeInstallStamp(stampPath, { inputs: fetched() });
     },
   };
-}
-
-/**
- * Rewrite every `.pth` line in the environment's site-packages that names a
- * directory inside this checkout as a path relative to that site-packages,
- * which is how Python's `site` resolves a relative line. Every other line — an
- * `import` line, a path outside the checkout, a directory that does not exist
- * — stays as uv wrote it.
- */
-function relativizeCheckoutPaths(environment: string): void {
-  const root = `${realpathSync(projectRoot)}${path.sep}`;
-  for (const sitePackages of sitePackagesDirectories(environment)) {
-    const site = realpathSync(sitePackages);
-    for (const name of readdirSync(site).filter((entry) => entry.endsWith('.pth'))) {
-      const file = path.join(site, name);
-      const content = readFileSync(file, 'utf8');
-      const rewritten = content
-        .split('\n')
-        .map((line) => {
-          const target = path.isAbsolute(line) && existsSync(line) ? realpathSync(line) : null;
-          return target?.startsWith(root) ? path.relative(site, target) : line;
-        })
-        .join('\n');
-      if (rewritten !== content) {
-        writeFileSync(file, rewritten);
-      }
-    }
-  }
 }
 
 /**
@@ -1787,13 +1347,10 @@ function declaresNativeTypeScript(root: string): boolean {
   const rootPackageJson = path.join(root, 'package.json');
   if (!existsSync(rootPackageJson)) return false;
   try {
-    const pkg = JSON.parse(readFileSync(rootPackageJson, 'utf8')) as {
-      devDependencies?: Record<string, string>;
-      dependencies?: Record<string, string>;
-    };
-    return (
-      typeof pkg.devDependencies?.['@typescript/native'] === 'string' ||
-      typeof pkg.dependencies?.['@typescript/native'] === 'string'
+    const pkg: unknown = JSON.parse(readFileSync(rootPackageJson, 'utf8'));
+    if (!payloadObject(pkg)) return false;
+    return [pkg.devDependencies, pkg.dependencies].some(
+      (dependencies) => payloadObject(dependencies) && typeof dependencies['@typescript/native'] === 'string',
     );
   } catch {
     return false;
@@ -1847,11 +1404,13 @@ function assertTypescriptApiAt(typescriptRoot: string, expectedTarget: string): 
     throw new Error(`Missing ${typescriptRoot} after linking TypeScript ${TYPESCRIPT_API_VERSION} API package`);
   }
   const requireFromInstall = createRequire(path.join(typescriptRoot, 'package.json'));
-  const typed = requireFromInstall(typescriptRoot) as { version?: string; readConfigFile?: unknown };
-  if (typeof typed.readConfigFile !== 'function' || typed.version !== TYPESCRIPT_API_VERSION) {
+  const typed: unknown = requireFromInstall(typescriptRoot);
+  const api: Record<string, unknown> = payloadObject(typed) ? typed : {};
+  const version = typeof api.version === 'string' ? api.version : undefined;
+  if (typeof api.readConfigFile !== 'function' || version !== TYPESCRIPT_API_VERSION) {
     throw new Error(
       `${typescriptRoot} must export TypeScript ${TYPESCRIPT_API_VERSION} compiler API (readConfigFile). ` +
-        `Resolved version ${typed.version ?? 'unknown'} (expected link target ${expectedTarget}). ` +
+        `Resolved version ${version ?? 'unknown'} (expected link target ${expectedTarget}). ` +
         'Bun isolated linking races .bun/node_modules/typescript between typescript@6 and ' +
         "@typescript/native's TS7. See https://github.com/oven-sh/bun/issues/40355.",
     );
@@ -1879,14 +1438,15 @@ async function applyWorkspaceGitConfig(root: string): Promise<void> {
 
   const gitDir = path.resolve(root, new TextDecoder().decode(gitDirResult.stdout).trim());
   const tooling = path.join(root, 'tooling');
-  linkHook(gitDir, tooling, 'pre-commit');
+  linkHook(gitDir, path.join(tooling, 'git-hooks', 'pre-commit.sh'));
   installPostCommitHook(gitDir, tooling);
-  linkHook(gitDir, tooling, 'commit-msg');
-  linkHook(gitDir, tooling, 'pre-push');
+  linkHook(gitDir, path.join(tooling, 'git-hooks', 'commit-msg.sh'));
+  linkHook(gitDir, path.join(tooling, 'git-hooks', 'pre-push.sh'));
 }
 
-function linkHook(gitDir: string, tooling: string, name: string): void {
-  const source = path.join(tooling, 'git-hooks', `${name}.sh`);
+/** Links `.git/hooks/<name>` to the hook source `<name>.sh`. */
+function linkHook(gitDir: string, source: string): void {
+  const name = path.basename(source, '.sh');
   if (!existsSync(source)) {
     throw new Error(`Missing ${name} hook source: ${source}`);
   }
@@ -1969,6 +1529,46 @@ async function runSetupCommand(
     throw new CapturedCommandError(command, result.exitCode, result.stdout, result.stderr);
   }
   return result;
+}
+
+/**
+ * `runSetupCommand` for a command that must not outlive `deadlineMs`: it runs in a process group of its own, which is
+ * killed with everything in it when the deadline passes (cargo-fetch-run.ts). `lockPath` is the lock the command holds
+ * while it runs, which the failure of one that was killed names.
+ */
+async function runBoundedSetupCommand(
+  command: string,
+  argv: readonly string[],
+  options: { quiet: boolean; deadlineMs: number; env: Readonly<Record<string, string>>; lockPath: string },
+): Promise<CapturedOutput> {
+  let outcome: BoundedOutcome;
+  try {
+    outcome = await runBounded({
+      argv,
+      cwd: projectRoot,
+      env: options.env,
+      deadlineMs: options.deadlineMs,
+      echo: !options.quiet,
+    });
+  } catch (cause) {
+    throw new Error(`${command} could not run: ${cause instanceof Error ? cause.message : String(cause)}`, { cause });
+  }
+  if (outcome.kind === 'expired') {
+    const { deadlineMs, lockPath } = options;
+    const message = describeDeadline({
+      command,
+      deadlineMs,
+      elapsedMs: Math.round(outcome.elapsedMs),
+      lockPath,
+      group: outcome.group,
+      membersLeft: outcome.membersLeft,
+    });
+    throw new CommandDeadlineError(command, message, outcome.stdout, outcome.stderr);
+  }
+  if (outcome.exitCode !== 0) {
+    throw new CapturedCommandError(command, outcome.exitCode, outcome.stdout, outcome.stderr);
+  }
+  return outcome;
 }
 
 /**
@@ -2136,6 +1736,9 @@ function describeFailure(level: 'ERROR' | 'WARNING', error: unknown): void {
   if (error instanceof CapturedCommandError) {
     console.error(`--- ${level}: setup-environment.ts failed while running: ${error.command}`);
     console.error(`exit code: ${error.exitCode}`);
+  } else if (error instanceof CommandDeadlineError) {
+    console.error(`--- ${level}: setup-environment.ts failed while running: ${error.command}`);
+    console.error(error.message);
   } else {
     console.error(`--- ${level}: setup-environment.ts failed: ${error}`);
   }
@@ -2144,7 +1747,7 @@ function describeFailure(level: 'ERROR' | 'WARNING', error: unknown): void {
 }
 
 function replayCapturedOutput(error: unknown): void {
-  if (!(error instanceof CapturedCommandError)) {
+  if (!(error instanceof CapturedCommandError || error instanceof CommandDeadlineError)) {
     return;
   }
   // The install ran with every resolved secret in its environment, so its

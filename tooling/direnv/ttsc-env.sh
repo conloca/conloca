@@ -10,6 +10,15 @@
 # TTSC_GO_CACHE_DIR, where ttsc keeps the plugin binaries it compiles and the
 # Go build cache that compiles them.
 #
+# This checkout is the directory the script is sourced from: devenv.smoo.nix's
+# enterShell enters the workspace root first, and each git hook enters
+# `git rev-parse --show-toplevel`. Sourced from any other directory, $PWD names
+# no checkout, and every cache below would land beside that directory instead:
+# a shell in HOME would create ~/.cache/ttsc. That directory is refused.
+if [ ! -f "$PWD/tooling/direnv/ttsc-env.sh" ]; then
+  echo "ttsc-env.sh: not a workspace root (no tooling/direnv/ttsc-env.sh): $PWD; source it from the checkout root" >&2
+  return 1
+fi
 # The compiler is always this checkout's own. An inherited cache directory is
 # the host's choice and stays (CI points it at a cache shared across runs),
 # unless the environment was bound for another workspace: an inherited
