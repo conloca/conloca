@@ -1,6 +1,6 @@
 {
   "name": "@conloca/cloud-astro",
-  "version": "0.2.3-next.0",
+  "version": "0.2.3",
   "publishConfig": {
     "access": "public"
   },
