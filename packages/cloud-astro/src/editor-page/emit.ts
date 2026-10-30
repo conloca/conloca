@@ -14,6 +14,9 @@ import {
   editorUiOrigin,
   isEditorPageInfo,
   isValidBranchName,
+  PREVIEW_PROTOCOL,
+  type PreviewMode,
+  type PreviewSignal,
 } from '@conloca/content-api/editor-host';
 import { readSitesConfig } from '@conloca/content-api/node';
 import { buildSandboxSrcdoc } from '@conloca/mdx/sandbox-frame';
@@ -46,6 +49,8 @@ export interface EmitEditorPageInput {
   inherited: InheritedOptions;
   repoUri: string | undefined;
   siteIdOverride: string | undefined;
+  /** How this build serves draft previews; conloca.json `preview.mode`. */
+  previewMode: PreviewMode;
   logger: { info(message: string): void; warn(message: string): void };
 }
 
@@ -122,8 +127,10 @@ export async function emitEditorPage(input: EmitEditorPageInput): Promise<void> 
     gitOutput(['rev-parse', '--show-toplevel'], input.root),
   );
   const branchDeploys = branchDeploysFromEnv(process.env);
+  const preview: PreviewSignal = { mode: input.previewMode, protocol: PREVIEW_PROTOCOL };
   const written = {
     ...info,
+    preview,
     ...(branchDeploys === undefined ? {} : { branchDeploys }),
     ...(contentPaths === undefined ? {} : { contentPaths }),
   };

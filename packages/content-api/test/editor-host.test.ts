@@ -10,6 +10,7 @@ import {
   isEditorPageInfo,
   isFromVercel,
   isValidBranchName,
+  PREVIEW_PROTOCOL,
   parentRoot,
 } from '../src/editor-host.js';
 
@@ -90,6 +91,15 @@ describe('contentPathsOf', () => {
   });
   it('leaves a conloca.json with a malformed contentPaths valid', () => {
     expect(isEditorPageInfo({ ...info, contentPaths: ['../src'] })).toBe(true);
+  });
+});
+
+describe('preview signal', () => {
+  it('is protocol 1', () => {
+    expect(PREVIEW_PROTOCOL).toBe(1);
+  });
+  it('leaves a conloca.json with a malformed preview valid', () => {
+    expect(isEditorPageInfo({ ...info, preview: 'd2' })).toBe(true);
   });
 });
 

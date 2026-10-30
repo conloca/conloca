@@ -1,10 +1,13 @@
+import { PREVIEW_PROTOCOL } from '@conloca/content-api/editor-host';
 import { createRemoteJWKSet, customFetch, type JWTPayload, type JWTVerifyGetKey, jwtVerify } from 'jose';
 import { parseCookies, serializePreviewCookie } from './cookie.js';
+import { PREVIEW_CACHE_HEADERS } from './headers.js';
 import { previewLabel } from './label.js';
 import { renderNoPreviewLanding } from './landing.js';
 import {
   PREVIEW_COOKIE_NAME,
   PREVIEW_LABEL_HEADER,
+  PREVIEW_PROTOCOL_HEADER,
   PREVIEW_QUERY_PARAM,
   previewRoutePrefix,
   stripPreviewPrefix,
@@ -267,23 +270,44 @@ function readStringClaim(payload: JWTPayload, name: string): string | undefined 
 
 /**
  * Builds the 302 that expires the preview cookie and returns the visitor to
- * the published page. `?to=` names the page the banner was on; only a
- * same-origin absolute path is accepted (a full URL or `//host` would turn
- * this route into an open redirect), anything else falls back to the site's
- * base. The `conloca-preview` header carries this build's public label.
+ * the published page `?to=` names (see {@link exitTarget}). The
+ * `conloca-preview` header carries this build's public label, and `conloca-preview-protocol` the preview protocol it speaks.
  */
 function makeExitRedirect(url: URL, base: string, label: string): Response {
-  const to = url.searchParams.get('to') ?? base;
-  const target = to.startsWith('/') && !to.startsWith('//') ? to : base;
   return new Response(null, {
     status: 302,
     headers: {
-      location: target,
+      location: exitTarget(url, base),
       'set-cookie': serializePreviewCookie(PREVIEW_COOKIE_NAME, '', 0),
-      'cache-control': 'private, no-store',
+      ...PREVIEW_CACHE_HEADERS,
       [PREVIEW_LABEL_HEADER]: label,
+      // Lets Conloca refuse to link to a preview server below its protocol floor.
+      [PREVIEW_PROTOCOL_HEADER]: String(PREVIEW_PROTOCOL),
     },
   });
+}
+
+/**
+ * Where Exit sends the visitor: `?to=` resolved against this origin and kept
+ * only while it stays there, as its path and query with the preview route
+ * stripped. Anything else falls back to the site's base: another origin,
+ * `//host`, and `/\host` or `/<tab>/host`, which browsers read as `//host`.
+ * The emitted path is checked again, because the browser parses it again:
+ * `https://site//host`, `/.//host` and `<preview route>//host` all leave a
+ * same-origin parse as the path `//host`.
+ */
+function exitTarget(url: URL, base: string): string {
+  const to = url.searchParams.get('to');
+  if (to === null || to === '') return base;
+  let target: URL;
+  try {
+    target = new URL(to, url.origin);
+  } catch {
+    return base;
+  }
+  if (target.origin !== url.origin) return base;
+  const location = `${stripPreviewPrefix(target.pathname, base)}${target.search}`;
+  return new URL(location, url.origin).origin === url.origin ? location : base;
 }
 
 /**
@@ -314,7 +338,7 @@ function makeInitRedirect(url: URL, token: string, base: string, maxAgeSeconds?:
     headers: {
       location,
       'set-cookie': serializePreviewCookie(PREVIEW_COOKIE_NAME, token, maxAgeSeconds),
-      'cache-control': 'private, no-store',
+      ...PREVIEW_CACHE_HEADERS,
     },
   });
 }

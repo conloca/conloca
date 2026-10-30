@@ -318,36 +318,77 @@ describe('createPreviewSiteMiddleware — verdict rendering', () => {
   });
 });
 
-describe('createPreviewSiteMiddleware — endpoint degradation', () => {
-  it('serves published bytes with preview headers when page-status answers 5xx', async () => {
-    // An endpoint mid-deploy must not take the whole site down for a
-    // visitor holding a (HttpOnly, unremovable) preview cookie. Degrade to
-    // the ordinary render — the documented fail-open stance.
+describe('createPreviewSiteMiddleware — shared caches', () => {
+  it('varies its redirects on the cookie and keeps them out of CDN caches', async () => {
+    const jwt = await mintJwt();
+    const canonical = await createPreviewSiteMiddleware(opts, seams())(
+      contextFor('https://site.test/_conloca/preview/blog', `${PREVIEW_COOKIE_NAME}=${jwt}`),
+      next,
+    );
+    const moved = await createPreviewSiteMiddleware(
+      opts,
+      seams(makeFetch([new Response(null, { status: 302, headers: { location: '/moved' } })]).fn),
+    )(contextFor('https://site.test/old', `${PREVIEW_COOKIE_NAME}=${jwt}`), next);
+    for (const response of [canonical, moved]) {
+      expect(response.status).toBe(302);
+      expect(response.headers.get('vary')).toBe('Cookie');
+      expect(response.headers.get('cdn-cache-control')).toBe('no-store');
+      expect(response.headers.get('cache-control')).toBe('private, no-store');
+    }
+  });
+});
+
+describe('createPreviewSiteMiddleware — the draft cannot be loaded', () => {
+  it('shows the retry page, never the published page, when page-status answers 5xx', async () => {
     const jwt = await mintJwt();
     const fetchSpy = makeFetch([new Response('deploying', { status: 503 })]);
     const onRequest = createPreviewSiteMiddleware(opts, seams(fetchSpy.fn));
-    const context = contextFor('https://site.test/blog', `${PREVIEW_COOKIE_NAME}=${jwt}`);
+    const context = contextFor('https://site.test/blog?tab=2', `${PREVIEW_COOKIE_NAME}=${jwt}`);
+    let rendered = false;
 
-    const response = await onRequest(context, htmlNext('published body'));
+    const response = await onRequest(context, async () => {
+      rendered = true;
+      return new Response('published body');
+    });
 
     const html = await response.text();
-    expect(html).toContain('published body');
-    expect(html).not.toContain('conloca-preview-banner');
-    expect(context.locals.contentApi).toBeUndefined();
-    expect(response.headers.get('x-robots-tag')).toContain('noindex');
+    expect(rendered).toBe(false);
+    expect(response.status).toBe(503);
+    expect(html).toContain("Preview couldn't load the draft");
+    // Retry reloads this page; Exit leaves preview, since the visitor can't remove the HttpOnly cookie.
+    expect(html).toContain('<a class="btn primary" href="/blog?tab=2">Retry</a>');
+    expect(html).toContain('href="/_conloca/preview/__exit?to=%2Fblog"');
+    expect(html).not.toContain('published body');
+    expect(response.headers.get('x-robots-tag')).toBe('noindex');
     expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(response.headers.get('vary')).toBe('Cookie');
   });
 
-  it('serves published bytes when the page-status transport itself rejects', async () => {
+  it.each([
+    ['the page-status transport rejects', () => Promise.reject(new Error('connection reset'))],
+    ['page-status answers 401', async () => new Response(null, { status: 401 })],
+  ] as const)('shows the retry page when %s', async (_reason, fetchImpl) => {
     const jwt = await mintJwt();
-    const rejecting = (() => Promise.reject(new Error('connection reset'))) as unknown as typeof fetch;
-    const onRequest = createPreviewSiteMiddleware(opts, seams(rejecting));
+    // Bun's `typeof fetch` carries `preconnect`; the middleware never calls it.
+    const fetchFn = Object.assign(fetchImpl, { preconnect: fetch.preconnect });
+    const onRequest = createPreviewSiteMiddleware(opts, seams(fetchFn));
     const context = contextFor('https://site.test/blog', `${PREVIEW_COOKIE_NAME}=${jwt}`);
 
     const response = await onRequest(context, htmlNext('published body'));
 
-    expect(await response.text()).toContain('published body');
-    expect(response.headers.get('x-robots-tag')).toContain('noindex');
+    expect(response.status).toBe(503);
+    expect(await response.text()).not.toContain('published body');
+  });
+
+  it('keeps the Retry link same-origin when the path starts with //', async () => {
+    const jwt = await mintJwt();
+    const fetchSpy = makeFetch([new Response('deploying', { status: 503 })]);
+    const onRequest = createPreviewSiteMiddleware(opts, seams(fetchSpy.fn));
+    const context = contextFor('https://site.test//evil.test/x', `${PREVIEW_COOKIE_NAME}=${jwt}`);
+
+    const response = await onRequest(context, htmlNext('published body'));
+
+    expect(await response.text()).toContain('<a class="btn primary" href="/evil.test/x">Retry</a>');
   });
 });
 

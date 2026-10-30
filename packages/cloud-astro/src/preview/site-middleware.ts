@@ -30,7 +30,8 @@ import type { ContentAPI } from '@conloca/content-api';
 import { fetchPageStatus, type PageStatus } from './_dispatch.js';
 import { injectPreviewBanner } from './banner.js';
 import { PreviewContentAPI } from './content-api.js';
-import { applyPreviewHeaders } from './headers.js';
+import { applyPreviewHeaders, PREVIEW_CACHE_HEADERS } from './headers.js';
+import { renderPreviewUnavailable } from './landing.js';
 import { handlePreviewRequest, type PreviewContext, type PreviewMiddlewareOptions } from './middleware.js';
 import { normalizeTrailingSlash, previewRoutePrefix, stripPreviewPrefix } from './preview-path.js';
 
@@ -107,14 +108,15 @@ export function createPreviewSiteMiddleware(resolveOpts: () => PreviewMiddleware
     if (stripPreviewPrefix(rawPath, opts.base) !== rawPath) {
       return new Response(null, {
         status: 302,
-        headers: { location: path, 'cache-control': 'private, no-store' },
+        headers: { location: path, ...PREVIEW_CACHE_HEADERS },
       });
     }
 
     context.locals.conlocaPreview = verdict.ctx;
-    // An endpoint failure (5xx mid-deploy, auth envelope, network) must not 500
-    // the whole site for a visitor holding the HttpOnly cookie they cannot
-    // remove — degrade to published bytes, keeping the preview headers.
+    // An endpoint failure (5xx mid-deploy, auth envelope, network) must neither
+    // 500 the site nor pass published bytes off as the draft: answer with a
+    // retry page that also offers Exit, since the visitor can't remove the
+    // HttpOnly cookie.
     let status: PageStatus;
     try {
       status = await fetchPageStatus({
@@ -128,10 +130,14 @@ export function createPreviewSiteMiddleware(resolveOpts: () => PreviewMiddleware
       });
     } catch (error) {
       console.warn(
-        `[@conloca/cloud-astro] preview page-status failed for ${path} — serving the published page instead: ` +
+        `[@conloca/cloud-astro] preview page-status failed for ${path} — showing the retry page: ` +
           `${error instanceof Error ? error.message : String(error)}`,
       );
-      return applyPreviewHeaders(await next());
+      return renderPreviewUnavailable({
+        // Collapse leading slashes: `//evil.test/x` would otherwise be a cross-origin link.
+        retryHref: `/${rawPath.replace(/^\/+/u, '')}${context.url.search}`,
+        exitHref: `${previewRoutePrefix(opts.base)}/__exit?to=${encodeURIComponent(rawPath)}`,
+      });
     }
 
     if (status.kind === 'unchanged') {
@@ -146,7 +152,7 @@ export function createPreviewSiteMiddleware(resolveOpts: () => PreviewMiddleware
       // redirect can never be cached by intermediaries.
       return new Response(null, {
         status: 302,
-        headers: { location: status.target, 'cache-control': 'private, no-store' },
+        headers: { location: status.target, ...PREVIEW_CACHE_HEADERS },
       });
     }
 

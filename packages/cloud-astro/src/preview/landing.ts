@@ -1,3 +1,47 @@
+import { PREVIEW_CACHE_HEADERS } from './headers.js';
+
+const PAGE_STYLE =
+  'body{font-family:system-ui,sans-serif;max-width:32rem;margin:8rem auto;padding:0 1rem;line-height:1.5;color:#1a1a1a}h1{margin-bottom:1rem}a.btn{display:inline-block;padding:0.75rem 1.25rem;margin-right:0.5rem;border-radius:6px;text-decoration:none}a.btn.primary{background:#111;color:#fff}a.btn.secondary{border:1px solid #ccc;color:#1a1a1a}';
+
+/**
+ * Headers of both pages below: noindex, never cached, and a tight own CSP.
+ * They are Conloca-authored (only an inline <style>, no scripts), so no
+ * script runs and nothing may frame them.
+ */
+const PAGE_HEADERS = {
+  'content-type': 'text/html; charset=utf-8',
+  'x-robots-tag': 'noindex',
+  ...PREVIEW_CACHE_HEADERS,
+  'content-security-policy':
+    "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+};
+
+/** A heading, one paragraph and link buttons; the first link is the primary one. Hrefs are escaped here. */
+function renderPage(content: { title: string; heading: string; text: string; links: [string, string][] }): string {
+  return [
+    '<!doctype html>',
+    '<html lang="en">',
+    '<head>',
+    '<meta charset="utf-8">',
+    '<meta name="viewport" content="width=device-width, initial-scale=1">',
+    '<meta name="robots" content="noindex, nofollow">',
+    `<title>${content.title}</title>`,
+    `<style>${PAGE_STYLE}</style>`,
+    '</head>',
+    '<body>',
+    `<h1>${content.heading}</h1>`,
+    `<p>${content.text}</p>`,
+    '<p>',
+    ...content.links.map(
+      ([label, href], index) =>
+        `<a class="btn ${index === 0 ? 'primary' : 'secondary'}" href="${escapeHtml(href)}">${label}</a>`,
+    ),
+    '</p>',
+    '</body>',
+    '</html>',
+  ].join('');
+}
+
 /**
  * Renders the "no preview context" landing page returned when a request
  * hits the preview route but carries neither a fresh query param nor a
@@ -20,48 +64,42 @@ export function renderNoPreviewLanding(opts: { pathname: string; saasEndpoint: s
   // was trying to preview and the endpoint that issues the JWT.
   const loginUrl = new URL('/login', opts.saasEndpoint);
   loginUrl.searchParams.set('return', opts.pathname);
-  const escapedPath = escapeHtml(opts.pathname);
-  const escapedLogin = escapeHtml(loginUrl.toString());
-
-  const body = [
-    '<!doctype html>',
-    '<html lang="en">',
-    '<head>',
-    '<meta charset="utf-8">',
-    '<meta name="viewport" content="width=device-width, initial-scale=1">',
-    '<meta name="robots" content="noindex, nofollow">',
-    '<title>Conloca preview</title>',
-    '<style>body{font-family:system-ui,sans-serif;max-width:32rem;margin:8rem auto;padding:0 1rem;line-height:1.5;color:#1a1a1a}h1{margin-bottom:1rem}a.btn{display:inline-block;padding:0.75rem 1.25rem;margin-right:0.5rem;border-radius:6px;text-decoration:none}a.btn.primary{background:#111;color:#fff}a.btn.secondary{border:1px solid #ccc;color:#1a1a1a}</style>',
-    '</head>',
-    '<body>',
-    '<h1>This is a Conloca preview environment</h1>',
-    '<p>To preview unreleased content you need to log in. Otherwise visit the production site.</p>',
-    '<p>',
-    `<a class="btn primary" href="${escapedLogin}">Log in to edit</a>`,
-    `<a class="btn secondary" href="${escapedPath}">Go to production</a>`,
-    '</p>',
-    '</body>',
-    '</html>',
-  ].join('');
-
-  return new Response(body, {
-    status: 200,
-    headers: {
-      'content-type': 'text/html; charset=utf-8',
-      'x-robots-tag': 'noindex',
-      'cache-control': 'private, no-store',
-      // This is a Conloca-authored page (only an inline <style>, no scripts),
-      // so it carries a tight own CSP — no script execution, no framing.
-      'content-security-policy':
-        "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
-    },
+  const body = renderPage({
+    title: 'Conloca preview',
+    heading: 'This is a Conloca preview environment',
+    text: 'To preview unreleased content you need to log in. Otherwise visit the production site.',
+    links: [
+      ['Log in to edit', loginUrl.toString()],
+      ['Go to production', opts.pathname],
+    ],
   });
+  return new Response(body, { status: 200, headers: PAGE_HEADERS });
 }
 
 /**
- * Minimal HTML attribute/text escaper — enough to prevent the rendered
- * pathname from breaking out of an attribute or injecting markup. We do
- * not pull in a dependency for one helper used in one place.
+ * The page a preview request gets when its draft could not be loaded (the
+ * page-status call failed). Never the published page: under preview,
+ * published bytes would pass for the draft. Retry reloads the page; Exit
+ * leaves preview, since the visitor can't remove the HttpOnly cookie
+ * themselves.
+ */
+export function renderPreviewUnavailable(opts: { retryHref: string; exitHref: string }): Response {
+  const body = renderPage({
+    title: 'Preview unavailable',
+    heading: "Preview couldn't load the draft",
+    text: 'The draft could not be fetched just now. Your published site is not affected.',
+    links: [
+      ['Retry', opts.retryHref],
+      ['Exit preview', opts.exitHref],
+    ],
+  });
+  return new Response(body, { status: 503, headers: PAGE_HEADERS });
+}
+
+/**
+ * Minimal HTML attribute/text escaper — enough to prevent a rendered
+ * path from breaking out of an attribute or injecting markup. We do
+ * not pull in a dependency for one helper.
  */
 function escapeHtml(value: string): string {
   return value

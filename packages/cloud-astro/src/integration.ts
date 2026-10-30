@@ -332,6 +332,8 @@ export function conlocaCloud(options: ConlocaCloudOptions = {}): AstroIntegratio
           inherited,
           repoUri,
           siteIdOverride: options.siteId,
+          // The preview build serves drafts from the site's own deploy (d2); no other mode exists yet.
+          previewMode: previewMode() === 'on' ? 'd2' : 'off',
           logger,
         });
 

@@ -334,32 +334,43 @@ describe('injectPreviewBanner', () => {
     expect(out).toContain('noindex');
   });
 
-  it('wires the Share Preview button to the share route when an endpoint is threaded', async () => {
+  it("replaces the site's own robots meta instead of sitting next to it", async () => {
     const { injectPreviewBanner } = await import('../preview/banner.js');
-    const html = '<html><body></body></html>';
-    const out = injectPreviewBanner(
-      html,
-      { branch: 'feature/x', org: 'acme', repo: 'site', jwt: 'tok' },
-      'https://cms.example.test',
-    );
-    // The endpoint rides the embedded envelope so the browser button can build
-    // the fetch URL; the click handler calls GET {endpoint}/preview/share with
-    // the preview JWT as a Bearer token and copies the returned url.
-    expect(out).toContain('"endpoint":"https://cms.example.test"');
-    expect(out).toContain("share.addEventListener('click'");
-    expect(out).toContain('/preview/share?branch=');
-    expect(out).toContain("'Bearer ' + __conlocaPreview.jwt");
-    expect(out).toContain('navigator.clipboard.writeText');
+    const html =
+      '<html><head><meta name="robots" content="index, follow"><META content=all NAME=robots />' +
+      '<meta name="robots-extra" content="keep"></head><body></body></html>';
+    const out = injectPreviewBanner(html, { branch: 'main', org: 'acme', repo: 'acme/site', jwt: 'tok' });
+    expect(out).not.toContain('index, follow');
+    expect(out).not.toContain('content=all');
+    expect(out.match(/noindex, nofollow/g)).toHaveLength(1);
+    expect(out.indexOf('noindex, nofollow')).toBeLessThan(out.indexOf('</head>'));
+    expect(out).toContain('<meta name="robots-extra" content="keep">');
   });
 
-  it('leaves the Share button inert when no endpoint is threaded', async () => {
+  it('keeps the pass out of the page: only the branch, the endpoint and the exit route are embedded', async () => {
     const { injectPreviewBanner } = await import('../preview/banner.js');
-    const html = '<html><body></body></html>';
-    const out = injectPreviewBanner(html, { branch: 'feature/x', org: 'acme', repo: 'site', jwt: 'tok' });
-    // No endpoint key in the envelope, and the click handler's guard
-    // short-circuits so a click does nothing.
-    expect(out).not.toContain('"endpoint"');
-    expect(out).toContain('if (!__conlocaPreview.endpoint) return;');
+    const out = injectPreviewBanner(
+      '<html><body></body></html>',
+      { branch: 'feature/x', org: 'acme', repo: 'acme/site', jwt: 'header.secret-pass.signature' },
+      'https://cms.example.test',
+      '/_conloca/preview/__exit',
+    );
+    expect(out).not.toContain('secret-pass');
+    expect(out).not.toContain('"jwt"');
+    expect(out).toContain(
+      'var __conlocaPreview = {"branch":"feature/x","endpoint":"https://cms.example.test","exitPath":"/_conloca/preview/__exit"};',
+    );
+  });
+
+  it('shows no Share button until share links can be revoked', async () => {
+    const { injectPreviewBanner } = await import('../preview/banner.js');
+    const out = injectPreviewBanner(
+      '<html><body></body></html>',
+      { branch: 'main', org: 'acme', repo: 'acme/site', jwt: 'tok' },
+      'https://cms.example.test',
+    );
+    expect(out).not.toContain('Share');
+    expect(out).not.toContain('/preview/share');
   });
 });
 
@@ -410,6 +421,34 @@ describe('applyPreviewHeaders', () => {
     const csp = resp.headers.get('content-security-policy') ?? '';
     expect(csp).toContain("default-src 'self'");
     expect(csp).toContain("frame-ancestors 'none'");
+  });
+});
+
+describe('preview responses and shared caches', () => {
+  it("varies on the cookie and tells CDNs not to store, keeping the site's own Vary", async () => {
+    const { applyPreviewHeaders } = await import('../preview/headers.js');
+    const resp = applyPreviewHeaders(
+      new Response('ok', { headers: { vary: 'Accept-Encoding', 'cdn-cache-control': 'public, max-age=600' } }),
+    );
+    expect(resp.headers.get('vary')).toBe('Accept-Encoding, Cookie');
+    expect(resp.headers.get('cdn-cache-control')).toBe('no-store');
+  });
+
+  it('marks the exit, entry and landing answers the same way', async () => {
+    const answers = [
+      await handlePreviewRequest(makeRequest('https://site.test/_conloca/preview/__exit?to=%2F'), makeOptions()),
+      await handlePreviewRequest(
+        makeRequest(`https://site.test/_conloca/preview/about?${PREVIEW_QUERY_PARAM}=${await mintJwt()}`),
+        makeOptions(),
+      ),
+      await handlePreviewRequest(makeRequest('https://site.test/_conloca/preview/about'), makeOptions()),
+    ];
+    for (const answer of answers) {
+      if (answer.kind !== 'response') throw new Error(`expected a response, got ${answer.kind}`);
+      expect(answer.response.headers.get('vary')).toBe('Cookie');
+      expect(answer.response.headers.get('cdn-cache-control')).toBe('no-store');
+      expect(answer.response.headers.get('cache-control')).toBe('private, no-store');
+    }
   });
 });
 
@@ -507,15 +546,49 @@ describe('exit route', () => {
     expect(setCookie).toContain('Max-Age=0');
   });
 
-  it('rejects non-path exit targets so the route cannot open-redirect', async () => {
-    for (const target of ['https%3A%2F%2Fevil.test', '%2F%2Fevil.test']) {
-      const verdict = await handlePreviewRequest(
-        makeRequest(`https://site.test/_conloca/preview/__exit?to=${target}`),
-        makeOptions(),
-      );
-      const response = (verdict as { response: Response }).response;
-      expect(response.headers.get('location')).toBe('/');
-    }
+  it.each([
+    '/%5Cevil.com',
+    '/%09/evil.com',
+    '//evil.com',
+    '%2F%2Fevil.com',
+    'https://evil.com/x',
+    'https%3A%2F%2Fevil.com',
+    'javascript:alert(1)',
+    // Same origin when parsed, but the emitted path starts with `//`, which the browser reads as a host.
+    'https://site.test//evil.com',
+    '/_conloca/preview//evil.com',
+    '/.//evil.com',
+    '/a/..//evil.com',
+  ])('sends the exit target %s to the site base, never off this origin', async (to) => {
+    const verdict = await handlePreviewRequest(
+      makeRequest(`https://site.test/_conloca/preview/__exit?to=${to}`),
+      makeOptions(),
+    );
+    if (verdict.kind !== 'response') throw new Error('expected the exit redirect');
+    expect(verdict.response.headers.get('location')).toBe('/');
+  });
+
+  it('sends an empty exit target to the site base', async () => {
+    const verdict = await handlePreviewRequest(
+      makeRequest('https://site.test/docs/_conloca/preview/__exit?to='),
+      makeOptions({ base: '/docs/' }),
+    );
+    if (verdict.kind !== 'response') throw new Error('expected the exit redirect');
+    expect(verdict.response.headers.get('location')).toBe('/docs/');
+  });
+
+  it.each([
+    ['%2Fblog%3Fpage%3D2', '/blog?page=2'],
+    ['https%3A%2F%2Fsite.test%2Fabout', '/about'],
+    ['%2F_conloca%2Fpreview%2Fpricing', '/pricing'],
+    ['%2Fdocs%23intro', '/docs'],
+  ])('keeps the same-origin exit target %s as the path %s', async (to, location) => {
+    const verdict = await handlePreviewRequest(
+      makeRequest(`https://site.test/_conloca/preview/__exit?to=${to}`),
+      makeOptions(),
+    );
+    if (verdict.kind !== 'response') throw new Error('expected the exit redirect');
+    expect(verdict.response.headers.get('location')).toBe(location);
   });
 });
 
@@ -610,6 +683,7 @@ describe('handlePreviewRequest — the pass must match the build', () => {
     if (v.kind !== 'response') throw new Error('expected the exit redirect');
     expect(v.response.headers.get('location')).toBe('/blog');
     expect(v.response.headers.get('conloca-preview')).toBe(await previewLabel('acme/site', 'website', 'main'));
+    expect(v.response.headers.get('conloca-preview-protocol')).toBe('1');
     expect(v.response.headers.get('set-cookie')).toContain(
       '__Host-conloca_preview=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0',
     );

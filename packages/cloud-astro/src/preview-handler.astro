@@ -1,6 +1,7 @@
 ---
 import bakedPreviewOpts from 'virtual:conloca-preview-opts';
 import { resolveEndpointFetch, resolveFromBaked } from './preview/_resolve-opts.js';
+import { PREVIEW_CACHE_HEADERS } from './preview/headers.js';
 import { stripPreviewPrefix } from './preview/preview-path.js';
 /**
  * Entry route injected by the recursive preview build at the fixed, public
@@ -51,7 +52,7 @@ if (verdict.kind === 'pass-through') {
 const cleanPath = stripPreviewPrefix(Astro.originPathname ?? Astro.url.pathname, opts.base);
 const canonical: Response = new Response(null, {
   status: 302,
-  headers: { location: cleanPath, 'cache-control': 'private, no-store' },
+  headers: { location: cleanPath, ...PREVIEW_CACHE_HEADERS },
 });
 return canonical;
 ---

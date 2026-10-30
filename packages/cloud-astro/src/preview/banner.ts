@@ -22,15 +22,11 @@ export function getBannerScriptText(ctx: PreviewContext, endpoint?: string, exit
   // break out of the script tag. Replacing `</` with `<\/` is the standard
   // mitigation (also done by ASP.NET's Json.Encode, Rails' j helper, etc.).
   //
-  // The endpoint rides the envelope alongside the preview ctx so the
-  // "Share Preview" button can call `GET {endpoint}/preview/share` from the
-  // browser with the preview JWT (the same credential the cookie carries; the
-  // cookie is HttpOnly, so the button reads the JWT from here). Absent an
-  // endpoint the button is inert. `endpoint: undefined` drops out of the JSON.
-  //
-  // `exitPath` is the server-side exit route, the fixed public
-  // `<base>/_conloca/preview/__exit`; it reveals nothing.
-  const ctxJson = JSON.stringify({ ...ctx, endpoint, exitPath }).replace(/</g, '\\u003c');
+  // Only the branch name and two public addresses reach the page: `endpoint`
+  // for the Edit link and `exitPath`, the fixed `<base>/_conloca/preview/__exit`.
+  // The pass never does: every script on the page, third-party tags included,
+  // could read it. `undefined` values drop out of the JSON.
+  const ctxJson = JSON.stringify({ branch: ctx.branch, endpoint, exitPath }).replace(/</g, '\\u003c');
   return [
     `var __conlocaPreview = ${ctxJson};`,
     "var __conlocaCollapseKey = 'conloca.preview.collapsed';",
@@ -51,23 +47,6 @@ export function getBannerScriptText(ctx: PreviewContext, endpoint?: string, exit
     // this page, now published.
     "  var exitLink = document.createElement('a'); exitLink.textContent = 'Exit Preview'; exitLink.style.color = '#9cf';",
     "  if (__conlocaPreview.exitPath) { exitLink.href = __conlocaPreview.exitPath + '?to=' + encodeURIComponent(location.pathname); host.appendChild(exitLink); }",
-    "  var share = document.createElement('button'); share.type = 'button'; share.textContent = 'Share Preview'; share.style.cssText = 'background:#333;color:#fff;border:1px solid #555;border-radius:4px;padding:2px 8px;cursor:pointer;'; host.appendChild(share);",
-    // "Share Preview": mint a fresh shareable link via GET {endpoint}/preview/share
-    // and copy it to the clipboard. Bearer-authenticated with the preview JWT
-    // (the route reads Authorization/?token=, never the HttpOnly cookie). The
-    // button briefly reflects the outcome, then restores.
-    "  share.addEventListener('click', function () {",
-    '    if (!__conlocaPreview.endpoint) return;',
-    "    var shareUrl = __conlocaPreview.endpoint + '/preview/share?branch=' + encodeURIComponent(__conlocaPreview.branch);",
-    '    var previousLabel = share.textContent;',
-    '    share.disabled = true;',
-    "    fetch(shareUrl, { headers: { authorization: 'Bearer ' + __conlocaPreview.jwt } })",
-    "      .then(function (res) { if (!res.ok) throw new Error('share ' + res.status); return res.json(); })",
-    "      .then(function (data) { if (!data || typeof data.url !== 'string') throw new Error('missing url'); return navigator.clipboard.writeText(data.url); })",
-    "      .then(function () { share.textContent = 'Link copied'; })",
-    "      .catch(function () { share.textContent = 'Copy failed'; })",
-    '      .then(function () { setTimeout(function () { share.textContent = previousLabel; share.disabled = false; }, 2000); });',
-    '  });',
     "  var collapse = document.createElement('button'); collapse.type = 'button'; collapse.textContent = __conlocaIsCollapsed() ? '+' : '-'; collapse.style.cssText = 'background:transparent;color:#fff;border:none;cursor:pointer;font-size:16px;line-height:1;'; host.appendChild(collapse);",
     "  collapse.addEventListener('click', function () { var c = !__conlocaIsCollapsed(); __conlocaSetCollapsed(c); host.style.display = c ? 'none' : ''; });",
     "  if (__conlocaIsCollapsed()) host.style.display = 'none';",
@@ -77,18 +56,30 @@ export function getBannerScriptText(ctx: PreviewContext, endpoint?: string, exit
   ].join(' ');
 }
 
+const ROBOTS_META = '<meta name="robots" content="noindex, nofollow">';
+// Any `<meta name=robots …>`, whatever the case, quoting or attribute order; `robots-extra` and `googlebot` are other names.
+const SITE_ROBOTS_META_RE = /<meta\b[^>]*?\sname\s*=\s*["']?robots(?=["'\s/>])[^>]*>/giu;
+
 /**
- * Returns `html` with the preview banner script and `<meta robots noindex>`
- * tag injected before the closing `</body>` tag.
+ * Returns `html` with the preview banner script injected before the closing
+ * `</body>` tag, and the page's robots metas replaced by one
+ * `<meta robots noindex>`. The site's own robots meta (often
+ * `index, follow`) must not sit next to the preview's. Ours takes the first
+ * one's place, or goes before `</body>` when the page has none.
  *
- * The injection uses `String.prototype.replace` with a string argument
- * (not a regex), so only the FIRST `</body>` match is rewritten. That
- * matters because a misconfigured renderer can emit malformed HTML with
- * multiple `</body>` tags; we never want to inject the banner more than
- * once per response.
+ * The `</body>` injection uses `String.prototype.replace` with a string
+ * argument (not a regex), so only the FIRST `</body>` match is rewritten.
+ * That matters because a misconfigured renderer can emit malformed HTML with
+ * multiple `</body>` tags; we never want to inject the banner more than once
+ * per response.
  */
 export function injectPreviewBanner(html: string, ctx: PreviewContext, endpoint?: string, exitPath?: string): string {
-  const robotsMeta = '<meta name="robots" content="noindex, nofollow">';
   const script = `<script>${getBannerScriptText(ctx, endpoint, exitPath)}</script>`;
-  return html.replace('</body>', `${robotsMeta + script}</body>`);
+  let replaced = false;
+  const page = html.replace(SITE_ROBOTS_META_RE, () => {
+    const first = !replaced;
+    replaced = true;
+    return first ? ROBOTS_META : '';
+  });
+  return page.replace('</body>', `${replaced ? '' : ROBOTS_META}${script}</body>`);
 }

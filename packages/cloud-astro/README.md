@@ -173,8 +173,9 @@ uses the deploy whose code is closest to the branch's latest commit, among the b
 branch's and a build of the branch it was created from (on a tie, in that order), and the editor says which; see
 [Branch deploys](#branch-deploys).
 
-`/_conloca/editor/conloca.json` publishes the repository's name and the build's branch and commit. If the repository is
-not public, its name becomes public with the deploy.
+`/_conloca/editor/conloca.json` publishes the repository's name, the build's branch and commit, and whether the build
+serves draft previews with the preview protocol it speaks (`preview`: `{ "mode": "d2", "protocol": 1 }` with
+`previewBuild`, else mode `off`). If the repository is not public, its name becomes public with the deploy.
 
 ### CI example (GitHub Actions)
 

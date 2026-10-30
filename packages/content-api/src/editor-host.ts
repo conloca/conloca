@@ -4,6 +4,20 @@ import { isRecord } from './component-vocabulary.js';
 export const EDITOR_HOST_PROTOCOL = 1;
 /** Protocols the current editor UI accepts. */
 export const EDITOR_HOST_PROTOCOLS = { min: 1, max: 1 } as const;
+/**
+ * The draft-preview protocol a preview server built by this release speaks. Protocol 1 keeps the pass out of the
+ * page. conloca.json `preview.protocol` and the exit route's `conloca-preview-protocol` header carry it.
+ */
+export const PREVIEW_PROTOCOL = 1;
+
+/** How a build serves draft previews: `d2` from the site's own deploy, `d4` from a separate preview deploy, `off` not at all. */
+export type PreviewMode = 'd2' | 'd4' | 'off';
+
+/** conloca.json `preview`: the build's preview mode and the preview protocol it speaks. */
+export interface PreviewSignal {
+  mode: PreviewMode;
+  protocol: number;
+}
 export const DEFAULT_EDITOR_ENDPOINT = 'https://app.conloca.com';
 /** Where the editor page is served, below the site's base. */
 export const EDITOR_PAGE_PATH = '/_conloca/editor/';
@@ -98,7 +112,7 @@ export type BranchDeploys = { host: 'cloudflare-pages'; project: string };
 const PAGES_PROJECT_RE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 
 /** A parsed conloca.json object, whether or not it passed `isEditorPageInfo`, as the optional-field readers take it. */
-export type ConlocaJson = EditorPageInfo | { branchDeploys?: unknown; contentPaths?: unknown };
+export type ConlocaJson = EditorPageInfo | { branchDeploys?: unknown; contentPaths?: unknown; preview?: unknown };
 
 /** conloca.json `branchDeploys`; `undefined` when absent or malformed, so a bad optional field never makes the page invalid. */
 export function branchDeploysOf(info: ConlocaJson): BranchDeploys | undefined {

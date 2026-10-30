@@ -15,6 +15,9 @@ export const PREVIEW_COOKIE_NAME = '__Host-conloca_preview';
 /** Response header on the exit route's redirect that carries the public label. */
 export const PREVIEW_LABEL_HEADER = 'conloca-preview';
 
+/** Response header on the exit route's redirect that names the preview protocol this build speaks. */
+export const PREVIEW_PROTOCOL_HEADER = 'conloca-preview-protocol';
+
 /** The preview route under Astro's `base` (`'/'` → `/_conloca/preview`, `'/docs/'` → `/docs/_conloca/preview`). */
 export function previewRoutePrefix(base: string): string {
   return `${base.replace(/\/+$/u, '')}${PREVIEW_ROUTE_SEGMENT}`;
