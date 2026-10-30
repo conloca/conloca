@@ -116,7 +116,7 @@ writes, so the result is editable at `/__cms` right away. Each takes `--json` fo
 conloca page create --site default --collection pages --pathname /about --title 'About us' --content about.json
 conloca page update /about --description 'Who we are' --image /media/hero.jpg
 conloca data create site --name contact --data contact.json
-echo '{"phone":"+1 555 0100"}' | conloca data update site contact --data -
+conloca data update site contact --data - < contact.json
 conloca asset add ~/Pictures/hero.jpg --alt 'Fresh bread on the counter'
 ```
 
@@ -125,7 +125,8 @@ conloca asset add ~/Pictures/hero.jpg --alt 'Fresh bread on the counter'
 - `page update` — change an existing page, found by id or pathname; only the flags given change, and an empty value
   (`--robots ''`) clears a field.
 - `data create` / `data update` — a shared entry (contact details, a header menu): a JSON object from a file or
-  `--data -`. Declare the collection's type in `src/schemas/data.ts`; the first `data create` wires the data schemas.
+  `--data -`. `data update` replaces the entry's whole object: send every field, not just the changed one. Declare the
+  collection's type in `src/schemas/data.ts`; the first `data create` wires the data schemas.
 - `asset add` — an image into the media folder; it prints the reference an image field stores, e.g. `/media/hero.jpg`.
 
 A layout reads a shared entry by name:
