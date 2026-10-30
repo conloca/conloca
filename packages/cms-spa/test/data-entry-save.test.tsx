@@ -74,6 +74,16 @@ async function storedData(id: string) {
 }
 
 describe('a new data entry', () => {
+  test('says it is not saved yet, not that it has no changes', async () => {
+    setupSite();
+    renderAuthors();
+    await openNewAuthor();
+
+    const editor = screen.getByTestId('edit-data-dialog');
+    expect(editor.textContent).toContain('Not saved yet');
+    expect(editor.textContent).not.toContain('No changes');
+  });
+
   test('is not written until the author saves it', async () => {
     setupSite();
     renderAuthors();

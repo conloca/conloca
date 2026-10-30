@@ -253,7 +253,7 @@ export function DataEditor({
             {hasChanges ? (
               <span className="text-yellow-05 dark:text-yellow-07">Unsaved changes</span>
             ) : (
-              <span>No changes</span>
+              <span>{isNew ? 'Not saved yet' : 'No changes'}</span>
             )}
           </div>
 
