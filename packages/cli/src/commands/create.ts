@@ -60,6 +60,7 @@ async function writeTemplate(directory: string, name: string, pm: PackageManager
     ['astro.config.mjs', renderAstroConfig(siteName)],
     ['tsconfig.json', TSCONFIG_TEMPLATE],
     ['src/content.config.ts', CONTENT_CONFIG_TEMPLATE],
+    ['public/media/.gitkeep', ''],
     ['.gitignore', GITIGNORE_TEMPLATE],
     ['README.md', renderReadme(name, packageManagerCommands(pm).run)],
     ['.github/workflows/conloca.yml', renderWorkflow(pm)],

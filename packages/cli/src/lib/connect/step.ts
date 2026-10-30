@@ -1,3 +1,6 @@
+import { mkdir, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
+
 /** How one `connect` step left its file: `differs` keeps a value the site owner chose. */
 export type StepState = 'done' | 'changed' | 'needs-you' | 'differs' | 'failed' | 'skipped';
 
@@ -43,4 +46,14 @@ export function jsonLike(before: string, value: unknown): string {
     });
   }
   return `${json}${before.endsWith('\n') ? '\n' : ''}`;
+}
+
+/** Write every edit, creating the folders new files need. */
+export async function writeEdits(edits: FileEdit[]): Promise<void> {
+  await Promise.all(
+    edits.map(async (edit) => {
+      await mkdir(dirname(edit.path), { recursive: true });
+      await writeFile(edit.path, edit.after, 'utf8');
+    }),
+  );
 }

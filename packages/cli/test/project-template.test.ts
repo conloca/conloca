@@ -155,6 +155,7 @@ describe('renderAstroConfig', () => {
     expect(config).toContain("contentRoot: './content'");
     expect(config).toContain("puckConfigPath: './src/puck.config.tsx'");
     expect(config).toContain("schemasPath: './src/schemas/data.ts'");
+    expect(config).toContain("assetsPath: './public/media'");
     expect(config).toContain("layout: './src/layouts/Layout.astro'");
     expect(config.indexOf('react()')).toBeLessThan(config.indexOf('conlocaCMS('));
   });

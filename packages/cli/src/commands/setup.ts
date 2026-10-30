@@ -4,7 +4,7 @@ import { ensureSiteInSitesConfig } from '../lib/sites-config.js';
 // Kept as a real .md file so it stays editable markdown; Bun inlines it into
 // the bundle.
 import CONLOCA_SKILL_TEMPLATE from '../templates/conloca-skill.md' with { type: 'text' };
-import { TYPIA_TSCONFIG_TEMPLATE, TYPIA_VITE_TEMPLATE } from '../templates/project-files.js';
+import { DATA_SCHEMAS_TEMPLATE, TYPIA_TSCONFIG_TEMPLATE, TYPIA_VITE_TEMPLATE } from '../templates/project-files.js';
 
 /** Site name every other Conloca default assumes for a single-site project. */
 export const DEFAULT_SITE_NAME = 'default';
@@ -634,65 +634,20 @@ const puckConfig: Config<Components> = {
 export default puckConfig;
 `;
 
-const DATA_SCHEMAS_TEMPLATE = `import { defineHostSchema } from '@conloca/astro-cms/page-schemas';
-import typia, { type tags } from 'typia';
-
-/**
- * Data collection schemas for the CMS.
- *
- * Each key is a collection name (matching folders in content/data/). Each value
- * is a TypeScript type plus what Typia generates for it at build time (wired by
- * typia-vite.mjs in astro.config.mjs): \`validate\` checks every stored entry
- * when the collection loads, and \`metadata\` is the JSON Schema the CMS renders
- * the entry form from.
- *
- * Tips:
- * - A JSDoc comment on a field becomes its help text in the form
- * - Optional properties (\`?\`) are optional fields
- * - Supported controls: string, number, boolean, date (\`string & tags.Format<'date-time'>\`),
- *   email / url (\`tags.Format\`), string literal unions (select), arrays
- */
-
-/** Authors collection - blog post authors, team members, etc. */
-export interface Author {
-  /** Full name */
-  name: string;
-  /** Short biography */
-  bio: string;
-  /** Profile image URL */
-  avatar?: string & tags.Format<'url'>;
-  /** Twitter handle (e.g., @username) */
-  twitter?: string;
-  /** Contact email */
-  email?: string & tags.Format<'email'>;
-}
-
-/** Settings collection - site configuration, feature flags, etc. */
-export interface Settings {
-  /** Site name */
-  siteName?: string;
-  /** Contact email address */
-  contactEmail?: string & tags.Format<'email'>;
-}
-
-export const dataSchemas = {
-  authors: defineHostSchema<Author>({
-    validate: typia.plain.createValidatePrune<Author>(),
-    metadata: typia.json.schema<Author>(),
-  }),
-  settings: defineHostSchema<Settings>({
-    validate: typia.plain.createValidatePrune<Settings>(),
-    metadata: typia.json.schema<Settings>(),
-  }),
-};
-`;
-
 // ============================================================================
 // Setup Command
 // ============================================================================
 
-/** Scaffold the Astro-side files into `projectPath`, recording `siteName` in sites.json, and report what was written. */
-export async function setup(projectPath = '.', siteName = DEFAULT_SITE_NAME): Promise<string[]> {
+/**
+ * Scaffold the Astro-side files into `projectPath`, recording `siteName` in sites.json, and report what was written.
+ * `dataSchemas: false` leaves out the data schemas and their Typia transform, for a config that does not load them.
+ */
+export async function setup(
+  projectPath = '.',
+  siteName = DEFAULT_SITE_NAME,
+  options: { dataSchemas?: boolean } = {},
+): Promise<string[]> {
+  const dataSchemas = options.dataSchemas !== false;
   try {
     const absolutePath = resolve(projectPath);
     const srcDir = join(absolutePath, 'src');
@@ -709,7 +664,7 @@ export async function setup(projectPath = '.', siteName = DEFAULT_SITE_NAME): Pr
       join(srcDir, 'components'),
       join(srcDir, 'components', 'puck'),
       join(srcDir, 'layouts'),
-      join(srcDir, 'schemas'),
+      ...(dataSchemas ? [join(srcDir, 'schemas')] : []),
       join(absolutePath, '.claude', 'skills', 'conloca'),
     ];
 
@@ -783,9 +738,11 @@ export async function setup(projectPath = '.', siteName = DEFAULT_SITE_NAME): Pr
 
     // 5. Data schemas, and the native Typia transform that generates their
     // validators and form metadata (astro.config.mjs names typia-vite.mjs).
-    await writeIfNotExists(join(srcDir, 'schemas', 'data.ts'), DATA_SCHEMAS_TEMPLATE, 'src/schemas/data.ts');
-    await writeIfNotExists(join(absolutePath, 'typia-vite.mjs'), TYPIA_VITE_TEMPLATE, 'typia-vite.mjs');
-    await writeIfNotExists(join(absolutePath, 'tsconfig.typia.json'), TYPIA_TSCONFIG_TEMPLATE, 'tsconfig.typia.json');
+    if (dataSchemas) {
+      await writeIfNotExists(join(srcDir, 'schemas', 'data.ts'), DATA_SCHEMAS_TEMPLATE, 'src/schemas/data.ts');
+      await writeIfNotExists(join(absolutePath, 'typia-vite.mjs'), TYPIA_VITE_TEMPLATE, 'typia-vite.mjs');
+      await writeIfNotExists(join(absolutePath, 'tsconfig.typia.json'), TYPIA_TSCONFIG_TEMPLATE, 'tsconfig.typia.json');
+    }
 
     // 6. Page layout
     await writeIfNotExists(join(srcDir, 'layouts', 'Layout.astro'), PAGE_LAYOUT_TEMPLATE, 'src/layouts/Layout.astro');

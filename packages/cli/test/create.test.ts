@@ -32,6 +32,7 @@ const EXPECTED_FILES = [
   'content/default/pages/index.en.vxjson',
   'content/sites.json',
   'package.json',
+  'public/media/.gitkeep',
   'src/components/ComponentLayout.tsx',
   'src/components/Section.tsx',
   'src/components/puck/Flex.tsx',

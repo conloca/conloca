@@ -1,7 +1,7 @@
 import { execFile as execFileCallback, spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { readdir, readFile } from 'node:fs/promises';
+import { join, relative, resolve, sep } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { promisify } from 'node:util';
 import { EDITOR_HOST_PROTOCOL } from '@conloca/content-api/editor-host';
@@ -9,10 +9,10 @@ import { createTwoFilesPatch } from 'diff';
 import { listAstroProjects } from '../lib/astro-projects.js';
 import { fail, withStdoutRedirected } from '../lib/cli-output.js';
 import { callOptions, stringLiteral, stripComments } from '../lib/config-text.js';
-import { readAstroSite, wireAstroConfig } from '../lib/connect/astro-config.js';
+import { ASTRO_CONFIG_FILES, readAstroSite, wireAstroConfig } from '../lib/connect/astro-config.js';
 import { framingStep } from '../lib/connect/framing.js';
 import { writeSiteAddress } from '../lib/connect/site-domain.js';
-import { type FileEdit, jsonLike, type StepResult, type StepState } from '../lib/connect/step.js';
+import { type FileEdit, jsonLike, type StepResult, type StepState, writeEdits } from '../lib/connect/step.js';
 import { contentRootOf } from '../lib/content-root.js';
 import { isRecord } from '../lib/is-record.js';
 import { legacyKeyFinding } from '../lib/legacy-key.js';
@@ -71,8 +71,6 @@ const NEXT = [
   'Deploy the site the way you always do',
   'Open your workspace editor at <slug>.conloca.com',
 ];
-
-const ASTRO_CONFIG_FILES = ['mjs', 'js', 'ts', 'mts', 'cjs'].map((extension) => `astro.config.${extension}`);
 
 /** The packages the editor page needs: the CMS, the integration that serves the page, and the CMS's React peers. */
 const CONLOCA_PACKAGES = ['@conloca/astro-cms', '@conloca/cloud-astro'] as const;
@@ -287,15 +285,6 @@ function patchOf(edit: FileEdit, start: string): string {
   return createTwoFilesPatch(edit.before === null ? '/dev/null' : name, name, edit.before ?? '', edit.after);
 }
 
-async function writeEdits(edits: FileEdit[]): Promise<void> {
-  await Promise.all(
-    edits.map(async (edit) => {
-      await mkdir(dirname(edit.path), { recursive: true });
-      await writeFile(edit.path, edit.after, 'utf8');
-    }),
-  );
-}
-
 /** 0 when every step is done, changed, skipped or kept; 1 when one failed; 2 when one needs a person. */
 export function exitCodeOf(report: ConnectReport): 0 | 1 | 2 {
   const states = new Set(report.steps.map((step) => step.state));
@@ -414,7 +403,8 @@ export async function runConnect(path: string, options: ConnectOptions, io: Conn
     if (packages.command !== undefined && !(await io.run(packages.command, projectDir))) {
       packages.result = { state: 'failed', message: `${packages.command} failed`, edits: [] };
     }
-    if (starter) await setup(projectDir);
+    // Data schema files come with their astro.config wiring (wireDataSchemas), never as files nothing loads.
+    if (starter) await setup(projectDir, DEFAULT_SITE_NAME, { dataSchemas: false });
     // The package manager writes package.json itself; its edit above is only the preview.
     await writeEdits(steps.flatMap((step) => (step === packages ? [] : step.result.edits)));
     if (io.isTTY && !options.yes) {

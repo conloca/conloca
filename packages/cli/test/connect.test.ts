@@ -226,6 +226,13 @@ describe('runConnect', () => {
     expect(exitCodeOf(report)).toBe(0);
   });
 
+  test('a starter connect writes no unwired schema files', async () => {
+    const dir = await makeRepo(FRESH_NPM);
+    await runConnect(dir, options({ build: false }), fakeIo().io);
+    expect(await Bun.file(join(dir, 'src/schemas/data.ts')).exists()).toBe(false);
+    expect(await Bun.file(join(dir, 'typia-vite.mjs')).exists()).toBe(false);
+  });
+
   test('refuses to pick between two projects without a terminal', async () => {
     const dir = await makeRepo(BUN_MONOREPO, []);
     const before = await treeHashes(dir);

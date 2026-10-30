@@ -1,5 +1,5 @@
 import { type ASTNode, generateCode, type ProxifiedModule, parseExpression, parseModule } from 'magicast';
-import { stripComments } from '../config-text.js';
+import { containsOutsideStrings, stripComments } from '../config-text.js';
 import type { StepResult } from './step.js';
 
 type Node<T extends ASTNode['type']> = Extract<ASTNode, { type: T }>;
@@ -20,6 +20,12 @@ const REMOVED_OPTIONS = new Set([
 /** The options `astro setup` writes the starter files for. */
 const STARTER_CMS_OPTIONS =
   "{ contentRoot: './content', puckConfigPath: './src/puck.config.tsx', layout: './src/layouts/Layout.astro' }";
+
+/** Every name Astro loads its config from, in the order connect picks one. */
+export const ASTRO_CONFIG_FILES = ['mjs', 'js', 'ts', 'mts', 'cjs'].map((extension) => `astro.config.${extension}`);
+
+/** Where the starter data schemas live; typia-vite.mjs and the Typia packages compile exactly this module. */
+export const DEFAULT_SCHEMAS_PATH = './src/schemas/data.ts';
 
 const IMPORTS = {
   react: { from: '@astrojs/react', imported: 'default', local: 'react', sources: ['@astrojs/react'] },
@@ -298,9 +304,7 @@ export function wireAstroConfig(input: { path: string; text: string; repoUri: st
     const spec = IMPORTS[key];
     if (!locals.has(names[key])) mod.imports.$append({ from: spec.from, imported: spec.imported, local: names[key] });
   }
-  const printed = generateCode(mod, { format: { objectCurlySpacing: true } }).code;
-  // recast drops the final newline; keep the file's own.
-  const after = text.endsWith('\n') && !printed.endsWith('\n') ? `${printed}\n` : printed;
+  const after = printModule(mod, text);
   return { state: 'changed', message: notes.join('; '), edits: [{ path, before: text, after }] };
 }
 
@@ -348,25 +352,155 @@ function spliceText(input: {
   return after;
 }
 
-/** Astro's `site` and `base` when they are plain strings or absent; `computed` when the config builds either. */
-export function readAstroSite(text: string): { site: string | null; base: string | null } | 'computed' {
+/** The module reprinted, keeping the final newline recast drops. */
+export function printModule(mod: ProxifiedModule, text: string): string {
+  const printed = generateCode(mod, { format: { objectCurlySpacing: true } }).code;
+  return text.endsWith('\n') && !printed.endsWith('\n') ? `${printed}\n` : printed;
+}
+
+/** The properties of the object literal `code`, as nodes to push into another object. */
+export function objectProperties(code: string): ObjectNode['properties'] {
+  const node: ASTNode = parseExpression<object>(`({ ${code} })`).$ast;
+  if (node.type !== 'ObjectExpression') throw new Error(`not an object: ${code}`);
+  return node.properties;
+}
+
+/** A plain string value; undefined when the config computes it. */
+function stringValue(value: Node<'ObjectProperty'>['value']): string | undefined {
+  if (value.type === 'StringLiteral') return value.value;
+  if (value.type === 'TemplateLiteral' && value.expressions.length === 0) return value.quasis[0]?.value.cooked;
+  return undefined;
+}
+
+/** One top-level Astro option: its string, null when absent, undefined when the config computes it. */
+export function readAstroOption(text: string, name: string): string | null | undefined {
   let program: ASTNode;
   try {
     program = parseModule(text).$ast;
   } catch {
-    return 'computed';
+    return undefined;
   }
   const config = program.type === 'Program' ? configObject(program) : null;
-  if (config === null) return 'computed';
-  // undefined: the config computes the value.
-  const read = (name: string): string | null | undefined => {
-    const value = property(config, name)?.value;
-    if (value === undefined) return null;
-    if (value.type === 'StringLiteral') return value.value;
-    if (value.type === 'TemplateLiteral' && value.expressions.length === 0) return value.quasis[0]?.value.cooked;
-    return undefined;
-  };
-  const site = read('site');
-  const base = read('base');
+  if (config === null) return undefined;
+  const value = property(config, name)?.value;
+  return value === undefined ? null : stringValue(value);
+}
+
+/** Astro's `site` and `base` when they are plain strings or absent; `computed` when the config builds either. */
+export function readAstroSite(text: string): { site: string | null; base: string | null } | 'computed' {
+  const site = readAstroOption(text, 'site');
+  const base = readAstroOption(text, 'base');
   return site === undefined || base === undefined ? 'computed' : { site, base };
+}
+
+/** What the site owner pastes when the data schemas cannot be wired for them. */
+function dataSchemaLines(assetsPath: string): string[] {
+  return [
+    "import { schemaTypia } from './typia-vite.mjs';",
+    '',
+    '// in conlocaCMS({ ... }); keep your own schemasPath and assetsPath if it has them',
+    `schemasPath: '${DEFAULT_SCHEMAS_PATH}',`,
+    `assetsPath: '${assetsPath}',`,
+    '',
+    '// in defineConfig({ ... }), next to your own vite plugins',
+    'vite: { plugins: [...schemaTypia()] },',
+  ];
+}
+
+/**
+ * Give conlocaCMS() a `schemasPath` and an `assetsPath` (`<publicDir>/media`) when it has none, and with the default
+ * schemas the Typia vite plugin that compiles them. Values the site already names are kept. `schemasPath` and
+ * `assetsPath` are the site's own values or the defaults added; null only with `needs-you`.
+ */
+export function wireDataSchemaOptions(input: {
+  path: string;
+  text: string;
+}): StepResult & { schemasPath: string | null; assetsPath: string | null } {
+  const { path, text } = input;
+  let mod: ProxifiedModule | undefined;
+  try {
+    mod = parseModule(text);
+  } catch {
+    mod = undefined;
+  }
+  const program: ASTNode | undefined = mod?.$ast;
+  const config = program?.type === 'Program' ? configObject(program) : null;
+  const integrations = config === null ? undefined : property(config, 'integrations')?.value;
+  const locals = program?.type === 'Program' ? importLocals(program) : new Map<string, string>();
+  const elements = integrations?.type === 'ArrayExpression' ? integrations.elements : [];
+  const call = elements[callIndex(elements, localName(locals, IMPORTS.cms))];
+  const options = call?.type === 'CallExpression' && call.arguments.length === 1 ? call.arguments[0] : undefined;
+  const publicDir = readAstroOption(text, 'publicDir');
+  const defaultAssets =
+    publicDir === undefined
+      ? '<your publicDir>/media'
+      : `${publicDir === null ? './public' : publicDir.replace(/\/+$/, '')}/media`;
+  const needsYou = (message: string) => ({
+    state: 'needs-you' as const,
+    message,
+    lines: dataSchemaLines(defaultAssets),
+    edits: [],
+    schemasPath: null,
+    assetsPath: null,
+  });
+  if (
+    mod === undefined ||
+    config === null ||
+    options?.type !== 'ObjectExpression' ||
+    !options.properties.every((p) => propertyName(p) !== null)
+  ) {
+    return needsYou(
+      `${path} has no conlocaCMS({ ... }) with plain options to name the data schemas in: add these lines`,
+    );
+  }
+  const ownValue = (name: string) => {
+    const value = property(options, name)?.value;
+    return value === undefined ? null : stringValue(value);
+  };
+  const ownSchemas = ownValue('schemasPath');
+  const ownAssets = ownValue('assetsPath');
+  if (ownSchemas === undefined || ownAssets === undefined) {
+    return needsYou(`${path} computes schemasPath or assetsPath in conlocaCMS(), so their files are unknown`);
+  }
+  if (ownAssets === null && publicDir === undefined) {
+    return needsYou(`${path} computes publicDir, so the media folder inside it is unknown: add assetsPath yourself`);
+  }
+  const values = { schemasPath: ownSchemas ?? DEFAULT_SCHEMAS_PATH, assetsPath: ownAssets ?? defaultAssets };
+  const added: string[] = [];
+  if (ownSchemas === null) added.push(`schemasPath: ${quoted(values.schemasPath)}`);
+  if (ownAssets === null) added.push(`assetsPath: ${quoted(values.assetsPath)}`);
+  if (added.length === 0) {
+    return { state: 'done', message: 'conlocaCMS() already names schemasPath and assetsPath', edits: [], ...values };
+  }
+  options.properties.push(...objectProperties(added.join(', ')));
+  const notes = [`added ${added.map((entry) => entry.split(':')[0]).join(' and ')} to conlocaCMS()`];
+
+  if (ownSchemas === null) {
+    const vite = property(config, 'vite')?.value;
+    if (vite === undefined) {
+      config.properties.push(...objectProperties('vite: { plugins: [...schemaTypia()] }'));
+    } else if (vite.type === 'ObjectExpression' && vite.properties.every((p) => propertyName(p) !== null)) {
+      const plugins = property(vite, 'plugins')?.value;
+      if (plugins === undefined) {
+        vite.properties.push(...objectProperties('plugins: [...schemaTypia()]'));
+      } else if (plugins.type !== 'ArrayExpression') {
+        return needsYou(`${path} computes vite.plugins, so the Typia plugin cannot be added to it`);
+      } else if (!containsOutsideStrings(stripComments(text), 'schemaTypia(')) {
+        const [spread] = objectProperties('...schemaTypia()');
+        if (spread?.type === 'SpreadElement') plugins.elements.push(spread);
+      }
+    } else {
+      return needsYou(`${path} computes vite, so the Typia plugin cannot be added to it`);
+    }
+    if (!locals.has('schemaTypia')) {
+      mod.imports.$append({ from: './typia-vite.mjs', imported: 'schemaTypia', local: 'schemaTypia' });
+    }
+    notes.push('added the Typia plugin to vite.plugins');
+  }
+  return {
+    state: 'changed',
+    message: notes.join('; '),
+    edits: [{ path, before: text, after: printModule(mod, text) }],
+    ...values,
+  };
 }
