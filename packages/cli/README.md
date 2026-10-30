@@ -314,6 +314,27 @@ Example:
 echo '{"siteName":"Corner Bakery"}' | conloca data create settings --name site --data -
 ```
 
+### Add an image
+
+Copy an image into the site's media folder and print the reference an image field stores:
+
+```bash
+conloca asset add <file> [path] [--folder <folder>] [--alt <text>] [--no-install] [--json]
+```
+
+The image lands in the `assetsPath` of `conlocaCMS()`, stored the way an editor upload stores it: the name lowercased
+and made URL-safe (`Hero Shot.JPG` becomes `hero-shot.jpg`), a name already taken stored as `hero-1.jpg`, and only web
+image formats up to 10 MB taken. `--folder` puts it in a folder inside the media folder; `--alt` records its alt text. A
+site without `assetsPath` yet is wired first, as `data create` wires it. It prints the reference, such as
+`/media/hero.jpg` (with the site's `base` in front), and the file path; `--json` prints
+`{ok, ref, path, wired?, command?}`. A config that computes `assetsPath`, `publicDir` or `base` stops the command.
+
+Example:
+
+```bash
+conloca asset add ~/Pictures/hero.jpg --alt 'Fresh bread on the counter'
+```
+
 ## Quick Start
 
 ```bash

@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { type AssetAddOptions, assetAdd } from './commands/asset-add.js';
 import { connect } from './commands/connect.js';
 import { create } from './commands/create.js';
 import { type DataCreateOptions, type DataUpdateOptions, dataCreate, dataUpdate } from './commands/data.js';
@@ -271,6 +272,36 @@ content, --data is not a JSON object, or the write fails.`,
       await dataUpdate(collection, ref, path, { ...options, json: options.json === true });
     },
   );
+
+const asset = program
+  .command('asset')
+  // Keeps the subcommand visible in the top-level command list.
+  .usage('<subcommand>')
+  .description('Image commands');
+
+asset
+  .command('add')
+  .argument('<file>', 'The image to add')
+  .argument('[path]', 'Astro project holding the content root', '.')
+  .option('--folder <folder>', "Folder inside the media folder, e.g. 'team'")
+  .option('--alt <text>', 'Alt text the editor shows for the image')
+  .option('--no-install', 'Do not install the packages the data schemas need; print the command instead')
+  .option('--json', 'Report as a single JSON object on stdout')
+  .description("Copy an image into the site's media folder")
+  .addHelpText(
+    'after',
+    `
+Copies <file> into the conlocaCMS() assetsPath, as an editor upload does: the
+name is lowercased and made URL-safe, a name already taken becomes name-1.ext,
+and only web image formats up to 10 MB are taken. A site without assetsPath is
+wired first, as by 'data create'. Prints the reference an image field stores,
+e.g. /media/hero.jpg, and the file path; --json prints {ok, ref, path, wired?,
+command?}. Exits 1 when the file is not an accepted image, astro.config
+computes assetsPath, publicDir or base, or the media folder is not served.`,
+  )
+  .action(async (file: string, path: string, options: Omit<AssetAddOptions, 'json'> & { json?: boolean }) => {
+    await assetAdd(file, path, { ...options, json: options.json === true });
+  });
 
 const astro = program
   .command('astro')
