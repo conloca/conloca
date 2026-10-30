@@ -23,7 +23,7 @@ import {
   type PackageManagerCommands,
   packageManagerCommands,
 } from '../lib/package-manager.js';
-import { conlocaRange, readCliManifest, THIRD_PARTY_VERSIONS } from '../lib/project-template.js';
+import { type CliManifest, conlocaRange, readCliManifest, THIRD_PARTY_VERSIONS } from '../lib/project-template.js';
 import { newSitesConfig } from '../lib/sites-config.js';
 import { compareVersions, conlocaDependencies, versionFloor } from '../lib/versions.js';
 import { DEFAULT_SITE_NAME, setup } from './setup.js';
@@ -190,8 +190,11 @@ async function packagesStep(projectDir: string, commands: PackageManagerCommands
   };
 }
 
-/** `<name> <floor>` for each `@conloca/*` dependency declared below release `to`; none for an unreadable package.json. */
-async function olderPackages(projectDir: string, to: string): Promise<string[]> {
+/**
+ * `<name> <floor>` for each `@conloca/*` dependency declared below the release `upgrade` would write for it; none for
+ * an unreadable package.json.
+ */
+export async function olderPackages(projectDir: string, cli: CliManifest): Promise<string[]> {
   let manifest: unknown;
   try {
     manifest = JSON.parse((await readText(join(projectDir, 'package.json'))) ?? '');
@@ -201,7 +204,8 @@ async function olderPackages(projectDir: string, to: string): Promise<string[]> 
   if (!isRecord(manifest)) return [];
   return conlocaDependencies(manifest).flatMap(({ name, spec }) => {
     const floor = versionFloor(spec);
-    return floor !== null && compareVersions(floor, to) < 0 ? [`${name} ${floor}`] : [];
+    const wanted = versionFloor(conlocaRange(cli, name)) ?? cli.version;
+    return floor !== null && compareVersions(floor, wanted) < 0 ? [`${name} ${floor}`] : [];
   });
 }
 
@@ -313,8 +317,9 @@ export async function runConnect(path: string, options: ConnectOptions, io: Conn
   };
 
   // A site on an older release goes through upgrade first, so connect never mixes two releases.
-  const to = (await readCliManifest()).version;
-  const older = await olderPackages(projectDir, to);
+  const cli = await readCliManifest();
+  const to = cli.version;
+  const older = await olderPackages(projectDir, cli);
   if (older.length > 0) {
     const name = relative(start, projectDir) || '.';
     const target = name === '.' ? '' : ` ${name}`;

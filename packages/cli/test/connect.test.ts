@@ -7,6 +7,7 @@ import {
   type ConnectOptions,
   type ConnectReport,
   exitCodeOf,
+  olderPackages,
   runConnect,
 } from '../src/commands/connect.js';
 import { readCliManifest } from '../src/lib/project-template.js';
@@ -247,6 +248,17 @@ describe('runConnect', () => {
     expect(calls).toEqual([]);
     expect(await treeHashes(dir)).toEqual(before);
     expect(exitCodeOf(report)).toBe(2);
+  });
+
+  test('compares each package with the release upgrade writes for it, not the CLI version', async () => {
+    const cli = { version: '0.2.4', dependencies: { '@conloca/astro-cms': '^0.2.3' } };
+    const lagging = await makeRepo({ 'package.json': packageJson({ '@conloca/astro-cms': '^0.2.3' }) });
+    expect(await olderPackages(lagging, cli)).toEqual([]);
+    await writeFile(
+      join(lagging, 'package.json'),
+      packageJson({ '@conloca/astro-cms': '^0.2.2', '@conloca/cloud-astro': '^0.2.3' }),
+    );
+    expect(await olderPackages(lagging, cli)).toEqual(['@conloca/astro-cms 0.2.2', '@conloca/cloud-astro 0.2.3']);
   });
 
   test('exits 2 and edits nothing for a config it cannot edit', async () => {
