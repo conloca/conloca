@@ -387,6 +387,13 @@ export interface SitesConfig {
       /** Path the site is served under, as Astro's `base`: starts and ends with `/`; default `/`. */
       base?: string;
       /**
+       * Address of a separate preview deployment for this site, per locale, each an `https://` origin. Conloca records
+       * and pins it once a workspace admin confirms it; preview links don't use it yet.
+       */
+      previewUrl?: {
+        [locale: string]: string;
+      };
+      /**
        * Optional filesystem path for this site's mdx-type pages.
        * When set, .mdx files under this path are surfaced in the CMS
        * as `kind: 'page'` + `type: 'mdx'` content owned by this site.
