@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { stripComments } from './config-text.js';
-import { ASTRO_CONFIG_FILES, REMOVED_OPTIONS, wireAstroConfig } from './connect/astro-config.js';
+import { ASTRO_CONFIG_FILES, REMOVED_OPTIONS, removedKeyOptions, wireAstroConfig } from './connect/astro-config.js';
 import { wireDataSchemas } from './connect/data-schemas.js';
 import { leftoversStep } from './connect/leftovers.js';
 import type { StepResult, StepState } from './connect/step.js';
@@ -28,8 +28,13 @@ export interface Migration {
 /** Merge order: a later state outranks an earlier one. */
 const SEVERITY: StepState[] = ['done', 'changed', 'needs-you', 'failed'];
 
-/** The removed options the comment-free `source` still names. */
+/**
+ * The removed options `source` still gives conlocaCloud(); the whole comment-free file only when its options cannot be
+ * read, since conlocaCMS() still takes one of the names (fragmentPreviewRoute).
+ */
 function removedNames(source: string): string[] {
+  const passed = removedKeyOptions(source);
+  if (passed !== null) return passed;
   const code = stripComments(source);
   return [...REMOVED_OPTIONS].filter((name) => new RegExp(`\\b${name}\\b`).test(code));
 }

@@ -92,6 +92,41 @@ describe('the keyless migration', () => {
     expect(plan.edits).toEqual([]);
   });
 
+  test('keeps a conlocaCMS() fragmentPreviewRoute while it drops buildToken from conlocaCloud()', async () => {
+    const config = KEYED_CONFIG.replace(
+      "{ contentRoot: './content' }",
+      "{ contentRoot: './content', fragmentPreviewRoute: '/x/' }",
+    );
+    dir = await makeRepo({ 'astro.config.mjs': config }, []);
+    const plan = await keyless.plan({ projectDir: dir, repoRoot: dir });
+    expect(plan.state).toBe('changed');
+    expect(plan.edits).toHaveLength(1);
+    expect(plan.edits[0]?.after).not.toContain('buildToken');
+    expect(plan.edits[0]?.after).toContain("fragmentPreviewRoute: '/x/'");
+  });
+
+  test('is done when only conlocaCMS() names fragmentPreviewRoute', async () => {
+    const config = KEYLESS_CONFIG.replace(
+      "{ contentRoot: './content' }",
+      "{ contentRoot: './content', fragmentPreviewRoute: '/x/' }",
+    );
+    dir = await makeRepo({ 'astro.config.mjs': config }, []);
+    expect(await keyless.plan({ projectDir: dir, repoRoot: dir })).toMatchObject({ state: 'done', edits: [] });
+  });
+
+  test('needs a person when the workflow edit is planned but the config needs one', async () => {
+    const config = KEYED_CONFIG.replace(
+      'export default',
+      'const opts = { buildToken: process.env.T };\n\nexport default',
+    ).replace('conlocaCloud({ buildToken: process.env.CONLOCA_BUILD_TOKEN })', 'conlocaCloud(opts)');
+    dir = await makeRepo({ '.github/workflows/conloca.yml': OLD_WORKFLOW, 'astro.config.mjs': config }, []);
+    const plan = await keyless.plan({ projectDir: dir, repoRoot: dir });
+    expect(plan.state).toBe('needs-you');
+    expect(plan.message).toMatch(/; remove buildToken from conlocaCloud\(\) in astro\.config\.mjs/);
+    expect(plan.lines).toEqual(['astro.config.mjs']);
+    expect(plan.edits.map((edit) => relative(dir, edit.path))).toEqual(['.github/workflows/conloca.yml']);
+  });
+
   test('is done on a keyless site', async () => {
     dir = await makeRepo({ 'astro.config.mjs': KEYLESS_CONFIG }, []);
     expect(await keyless.plan({ projectDir: dir, repoRoot: dir })).toMatchObject({ state: 'done', edits: [] });

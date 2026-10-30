@@ -123,6 +123,34 @@ function callIndex(elements: Element[], local: string): number {
   );
 }
 
+/**
+ * The removed options the conlocaCloud() of the integrations list still takes, [] when the config never calls it; null
+ * when its options are not a plain object literal or the call sits elsewhere, so only the whole file can tell.
+ */
+export function removedKeyOptions(text: string): string[] | null {
+  let program: ASTNode;
+  try {
+    program = parseModule(text).$ast;
+  } catch {
+    return null;
+  }
+  if (program.type !== 'Program') return null;
+  const config = configObject(program);
+  const value = config === null ? undefined : property(config, 'integrations')?.value;
+  const elements = value?.type === 'ArrayExpression' ? value.elements : [];
+  const local = localName(importLocals(program), IMPORTS.editorPage);
+  const call = elements[callIndex(elements, local)];
+  if (call?.type !== 'CallExpression') {
+    return new RegExp(`\\b${local.replace(/\$/g, '\\$')}\\s*\\(`).test(stripComments(text)) ? null : [];
+  }
+  const [options, ...rest] = call.arguments;
+  if (options === undefined) return [];
+  if (options.type !== 'ObjectExpression' || rest.length > 0) return null;
+  const names = options.properties.map(propertyName);
+  if (names.some((name) => name === null)) return null;
+  return names.flatMap((name) => (name !== null && REMOVED_OPTIONS.has(name) ? [name] : []));
+}
+
 /** What the site owner pastes when the config is not a plain object connect can edit. */
 function pasteLines(repoUri: string | null): string[] {
   return [
