@@ -2,7 +2,12 @@ import { beforeAll, describe, expect, it } from 'bun:test';
 import { generateKeyPair, type JWTPayload, type JWTVerifyGetKey, SignJWT } from 'jose';
 import { previewLabel } from '../preview/label.js';
 import { handlePreviewRequest, type PreviewMiddlewareOptions, type PreviewVerdict } from '../preview/middleware.js';
-import { PREVIEW_COOKIE_NAME, PREVIEW_QUERY_PARAM } from '../preview/preview-path.js';
+import {
+  PREVIEW_CODE_PARAM,
+  PREVIEW_COOKIE_NAME,
+  PREVIEW_GRANT_COOKIE_NAME,
+  PREVIEW_QUERY_PARAM,
+} from '../preview/preview-path.js';
 
 // ---------------------------------------------------------------------------
 // Test scaffolding
@@ -50,6 +55,7 @@ interface MintOptions {
   scope?: string;
   signWith?: CryptoKey;
   omitBranch?: boolean;
+  extra?: JWTPayload;
 }
 
 async function mintJwt(opts: MintOptions = {}): Promise<string> {
@@ -58,6 +64,7 @@ async function mintJwt(opts: MintOptions = {}): Promise<string> {
     repo: opts.repo ?? 'acme/site',
     site_id: opts.siteId ?? 'website',
     scope: opts.scope ?? 'preview',
+    ...opts.extra,
   };
   if (!opts.omitBranch) {
     payload.branch = opts.branch ?? 'main';
@@ -176,6 +183,200 @@ describe('handlePreviewRequest — query-param init', () => {
     expect(verdict.kind).toBe('response');
     if (verdict.kind !== 'response') return;
     expect(verdict.response.headers.get('set-cookie')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Entry code (protocol 2) → server-to-server exchange → 302 + cookie
+// ---------------------------------------------------------------------------
+
+function exchangeAnswering(pass: string | null | (() => Response)) {
+  const bodies: unknown[] = [];
+  const answer = async (_url: unknown, init?: RequestInit) => {
+    bodies.push(typeof init?.body === 'string' ? JSON.parse(init.body) : init?.body);
+    if (typeof pass === 'function') return pass();
+    return pass === null ? Response.json({ error: 'code-unknown' }, { status: 404 }) : Response.json({ pass });
+  };
+  return { fetchFn: Object.assign(answer, { preconnect: fetch.preconnect }), bodies };
+}
+
+describe('handlePreviewRequest — entry code', () => {
+  it('trades the code for the pass, sets the cookie and lands on the clean path without the code', async () => {
+    const pass = await mintJwt();
+    const { fetchFn, bodies } = exchangeAnswering(pass);
+    const v = await handlePreviewRequest(
+      makeRequest(`https://site.test/_conloca/preview/blog?${PREVIEW_CODE_PARAM}=Z2l0aHViOjc.s3cret&utm=keep`),
+      makeOptions({ fetchFn }),
+    );
+    if (v.kind !== 'response') throw new Error('expected the init redirect');
+    expect(v.response.status).toBe(302);
+    expect(v.response.headers.get('location')).toBe('https://site.test/blog?utm=keep');
+    expect(v.response.headers.getSetCookie()).toEqual([
+      expect.stringMatching(new RegExp(`^${PREVIEW_COOKIE_NAME}=${pass};`)),
+    ]);
+    expect(bodies).toEqual([
+      { code: 'Z2l0aHViOjc.s3cret', origin: 'https://site.test', repo: 'acme/site', siteId: 'website' },
+    ]);
+  });
+
+  it('shows the landing page when Conloca refuses the code and no pass is held', async () => {
+    const { fetchFn } = exchangeAnswering(null);
+    await expectLanding(
+      await handlePreviewRequest(
+        makeRequest(`https://site.test/_conloca/preview/?${PREVIEW_CODE_PARAM}=x.y`),
+        makeOptions({ fetchFn }),
+      ),
+    );
+  });
+
+  it('refuses a pass the exchange returns for another site', async () => {
+    const { fetchFn } = exchangeAnswering(await mintJwt({ siteId: 'docs' }));
+    await expectLanding(
+      await handlePreviewRequest(
+        makeRequest(`https://site.test/_conloca/preview/?${PREVIEW_CODE_PARAM}=x.y`),
+        makeOptions({ fetchFn }),
+      ),
+    );
+  });
+
+  it('reopens a used code link from history on the page when the cookie still holds a valid pass', async () => {
+    const held = await mintJwt();
+    const { fetchFn } = exchangeAnswering(null);
+    const v = await handlePreviewRequest(
+      makeRequest(`https://site.test/_conloca/preview/about?${PREVIEW_CODE_PARAM}=x.y`, {
+        headers: { cookie: `${PREVIEW_COOKIE_NAME}=${held}` },
+      }),
+      makeOptions({ fetchFn }),
+    );
+    if (v.kind !== 'response') throw new Error('expected a redirect');
+    expect(v.response.status).toBe(302);
+    expect(v.response.headers.get('location')).toBe('https://site.test/about');
+    expect(v.response.headers.get('set-cookie')).toBeNull();
+  });
+
+  it('shows the ended page, not the held pass, when the link has ended', async () => {
+    const held = await mintJwt();
+    const { fetchFn } = exchangeAnswering(() =>
+      Response.json({ error: 'grant-revoked', sharedBy: 'Ana' }, { status: 410 }),
+    );
+    const v = await handlePreviewRequest(
+      makeRequest(`https://site.test/_conloca/preview/about?${PREVIEW_CODE_PARAM}=x.y`, {
+        headers: { cookie: `${PREVIEW_COOKIE_NAME}=${held}` },
+      }),
+      makeOptions({ fetchFn }),
+    );
+    if (v.kind !== 'response') throw new Error('expected the ended page');
+    expect(v.response.status).toBe(410);
+    expect(v.response.headers.get('set-cookie')).toBeNull();
+    const html = await v.response.text();
+    expect(html).toContain('Ana');
+    expect(html).toContain('href="/_conloca/preview/__exit?to=%2Fabout"');
+  });
+
+  it.each([
+    ['a 503', () => new Response('down', { status: 503 })],
+    ['a 429', () => Response.json({ error: 'rate-limited' }, { status: 429 })],
+    ['a 403', () => Response.json({ error: 'origin-mismatch' }, { status: 403 })],
+  ])('shows the unavailable page, not the held pass, on %s', async (_name, answer) => {
+    const held = await mintJwt();
+    const { fetchFn } = exchangeAnswering(answer);
+    const v = await handlePreviewRequest(
+      makeRequest(`https://site.test/_conloca/preview/about?${PREVIEW_CODE_PARAM}=x.y`, {
+        headers: { cookie: `${PREVIEW_COOKIE_NAME}=${held}` },
+      }),
+      makeOptions({ fetchFn }),
+    );
+    if (v.kind !== 'response') throw new Error('expected the unavailable page');
+    expect(v.response.status).toBe(503);
+    expect(v.response.headers.get('set-cookie')).toBeNull();
+    const html = await v.response.text();
+    expect(html).toContain('Retry');
+    expect(html).toContain('href="/_conloca/preview/about?conloca_code=x.y"');
+    expect(html).toContain('href="/_conloca/preview/__exit?to=%2Fabout"');
+  });
+
+  it('sets the grant cookie for a share pass under D4, bounded to the grant', async () => {
+    const grantExp = Math.floor(Date.now() / 1000) + 86_400;
+    const pass = await mintJwt({ extra: { grant: 'AAAAAAAAAAAAAAAAAAAAAA', grant_exp: grantExp, shared_by: 'Ana' } });
+    const { fetchFn } = exchangeAnswering(pass);
+    const v = await handlePreviewRequest(
+      makeRequest(`https://site.test/_conloca/preview/?${PREVIEW_CODE_PARAM}=x.y`),
+      makeOptions({ fetchFn, mode: 'd4' }),
+    );
+    if (v.kind !== 'response') throw new Error('expected the init redirect');
+    const cookies = v.response.headers.getSetCookie();
+    expect(cookies).toHaveLength(2);
+    expect(cookies[1]).toMatch(
+      new RegExp(
+        `^${PREVIEW_GRANT_COOKIE_NAME}=YWNtZQ\\.AAAAAAAAAAAAAAAAAAAAAA; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=86\\d{3}$`,
+      ),
+    );
+  });
+
+  it('sets no grant cookie under D2, where an expired pass means opening the share link again', async () => {
+    const grantExp = Math.floor(Date.now() / 1000) + 86_400;
+    const pass = await mintJwt({ extra: { grant: 'AAAAAAAAAAAAAAAAAAAAAA', grant_exp: grantExp, shared_by: 'Ana' } });
+    const { fetchFn } = exchangeAnswering(pass);
+    const v = await handlePreviewRequest(
+      makeRequest(`https://site.test/_conloca/preview/?${PREVIEW_CODE_PARAM}=x.y`),
+      makeOptions({ fetchFn }),
+    );
+    if (v.kind !== 'response') throw new Error('expected the init redirect');
+    expect(v.response.headers.getSetCookie()).toHaveLength(1);
+  });
+
+  it('refuses a share pass whose grant expiry is missing', async () => {
+    const { fetchFn } = exchangeAnswering(await mintJwt({ extra: { grant: 'AAAAAAAAAAAAAAAAAAAAAA' } }));
+    await expectLanding(
+      await handlePreviewRequest(
+        makeRequest(`https://site.test/_conloca/preview/?${PREVIEW_CODE_PARAM}=x.y`),
+        makeOptions({ fetchFn }),
+      ),
+    );
+  });
+
+  it('still opens a protocol-1 link with the pass in it, for one release', async () => {
+    const jwt = await mintJwt();
+    const v = await handlePreviewRequest(
+      makeRequest(`https://site.test/_conloca/preview/?${PREVIEW_QUERY_PARAM}=${jwt}`),
+      makeOptions(),
+    );
+    if (v.kind !== 'response') throw new Error('expected the init redirect');
+    expect(v.response.status).toBe(302);
+  });
+});
+
+describe('handlePreviewRequest — renewal through the share link (D4)', () => {
+  const ref = 'YWNtZQ.AAAAAAAAAAAAAAAAAAAAAA';
+
+  it('sends a visitor whose pass expired back to the share link, keeping the page', async () => {
+    const v = await handlePreviewRequest(
+      makeRequest('https://preview.site.test/pricing', { headers: { cookie: `${PREVIEW_GRANT_COOKIE_NAME}=${ref}` } }),
+      makeOptions({ mode: 'd4', onMiss: 'pass-through' }),
+    );
+    if (v.kind !== 'response') throw new Error('expected the renewal redirect');
+    expect(v.response.status).toBe(302);
+    expect(v.response.headers.get('location')).toBe(
+      'https://cms.example.test/preview/redeem/YWNtZQ/AAAAAAAAAAAAAAAAAAAAAA?renew=1&to=%2Fpricing',
+    );
+  });
+
+  it('never renews under D2, where the grant cookie does not exist', async () => {
+    const v = await handlePreviewRequest(
+      makeRequest('https://site.test/pricing', { headers: { cookie: `${PREVIEW_GRANT_COOKIE_NAME}=${ref}` } }),
+      makeOptions({ onMiss: 'pass-through' }),
+    );
+    expect(v.kind).toBe('pass-through');
+  });
+
+  it('ignores a grant cookie that is not a grant reference', async () => {
+    const v = await handlePreviewRequest(
+      makeRequest('https://preview.site.test/', {
+        headers: { cookie: `${PREVIEW_GRANT_COOKIE_NAME}=https://evil.test/` },
+      }),
+      makeOptions({ mode: 'd4', onMiss: 'pass-through' }),
+    );
+    expect(v.kind).toBe('pass-through');
   });
 });
 
@@ -362,15 +563,50 @@ describe('injectPreviewBanner', () => {
     );
   });
 
-  it('shows no Share button until share links can be revoked', async () => {
+  it('links Share to the editor for this page on an editor pass', async () => {
     const { injectPreviewBanner } = await import('../preview/banner.js');
     const out = injectPreviewBanner(
       '<html><body></body></html>',
-      { branch: 'main', org: 'acme', repo: 'acme/site', jwt: 'tok' },
+      {
+        branch: 'main',
+        org: 'acme',
+        repo: 'acme/site',
+        jwt: 'tok',
+        editorUrl: 'https://editor.example.test/branches/main/edit?repo=acme%2Fsite&site=website',
+      },
       'https://cms.example.test',
+      '/_conloca/preview/__exit',
+      'https://editor.example.test/branches/main/edit?repo=acme%2Fsite&site=website&share=%2Fpricing',
     );
-    expect(out).not.toContain('Share');
-    expect(out).not.toContain('/preview/share');
+    expect(out).toContain(
+      '"shareUrl":"https://editor.example.test/branches/main/edit?repo=acme%2Fsite&site=website&share=%2Fpricing"',
+    );
+    expect(out).toContain("share.textContent = 'Share'");
+    expect(out).not.toContain('tok');
+  });
+
+  it('shows a share viewer the draft, who shared it and the expiry, with no Edit or Share', async () => {
+    const { injectPreviewBanner } = await import('../preview/banner.js');
+    const expiresAt = Math.floor(Date.now() / 1000) + 3600;
+    const out = injectPreviewBanner(
+      '<html><body></body></html>',
+      {
+        branch: 'spring-sale',
+        org: 'acme',
+        repo: 'acme/site',
+        jwt: 'tok',
+        grant: { id: 'AAAAAAAAAAAAAAAAAAAAAA', expiresAt, sharedBy: '<b>Ana</b>' },
+      },
+      'https://cms.example.test',
+      '/_conloca/preview/__exit',
+      'https://ignored.example/',
+    );
+    expect(out).toContain(
+      `var __conlocaPreview = {"branch":"spring-sale","exitPath":"/_conloca/preview/__exit","viewer":{"sharedBy":"\\u003cb>Ana\\u003c/b>","expiresAt":${expiresAt}}};`,
+    );
+    expect(out).toContain("label.textContent = 'Draft: '");
+    expect(out).not.toContain('cms.example.test');
+    expect(out).not.toContain('ignored.example');
   });
 });
 
@@ -546,6 +782,19 @@ describe('exit route', () => {
     expect(setCookie).toContain('Max-Age=0');
   });
 
+  it('expires the share grant too, so the D4 renewal cannot pull the viewer back in', async () => {
+    const v = await handlePreviewRequest(
+      makeRequest('https://preview.site.test/_conloca/preview/__exit?to=%2F'),
+      makeOptions({ mode: 'd4' }),
+    );
+    if (v.kind !== 'response') throw new Error('expected the exit redirect');
+    const cookies = v.response.headers.getSetCookie();
+    expect(cookies).toHaveLength(2);
+    expect(cookies.every((c) => c.includes('Max-Age=0'))).toBe(true);
+    expect(cookies.some((c) => c.startsWith(`${PREVIEW_COOKIE_NAME}=;`))).toBe(true);
+    expect(cookies.some((c) => c.startsWith(`${PREVIEW_GRANT_COOKIE_NAME}=;`))).toBe(true);
+  });
+
   it.each([
     '/%5Cevil.com',
     '/%09/evil.com',
@@ -683,7 +932,7 @@ describe('handlePreviewRequest — the pass must match the build', () => {
     if (v.kind !== 'response') throw new Error('expected the exit redirect');
     expect(v.response.headers.get('location')).toBe('/blog');
     expect(v.response.headers.get('conloca-preview')).toBe(await previewLabel('acme/site', 'website', 'main'));
-    expect(v.response.headers.get('conloca-preview-protocol')).toBe('1');
+    expect(v.response.headers.get('conloca-preview-protocol')).toBe('2');
     expect(v.response.headers.get('set-cookie')).toContain(
       '__Host-conloca_preview=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0',
     );

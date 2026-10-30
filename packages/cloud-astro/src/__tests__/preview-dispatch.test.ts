@@ -169,8 +169,47 @@ describe('fetchPageStatus', () => {
 // ---------------------------------------------------------------------------
 
 describe('PageStatus union', () => {
-  it('pins the four spec verdicts as the union members so a stray kind is a type error', () => {
-    const kinds: PageStatus['kind'][] = ['unchanged', 'changed', 'deleted', 'redirect'];
-    expect(kinds.sort()).toEqual(['changed', 'deleted', 'redirect', 'unchanged']);
+  it('names every verdict the site renders', () => {
+    const kinds: PageStatus['kind'][] = [
+      'unchanged',
+      'changed',
+      'deleted',
+      'redirect',
+      'grant-revoked',
+      'grant-expired',
+      'draft-published',
+      'draft-discarded',
+    ];
+    expect(kinds).toHaveLength(8);
+  });
+
+  it.each(['grant-revoked', 'grant-expired', 'draft-published', 'draft-discarded'] as const)(
+    'decodes a 410 %s with who shared the link',
+    async (kind) => {
+      const fetchFn = Object.assign(async () => Response.json({ error: kind, sharedBy: 'Ana' }, { status: 410 }), {
+        preconnect: fetch.preconnect,
+      });
+      const status = await fetchPageStatus({
+        saasEndpoint: 'https://cms.example.test',
+        ctx: { branch: 'main', org: 'acme', repo: 'acme/site', jwt: 't' },
+        path: '/',
+        fetchFn,
+      });
+      expect(status).toEqual({ kind, sharedBy: 'Ana' });
+    },
+  );
+
+  it('throws on a 410 it cannot read, so the retry page shows', async () => {
+    const fetchFn = Object.assign(async () => Response.json({ error: 'gone' }, { status: 410 }), {
+      preconnect: fetch.preconnect,
+    });
+    await expect(
+      fetchPageStatus({
+        saasEndpoint: 'https://e',
+        ctx: { branch: 'main', org: 'a', repo: 'a/s', jwt: 't' },
+        path: '/',
+        fetchFn,
+      }),
+    ).rejects.toThrow('410');
   });
 });

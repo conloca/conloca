@@ -30,6 +30,7 @@ describe('resolveFromBaked', () => {
       siteId: 'website',
       branch: 'main',
       base: '/',
+      mode: 'd2',
     });
   });
 
@@ -79,5 +80,18 @@ describe('resolveFromBaked', () => {
 
   it('defaults base to /', () => {
     expect(resolveFromBaked({ ...complete, base: undefined }, () => undefined).base).toBe('/');
+  });
+
+  it('carries the baked preview mode, D2 when none was baked', () => {
+    const base = {
+      saasEndpoint: 'https://e',
+      saasIssuer: 'https://i',
+      saasAudience: 'a',
+      repo: 'r/s',
+      siteId: 's',
+      branch: 'main',
+    };
+    expect(resolveFromBaked({ ...base, mode: 'd4' }, () => undefined).mode).toBe('d4');
+    expect(resolveFromBaked(base, () => undefined).mode).toBe('d2');
   });
 });

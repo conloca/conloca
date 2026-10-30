@@ -12,6 +12,10 @@
 export const PREVIEW_ROUTE_SEGMENT = '/_conloca/preview';
 export const PREVIEW_QUERY_PARAM = 'conloca_preview';
 export const PREVIEW_COOKIE_NAME = '__Host-conloca_preview';
+/** Protocol 2: the single-use code a preview link carries instead of the pass. */
+export const PREVIEW_CODE_PARAM = 'conloca_code';
+/** The share link a viewer's pass came from (D4 only), so an expired pass can renew through it. */
+export const PREVIEW_GRANT_COOKIE_NAME = '__Host-conloca_grant';
 /** Response header on the exit route's redirect that carries the public label. */
 export const PREVIEW_LABEL_HEADER = 'conloca-preview';
 
@@ -34,6 +38,13 @@ export function stripPreviewPrefix(pathname: string, base: string): string {
   if (pathname !== prefix && !pathname.startsWith(`${prefix}/`)) return pathname;
   const rest = pathname.slice(prefix.length);
   return `${base.replace(/\/+$/u, '')}${rest === '' ? '/' : rest}`;
+}
+
+/** A site path without the base, as the editor names pages (`/docs/guide` under `/docs/` → `/guide`). */
+export function pathUnderBase(path: string, base: string): string {
+  const root = base.replace(/\/+$/u, '');
+  if (root === '' || (path !== root && !path.startsWith(`${root}/`))) return path;
+  return path.slice(root.length) || '/';
 }
 
 /**

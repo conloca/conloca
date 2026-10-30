@@ -13,6 +13,8 @@ export interface BakedPreviewOpts {
   branch?: string;
   /** Astro's `base` at build time. */
   base?: string;
+  /** How this build serves previews (`d2` when not baked). */
+  mode?: 'd2' | 'd4';
 }
 
 /** A value only the build can bake; the deployment cannot supply it. */
@@ -64,6 +66,7 @@ export function resolveFromBaked(
     siteId: bakedOnly('siteId', baked.siteId),
     branch: bakedOnly('branch', baked.branch),
     base: baked.base || '/',
+    mode: baked.mode ?? 'd2',
     // Optional: an artifact built before this was baked has none, and the
     // endpoint then falls back to the branch's registered build.
     ...(baked.buildCommit ? { buildCommit: baked.buildCommit } : {}),

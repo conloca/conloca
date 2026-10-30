@@ -149,6 +149,7 @@ export function conlocaCloud(options: ConlocaCloudOptions = {}): AstroIntegratio
             siteId,
             branch: buildRef.branch,
             base: config.base ?? '/',
+            mode: 'd2',
           };
           // Preview-build path: the child build must emit an SSR
           // artifact even when the primary build is fully static. Switch to

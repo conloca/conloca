@@ -27,13 +27,13 @@
  */
 
 import type { ContentAPI } from '@conloca/content-api';
-import { fetchPageStatus, type PageStatus } from './_dispatch.js';
+import { fetchPageStatus, isShareEndedKind, type PageStatus } from './_dispatch.js';
 import { injectPreviewBanner } from './banner.js';
 import { PreviewContentAPI } from './content-api.js';
 import { applyPreviewHeaders, PREVIEW_CACHE_HEADERS } from './headers.js';
-import { renderPreviewUnavailable } from './landing.js';
+import { renderPreviewUnavailable, renderShareEnded } from './landing.js';
 import { handlePreviewRequest, type PreviewContext, type PreviewMiddlewareOptions } from './middleware.js';
-import { normalizeTrailingSlash, previewRoutePrefix, stripPreviewPrefix } from './preview-path.js';
+import { normalizeTrailingSlash, pathUnderBase, previewRoutePrefix, stripPreviewPrefix } from './preview-path.js';
 
 /** The subset of Astro's middleware context this middleware touches. */
 export interface PreviewMiddlewareContext {
@@ -140,6 +140,13 @@ export function createPreviewSiteMiddleware(resolveOpts: () => PreviewMiddleware
       });
     }
 
+    if (isShareEndedKind(status.kind) && 'sharedBy' in status) {
+      return renderShareEnded(status.kind, {
+        sharedBy: status.sharedBy,
+        liveHref: `${previewRoutePrefix(opts.base)}/__exit?to=${encodeURIComponent(path)}`,
+      });
+    }
+
     if (status.kind === 'unchanged') {
       // Production-equivalent bytes: render the ordinary route against the
       // build's own collections. No banner — same delegated semantics as
@@ -181,11 +188,18 @@ export function createPreviewSiteMiddleware(resolveOpts: () => PreviewMiddleware
       // through with the preview headers only.
       return applyPreviewHeaders(rendered);
     }
+    let shareUrl: string | undefined;
+    if (verdict.ctx.editorUrl !== undefined) {
+      const url = new URL(verdict.ctx.editorUrl);
+      url.searchParams.set('share', pathUnderBase(path, opts.base));
+      shareUrl = url.toString();
+    }
     const html = injectPreviewBanner(
       await rendered.text(),
       verdict.ctx,
       opts.saasEndpoint,
       `${previewRoutePrefix(opts.base)}/__exit`,
+      shareUrl,
     );
     return applyPreviewHeaders(new Response(html, { status: rendered.status, headers: rendered.headers }));
   };

@@ -31,9 +31,9 @@ beforeAll(async () => {
   getKey = () => Promise.resolve(pub);
 });
 
-async function mintJwt(scope: 'preview' | 'editor' = 'preview'): Promise<string> {
+async function mintJwt(scope: 'preview' | 'editor' = 'preview', claims: Record<string, string> = {}): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
-  return new SignJWT({ org: 'acme', repo: 'acme/site', site_id: 'website', branch: 'feature/x', scope })
+  return new SignJWT({ org: 'acme', repo: 'acme/site', site_id: 'website', branch: 'feature/x', scope, ...claims })
     .setProtectedHeader({ alg: 'RS256' })
     .setIssuedAt(now)
     .setExpirationTime(now + 300)
@@ -258,6 +258,25 @@ describe('createPreviewSiteMiddleware — verdict rendering', () => {
     expect(html).toContain('"exitPath":"/_conloca/preview/__exit"');
   });
 
+  it.each([
+    [
+      'https://editor.example.test/edit?repo=acme%2Fsite',
+      'https://editor.example.test/edit?repo=acme%2Fsite&share=%2Fguide',
+    ],
+    ['https://editor.example.test/edit', 'https://editor.example.test/edit?share=%2Fguide'],
+  ])('links Share to the page under the base when the editor address is %s', async (editorUrl, shareUrl) => {
+    const jwt = await mintJwt('preview', { editor_url: editorUrl });
+    const onRequest = createPreviewSiteMiddleware(
+      () => ({ ...opts(), base: '/docs/' }),
+      seams(makeFetch([changed(), emptyListing()]).fn),
+    );
+    const context = contextFor('https://site.test/docs/guide', `${PREVIEW_COOKIE_NAME}=${jwt}`);
+
+    const html = await (await onRequest(context, htmlNext('draft body'))).text();
+
+    expect(html).toContain(`"shareUrl":"${shareUrl}"`);
+  });
+
   it('normalizes a trailing slash out of the page-status path (site nav links carry them)', async () => {
     const jwt = await mintJwt();
     const fetchSpy = makeFetch([new Response(null, { status: 304 })]);
@@ -419,5 +438,49 @@ describe('createPreviewSiteMiddleware — unconfigured runtime', () => {
     const section = /README "([^"]+)"/.exec(warning)?.[1];
     const readme = await readFile(new URL('../../README.md', import.meta.url), 'utf8');
     expect(readme.split('\n').filter((line) => line.startsWith('## '))).toContain(`## ${section}`);
+  });
+});
+
+describe('createPreviewSiteMiddleware — ended share links', () => {
+  it.each([
+    ['grant-expired', 'This preview link has expired', 'Ask Ana for a new link.', 'View the live site'],
+    [
+      'grant-revoked',
+      'This preview link was turned off',
+      'Ana or a workspace admin turned it off.',
+      'View the live site',
+    ],
+    ['draft-published', 'This draft was published', 'Its changes are on the live site now.', 'View live'],
+    ['draft-discarded', 'This draft was discarded', 'Its changes were thrown away', 'View the live site'],
+  ])(
+    'answers %s with its own page and an exit to the live page, never the published bytes',
+    async (kind, heading, text, link) => {
+      const { fn } = makeFetch([Response.json({ error: kind, sharedBy: 'Ana' }, { status: 410 })]);
+      const onRequest = createPreviewSiteMiddleware(opts, seams(fn));
+      const response = await onRequest(
+        contextFor('https://site.test/pricing', `${PREVIEW_COOKIE_NAME}=${await mintJwt()}`),
+        htmlNext('PUBLISHED'),
+      );
+      const html = await response.text();
+      expect(response.status).toBe(410);
+      expect(html).toContain(heading);
+      expect(html).toContain(text);
+      expect(html).toContain(`>${link}</a>`);
+      expect(html).toContain('href="/_conloca/preview/__exit?to=%2Fpricing"');
+      expect(html).not.toContain('PUBLISHED');
+      expect(response.headers.get('cache-control')).toBe('private, no-store');
+    },
+  );
+
+  it('shows a sharer name with markup as text', async () => {
+    const { fn } = makeFetch([
+      Response.json({ error: 'grant-expired', sharedBy: '<img src=x onerror=alert(1)>' }, { status: 410 }),
+    ]);
+    const onRequest = createPreviewSiteMiddleware(opts, seams(fn));
+    const html = await (
+      await onRequest(contextFor('https://site.test/', `${PREVIEW_COOKIE_NAME}=${await mintJwt()}`), next)
+    ).text();
+    expect(html).toContain('Ask &lt;img src=x onerror=alert(1)&gt; for a new link.');
+    expect(html).not.toContain('<img');
   });
 });

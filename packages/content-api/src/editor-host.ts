@@ -6,9 +6,10 @@ export const EDITOR_HOST_PROTOCOL = 1;
 export const EDITOR_HOST_PROTOCOLS = { min: 1, max: 1 } as const;
 /**
  * The draft-preview protocol a preview server built by this release speaks. Protocol 1 keeps the pass out of the
- * page. conloca.json `preview.protocol` and the exit route's `conloca-preview-protocol` header carry it.
+ * page; protocol 2 opens a preview with a single-use code the server trades for the pass, so no pass travels in a
+ * link. conloca.json `preview.protocol` and the exit route's `conloca-preview-protocol` header carry it.
  */
-export const PREVIEW_PROTOCOL = 1;
+export const PREVIEW_PROTOCOL = 2;
 
 /** How a build serves draft previews: `d2` from the site's own deploy, `d4` from a separate preview deploy, `off` not at all. */
 export type PreviewMode = 'd2' | 'd4' | 'off';

@@ -1,3 +1,4 @@
+import type { ShareEndedKind } from './_dispatch.js';
 import { PREVIEW_CACHE_HEADERS } from './headers.js';
 
 const PAGE_STYLE =
@@ -94,6 +95,45 @@ export function renderPreviewUnavailable(opts: { retryHref: string; exitHref: st
     ],
   });
   return new Response(body, { status: 503, headers: PAGE_HEADERS });
+}
+
+/** Each ended link's words; the sharer's name arrives escaped. */
+const SHARE_ENDED_COPY = {
+  'grant-expired': (sharer) => ({
+    heading: 'This preview link has expired',
+    text: `Ask ${sharer || 'the person who shared it'} for a new link.`,
+    link: 'View the live site',
+  }),
+  'grant-revoked': (sharer) => ({
+    heading: 'This preview link was turned off',
+    text: `${sharer || 'The person who shared it'} or a workspace admin turned it off.`,
+    link: 'View the live site',
+  }),
+  'draft-published': () => ({
+    heading: 'This draft was published',
+    text: 'Its changes are on the live site now.',
+    link: 'View live',
+  }),
+  'draft-discarded': () => ({
+    heading: 'This draft was discarded',
+    text: 'Its changes were thrown away, so there is nothing left to preview.',
+    link: 'View the live site',
+  }),
+} satisfies Record<ShareEndedKind, (sharer: string) => { heading: string; text: string; link: string }>;
+
+/**
+ * The page a share viewer gets once the link no longer opens. Never the published page: under preview it would
+ * pass for the draft. The one link leaves preview for the live page.
+ */
+export function renderShareEnded(kind: ShareEndedKind, opts: { sharedBy: string; liveHref: string }): Response {
+  const copy = SHARE_ENDED_COPY[kind](escapeHtml(opts.sharedBy));
+  const body = renderPage({
+    title: copy.heading,
+    heading: copy.heading,
+    text: copy.text,
+    links: [[copy.link, opts.liveHref]],
+  });
+  return new Response(body, { status: 410, headers: PAGE_HEADERS });
 }
 
 /**

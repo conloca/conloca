@@ -95,8 +95,8 @@ describe('contentPathsOf', () => {
 });
 
 describe('preview signal', () => {
-  it('is protocol 1', () => {
-    expect(PREVIEW_PROTOCOL).toBe(1);
+  it('is protocol 2', () => {
+    expect(PREVIEW_PROTOCOL).toBe(2);
   });
   it('leaves a conloca.json with a malformed preview valid', () => {
     expect(isEditorPageInfo({ ...info, preview: 'd2' })).toBe(true);

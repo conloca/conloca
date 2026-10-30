@@ -15,6 +15,7 @@ import type { PreviewContext } from './middleware.js';
  *   answers.
  * - `redirect` — branch installed a redirect at the page's path; callers
  *   issue a 302 (we deliberately downgrade 301 to 302 — see fetchPageStatus).
+ * - an ended share link (`grant-revoked`, `grant-expired`, `draft-published`, `draft-discarded`) — Conloca answers 410 and names who shared the link; the site shows that page, never the published one.
  *
  * The verdict-to-response mapping lives in the site middleware
  * (`./site-middleware.ts`), which renders through the site's own route.
@@ -23,7 +24,22 @@ export type PageStatus =
   | { kind: 'unchanged' }
   | { kind: 'changed'; embedded: ReadonlyMap<string, LocalizedEntry> }
   | { kind: 'deleted' }
-  | { kind: 'redirect'; target: string };
+  | { kind: 'redirect'; target: string }
+  | { kind: ShareEndedKind; sharedBy: string };
+
+/** Why a share link no longer opens: turned off, expired, or its draft was published or discarded. */
+export type ShareEndedKind = 'grant-revoked' | 'grant-expired' | 'draft-published' | 'draft-discarded';
+
+const SHARE_ENDED: ReadonlySet<string> = new Set([
+  'grant-revoked',
+  'grant-expired',
+  'draft-published',
+  'draft-discarded',
+]);
+
+export function isShareEndedKind(value: string): value is ShareEndedKind {
+  return SHARE_ENDED.has(value);
+}
 
 interface FetchPageStatusInput {
   saasEndpoint: string;
@@ -71,6 +87,10 @@ export async function fetchPageStatus(input: FetchPageStatusInput): Promise<Page
     const data: unknown = await response.json();
     return { kind: 'changed', embedded: decodeEmbedded(data) };
   }
+  if (response.status === 410) {
+    const ended = await shareEndedOf(response);
+    if (ended !== null) return ended;
+  }
   throw new Error(`preview page-status ${input.path}: ${response.status}`);
 }
 
@@ -102,4 +122,19 @@ function isLocalizedEntry(value: unknown): value is LocalizedEntry {
   if (typeof v.localized !== 'object' || v.localized === null) return false;
   const l = v.localized as { etag?: unknown; locale?: unknown; content?: unknown };
   return typeof l.etag === 'string' && typeof l.locale === 'string' && typeof l.content === 'object';
+}
+
+/** The ended-link verdict a 410 names, or null when the body is not one. */
+export async function shareEndedOf(response: Response): Promise<{ kind: ShareEndedKind; sharedBy: string } | null> {
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    return null;
+  }
+  if (typeof body !== 'object' || body === null) return null;
+  const error = 'error' in body ? body.error : undefined;
+  const sharedBy = 'sharedBy' in body ? body.sharedBy : undefined;
+  if (typeof error !== 'string' || !isShareEndedKind(error)) return null;
+  return { kind: error, sharedBy: typeof sharedBy === 'string' ? sharedBy : '' };
 }

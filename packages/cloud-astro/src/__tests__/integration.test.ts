@@ -988,10 +988,10 @@ describe('conlocaCloud — the editor page', () => {
   it('names the preview mode and protocol in conloca.json: d2 when the preview build runs, off when it does not', async () => {
     const previewBuild = { adapter: { name: '@astrojs/cloudflare', hooks: {} } };
     await buildDoneHook(pageOptions({ previewBuild }))({ dir: buildDir.dist, logger: makeLogger() });
-    expect((await readPage()).info).toHaveProperty('preview', { mode: 'd2', protocol: 1 });
+    expect((await readPage()).info).toHaveProperty('preview', { mode: 'd2', protocol: 2 });
     await rm(join(buildDir.distPath, '_conloca'), { recursive: true });
     await buildDoneHook(pageOptions())({ dir: buildDir.dist, logger: makeLogger() });
-    expect((await readPage()).info).toHaveProperty('preview', { mode: 'off', protocol: 1 });
+    expect((await readPage()).info).toHaveProperty('preview', { mode: 'off', protocol: 2 });
   });
 
   it('writes null facts and warns when no GitHub repository resolves', async () => {

@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'bun:test';
-import { previewRoutePrefix, stripPreviewPrefix } from '../preview/preview-path.js';
+import { pathUnderBase, previewRoutePrefix, stripPreviewPrefix } from '../preview/preview-path.js';
+
+it('gives the page path under the base, as the editor names pages', () => {
+  expect(pathUnderBase('/docs/guide', '/docs/')).toBe('/guide');
+  expect(pathUnderBase('/docs', '/docs/')).toBe('/');
+  expect(pathUnderBase('/pricing', '/')).toBe('/pricing');
+});
 
 describe('previewRoutePrefix', () => {
   it('puts the route under the site base', () => {

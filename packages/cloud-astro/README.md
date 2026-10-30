@@ -10,8 +10,10 @@ Astro integration that adds the editor page for Conloca's workspace editor to a 
 3. Wire preview SSR middleware that serves `/_conloca/preview/*` under the site's `base` and admits only passes, signed
    by the endpoint's token issuer, for the repository, site and branch the preview build was made from.
 4. Expose `PreviewContentAPI` for `.astro` pages to fetch draft content.
+5. Show share links: a viewer sees who shared the draft and when the link expires; an expired, turned-off, published or
+   discarded link shows its own page.
 
-Items 2 to 4 serve draft previews, which are not available on your own deployment yet. They stay off unless
+Items 2 to 5 serve draft previews, which are not available on your own deployment yet. They stay off unless
 `previewBuild` is given as an object (see [Draft previews](#draft-previews)).
 
 ## Setup
@@ -174,8 +176,10 @@ branch's and a build of the branch it was created from (on a tie, in that order)
 [Branch deploys](#branch-deploys).
 
 `/_conloca/editor/conloca.json` publishes the repository's name, the build's branch and commit, and whether the build
-serves draft previews with the preview protocol it speaks (`preview`: `{ "mode": "d2", "protocol": 1 }` with
-`previewBuild`, else mode `off`). If the repository is not public, its name becomes public with the deploy.
+serves draft previews with the preview protocol it speaks (`preview`: `{ "mode": "d2", "protocol": 2 }` with
+`previewBuild`, else mode `off`). If the repository is not public, its name becomes public with the deploy. Protocol 2
+opens a preview with a single-use `conloca_code` link that the preview server trades for the pass with Conloca; a link
+that carries the pass itself (`conloca_preview`, protocol 1) still opens in this release and stops opening in the next.
 
 ### CI example (GitHub Actions)
 

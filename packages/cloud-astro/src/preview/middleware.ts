@@ -1,17 +1,21 @@
 import { PREVIEW_PROTOCOL } from '@conloca/content-api/editor-host';
 import { createRemoteJWKSet, customFetch, type JWTPayload, type JWTVerifyGetKey, jwtVerify } from 'jose';
 import { parseCookies, serializePreviewCookie } from './cookie.js';
+import { exchangeEntryCode } from './entry-code.js';
 import { PREVIEW_CACHE_HEADERS } from './headers.js';
 import { previewLabel } from './label.js';
-import { renderNoPreviewLanding } from './landing.js';
+import { renderNoPreviewLanding, renderPreviewUnavailable, renderShareEnded } from './landing.js';
 import {
+  PREVIEW_CODE_PARAM,
   PREVIEW_COOKIE_NAME,
+  PREVIEW_GRANT_COOKIE_NAME,
   PREVIEW_LABEL_HEADER,
   PREVIEW_PROTOCOL_HEADER,
   PREVIEW_QUERY_PARAM,
   previewRoutePrefix,
   stripPreviewPrefix,
 } from './preview-path.js';
+import { GRANT_REF_RE, grantRef } from './redeem-url.js';
 
 /**
  * Options consumed by {@link handlePreviewRequest}.
@@ -49,7 +53,7 @@ export interface PreviewMiddlewareOptions {
   buildCommit?: string;
   getKey?: JWTVerifyGetKey;
   /**
-   * Transport for the JWKS fetch. A deployment that cannot reach the endpoint
+   * Transport for the JWKS fetch and the entry-code exchange. A deployment that cannot reach the endpoint
    * with a plain fetch by hostname supplies a Cloudflare binding's fetch here;
    * otherwise key discovery gets another server's answer and every token
    * looks forged.
@@ -66,6 +70,12 @@ export interface PreviewMiddlewareOptions {
    *   screen on every URL.
    */
   onMiss?: 'landing' | 'pass-through';
+  /**
+   * How this build serves previews. `d2` (default): on the site's own deploy, where a share viewer whose pass
+   * expires opens the share link again. `d4`: on a separate preview deploy that has no other visitors, so a grant
+   * cookie lets an expired pass renew through the share link.
+   */
+  mode?: 'd2' | 'd4';
 }
 
 /**
@@ -83,6 +93,10 @@ export interface PreviewContext {
   jwt: string;
   /** Seconds until the JWT expires — bounds the preview cookie's Max-Age. */
   expiresInSeconds?: number;
+  /** Set when the pass came from a share link: the link's id, its expiry (epoch seconds) and who shared it. */
+  grant?: { id: string; expiresAt: number; sharedBy: string };
+  /** The editor this branch is edited in; set only on an editor's own pass. */
+  editorUrl?: string;
 }
 
 // Augments Astro's `Locals` so a site's .astro files that read
@@ -124,11 +138,14 @@ export type PreviewVerdict =
  * Order of checks:
  *   0. `<base>/_conloca/preview/__exit` → expire the cookie and redirect,
  *      carrying this build's public label.
- *   1. `?conloca_preview=<JWT>` query param → validate; on success issue a
- *      302 with the cookie set and the query stripped.
- *   2. `__Host-conloca_preview=<JWT>` cookie → validate; on success return a
+ *   1. `?conloca_code=<code>` → trade the single-use code for the pass on
+ *      the server; on success issue a 302 with the cookie set and the code
+ *      stripped. A used code with a valid cookie redirects to the clean path.
+ *   2. `?conloca_preview=<JWT>` query param (protocol 1) → validate; on
+ *      success issue a 302 with the cookie set and the query stripped.
+ *   3. `__Host-conloca_preview=<JWT>` cookie → validate; on success return a
  *      `preview` verdict with the decoded context.
- *   3. Neither present → no-preview landing page response.
+ *   4. Neither present → no-preview landing page response.
  *
  * Invalid JWTs (tampered signature, expired, missing required claim, wrong
  * issuer/audience/scope, or naming another repository, site or branch than
@@ -150,14 +167,57 @@ export async function handlePreviewRequest(request: Request, opts: PreviewMiddle
     return { kind: 'response', response: makeExitRedirect(url, opts.base, label) };
   }
 
-  // 1. Query-param init path.
+  // 1. Entry code (protocol 2): trade it for the pass on the server.
+  const code = url.searchParams.get(PREVIEW_CODE_PARAM);
+  if (code !== null) {
+    const exchanged = await exchangeEntryCode({
+      saasEndpoint: opts.saasEndpoint,
+      code,
+      origin: url.origin,
+      repo: opts.repo,
+      siteId: opts.siteId,
+      fetchFn: opts.fetchFn,
+    });
+    const path = stripPreviewPrefix(url.pathname, opts.base);
+    const exitHref = `${previewRoutePrefix(opts.base)}/__exit?to=${encodeURIComponent(path)}`;
+    if (exchanged.ok) {
+      const ctx = await tryValidate(exchanged.pass, opts);
+      if (ctx !== null) return { kind: 'response', response: makeInitRedirect(url, exchanged.pass, ctx, opts) };
+    } else if (exchanged.kind === 'ended') {
+      return {
+        kind: 'response',
+        response: renderShareEnded(exchanged.ended.verdict, { sharedBy: exchanged.ended.sharedBy, liveHref: exitHref }),
+      };
+    } else if (exchanged.kind === 'unavailable') {
+      // Never the held pass: it may open another branch than the link names.
+      return {
+        kind: 'response',
+        response: renderPreviewUnavailable({ retryHref: `${url.pathname}${url.search}`, exitHref }),
+      };
+    } else {
+      // A used code reopened from history while the cookie still holds a pass: open the page.
+      const held = parseCookies(request.headers.get('cookie')).get(PREVIEW_COOKIE_NAME);
+      if (held !== undefined && (await tryValidate(held, opts)) !== null) {
+        return { kind: 'response', response: makeCleanRedirect(url, opts.base) };
+      }
+    }
+    return {
+      kind: 'response',
+      response: renderNoPreviewLanding({
+        pathname: stripPreviewPrefix(url.pathname, opts.base),
+        saasEndpoint: opts.saasEndpoint,
+      }),
+    };
+  }
+
+  // 2. Query-param init path (protocol 1, read for one release).
   const queryToken = url.searchParams.get(PREVIEW_QUERY_PARAM);
   if (queryToken !== null) {
     const ctx = await tryValidate(queryToken, opts);
     if (ctx) {
       return {
         kind: 'response',
-        response: makeInitRedirect(url, queryToken, opts.base, ctx.expiresInSeconds),
+        response: makeInitRedirect(url, queryToken, ctx, opts),
       };
     }
     // Invalid query-param JWT — fall through to the landing page rather than
@@ -171,7 +231,7 @@ export async function handlePreviewRequest(request: Request, opts: PreviewMiddle
     };
   }
 
-  // 2. Cookie path.
+  // 3. Cookie path.
   const cookies = parseCookies(request.headers.get('cookie'));
   const cookieToken = cookies.get(PREVIEW_COOKIE_NAME);
   if (cookieToken !== undefined) {
@@ -181,7 +241,23 @@ export async function handlePreviewRequest(request: Request, opts: PreviewMiddle
     }
   }
 
-  // 3. No valid preview context.
+  // 4. No valid preview context.
+  // Under D4 a share viewer's expired pass renews through the share link the grant cookie names.
+  const ref = opts.mode === 'd4' ? cookies.get(PREVIEW_GRANT_COOKIE_NAME) : undefined;
+  if (ref !== undefined && GRANT_REF_RE.test(ref)) {
+    const [org, grant] = ref.split('.');
+    const to = encodeURIComponent(stripPreviewPrefix(url.pathname, opts.base));
+    return {
+      kind: 'response',
+      response: new Response(null, {
+        status: 302,
+        headers: {
+          location: `${opts.saasEndpoint}/preview/redeem/${org}/${grant}?renew=1&to=${to}`,
+          ...PREVIEW_CACHE_HEADERS,
+        },
+      }),
+    };
+  }
   if (opts.onMiss === 'pass-through') {
     return { kind: 'pass-through' };
   }
@@ -255,12 +331,34 @@ function projectContext(payload: JWTPayload, jwt: string, opts: PreviewMiddlewar
   if (!branch || !org || !repo) return null;
   if (repo !== opts.repo || readStringClaim(payload, 'site_id') !== opts.siteId) return null;
   if (branch !== opts.branch && readStringClaim(payload, 'served_by') !== opts.branch) return null;
-  // Remaining token lifetime, so the cookie can be bounded to the credential
-  // it carries rather than living for the whole browser session. `exp` is
-  // already verified by `jwtVerify` above, so it is present and in the future.
   const expiresInSeconds =
     typeof payload.exp === 'number' ? Math.max(0, payload.exp - Math.floor(Date.now() / 1000)) : undefined;
-  return { branch, org, repo, jwt, expiresInSeconds };
+  // A share pass names its link and the link's expiry; a pass that names a link without one is malformed.
+  const grantId = readStringClaim(payload, 'grant');
+  const grantExp = payload.grant_exp;
+  if (grantId !== undefined && typeof grantExp !== 'number') return null;
+  const grant =
+    grantId === undefined || typeof grantExp !== 'number'
+      ? undefined
+      : { id: grantId, expiresAt: grantExp, sharedBy: readStringClaim(payload, 'shared_by') ?? '' };
+  const editorUrl = grant === undefined ? editorUrlOf(readStringClaim(payload, 'editor_url')) : undefined;
+  return {
+    branch,
+    org,
+    repo,
+    jwt,
+    expiresInSeconds,
+    ...(grant === undefined ? {} : { grant }),
+    ...(editorUrl === undefined ? {} : { editorUrl }),
+  };
+}
+
+/** The editor address a pass names, when it is an https URL (http only on `.localhost`). */
+function editorUrlOf(value: string | undefined): string | undefined {
+  if (value === undefined || !URL.canParse(value)) return undefined;
+  const url = new URL(value);
+  const local = url.protocol === 'http:' && url.hostname.endsWith('.localhost');
+  return url.protocol === 'https:' || local ? url.toString() : undefined;
 }
 
 function readStringClaim(payload: JWTPayload, name: string): string | undefined {
@@ -274,17 +372,17 @@ function readStringClaim(payload: JWTPayload, name: string): string | undefined 
  * `conloca-preview` header carries this build's public label, and `conloca-preview-protocol` the preview protocol it speaks.
  */
 function makeExitRedirect(url: URL, base: string, label: string): Response {
-  return new Response(null, {
-    status: 302,
-    headers: {
-      location: exitTarget(url, base),
-      'set-cookie': serializePreviewCookie(PREVIEW_COOKIE_NAME, '', 0),
-      ...PREVIEW_CACHE_HEADERS,
-      [PREVIEW_LABEL_HEADER]: label,
-      // Lets Conloca refuse to link to a preview server below its protocol floor.
-      [PREVIEW_PROTOCOL_HEADER]: String(PREVIEW_PROTOCOL),
-    },
+  const headers = new Headers({
+    location: exitTarget(url, base),
+    'set-cookie': serializePreviewCookie(PREVIEW_COOKIE_NAME, '', 0),
+    ...PREVIEW_CACHE_HEADERS,
+    [PREVIEW_LABEL_HEADER]: label,
+    // Lets Conloca refuse to link to a preview server below its protocol floor.
+    [PREVIEW_PROTOCOL_HEADER]: String(PREVIEW_PROTOCOL),
   });
+  // Without this the D4 renewal would see the grant and send the viewer straight back in.
+  headers.append('set-cookie', serializePreviewCookie(PREVIEW_GRANT_COOKIE_NAME, '', 0));
+  return new Response(null, { status: 302, headers });
 }
 
 /**
@@ -311,34 +409,32 @@ function exitTarget(url: URL, base: string): string {
 }
 
 /**
- * Builds the 302 response that strips the preview query parameter from
- * the requested URL and sets the preview cookie. Preserves every other
- * query parameter so analytics / utm tags survive the redirect.
+ * The requested URL without the code or pass parameter and without the preview route: once the cookie is set
+ * (Path=/), every same-origin request carries it, so the visitor belongs on the real path. Other query
+ * parameters (analytics tags) stay.
  */
-function makeInitRedirect(url: URL, token: string, base: string, maxAgeSeconds?: number): Response {
+function cleanLocation(url: URL, base: string): string {
   const cleaned = new URL(url.toString());
   cleaned.searchParams.delete(PREVIEW_QUERY_PARAM);
-  // Land the browser on the REAL site path, not the preview route.
-  // The route is an entry door: it exists so the endpoint has a URL to link to
-  // before any cookie exists. Once the cookie is set (Path=/), every
-  // same-origin request carries the credential, so the visitor belongs on the
-  // canonical path — otherwise the first internal link they click drops the
-  // route, escapes preview, and silently shows published content.
+  cleaned.searchParams.delete(PREVIEW_CODE_PARAM);
   cleaned.pathname = stripPreviewPrefix(cleaned.pathname, base);
-  // Normalise the search string: when the only param was the preview JWT,
-  // URL.search becomes '' but URL.toString() still emits a trailing `?` only
-  // if it was already empty. Re-serialising via URL strips that automatically;
-  // double-check by explicitly clearing the `?` when no params remain.
-  let location = cleaned.toString();
-  if (cleaned.search === '' && location.endsWith('?')) {
-    location = location.slice(0, -1);
+  const location = cleaned.toString();
+  return cleaned.search === '' && location.endsWith('?') ? location.slice(0, -1) : location;
+}
+
+/** The 302 that sets the pass cookie (and, under D4, the grant cookie) and lands on the clean path. */
+function makeInitRedirect(url: URL, token: string, ctx: PreviewContext, opts: PreviewMiddlewareOptions): Response {
+  const headers = new Headers({ location: cleanLocation(url, opts.base), ...PREVIEW_CACHE_HEADERS });
+  headers.append('set-cookie', serializePreviewCookie(PREVIEW_COOKIE_NAME, token, ctx.expiresInSeconds));
+  const { org, grant } = ctx;
+  if (opts.mode === 'd4' && grant !== undefined) {
+    const lifetime = grant.expiresAt - Math.floor(Date.now() / 1000);
+    headers.append('set-cookie', serializePreviewCookie(PREVIEW_GRANT_COOKIE_NAME, grantRef(org, grant.id), lifetime));
   }
-  return new Response(null, {
-    status: 302,
-    headers: {
-      location,
-      'set-cookie': serializePreviewCookie(PREVIEW_COOKIE_NAME, token, maxAgeSeconds),
-      ...PREVIEW_CACHE_HEADERS,
-    },
-  });
+  return new Response(null, { status: 302, headers });
+}
+
+/** The 302 to the clean path for a visitor who already holds a valid pass. */
+function makeCleanRedirect(url: URL, base: string): Response {
+  return new Response(null, { status: 302, headers: { location: cleanLocation(url, base), ...PREVIEW_CACHE_HEADERS } });
 }
