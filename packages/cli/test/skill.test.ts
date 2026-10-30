@@ -57,4 +57,20 @@ describe('conloca agent skill', () => {
       await rm(dir, { recursive: true, force: true });
     }
   });
+
+  test('the skill names every content command, one command form and the shared-entry helper', async () => {
+    const skill = await readFile(SKILL_TEMPLATE, 'utf-8');
+    for (const text of [
+      'conloca page update',
+      'conloca data create',
+      'conloca data update',
+      'conloca asset add',
+      '--content',
+      'conlocaDataEntry',
+      'dataBindings',
+      'npx @conloca/cli@<version>',
+    ])
+      expect(skill).toContain(text);
+    expect(skill).not.toContain('npx @conloca/cli doctor');
+  });
 });

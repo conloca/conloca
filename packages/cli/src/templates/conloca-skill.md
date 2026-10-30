@@ -19,8 +19,8 @@ conloca doctor            # human-readable report
 conloca doctor --json     # single {ok, problems} object on stdout
 ```
 
-The `conloca` command ships in `@conloca/cli` — run it as `npx @conloca/cli doctor` (or `bunx`) when it is not
-installed.
+`conloca <command>` in this skill means `npx @conloca/cli@<version> <command>`: use the exact version a Conloca prompt
+gave you, `@latest` when none did. Never run a different version than the prompt names.
 
 It checks the content directory (sites.json complete, site directories present, every content file indexes cleanly) and,
 when an astro.config is present, the Astro wiring: content config, conlocaCMS import and options, react() order, peer
@@ -107,15 +107,45 @@ building.
   in the dev-server or build terminal.
 - The editor at `/__cms` exists only on the dev server. A production build without it is not a bug.
 
-## Creating a page
+## Writing content from the command line
+
+Never hand-write files under `content/`, and do not reach for HTTP endpoints: these commands write what the editor
+writes, so the result is editable at `/__cms` right away. Each takes `--json` for a machine-readable result.
 
 ```bash
-conloca page create --site default --collection pages --pathname /about --title 'About us'
+conloca page create --site default --collection pages --pathname /about --title 'About us' --content about.json
+conloca page update /about --description 'Who we are' --image /media/hero.jpg
+conloca data create site --name contact --data contact.json
+echo '{"phone":"+1 555 0100"}' | conloca data update site contact --data -
+conloca asset add ~/Pictures/hero.jpg --alt 'Fresh bread on the counter'
 ```
 
-Writes the `.vxjson` file with the same empty Puck payload the CMS writes for a new page, in the site's default locale;
-the page is immediately editable at `/__cms`. `--json` prints `{ok, id, path}`. Do not hand-craft `.vxjson` files and do
-not reach for HTTP endpoints — this command is the supported path.
+- `page create` — a new page. `--content` takes Puck data `{ root, content, zones }` from a file or `-` (stdin), never
+  inline JSON; `--description`, `--image`, `--canonical` and `--robots` fill its page settings.
+- `page update` — change an existing page, found by id or pathname; only the flags given change, and an empty value
+  (`--robots ''`) clears a field.
+- `data create` / `data update` — a shared entry (contact details, a header menu): a JSON object from a file or
+  `--data -`. Declare the collection's type in `src/schemas/data.ts`; the first `data create` wires the data schemas.
+- `asset add` — an image into the media folder; it prints the reference an image field stores, e.g. `/media/hero.jpg`.
+
+A layout reads a shared entry by name:
+
+```ts
+import { getCollection } from 'astro:content';
+import { conlocaDataEntry } from '@conloca/astro-cms/collections';
+import { dataSchemas } from '../schemas/data';
+
+const contact = conlocaDataEntry(dataSchemas, 'site', await getCollection('site'), 'contact', 'en');
+contact.phone; // typed by the `site` schema
+```
+
+A missing name, or one saved in several locales with none given, throws and fails the build instead of rendering empty.
+
+Entries a page's blocks list (team, testimonials) bind to the route with
+`routing.routes.<name>.dataBindings.collections`; a block's Puck `resolveData` then reads them from
+`metadata.collections.<name>`.
+
+After writing content, run the build: it validates every entry against its schema.
 
 ## Routing
 
