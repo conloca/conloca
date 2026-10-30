@@ -264,6 +264,11 @@ describe('conlocaDataEntry — one shared entry read by name', () => {
       '[conloca] data collection "testimonials" has no entry named "header"',
     );
   });
+  test('names the locale it looked in when no entry has the name there', () => {
+    expect(() =>
+      conlocaDataEntry(dataSchemas, 'testimonials', [testimonialEntry('a', 'en', { quote: 'A' })], 'a', 'de'),
+    ).toThrow('[conloca] data collection "testimonials" has no entry named "a" in locale "de"');
+  });
   test('fails listing the locales when the name matches more than one entry', () => {
     expect(() =>
       conlocaDataEntry(

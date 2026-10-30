@@ -116,7 +116,10 @@ export function conlocaDataEntry<DS extends DataSchemas, K extends keyof DS & st
     (entry) => entry.data.name === name && (locale === undefined || entry.data.locale === locale),
   );
   const [match] = matches;
-  if (!match) throw new Error(`[conloca] data collection "${collection}" has no entry named "${name}"`);
+  if (!match) {
+    const where = locale === undefined ? '' : ` in locale "${locale}"`;
+    throw new Error(`[conloca] data collection "${collection}" has no entry named "${name}"${where}`);
+  }
   if (matches.length > 1) {
     const locales = matches.map((entry) => entry.data.locale);
     locales.sort();
