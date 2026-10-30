@@ -19,4 +19,6 @@ export {
 } from './editor-page/framing.js';
 // The default export is what `astro add @conloca/cloud-astro` wires in.
 export { conlocaCloud as default, conlocaCloud, PACKAGE_NAME, PREVIEW_BUILD_ENV_FLAG } from './integration.js';
+// The page `conloca upgrade` compares against the site's copy and refreshes.
+export { agentSkill } from './skill.js';
 export type { ConlocaCloudOptions, PreviewBuildOptions } from './types.js';

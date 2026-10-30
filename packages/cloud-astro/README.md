@@ -370,8 +370,8 @@ depends on it runs this package's checks after the CMS ones, offline by default.
 The integration also scaffolds a one-page agent skill at `.claude/skills/conloca-cloud/SKILL.md` — in the nearest
 `.claude/` directory between the Astro project and the git root — on any Astro command that loads the config (build,
 dev, sync, check), once, never overwriting an existing file. Repos without a `.claude/` directory get nothing. Projects
-outside a git repository get nothing either. The page is not auto-updated: copy the current one from this package's
-`src/skill/SKILL.md` when it changes.
+outside a git repository get nothing either. `conloca upgrade` refreshes it; an edited page is kept and the new one
+written beside it as `SKILL.new.md`.
 
 ## Tests
 

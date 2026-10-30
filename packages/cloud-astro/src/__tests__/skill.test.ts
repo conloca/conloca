@@ -3,10 +3,18 @@ import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { isUneditedSkill, skillChecksum, stampSkill } from '@conloca/content-api/skill-stamp';
 import type { AstroIntegration, AstroIntegrationLogger } from 'astro';
 import { PREVIEW_BUILD_ENV_FLAG } from '../constants.js';
-import { conlocaCloud } from '../index.js';
-import { findClaudeHome, SKILL_RELATIVE_PATH, scaffoldSkill, skillTemplateUrl } from '../skill.js';
+import { agentSkill, conlocaCloud } from '../index.js';
+import { packageVersion } from '../package-version.js';
+import {
+  findClaudeHome,
+  LEGACY_SKILL_CHECKSUMS,
+  SKILL_RELATIVE_PATH,
+  scaffoldSkill,
+  skillTemplateUrl,
+} from '../skill.js';
 
 const silent = { info: () => {}, debug: () => {}, warn: () => {} };
 
@@ -85,7 +93,9 @@ describe('scaffoldSkill', () => {
     await mkdir(join(root, '.claude'));
     expect(scaffoldSkill(root, silent)).toBe('written');
     const written = await readFile(join(root, SKILL_RELATIVE_PATH), 'utf-8');
-    expect(written).toBe(await readFile(skillTemplateUrl(), 'utf-8'));
+    const version = packageVersion();
+    if (version === undefined) throw new Error('the package version is unreadable');
+    expect(written).toBe(stampSkill(await readFile(skillTemplateUrl(), 'utf-8'), version));
     expect(written).toStartWith('---\nname: conloca-cloud\n');
     expect(scaffoldSkill(root, silent)).toBe('exists');
   });
@@ -96,6 +106,20 @@ describe('scaffoldSkill', () => {
     await writeFile(join(root, SKILL_RELATIVE_PATH), custom);
     expect(scaffoldSkill(root, silent)).toBe('exists');
     expect(await readFile(join(root, SKILL_RELATIVE_PATH), 'utf-8')).toBe(custom);
+  });
+
+  it('knows every released unstamped page, one fixture per listed checksum', async () => {
+    const fixtures = ['skill-0.2.2.md', 'skill-0.2.3.md'];
+    const texts = await Promise.all(fixtures.map((name) => readFile(join(import.meta.dir, 'fixtures', name), 'utf-8')));
+    for (const text of texts) expect(isUneditedSkill(text, LEGACY_SKILL_CHECKSUMS)).toBe(true);
+    expect(new Set(texts.map(skillChecksum))).toEqual(new Set(LEGACY_SKILL_CHECKSUMS));
+  });
+
+  it('agentSkill names the page path and the stamped text, or nothing without a .claude home', async () => {
+    expect(agentSkill(root)).toBeNull();
+    await mkdir(join(root, '.claude'));
+    expect(agentSkill(root)).toMatchObject({ path: join(root, SKILL_RELATIVE_PATH) });
+    expect(agentSkill(root)?.text).toContain('metadata:\n  version: "');
   });
 
   it('skips a repo without .claude/', () => {
