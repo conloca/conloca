@@ -282,6 +282,38 @@ Example:
 conloca page update /about --content about.json --description 'Who we are'
 ```
 
+### Data entries
+
+Create a data entry, such as site settings or an author, in a site's default locale:
+
+```bash
+conloca data create <collection> [path] --name <name> --data <file|-> [--title <title>] [--site <site>] [--no-install] [--json]
+```
+
+`--data` is a JSON object, read from a file or from stdin with `-`; anything else is refused before a file is written.
+The entry lands in `<content root>/data/<collection>/<name>.<locale>.json`, titled `--title` or its name. A name another
+entry of the collection has, in any letter case, is refused. A site without data schemas yet is wired first:
+`schemasPath`, `assetsPath` and the Typia vite plugin in `astro.config`, `conlocaData()` in the content config, the
+starter `src/schemas/data.ts`, `typia-vite.mjs` and `tsconfig.typia.json`, and the Typia packages, added with the site's
+package manager (`--no-install` prints that command instead). A config it cannot edit stops the command, with the lines
+to add by hand. When the schemas module declares no such collection, it warns that the build fails on the entry.
+`--json` prints `{ok, id, path, wired?, command?, warnings?}`.
+
+Replace the data of an existing entry, found by its id or by its name in the collection:
+
+```bash
+conloca data update <collection> <id|name> [path] --data <file|-> [--title <title>] [--site <site>] [--json]
+```
+
+It keeps the title unless `--title` is given, and exits 1 when no entry of the collection has that id or name. `--json`
+prints `{ok, id, path}`.
+
+Example:
+
+```bash
+echo '{"siteName":"Corner Bakery"}' | conloca data create settings --name site --data -
+```
+
 ## Quick Start
 
 ```bash

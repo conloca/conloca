@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { connect } from './commands/connect.js';
 import { create } from './commands/create.js';
+import { type DataCreateOptions, type DataUpdateOptions, dataCreate, dataUpdate } from './commands/data.js';
 import { doctor } from './commands/doctor.js';
 import { init } from './commands/init.js';
 import { type PageCreateOptions, pageCreate } from './commands/page-create.js';
@@ -209,6 +210,67 @@ update, or the write fails.`,
   .action(async (ref: string, path: string, options: Omit<PageUpdateOptions, 'json'> & { json?: boolean }) => {
     await pageUpdate(ref, path, { ...options, json: options.json === true });
   });
+
+const data = program
+  .command('data')
+  // Keeps the subcommand visible in the top-level command list.
+  .usage('<subcommand>')
+  .description('Data entry commands');
+
+data
+  .command('create')
+  .argument('<collection>', "Data collection, e.g. 'settings'")
+  .argument('[path]', 'Astro project holding the content root', '.')
+  .requiredOption('--name <name>', 'Entry name: letters, digits, - and _')
+  .requiredOption('--data <source>', "The entry's data as a JSON object, from a file or '-' for stdin")
+  .option('--title <title>', 'Entry title (meta.title), defaults to the name')
+  .option('--site <site>', 'Site whose default locale the entry is written in (a key in sites.json)', DEFAULT_SITE_NAME)
+  .option('--no-install', 'Do not install the packages the data schemas need; print the command instead')
+  .option('--json', 'Report as a single JSON object on stdout')
+  .description("Create a data entry in the site's default locale")
+  .addHelpText(
+    'after',
+    `
+Writes <content root>/data/<collection>/<name>.<locale>.json holding --data.
+A site without data schemas is wired first: schemasPath, assetsPath and the
+Typia vite plugin in astro.config, the data collections in the content config,
+the starter schema files, and the packages they need. Prints the entry file
+path and id; --json prints {ok, id, path, wired?, command?, warnings?}. Warns
+when the schemas module declares no such collection. Exits 1 when --data is not
+a JSON object, the config needs a hand, the name is taken, or the write fails.`,
+  )
+  .action(async (collection: string, path: string, options: Omit<DataCreateOptions, 'json'> & { json?: boolean }) => {
+    await dataCreate(collection, path, { ...options, json: options.json === true });
+  });
+
+data
+  .command('update')
+  .argument('<collection>', "Data collection, e.g. 'settings'")
+  .argument('<ref>', 'Entry id, or its name in the collection')
+  .argument('[path]', 'Astro project holding the content root', '.')
+  .requiredOption('--data <source>', "The entry's new data as a JSON object, from a file or '-' for stdin")
+  .option('--title <title>', 'Entry title (meta.title)')
+  .option('--site <site>', 'Site whose default locale the entry is in (a key in sites.json)', DEFAULT_SITE_NAME)
+  .option('--json', 'Report as a single JSON object on stdout')
+  .description("Replace a data entry's data in the site's default locale")
+  .addHelpText(
+    'after',
+    `
+Replaces the entry's data with --data and sets its title when --title is
+given. Prints the entry file path and id; --json prints {ok, id, path}. Exits 1
+when no entry of the collection has that id or name, the id belongs to other
+content, --data is not a JSON object, or the write fails.`,
+  )
+  .action(
+    async (
+      collection: string,
+      ref: string,
+      path: string,
+      options: Omit<DataUpdateOptions, 'json'> & { json?: boolean },
+    ) => {
+      await dataUpdate(collection, ref, path, { ...options, json: options.json === true });
+    },
+  );
 
 const astro = program
   .command('astro')

@@ -89,7 +89,7 @@ const GITHUB_REMOTE =
   /^(?:https:\/\/(?:[^@/]+@)?github\.com\/|(?:ssh:\/\/)?git@github\.com[:/])([\w.-]+\/[\w.-]+?)(?:\.git)?\/?$/;
 
 /** Trimmed stdout of a git command, or null when git fails (not a checkout, no such remote). */
-async function gitText(args: string[], cwd: string): Promise<string | null> {
+export async function gitText(args: string[], cwd: string): Promise<string | null> {
   try {
     const { stdout } = await execFile('git', args, { cwd });
     return stdout.trim();
@@ -473,7 +473,8 @@ export async function runConnect(path: string, options: ConnectOptions, io: Conn
   return report;
 }
 
-function terminalIo(json: boolean): ConnectIo {
+/** The real terminal and shell; in --json mode a command's output goes to stderr. */
+export function terminalIo(json: boolean): ConnectIo {
   return {
     isTTY: process.stdin.isTTY,
     async confirm(question) {
