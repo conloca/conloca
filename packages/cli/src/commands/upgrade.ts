@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { readFile, rm, writeFile } from 'node:fs/promises';
+import { readFile, rm, rmdir, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fail, withStdoutRedirected } from '../lib/cli-output.js';
 import { type FileEdit, jsonLike, type StepResult, type StepState, writeEdits } from '../lib/connect/step.js';
@@ -361,6 +361,8 @@ async function applyMigration(
 async function applyUpgrade(plan: Plan, io: ConnectIo): Promise<UpgradeReport> {
   const { start, projectDir, install, commands, steps, report } = plan;
   const journal = new Map<string, Buffer | null>();
+  // Folders a write creates (writeEdits makes them), so a restore takes them away again.
+  const folders = new Set<string>();
   const save = async (paths: string[]) => {
     const fresh = paths.filter((path) => !journal.has(path));
     // Only a missing file is saved as "absent"; an unreadable one must fail here, never be deleted on restore.
@@ -372,7 +374,11 @@ async function applyUpgrade(plan: Plan, io: ConnectIo): Promise<UpgradeReport> {
         }),
       ),
     );
-    for (const [index, path] of fresh.entries()) journal.set(path, contents[index] ?? null);
+    for (const [index, path] of fresh.entries()) {
+      journal.set(path, contents[index] ?? null);
+      // A file that exists has its folder; only an absent one can need folders made.
+      for (let dir = dirname(path); !existsSync(dir); dir = dirname(dir)) folders.add(dir);
+    }
   };
   await save([...plan.manifests.map((manifest) => manifest.path), install.lockfile]);
   const saved = journal.size;
@@ -392,8 +398,10 @@ async function applyUpgrade(plan: Plan, io: ConnectIo): Promise<UpgradeReport> {
       step.result = await applyMigration(migration, plan, save);
     }
     if (!steps.some((step) => step.result.state === 'failed')) {
-      current = { id: 'skills', result: await planSkillRefresh(projectDir, report.to) };
+      // Current before the await: a throw while planning is the skills step's failure.
+      current = { id: 'skills', result: { state: 'done', message: 'nothing to refresh', edits: [] } };
       steps.push(current);
+      current.result = await planSkillRefresh(projectDir, report.to);
       await save(current.result.edits.map((edit) => edit.path));
       // A `differs` result carries the SKILL.new.md beside the edited page.
       await writeEdits(current.result.edits);
@@ -413,19 +421,34 @@ async function applyUpgrade(plan: Plan, io: ConnectIo): Promise<UpgradeReport> {
   const failed = steps.find((step) => step.result.state === 'failed');
   // Something was written once the manifests were, or once a later file was saved for writing.
   if (failed !== undefined && (plan.manifestEdits.length > 0 || journal.size > saved)) {
-    const unrestored = await restoreJournal(journal);
+    const lockfile = basename(install.lockfile);
+    const created = plan.noLockfile && existsSync(install.lockfile);
+    const unrestored = await restoreJournal(journal, folders);
     report.unrestored = unrestored.map((path) => relative(start, path));
     report.restored = unrestored.length === 0;
     const reinstall = plan.noLockfile ? commands.install : commands.frozenInstall;
+    const manifests = plan.manifests.length === 1 ? 'package.json' : `${plan.manifests.length} package.json files`;
+    const others = journal.size - plan.manifests.length - 1;
+    const restored = [
+      manifests,
+      ...(plan.noLockfile ? [] : [lockfile]),
+      ...(others > 0 ? [`${others} more files`] : []),
+    ];
     failed.result.message += report.restored
-      ? `; restored package.json, ${basename(install.lockfile)} and ${journal.size - 2} files; run '${reinstall}' to put node_modules back`
+      ? `; restored ${restored.join(', ')}${created ? ` and removed the new ${lockfile}` : ''}; run '${reinstall}' to put node_modules back`
       : `; could not restore ${report.unrestored.join(', ')}`;
   }
   return reportOf({ start, steps, report });
 }
 
-/** Put every journaled path back, each on its own; returns the paths that could not be restored. */
-export async function restoreJournal(journal: Map<string, Buffer | null>): Promise<string[]> {
+/**
+ * Put every journaled path back, each on its own, then remove the `folders` a write created once they are empty again;
+ * returns the paths that could not be restored.
+ */
+export async function restoreJournal(
+  journal: Map<string, Buffer | null>,
+  folders: Iterable<string> = [],
+): Promise<string[]> {
   const unrestored = await Promise.all(
     [...journal].map(async ([path, saved]) => {
       try {
@@ -437,6 +460,13 @@ export async function restoreJournal(journal: Map<string, Buffer | null>): Promi
       }
     }),
   );
+  // Deepest first; a folder that still holds something keeps it.
+  const deepestFirst = [...folders];
+  deepestFirst.sort((a, b) => b.length - a.length);
+  for (const folder of deepestFirst) {
+    // oxlint-disable-next-line no-await-in-loop -- a parent is empty only once its children are gone.
+    await rmdir(folder).catch(() => undefined);
+  }
   return unrestored.flat();
 }
 

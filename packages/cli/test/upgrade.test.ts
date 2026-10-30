@@ -103,6 +103,7 @@ beforeAll(async () => {
   // Not yet data-wired: without assetsPath the data-schemas migration has work to do.
   const config = join(template, 'astro.config.mjs');
   await writeFile(config, (await readFile(config, 'utf8')).replace("      assetsPath: './public/media',\n", ''));
+  expect(await readFile(config, 'utf8')).not.toContain('assetsPath');
   await writeFile(join(template, 'package-lock.json'), '{}\n');
   await writeFile(join(template, '.github', 'workflows', 'conloca.yml'), OLD_WORKFLOW);
   // The unedited page an older CLI wrote, so the skill refresh has work to do.
@@ -315,6 +316,34 @@ describe('runUpgrade', () => {
     expect(stepOf(report, 'doctor')?.state).toBe('failed');
     expect(await treeHashes(dir)).toEqual(before);
     expect(report.restored).toBe(true);
+    expect(stepOf(report, 'doctor')?.message).toMatch(
+      /; restored package\.json, package-lock\.json, \d+ more files; run '[^']+' to put node_modules back$/,
+    );
+  });
+
+  test('takes away the folders a failed upgrade created', async () => {
+    const deep: Migration = {
+      id: 'deep',
+      since: '0.2.2',
+      description: 'x',
+      plan: async () => ({
+        state: 'changed',
+        message: 'x',
+        // The shallow file first: `new` is journaled before `new/deep`, so the restore must still go deepest first.
+        edits: [
+          { path: join(dir, 'new', 'file.txt'), before: null, after: 'x' },
+          { path: join(dir, 'new', 'deep', 'file.txt'), before: null, after: 'x' },
+        ],
+        packages: [],
+      }),
+    };
+    await mkdir(join(dir, 'kept'));
+    await writeFile(join(dir, 'content/sites.json'), '{');
+    const report = await runUpgrade(dir, opts, fakeIo('ok').io, [deep]);
+    expect(stepOf(report, 'doctor')?.state).toBe('failed');
+    expect(report).toMatchObject({ restored: true, unrestored: [] });
+    expect(existsSync(join(dir, 'new'))).toBe(false);
+    expect(existsSync(join(dir, 'kept'))).toBe(true);
   });
 
   test('restores a binary bun.lockb byte for byte', async () => {
@@ -333,6 +362,9 @@ describe('runUpgrade', () => {
     expect(await treeHashes(dir)).toEqual(before);
     expect(existsSync(join(dir, 'package-lock.json'))).toBe(false);
     expect(report).toMatchObject({ restored: true, unrestored: [] });
+    expect(stepOf(report, 'install')?.message).toEndWith(
+      "; restored package.json and removed the new package-lock.json; run 'npm install' to put node_modules back",
+    );
   });
 
   test.each([['workspace:*'], ['catalog:'], ['link:../cms'], ['file:../cms.tgz']])(
@@ -434,6 +466,15 @@ describe('runUpgrade', () => {
       const after = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
       expect(after.devDependencies['@conloca/cli']).toBe(TO);
       expect(after.dependencies).toBeUndefined();
+    });
+
+    test('names both package.json files when a failed install restores them', async () => {
+      const manifest = { name: 'repo', private: true, devDependencies: { '@conloca/cli': '0.2.1' } };
+      await writeFile(join(root, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+      const before = await treeHashes(root);
+      const report = await runUpgrade(root, opts, fakeIo('fail-install', ['package.json', 'sites/a/package.json']).io);
+      expect(await treeHashes(root)).toEqual(before);
+      expect(stepOf(report, 'install')?.message).toContain('; restored 2 package.json files, bun.lock; run ');
     });
   });
 
