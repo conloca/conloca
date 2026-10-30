@@ -21,9 +21,9 @@ let projectDir: string;
 let folder: string;
 let schemasPath: string;
 
-function makeLogger(): { warn(message: string): void; warnings: string[] } {
+function makeLogger() {
   const warnings: string[] = [];
-  return { warn: (message) => warnings.push(message), warnings };
+  return { warn: (message: string) => warnings.push(message), warnings };
 }
 
 async function emit(plugins: Plugin[] = []) {

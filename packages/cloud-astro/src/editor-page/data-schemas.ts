@@ -20,6 +20,7 @@ export async function emitDataSchemas(input: {
 }): Promise<void> {
   let dataSchemas: unknown;
   try {
+    // shortcut: runnerImport resolves plugins in serve mode, so an apply: 'build' schema transform is skipped (warning, no file); upgrade if a site needs one.
     const { module } = await runnerImport<{ dataSchemas?: unknown }>(resolve(input.root, input.schemasPath), {
       ...input.vite,
       configFile: false,
@@ -34,12 +35,13 @@ export async function emitDataSchemas(input: {
     return;
   }
   if (!isRecord(dataSchemas)) return;
-  const collections: Record<string, Record<string, unknown>> = {};
-  for (const [name, entry] of Object.entries(dataSchemas)) {
-    const metadata = isRecord(entry) ? entry.metadata : undefined;
-    if (isRecord(metadata) && isRecord(metadata.schema) && isRecord(metadata.components)) {
-      collections[name] = metadata;
-    }
-  }
+  const collections = Object.fromEntries(
+    Object.entries(dataSchemas).flatMap(([name, entry]) => {
+      const metadata = isRecord(entry) ? entry.metadata : undefined;
+      return isRecord(metadata) && isRecord(metadata.schema) && isRecord(metadata.components)
+        ? [[name, metadata] as const]
+        : [];
+    }),
+  );
   await writeFile(join(input.folder, DATA_SCHEMAS_FILE), `${JSON.stringify({ collections }, null, 2)}\n`);
 }
