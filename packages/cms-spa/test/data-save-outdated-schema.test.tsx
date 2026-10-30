@@ -43,7 +43,7 @@ afterEach(() => {
 });
 
 describe('saving a new data entry on a site whose schema is not a generated host schema', () => {
-  test('keeps the editor open and says the schema needs regenerating', async () => {
+  test('keeps the editor open, says the schema needs regenerating and writes nothing', async () => {
     setupTestAPI('/__cms/api', { sites: { default: { locales: ['en'], defaultLocale: 'en' } }, globalLocales: ['en'] });
     configureUI({ apiBaseUrl: '/__cms/api', locales: { list: ['en'], defaultLocale: 'en' } });
 
@@ -56,7 +56,8 @@ describe('saving a new data entry on a site whose schema is not a generated host
     const notice = await within(editor).findByTestId('schema-form-outdated-schema');
     expect(notice.getAttribute('role')).toBe('alert');
     expect(notice.textContent).toContain('not a generated host schema');
-    expect(Array.from(testApi.listAllContent({ kind: 'data', collection: 'authors' }))).toHaveLength(1);
+    expect(Array.from(testApi.listAllContent({ kind: 'data', collection: 'authors' }))).toHaveLength(0);
+    expect((within(editor).getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
 

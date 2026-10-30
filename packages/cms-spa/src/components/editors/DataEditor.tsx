@@ -1,18 +1,22 @@
 import { getContentAPIClient, useLocalizedContent, useUpdateLocalized } from '@conloca/content-api-client';
 import { AlertCircle, Code2, Loader2, Save } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import type { HostSchema } from '../../host-schema.js';
+import { type HostSchema, isHostSchema } from '../../host-schema.js';
 import { contentFailureMessage } from '../../utils/content-failure.js';
+import { validateEntryData } from '../../utils/data-entry-validation.js';
 import { UnsavedChangesDialog } from '../dialogs/UnsavedChangesDialog.js';
 import { LocaleSelector } from '../editor/LocaleSelector.js';
 import { SchemaForm } from '../forms/SchemaForm.js';
 
 interface DataEditorProps {
+  /** The entry's id, or '' for a new entry, which `create` writes on the first Save. */
   id: string;
   collection: string;
   initialLocale: string;
   existingLocales: string[];
   schema: HostSchema | null;
+  /** Writes a new entry holding `data`; resolves true once it is created. */
+  create?: (data: Record<string, unknown>) => Promise<boolean>;
   onSave?: () => void;
   onCancel?: () => void;
 }
@@ -28,6 +32,7 @@ export function DataEditor({
   initialLocale,
   existingLocales,
   schema,
+  create,
   onSave,
   onCancel,
 }: DataEditorProps) {
@@ -47,6 +52,8 @@ export function DataEditor({
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [hasChanges, setHasChanges] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const isNew = id === '';
 
   // Initialize form values and etag when entry loads
   useEffect(() => {
@@ -67,28 +74,46 @@ export function DataEditor({
     setHasChanges(true);
   };
 
-  // Save handler
-  const handleSave = async () => {
-    setSaveError(null);
+  /**
+   * Writes the form once it passes the schema, as the build validates the entry; resolves whether it
+   * was written.
+   */
+  const handleSave = async (): Promise<boolean> => {
+    if (saving || !isHostSchema(schema)) return false;
+    const invalid = validateEntryData(schema, values);
+    setSaveError(invalid);
+    if (invalid) return false;
 
-    const result = await updateLocalized.mutateAsync({
-      id,
-      locale: currentLocale,
-      data: {
-        content: { data: values },
-      },
-      etag: currentEtag,
-    });
+    setSaving(true);
+    try {
+      if (isNew) {
+        const created = (await create?.(values)) ?? false;
+        if (created) onSave?.();
+        return created;
+      }
 
-    if (result.success) {
+      const result = await updateLocalized.mutateAsync({
+        id,
+        locale: currentLocale,
+        data: {
+          content: { data: values },
+        },
+        etag: currentEtag,
+      });
+
+      if (!result.success) {
+        setSaveError(contentFailureMessage(result, 'Failed to save data'));
+        return false;
+      }
       setHasChanges(false);
       savedValuesRef.current = values;
       if (result.etag) {
         setCurrentEtag(result.etag);
       }
       onSave?.();
-    } else {
-      setSaveError(contentFailureMessage(result, 'Failed to save data'));
+      return true;
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -131,11 +156,12 @@ export function DataEditor({
   const handleUnsavedDialogSave = async () => {
     if (!pendingLocaleSwitch) return;
 
-    // Save current content first
+    // Save current content first; a refused save keeps the locale and the edits, with the reason shown.
     try {
-      await handleSave();
+      const saved = await handleSave();
       setShowUnsavedDialog(false);
-      await switchLocale(pendingLocaleSwitch);
+      if (saved) await switchLocale(pendingLocaleSwitch);
+      else setPendingLocaleSwitch(null);
     } catch (error) {
       // Don't switch if save failed
       console.error('Failed to save before locale switch:', error);
@@ -196,15 +222,17 @@ export function DataEditor({
   return (
     <>
       <div className="space-y-6">
-        {/* Locale selector header - only show existing locales */}
-        <div className="flex items-center gap-3 pb-4 border-b border-grey-09 dark:border-grey-03">
-          <span className="text-sm text-grey-04 dark:text-grey-07">Locale:</span>
-          <LocaleSelector
-            currentLocale={currentLocale}
-            availableLocales={existingLocales}
-            onChange={handleLocaleChange}
-          />
-        </div>
+        {/* Locale selector header - only show existing locales; a new entry has one, the one it is created in */}
+        {!isNew && (
+          <div className="flex items-center gap-3 pb-4 border-b border-grey-09 dark:border-grey-03">
+            <span className="text-sm text-grey-04 dark:text-grey-07">Locale:</span>
+            <LocaleSelector
+              currentLocale={currentLocale}
+              availableLocales={existingLocales}
+              onChange={handleLocaleChange}
+            />
+          </div>
+        )}
 
         <SchemaForm schema={schema} values={values} onChange={handleChange} />
 
@@ -229,7 +257,7 @@ export function DataEditor({
               <button
                 type="button"
                 onClick={onCancel}
-                disabled={updateLocalized.isPending}
+                disabled={saving}
                 className="px-4 py-2 border border-grey-09 dark:border-grey-03 rounded-md hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors disabled:opacity-50"
               >
                 Cancel
@@ -238,10 +266,10 @@ export function DataEditor({
             <button
               type="button"
               onClick={handleSave}
-              disabled={!hasChanges || updateLocalized.isPending}
+              disabled={(!hasChanges && !isNew) || saving || !isHostSchema(schema)}
               className="px-4 py-2 bg-azure-04 text-white rounded-md hover:bg-azure-03 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
             >
-              {updateLocalized.isPending ? (
+              {saving ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Saving...

@@ -7,7 +7,7 @@
  * the editor offers first, as new pages and fragments are.
  */
 import { afterEach, describe, expect, test } from 'bun:test';
-import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitForElementToBeRemoved } from '@testing-library/react';
 import { DataList } from '../src/components/pages/DataList.js';
 import { configureUI } from '../src/ui-config.js';
 import { bioFields } from './fixtures/typia/host-schemas.js';
@@ -32,6 +32,9 @@ describe('a new data entry on a site whose only language is German', () => {
 
     const editor = await screen.findByTestId('edit-data-dialog');
     expect(editor.textContent).toContain('authors · de');
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitForElementToBeRemoved(() => screen.queryByTestId('edit-data-dialog'));
+
     const [entry] = Array.from(testApi.listAllContent({ kind: 'data', collection: 'authors' }));
     expect(Object.keys(entry?.locales ?? {})).toEqual(['de']);
     expect(entry?.locales.de?.meta?.title).toBe('Anna Schmidt');

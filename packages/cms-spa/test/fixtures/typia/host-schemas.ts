@@ -115,6 +115,23 @@ export const bioFields = defineHostSchema<BioFields>({
   metadata: typia.json.schema<BioFields>(),
 });
 
+/** A data collection's entry fields, one of them required and one with a format. */
+export interface RequiredBioFields {
+  name: string;
+  email?: string & tags.Format<'email'>;
+}
+
+export const requiredBio = defineHostSchema<RequiredBioFields>({
+  validate: typia.createValidate<RequiredBioFields>(),
+  metadata: typia.json.schema<RequiredBioFields>(),
+});
+
+/** {@link requiredBio} behind a pruning validator, the scaffold's default, which drops undeclared keys. */
+export const prunedRequiredBio = defineHostSchema<RequiredBioFields>({
+  validate: typia.plain.createValidatePrune<RequiredBioFields>(),
+  metadata: typia.json.schema<RequiredBioFields>(),
+});
+
 /** Each field documents itself; the comment is the help text the form shows. */
 export interface HelpTextFields {
   /** Title help */

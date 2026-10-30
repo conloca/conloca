@@ -11,7 +11,7 @@
  */
 import { afterEach, beforeEach, describe, expect, onTestFinished, spyOn, test } from 'bun:test';
 import { ErrorCodes, getContentAPIClient } from '@conloca/content-api-client';
-import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitForElementToBeRemoved } from '@testing-library/react';
 import { DataList } from '../src/components/pages/DataList.js';
 import { bioFields } from './fixtures/typia/host-schemas.js';
 import { API_ROUTES, mockAPIError, renderWithProviders, setupTestAPI, testApi } from './test-utils.js';
@@ -47,14 +47,24 @@ async function createAuthorTitled(title: string) {
   fireEvent.click(screen.getByTestId('create-data-submit'));
 }
 
+/** Wait for the new entry's editor and click its Save, which creates the entry. */
+async function saveNewEntry() {
+  await screen.findByTestId('edit-data-dialog');
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+}
+
 describe('a new data entry whose name another entry has', () => {
   test('tells the author why it was not created', async () => {
     await createAuthor('john-doe', 'John Doe');
+    const createContent = spyOn(getContentAPIClient(), 'createContent');
+    onTestFinished(() => createContent.mockRestore());
 
     await createAuthorTitled('John Doe');
 
     expect(await screen.findByText('Data name john-doe already exists in collection authors')).toBeDefined();
     expect(screen.getByTestId('create-data-dialog')).toBeDefined();
+    // Refused from the names already read, before anything is written.
+    expect(createContent).toHaveBeenCalledTimes(0);
   });
 });
 
@@ -72,13 +82,14 @@ describe('a new data entry whose title has no letters a–z or digits', () => {
 
     await createAuthorTitled('照片');
 
-    await screen.findByTestId('edit-data-dialog');
+    await saveNewEntry();
+    await waitForElementToBeRemoved(() => screen.queryByTestId('edit-data-dialog'));
     expect(authorNames()).toEqual(['untitled', 'untitled-2']);
   });
 
   // Finding a free untitled name reads the collection first; on a slow connection the author may
-  // click Create again meanwhile, which made two entries.
-  test('keeps its dialog busy while it finds the name, so a second click creates nothing', async () => {
+  // click Create again meanwhile, which made two entries. Save in the editor then writes it once.
+  test('keeps its dialog busy while it finds the name, and a second Save creates nothing', async () => {
     const client = getContentAPIClient();
     const listData = client.getData.bind(client);
     let answerListing!: () => void;
@@ -104,6 +115,11 @@ describe('a new data entry whose title has no letters a–z or digits', () => {
     fireEvent.click(submit);
     answerListing();
     await screen.findByTestId('edit-data-dialog');
+    expect(createContent).toHaveBeenCalledTimes(0);
+    const save = screen.getByRole('button', { name: 'Save' });
+    fireEvent.click(save);
+    fireEvent.click(save);
+    await waitForElementToBeRemoved(() => screen.queryByTestId('edit-data-dialog'));
     expect(createContent).toHaveBeenCalledTimes(1);
     expect(authorNames()).toEqual(['untitled']);
   });
@@ -115,12 +131,14 @@ describe('a new data entry whose title has no letters a–z or digits', () => {
     mockAPIError(API_ROUTES.ALL_CONTENT, 409, ErrorCodes.NAME_TAKEN, refusal);
 
     await createAuthorTitled('照片');
+    await saveNewEntry();
 
     expect(
       await screen.findByText(
         `The title has no letters a–z or digits to make a name from, so it was named untitled-2. ${refusal}`,
       ),
     ).toBeDefined();
+    expect(screen.getByTestId('edit-data-dialog')).toBeDefined();
   });
 
   // The note on the made-up name only explains a refusal of that name; on any other failure it is
@@ -145,6 +163,7 @@ describe('a new data entry whose title has no letters a–z or digits', () => {
     mockAPIError(API_ROUTES.ALL_CONTENT, 500, ErrorCodes.WRITE_ERROR, refusal);
 
     await createAuthorTitled('照片');
+    await saveNewEntry();
 
     expect(await screen.findByText(refusal)).toBeDefined();
   });
@@ -159,6 +178,7 @@ describe('a new data entry whose title has no letters a–z or digits', () => {
     onTestFinished(() => createContent.mockRestore());
 
     await createAuthorTitled('照片');
+    await saveNewEntry();
 
     // The technical details under the message repeat the error's text.
     expect(await screen.findByText(refusal, { selector: 'p' })).toBeDefined();

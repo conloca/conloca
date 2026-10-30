@@ -358,14 +358,14 @@ describeRoute('/data', () => {
     await showing('new-data-button');
   });
 
-  test('New Entry creates the entry and opens its form', async () => {
+  test('New Entry opens an empty form and writes nothing until Save', async () => {
     openCms('/data');
 
     await submitNewAuthor();
 
     const editor = await showing('edit-data-dialog');
     expect(editor.contains(await settled(() => screen.getByLabelText(/^Bio/)))).toBe(true);
-    expect(Array.from(testApi.listAllContent({ kind: 'data', collection: 'authors' }))).toHaveLength(1);
+    expect(Array.from(testApi.listAllContent({ kind: 'data', collection: 'authors' }))).toHaveLength(0);
   });
 
   test('Save in the entry editor keeps what was typed', async () => {
@@ -395,9 +395,9 @@ describeRoute('/data', () => {
 
     await submitNewAuthor();
 
-    // The crash came after the entry loaded, so the dialog alone proves nothing: wait for the notice.
+    // The crash came when the form rendered, so the dialog alone proves nothing: wait for the notice.
     await showing('schema-form-outdated-schema');
-    expect(Array.from(testApi.listAllContent({ kind: 'data', collection: 'authors' }))).toHaveLength(1);
+    expect(Array.from(testApi.listAllContent({ kind: 'data', collection: 'authors' }))).toHaveLength(0);
   });
 
   test('an entry of a collection with no schema explains that instead of showing a form', async () => {

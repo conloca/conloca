@@ -73,13 +73,14 @@ export function DataList({ dataSchemas }: DataListProps) {
     locale: '',
     existingLocales: [] as string[],
     name: '',
+    description: '',
   });
 
   const { showError, showStaleWriteError, errorModalProps } = useErrorModal();
 
   const createContent = useCreateContent();
-  // From the Create click until the create answers, including while a title with no a–z or 0–9
-  // waits for the collection's names: a second click then would create a second entry.
+  // From the Create click until the collection's names are read: a second click meanwhile would open
+  // a second editor.
   const [creating, setCreating] = useState(false);
   const deleteContent = useDeleteContent();
   const updateLocalized = useUpdateLocalized();
@@ -165,23 +166,59 @@ export function DataList({ dataSchemas }: DataListProps) {
     );
   }
 
+  // Opens the editor on a new entry; `createEntry` writes it once the author saves valid data.
   const handleCreateEntry = async (collection: string, values: Record<string, unknown>) => {
     const title = ((values.title as string) || '').trim();
     if (!title || !collection) return;
 
-    const slug = slugify(title);
-    let name = slug;
-    const description = ((values.description as string) || '').trim() || undefined;
+    let name = slugify(title);
+    const description = ((values.description as string) || '').trim();
+
+    let items: ContentManifest[];
+    setCreating(true);
+    try {
+      items = (await getContentAPIClient().getData(collection)).items;
+    } catch (error) {
+      showError('Failed to create data entry. Please try again.', error);
+      return;
+    } finally {
+      setCreating(false);
+    }
+
+    // A title with no a–z or 0–9 (Фото, 照片) makes no name: take an untitled one no entry has.
+    name ||= untitledName(items);
+    // Names that differ only in letter case share one file on a case-insensitive disk.
+    const nameTaken = items.some((entry) =>
+      Array.from(localesOf(entry)).some((locale) => locale.name?.toLowerCase() === name.toLowerCase()),
+    );
+    if (nameTaken) {
+      showError(`Data name ${name} already exists in collection ${collection}`);
+      return;
+    }
+
+    closeCreateDialog();
+    openEditDataDialog({
+      entryId: '',
+      entryTitle: title,
+      collection,
+      locale: newEntryLocale,
+      existingLocales: [newEntryLocale],
+      name,
+      description,
+    });
+  };
+
+  /** Writes the new entry the editor is open on, holding `data`; resolves true once it is created. */
+  const createEntry = async (data: Record<string, unknown>) => {
+    const { collection, entryTitle: title, locale, name } = editDataDialog;
+    const description = editDataDialog.description || undefined;
     // The author never typed a name made up for a title with none to give: when that name is refused
     // as taken, say where it came from. Any other failure is not about the name.
     const withNameNote = (message: string, nameTaken: boolean) =>
-      slug || !nameTaken ? message : `${untitledNameNote(name)} ${message}`;
+      slugify(title) || !nameTaken ? message : `${untitledNameNote(name)} ${message}`;
 
     let result: Awaited<ReturnType<typeof createContent.mutateAsync>>;
-    setCreating(true);
     try {
-      // A title with no a–z or 0–9 (Фото, 照片) makes no name: take an untitled one no entry has.
-      name ||= untitledName((await getContentAPIClient().getData(collection)).items);
       result = await createContent.mutateAsync({
         kind: 'data',
         collection,
@@ -192,14 +229,12 @@ export function DataList({ dataSchemas }: DataListProps) {
           description,
         },
         locales: {
-          [newEntryLocale]: {
+          [locale]: {
             meta: {
               title,
               description,
             },
-            content: {
-              data: {},
-            },
+            content: { data },
           },
         },
       });
@@ -216,26 +251,14 @@ export function DataList({ dataSchemas }: DataListProps) {
         ),
         error,
       );
-      return;
-    } finally {
-      setCreating(false);
+      return false;
     }
 
-    if (result.success && result.id) {
-      closeCreateDialog();
-      // Auto-open the editor so user can fill in schema fields
-      openEditDataDialog({
-        entryId: result.id,
-        entryTitle: title,
-        collection,
-        locale: newEntryLocale,
-        existingLocales: [newEntryLocale],
-        name,
-      });
-    } else if (!result.success) {
+    if (!result.success) {
       const nameTaken = result.reason === 'name_taken' || result.reason === 'already_exists';
       showError(withNameNote(contentFailureMessage(result, 'Failed to create data entry'), nameTaken), result.error);
     }
+    return result.success;
   };
 
   const handleDeleteEntry = (entryId: string) => {
@@ -484,6 +507,7 @@ export function DataList({ dataSchemas }: DataListProps) {
               initialLocale={editDataDialog.locale}
               existingLocales={editDataDialog.existingLocales}
               schema={dataSchemas[editDataDialog.collection] ?? null}
+              create={createEntry}
               onSave={closeEditDataDialog}
               onCancel={closeEditDataDialog}
             />
