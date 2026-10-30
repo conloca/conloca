@@ -293,8 +293,9 @@ asset
     `
 Copies <file> into the conlocaCMS() assetsPath, as an editor upload does: the
 name is lowercased and made URL-safe, a name already taken becomes name-1.ext,
-and only web image formats up to 10 MB are taken. A site without assetsPath is
-wired first, as by 'data create'. Prints the reference an image field stores,
+and only web image formats up to 10 MB are taken. A site without data schemas
+is wired first, as by 'data create': schemas, the assets folder and the Typia
+packages. Prints the reference an image field stores,
 e.g. /media/hero.jpg, and the file path; --json prints {ok, ref, path, wired?,
 command?}. Exits 1 when the file is not an accepted image, astro.config
 computes assetsPath, publicDir or base, or the media folder is not served.`,

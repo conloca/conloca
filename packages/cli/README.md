@@ -325,9 +325,10 @@ conloca asset add <file> [path] [--folder <folder>] [--alt <text>] [--no-install
 The image lands in the `assetsPath` of `conlocaCMS()`, stored the way an editor upload stores it: the name lowercased
 and made URL-safe (`Hero Shot.JPG` becomes `hero-shot.jpg`), a name already taken stored as `hero-1.jpg`, and only web
 image formats up to 10 MB taken. `--folder` puts it in a folder inside the media folder; `--alt` records its alt text. A
-site without `assetsPath` yet is wired first, as `data create` wires it. It prints the reference, such as
-`/media/hero.jpg` (with the site's `base` in front), and the file path; `--json` prints
-`{ok, ref, path, wired?, command?}`. A config that computes `assetsPath`, `publicDir` or `base` stops the command.
+site without data schemas is wired first, as `data create` wires it: the schemas, the assets folder and the Typia
+packages. It prints the reference, such as `/media/hero.jpg` (with the site's `base` in front), and the file path;
+`--json` prints `{ok, ref, path, wired?, command?}`. A config that computes `assetsPath`, `publicDir` or `base` stops
+the command.
 
 Example:
 
