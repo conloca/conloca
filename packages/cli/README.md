@@ -274,7 +274,7 @@ runs build again and compare every route with the baseline:
 - A chosen route that became a Conloca page must keep its text (with image alt texts), links, head tags and status (page
   or redirect); its markup may change.
 - A route that became a Conloca page without being chosen fails, and so does a Conloca page still hidden behind its
-  `src/pages` file.
+  `src/pages` file, unless it was already hidden at baseline and not chosen.
 
 It reads the build from `dist/client` when present, else `dist`, and fails when the build wrote no fresh HTML there. The
 site is the first one in `sites.json`. The baseline stays until `--reset`; `--routes` is accepted only on the run that

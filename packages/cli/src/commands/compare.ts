@@ -13,7 +13,10 @@ import { astroI18nOf, astroOutputOf, findAstroConfig } from './doctor-astro.js';
 
 type Baseline = {
   chosenRoutes: string[];
+  /** Conloca routes the site showed at baseline time. */
   conlocaRoutes: string[];
+  /** Conloca routes a src/pages file already hid at baseline time. */
+  hiddenRoutes: string[];
 };
 
 const isStringArray = (value: JsonValue | undefined): value is string[] =>
@@ -25,7 +28,8 @@ function isBaseline(value: JsonValue): value is Baseline {
     value !== null &&
     !Array.isArray(value) &&
     isStringArray(value.chosenRoutes) &&
-    isStringArray(value.conlocaRoutes)
+    isStringArray(value.conlocaRoutes) &&
+    isStringArray(value.hiddenRoutes)
   );
 }
 
@@ -105,7 +109,12 @@ export async function compare(
   }
 
   const pages = await withStdoutRedirected(json, () => readConlocaPages(contentRoot, sites));
-  const conlocaRoutes = pages.filter((page) => page.site === site && page.defaultLocale).map((page) => page.pathname);
+  const config = { serverOutput: astroOutputOf(configText) === 'server', i18n: astroI18nOf(configText) };
+  const routesNow = siteRoutes(await readFileRoutes(projectDir, config, sites, site), pages, site);
+  const conlocaRoutes = routesNow
+    .filter((route) => route.pageId !== undefined && route.hidden !== true)
+    .map((route) => route.route);
+  const hiddenNow = routesNow.filter((route) => route.hidden);
 
   if (baseline === null) {
     const saved = outFiles.filter(
@@ -119,8 +128,9 @@ export async function compare(
       }),
     );
     const chosenRoutes = chosen ?? [];
+    const hiddenRoutes = hiddenNow.map((route) => route.route);
     // Written last: a baseline.json only exists next to a complete output/.
-    await writeFile(baselinePath, JSON.stringify({ chosenRoutes, conlocaRoutes } satisfies Baseline));
+    await writeFile(baselinePath, JSON.stringify({ chosenRoutes, conlocaRoutes, hiddenRoutes } satisfies Baseline));
     const routeCount = new Set(saved.filter(isComparedOutputFile).map(routeOfOutputFile)).size;
     if (json) {
       console.log(
@@ -145,15 +155,17 @@ export async function compare(
 
   const chosenRoutes = new Set(baseline.chosenRoutes);
   const before = new Set(baseline.conlocaRoutes);
+  // A page hidden at baseline that is shown now counts as new: converted when chosen, an unchosen failure otherwise.
   const newPages = conlocaRoutes.filter((route) => !before.has(route));
   const convertedRoutes = new Set(newPages.filter((route) => chosenRoutes.has(route)));
   const unchosen = newPages
     .filter((route) => !chosenRoutes.has(route))
     .map((route) => `${route} became a Conloca page but was not chosen`);
   const comparison = await compareOutputs({ baselineDir: outputRoot, currentDir: outDir, convertedRoutes });
-  const config = { serverOutput: astroOutputOf(configText) === 'server', i18n: astroI18nOf(configText) };
-  const hidden = siteRoutes(await readFileRoutes(projectDir, config, sites, site), pages, site)
-    .filter((route) => route.hidden)
+  // Pages hidden already at baseline belong to routes the agent must not touch, unless the user chose them.
+  const hiddenBefore = new Set(baseline.hiddenRoutes);
+  const hidden = hiddenNow
+    .filter((route) => chosenRoutes.has(route.route) || !hiddenBefore.has(route.route))
     .map((route) => `${route.route} is a Conloca page hidden behind ${route.file} — delete the file`);
   const ok =
     comparison.routes.every((route) => route.differences.length === 0) &&

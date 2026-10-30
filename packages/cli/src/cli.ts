@@ -155,10 +155,11 @@ chose (--routes). Later runs build again and compare every route with the
 baseline: untouched routes must be identical (linked CSS included), and chosen
 routes that became Conloca pages must keep their text, links, head tags and
 status. A route that became a Conloca page without being chosen fails, and so
-does a Conloca page still hidden behind its src/pages file. Hashed asset
-names, timestamps and island ids never count. Reads the build from
-dist/client, else dist. The baseline stays in node_modules/.cache until
---reset. Never commits. Exits 1 when anything differs.`,
+does a Conloca page still hidden behind its src/pages file, unless it was
+already hidden at baseline and not chosen. Hashed asset names, timestamps and
+island ids never count. Reads the build from dist/client, else dist. The
+baseline stays in node_modules/.cache until --reset. Never commits. Exits 1
+when anything differs.`,
   )
   .action(async (path: string, options: { routes?: string; reset?: boolean; json?: boolean }) => {
     await compare(path, { routes: options.routes, reset: options.reset === true, json: options.json === true });

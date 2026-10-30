@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { existsSync } from 'node:fs';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { $ } from 'bun';
@@ -145,6 +145,26 @@ describe('conloca compare', () => {
     const result = await report(dir);
     expect(result.ok).toBe(false);
     expect(result.hidden[0]).toContain('src/pages/pricing.astro');
+  });
+
+  describe('with a Conloca page already hidden at baseline', () => {
+    beforeEach(async () => {
+      await Bun.write(join(dir, 'content', 'default', 'pages', 'pricing.en.vxjson'), pageFile('pricing'));
+      await Bun.write(join(dir, 'src', 'pages', 'pricing.astro'), '<h1>Pricing</h1>\n');
+    });
+
+    test('choosing it and deleting the hiding file converts the route', async () => {
+      expect((await run(dir, '--routes', '/pricing')).exitCode).toBe(0);
+      await unlink(join(dir, 'src', 'pages', 'pricing.astro'));
+      const result = await report(dir);
+      expect(result).toMatchObject({ ok: true, unchosen: [], hidden: [] });
+      expect(result.routes.find((r: RouteResult) => r.route === '/pricing').kind).toBe('converted');
+    });
+
+    test('leaving it unchosen and untouched passes', async () => {
+      expect((await run(dir)).exitCode).toBe(0);
+      expect(await report(dir)).toMatchObject({ ok: true, unchosen: [], hidden: [] });
+    });
   });
 
   test('a failing build saves no baseline', async () => {
