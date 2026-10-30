@@ -242,6 +242,30 @@ modifies a file. `--json` prints `{ok, site, routes}`; each route carries `route
   src/pages/pricing.astro hides Conloca page pricing
 ```
 
+### List components
+
+List the site's Puck components and the fields each accepts:
+
+```bash
+conloca components [path] [--json]
+```
+
+| Argument / Option | Description                                    | Default                 |
+| ----------------- | ---------------------------------------------- | ----------------------- |
+| `path`            | Project directory, holding `astro.config`      | `.` (current directory) |
+| `--json`          | Print the component manifest as JSON on stdout |                         |
+
+It reads the Puck config that `conlocaCMS`'s `puckConfigPath` names from source, without running it, and prints one line
+per component with its fields, then each component it could not read with the reason. `--json` prints the manifest the
+editor and agents use: `components`, `unresolved` and, when the config cannot be fully read, `unreadable: true` with
+`unreadableReason`. An unreadable config is still an answer; the command fails only without an `astro.config` or when
+`puckConfigPath` is not a plain string. Read-only: it never modifies a file.
+
+```plain
+Hero: title (text), image (image)
+Card: heading (text), body (textarea)
+```
+
 ### Create a Page
 
 Create a Puck page in a site's default locale:

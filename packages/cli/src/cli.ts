@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import { type AssetAddOptions, assetAdd } from './commands/asset-add.js';
+import { components } from './commands/components.js';
 import { connect } from './commands/connect.js';
 import { create } from './commands/create.js';
 import { type DataCreateOptions, type DataUpdateOptions, dataCreate, dataUpdate } from './commands/data.js';
@@ -114,6 +115,24 @@ in [path]. Read-only: never modifies any file.`,
   )
   .action(async (path: string, options: { site?: string; json?: boolean }) => {
     await routes(path, { site: options.site, json: options.json === true });
+  });
+
+program
+  .command('components')
+  .argument('[path]', 'Project directory', '.')
+  .option('--json', 'Print the component manifest as JSON on stdout')
+  .description("List the site's Puck components and their fields")
+  .addHelpText(
+    'after',
+    `
+Reads the Puck config that conlocaCMS's puckConfigPath names from source,
+without running it, and prints one line per component with its fields.
+--json prints the manifest the editor and agents use. A config that cannot be
+fully read is still an answer: the manifest says what and why. Needs an
+astro.config in [path]. Read-only: never modifies any file.`,
+  )
+  .action(async (path: string, options: { json?: boolean }) => {
+    await components(path, { json: options.json === true });
   });
 
 program
