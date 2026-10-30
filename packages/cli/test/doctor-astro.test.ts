@@ -371,6 +371,39 @@ export default defineConfig({
     }
   });
 
+  test("C11: only the configured site's page is reported when another site has the same path", async () => {
+    const dir = await makeAstroProject('conloca-astro-c11-sites-');
+    try {
+      await Bun.write(
+        join(dir, 'content', 'sites.json'),
+        JSON.stringify({
+          sites: {
+            default: { locales: ['en'], defaultLocale: 'en' },
+            other: { locales: ['en'], defaultLocale: 'en' },
+          },
+          globalLocales: ['en'],
+        }),
+      );
+      await Bun.write(
+        join(dir, 'content', 'default', 'pages', 'about.en.vxjson'),
+        VALID_PAGE.replace('"id":"home"', '"id":"about"'),
+      );
+      await Bun.write(
+        join(dir, 'content', 'other', 'pages', 'about.en.vxjson'),
+        VALID_PAGE.replace('"id":"home"', '"id":"other-about"'),
+      );
+      await Bun.write(join(dir, 'src', 'pages', 'about.astro'), '<h1>About</h1>\n');
+      const result = await $`${CLI} doctor --json ${dir}`.quiet().nothrow();
+      expect(result.exitCode).toBe(0);
+      const report = JSON.parse(result.stdout.toString());
+      const c11 = report.problems.filter((problem: { check: string }) => problem.check === 'C11');
+      expect(c11).toHaveLength(1);
+      expect(c11[0].message).toContain('src/pages/about.astro hides the Conloca page /about (about)');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   test('C11: index.astro passes when no Conloca page has its path', async () => {
     const dir = await makeAstroProject('conloca-astro-c11-index-');
     try {

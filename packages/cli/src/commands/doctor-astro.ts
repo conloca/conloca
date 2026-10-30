@@ -16,7 +16,7 @@ import {
 import { ASTRO_CONFIG_FILES } from '../lib/connect/astro-config.js';
 import { isRecord } from '../lib/is-record.js';
 import { type ProjectPackage, readProjectDependencies } from '../lib/project-dependencies.js';
-import { type ConlocaPageRef, readFileRoutes } from '../lib/site-routes.js';
+import { type ConlocaPageRef, readFileRoutes, siteRoutes } from '../lib/site-routes.js';
 import type { CheckOutcome, DoctorProblem } from './doctor.js';
 
 /** The project's astro config path, in the order Astro and connect pick one; undefined when there is none. */
@@ -534,12 +534,13 @@ async function checkPrerender(projectDir: string, configText: string): Promise<C
   return outcome;
 }
 
-/** C11 — no default-locale Conloca page shares its path with a src/pages file, which always wins. */
+/** C11 — no default-locale Conloca page of the site shares its path with a src/pages file, which always wins. */
 function checkHiddenPages(
   projectDir: string,
   options: CallOptions,
   fileRoutes: readonly StaticPageRoute[] | null,
   pages: readonly ConlocaPageRef[],
+  site: string,
 ): CheckOutcome {
   const outcome = outcomeOf('C11');
   if (options.state === 'no-call') {
@@ -550,14 +551,12 @@ function checkHiddenPages(
     outcome.skipped = SRC_PAGES_UNREADABLE;
     return outcome;
   }
-  const fileByRoute = new Map(fileRoutes.map(({ route, file }) => [route, file]));
-  for (const page of pages) {
-    const file = page.defaultLocale ? fileByRoute.get(page.pathname) : undefined;
-    if (file === undefined) continue;
+  for (const { route, file, pageId, hidden } of siteRoutes(fileRoutes, pages, site)) {
+    if (!hidden || file === undefined) continue;
     outcome.problems.push({
       check: 'C11',
       level: 'warn',
-      message: `${file} hides the Conloca page ${page.pathname} (${page.id}) — a src/pages file always wins over a Conloca page at the same path; delete the file in the same change that makes the Conloca page live`,
+      message: `${file} hides the Conloca page ${route} (${pageId}) — a src/pages file always wins over a Conloca page at the same path; delete the file in the same change that makes the Conloca page live`,
       path: join(projectDir, file),
     });
   }
@@ -664,6 +663,7 @@ export async function runAstroChecks(
     sites ?? { sites: {}, globalLocales: ['en'] },
     site,
   ).catch(() => null);
+  const sitePages = pages.filter((page) => page.site === site);
 
   return [
     await checkContentConfig(projectDir),
@@ -674,8 +674,8 @@ export async function runAstroChecks(
     checkPeers(pkg),
     await checkTsconfigJsx(projectDir),
     await checkPrerender(projectDir, configText),
-    checkHiddenPages(projectDir, options, fileRoutes, pages),
-    checkHasPages(fileRoutes, pages),
-    await checkSiteStyles(projectDir, options, callOptions(configText, 'conlocaCloud'), pages),
+    checkHiddenPages(projectDir, options, fileRoutes, sitePages, site),
+    checkHasPages(fileRoutes, sitePages),
+    await checkSiteStyles(projectDir, options, callOptions(configText, 'conlocaCloud'), sitePages),
   ];
 }
