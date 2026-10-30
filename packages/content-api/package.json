@@ -93,6 +93,11 @@
       "types": "./dist/editor-host.d.ts",
       "import": "./dist/editor-host.js",
       "default": "./dist/editor-host.js"
+    },
+    "./skill-stamp": {
+      "types": "./dist/skill-stamp.d.ts",
+      "import": "./dist/skill-stamp.js",
+      "default": "./dist/skill-stamp.js"
     }
   },
   "scripts": {
