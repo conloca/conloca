@@ -25,22 +25,21 @@ export interface AstroI18nLocales {
   defaultLocale: string;
 }
 
-const PAGE_EXTENSIONS = ['.astro', '.md', '.mdx', '.html'];
+const PAGE_EXTENSIONS = new Set(['.astro', '.md', '.mdx', '.html']);
 const PRERENDER_EXPORT = /\bprerender\s*[=:]\s*(true|false)\b/;
 
-/**
- * Lists the static page routes of a pages folder; dynamic routes, underscore/dot paths, endpoints, error pages and
- * non-default-locale folders are left out. Routes are file-derived and returned verbatim for the caller to validate.
- */
+/** Lists a pages folder's static routes verbatim, leaving out dynamic, underscore, endpoint, error and locale pages. */
 export async function collectStaticPageRoutes(input: StaticPageRoutesInput): Promise<StaticPageRoute[]> {
-  const entries = await readdir(input.pagesDir, { recursive: true, withFileTypes: true }).catch((error: unknown) => {
-    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return [];
-    throw error;
-  });
+  const entries = await readdir(input.pagesDir, { recursive: true, withFileTypes: true }).catch(
+    (error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return [];
+      throw error;
+    },
+  );
 
-  const routes: StaticPageRoute[] = [];
+  const pages: { route: string; file: string }[] = [];
   for (const entry of entries) {
-    if (!entry.isFile() || !PAGE_EXTENSIONS.includes(extname(entry.name))) continue;
+    if (!entry.isFile() || !PAGE_EXTENSIONS.has(extname(entry.name))) continue;
     const segments = relative(input.pagesDir, join(entry.parentPath, entry.name)).split(sep);
     if (segments.some((s) => s.startsWith('_') || s.startsWith('.') || s.includes('['))) continue;
 
@@ -49,20 +48,23 @@ export async function collectStaticPageRoutes(input: StaticPageRoutesInput): Pro
     if (routeSegments[routeSegments.length - 1] === 'index') routeSegments.pop();
     const route = `/${routeSegments.join('/')}`;
     if (route === '/404' || route === '/500' || input.nonDefaultLocales.includes(routeSegments[0] ?? '')) continue;
-
-    const source = await readFile(join(input.pagesDir, file), 'utf8').catch(() => '');
-    const prerender = PRERENDER_EXPORT.exec(source)?.[1];
-    routes.push({ route, file, prerendered: input.serverOutput ? prerender === 'true' : prerender !== 'false' });
+    pages.push({ route, file });
   }
 
+  const routes = await Promise.all(
+    pages.map(async ({ route, file }): Promise<StaticPageRoute> => {
+      const source = await readFile(join(input.pagesDir, file), 'utf8').catch(() => '');
+      const prerender = PRERENDER_EXPORT.exec(source)?.[1];
+      return { route, file, prerendered: input.serverOutput ? prerender === 'true' : prerender !== 'false' };
+    }),
+  );
   // Code-unit order, not locale order, so the listing is the same on every machine; files are unique per route.
-  return routes.sort((a, b) => (a.route === b.route ? (a.file < b.file ? -1 : 1) : a.route < b.route ? -1 : 1));
+  // oxlint-disable-next-line unicorn/no-array-sort -- the target lib predates toSorted; this sorts a fresh local array.
+  routes.sort((a, b) => (a.route === b.route ? (a.file < b.file ? -1 : 1) : a.route < b.route ? -1 : 1));
+  return routes;
 }
 
-/**
- * Locales whose first path segment is not the site's default: sites.json's global and per-site locales minus the
- * site default, plus Astro i18n locales (or their `path`) minus the i18n default. Deduplicated and sorted.
- */
+/** Locales other than the default: sites.json's global and every site's locales, plus Astro i18n locale paths. */
 export function nonDefaultLocalesOf(
   sites: {
     sites: Record<string, { locales?: readonly string[]; defaultLocale?: string }>;
@@ -80,5 +82,8 @@ export function nonDefaultLocalesOf(
     const path = typeof locale === 'string' ? locale : locale.path;
     if (path !== i18n?.defaultLocale) locales.add(path);
   }
-  return [...locales].sort();
+  const sorted = [...locales];
+  // oxlint-disable-next-line unicorn/no-array-sort -- the target lib predates toSorted; this sorts a fresh local copy.
+  sorted.sort();
+  return sorted;
 }
