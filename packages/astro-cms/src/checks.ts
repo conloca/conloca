@@ -18,3 +18,4 @@ export {
   type StaticPageRoute,
   type StaticPageRoutesInput,
 } from './lib/static-page-routes.js';
+export { isSlotContent } from './lib/unknown-components.js';

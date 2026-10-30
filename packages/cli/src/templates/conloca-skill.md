@@ -106,6 +106,8 @@ building.
 - A page referencing a Puck component type missing from puck.config.tsx serves HTTP 200 with a blank region and a clean
   browser console. The only signal is `[Conloca] Page references N component type(s) missing from your Puck config: ...`
   in the dev-server or build terminal.
+- `conloca doctor` finds them before a build: C14 warns about every component type or prop a page stores that the Puck
+  config does not declare.
 - The editor at `/__cms` exists only on the dev server. A production build without it is not a bug.
 
 ## Writing content from the command line

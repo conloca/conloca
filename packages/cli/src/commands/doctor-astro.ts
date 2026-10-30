@@ -1,8 +1,8 @@
 import { existsSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
-import { join, sep } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import type { AstroI18nLocales, StaticPageRoute } from '@conloca/astro-cms/checks';
-import type { SitesConfig } from '@conloca/content-api/node';
+import type { JsonValue, SitesConfig } from '@conloca/content-api/node';
 import {
   balancedSlice,
   type CallOptions,
@@ -14,7 +14,9 @@ import {
   stripComments,
 } from '../lib/config-text.js';
 import { ASTRO_CONFIG_FILES } from '../lib/connect/astro-config.js';
+import { contentRootOf } from '../lib/content-root.js';
 import { isRecord } from '../lib/is-record.js';
+import { componentFindings, hasPuckItems, readSiteComponents } from '../lib/page-components.js';
 import { type ProjectPackage, readProjectDependencies } from '../lib/project-dependencies.js';
 import { type ConlocaPageRef, readFileRoutes, siteRoutes } from '../lib/site-routes.js';
 import type { CheckOutcome, DoctorProblem } from './doctor.js';
@@ -151,6 +153,7 @@ const ASTRO_CHECK_LABELS = {
   C10: 'server-output pages declare prerender',
   C11: 'no Conloca page is hidden behind a src/pages file',
   C13: 'the site has Conloca pages to edit',
+  C14: 'pages use only components and fields the Puck config declares',
   C15: 'siteStyles styles Conloca pages in the editor',
 } satisfies Record<string, string>;
 
@@ -581,6 +584,68 @@ function checkHasPages(fileRoutes: readonly StaticPageRoute[] | null, pages: rea
   return outcome;
 }
 
+/** The stored `content.puckData` of a page file; undefined when it cannot be read or parsed. */
+async function readPuckData(file: string): Promise<JsonValue | undefined> {
+  const text = await readFile(file, 'utf-8').catch(() => null);
+  if (text === null) return undefined;
+  try {
+    const page: JsonValue = JSON.parse(text);
+    const content = isRecord(page) ? page.content : undefined;
+    return isRecord(content) ? content.puckData : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** C14 — the components and props Puck pages store are ones the Puck config declares. */
+async function checkPageComponents(
+  projectDir: string,
+  options: CallOptions,
+  pages: readonly ConlocaPageRef[],
+): Promise<CheckOutcome> {
+  const outcome = outcomeOf('C14');
+  const stored = await Promise.all(
+    pages
+      .filter((page) => page.type === 'puck')
+      .map(async (page) => ({ page, puckData: await readPuckData(page.file) })),
+  );
+  const filled = stored.filter(({ puckData }) => hasPuckItems(puckData));
+  // Reading the config loads the TypeScript compiler, so pages without content never pay for it.
+  if (filled.length === 0) return outcome;
+  const site = await readSiteComponents(projectDir, options);
+  if ('reason' in site) {
+    outcome.skipped = site.reason;
+    return outcome;
+  }
+  const { manifest } = site;
+  // Warnings, never errors: stale props are common, and `conloca upgrade` rolls back on doctor errors.
+  if (manifest.unreadable && Object.keys(manifest.components).length === 0) {
+    outcome.problems.push({
+      check: 'C14',
+      level: 'warn',
+      message: `could not read the Puck config (${manifest.unreadableReason}), so page components were not checked`,
+    });
+    return outcome;
+  }
+  const contentRoot = contentRootOf(projectDir);
+  for (const { page, puckData } of filled) {
+    const file = relative(contentRoot, page.file).split(sep).join('/');
+    for (const { component, field } of componentFindings(puckData, manifest)) {
+      const fields = Object.keys(manifest.components[component]?.fields ?? {}).join(', ') || 'none';
+      outcome.problems.push({
+        check: 'C14',
+        level: 'warn',
+        message:
+          field === undefined
+            ? `${file}: component "${component}" is not in the Puck config — it renders as nothing`
+            : `${file}: ${component} has no field "${field}" (fields: ${fields}) — its value is never shown`,
+        path: page.file,
+      });
+    }
+  }
+  return outcome;
+}
+
 /** C15 — when Conloca pages exist and the project has a stylesheet, siteStyles brings it into the editor. */
 async function checkSiteStyles(
   projectDir: string,
@@ -676,6 +741,7 @@ export async function runAstroChecks(
     await checkPrerender(projectDir, configText),
     checkHiddenPages(projectDir, options, fileRoutes, sitePages, site),
     checkHasPages(fileRoutes, sitePages),
+    await checkPageComponents(projectDir, options, sitePages),
     await checkSiteStyles(projectDir, options, callOptions(configText, 'conlocaCloud'), sitePages),
   ];
 }

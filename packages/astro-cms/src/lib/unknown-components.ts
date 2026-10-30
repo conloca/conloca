@@ -11,7 +11,7 @@ interface PuckItem {
  * config which fields are slots would miss a component the config no longer
  * declares, and that is precisely the case this check exists for.
  */
-function isSlotContent(value: unknown): value is PuckItem[] {
+export function isSlotContent(value: unknown): value is PuckItem[] {
   return (
     Array.isArray(value) &&
     value.length > 0 &&

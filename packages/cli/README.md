@@ -173,6 +173,8 @@ never executed):
 - with `output: 'server'`, every file under `src/pages` declares `prerender`
 - no Conloca page is hidden behind a `src/pages` file at the same path — the file always wins (a warning)
 - a site with static `src/pages` routes has at least one Conloca page for the editor (a warning)
+- every component and prop a Puck page stores is one the Puck config declares — an undeclared one renders as nothing (a
+  warning)
 - when Conloca pages exist and `src/` holds a stylesheet, `siteStyles` brings it into the editor (a warning)
 
 Anything doctor cannot determine becomes an explicit warning, never a silent pass, and it never modifies files. The exit
@@ -196,6 +198,7 @@ Checking /path/to/my-astro-project/content
 …
 ✓ C11 no Conloca page is hidden behind a src/pages file
 ✓ C13 the site has Conloca pages to edit
+✓ C14 pages use only components and fields the Puck config declares
 ✓ C15 siteStyles styles Conloca pages in the editor
 
 Found 1 error, 0 warnings

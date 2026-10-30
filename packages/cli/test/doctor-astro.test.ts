@@ -85,6 +85,32 @@ async function makeAstroProject(prefix: string): Promise<string> {
   return dir;
 }
 
+/** An astro project whose home page stores an undeclared component and an undeclared Hero prop. */
+async function makeC14Project(prefix: string): Promise<string> {
+  const dir = await makeAstroProject(prefix);
+  await Bun.write(
+    join(dir, 'astro.config.mjs'),
+    GOOD_ASTRO_CONFIG.replace("'./src/puck.config.tsx'", "'./src/puck.config.ts'"),
+  );
+  await Bun.write(
+    join(dir, 'src', 'puck.config.ts'),
+    "export default { components: { Hero: { fields: { title: { type: 'text' }, image: { type: 'text' } }, render: () => null } } };\n",
+  );
+  const page = JSON.parse(VALID_PAGE);
+  page.content = {
+    puckData: {
+      root: {},
+      content: [
+        { type: 'Hero', props: { id: 'h', title: 'Hi', subtitel: 'x' } },
+        { type: 'Missing', props: { id: 'm' } },
+      ],
+      zones: {},
+    },
+  };
+  await Bun.write(join(dir, 'content', 'default', 'pages', 'home.en.vxjson'), JSON.stringify(page));
+  return dir;
+}
+
 async function runDoctor(dir: string): Promise<{ exitCode: number; stdout: string }> {
   const result = await $`${CLI} doctor ${dir}`.quiet().nothrow();
   return { exitCode: result.exitCode, stdout: result.stdout.toString() };
@@ -99,7 +125,7 @@ describe('conloca doctor astro checks', () => {
       const { exitCode, stdout } = await runDoctor(dir);
       expect(exitCode).toBe(0);
       expect(stdout).toContain('(skipped: no astro.config found)');
-      for (const id of ['C1', 'C2', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10', 'C11', 'C13', 'C15']) {
+      for (const id of ['C1', 'C2', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10', 'C11', 'C13', 'C14', 'C15']) {
         expect(stdout).toContain(id);
       }
     } finally {
@@ -427,6 +453,39 @@ export default defineConfig({
       expect(stdout).toContain('! C13');
       expect(stdout).toContain('src/pages has 2 static pages (/, /pricing)');
       expect(stdout).toContain('Converting an existing Astro page');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('C14: an unknown component and field warn and never fail doctor', async () => {
+    const dir = await makeC14Project('conloca-astro-c14-');
+    try {
+      const { exitCode, stdout } = await runDoctor(dir);
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain('! C14');
+      expect(stdout).toContain('default/pages/home.en.vxjson: component "Missing" is not in the Puck config');
+      expect(stdout).toContain('Hero has no field "subtitel" (fields: title, image)');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('C14: an unreadable Puck config is a single warning', async () => {
+    const dir = await makeC14Project('conloca-astro-c14-unreadable-');
+    try {
+      await rm(join(dir, 'src', 'puck.config.ts'));
+      const home = await Bun.file(join(dir, 'content', 'default', 'pages', 'home.en.vxjson')).text();
+      await Bun.write(
+        join(dir, 'content', 'default', 'pages', 'about.en.vxjson'),
+        home.replace('"id":"home"', '"id":"about"'),
+      );
+      const result = await $`${CLI} doctor --json ${dir}`.quiet().nothrow();
+      expect(result.exitCode).toBe(0);
+      const report = JSON.parse(result.stdout.toString());
+      const c14 = report.problems.filter((problem: { check: string }) => problem.check === 'C14');
+      expect(c14).toHaveLength(1);
+      expect(c14[0].message).toContain('could not read the Puck config');
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
