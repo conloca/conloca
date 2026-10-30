@@ -44,6 +44,12 @@ export async function assetAdd(file: string, directory: string, options: AssetAd
   const { json } = options;
   try {
     const projectDir = resolve(directory);
+    // Before the wiring, so a mistyped file name leaves the site untouched.
+    const bytes = await readFile(file).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') fail(json, `no file ${file}`);
+      throw error;
+    });
+    const image = new File([bytes], basename(file));
     // Outside withStdoutRedirected: it may fail, and fail's --json report belongs on stdout.
     const wiring = await ensureDataWiring(projectDir, options);
     // Read after the wiring: it may just have added assetsPath.
@@ -54,7 +60,6 @@ export async function assetAdd(file: string, directory: string, options: AssetAd
     const refBase = deriveAssetRefBase(assetsFolder, pathToFileURL(`${resolve(projectDir, publicDir)}/`), base);
 
     const assets = new AssetOperations({ assetsPath: assetsFolder, contentRoot: contentRootOf(directory) });
-    const image = new File([await readFile(file)], basename(file));
     const uploaded = await withStdoutRedirected(json, () =>
       assets.upload(image, { alt: options.alt, folder: options.folder }),
     );

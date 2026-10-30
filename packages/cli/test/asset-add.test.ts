@@ -117,6 +117,15 @@ describe('conloca asset add', () => {
     expect(report).toMatchObject({ ok: false, error: expect.stringMatching(/Invalid format/) });
   });
 
+  test('refuses a missing file before it wires the site', async () => {
+    const dir = await makeSite();
+    const { exitCode, report } = await addJson(dir, 'typo.jpg');
+    expect(exitCode).toBe(1);
+    expect(report.error).toBe(`no file ${join(dir, 'typo.jpg')}`);
+    expect(await readFile(join(dir, 'astro.config.mjs'), 'utf-8')).toBe(connectedConfig());
+    expect(await exists(join(dir, 'public', 'media'))).toBe(false);
+  });
+
   test('wires the media folder first on a site that has none', async () => {
     const dir = await makeSite();
     const { exitCode, report } = await addJson(dir, 'hero.jpg');
