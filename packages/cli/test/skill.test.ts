@@ -73,4 +73,40 @@ describe('conloca agent skill', () => {
       expect(skill).toContain(text);
     expect(skill).not.toContain('npx @conloca/cli doctor');
   });
+
+  test('the skill carries every conversion rule and no hardcoded MCP address', async () => {
+    const skill = await readFile(SKILL_TEMPLATE, 'utf-8');
+    const start = skill.indexOf('## Converting an existing Astro page');
+    expect(start).toBeGreaterThan(-1);
+    const end = skill.indexOf('\n## ', start + 1);
+    const section = skill.slice(start, end === -1 ? undefined : end);
+    for (const rule of [
+      'conloca upgrade',
+      'conloca routes',
+      'conloca components --json',
+      'conloca compare --reset --routes',
+      'conloca doctor',
+      'src/components/puck/',
+      'siteStyles',
+      'withHydration()',
+      'conloca asset add',
+      'conloca page update',
+      'conloca data create',
+      '`title`, `description`, `page`',
+      'one copy',
+      "'header', 'en').menu",
+      'header and footer',
+      'Fragments',
+      'fail the build',
+      'Never hand-write content files',
+      'same change',
+      'identical',
+      'allowed change',
+      'Report every changed file',
+      'MCP',
+      'cannot change code',
+    ])
+      expect(section).toContain(rule);
+    expect(section.match(/https?:\/\/\S+/g) ?? []).toEqual(['https://conloca.com/workspace-mcp/.']);
+  });
 });

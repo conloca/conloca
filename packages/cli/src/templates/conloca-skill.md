@@ -173,6 +173,47 @@ After writing content, run the build: it validates every entry against its schem
 - Plain `.md` files are never adopted — only `.mdx` and `.vxjson` are recognized as pages. Rename `.md` to `.mdx` to
   bring a file under management.
 
+## Converting an existing Astro page
+
+Use this when the user names existing `src/pages` routes to make editable. Convert only those routes.
+
+1. Run `conloca upgrade` (with the version your prompt gave, as defined above). Stop and report if it or
+   `conloca doctor` fails: the commands below ship in that release.
+2. Run `conloca routes` and check each named route is listed. Dynamic routes (`[slug].astro`, content collection pages)
+   and non-default-locale routes are out of scope and never listed.
+3. Before changing anything, run `conloca compare --reset --routes /a,/b` with exactly the routes the user named; it
+   builds the site and saves a fresh baseline.
+4. Run `conloca components --json` to see the components the site already has.
+5. Port each section of the page to a React component in `src/components/puck/` whose editable text and images are
+   fields. `.astro` components cannot be Puck components: port, do not reuse. Scoped `<style>` moves into a stylesheet
+   listed in `siteStyles`; `<script>` and `client:` islands keep working through `withHydration()`; links stay links;
+   images that become fields go into the assets folder with `conloca asset add`.
+6. Render the page through the layout the original used: point `conlocaCMS` (or a per-route layout) at it and adapt it
+   to the props Conloca passes (`title`, `description`, `page`).
+7. Text from data files (like `src/data/*.ts`): per-page text goes into the page; values shared across pages go into
+   data entries, moved once, on the first conversion that needs them. Every importer of those values (pages, layout,
+   endpoints, browser components through props) then reads the same data entries, so there is one copy. Pages the user
+   did not name may change only there, and their output must stay identical.
+8. The shared header and footer stay code in the layout. Their texts and links (menu items, footer links, contact
+   details) move into a data entry the layout reads. Fragments are for prose blocks placed inside pages.
+9. Read a shared entry by a fixed name and fail the build when it is missing or duplicated:
+   `conlocaDataEntry(dataSchemas, 'site', await getCollection('site'), 'header', 'en').menu` throws in both cases.
+10. Write all content through the CLI: `conloca page create` / `conloca page update` (with `--content` and the metadata
+    flags), `conloca data create` / `conloca data update`, `conloca asset add`. Never hand-write content files.
+11. Delete the old `.astro` file in the same change that makes the Conloca page live. A `src/pages` file always wins
+    over a Conloca page at the same path, so the page cannot be seen before that; `conloca compare` is the check, not
+    the browser.
+12. Run `conloca compare` again. Every route you did not convert must be identical (its linked stylesheets too); every
+    converted route must keep its text, links, `<head>` tags and status; a route that became a Conloca page without
+    being named fails. Fix and rerun until it passes, then run `conloca doctor`.
+13. Report every changed file, every page you were not asked to convert whose code changed, every allowed change
+    `conloca compare` listed (for example island props that now carry shared values), and anything that could not be
+    converted faithfully.
+
+The workspace also has an MCP server for editing content remotely: pages, fragments and data entries on pushed branches.
+It cannot change code, upload media or publish. Use the address the editor's prompt gives you; never guess or hardcode
+one. Setup and limits: https://conloca.com/workspace-mcp/.
+
 ## Custom Puck components
 
 Follow the generated examples in `src/components/puck/` — that is the one proven path:
