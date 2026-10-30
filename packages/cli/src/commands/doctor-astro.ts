@@ -1,7 +1,8 @@
 import { existsSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
-import { join } from 'node:path';
-import type { AstroI18nLocales } from '@conloca/astro-cms/checks';
+import { join, sep } from 'node:path';
+import type { AstroI18nLocales, StaticPageRoute } from '@conloca/astro-cms/checks';
+import type { SitesConfig } from '@conloca/content-api/node';
 import {
   balancedSlice,
   type CallOptions,
@@ -15,6 +16,7 @@ import {
 import { ASTRO_CONFIG_FILES } from '../lib/connect/astro-config.js';
 import { isRecord } from '../lib/is-record.js';
 import { type ProjectPackage, readProjectDependencies } from '../lib/project-dependencies.js';
+import { type ConlocaPageRef, readFileRoutes } from '../lib/site-routes.js';
 import type { CheckOutcome, DoctorProblem } from './doctor.js';
 
 /** The project's astro config path, in the order Astro and connect pick one; undefined when there is none. */
@@ -62,6 +64,10 @@ export function astroI18nOf(configText: string): AstroI18nLocales | undefined {
 const CMS_PEERS = ['@vitejs/plugin-react'];
 
 const PAGE_FILE_RE = /\.(?:astro|ts|md|mdx)$/;
+
+const STYLESHEET_RE = /\.(?:css|scss|sass|less|styl)$/;
+
+const SRC_PAGES_UNREADABLE = 'src/pages could not be read';
 
 /** The calls a `collections` member may be, for the config text to show every collection it makes. */
 const IN_VIEW_COLLECTION_CALLS = new Set(['conlocaPages', 'conlocaData', 'conlocaFragments', 'defineCollection']);
@@ -134,7 +140,7 @@ export function declaredPageCollections(configText: string): Set<string> | null 
 }
 
 /** Insertion order is the report order. */
-const ASTRO_CHECK_LABELS: Record<string, string> = {
+const ASTRO_CHECK_LABELS = {
   C1: 'content config registers Conloca collections',
   C2: 'siteName matches a sites.json entry',
   C5: 'conlocaCMS is imported from @conloca/astro-cms/node',
@@ -143,10 +149,12 @@ const ASTRO_CHECK_LABELS: Record<string, string> = {
   C8: 'CMS peer dependencies are declared',
   C9: 'tsconfig compilerOptions.jsx suits Puck components',
   C10: 'server-output pages declare prerender',
-  C11: 'no static page shadows the CMS home',
-};
+  C11: 'no Conloca page is hidden behind a src/pages file',
+  C13: 'the site has Conloca pages to edit',
+  C15: 'siteStyles styles Conloca pages in the editor',
+} satisfies Record<string, string>;
 
-function outcomeOf(id: string): CheckOutcome {
+function outcomeOf(id: keyof typeof ASTRO_CHECK_LABELS): CheckOutcome {
   return { id, label: ASTRO_CHECK_LABELS[id], problems: [] };
 }
 
@@ -526,68 +534,106 @@ async function checkPrerender(projectDir: string, configText: string): Promise<C
   return outcome;
 }
 
-type HomeRouteVerdict = { kind: 'catch-all'; pattern: string } | { kind: 'clear' } | { kind: 'undeterminable' };
-
-/** Whether the configured CMS routing serves '/', mirroring the plugin's routing defaults. */
-function homeRouteVerdict(options: CallOptions): HomeRouteVerdict {
-  if (options.state !== 'literal') return { kind: 'undeterminable' };
-  const routingRaw = options.entries.get('routing');
-  if (routingRaw === undefined) {
-    // A top-level layout alone enables routing with the default catch-all.
-    if (options.entries.has('layout')) return { kind: 'catch-all', pattern: '/[...slug]' };
-    return options.hasSpread ? { kind: 'undeterminable' } : { kind: 'clear' };
-  }
-  if (routingRaw === 'false') return { kind: 'clear' };
-  if (routingRaw === 'true') return { kind: 'catch-all', pattern: '/[...slug]' };
-  if (!routingRaw.startsWith('{')) return { kind: 'undeterminable' };
-  const patternValues = [...routingRaw.matchAll(/\bpattern\s*:\s*(['"])([^'"]*)\1/g)].map((match) => match[2]);
-  const catchAll = patternValues.find((pattern) => pattern === '/' || pattern.startsWith('/[...'));
-  if (catchAll !== undefined) return { kind: 'catch-all', pattern: catchAll };
-  const patternKeyCount = (routingRaw.match(/\bpattern\s*:/g) ?? []).length;
-  if (patternKeyCount > patternValues.length || containsOutsideStrings(routingRaw, '...')) {
-    return { kind: 'undeterminable' };
-  }
-  return { kind: 'clear' };
-}
-
-/** C11 — a static src/pages/index.astro must not shadow the CMS home page. */
-function checkHomeShadow(projectDir: string, options: CallOptions): CheckOutcome {
+/** C11 — no default-locale Conloca page shares its path with a src/pages file, which always wins. */
+function checkHiddenPages(
+  projectDir: string,
+  options: CallOptions,
+  fileRoutes: readonly StaticPageRoute[] | null,
+  pages: readonly ConlocaPageRef[],
+): CheckOutcome {
   const outcome = outcomeOf('C11');
-  const indexPath = join(projectDir, 'src', 'pages', 'index.astro');
-  if (!existsSync(indexPath)) return outcome;
   if (options.state === 'no-call') {
     outcome.skipped = 'conlocaCMS is not called in the astro config';
     return outcome;
   }
-  const verdict = homeRouteVerdict(options);
-  if (verdict.kind === 'catch-all') {
+  if (fileRoutes === null) {
+    outcome.skipped = SRC_PAGES_UNREADABLE;
+    return outcome;
+  }
+  const fileByRoute = new Map(fileRoutes.map(({ route, file }) => [route, file]));
+  for (const page of pages) {
+    const file = page.defaultLocale ? fileByRoute.get(page.pathname) : undefined;
+    if (file === undefined) continue;
     outcome.problems.push({
       check: 'C11',
       level: 'warn',
-      message: `src/pages/index.astro shadows the CMS home page — the conlocaCMS pattern '${verdict.pattern}' also serves '/' and the static file wins; delete src/pages/index.astro or manage the home page in the CMS`,
-      path: indexPath,
-    });
-  } else if (verdict.kind === 'undeterminable') {
-    outcome.problems.push({
-      check: 'C11',
-      level: 'warn',
-      message:
-        "src/pages/index.astro exists but doctor could not determine the conlocaCMS routing pattern — if it is a catch-all like '/[...slug]', the static file shadows the CMS home page",
-      path: indexPath,
+      message: `${file} hides the Conloca page ${page.pathname} (${page.id}) — a src/pages file always wins over a Conloca page at the same path; delete the file in the same change that makes the Conloca page live`,
+      path: join(projectDir, file),
     });
   }
+  return outcome;
+}
+
+/** C13 — a site with static src/pages routes has at least one Conloca page for the editor. */
+function checkHasPages(fileRoutes: readonly StaticPageRoute[] | null, pages: readonly ConlocaPageRef[]): CheckOutcome {
+  const outcome = outcomeOf('C13');
+  if (fileRoutes === null) {
+    outcome.skipped = SRC_PAGES_UNREADABLE;
+    return outcome;
+  }
+  const routes = [...new Set(fileRoutes.map(({ route }) => route))];
+  if (routes.length === 0 || pages.length > 0) return outcome;
+  const listed = routes.length > 5 ? `${routes.slice(0, 5).join(', ')}, …` : routes.join(', ');
+  outcome.problems.push({
+    check: 'C13',
+    level: 'warn',
+    message: `src/pages has ${routes.length} static page${routes.length === 1 ? '' : 's'} (${listed}) and no Conloca pages yet, so the editor has none to show — to make one editable, follow "Converting an existing Astro page" in .claude/skills/conloca/SKILL.md`,
+  });
+  return outcome;
+}
+
+/** C15 — when Conloca pages exist and the project has a stylesheet, siteStyles brings it into the editor. */
+async function checkSiteStyles(
+  projectDir: string,
+  cms: CallOptions,
+  conlocaCloud: CallOptions,
+  pages: readonly ConlocaPageRef[],
+): Promise<CheckOutcome> {
+  const outcome = outcomeOf('C15');
+  if (cms.state === 'no-call') {
+    outcome.skipped = 'conlocaCMS is not called in the astro config';
+    return outcome;
+  }
+  const both = [cms, conlocaCloud];
+  if (both.some((call) => call.state === 'literal' && call.entries.has('siteStyles'))) return outcome;
+  if (both.some((call) => call.state === 'dynamic' || (call.state === 'literal' && call.hasSpread))) {
+    outcome.skipped = 'the conlocaCMS or conlocaCloud options are not a plain object literal';
+    return outcome;
+  }
+  if (pages.length === 0) return outcome;
+  const names = await readdir(join(projectDir, 'src'), { recursive: true }).catch((): string[] => []);
+  const stylesheets = names.filter((name) => STYLESHEET_RE.test(name));
+  if (stylesheets.length === 0) return outcome;
+  const first = stylesheets
+    .reduce((a, b) => (b < a ? b : a))
+    .split(sep)
+    .join('/');
+  outcome.problems.push({
+    check: 'C15',
+    level: 'warn',
+    message: `Conloca pages exist but siteStyles is not set, so they look unstyled in the editor — add siteStyles: './src/${first}' to conlocaCMS(...)`,
+  });
   return outcome;
 }
 
 /**
  * The astro-side doctor checks. All of them skip when the project has no
  * astro config, so doctor stays useful on content-only directories.
- * `siteNames` is null when sites.json was unusable.
+ * `sites` is null when sites.json was unusable.
  */
-export async function runAstroChecks(projectDir: string, siteNames: string[] | null): Promise<CheckOutcome[]> {
+export async function runAstroChecks(
+  projectDir: string,
+  sites: SitesConfig | null,
+  pages: readonly ConlocaPageRef[],
+): Promise<CheckOutcome[]> {
   const configPath = findAstroConfig(projectDir);
   if (configPath === undefined) {
-    return Object.keys(ASTRO_CHECK_LABELS).map((id) => ({ ...outcomeOf(id), skipped: 'no astro.config found' }));
+    return Object.entries(ASTRO_CHECK_LABELS).map(([id, label]) => ({
+      id,
+      label,
+      problems: [],
+      skipped: 'no astro.config found',
+    }));
   }
 
   const source = await readFile(configPath, 'utf-8').catch(() => null);
@@ -599,16 +645,25 @@ export async function runAstroChecks(projectDir: string, siteNames: string[] | n
       message: `doctor could not read ${configPath} — check its file permissions`,
       path: configPath,
     };
-    return Object.keys(ASTRO_CHECK_LABELS).map((id) =>
+    return Object.entries(ASTRO_CHECK_LABELS).map(([id, label]) =>
       id === 'C5'
-        ? { ...outcomeOf(id), problems: [problem] }
-        : { ...outcomeOf(id), skipped: 'astro config could not be read' },
+        ? { id, label, problems: [problem] }
+        : { id, label, problems: [], skipped: 'astro config could not be read' },
     );
   }
 
   const configText = stripComments(source);
   const options = callOptions(configText, 'conlocaCMS');
   const pkg = await readProjectDependencies(projectDir);
+  const siteNames = sites ? Object.keys(sites.sites) : null;
+  const siteName = options.state === 'literal' ? resolveSiteNameText(options) : undefined;
+  const site = siteName?.kind === 'literal' ? siteName.name : (siteNames?.[0] ?? '');
+  const fileRoutes = await readFileRoutes(
+    projectDir,
+    { serverOutput: astroOutputOf(configText) === 'server', i18n: astroI18nOf(configText) },
+    sites ?? { sites: {}, globalLocales: ['en'] },
+    site,
+  ).catch(() => null);
 
   return [
     await checkContentConfig(projectDir),
@@ -619,6 +674,8 @@ export async function runAstroChecks(projectDir: string, siteNames: string[] | n
     checkPeers(pkg),
     await checkTsconfigJsx(projectDir),
     await checkPrerender(projectDir, configText),
-    checkHomeShadow(projectDir, options),
+    checkHiddenPages(projectDir, options, fileRoutes, pages),
+    checkHasPages(fileRoutes, pages),
+    await checkSiteStyles(projectDir, options, callOptions(configText, 'conlocaCloud'), pages),
   ];
 }

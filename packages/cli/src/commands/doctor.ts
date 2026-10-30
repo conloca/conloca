@@ -5,7 +5,7 @@ import { ContentIndex, FileSystemReaderBackend, type SitesConfig } from '@conloc
 import { contentRootOf } from '../lib/content-root.js';
 import { isRecord } from '../lib/is-record.js';
 import { messageOf } from '../lib/message-of.js';
-import { CONTENT_GLOB } from '../lib/site-routes.js';
+import { CONTENT_GLOB, type ConlocaPageRef, pagesOf } from '../lib/site-routes.js';
 import { runAstroChecks } from './doctor-astro.js';
 import { runExtensionChecks } from './doctor-extensions.js';
 
@@ -198,9 +198,13 @@ async function checkSiteDirs(contentRoot: string, config: SitesConfig | null): P
  * reported here is one the CMS and the build silently drop. Unlike the legacy
  * loader, this path never repairs, renames, or rewrites anything on disk.
  */
-async function checkContentIndex(contentRoot: string, config: SitesConfig | null): Promise<CheckOutcome> {
+async function checkContentIndex(
+  contentRoot: string,
+  config: SitesConfig | null,
+): Promise<{ outcome: CheckOutcome; pages: ConlocaPageRef[] }> {
   const problems: DoctorProblem[] = [];
   const outcome: CheckOutcome = { id: 'C12', label: 'content files index cleanly', problems };
+  let pages: ConlocaPageRef[] = [];
 
   // Without a usable sites.json the page buckets are unknown, but parse and
   // duplicate-id failures are still detectable, so the scan runs regardless.
@@ -220,11 +224,12 @@ async function checkContentIndex(contentRoot: string, config: SitesConfig | null
       },
     });
     outcome.detail = counted(indexed, 'file');
+    pages = pagesOf(index, contentRoot, sitesConfig);
   } catch (error) {
     problems.push({ check: 'C12', level: 'error', message: `content scan failed: ${messageOf(error)}` });
   }
 
-  return outcome;
+  return { outcome, pages };
 }
 
 export interface DoctorOptions {
@@ -241,8 +246,9 @@ export async function runDoctor(
   const sitesFile = await checkSitesFile(contentRoot);
   const checks: CheckOutcome[] = [sitesFile.outcome];
   checks.push(await checkSiteDirs(contentRoot, sitesFile.config));
-  checks.push(await checkContentIndex(contentRoot, sitesFile.config));
-  checks.push(...(await runAstroChecks(projectDir, sitesFile.config ? Object.keys(sitesFile.config.sites) : null)));
+  const contentIndex = await checkContentIndex(contentRoot, sitesFile.config);
+  checks.push(contentIndex.outcome);
+  checks.push(...(await runAstroChecks(projectDir, sitesFile.config, contentIndex.pages)));
   checks.push(...(await runExtensionChecks(projectDir, contentRoot, options.live)));
 
   const problems = checks.flatMap((check) => check.problems);

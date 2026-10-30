@@ -171,7 +171,9 @@ never executed):
 - the `@vitejs/plugin-react` peer is declared in `package.json`
 - `tsconfig.json` sets `compilerOptions.jsx` to `react-jsx` (advisory — a warning only)
 - with `output: 'server'`, every file under `src/pages` declares `prerender`
-- no static `src/pages/index.astro` shadows the CMS home page
+- no Conloca page is hidden behind a `src/pages` file at the same path — the file always wins (a warning)
+- a site with static `src/pages` routes has at least one Conloca page for the editor (a warning)
+- when Conloca pages exist and `src/` holds a stylesheet, `siteStyles` brings it into the editor (a warning)
 
 Anything doctor cannot determine becomes an explicit warning, never a silent pass, and it never modifies files. The exit
 code is 1 when any error is found; warnings alone exit 0. `--json` prints a single `{ok, problems}` object, each problem
@@ -192,7 +194,9 @@ Checking /path/to/my-astro-project/content
     error: Could not parse VXJSON header for default/pages/broken.en.vxjson (malformed-vxjson)
 ✓ C1 content config registers Conloca collections
 …
-✓ C11 no static page shadows the CMS home
+✓ C11 no Conloca page is hidden behind a src/pages file
+✓ C13 the site has Conloca pages to edit
+✓ C15 siteStyles styles Conloca pages in the editor
 
 Found 1 error, 0 warnings
 ```

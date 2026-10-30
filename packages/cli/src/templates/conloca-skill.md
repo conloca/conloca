@@ -24,8 +24,9 @@ gave you, `@latest` when none did. Never run a different version than the prompt
 
 It checks the content directory (sites.json complete, site directories present, every content file indexes cleanly) and,
 when an astro.config is present, the Astro wiring: content config, conlocaCMS import and options, react() order, peer
-dependencies, tsconfig jsx, prerender under server output, and home-page shadowing. Each problem names the broken file
-and the fix. It is read-only and exits 1 on errors; warnings alone exit 0.
+dependencies, tsconfig jsx, prerender under server output, Conloca pages hidden behind a `src/pages` file, static pages
+with no Conloca pages, and siteStyles. Each problem names the broken file and the fix. It is read-only and exits 1 on
+errors; warnings alone exit 0.
 
 New project from an empty directory? `conloca create <dir>` writes and installs the whole wired site. An existing Astro
 site: `conloca connect` installs the packages, wires `astro.config` and writes the site's domain for the workspace
@@ -157,8 +158,8 @@ After writing content, run the build: it validates every entry against its schem
 - `routing: true` is the same default catch-all with no layout.
 - `fallback: '404'` returns a bare 404 when no content matches the pattern; `'passthrough'` hands the miss back to Astro
   so the site's own `/404` page renders, with a real 404 status.
-- Trap: a static `src/pages/index.astro` shadows the CMS home page — the file wins over the catch-all and Astro says
-  nothing. Doctor flags it; delete the file or manage the home page in the CMS.
+- Trap: a `src/pages` file always wins over a Conloca page at the same path, and Astro says nothing. Doctor warns when
+  one hides a page; delete the file in the same change that makes the Conloca page live.
 
 ## Adding Conloca to an existing Astro site
 

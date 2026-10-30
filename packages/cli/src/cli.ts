@@ -85,8 +85,9 @@ Runs read-only health checks over the project in [path]: sites.json is present
 and complete, every site has its pages directory, and every content file
 indexes cleanly. When an astro.config is present it also checks the Astro
 wiring: content config, conlocaCMS import and options, react() order, peer
-dependencies, tsconfig jsx, prerender under server output, and home-page
-shadowing. Dependencies that ship a doctor extension (a conloca.doctor field
+dependencies, tsconfig jsx, prerender under server output, Conloca pages
+hidden behind a src/pages file, static pages with no Conloca pages, and
+siteStyles. Dependencies that ship a doctor extension (a conloca.doctor field
 in their package.json) add their own checks; --live lets those extensions
 reach the services the project configures, otherwise they stay offline.
 Never modifies any file. Exits 1 when an error is found; warnings alone exit

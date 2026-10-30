@@ -99,7 +99,7 @@ describe('conloca doctor astro checks', () => {
       const { exitCode, stdout } = await runDoctor(dir);
       expect(exitCode).toBe(0);
       expect(stdout).toContain('(skipped: no astro.config found)');
-      for (const id of ['C1', 'C2', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10', 'C11']) {
+      for (const id of ['C1', 'C2', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10', 'C11', 'C13', 'C15']) {
         expect(stdout).toContain(id);
       }
     } finally {
@@ -354,14 +354,77 @@ export default defineConfig({
     }
   });
 
-  test('C11: index.astro alongside a catch-all route is a warning naming the shadow', async () => {
+  test('C11: a Conloca page served by a src/pages file is a warning naming both', async () => {
     const dir = await makeAstroProject('conloca-astro-c11-');
     try {
-      await Bun.write(join(dir, 'src', 'pages', 'index.astro'), '<h1>Home</h1>\n');
+      await Bun.write(
+        join(dir, 'content', 'default', 'pages', 'pricing.en.vxjson'),
+        VALID_PAGE.replace('"id":"home"', '"id":"pricing"'),
+      );
+      await Bun.write(join(dir, 'src', 'pages', 'pricing.astro'), '<h1>Pricing</h1>\n');
       const { exitCode, stdout } = await runDoctor(dir);
       expect(exitCode).toBe(0);
-      expect(stdout).toContain('index.astro');
-      expect(stdout).toContain('C11');
+      expect(stdout).toContain('! C11');
+      expect(stdout).toContain('src/pages/pricing.astro hides the Conloca page /pricing');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('C11: index.astro passes when no Conloca page has its path', async () => {
+    const dir = await makeAstroProject('conloca-astro-c11-index-');
+    try {
+      await Bun.write(join(dir, 'src', 'pages', 'index.astro'), '<h1>Home</h1>\n');
+      const { stdout } = await runDoctor(dir);
+      expect(stdout).toContain('✓ C11');
+      expect(stdout).not.toContain('delete src/pages/index.astro');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('C13: Astro pages and no Conloca pages is a warning pointing to the skill section', async () => {
+    const dir = await makeAstroProject('conloca-astro-c13-');
+    try {
+      await rm(join(dir, 'content', 'default', 'pages', 'home.en.vxjson'));
+      await Bun.write(join(dir, 'src', 'pages', 'index.astro'), '<h1>Home</h1>\n');
+      await Bun.write(join(dir, 'src', 'pages', 'pricing.astro'), '<h1>Pricing</h1>\n');
+      const { exitCode, stdout } = await runDoctor(dir);
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain('! C13');
+      expect(stdout).toContain('src/pages has 2 static pages (/, /pricing)');
+      expect(stdout).toContain('Converting an existing Astro page');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('C15: a stylesheet left out of siteStyles is a warning', async () => {
+    const dir = await makeAstroProject('conloca-astro-c15-');
+    try {
+      await Bun.write(join(dir, 'src', 'styles', 'global.css'), 'body { margin: 0; }\n');
+      const { exitCode, stdout } = await runDoctor(dir);
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain('! C15');
+      expect(stdout).toContain("siteStyles: './src/styles/global.css'");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('C15: siteStyles on conlocaCMS passes', async () => {
+    const dir = await makeAstroProject('conloca-astro-c15-set-');
+    try {
+      await Bun.write(join(dir, 'src', 'styles', 'global.css'), 'body { margin: 0; }\n');
+      await Bun.write(
+        join(dir, 'astro.config.mjs'),
+        GOOD_ASTRO_CONFIG.replace(
+          "contentRoot: './content',",
+          "contentRoot: './content',\n      siteStyles: './src/styles/global.css',",
+        ),
+      );
+      const { stdout } = await runDoctor(dir);
+      expect(stdout).toContain('✓ C15');
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
