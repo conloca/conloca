@@ -181,6 +181,9 @@ serves draft previews with the preview protocol it speaks (`preview`: `{ "mode":
 opens a preview with a single-use `conloca_code` link that the preview server trades for the pass with Conloca; a link
 that carries the pass itself (`conloca_preview`, protocol 1) still opens in this release and stops opening in the next.
 
+`/_conloca/editor/data-schemas.json` publishes the JSON schema of each `dataSchemas` collection, the metadata the
+editor's entry forms already use, so agents can write data entries that match.
+
 ### CI example (GitHub Actions)
 
 ```yaml

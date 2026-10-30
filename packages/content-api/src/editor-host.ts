@@ -97,6 +97,9 @@ export interface EditorPageInfo {
   componentManifest: { path: string; sha256: string } | null;
 }
 
+/** The file beside conloca.json holding each `dataSchemas` collection's JSON schema, as `{ collections }`. */
+export const DATA_SCHEMAS_FILE = 'data-schemas.json';
+
 export const EDITOR_PAGE_INFO_FORMATS = {
   commit: /^[0-9a-f]{40}$/,
   builtWith: /^@conloca\/cloud-astro@\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/,

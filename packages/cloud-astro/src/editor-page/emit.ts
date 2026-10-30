@@ -29,6 +29,7 @@ import { packageVersion } from '../package-version.js';
 import type { InheritedOptions } from '../resolve-options.js';
 import { resolveBuildSiteId } from '../site-id.js';
 import { bundleEditorPage } from './bundle.js';
+import { emitDataSchemas } from './data-schemas.js';
 import { findFramingBlockers } from './framing.js';
 import { renderEditorPage } from './page.js';
 import { baseMismatch } from './site-base.js';
@@ -96,6 +97,15 @@ export async function emitEditorPage(input: EmitEditorPageInput): Promise<void> 
     ...(descriptors === undefined ? {} : { descriptors }),
     logger,
   });
+  if (descriptors?.schemasPath) {
+    await emitDataSchemas({
+      folder,
+      root: input.root,
+      vite: input.vite,
+      schemasPath: descriptors.schemasPath,
+      logger,
+    });
+  }
 
   let editorCssFile: string | null = null;
   if (inherited.editorCss) {

@@ -861,7 +861,7 @@ describe('conlocaCloud — the editor page', () => {
   }
 
   /** The channel conlocaCMS publishes in every build it is part of. */
-  function publishChannel(extra: { editorCSS?: string; contentPaths?: string[] } = {}): void {
+  function publishChannel(extra: { editorCSS?: string; contentPaths?: string[]; schemasPath?: string } = {}): void {
     process.env.CONLOCA_EDITOR_DESCRIPTORS = JSON.stringify({
       registry: { contentRoot: buildDir.root, componentFolders: [] },
       ...extra,
@@ -1051,6 +1051,17 @@ describe('conlocaCloud — the editor page', () => {
     expect(file.slice('editor.'.length, -'.css'.length)).toBe(
       createHash('sha256').update(bytes).digest('hex').slice(0, 16),
     );
+  });
+
+  it('writes data-schemas.json when the channel names a schemasPath', async () => {
+    const schemasPath = join(buildDir.root, 'schemas.ts');
+    const unit = { version: '3.1', schema: { type: 'object' }, components: {} };
+    await writeFile(schemasPath, `export const dataSchemas = { team: { metadata: ${JSON.stringify(unit)} } };\n`);
+    publishChannel({ schemasPath });
+    await buildDoneHook(pageOptions())({ dir: buildDir.dist, logger: makeLogger() });
+    expect(await readdir(editorDir())).toContain('data-schemas.json');
+    const written = JSON.parse(await readFile(join(editorDir(), 'data-schemas.json'), 'utf8'));
+    expect(Object.keys(written.collections)).toEqual(['team']);
   });
 
   it('writes the sandbox frame from @conloca/mdx', async () => {
