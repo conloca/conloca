@@ -5,7 +5,13 @@ import { dirname, join, relative } from 'node:path';
 import { type DataSchemasWiring, wireDataSchemas } from '../src/lib/connect/data-schemas.js';
 import { writeEdits } from '../src/lib/connect/step.js';
 import { readCliManifest, renderPackageJson } from '../src/lib/project-template.js';
-import { CONTENT_CONFIG_TEMPLATE, DATA_SCHEMAS_TEMPLATE, renderAstroConfig } from '../src/templates/project-files.js';
+import {
+  CONTENT_CONFIG_TEMPLATE,
+  DATA_SCHEMAS_TEMPLATE,
+  renderAstroConfig,
+  TYPIA_TSCONFIG_TEMPLATE,
+  TYPIA_VITE_TEMPLATE,
+} from '../src/templates/project-files.js';
 
 /** astro.config.mjs as `conloca connect` leaves a site it set up. */
 function connectedConfig(cmsOptions: string, extra = ''): string {
@@ -197,6 +203,8 @@ describe('wireDataSchemas on a site made with conloca create', () => {
       'src/content.config.ts': CONTENT_CONFIG_TEMPLATE,
       'src/schemas/data.ts': DATA_SCHEMAS_TEMPLATE,
       'public/media/.gitkeep': '',
+      'typia-vite.mjs': TYPIA_VITE_TEMPLATE,
+      'tsconfig.typia.json': TYPIA_TSCONFIG_TEMPLATE,
     });
     expect(await wireDataSchemas(dir)).toMatchObject({ state: 'done', edits: [], packages: [] });
   });
@@ -220,5 +228,24 @@ describe('wireDataSchemas on a config it cannot edit', () => {
     expect(result.state).toBe('needs-you');
     expect(result.edits).toEqual([]);
     expect(result.message).toContain('publicDir');
+  });
+
+  test('writes the scaffold once the needs-you lines are pasted in', async () => {
+    await makeSite({
+      ...CONNECTED,
+      'astro.config.mjs': `import { schemaTypia } from './typia-vite.mjs';\n${connectedConfig(
+        "{ contentRoot: './content', schemasPath: './src/schemas/data.ts', assetsPath: './x/media' }",
+        "\n  publicDir: resolve('x'),\n  vite: { plugins: [...schemaTypia()] },",
+      )}`,
+    });
+    const result = await wireDataSchemas(dir);
+    expect(result.state).toBe('changed');
+    expect(editOf(result, 'astro.config.mjs')).toBeUndefined();
+    expect(newFiles(result)).toEqual([
+      'src/schemas/data.ts',
+      'tsconfig.typia.json',
+      'typia-vite.mjs',
+      'x/media/.gitkeep',
+    ]);
   });
 });

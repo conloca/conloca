@@ -8,7 +8,7 @@ import {
   TYPIA_TSCONFIG_TEMPLATE,
   TYPIA_VITE_TEMPLATE,
 } from '../../templates/project-files.js';
-import { callOptions, containsOutsideStrings, stripComments } from '../config-text.js';
+import { containsOutsideStrings, stripComments } from '../config-text.js';
 import { isRecord } from '../is-record.js';
 import { THIRD_PARTY_VERSIONS } from '../project-template.js';
 import {
@@ -108,25 +108,17 @@ export async function wireDataSchemas(projectDir: string): Promise<DataSchemasWi
   const content = await contentConfigStep(projectDir, schemasPath);
   if (content.state === 'needs-you') return { ...content, packages: [] };
 
-  const own = callOptions(stripComments(text), 'conlocaCMS');
-  const had = (name: string) => own.state === 'literal' && own.entries.has(name);
-  const scaffold: [file: string, text: string][] = [];
-  if (!had('schemasPath')) {
+  // Keyed on the paths in use, not on what this run added, so a config wired by hand from the needs-you lines gets them too.
+  const scaffold: [file: string, text: string][] = existsSync(resolve(projectDir, assetsPath))
+    ? []
+    : [[join(assetsPath, '.gitkeep'), '']];
+  let packages: [string, string][] = [];
+  if (schemasPath === DEFAULT_SCHEMAS_PATH) {
     scaffold.push(
       [schemasPath, DATA_SCHEMAS_TEMPLATE],
       ['typia-vite.mjs', TYPIA_VITE_TEMPLATE],
       ['tsconfig.typia.json', TYPIA_TSCONFIG_TEMPLATE],
     );
-  }
-  if (!had('assetsPath') && !existsSync(resolve(projectDir, assetsPath))) {
-    scaffold.push([join(assetsPath, '.gitkeep'), '']);
-  }
-  const files: FileEdit[] = scaffold
-    .map(([file, after]) => ({ path: resolve(projectDir, file), before: null, after }))
-    .filter((edit) => !existsSync(edit.path));
-
-  let packages: [string, string][] = [];
-  if (schemasPath === DEFAULT_SCHEMAS_PATH) {
     const manifest: unknown = JSON.parse(await readFile(join(projectDir, 'package.json'), 'utf8').catch(() => '{}'));
     const declared = isRecord(manifest) ? [manifest.dependencies, manifest.devDependencies].filter(isRecord) : [];
     packages = TYPIA_PACKAGES.filter((name) => !declared.some((list) => name in list)).map((name) => [
@@ -134,6 +126,9 @@ export async function wireDataSchemas(projectDir: string): Promise<DataSchemasWi
       THIRD_PARTY_VERSIONS[name],
     ]);
   }
+  const files: FileEdit[] = scaffold
+    .map(([file, after]) => ({ path: resolve(projectDir, file), before: null, after }))
+    .filter((edit) => !existsSync(edit.path));
 
   const edits = [...options.edits, ...content.edits, ...files];
   const notes = [options, content].filter((part) => part.edits.length > 0).map((part) => part.message);
