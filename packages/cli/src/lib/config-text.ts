@@ -4,7 +4,8 @@ const OPENERS = new Map([
   ['[', ']'],
 ]);
 const CLOSERS = new Set([')', '}', ']']);
-const QUOTES = new Set(["'", '"', '`']);
+// The backtick as a char code: a lone backtick in the bundle throws off test-packed's template-literal scan.
+const QUOTES = new Set(["'", '"', String.fromCharCode(96)]);
 
 // The astro config is scanned as TEXT, never imported: user configs may import
 // anything and run side effects. Every scanner below has three outcomes —
