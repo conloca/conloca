@@ -18,6 +18,13 @@ describe('Conloca CLI', () => {
     expect(result.exitCode).toBe(0);
   });
 
+  test('prints its own version with --version', async () => {
+    const result = await $`./dist/conloca.js --version`.cwd(`${import.meta.dir}/..`).quiet();
+    const { version } = JSON.parse(await readFile(join(import.meta.dir, '..', 'package.json'), 'utf-8'));
+    expect(result.stdout.toString().trim()).toBe(version);
+    expect(result.exitCode).toBe(0);
+  });
+
   test('errors on unknown command', async () => {
     const result = await $`./dist/conloca.js unknown`
       .cwd(`${import.meta.dir}/..`)

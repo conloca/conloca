@@ -12,6 +12,7 @@ import { type PageUpdateOptions, pageUpdate } from './commands/page-update.js';
 import { routes } from './commands/routes.js';
 import { DEFAULT_SITE_NAME, printSetupNextSteps, setup } from './commands/setup.js';
 import { PACKAGE_MANAGERS } from './lib/package-manager.js';
+import { readCliManifest } from './lib/project-template.js';
 
 const program = new Command();
 
@@ -403,6 +404,7 @@ async function main() {
       process.exit(0);
     }
 
+    program.version((await readCliManifest()).version, '-v, --version', 'Show the CLI version');
     await program.parseAsync(process.argv);
   } catch (error) {
     console.error('Error:', error);
