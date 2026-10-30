@@ -16,6 +16,8 @@ const TO = (await readCliManifest()).version;
 const opts: UpgradeOptions = { dryRun: false, json: false };
 const CLI = join(import.meta.dir, '..', 'dist', 'conloca.js');
 const LOCKFILES = ['bun.lock', 'bun.lockb', 'pnpm-lock.yaml', 'yarn.lock', 'package-lock.json'];
+/** The skill page CLI 0.2.1 wrote, unedited (one of LEGACY_CONLOCA_SKILL_CHECKSUMS). */
+const OLD_SKILL = await readFile(join(import.meta.dir, 'fixtures', 'conloca-skill-0.2.1.md'), 'utf8');
 
 /** A workflow that passes the old key inline, which the keyless migration leaves for a person. */
 const INLINE_KEY_WORKFLOW =
@@ -103,6 +105,8 @@ beforeAll(async () => {
   await writeFile(config, (await readFile(config, 'utf8')).replace("      assetsPath: './public/media',\n", ''));
   await writeFile(join(template, 'package-lock.json'), '{}\n');
   await writeFile(join(template, '.github', 'workflows', 'conloca.yml'), OLD_WORKFLOW);
+  // The unedited page an older CLI wrote, so the skill refresh has work to do.
+  await writeFile(join(template, CONLOCA_SKILL_PATH), OLD_SKILL);
 }, 60_000);
 
 afterAll(async () => {
@@ -133,8 +137,67 @@ describe('runUpgrade', () => {
     expect(manifest.devDependencies['@conloca/cli']).toBe(TO);
     expect(await readFile(join(dir, '.github/workflows/conloca.yml'), 'utf8')).not.toContain('CONLOCA_BUILD_TOKEN');
     expect(await readFile(join(dir, 'astro.config.mjs'), 'utf8')).toContain('assetsPath');
+    expect(stepOf(report, 'skills')?.state).toBe('changed');
     expect(await readFile(join(dir, CONLOCA_SKILL_PATH), 'utf8')).toContain(`version: "${TO}"`);
     expect(exitCodeOf(report)).toBe(0);
+  });
+
+  test('keeps a hand-edited skill page and writes the new text beside it', async () => {
+    const edited = `${OLD_SKILL}\nMy own note.\n`;
+    await writeFile(join(dir, CONLOCA_SKILL_PATH), edited);
+    const report = await runUpgrade(dir, opts, fakeIo('ok').io);
+    expect(stepOf(report, 'skills')?.state).toBe('differs');
+    expect(await readFile(join(dir, CONLOCA_SKILL_PATH), 'utf8')).toBe(edited);
+    const beside = join(dir, '.claude', 'skills', 'conloca', 'SKILL.new.md');
+    expect(await readFile(beside, 'utf8')).toContain(`version: "${TO}"`);
+    expect(exitCodeOf(report)).toBe(0);
+  });
+
+  test('removes the SKILL.new.md it wrote when a later step fails', async () => {
+    await writeFile(join(dir, CONLOCA_SKILL_PATH), `${OLD_SKILL}\nMy own note.\n`);
+    await writeFile(join(dir, 'content/sites.json'), '{');
+    const before = await treeHashes(dir);
+    const report = await runUpgrade(dir, opts, fakeIo('ok').io);
+    expect(stepOf(report, 'skills')?.state).toBe('differs');
+    expect(stepOf(report, 'doctor')?.state).toBe('failed');
+    expect(await treeHashes(dir)).toEqual(before);
+    expect(report).toMatchObject({ restored: true, unrestored: [] });
+  });
+
+  test('refuses to move back a package node_modules already holds at a newer release', async () => {
+    const installed = join(dir, 'node_modules', '@conloca', 'astro-cms');
+    await mkdir(installed, { recursive: true });
+    await writeFile(join(installed, 'package.json'), '{ "name": "@conloca/astro-cms", "version": "99.0.1" }\n');
+    const before = await treeHashes(dir);
+    const { io, calls } = fakeIo('ok');
+    const report = await runUpgrade(dir, opts, io);
+    expect(stepOf(report, 'packages')).toMatchObject({
+      state: 'needs-you',
+      message: expect.stringContaining('npx @conloca/cli@99.0.1 upgrade'),
+    });
+    expect(calls).toEqual([]);
+    expect(await treeHashes(dir)).toEqual(before);
+    expect(exitCodeOf(report)).toBe(2);
+  });
+
+  test('never deletes a path it could not read when saving it', async () => {
+    // A folder where a migration writes a file: reading it fails with EISDIR, not ENOENT.
+    const folder: Migration = {
+      id: 'folder',
+      since: '0.2.2',
+      description: 'x',
+      plan: async () => ({
+        state: 'changed',
+        message: 'x',
+        edits: [{ path: join(dir, 'src'), before: null, after: '' }],
+        packages: [],
+      }),
+    };
+    const before = await treeHashes(dir);
+    const report = await runUpgrade(dir, opts, fakeIo('ok').io, [folder]);
+    expect(stepOf(report, 'folder')?.state).toBe('failed');
+    expect(report).toMatchObject({ restored: true, unrestored: [] });
+    expect(await treeHashes(dir)).toEqual(before);
   });
 
   test('is safe to run again: no install, nothing changes, doctor still runs', async () => {

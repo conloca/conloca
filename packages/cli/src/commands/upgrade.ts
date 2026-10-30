@@ -93,8 +93,13 @@ function needsYou(message: string): StepResult {
   return { state: 'needs-you', message, edits: [] };
 }
 
-/** Why the packages cannot be raised safely, or null when they can. */
-async function refusalOf(manifests: Manifest[], installDir: string, to: string): Promise<StepResult | null> {
+/** Why the packages cannot be raised safely, or null when they can; `installed` is what node_modules holds now. */
+async function refusalOf(
+  manifests: Manifest[],
+  installed: { name: string; version: string | null }[],
+  installDir: string,
+  to: string,
+): Promise<StepResult | null> {
   const entries = manifests.flatMap((manifest) => conlocaDependencies(manifest.value));
   const pinned = entries.find((entry) => entry.spec.includes(':') || entry.spec.includes('/'));
   if (pinned !== undefined) {
@@ -116,10 +121,11 @@ async function refusalOf(manifests: Manifest[], installDir: string, to: string):
   if (workspace.includes('@conloca/')) {
     return needsYou('pnpm-workspace.yaml names @conloca packages (a catalog or override): remove them first');
   }
-  const floors = entries.flatMap((entry) => {
-    const floor = versionFloor(entry.spec);
-    return floor === null ? [] : [{ name: entry.name, floor }];
-  });
+  // An installed release counts too: a range may have pulled in one newer than this CLI.
+  const floors = [
+    ...entries.map((entry) => ({ name: entry.name, floor: versionFloor(entry.spec) })),
+    ...installed.map((entry) => ({ name: entry.name, floor: entry.version })),
+  ].flatMap(({ name, floor }) => (floor === null ? [] : [{ name, floor }]));
   floors.sort((a, b) => compareVersions(b.floor, a.floor));
   const [newest] = floors;
   if (newest !== undefined && compareVersions(newest.floor, to) > 0) {
@@ -244,7 +250,8 @@ async function planUpgrade(
       edits: [],
     });
   }
-  const refusal = await refusalOf(manifests, install.installDir, to);
+  const installed = await installedVersions(manifests, projectDir, install.installDir);
+  const refusal = await refusalOf(manifests, installed, install.installDir, to);
   if (refusal !== null) return stop('packages', refusal);
   const floors = manifests.flatMap((manifest) =>
     conlocaDependencies(manifest.value).flatMap((entry) => versionFloor(entry.spec) ?? []),
@@ -296,25 +303,36 @@ async function planUpgrade(
   };
 }
 
-/** The version of every Conloca package installed for the project, looking up from it to the install folder. */
-async function versionsStep(plan: Plan): Promise<StepResult> {
+/** The installed version of every Conloca package of `manifests`, looking up from the project to the install folder. */
+async function installedVersions(
+  manifests: Manifest[],
+  projectDir: string,
+  installDir: string,
+): Promise<{ name: string; version: string | null }[]> {
   const names = new Set(
-    plan.manifests.flatMap((manifest) => conlocaDependencies(manifest.value).map((entry) => entry.name)),
+    manifests.flatMap((manifest) => conlocaDependencies(manifest.value).map((entry) => entry.name)),
   );
-  const installed = await Promise.all(
+  return Promise.all(
     [...names].map(async (name) => {
-      for (let dir = plan.projectDir; ; dir = dirname(dir)) {
+      for (let dir = projectDir; ; dir = dirname(dir)) {
         // oxlint-disable-next-line no-await-in-loop -- the nearest node_modules wins, as Node resolves it.
         const manifest = await readManifest(join(dir, 'node_modules', name, 'package.json'));
-        if (manifest !== null) return { name, version: String(manifest.value.version) };
-        if (dir === plan.install.installDir || dir === dirname(dir)) return { name, version: 'not installed' };
+        if (manifest !== null) {
+          return { name, version: typeof manifest.value.version === 'string' ? manifest.value.version : null };
+        }
+        if (dir === installDir || dir === dirname(dir)) return { name, version: null };
       }
     }),
   );
+}
+
+/** Whether every Conloca package is installed, all at one version. */
+async function versionsStep(plan: Plan): Promise<StepResult> {
+  const installed = await installedVersions(plan.manifests, plan.projectDir, plan.install.installDir);
   const versions = new Set(installed.map((entry) => entry.version));
   const [only] = versions;
-  if (versions.size !== 1 || only === 'not installed') {
-    const list = installed.map((entry) => `${entry.name} ${entry.version}`).join(', ');
+  if (versions.size !== 1 || only === null || only === undefined) {
+    const list = installed.map((entry) => `${entry.name} ${entry.version ?? 'not installed'}`).join(', ');
     return { state: 'failed', message: `the installed @conloca packages disagree: ${list}`, edits: [] };
   }
   return { state: 'done', message: `every @conloca package is installed at ${only}`, edits: [] };
@@ -345,7 +363,15 @@ async function applyUpgrade(plan: Plan, io: ConnectIo): Promise<UpgradeReport> {
   const journal = new Map<string, Buffer | null>();
   const save = async (paths: string[]) => {
     const fresh = paths.filter((path) => !journal.has(path));
-    const contents = await Promise.all(fresh.map((path) => readFile(path).catch(() => null)));
+    // Only a missing file is saved as "absent"; an unreadable one must fail here, never be deleted on restore.
+    const contents = await Promise.all(
+      fresh.map((path) =>
+        readFile(path).catch((error: NodeJS.ErrnoException) => {
+          if (error.code === 'ENOENT') return null;
+          throw error;
+        }),
+      ),
+    );
     for (const [index, path] of fresh.entries()) journal.set(path, contents[index] ?? null);
   };
   await save([...plan.manifests.map((manifest) => manifest.path), install.lockfile]);
