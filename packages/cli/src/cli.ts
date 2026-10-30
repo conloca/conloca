@@ -189,8 +189,9 @@ it, builds the site once to prove the editor page is there, and removes the
 old build key from workflows. Every change is shown as a diff first; in a
 terminal it asks once, --yes accepts, and without a terminal or --yes nothing
 is written. A value you set yourself is kept and reported as "differs".
-Never commits, pushes or deploys. Exits 0 when done, 1 when a step failed,
-2 when a step needs you.`,
+Never commits, pushes or deploys. A site whose @conloca packages are older
+than this CLI is handed to 'conloca upgrade' with nothing written (exit 2).
+Exits 0 when done, 1 when a step failed, 2 when a step needs you.`,
   )
   .action(
     async (

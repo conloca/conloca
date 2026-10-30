@@ -12,6 +12,8 @@ bun add -g @conloca/cli
 
 ## Usage
 
+`conloca --version` prints the CLI's release, the one `upgrade` brings a site to.
+
 ### Create a Project
 
 Create a new Astro site with Conloca CMS wired in, from an empty directory:
@@ -47,7 +49,8 @@ Run it in the site's folder or the repository holding it. In order, it:
 
 1. **Finds the project:** the Astro project in `[path]`. A repository with several asks which one in a terminal; without
    one it lists them and stops, so you pass `--project <dir>`. The editor needs the repository on GitHub; without a
-   GitHub `origin` it continues and says so.
+   GitHub `origin` it continues and says so. A site whose `@conloca/*` packages are older than this CLI is handed to
+   `upgrade`: `connect` prints the `upgrade` and `connect` commands to run, writes nothing and exits `2`.
 2. **Adds packages:** `@conloca/astro-cms`, `@conloca/cloud-astro`, `@astrojs/react` and `@vitejs/plugin-react`,
    whichever `package.json` lacks, with the package manager of the nearest lockfile. `--no-install` prints the command
    instead.
@@ -99,9 +102,10 @@ it:
    `SKILL.new.md` beside it.
 4. **Checks:** every installed `@conloca/*` package has the same version, then runs `doctor`.
 
-Every change is printed as a diff first; `--dry-run` stops there. On any failure the saved files are put back and the
-report says so, with the install command that puts `node_modules` back. A second run on an upgraded site changes
-nothing. `upgrade` never commits or pushes.
+The package and migration changes are printed as a diff first; `--dry-run` stops there. The agent skill refresh is not
+previewed: it reads the `@conloca/cloud-astro` the install brings, and only reports which pages it wrote. On any failure
+the saved files are put back and the report says so, with the install command that puts `node_modules` back. A second
+run on an upgraded site changes nothing. `upgrade` never commits or pushes.
 
 Exit codes: `0` every step is done, changed or kept; `1` a step failed and the site was restored; `2` a step needs you
 and nothing was touched. `--json` prints one object:
