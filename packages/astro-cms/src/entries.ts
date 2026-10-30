@@ -105,10 +105,10 @@ export function conlocaDataEntries<E extends CollectionEntryLike, DS extends Dat
  * The validated payload of the one `collection` entry named `name` (in `locale`, when given), so a missing shared
  * entry fails the build instead of rendering empty.
  */
-export function conlocaDataEntry<E extends CollectionEntryLike, DS extends DataSchemas, K extends keyof DS & string>(
+export function conlocaDataEntry<DS extends DataSchemas, K extends keyof DS & string>(
   dataSchemas: DS,
   collection: K,
-  entries: readonly E[],
+  entries: readonly CollectionEntryLike[],
   name: string,
   locale?: string,
 ): HostSchemaType<DS[K]> {
@@ -118,7 +118,8 @@ export function conlocaDataEntry<E extends CollectionEntryLike, DS extends DataS
   const [match] = matches;
   if (!match) throw new Error(`[conloca] data collection "${collection}" has no entry named "${name}"`);
   if (matches.length > 1) {
-    const locales = matches.map((entry) => entry.data.locale).sort();
+    const locales = matches.map((entry) => entry.data.locale);
+    locales.sort();
     throw new Error(
       `[conloca] data collection "${collection}" has ${matches.length} entries named "${name}" (${locales.join(', ')}); pass a locale`,
     );

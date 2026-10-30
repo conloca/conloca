@@ -16,6 +16,7 @@ import {
   starlightOwnedCoreFields,
   starlightPrunedSidebarFields,
   stringTitleBannerFields,
+  type Testimonial,
   testimonialPayload,
   titleRedeclaringFields,
   weirdKeyFields,
@@ -232,18 +233,18 @@ describe('typed collection accessors', () => {
   });
 });
 
+/** A testimonials collection entry as Astro hands it over, named `name` in `locale`. */
+function testimonialEntry(name: string, locale: string, data?: Testimonial) {
+  return { id: `${name}/${locale}`, data: { id: name, locale, name, title: name, ...(data ? { data } : {}) } };
+}
+
 describe('conlocaDataEntry — one shared entry read by name', () => {
   const dataSchemas = { testimonials: testimonialPayload };
-  const entry = (name: string, locale: string, data?: object) => ({
-    id: `${name}/${locale}`,
-    data: { id: name, locale, name, title: name, ...(data ? { data } : {}) },
-  });
-
   test('returns the typed payload of the entry with that name', () => {
     const found = conlocaDataEntry(
       dataSchemas,
       'testimonials',
-      [entry('a', 'en', { quote: 'A' }), entry('b', 'en', { quote: 'B' })],
+      [testimonialEntry('a', 'en', { quote: 'A' }), testimonialEntry('b', 'en', { quote: 'B' })],
       'b',
     );
     expect(found).toEqual({ quote: 'B' });
@@ -252,7 +253,7 @@ describe('conlocaDataEntry — one shared entry read by name', () => {
     const found = conlocaDataEntry(
       dataSchemas,
       'testimonials',
-      [entry('a', 'en', { quote: 'A' }), entry('a', 'de', { quote: 'Ä' })],
+      [testimonialEntry('a', 'en', { quote: 'A' }), testimonialEntry('a', 'de', { quote: 'Ä' })],
       'a',
       'de',
     );
@@ -268,13 +269,13 @@ describe('conlocaDataEntry — one shared entry read by name', () => {
       conlocaDataEntry(
         dataSchemas,
         'testimonials',
-        [entry('a', 'en', { quote: 'A' }), entry('a', 'de', { quote: 'Ä' })],
+        [testimonialEntry('a', 'en', { quote: 'A' }), testimonialEntry('a', 'de', { quote: 'Ä' })],
         'a',
       ),
     ).toThrow(/2 entries named "a" \(de, en\)/);
   });
   test('fails when the entry stores no data', () => {
-    expect(() => conlocaDataEntry(dataSchemas, 'testimonials', [entry('a', 'en')], 'a')).toThrow(
+    expect(() => conlocaDataEntry(dataSchemas, 'testimonials', [testimonialEntry('a', 'en')], 'a')).toThrow(
       '[conloca] data entry "a" in "testimonials" has no data',
     );
   });
@@ -309,10 +310,5 @@ type DataPayloadOf<K extends keyof DataRegistry & string> = ReturnType<
 export type DataEntryTypeProof = [
   Assert<IsExactly<DataPayloadOf<'testimonials'>, { quote: string } | undefined>>,
   Assert<IsExactly<DataPayloadOf<'faqs'>, { question: string } | undefined>>,
-  Assert<
-    IsExactly<
-      ReturnType<typeof conlocaDataEntry<{ id: string; data: unknown }, DataRegistry, 'testimonials'>>,
-      { quote: string }
-    >
-  >,
+  Assert<IsExactly<ReturnType<typeof conlocaDataEntry<DataRegistry, 'testimonials'>>, { quote: string }>>,
 ];
