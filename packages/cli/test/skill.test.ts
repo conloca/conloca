@@ -112,4 +112,13 @@ describe('conloca agent skill', () => {
       expect(section).toContain(rule);
     expect(section.match(/https?:\/\/\S+/g) ?? []).toEqual(['https://conloca.com/workspace-mcp/.']);
   });
+
+  test('the skill teaches the one upgrade command and forbids hand-edited versions', async () => {
+    const skill = await readFile(SKILL_TEMPLATE, 'utf-8');
+    expect(skill).toContain('## Upgrading Conloca');
+    expect(skill).toContain('npx @conloca/cli@latest upgrade');
+    expect(skill.match(/means `npx @conloca\/cli@<version>/g)?.length).toBe(1); // P1's definition, not a second one
+    expect(skill).toContain('SKILL.new.md');
+    expect(skill).toMatch(/never edit `@conloca\/\*` versions by hand/i);
+  });
 });

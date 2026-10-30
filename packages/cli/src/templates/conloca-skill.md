@@ -32,6 +32,23 @@ New project from an empty directory? `conloca create <dir>` writes and installs 
 site: `conloca connect` installs the packages, wires `astro.config` and writes the site's domain for the workspace
 editor; `conloca astro setup` only scaffolds the starter files.
 
+## Upgrading Conloca
+
+To move a site to a newer Conloca release:
+
+1. In the site's folder run `npx @conloca/cli@latest upgrade` (or the exact version a Conloca prompt gave you). It
+   raises every `@conloca/*` package together in one install, applies the changes between releases, refreshes this skill
+   and runs `conloca doctor`. `--dry-run` shows the diffs and changes nothing, `--json` prints one object on stdout,
+   `--project <dir>` picks the site folder.
+2. Exit `2`: it lists what a person must change first; nothing was touched. Make those changes, then run it again.
+3. Exit `1`: it failed and put `package.json`, the lockfile and every changed file back. Fix what it names, run the
+   install command its message gives when `node_modules` needs it, and run it again.
+4. A `SKILL.new.md` beside a skill means that skill had local edits, so the new text was written next to it: merge it
+   into the skill by hand, then delete `SKILL.new.md`.
+5. Review `git diff`, run the build, then commit and push yourself — the command never commits or pushes.
+
+Never edit `@conloca/*` versions by hand: every `@conloca/*` package moves together, through `upgrade`.
+
 ## The files a working site needs
 
 - `astro.config.mjs` — registers `react()` and `conlocaCMS(...)`

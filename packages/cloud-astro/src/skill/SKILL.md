@@ -22,7 +22,9 @@ into `sites.json`, adds a framing rule only where a committed header file forbid
 editor page, and removes old build key lines from workflows. It shows diffs first, keeps values you set (`differs`), and
 exits `2` with the lines to add when a step needs a person (`--site-url https://…` when `astro.config` has no `site`).
 It never commits, pushes or deploys: commit, push to the default branch, deploy as usual, then open the workspace
-editor. Editing needs the deployed site; before that, `astro dev` serves the local editor at `/__cms`.
+editor. Editing needs the deployed site; before that, `astro dev` serves the local editor at `/__cms`. Package updates
+go through `npx @conloca/cli@latest upgrade` (or the exact version a Conloca prompt gave), never by editing `@conloca/*`
+versions.
 
 ## First move: `conloca doctor --live`
 
