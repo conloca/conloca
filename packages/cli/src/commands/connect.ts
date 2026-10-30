@@ -1,6 +1,6 @@
 import { execFile as execFileCallback, spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { readdir, readFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { join, relative, resolve, sep } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { promisify } from 'node:util';
@@ -11,11 +11,11 @@ import { fail, withStdoutRedirected } from '../lib/cli-output.js';
 import { callOptions, stringLiteral, stripComments } from '../lib/config-text.js';
 import { ASTRO_CONFIG_FILES, readAstroSite, wireAstroConfig } from '../lib/connect/astro-config.js';
 import { framingStep } from '../lib/connect/framing.js';
+import { leftoversStep } from '../lib/connect/leftovers.js';
 import { writeSiteAddress } from '../lib/connect/site-domain.js';
 import { type FileEdit, jsonLike, type StepResult, type StepState, writeEdits } from '../lib/connect/step.js';
 import { contentRootOf } from '../lib/content-root.js';
 import { isRecord } from '../lib/is-record.js';
-import { legacyKeyFinding } from '../lib/legacy-key.js';
 import { messageOf } from '../lib/message-of.js';
 import {
   lockfileInstall,
@@ -187,46 +187,6 @@ async function packagesStep(projectDir: string, commands: PackageManagerCommands
     },
     command: `${commands.add} ${missing.map(([name, range]) => `'${name}@${range}'`).join(' ')}`,
   };
-}
-
-/** The workflow lines that still pass the old build key, as deletion edits; lines a person must change stay needs-you. */
-async function leftoversStep(repoRoot: string): Promise<StepResult> {
-  const folder = join(repoRoot, '.github', 'workflows');
-  const names = (await readdir(folder).catch(() => [])).filter((name) => /\.ya?ml$/.test(name));
-  names.sort();
-  const texts = await Promise.all(names.map((name) => readText(join(folder, name))));
-  const edits: FileEdit[] = [];
-  const manual: string[] = [];
-  for (const [index, name] of names.entries()) {
-    const path = join(folder, name);
-    const text = texts[index] ?? null;
-    const finding = text === null ? null : legacyKeyFinding(relative(repoRoot, path), text);
-    if (text === null || finding === null) continue;
-    if (finding.deleted.length > 0) {
-      const gone = new Set(finding.deleted);
-      const after = text
-        .split('\n')
-        .filter((_, line) => !gone.has(line + 1))
-        .join('\n');
-      edits.push({ path, before: text, after });
-    }
-    if (finding.manual.length > 0) manual.push(`${finding.path}: line ${finding.manual.join(', ')}`);
-  }
-  if (manual.length > 0) {
-    return {
-      state: 'needs-you',
-      message: 'remove the old build key CONLOCA_BUILD_TOKEN from these lines yourself; the editor page needs no key',
-      lines: manual,
-      edits,
-    };
-  }
-  return edits.length > 0
-    ? {
-        state: 'changed',
-        message: 'removed the old build key CONLOCA_BUILD_TOKEN; the editor page needs no key',
-        edits,
-      }
-    : { state: 'done', message: 'no workflow names the old build key', edits: [] };
 }
 
 /** The site id a build writes into conloca.json: the top-level `siteId` of sites.json, else `default`. */

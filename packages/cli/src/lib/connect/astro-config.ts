@@ -8,7 +8,7 @@ type Element = Node<'ArrayExpression'>['elements'][number];
 type ImportLocals = Map<string, string>;
 
 /** Options of the key path that `conlocaCloud()` no longer takes. */
-const REMOVED_OPTIONS = new Set([
+export const REMOVED_OPTIONS = new Set([
   'buildToken',
   'publicBaseUrl',
   'previewDomain',
