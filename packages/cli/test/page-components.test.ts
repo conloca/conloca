@@ -57,6 +57,25 @@ describe('componentFindings', () => {
     ).toEqual([]);
   });
 
+  test('skips the props of a component with computed fields or saved props', () => {
+    const computed: PuckManifest = {
+      components: {
+        Dynamic: { fields: {}, dynamicFields: true },
+        Derived: { fields: {}, derivedProps: true },
+        UnreadFields: { fields: {}, unreadableKeys: ['resolveFields'] },
+        UnreadData: { fields: {}, unreadableKeys: ['resolveData'] },
+      },
+      unresolved: [],
+    };
+    const data = {
+      content: ['Dynamic', 'Derived', 'UnreadFields', 'UnreadData'].map((type) => ({
+        type,
+        props: { id: type, extra: 1 },
+      })),
+    };
+    expect(componentFindings(data, computed)).toEqual([]);
+  });
+
   test('reports each finding once per page', () => {
     const missing = { type: 'Missing', props: { id: 'm', subtitel: 1 } };
     const data = {

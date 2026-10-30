@@ -104,8 +104,8 @@ building.
 - `astro dev` runs in the foreground: config and integration errors print to the terminal running it, and page errors
   also show in the browser error overlay. There is no separate log command — read that terminal.
 - A page referencing a Puck component type missing from puck.config.tsx serves HTTP 200 with a blank region and a clean
-  browser console. The only signal is `[Conloca] Page references N component type(s) missing from your Puck config: ...`
-  in the dev-server or build terminal.
+  browser console. The signal is `[Conloca] Page references N component type(s) missing from your Puck config: ...` in
+  the dev-server or build terminal.
 - `conloca doctor` finds them before a build: C14 warns about every component type or prop a page stores that the Puck
   config does not declare.
 - The editor at `/__cms` exists only on the dev server. A production build without it is not a bug.

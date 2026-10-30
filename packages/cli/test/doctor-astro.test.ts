@@ -522,6 +522,18 @@ export default defineConfig({
     }
   });
 
+  test('C15: an unreadable src/ skips the check with the reason, never a silent pass', async () => {
+    const dir = await makeAstroProject('conloca-astro-c15-unreadable-');
+    try {
+      await rm(join(dir, 'src'), { recursive: true });
+      await Bun.write(join(dir, 'src'), 'not a folder\n');
+      const { stdout } = await runDoctor(dir);
+      expect(stdout).toContain('(skipped: src/ could not be read (ENOTDIR))');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   test('--json carries the astro check ids in problems', async () => {
     const dir = await makeAstroProject('conloca-astro-json-');
     try {

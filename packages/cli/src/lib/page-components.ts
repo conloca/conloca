@@ -37,14 +37,7 @@ export function hasPuckItems(puckData: unknown): boolean {
   return itemLists(puckData).some(isSlotContent);
 }
 
-/**
- * The component types and props a page's Puck data uses that the manifest does
- * not declare, once each, in page order. Slots are found by shape, so items
- * under a component the config no longer declares are still walked. Nothing is
- * reported where the config could not be read: an `unreadable` manifest may
- * declare more types, and a component with unreadable or computed fields may
- * accept any prop. Fragment_* items are registered only at render.
- */
+/** The component types and props a page's Puck data uses that the manifest does not declare, once each, in page order. */
 export function componentFindings(puckData: unknown, manifest: PuckManifest): ComponentFinding[] {
   const findings = new Map<string, ComponentFinding>();
   const report = (finding: ComponentFinding): void => {
@@ -54,12 +47,24 @@ export function componentFindings(puckData: unknown, manifest: PuckManifest): Co
   const check = (type: string, propNames: readonly string[]): void => {
     const component = Object.hasOwn(manifest.components, type) ? manifest.components[type] : undefined;
     if (component === undefined) {
+      // An unreadable manifest may declare more types.
       if (!manifest.unreadable && !manifest.unresolved.includes(type)) report({ component: type });
       return;
     }
     // An unread defaultProps may hold any key, so then only the fields count.
     const defaults = component.unreadableKeys?.includes('defaultProps') ? undefined : (component.defaultProps ?? {});
-    if (component.fieldsUnreadable || component.dynamicFields || defaults === undefined) return;
+    // Computed fields (resolveFields) or saved props (resolveData), or unread ones, may accept any prop.
+    const unread = component.unreadableKeys ?? [];
+    if (
+      component.fieldsUnreadable ||
+      component.dynamicFields ||
+      component.derivedProps ||
+      unread.includes('resolveFields') ||
+      unread.includes('resolveData') ||
+      defaults === undefined
+    ) {
+      return;
+    }
     for (const key of propNames) {
       if (key !== 'id' && !Object.hasOwn(component.fields, key) && !Object.hasOwn(defaults, key)) {
         report({ component: type, field: key });
@@ -67,9 +72,11 @@ export function componentFindings(puckData: unknown, manifest: PuckManifest): Co
     }
   };
 
+  // Slots are found by shape, so items under an undeclared component are still walked.
   const visit = (items: unknown): void => {
     if (!isSlotContent(items)) return;
     for (const { type = '', props } of items) {
+      // Fragment_* types are registered only at render.
       if (!type.startsWith('Fragment_')) check(type, Object.keys(props ?? {}));
       for (const value of Object.values(props ?? {})) visit(value);
     }

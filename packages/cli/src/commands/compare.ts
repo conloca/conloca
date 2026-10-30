@@ -97,8 +97,9 @@ export async function compare(
     fail(json, `${buildCommand} failed; fix the build, then run conloca compare again`);
   }
 
-  // The same two places connect's build step looks.
-  const outName = existsSync(join(projectDir, 'dist', 'client')) ? 'dist/client' : 'dist';
+  // A server adapter writes dist/client beside dist/server; a static site's dist/client is just its /client route.
+  const serverLayout = existsSync(join(projectDir, 'dist', 'server')) && existsSync(join(projectDir, 'dist', 'client'));
+  const outName = serverLayout ? 'dist/client' : 'dist';
   const outDir = join(projectDir, outName);
   const outFiles = await filesUnder(outDir);
   const htmlTimes = await Promise.all(

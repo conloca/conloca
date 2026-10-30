@@ -183,11 +183,26 @@ describe('conloca compare', () => {
     expect(result.stderr).toContain('no fresh HTML');
   });
 
-  test('picks dist/client when the build writes it', async () => {
-    await Bun.write(join(dir, 'build-site.mjs'), buildScript('dist/client'));
+  test('picks dist/client when the build writes it beside dist/server', async () => {
+    await Bun.write(
+      join(dir, 'build-site.mjs'),
+      `${buildScript('dist/client')}mkdirSync('dist/server', { recursive: true });\n`,
+    );
     const first = await run(dir);
     expect(first.exitCode).toBe(0);
     expect(first.stdout).toContain('3 routes from dist/client');
     expect((await run(dir)).exitCode).toBe(0);
+  });
+
+  test('reads dist on a static site with a /client page', async () => {
+    await Bun.write(join(dir, 'pages-src', 'client.html'), sourcePage('Client', '<h1>Clients</h1>'));
+    await Bun.write(
+      join(dir, 'build-site.mjs'),
+      buildScript().replace("['index', 'pricing', 'about']", "['index', 'pricing', 'about', 'client']"),
+    );
+    const first = await run(dir);
+    expect(first.exitCode).toBe(0);
+    expect(first.stdout).toContain('4 routes from dist;');
+    expect((await report(dir)).routes.map((route: RouteResult) => route.route)).toContain('/');
   });
 });

@@ -665,7 +665,15 @@ async function checkSiteStyles(
     return outcome;
   }
   if (pages.length === 0) return outcome;
-  const names = await readdir(join(projectDir, 'src'), { recursive: true }).catch((): string[] => []);
+  // Only a missing src/ means no stylesheets; any other read error must not pass silently.
+  const names = await readdir(join(projectDir, 'src'), { recursive: true }).catch(
+    (error: NodeJS.ErrnoException): string[] | string =>
+      error.code === 'ENOENT' ? [] : `src/ could not be read (${error.code ?? error.message})`,
+  );
+  if (typeof names === 'string') {
+    outcome.skipped = names;
+    return outcome;
+  }
   const stylesheets = names.filter((name) => STYLESHEET_RE.test(name));
   if (stylesheets.length === 0) return outcome;
   const first = stylesheets
