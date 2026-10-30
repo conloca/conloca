@@ -1,4 +1,4 @@
-import type { DataEditable } from '@conloca/content-api-client';
+import type { DataCollectionEntry, DataEditable } from '@conloca/content-api-client';
 import {
   APIClientError,
   type ContentManifest,
@@ -172,14 +172,14 @@ export function DataList({ dataSchemas }: DataListProps) {
     if (!title || !collection) return;
 
     let name = slugify(title);
-    const description = ((values.description as string) || '').trim();
+    const description = typeof values.description === 'string' ? values.description.trim() : '';
 
     let items: ContentManifest[];
     setCreating(true);
     try {
       items = (await getContentAPIClient().getData(collection)).items;
-    } catch (error) {
-      showError('Failed to create data entry. Please try again.', error);
+    } catch (loadError) {
+      showError('Failed to create data entry. Please try again.', loadError);
       return;
     } finally {
       setCreating(false);
@@ -208,8 +208,8 @@ export function DataList({ dataSchemas }: DataListProps) {
     });
   };
 
-  /** Writes the new entry the editor is open on, holding `data`; resolves true once it is created. */
-  const createEntry = async (data: Record<string, unknown>) => {
+  /** Writes the new entry the editor is open on, holding `entryData`; resolves true once it is created. */
+  const createEntry = async (entryData: DataCollectionEntry['data']) => {
     const { collection, entryTitle: title, locale, name } = editDataDialog;
     const description = editDataDialog.description || undefined;
     // The author never typed a name made up for a title with none to give: when that name is refused
@@ -234,7 +234,7 @@ export function DataList({ dataSchemas }: DataListProps) {
               title,
               description,
             },
-            content: { data },
+            content: { data: entryData },
           },
         },
       });

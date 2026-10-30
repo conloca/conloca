@@ -1,3 +1,4 @@
+import type { DataCollectionEntry } from '@conloca/content-api-client';
 import type { HostSchema } from '../host-schema.js';
 
 /**
@@ -7,7 +8,7 @@ import type { HostSchema } from '../host-schema.js';
  * keys from what it validates, so it gets a copy and the caller stores `values` as they are, keys
  * written outside the form included.
  */
-export function validateEntryData(schema: HostSchema, values: Record<string, unknown>): string | null {
+export function validateEntryData(schema: HostSchema, values: DataCollectionEntry['data']): string | null {
   const result = schema.validate(structuredClone(values));
   if (result.success) return null;
   const fields = result.errors.map((error) => `${error.path.replace(/^\$input\./, '')} (expected ${error.expected})`);

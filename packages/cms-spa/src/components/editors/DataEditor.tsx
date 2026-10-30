@@ -1,4 +1,9 @@
-import { getContentAPIClient, useLocalizedContent, useUpdateLocalized } from '@conloca/content-api-client';
+import {
+  type DataCollectionEntry,
+  getContentAPIClient,
+  useLocalizedContent,
+  useUpdateLocalized,
+} from '@conloca/content-api-client';
 import { AlertCircle, Code2, Loader2, Save } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { type HostSchema, isHostSchema } from '../../host-schema.js';
@@ -16,7 +21,7 @@ interface DataEditorProps {
   existingLocales: string[];
   schema: HostSchema | null;
   /** Writes a new entry holding `data`; resolves true once it is created. */
-  create?: (data: Record<string, unknown>) => Promise<boolean>;
+  create?: (data: DataCollectionEntry['data']) => Promise<boolean>;
   onSave?: () => void;
   onCancel?: () => void;
 }

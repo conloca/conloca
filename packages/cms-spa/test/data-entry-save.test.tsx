@@ -8,7 +8,7 @@
  * build. The editor now writes only on Save and only data the schema accepts.
  */
 import { afterEach, describe, expect, onTestFinished, spyOn, test } from 'bun:test';
-import { getContentAPIClient } from '@conloca/content-api-client';
+import { type DataCollectionEntry, getContentAPIClient } from '@conloca/content-api-client';
 import { cleanup, fireEvent, screen, waitForElementToBeRemoved } from '@testing-library/react';
 import { DataList } from '../src/components/pages/DataList.js';
 import type { HostSchema } from '../src/host-schema.js';
@@ -38,7 +38,7 @@ function authors() {
 }
 
 /** An author entry holding `data` in each of `locales`; returns its id. */
-async function createAuthor(data: Record<string, unknown>, locales: string[] = ['en']) {
+async function createAuthor(data: DataCollectionEntry['data'], locales: string[] = ['en']) {
   const created = await testApi.createContent({
     kind: 'data',
     collection: 'authors',
@@ -167,7 +167,8 @@ describe('switching locale with unsaved values that fail the schema', () => {
     expect(screen.queryByRole('button', { name: 'Save & Continue' })).toBeNull();
     expect(screen.getByTestId('edit-data-dialog').textContent).toContain('authors · en');
     expect(screen.getByRole('combobox', { name: 'Locale' }).textContent).toContain('en');
-    expect((screen.getByLabelText(/^Email/) as HTMLInputElement).value).toBe('nope');
+    const email = screen.getByLabelText(/^Email/);
+    expect(email instanceof HTMLInputElement && email.value).toBe('nope');
   });
 });
 

@@ -57,7 +57,8 @@ describe('saving a new data entry on a site whose schema is not a generated host
     expect(notice.getAttribute('role')).toBe('alert');
     expect(notice.textContent).toContain('not a generated host schema');
     expect(Array.from(testApi.listAllContent({ kind: 'data', collection: 'authors' }))).toHaveLength(0);
-    expect((within(editor).getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(true);
+    const save = within(editor).getByRole('button', { name: 'Save' });
+    expect(save instanceof HTMLButtonElement && save.disabled).toBe(true);
   });
 });
 
