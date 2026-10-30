@@ -23,6 +23,12 @@ describe('renderPackageJson', () => {
     }
   });
 
+  test('pins @ttsc/unplugin to exactly the ttsc release, so npm finds the ttsc peer it asks for', () => {
+    const { '@ttsc/unplugin': unplugin, ttsc } = THIRD_PARTY_VERSIONS;
+    expect(unplugin).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(unplugin).toBe(ttsc);
+  });
+
   test('pins Conloca packages to the releases this CLI itself depends on, not to its own version', () => {
     // The shape npm publishes: pack time rewrites `workspace:*` to the sibling version
     // that was on disk at the release commit, so an independent CLI bump names a release

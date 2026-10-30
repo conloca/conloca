@@ -17,7 +17,8 @@ export const THIRD_PARTY_VERSIONS = {
   'react-dom': '19.2.8',
   typia: '^14.0.4',
   '@astrojs/check': '^0.9.10',
-  '@ttsc/unplugin': '^0.34.1',
+  // Exact and equal to ttsc: a newer @ttsc/unplugin asks for a newer ttsc peer, which npm refuses against the pin.
+  '@ttsc/unplugin': '0.34.1',
   ttsc: '0.34.1',
 } as const;
 
