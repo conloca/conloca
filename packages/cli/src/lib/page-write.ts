@@ -2,6 +2,9 @@ import { join } from 'node:path';
 import {
   type ContentMetaPatch,
   FileSystemContentAPI,
+  type JsonArray,
+  type JsonObject,
+  type JsonValue,
   normalizeAndValidatePathname,
   normalizePathname,
   readSitesConfig,
@@ -23,12 +26,11 @@ export type PageWriteReason =
   | 'wrong_kind'
   | 'invalid_input';
 
-/** A Puck page's data as the editor stores it in `content.puckData`. */
-export interface PuckPayload {
-  root: Record<string, unknown>;
-  content: unknown[];
-  zones?: Record<string, unknown>;
-}
+/**
+ * A Puck page's data as the editor stores it in `content.puckData`. A type literal, not an interface, so it stays a
+ * JsonValue for the `isPuckData` guard.
+ */
+export type PuckPayload = { root: JsonObject; content: JsonArray; zones?: JsonObject };
 
 /** Page-settings metadata by meta key, as the editor's page settings name them; '' clears the field. */
 export type PageMetaFlags = Partial<Record<'description' | 'ogImage' | 'canonical' | 'robots', string>>;
@@ -77,7 +79,7 @@ export class PageWriteError extends Error {
 }
 
 /** Whether `value` has the shape of Puck data: a root object, a content list and optional zones. */
-export function isPuckData(value: unknown): value is PuckPayload {
+export function isPuckData(value: JsonValue): value is PuckPayload {
   return (
     isRecord(value) &&
     isRecord(value.root) &&

@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { FileSystemContentAPI } from '@conloca/content-api/node';
+import { FileSystemContentAPI, type JsonObject } from '@conloca/content-api/node';
 import { PageWriteError, siteLocale } from './page-write.js';
 
 export interface DataWriteInput {
@@ -10,7 +10,7 @@ export interface DataWriteInput {
   name: string;
   /** Defaults to the name. */
   title?: string;
-  data: Record<string, unknown>;
+  data: JsonObject;
 }
 
 export interface DataUpdateInput {
@@ -22,7 +22,7 @@ export interface DataUpdateInput {
   /** Left as stored when not given. */
   title?: string;
   /** Replaces the entry's data. */
-  data: Record<string, unknown>;
+  data: JsonObject;
 }
 
 export interface DataWriteResult {

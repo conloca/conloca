@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import type { SitesConfig } from '@conloca/content-api';
 import { FileSystemContentAPI } from '@conloca/content-api/node';
 import { $ } from 'bun';
 
@@ -19,7 +20,7 @@ afterEach(async () => {
   await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
-async function makeProject(sites: object = SITES): Promise<string> {
+async function makeProject(sites: SitesConfig = SITES): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), 'conloca-page-update-'));
   dirs.push(dir);
   await Bun.write(join(dir, 'content', 'sites.json'), JSON.stringify(sites));

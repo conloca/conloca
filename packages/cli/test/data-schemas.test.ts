@@ -74,10 +74,9 @@ function editOf(result: DataSchemasWiring, path: string): string | undefined {
 }
 
 function newFiles(result: DataSchemasWiring): string[] {
-  return result.edits
-    .filter((edit) => edit.before === null)
-    .map((edit) => relative(dir, edit.path))
-    .sort();
+  const files = result.edits.filter((edit) => edit.before === null).map((edit) => relative(dir, edit.path));
+  files.sort();
+  return files;
 }
 
 /** What the package manager does for the packages the wiring asks for. */

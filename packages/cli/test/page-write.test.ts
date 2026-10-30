@@ -181,10 +181,12 @@ describe('updatePage', () => {
         locales: { en: { meta: { title: 'Header' }, content: { puckData: { root: {}, content: [] } } } },
       });
       const id = created.id ?? '';
-      await expect(updatePage({ contentRoot, site: 'default', ref: id, title: 'X' })).rejects.toMatchObject({
-        reason: 'wrong_kind',
-        message: `"${id}" is a fragment, not a page`,
-      } satisfies Partial<PageWriteError>);
+      await Promise.resolve(
+        expect(updatePage({ contentRoot, site: 'default', ref: id, title: 'X' })).rejects.toMatchObject({
+          reason: 'wrong_kind',
+          message: `"${id}" is a fragment, not a page`,
+        } satisfies Partial<PageWriteError>),
+      );
     } finally {
       FileSystemContentAPI.clearCaches();
       await rm(dir, { recursive: true, force: true });

@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { text } from 'node:stream/consumers';
+import type { JsonValue } from '@conloca/content-api';
 import { messageOf } from './message-of.js';
 import { PageWriteError } from './page-write.js';
 
@@ -8,7 +9,7 @@ import { PageWriteError } from './page-write.js';
  * a file path. Inline JSON is not accepted; pass a file or pipe into '-'.
  * Every refusal names `flag`, so the message points at what to fix.
  */
-export async function readJsonInput(source: string, flag: string): Promise<unknown> {
+export async function readJsonInput(source: string, flag: string): Promise<JsonValue> {
   const input =
     source === '-'
       ? await text(process.stdin)

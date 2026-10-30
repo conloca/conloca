@@ -73,6 +73,14 @@ async function makeCreatedSite(): Promise<string> {
   return dir;
 }
 
+/** A created site holding the settings entry `site`; returns its id. */
+async function makeSiteWithEntry(): Promise<{ dir: string; id: string }> {
+  const dir = await makeCreatedSite();
+  const result =
+    await $`${CLI} data create settings ${dir} --name site --data ${join(dir, 'site.json')} --json`.quiet();
+  return { dir, id: JSON.parse(result.stdout.toString()).id };
+}
+
 async function makeConnectedSite(files: Record<string, string> = CONNECTED): Promise<string> {
   const dir = await tempDir('conloca-data-connected-');
   await Promise.all(
@@ -186,13 +194,6 @@ describe('conloca data create on a connected site without data schemas', () => {
 });
 
 describe('conloca data update', () => {
-  async function makeSiteWithEntry(): Promise<{ dir: string; id: string }> {
-    const dir = await makeCreatedSite();
-    const result =
-      await $`${CLI} data create settings ${dir} --name site --data ${join(dir, 'site.json')} --json`.quiet();
-    return { dir, id: JSON.parse(result.stdout.toString()).id };
-  }
-
   test('replaces the data of the entry named in its collection', async () => {
     const { dir, id } = await makeSiteWithEntry();
     const result = await $`${CLI} data update settings site ${dir} --data ${join(dir, 'new.json')} --json`.quiet();

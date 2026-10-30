@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join, relative, resolve } from 'node:path';
+import type { JsonObject } from '@conloca/content-api';
 import { fail, withStdoutRedirected } from '../lib/cli-output.js';
 import { callOptions, stringLiteral, stripComments } from '../lib/config-text.js';
 import { ASTRO_CONFIG_FILES } from '../lib/connect/astro-config.js';
@@ -34,7 +35,7 @@ export interface DataUpdateOptions {
 }
 
 /** The JSON object `--data` points at; refuses anything else. */
-async function readDataInput(source: string): Promise<Record<string, unknown>> {
+async function readDataInput(source: string): Promise<JsonObject> {
   const value = await readJsonInput(source, '--data');
   if (!isRecord(value)) throw new PageWriteError('invalid_input', '--data must be a JSON object', '--data');
   return value;

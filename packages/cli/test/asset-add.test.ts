@@ -35,7 +35,7 @@ afterEach(async () => {
 async function makeSite(config = connectedConfig()): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), 'conloca-asset-add-'));
   dirs.push(dir);
-  const files: Record<string, string> = {
+  const files = {
     'package.json': `${JSON.stringify({ name: 'site', dependencies: { astro: '^7.3.1' } }, null, 2)}\n`,
     'astro.config.mjs': config,
     'src/content.config.ts': `import { conlocaPages } from '@conloca/astro-cms/node/content';
