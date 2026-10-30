@@ -161,7 +161,8 @@ Content checks, always:
   flagged too)
 - every content file indexes cleanly — each file reported is one the CMS would otherwise silently drop
 
-Astro checks, when an `astro.config.mjs`/`.ts`/`.js` is present (the config is read as text, never executed):
+Astro checks, when an `astro.config` (`.mjs`, `.js`, `.ts`, `.mts` or `.cjs`) is present (the config is read as text,
+never executed):
 
 - the content config registers Conloca's collections
 - `conlocaCMS` is imported from `@conloca/astro-cms/node` and its options carry `contentRoot`, `puckConfigPath`, and a
@@ -213,6 +214,33 @@ Extensions must stay read-only, and offline unless `live` is true. `live` is tru
 without it an extension should mark its network checks as skipped. A contract-version mismatch, a package that fails to
 load, or a malformed result becomes one warning naming the package — never a crash and never a silent skip. Those
 seam-level warnings carry the check id `EXT`, so `--json` consumers can tell them from an extension's own findings.
+
+### List routes
+
+List a site's static routes and which of them are Conloca pages:
+
+```bash
+conloca routes [path] [--site <site>] [--json]
+```
+
+| Argument / Option | Description                               | Default                 |
+| ----------------- | ----------------------------------------- | ----------------------- |
+| `path`            | Project directory, holding `astro.config` | `.` (current directory) |
+| `--site`          | Site in `sites.json` to list              | the first site          |
+| `--json`          | Report as a single JSON object on stdout  |                         |
+
+It lists every static page route of `src/pages` and every default-locale Conloca page of the site, one line per route.
+When a `src/pages` file and a Conloca page serve the same path, the file wins and the page is marked hidden. Dynamic
+routes (`[slug].astro`, content collection pages) and non-default-locale routes are never listed. Read-only: it never
+modifies a file. `--json` prints `{ok, site, routes}`; each route carries `route`, plus `file` and `prerendered` for a
+`src/pages` file, `pageId` for a Conloca page, and `hidden: true` when both serve it.
+
+```plain
+/  src/pages/index.astro
+/about  Conloca page about
+/pricing  src/pages/pricing.astro
+  src/pages/pricing.astro hides Conloca page pricing
+```
 
 ### Create a Page
 

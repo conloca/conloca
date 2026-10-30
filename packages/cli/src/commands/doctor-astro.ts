@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { AstroI18nLocales } from '@conloca/astro-cms/checks';
 import {
   balancedSlice,
   type CallOptions,
@@ -11,11 +12,51 @@ import {
   stringLiteral,
   stripComments,
 } from '../lib/config-text.js';
+import { ASTRO_CONFIG_FILES } from '../lib/connect/astro-config.js';
 import { isRecord } from '../lib/is-record.js';
 import { type ProjectPackage, readProjectDependencies } from '../lib/project-dependencies.js';
 import type { CheckOutcome, DoctorProblem } from './doctor.js';
 
-const ASTRO_CONFIG_NAMES = ['astro.config.mjs', 'astro.config.ts', 'astro.config.js'];
+/** The project's astro config path, in the order Astro and connect pick one; undefined when there is none. */
+export function findAstroConfig(projectDir: string): string | undefined {
+  return ASTRO_CONFIG_FILES.map((name) => join(projectDir, name)).find((path) => existsSync(path));
+}
+
+/** Astro's `output` from the config text: 'unknown' when it is set but not a plain string literal. */
+export function astroOutputOf(configText: string): 'server' | 'other' | 'unknown' {
+  const keyMatch = /\boutput\s*:/.exec(configText);
+  if (!keyMatch) return 'other';
+  const literal = /^(['"])([^'"]*)\1/.exec(configText.slice(keyMatch.index + keyMatch[0].length).trimStart());
+  if (!literal) return 'unknown';
+  return literal[2] === 'server' ? 'server' : 'other';
+}
+
+/** The literal `i18n: { locales: [...], defaultLocale: '...' }` of defineConfig; undefined when absent or not plain literals. */
+export function astroI18nOf(configText: string): AstroI18nLocales | undefined {
+  const config = callOptions(configText, 'defineConfig');
+  if (config.state !== 'literal') return undefined;
+  const i18n = parseObjectEntries(config.entries.get('i18n') ?? '');
+  const defaultLocale = stringLiteral(i18n?.entries.get('defaultLocale') ?? '');
+  const list = i18n?.entries.get('locales') ?? '';
+  if (defaultLocale === null || !list.startsWith('[') || balancedSlice(list, 0) !== list) return undefined;
+
+  const body = list.slice(1, -1);
+  const locales: (string | { path: string })[] = [];
+  for (let i = 0; i < body.length; ) {
+    if (/[\s,]/.test(body[i])) {
+      i += 1;
+      continue;
+    }
+    const end = skipValue(body, i);
+    const raw = body.slice(i, end).trim();
+    i = end;
+    const path = raw.startsWith('{') ? stringLiteral(parseObjectEntries(raw)?.entries.get('path') ?? '') : null;
+    const locale = path === null ? stringLiteral(raw) : { path };
+    if (locale === null) return undefined;
+    locales.push(locale);
+  }
+  return { locales, defaultLocale };
+}
 
 /** Peers @conloca/astro-cms declares that projects forget most often. */
 const CMS_PEERS = ['@vitejs/plugin-react'];
@@ -447,14 +488,8 @@ async function checkTsconfigJsx(projectDir: string): Promise<CheckOutcome> {
 /** C10 — with output: 'server', every file under src/pages declares prerender. */
 async function checkPrerender(projectDir: string, configText: string): Promise<CheckOutcome> {
   const outcome = outcomeOf('C10');
-  const keyMatch = /\boutput\s*:/.exec(configText);
-  if (!keyMatch) {
-    outcome.skipped = "output is not 'server'";
-    return outcome;
-  }
-  const valueText = configText.slice(keyMatch.index + keyMatch[0].length).trimStart();
-  const literal = /^(['"])([^'"]*)\1/.exec(valueText);
-  if (!literal) {
+  const output = astroOutputOf(configText);
+  if (output === 'unknown') {
     outcome.problems.push({
       check: 'C10',
       level: 'warn',
@@ -463,7 +498,7 @@ async function checkPrerender(projectDir: string, configText: string): Promise<C
     });
     return outcome;
   }
-  if (literal[2] !== 'server') {
+  if (output === 'other') {
     outcome.skipped = "output is not 'server'";
     return outcome;
   }
@@ -550,7 +585,7 @@ function checkHomeShadow(projectDir: string, options: CallOptions): CheckOutcome
  * `siteNames` is null when sites.json was unusable.
  */
 export async function runAstroChecks(projectDir: string, siteNames: string[] | null): Promise<CheckOutcome[]> {
-  const configPath = ASTRO_CONFIG_NAMES.map((name) => join(projectDir, name)).find((path) => existsSync(path));
+  const configPath = findAstroConfig(projectDir);
   if (configPath === undefined) {
     return Object.keys(ASTRO_CHECK_LABELS).map((id) => ({ ...outcomeOf(id), skipped: 'no astro.config found' }));
   }

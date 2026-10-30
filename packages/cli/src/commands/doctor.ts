@@ -5,6 +5,7 @@ import { ContentIndex, FileSystemReaderBackend, type SitesConfig } from '@conloc
 import { contentRootOf } from '../lib/content-root.js';
 import { isRecord } from '../lib/is-record.js';
 import { messageOf } from '../lib/message-of.js';
+import { CONTENT_GLOB } from '../lib/site-routes.js';
 import { runAstroChecks } from './doctor-astro.js';
 import { runExtensionChecks } from './doctor-extensions.js';
 
@@ -33,11 +34,6 @@ export interface DoctorReport {
 
 /** Top-level content directories that are not sites. */
 export const RESERVED_CONTENT_DIRS = new Set(['fragments', 'data']);
-
-// What the CMS actually indexes: .vxjson/.mdx anywhere, .json only under
-// data/. The reader backend's default glob matches every .json, which would
-// report sites.json itself as broken content.
-const CONTENT_GLOB = '{**/*.{vxjson,mdx},data/**/*.json}';
 
 function isLocaleList(value: unknown): value is string[] {
   return (

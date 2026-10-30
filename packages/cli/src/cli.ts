@@ -7,6 +7,7 @@ import { doctor } from './commands/doctor.js';
 import { init } from './commands/init.js';
 import { type PageCreateOptions, pageCreate } from './commands/page-create.js';
 import { type PageUpdateOptions, pageUpdate } from './commands/page-update.js';
+import { routes } from './commands/routes.js';
 import { DEFAULT_SITE_NAME, printSetupNextSteps, setup } from './commands/setup.js';
 import { PACKAGE_MANAGERS } from './lib/package-manager.js';
 
@@ -94,6 +95,25 @@ the retired verify command.`,
   )
   .action(async (path: string, options: { json?: boolean; live?: boolean }) => {
     await doctor(path, { json: options.json === true, live: options.live === true });
+  });
+
+program
+  .command('routes')
+  .argument('[path]', 'Project directory', '.')
+  .option('--site <site>', 'Site in sites.json to list (default: the first one)')
+  .option('--json', 'Report as a single JSON object on stdout')
+  .description("List a site's static routes and which are Conloca pages")
+  .addHelpText(
+    'after',
+    `
+Lists the static page routes of src/pages next to the site's Conloca pages,
+one per route. A route served by both is marked: the src/pages file wins and
+hides the Conloca page. Dynamic routes ([slug].astro, content collection
+pages) and non-default-locale routes are never listed. Needs an astro.config
+in [path]. Read-only: never modifies any file.`,
+  )
+  .action(async (path: string, options: { site?: string; json?: boolean }) => {
+    await routes(path, { site: options.site, json: options.json === true });
   });
 
 program
