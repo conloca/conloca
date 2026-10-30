@@ -141,6 +141,15 @@ describe('conloca page update', () => {
     expect(await readFile(join(dir, ABOUT_FILE), 'utf-8')).toBe(before);
   });
 
+  test('a relative --canonical fails naming the flag and changes nothing', async () => {
+    const { dir } = await makeProjectWithAbout();
+    const before = await readFile(join(dir, ABOUT_FILE), 'utf-8');
+    const result = await $`${CLI} page update /about ${dir} --title New --canonical about`.quiet().nothrow();
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr.toString()).toContain('--canonical must be an absolute URL');
+    expect(await readFile(join(dir, ABOUT_FILE), 'utf-8')).toBe(before);
+  });
+
   test('--json prints ok, id and path', async () => {
     const { dir, id } = await makeProjectWithAbout();
     const result = await $`${CLI} page update --json /about --canonical https://example.com/about`.cwd(dir).quiet();

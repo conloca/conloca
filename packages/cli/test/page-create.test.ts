@@ -348,6 +348,26 @@ describe('conloca page create', () => {
       await rm(dir, { recursive: true, force: true });
     }
   });
+
+  test('a relative --canonical fails naming the flag and writes nothing', async () => {
+    const dir = await makeProject('conloca-page-create-relative-canonical-');
+    try {
+      const result =
+        await $`${CLI} page create --json --site default --collection pages --pathname /about --title About --canonical /about ${dir}`
+          .quiet()
+          .nothrow();
+      expect(result.exitCode).toBe(1);
+      expect(JSON.parse(result.stdout.toString())).toEqual({
+        ok: false,
+        error: '--canonical must be an absolute URL',
+        field: '--canonical',
+      });
+      const created = await stat(join(dir, 'content', 'default', 'pages', 'about.en.vxjson')).catch(() => null);
+      expect(created).toBeNull();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 /**

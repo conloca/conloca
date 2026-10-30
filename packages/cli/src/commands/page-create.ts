@@ -31,8 +31,12 @@ export interface PageCreateOptions extends PageMetaOptions {
   json: boolean;
 }
 
-/** The page-settings meta keys the metadata flags write. */
+/** The page-settings meta keys the metadata flags write; refuses a `--canonical` the build would reject. */
 export function metaFlagsOf(options: PageMetaOptions): PageMetaFlags {
+  // The build checks canonical with `new URL()` on the trimmed value (content-api normalize.ts coerceUrl).
+  if (options.canonical && !URL.canParse(options.canonical.trim())) {
+    throw new PageWriteError('invalid_input', '--canonical must be an absolute URL', '--canonical');
+  }
   return {
     description: options.description,
     ogImage: options.image,
