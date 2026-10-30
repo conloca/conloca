@@ -274,6 +274,14 @@ describe('Conloca CLI', () => {
     expect(result.exitCode).toBe(0);
   });
 
+  test('upgrade --help lists --project, --dry-run and --json', async () => {
+    const result = await $`./dist/conloca.js upgrade --help`.cwd(`${import.meta.dir}/..`).quiet();
+    for (const flag of ['--project', '--dry-run', '--json']) {
+      expect(result.stdout.toString()).toContain(flag);
+    }
+    expect(result.exitCode).toBe(0);
+  });
+
   test('init does not double the content segment', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'conloca-init-'));
     try {

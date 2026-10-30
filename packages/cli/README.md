@@ -76,6 +76,37 @@ Exit codes: `0` every step is done, changed, skipped or kept; `1` a step failed;
 one object: `{ok, project, siteId, packageManager, steps: [{id, state, files?, message}], next}`, where `state` is
 `done`, `changed`, `needs-you`, `differs`, `failed` or `skipped`.
 
+### Upgrade a site
+
+Bring every `@conloca/*` package of a site to the release of the CLI you run, with the changes that release needs:
+
+```bash
+npx @conloca/cli@latest upgrade [path] [--project <dir>] [--dry-run] [--json]
+```
+
+Run it in the site's folder or the repository holding it; it picks the Astro project the way `connect` does. In order,
+it:
+
+1. **Refuses what it cannot raise safely:** a `@conloca/*` spec that is no version range (`catalog:`, `workspace:`,
+   `link:`, `file:`), `overrides` or `resolutions` pinning a `@conloca/*` package, and any `@conloca/*` package newer
+   than this CLI, which it never moves back (it names the release to run instead). A site with no `@conloca/*` package
+   is sent to `connect`.
+2. **Dry-runs every migration** between the site's oldest `@conloca/*` release and this one, and stops before touching
+   anything when one fails or needs you.
+3. **Writes:** saves `package.json` and the lockfile, raises every `@conloca/*` package in one package manager install
+   (each stays in its own section, `devDependencies` included, also in a workspace root's `package.json`), applies the
+   migrations and refreshes the agent skills. A skill page you edited is never overwritten: the new text goes to
+   `SKILL.new.md` beside it.
+4. **Checks:** every installed `@conloca/*` package has the same version, then runs `doctor`.
+
+Every change is printed as a diff first; `--dry-run` stops there. On any failure the saved files are put back and the
+report says so, with the install command that puts `node_modules` back. A second run on an upgraded site changes
+nothing. `upgrade` never commits or pushes.
+
+Exit codes: `0` every step is done, changed or kept; `1` a step failed and the site was restored; `2` a step needs you
+and nothing was touched. `--json` prints one object:
+`{ok, project, from, to, packageManager, restored, unrestored, steps: [{id, state, files?, message}]}`.
+
 ### Initialize Content Structure
 
 `conloca create` and `conloca astro setup` already do this for the first site — use `init` to add another one.

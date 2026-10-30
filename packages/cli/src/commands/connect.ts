@@ -107,10 +107,10 @@ function isInside(path: string, folder: string): boolean {
 }
 
 /** The Astro project to connect, as absolute paths, or the project step's verdict when there is none to pick. */
-async function pickProject(
+export async function pickProject(
   start: string,
   repoRoot: string | null,
-  options: ConnectOptions,
+  options: Pick<ConnectOptions, 'project'>,
   io: ConnectIo,
 ): Promise<{ dir: string; configFile: string } | StepResult> {
   const projects =
@@ -240,13 +240,14 @@ async function buildStep(projectDir: string, siteId: string, command: string, io
   return { state: 'done', message: `the build wrote the editor page to ${where} for site ${siteId}`, edits: [] };
 }
 
-function patchOf(edit: FileEdit, start: string): string {
+/** The unified diff of one edit, named relative to `start`. */
+export function patchOf(edit: FileEdit, start: string): string {
   const name = relative(start, edit.path);
   return createTwoFilesPatch(edit.before === null ? '/dev/null' : name, name, edit.before ?? '', edit.after);
 }
 
 /** 0 when every step is done, changed, skipped or kept; 1 when one failed; 2 when one needs a person. */
-export function exitCodeOf(report: ConnectReport): 0 | 1 | 2 {
+export function exitCodeOf(report: { steps: { state: StepState }[] }): 0 | 1 | 2 {
   const states = new Set(report.steps.map((step) => step.state));
   return states.has('failed') ? 1 : states.has('needs-you') ? 2 : 0;
 }

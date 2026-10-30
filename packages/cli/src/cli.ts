@@ -11,6 +11,7 @@ import { type PageCreateOptions, pageCreate } from './commands/page-create.js';
 import { type PageUpdateOptions, pageUpdate } from './commands/page-update.js';
 import { routes } from './commands/routes.js';
 import { DEFAULT_SITE_NAME, printSetupNextSteps, setup } from './commands/setup.js';
+import { upgrade } from './commands/upgrade.js';
 import { PACKAGE_MANAGERS } from './lib/package-manager.js';
 import { readCliManifest } from './lib/project-template.js';
 
@@ -215,6 +216,32 @@ Never commits, pushes or deploys. Exits 0 when done, 1 when a step failed,
       });
     },
   );
+
+program
+  .command('upgrade')
+  .argument('[path]', 'Folder of the Astro site, or of the repository holding it', '.')
+  .option('--project <dir>', 'Astro project to upgrade, when the repository has several')
+  .option('--dry-run', 'Show the changes, write nothing')
+  .option('--json', 'One JSON report on stdout')
+  .description('Bring every @conloca package of the site to this CLI release')
+  .addHelpText(
+    'after',
+    `
+Refuses specs a version range cannot replace (catalog:, workspace:, link:,
+file:), overrides pinning @conloca packages, and any @conloca package newer
+than this CLI; then dry-runs every migration between the site's release and
+this one and stops before touching anything if one fails or needs you; then
+saves package.json and the lockfile, raises every @conloca package in one
+package manager install, applies the migrations and refreshes the agent
+skills (an edited skill is kept, its new text written to SKILL.new.md beside
+it); finally checks every installed @conloca package has the same version and
+runs doctor. On any failure the saved files are put back. Never commits or
+pushes. Exits 0 when done, 1 when a step failed (the site is restored), 2
+when a step needs you (nothing was touched).`,
+  )
+  .action(async (path: string, options: { project?: string; dryRun?: boolean; json?: boolean }) => {
+    await upgrade(path, { project: options.project, dryRun: options.dryRun === true, json: options.json === true });
+  });
 
 const page = program
   .command('page')
