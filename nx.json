@@ -95,6 +95,12 @@
       "versionActions": "@smoothbricks/nx-plugin/version-actions"
     },
     "projectsRelationship": "independent",
+    "groups": {
+      "conloca": {
+        "projectsRelationship": "fixed",
+        "projects": ["astro-cms", "cli", "cloud-astro", "cms-spa", "content-api", "content-api-client", "mdx"]
+      }
+    },
     "releaseTag": {
       "pattern": "{projectName}@{version}"
     },

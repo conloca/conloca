@@ -18,31 +18,33 @@ const typiaRoot = dirname(createRequire(import.meta.url).resolve('typia/package.
 export function typiaFixtures(): Plugin[] {
   const created = ttsc({ project });
   const plugins: Plugin[] = Array.isArray(created) ? created : [created];
-  const scoped = plugins.map((plugin) => {
+  for (const plugin of plugins) {
     const transform = plugin.transform;
-    if (!transform) return plugin;
-    if (typeof transform === 'function') {
-      return { ...plugin, transform: { handler: transform, filter: { id: fixtureModules } } };
-    }
-    return { ...plugin, transform: { ...transform, filter: { ...transform.filter, id: fixtureModules } } };
-  });
+    if (!transform) continue;
+    plugin.transform =
+      typeof transform === 'function'
+        ? { handler: transform, filter: { id: fixtureModules } }
+        : { ...transform, filter: { ...transform.filter, id: fixtureModules } };
+  }
   // ttsc 0.34.1 adds dependency-scan hooks that ignore the filter above and stall Vite's cold scan for ~60s.
   const dropScan: Plugin = {
     name: 'typia-fixtures:no-ttsc-dependency-scan',
     configResolved(config) {
-      type ScanBackend = { plugins?: ({ name?: string } | null)[] };
-      // Vitest's Vite 8 scans through `rolldownOptions`, which these (Storybook's Vite 7) types lack.
-      const all = [config.optimizeDeps, ...Object.values(config.environments ?? {}).map((env) => env.optimizeDeps)] as {
-        esbuildOptions?: ScanBackend;
-        rolldownOptions?: ScanBackend;
-      }[];
-      for (const backend of all.flatMap((deps) => [deps?.esbuildOptions, deps?.rolldownOptions])) {
-        if (!Array.isArray(backend?.plugins)) continue;
-        backend.plugins = backend.plugins.filter((p) => !p?.name?.startsWith('ttsc-dependency-'));
+      const all = [config.optimizeDeps, ...Object.values(config.environments ?? {}).map((env) => env.optimizeDeps)];
+      for (const deps of all) {
+        // Vitest's Vite 8 scans through `rolldownOptions`, which these (Storybook's Vite 7) types lack.
+        for (const backend of [deps.esbuildOptions, 'rolldownOptions' in deps ? deps.rolldownOptions : undefined]) {
+          if (typeof backend !== 'object' || backend === null) continue;
+          if (!('plugins' in backend) || !Array.isArray(backend.plugins)) continue;
+          backend.plugins = backend.plugins.filter(
+            (p: unknown) =>
+              !(typeof p === 'object' && p !== null && 'name' in p && String(p.name).startsWith('ttsc-dependency-')),
+          );
+        }
       }
     },
   };
-  return [...scoped, dropScan];
+  return [...plugins, dropScan];
 }
 
 /**
