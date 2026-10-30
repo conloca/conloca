@@ -130,16 +130,25 @@ describe('wireDataSchemas on a site connect set up', () => {
 });
 
 describe('wireDataSchemas on a site that already has parts of it', () => {
-  test('keeps the vite plugins the site has and appends the Typia one', async () => {
+  test('keeps the vite plugins the site has, appends the Typia one, and is done on a second run', async () => {
     await makeSite({
       ...CONNECTED,
       'astro.config.mjs': connectedConfig(STARTER_OPTIONS, '\n  vite: { plugins: [tailwind()] },'),
     });
-    const after = editOf(await wireDataSchemas(dir), 'astro.config.mjs');
-    expect(after).toContain('plugins: [tailwind(), ...schemaTypia()]');
+    const result = await wireDataSchemas(dir);
+    expect(editOf(result, 'astro.config.mjs')).toContain('plugins: [tailwind(), ...schemaTypia()]');
+
+    await writeEdits(result.edits);
+    await addDependencies(
+      dir,
+      result.packages.map(([name]) => name),
+    );
+    expect(await wireDataSchemas(dir)).toMatchObject({ state: 'done', edits: [], packages: [] });
+    const config = await readFile(join(dir, 'astro.config.mjs'), 'utf8');
+    expect(config.match(/schemaTypia/g)).toHaveLength(2);
   });
 
-  test('keeps a schemasPath of its own and imports dataSchemas from it in content.config.ts', async () => {
+  test('keeps a schemasPath of its own, imports dataSchemas from it in content.config.ts, and is done on a second run', async () => {
     await makeSite({
       ...CONNECTED,
       'astro.config.mjs': connectedConfig("{ contentRoot: './content', schemasPath: './src/cms/schemas.ts' }"),
@@ -151,6 +160,9 @@ describe('wireDataSchemas on a site that already has parts of it', () => {
     expect(config).not.toContain('schemaTypia');
     expect(newFiles(result)).toEqual(['public/media/.gitkeep']);
     expect(result.packages).toEqual([]);
+
+    await writeEdits(result.edits);
+    expect(await wireDataSchemas(dir)).toMatchObject({ state: 'done', edits: [], packages: [] });
   });
 
   test('never overwrites an existing src/schemas/data.ts', async () => {
