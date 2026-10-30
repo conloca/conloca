@@ -2,7 +2,9 @@ import { describe, expect, test } from 'bun:test';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { stampSkill } from '@conloca/content-api/skill-stamp';
 import { $ } from 'bun';
+import { readCliManifest } from '../src/lib/project-template.js';
 
 const CLI = join(import.meta.dir, '..', 'dist', 'conloca.js');
 const SKILL_RELATIVE_PATH = join('.claude', 'skills', 'conloca', 'SKILL.md');
@@ -47,12 +49,13 @@ describe('conloca agent skill', () => {
     }
   });
 
-  // The canonical page is src/templates/conloca-skill.md; setup writes it as it is.
-  test('astro setup scaffolds the packaged skill template byte for byte', async () => {
+  // The canonical page is src/templates/conloca-skill.md; setup writes it stamped with the CLI release.
+  test('astro setup scaffolds the packaged skill template, stamped with the CLI release', async () => {
     const dir = await runSetup('conloca-skill-template-');
     try {
       const scaffolded = await readFile(join(dir, SKILL_RELATIVE_PATH), 'utf-8');
-      expect(scaffolded).toBe(await readFile(SKILL_TEMPLATE, 'utf-8'));
+      const { version } = await readCliManifest();
+      expect(scaffolded).toBe(stampSkill(await readFile(SKILL_TEMPLATE, 'utf-8'), version));
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

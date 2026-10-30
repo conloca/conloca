@@ -1,11 +1,9 @@
 import { readFile } from 'node:fs/promises';
-import { createRequire } from 'node:module';
 import { join, relative } from 'node:path';
-import { pathToFileURL } from 'node:url';
 import type { FramingBlocker, FramingSnippets } from '@conloca/cloud-astro';
 import { editorUiOrigin, parentRoot } from '@conloca/content-api/editor-host';
 import { isRecord } from '../is-record.js';
-import { messageOf } from '../message-of.js';
+import { importFromProject } from '../project-module.js';
 import { type FileEdit, jsonLike, type StepResult } from './step.js';
 
 interface FramingHelpers {
@@ -19,24 +17,10 @@ function isFramingHelpers(value: unknown): value is FramingHelpers {
   );
 }
 
-/**
- * The framing helpers of the project's own @conloca/cloud-astro, so the rules match the version the site builds
- * with. Resolution starts at the project, never at the CLI's own install.
- */
+/** The framing helpers of the project's own @conloca/cloud-astro, so the rules match the version the site builds with. */
 async function loadFramingHelpers(projectDir: string): Promise<FramingHelpers | 'missing' | 'outdated' | Error> {
-  let entry: string;
-  try {
-    entry = createRequire(join(projectDir, 'package.json')).resolve('@conloca/cloud-astro');
-  } catch {
-    return 'missing';
-  }
-  let module: unknown;
-  try {
-    // Dynamic on purpose: the module path is the project's install, known only at run time.
-    module = await import(pathToFileURL(entry).href);
-  } catch (error) {
-    return new Error(messageOf(error));
-  }
+  const module = await importFromProject(projectDir, '@conloca/cloud-astro');
+  if (module === 'missing' || module instanceof Error) return module;
   return isFramingHelpers(module) ? module : 'outdated';
 }
 

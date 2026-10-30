@@ -1,5 +1,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
+import { stampSkill } from '@conloca/content-api/skill-stamp';
+import { readCliManifest } from '../lib/project-template.js';
 import { ensureSiteInSitesConfig } from '../lib/sites-config.js';
 // Kept as a real .md file so it stays editable markdown; Bun inlines it into
 // the bundle.
@@ -751,7 +753,7 @@ export async function setup(
     // working on this project.
     await writeIfNotExists(
       join(absolutePath, '.claude', 'skills', 'conloca', 'SKILL.md'),
-      CONLOCA_SKILL_TEMPLATE,
+      stampSkill(CONLOCA_SKILL_TEMPLATE, (await readCliManifest()).version),
       '.claude/skills/conloca/SKILL.md',
     );
 
