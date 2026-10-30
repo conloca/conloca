@@ -3,7 +3,8 @@ import { connect } from './commands/connect.js';
 import { create } from './commands/create.js';
 import { doctor } from './commands/doctor.js';
 import { init } from './commands/init.js';
-import { pageCreate } from './commands/page-create.js';
+import { type PageCreateOptions, pageCreate } from './commands/page-create.js';
+import { type PageUpdateOptions, pageUpdate } from './commands/page-update.js';
 import { DEFAULT_SITE_NAME, printSetupNextSteps, setup } from './commands/setup.js';
 import { PACKAGE_MANAGERS } from './lib/package-manager.js';
 
@@ -149,38 +150,65 @@ const page = program
   .usage('<subcommand>')
   .description('Page management commands');
 
-page
-  .command('create')
-  .argument('[path]', 'Project directory holding the content root', '.')
-  .requiredOption('--site <site>', 'Site the page belongs to (a key in sites.json)')
-  .requiredOption('--collection <collection>', "Collection directory under the site, e.g. 'pages'")
-  .requiredOption('--pathname <pathname>', "Page route, starting with '/'")
-  .requiredOption('--title <title>', 'Page title (meta.title)')
+/** The Puck content and page-settings metadata flags `page create` and `page update` share. */
+function withPageContentOptions(command: Command): Command {
+  return command
+    .option('--content <source>', "Puck data { root, content, zones } from a JSON file, or '-' for stdin")
+    .option('--description <text>', 'Page description (meta.description)')
+    .option('--image <ref>', 'Social sharing image (meta.ogImage)')
+    .option('--canonical <url>', 'Canonical URL (meta.canonical)')
+    .option('--robots <value>', "Robots directive, e.g. 'noindex' (meta.robots)");
+}
+
+withPageContentOptions(
+  page
+    .command('create')
+    .argument('[path]', 'Project directory holding the content root', '.')
+    .requiredOption('--site <site>', 'Site the page belongs to (a key in sites.json)')
+    .requiredOption('--collection <collection>', "Collection directory under the site, e.g. 'pages'")
+    .requiredOption('--pathname <pathname>', "Page route, starting with '/'")
+    .requiredOption('--title <title>', 'Page title (meta.title)'),
+)
   .option('--json', 'Report as a single JSON object on stdout')
-  .description("Create an empty Puck page in the site's default locale")
+  .description("Create a Puck page in the site's default locale")
   .addHelpText(
     'after',
     `
-Writes a new .vxjson page file under <content root>/<site>/<collection>, with
-the same empty Puck payload the CMS writes for a new page, in the site's
-default locale from sites.json. Prints the created file path and page id;
---json prints {ok, id, path} instead. Exits 1 when the site is unknown, the
-pathname is invalid or already taken, or the write fails.`,
+Writes a new .vxjson page file under <content root>/<site>/<collection>, in the
+site's default locale from sites.json. The page holds the Puck data --content
+points at, or the same empty Puck payload the CMS writes for a new page; the
+metadata flags are stored in its meta. Prints the created file path and page
+id; --json prints {ok, id, path} instead. Exits 1 when the site is unknown,
+the pathname is invalid or already taken, --content is not Puck data, or the
+write fails.`,
   )
-  .action(
-    async (
-      path: string,
-      options: { site: string; collection: string; pathname: string; title: string; json?: boolean },
-    ) => {
-      await pageCreate(path, {
-        site: options.site,
-        collection: options.collection,
-        pathname: options.pathname,
-        title: options.title,
-        json: options.json === true,
-      });
-    },
-  );
+  .action(async (path: string, options: Omit<PageCreateOptions, 'json'> & { json?: boolean }) => {
+    await pageCreate(path, { ...options, json: options.json === true });
+  });
+
+withPageContentOptions(
+  page
+    .command('update')
+    .argument('<ref>', "Page id, or its route starting with '/'")
+    .argument('[path]', 'Project directory holding the content root', '.')
+    .option('--site <site>', 'Site the page belongs to (a key in sites.json)', DEFAULT_SITE_NAME)
+    .option('--title <title>', 'Page title (meta.title)'),
+)
+  .option('--json', 'Report as a single JSON object on stdout')
+  .description("Update a page's content or metadata in the site's default locale")
+  .addHelpText(
+    'after',
+    `
+Writes only what is given: --content replaces the page's Puck data (Puck pages
+only), --title and the metadata flags set those meta fields, and an empty value
+(--robots '') clears one. A route like /about/ finds /about. Prints the page
+file path and id; --json prints {ok, id, path} instead. Exits 1 when no page
+has that id or route, the id is a data entry or fragment, nothing is given to
+update, or the write fails.`,
+  )
+  .action(async (ref: string, path: string, options: Omit<PageUpdateOptions, 'json'> & { json?: boolean }) => {
+    await pageUpdate(ref, path, { ...options, json: options.json === true });
+  });
 
 const astro = program
   .command('astro')

@@ -83,6 +83,9 @@ describe('conloca page create', () => {
     expect(output).toContain('--collection');
     expect(output).toContain('--pathname');
     expect(output).toContain('--title');
+    for (const flag of ['--content', '--description', '--image', '--canonical', '--robots']) {
+      expect(output).toContain(flag);
+    }
     expect(output).toContain('--json');
     expect(result.exitCode).toBe(0);
   });
@@ -262,6 +265,85 @@ describe('conloca page create', () => {
       expect(report.ok).toBe(false);
       expect(report.error).toContain('default');
       expect(report.field).toBe('site');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('--content writes the given Puck data and the metadata flags into meta', async () => {
+    const dir = await makeProject('conloca-page-create-content-');
+    try {
+      const puckData = { root: { props: {} }, content: [{ type: 'Heading', props: { id: 'Heading-1' } }], zones: {} };
+      await Bun.write(join(dir, 'about.json'), JSON.stringify(puckData));
+      const result =
+        await $`${CLI} page create --site default --collection pages --pathname /about --title About --content ${join(dir, 'about.json')} --description D --image /media/a.jpg --canonical https://example.com/about --robots noindex ${dir}`.quiet();
+      expect(result.exitCode).toBe(0);
+
+      const parsed = JSON.parse(await readFile(join(dir, 'content', 'default', 'pages', 'about.en.vxjson'), 'utf-8'));
+      expect(parsed.content.puckData).toEqual(puckData);
+      expect(parsed.meta).toEqual({
+        title: 'About',
+        description: 'D',
+        ogImage: '/media/a.jpg',
+        canonical: 'https://example.com/about',
+        robots: 'noindex',
+      });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test.each([
+    ['an array', '[]'],
+    ['an object without root', '{"content":[]}'],
+  ])('--content that is %s fails naming the flag and writes nothing', async (_label, text) => {
+    const dir = await makeProject('conloca-page-create-bad-content-');
+    try {
+      await Bun.write(join(dir, 'about.json'), text);
+      const result =
+        await $`${CLI} page create --site default --collection pages --pathname /about --title About --content ${join(dir, 'about.json')} ${dir}`
+          .quiet()
+          .nothrow();
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr.toString()).toContain('--content must be Puck data { root, content, zones }');
+      const created = await stat(join(dir, 'content', 'default', 'pages', 'about.en.vxjson')).catch(() => null);
+      expect(created).toBeNull();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('--content - reads the Puck data from stdin', async () => {
+    const dir = await makeProject('conloca-page-create-stdin-');
+    try {
+      const puckData = { root: {}, content: [{ type: 'Text', props: { id: 'Text-1' } }] };
+      const result =
+        await $`${CLI} page create --json --site default --collection pages --pathname /about --title About --content - ${dir} < ${new Response(JSON.stringify(puckData))}`.quiet();
+      expect(result.exitCode).toBe(0);
+      expect(JSON.parse(result.stdout.toString()).ok).toBe(true);
+
+      const parsed = JSON.parse(await readFile(join(dir, 'content', 'default', 'pages', 'about.en.vxjson'), 'utf-8'));
+      expect(parsed.content.puckData).toEqual(puckData);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('--content - with empty stdin fails naming the flag and writes nothing', async () => {
+    const dir = await makeProject('conloca-page-create-empty-stdin-');
+    try {
+      const result =
+        await $`${CLI} page create --json --site default --collection pages --pathname /about --title About --content - ${dir} < ${new Response('')}`
+          .quiet()
+          .nothrow();
+      expect(result.exitCode).toBe(1);
+      expect(JSON.parse(result.stdout.toString())).toEqual({
+        ok: false,
+        error: '--content is empty',
+        field: '--content',
+      });
+      const created = await stat(join(dir, 'content', 'default', 'pages', 'about.en.vxjson')).catch(() => null);
+      expect(created).toBeNull();
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

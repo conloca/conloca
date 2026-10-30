@@ -2,7 +2,8 @@ import { describe, expect, test } from 'bun:test';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { type PageWriteError, writePage } from '../src/lib/page-write.js';
+import { FileSystemContentAPI } from '@conloca/content-api/node';
+import { isPuckData, metaPatchOf, type PageWriteError, updatePage, writePage } from '../src/lib/page-write.js';
 
 const VALID_SITES = JSON.stringify({
   sites: { default: { locales: ['en'], defaultLocale: 'en' } },
@@ -120,6 +121,72 @@ describe('writePage', () => {
         writePage({ contentRoot, site: 'default', collection: 'pages', pathname: '/about', title: 'About' }),
       ).rejects.toMatchObject({ reason: 'write_failed' } satisfies Partial<PageWriteError>);
     } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('writePage with metadata', () => {
+  test('writes the metadata flags into meta and leaves empty ones out', async () => {
+    const { dir, contentRoot } = await makeContentRoot('conloca-page-write-meta-');
+    try {
+      const result = await writePage({
+        contentRoot,
+        site: 'default',
+        collection: 'pages',
+        pathname: '/about',
+        title: 'About',
+        meta: { description: 'D', robots: '' },
+      });
+      const parsed = JSON.parse(await readFile(result.filePath, 'utf-8'));
+      expect(parsed.meta).toEqual({ title: 'About', description: 'D' });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('metaPatchOf', () => {
+  test('keeps given values and turns an empty one into a clear', () => {
+    expect(metaPatchOf({ description: 'D', ogImage: '' })).toEqual({ description: 'D', ogImage: null });
+  });
+});
+
+describe('isPuckData', () => {
+  test('accepts a root and a content list, with or without zones', () => {
+    expect(isPuckData({ root: {}, content: [] })).toBe(true);
+    expect(isPuckData({ root: { props: {} }, content: [], zones: {} })).toBe(true);
+  });
+
+  test.each([
+    ['an array', []],
+    ['an object without root', { content: [] }],
+    ['an object without a content list', { root: {}, content: {} }],
+    ['zones that are not an object', { root: {}, content: [], zones: [] }],
+  ])('refuses %s', (_label, value) => {
+    expect(isPuckData(value)).toBe(false);
+  });
+});
+
+describe('updatePage', () => {
+  test('refuses a fragment id', async () => {
+    const { dir, contentRoot } = await makeContentRoot('conloca-page-update-fragment-');
+    try {
+      const api = await FileSystemContentAPI.create({ contentRoot });
+      const created = await api.createContent({
+        kind: 'fragment',
+        type: 'puck',
+        collection: 'general',
+        name: 'header',
+        locales: { en: { meta: { title: 'Header' }, content: { puckData: { root: {}, content: [] } } } },
+      });
+      const id = created.id ?? '';
+      await expect(updatePage({ contentRoot, site: 'default', ref: id, title: 'X' })).rejects.toMatchObject({
+        reason: 'wrong_kind',
+        message: `"${id}" is a fragment, not a page`,
+      } satisfies Partial<PageWriteError>);
+    } finally {
+      FileSystemContentAPI.clearCaches();
       await rm(dir, { recursive: true, force: true });
     }
   });

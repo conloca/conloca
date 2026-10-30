@@ -2,15 +2,53 @@ import { readFile } from 'node:fs/promises';
 import { relative, resolve } from 'node:path';
 import { fail, withStdoutRedirected } from '../lib/cli-output.js';
 import { contentRootOf } from '../lib/content-root.js';
-import { PageWriteError, type PageWriteResult, writePage } from '../lib/page-write.js';
+import { readJsonInput } from '../lib/json-input.js';
+import {
+  isPuckData,
+  type PageMetaFlags,
+  PageWriteError,
+  type PageWriteResult,
+  type PuckPayload,
+  writePage,
+} from '../lib/page-write.js';
 import { declaredPageCollections } from './doctor-astro.js';
 
-export interface PageCreateOptions {
+/** The metadata flags `page create` and `page update` share, named as typed. */
+export interface PageMetaOptions {
+  description?: string;
+  image?: string;
+  canonical?: string;
+  robots?: string;
+}
+
+export interface PageCreateOptions extends PageMetaOptions {
   site: string;
   collection: string;
   pathname: string;
   title: string;
+  /** A Puck data file, or '-' for stdin. */
+  content?: string;
   json: boolean;
+}
+
+/** The page-settings meta keys the metadata flags write. */
+export function metaFlagsOf(options: PageMetaOptions): PageMetaFlags {
+  return {
+    description: options.description,
+    ogImage: options.image,
+    canonical: options.canonical,
+    robots: options.robots,
+  };
+}
+
+/** The Puck data `--content` points at, or undefined without the flag; refuses anything that is not Puck data. */
+export async function readPuckContent(source: string | undefined): Promise<PuckPayload | undefined> {
+  if (source === undefined) return undefined;
+  const value = await readJsonInput(source, '--content');
+  if (!isPuckData(value)) {
+    throw new PageWriteError('invalid_input', '--content must be Puck data { root, content, zones }', '--content');
+  }
+  return value;
 }
 
 /**
@@ -60,6 +98,7 @@ async function createPage(directory: string, options: PageCreateOptions): Promis
 
   let written: PageWriteResult;
   try {
+    const puckData = await readPuckContent(options.content);
     written = await withStdoutRedirected(json, () =>
       writePage({
         contentRoot,
@@ -67,6 +106,8 @@ async function createPage(directory: string, options: PageCreateOptions): Promis
         collection: options.collection,
         pathname: options.pathname,
         title: options.title,
+        puckData,
+        meta: metaFlagsOf(options),
       }),
     );
   } catch (error) {

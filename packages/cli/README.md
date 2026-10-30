@@ -216,24 +216,31 @@ seam-level warnings carry the check id `EXT`, so `--json` consumers can tell the
 
 ### Create a Page
 
-Create an empty Puck page in a site's default locale:
+Create a Puck page in a site's default locale:
 
 ```bash
-conloca page create --site <site> --collection <collection> --pathname <pathname> --title <title> [path] [--json]
+conloca page create --site <site> --collection <collection> --pathname <pathname> --title <title> [path] [--content <file|->] [--description <text>] [--image <ref>] [--canonical <url>] [--robots <value>] [--json]
 ```
 
-| Argument / Option           | Description                                       | Default                 |
-| --------------------------- | ------------------------------------------------- | ----------------------- |
-| `path`                      | Project directory holding the content root        | `.` (current directory) |
-| `--site <site>`             | Site the page belongs to (a key in `sites.json`)  |                         |
-| `--collection <collection>` | Collection directory under the site, e.g. `pages` |                         |
-| `--pathname <pathname>`     | Page route, must start with `/`                   |                         |
-| `--title <title>`           | Page title (`meta.title`)                         |                         |
-| `--json`                    | Report as a single JSON object on stdout          |                         |
+| Argument / Option           | Description                                                                 | Default                 |
+| --------------------------- | --------------------------------------------------------------------------- | ----------------------- |
+| `path`                      | Project directory holding the content root                                  | `.` (current directory) |
+| `--site <site>`             | Site the page belongs to (a key in `sites.json`)                            |                         |
+| `--collection <collection>` | Collection directory under the site, e.g. `pages`                           |                         |
+| `--pathname <pathname>`     | Page route, must start with `/`                                             |                         |
+| `--title <title>`           | Page title (`meta.title`)                                                   |                         |
+| `--content <file\|->`       | Puck data `{ root, content, zones }` from a JSON file, or `-` to read stdin | the empty page          |
+| `--description <text>`      | Page description (`meta.description`)                                       |                         |
+| `--image <ref>`             | Social sharing image (`meta.ogImage`)                                       |                         |
+| `--canonical <url>`         | Canonical URL (`meta.canonical`)                                            |                         |
+| `--robots <value>`          | Robots directive, e.g. `noindex` (`meta.robots`)                            |                         |
+| `--json`                    | Report as a single JSON object on stdout                                    |                         |
 
-Writes a new `.vxjson` file under `<content root>/<site>/<collection>` with the same empty Puck payload the CMS writes
-for a new page, then prints the page id and the created file path. It exits 1 when the site is unknown, the pathname is
-invalid or already taken, or the write fails; validation failures name the offending option. `--json` prints
+Writes a new `.vxjson` file under `<content root>/<site>/<collection>` holding the Puck data `--content` points at, or
+the same empty Puck payload the CMS writes for a new page, then prints the page id and the created file path. The
+metadata flags are the fields of the editor's page settings. Inline JSON is not accepted: pass a file, or pipe the JSON
+into `--content -`. It exits 1 when the site is unknown, the pathname is invalid or already taken, `--content` is not
+Puck data, or the write fails; validation failures name the offending option. `--json` prints
 `{ok, id, path, warnings?}` on success and `{ok: false, error, field?}` on failure — stdout carries exactly that one
 object, progress lines and warnings go to stderr.
 
@@ -252,6 +259,27 @@ Indexing 1 content files...
 ✓ Created page /about (vx-0o0swYcO)
   File: content/default/pages/about.en.vxjson
 The page is now editable in the CMS.
+```
+
+### Update a Page
+
+Change the content or metadata of an existing page in a site's default locale:
+
+```bash
+conloca page update <id|pathname> [path] [--site <site>] [--title <title>] [--content <file|->] [--description <text>] [--image <ref>] [--canonical <url>] [--robots <value>] [--json]
+```
+
+The page is found by its id, or by its route when the reference starts with `/` (`/about/` finds `/about`). `--site`
+defaults to `default`; the other options mean what they mean for `page create`. Only what is given is written:
+`--content` replaces the Puck data and keeps the metadata, a metadata flag sets its field and keeps the content, and an
+empty value (`--robots ''`) clears the field. `--content` writes Puck pages only, so an MDX page takes metadata flags
+alone. It exits 1 when no page has that id or route, the id belongs to a data entry or fragment, nothing is given to
+update, or the write fails. `--json` prints `{ok, id, path}` on success and `{ok: false, error, field?}` on failure.
+
+Example:
+
+```bash
+conloca page update /about --content about.json --description 'Who we are'
 ```
 
 ## Quick Start
