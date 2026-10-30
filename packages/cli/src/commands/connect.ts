@@ -25,6 +25,7 @@ import {
 } from '../lib/package-manager.js';
 import { conlocaRange, readCliManifest, THIRD_PARTY_VERSIONS } from '../lib/project-template.js';
 import { newSitesConfig } from '../lib/sites-config.js';
+import { compareVersions, conlocaDependencies, versionFloor } from '../lib/versions.js';
 import { DEFAULT_SITE_NAME, setup } from './setup.js';
 
 const execFile = promisify(execFileCallback);
@@ -189,6 +190,21 @@ async function packagesStep(projectDir: string, commands: PackageManagerCommands
   };
 }
 
+/** `<name> <floor>` for each `@conloca/*` dependency declared below release `to`; none for an unreadable package.json. */
+async function olderPackages(projectDir: string, to: string): Promise<string[]> {
+  let manifest: unknown;
+  try {
+    manifest = JSON.parse((await readText(join(projectDir, 'package.json'))) ?? '');
+  } catch {
+    return [];
+  }
+  if (!isRecord(manifest)) return [];
+  return conlocaDependencies(manifest).flatMap(({ name, spec }) => {
+    const floor = versionFloor(spec);
+    return floor !== null && compareVersions(floor, to) < 0 ? [`${name} ${floor}`] : [];
+  });
+}
+
 /** The site id a build writes into conloca.json: the top-level `siteId` of sites.json, else `default`. */
 async function siteIdOf(sitesPath: string): Promise<string> {
   try {
@@ -295,6 +311,29 @@ export async function runConnect(path: string, options: ConnectOptions, io: Conn
       edits: [],
     },
   };
+
+  // A site on an older release goes through upgrade first, so connect never mixes two releases.
+  const to = (await readCliManifest()).version;
+  const older = await olderPackages(projectDir, to);
+  if (older.length > 0) {
+    const name = relative(start, projectDir) || '.';
+    const target = name === '.' ? '' : ` ${name}`;
+    const message = `this site's @conloca packages (${older.join(', ')}) are older than this CLI (${to}): upgrade them first`;
+    console.log(`needs-you: ${message}`);
+    const lines = [`npx @conloca/cli@${to} upgrade${target}`, `npx @conloca/cli@${to} connect${target}`];
+    for (const line of lines) console.log(`  ${line}`);
+    return {
+      ok: false,
+      project: name,
+      siteId: 'default',
+      packageManager,
+      steps: [
+        { id: 'project', state: project.result.state, message: project.result.message },
+        { id: 'packages', state: 'needs-you', message },
+      ],
+      next: NEXT,
+    };
+  }
 
   const packages = await packagesStep(projectDir, commands);
   if (!options.install && packages.command !== undefined) {

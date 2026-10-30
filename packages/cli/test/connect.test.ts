@@ -9,6 +9,7 @@ import {
   exitCodeOf,
   runConnect,
 } from '../src/commands/connect.js';
+import { readCliManifest } from '../src/lib/project-template.js';
 import { makeRepo as newRepo, OLD_WORKFLOW, treeHashes } from './fixture-repo.js';
 
 const STATIC_CONFIG = `import { defineConfig } from 'astro/config';
@@ -26,10 +27,12 @@ export default defineConfig({
 });
 `;
 
+const TO = (await readCliManifest()).version;
+
 const ALL_PACKAGES = {
   '@astrojs/react': '^6.0.5',
-  '@conloca/astro-cms': '^0.1.0',
-  '@conloca/cloud-astro': '^0.1.0',
+  '@conloca/astro-cms': TO,
+  '@conloca/cloud-astro': TO,
   '@vitejs/plugin-react': '^5.2.0',
   astro: '^7.3.1',
 };
@@ -199,6 +202,51 @@ describe('runConnect', () => {
     expect(calls[0]?.cwd).toBe(join(dir, 'sites/b'));
     expect(await readFile(join(dir, 'sites/a/astro.config.mjs'), 'utf8')).toBe(CMS_CONFIG);
     expect(await readFile(join(dir, 'sites/b/astro.config.mjs'), 'utf8')).toContain('conlocaCloud(');
+  });
+
+  test('hands a site on an older Conloca release to upgrade and writes nothing', async () => {
+    const dir = await makeRepo({
+      ...PNPM_WITH_CMS,
+      'package.json': packageJson({ ...ALL_PACKAGES, '@conloca/astro-cms': '^0.2.1' }),
+    });
+    const before = await treeHashes(dir);
+    const { io, calls } = fakeIo();
+    const report = await runConnect(dir, options(), io);
+    expect(report.steps.map((step) => [step.id, step.state])).toEqual([
+      ['project', 'done'],
+      ['packages', 'needs-you'],
+    ]);
+    expect(report.ok).toBe(false);
+    expect(stateOf(report, 'packages')).toBe('needs-you');
+    expect(report.steps[1]?.message).toBe(
+      `this site's @conloca packages (@conloca/astro-cms 0.2.1) are older than this CLI (${TO}): upgrade them first`,
+    );
+    const output = printed.join('\n');
+    expect(output).toContain(`npx @conloca/cli@${TO} upgrade\n`);
+    expect(output).toContain(`npx @conloca/cli@${TO} connect`);
+    expect(calls).toEqual([]);
+    expect(await treeHashes(dir)).toEqual(before);
+    expect(exitCodeOf(report)).toBe(2);
+  });
+
+  test('names the project in the hand-off when run from a repository root', async () => {
+    const dir = await makeRepo(
+      {
+        ...BUN_MONOREPO,
+        'sites/a/package.json': packageJson({ ...ALL_PACKAGES, '@conloca/astro-cms': '^0.2.1' }),
+      },
+      ['sites/a'],
+    );
+    const before = await treeHashes(dir);
+    const { io, calls } = fakeIo();
+    const report = await runConnect(dir, options({ project: 'sites/a' }), io);
+    const output = printed.join('\n');
+    expect(output).toContain(`npx @conloca/cli@${TO} upgrade sites/a`);
+    expect(output).toContain(`npx @conloca/cli@${TO} connect sites/a`);
+    expect(report).toMatchObject({ ok: false, project: 'sites/a' });
+    expect(calls).toEqual([]);
+    expect(await treeHashes(dir)).toEqual(before);
+    expect(exitCodeOf(report)).toBe(2);
   });
 
   test('exits 2 and edits nothing for a config it cannot edit', async () => {
