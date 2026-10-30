@@ -101,6 +101,32 @@ export function conlocaDataEntries<E extends CollectionEntryLike, DS extends Dat
   return typedEntries(entries, parse as EntryParser<ConlocaDataEntry<HostSchemaType<DS[K]>>>, collection);
 }
 
+/**
+ * The validated payload of the one `collection` entry named `name` (in `locale`, when given), so a missing shared
+ * entry fails the build instead of rendering empty.
+ */
+export function conlocaDataEntry<E extends CollectionEntryLike, DS extends DataSchemas, K extends keyof DS & string>(
+  dataSchemas: DS,
+  collection: K,
+  entries: readonly E[],
+  name: string,
+  locale?: string,
+): HostSchemaType<DS[K]> {
+  const matches = conlocaDataEntries(dataSchemas, collection, entries).filter(
+    (entry) => entry.data.name === name && (locale === undefined || entry.data.locale === locale),
+  );
+  const [match] = matches;
+  if (!match) throw new Error(`[conloca] data collection "${collection}" has no entry named "${name}"`);
+  if (matches.length > 1) {
+    const locales = matches.map((entry) => entry.data.locale).sort();
+    throw new Error(
+      `[conloca] data collection "${collection}" has ${matches.length} entries named "${name}" (${locales.join(', ')}); pass a locale`,
+    );
+  }
+  if (match.data.data === undefined) throw new Error(`[conloca] data entry "${name}" in "${collection}" has no data`);
+  return match.data.data;
+}
+
 /** Fragment collection entries, validated and typed as {@link ConlocaFragmentEntry}. */
 export function conlocaFragmentEntries<E extends CollectionEntryLike>(
   entries: readonly E[],

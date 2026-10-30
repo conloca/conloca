@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { definePageSchema } from '@conloca/cms-spa/page-schemas';
-import { conlocaDataEntries, conlocaPageEntries } from '../src/entries.js';
+import { conlocaDataEntries, conlocaDataEntry, conlocaPageEntries } from '../src/entries.js';
 import { createPageEntryParser, hostFieldsFromPageSchemas, topLevelKeyOf } from '../src/internal/entry-validation.js';
 import {
   authorFields,
@@ -232,6 +232,54 @@ describe('typed collection accessors', () => {
   });
 });
 
+describe('conlocaDataEntry — one shared entry read by name', () => {
+  const dataSchemas = { testimonials: testimonialPayload };
+  const entry = (name: string, locale: string, data?: object) => ({
+    id: `${name}/${locale}`,
+    data: { id: name, locale, name, title: name, ...(data ? { data } : {}) },
+  });
+
+  test('returns the typed payload of the entry with that name', () => {
+    const found = conlocaDataEntry(
+      dataSchemas,
+      'testimonials',
+      [entry('a', 'en', { quote: 'A' }), entry('b', 'en', { quote: 'B' })],
+      'b',
+    );
+    expect(found).toEqual({ quote: 'B' });
+  });
+  test('picks the locale when the entry exists in several', () => {
+    const found = conlocaDataEntry(
+      dataSchemas,
+      'testimonials',
+      [entry('a', 'en', { quote: 'A' }), entry('a', 'de', { quote: 'Ä' })],
+      'a',
+      'de',
+    );
+    expect(found.quote).toBe('Ä');
+  });
+  test('fails naming the collection and the name when no entry has it', () => {
+    expect(() => conlocaDataEntry(dataSchemas, 'testimonials', [], 'header')).toThrow(
+      '[conloca] data collection "testimonials" has no entry named "header"',
+    );
+  });
+  test('fails listing the locales when the name matches more than one entry', () => {
+    expect(() =>
+      conlocaDataEntry(
+        dataSchemas,
+        'testimonials',
+        [entry('a', 'en', { quote: 'A' }), entry('a', 'de', { quote: 'Ä' })],
+        'a',
+      ),
+    ).toThrow(/2 entries named "a" \(de, en\)/);
+  });
+  test('fails when the entry stores no data', () => {
+    expect(() => conlocaDataEntry(dataSchemas, 'testimonials', [entry('a', 'en')], 'a')).toThrow(
+      '[conloca] data entry "a" in "testimonials" has no data',
+    );
+  });
+});
+
 /**
  * Compile-time proof that the typed accessors carry entry types Astro's
  * schema-less `getCollection` cannot: page core fields, loader-written record
@@ -261,4 +309,10 @@ type DataPayloadOf<K extends keyof DataRegistry & string> = ReturnType<
 export type DataEntryTypeProof = [
   Assert<IsExactly<DataPayloadOf<'testimonials'>, { quote: string } | undefined>>,
   Assert<IsExactly<DataPayloadOf<'faqs'>, { question: string } | undefined>>,
+  Assert<
+    IsExactly<
+      ReturnType<typeof conlocaDataEntry<{ id: string; data: unknown }, DataRegistry, 'testimonials'>>,
+      { quote: string }
+    >
+  >,
 ];

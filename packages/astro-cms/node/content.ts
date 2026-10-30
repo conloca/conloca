@@ -10,6 +10,7 @@ export {
   type CreateConlocaCollectionsOptions,
   conlocaData,
   conlocaDataEntries,
+  conlocaDataEntry,
   conlocaFragmentEntries,
   conlocaFragments,
   conlocaPageEntries,

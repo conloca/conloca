@@ -99,6 +99,18 @@ declaring a collection before its folder exists is the normal order, since the f
 in the editor. The editor saves new fragments in the `fragments` folder, and every form of `conlocaFragments(...)`
 declares that folder, so it never needs naming for the build to accept it.
 
+A page that renders one shared entry, such as a site header, reads it by name; a missing entry, or a name saved in
+several locales with none given, fails the build instead of rendering empty:
+
+```ts
+import { getCollection } from 'astro:content';
+import { conlocaDataEntry } from '@conloca/astro-cms/collections';
+import { dataSchemas } from '../schemas';
+
+const header = conlocaDataEntry(dataSchemas, 'site', await getCollection('site'), 'header', 'en');
+header.menu; // typed by the `site` schema
+```
+
 A site with no MDX fragments yet prints this once per rendered page, and it is expected — nothing is wrong with the file
 this message points at:
 

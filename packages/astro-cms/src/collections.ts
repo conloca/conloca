@@ -19,6 +19,7 @@ export {
   type ConlocaFragmentEntry,
   type ConlocaPageEntry,
   conlocaDataEntries,
+  conlocaDataEntry,
   conlocaFragmentEntries,
   conlocaPageEntries,
   type TypedCollectionEntry,
