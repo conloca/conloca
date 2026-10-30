@@ -29,6 +29,7 @@ const bundleResult = await build({
     // npm dependencies, installed with the CLI
     'magicast',
     'diff',
+    'linkedom',
     // Workspace dependencies - resolved via npm at install time
     '@conloca/content-api',
     '@conloca/astro-cms',

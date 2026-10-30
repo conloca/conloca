@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import { type AssetAddOptions, assetAdd } from './commands/asset-add.js';
+import { compare } from './commands/compare.js';
 import { components } from './commands/components.js';
 import { connect } from './commands/connect.js';
 import { create } from './commands/create.js';
@@ -134,6 +135,33 @@ astro.config in [path]. Read-only: never modifies any file.`,
   )
   .action(async (path: string, options: { json?: boolean }) => {
     await components(path, { json: options.json === true });
+  });
+
+program
+  .command('compare')
+  .argument('[path]', 'Project directory', '.')
+  .option(
+    '--routes <routes>',
+    'Comma-separated routes the user chose to convert, e.g. /pricing,/about (first run only)',
+  )
+  .option('--reset', 'Remove the saved baseline first, so this run saves a new one')
+  .option('--json', 'Report as a single JSON object on stdout')
+  .description("Compare a site's build before and after converting pages")
+  .addHelpText(
+    'after',
+    `
+The first run builds the site and saves a baseline with the routes the user
+chose (--routes). Later runs build again and compare every route with the
+baseline: untouched routes must be identical (linked CSS included), and chosen
+routes that became Conloca pages must keep their text, links, head tags and
+status. A route that became a Conloca page without being chosen fails, and so
+does a Conloca page still hidden behind its src/pages file. Hashed asset
+names, timestamps and island ids never count. Reads the build from
+dist/client, else dist. The baseline stays in node_modules/.cache until
+--reset. Never commits. Exits 1 when anything differs.`,
+  )
+  .action(async (path: string, options: { routes?: string; reset?: boolean; json?: boolean }) => {
+    await compare(path, { routes: options.routes, reset: options.reset === true, json: options.json === true });
   });
 
 program

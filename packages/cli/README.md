@@ -249,6 +249,39 @@ modifies a file. `--json` prints `{ok, site, routes}`; each route carries `route
   src/pages/pricing.astro hides Conloca page pricing
 ```
 
+### Compare builds
+
+Build the site and compare its output before and after converting pages:
+
+```bash
+conloca compare [path] [--routes <routes>] [--reset] [--json]
+```
+
+| Argument / Option | Description                                                  | Default                 |
+| ----------------- | ------------------------------------------------------------ | ----------------------- |
+| `path`            | Project directory, holding `astro.config`                    | `.` (current directory) |
+| `--routes`        | Comma-separated routes the user chose to convert (first run) | none                    |
+| `--reset`         | Remove the saved baseline first, so this run saves a new one |                         |
+| `--json`          | Report as a single JSON object on stdout                     |                         |
+
+The first run builds the site with its package manager's `run build` and saves the output as a baseline in
+`node_modules/.cache/conloca-compare`, with the routes the user chose to convert (`--routes /pricing,/about`). Later
+runs build again and compare every route with the baseline:
+
+- A route nobody touched must be identical, linked `/_astro/*.css` content included. Hashed asset names, timestamps and
+  island ids never count; island props that changed because shared values moved into data entries are reported as
+  allowed. Sitemaps compare as a set of locations.
+- A chosen route that became a Conloca page must keep its text (with image alt texts), links, head tags and status (page
+  or redirect); its markup may change.
+- A route that became a Conloca page without being chosen fails, and so does a Conloca page still hidden behind its
+  `src/pages` file.
+
+It reads the build from `dist/client` when present, else `dist`, and fails when the build wrote no fresh HTML there. The
+site is the first one in `sites.json`. The baseline stays until `--reset`; `--routes` is accepted only on the run that
+saves it. Never commits. Exits 1 when anything differs. `--json` prints
+`{ok, baseline, chosenRoutes, routes, missing, added, unchosen, hidden}`; each route carries `route`, `kind`
+(`untouched` or `converted`), `differences` and `allowed`.
+
 ### List components
 
 List the site's Puck components and the fields each accepts:
