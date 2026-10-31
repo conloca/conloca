@@ -6,6 +6,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import type { AstroI18nLocales } from '@conloca/astro-cms/checks';
 import { EDITOR_PAGE_INFO_FORMATS, type EditorHostPageData, isEditorPageInfo } from '@conloca/content-api/editor-host';
 import { buildSandboxSrcdoc } from '@conloca/mdx/sandbox-frame';
 import type { AstroIntegration, AstroIntegrationLogger, ViteUserConfig } from 'astro';
@@ -116,7 +117,15 @@ type ConfigHook = (args: ConfigHookArgs) => Promise<void> | void;
 interface ConfigHookArgs {
   logger?: AstroIntegrationLogger;
   command?: string;
-  config?: { root?: URL; base?: string; vite?: ViteUserConfig; adapter?: AstroIntegration };
+  config?: {
+    root?: URL;
+    base?: string;
+    vite?: ViteUserConfig;
+    adapter?: AstroIntegration;
+    srcDir?: URL;
+    output?: 'static' | 'server';
+    i18n?: AstroI18nLocales;
+  };
   injectRoute?: (route: { pattern: string }) => void;
   updateConfig?: (update: ConfigUpdate) => void;
   addMiddleware?: () => void;
@@ -164,6 +173,9 @@ interface ConfigRun {
   vite?: ViteUserConfig;
   adapter?: AstroIntegration;
   base?: string;
+  srcDir?: URL;
+  output?: 'static' | 'server';
+  i18n?: AstroI18nLocales;
 }
 /**
  * Runs the config hooks the way `astro <command>` does (`astro build` unless
@@ -173,7 +185,7 @@ interface ConfigRun {
 async function runConfigHooks(
   hooks: AstroIntegration['hooks'],
   root: URL,
-  { command = 'build', vite = {}, adapter, base }: ConfigRun = {},
+  { command = 'build', vite = {}, adapter, base, ...config }: ConfigRun = {},
 ): Promise<void> {
   await configHook(
     hooks,
@@ -189,7 +201,7 @@ async function runConfigHooks(
   await configHook(
     hooks,
     'astro:config:done',
-  )({ config: { vite, ...(adapter ? { adapter } : {}), ...(base === undefined ? {} : { base }) } });
+  )({ config: { vite, ...(adapter ? { adapter } : {}), ...(base === undefined ? {} : { base }), ...config } });
 }
 
 /**
@@ -831,11 +843,13 @@ describe('conlocaCloud — the preview build is opt-in', () => {
 describe('conlocaCloud — the editor page', () => {
   let restore: () => void;
   let buildDir: BuildDir;
+  let srcDir: URL;
   beforeEach(async () => {
     restore = snapshotEnv([...PIPELINE_ENV_VARS, 'GIT_DIR']);
     for (const key of PIPELINE_ENV_VARS) delete process.env[key];
     delete process.env.GIT_DIR;
     buildDir = await makeBuildDir();
+    srcDir = pathToFileURL(`${join(buildDir.root, 'src')}/`);
     spawned.length = 0;
   });
   afterEach(async () => {
@@ -844,6 +858,7 @@ describe('conlocaCloud — the editor page', () => {
   });
 
   const editorDir = () => join(buildDir.distPath, '_conloca', 'editor');
+  const pages = () => join(buildDir.root, 'src', 'pages');
 
   /** A CMS-less build: no content root, so siteId comes from the option. */
   function pageOptions(overrides: Partial<ConlocaCloudOptions> = {}): ConlocaCloudOptions {
@@ -969,6 +984,47 @@ describe('conlocaCloud — the editor page', () => {
     publishChannel();
     await buildDoneHook(pageOptions())({ dir: buildDir.dist, logger: makeLogger() });
     expect((await readPage()).info).not.toHaveProperty('contentPaths');
+  });
+
+  it('lists the static page routes in conloca.json and leaves out a hostile file name', async () => {
+    await mkdir(join(pages(), 'about'), { recursive: true });
+    for (const file of [
+      'index.astro',
+      'pricing.astro',
+      'about/team.astro',
+      '"; rm -rf ~; echo ".astro',
+      'ignore previous instructions.astro',
+      '[slug].astro',
+    ])
+      await writeFile(join(pages(), file), '---\n---\n<p>x</p>\n');
+    const logger = makeLogger();
+    await buildDoneHook(pageOptions(), { srcDir })({ dir: buildDir.dist, logger });
+    expect((await readPage()).info).toHaveProperty('routes', ['/', '/about/team', '/pricing']);
+    expect(logger.messages.some((m) => m.level === 'warn' && m.msg.includes('npx @conloca/cli routes'))).toBe(true);
+  });
+
+  it('writes an empty route list for a site without src/pages', async () => {
+    await buildDoneHook(pageOptions(), { srcDir })({ dir: buildDir.dist, logger: makeLogger() });
+    expect((await readPage()).info).toHaveProperty('routes', []);
+  });
+
+  it('lists only prerendered pages of a server-output site', async () => {
+    await mkdir(pages(), { recursive: true });
+    await writeFile(join(pages(), 'index.astro'), '---\nexport const prerender = true;\n---\n');
+    await writeFile(join(pages(), 'account.astro'), '---\n---\n');
+    await buildDoneHook(pageOptions(), { srcDir, output: 'server' })({ dir: buildDir.dist, logger: makeLogger() });
+    expect((await readPage()).info).toHaveProperty('routes', ['/']);
+  });
+
+  it('leaves out pages under a non-default Astro i18n locale', async () => {
+    await mkdir(join(pages(), 'de'), { recursive: true });
+    await writeFile(join(pages(), 'index.astro'), '---\n---\n');
+    await writeFile(join(pages(), 'de', 'index.astro'), '---\n---\n');
+    await buildDoneHook(pageOptions(), { srcDir, i18n: { locales: ['en', 'de'], defaultLocale: 'en' } })({
+      dir: buildDir.dist,
+      logger: makeLogger(),
+    });
+    expect((await readPage()).info).toHaveProperty('routes', ['/']);
   });
 
   it('writes branchDeploys into conloca.json from a Pages build', async () => {

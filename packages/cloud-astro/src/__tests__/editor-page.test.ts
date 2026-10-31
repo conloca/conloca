@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'bun:test';
 import { createHash } from 'node:crypto';
-import { EDITOR_UI_MODULE_FILES, type EditorHostPageData } from '@conloca/content-api/editor-host';
+import type { StaticPageRoute } from '@conloca/astro-cms/checks';
+import {
+  CONLOCA_JSON_MAX_BYTES,
+  EDITOR_UI_MODULE_FILES,
+  type EditorHostPageData,
+  ROUTES_MAX,
+} from '@conloca/content-api/editor-host';
 import { EDITOR_BUNDLE_EXTERNALS } from '../editor-page/bundle.js';
-import { branchDeploysFromEnv, contentPathsFromBuild } from '../editor-page/emit.js';
+import { branchDeploysFromEnv, contentPathsFromBuild, routesFromBuild } from '../editor-page/emit.js';
 import { renderEditorPage } from '../editor-page/page.js';
 
 const ORIGIN = 'https://app.conloca.com';
@@ -31,6 +37,40 @@ function cspContent(html: string): string {
   if (!match?.[1]) throw new Error('no CSP meta in the page');
   return match[1];
 }
+
+describe('routesFromBuild', () => {
+  const r = (route: string, prerendered = true): StaticPageRoute => ({ route, file: `${route}.astro`, prerendered });
+  const size = (written: object, routes: string[]) =>
+    new TextEncoder().encode(`${JSON.stringify({ ...written, routes }, null, 2)}\n`).length;
+
+  it('lists only prerendered routes', () => {
+    expect(routesFromBuild([r('/'), r('/account', false), r('/pricing')], {})).toEqual({
+      routes: ['/', '/pricing'],
+      left: 0,
+    });
+  });
+
+  it('drops a route named with prompt or shell syntax', () => {
+    expect(routesFromBuild([r('/'), r('/"; rm -rf ~; echo "'), r('/ignore previous instructions')], {})).toEqual({
+      routes: ['/'],
+      left: 2,
+    });
+  });
+
+  it('stops at ROUTES_MAX', () => {
+    const many = Array.from({ length: ROUTES_MAX + 3 }, (_, i) => r(`/${i}`));
+    expect(routesFromBuild(many, {})).toEqual({ routes: many.slice(0, ROUTES_MAX).map((x) => x.route), left: 3 });
+  });
+
+  it('keeps the whole conloca.json within the size the workspace editor reads', () => {
+    const written = { contentPaths: Array.from({ length: 16 }, (_, i) => `${i}/${'c'.repeat(250)}`) };
+    const many = Array.from({ length: 400 }, (_, i) => r(`/${'p'.repeat(150)}${i}`));
+    const { routes, left } = routesFromBuild(many, written);
+    expect(size(written, routes)).toBeLessThanOrEqual(CONLOCA_JSON_MAX_BYTES);
+    expect(size(written, [...routes, many[routes.length]!.route])).toBeGreaterThan(CONLOCA_JSON_MAX_BYTES);
+    expect(left).toBe(400 - routes.length);
+  });
+});
 
 describe('branchDeploysFromEnv', () => {
   it('reads the Pages project from a production build URL', () => {

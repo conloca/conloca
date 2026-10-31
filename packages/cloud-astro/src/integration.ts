@@ -1,5 +1,6 @@
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import type { AstroI18nLocales } from '@conloca/astro-cms/checks';
 import { readEditorDescriptors } from '@conloca/astro-cms/node';
 import { DEFAULT_EDITOR_ENDPOINT, editorUiOrigin } from '@conloca/content-api/editor-host';
 import type { AstroIntegration } from 'astro';
@@ -65,6 +66,10 @@ export function conlocaCloud(options: ConlocaCloudOptions = {}): AstroIntegratio
   let viteConfig: ViteUserConfig | undefined;
   // Astro's base, as written: the editor page's URLs sit below it.
   let astroBase = '/';
+  // Where the site's pages live and how Astro builds them: conloca.json lists the prerendered ones.
+  let srcDir: URL | undefined;
+  let serverOutput = false;
+  let i18n: AstroI18nLocales | undefined;
   // The editor options, settled at config:done: conlocaCMS publishes its
   // channel from its own config:setup, which may run after ours.
   let inherited: InheritedOptions | undefined;
@@ -298,6 +303,9 @@ export function conlocaCloud(options: ConlocaCloudOptions = {}): AstroIntegratio
         adapterName = config.adapter?.name;
         viteConfig = config.vite;
         astroBase = config.base ?? '/';
+        srcDir = config.srcDir;
+        serverOutput = config.output === 'server';
+        i18n = config.i18n;
         inherited = resolveInheritedOptions(options, readEditorDescriptors());
         // A refused or missing preview adapter fails `astro build` here,
         // before the site builds, rather than after it. `astro dev`, `sync`
@@ -335,6 +343,9 @@ export function conlocaCloud(options: ConlocaCloudOptions = {}): AstroIntegratio
           siteIdOverride: options.siteId,
           // The preview build serves drafts from the site's own deploy (d2); no other mode exists yet.
           previewMode: previewMode() === 'on' ? 'd2' : 'off',
+          pagesDir: fileURLToPath(new URL('pages/', srcDir ?? new URL('src/', projectRoot))),
+          serverOutput,
+          i18n,
           logger,
         });
 

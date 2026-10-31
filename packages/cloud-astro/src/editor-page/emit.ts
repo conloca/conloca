@@ -2,21 +2,30 @@ import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { cp, mkdir, writeFile } from 'node:fs/promises';
 import { isAbsolute, join, relative, sep } from 'node:path';
+import {
+  type AstroI18nLocales,
+  collectStaticPageRoutes,
+  nonDefaultLocalesOf,
+  type StaticPageRoute,
+} from '@conloca/astro-cms/checks';
 import { readEditorDescriptors } from '@conloca/astro-cms/node';
 import { isValidSiteBase } from '@conloca/content-api';
 import {
   type BranchDeploys,
   branchDeploysOf,
+  CONLOCA_JSON_MAX_BYTES,
   contentPathsOf,
   EDITOR_HOST_PROTOCOL,
   EDITOR_PAGE_INFO_FORMATS,
   type EditorPageInfo,
   editorUiOrigin,
   isEditorPageInfo,
+  isEditorRoute,
   isValidBranchName,
   PREVIEW_PROTOCOL,
   type PreviewMode,
   type PreviewSignal,
+  ROUTES_MAX,
 } from '@conloca/content-api/editor-host';
 import { readSitesConfig } from '@conloca/content-api/node';
 import { buildSandboxSrcdoc } from '@conloca/mdx/sandbox-frame';
@@ -52,6 +61,12 @@ export interface EmitEditorPageInput {
   siteIdOverride: string | undefined;
   /** How this build serves draft previews; conloca.json `preview.mode`. */
   previewMode: PreviewMode;
+  /** The site's `src/pages` folder, as a filesystem path. */
+  pagesDir: string;
+  /** Astro `output === 'server'`: only pages with `prerender = true` are built. */
+  serverOutput: boolean;
+  /** Astro's `i18n`, whose non-default locale folders hold no pages to offer. */
+  i18n: AstroI18nLocales | undefined;
   logger: { info(message: string): void; warn(message: string): void };
 }
 
@@ -67,7 +82,8 @@ export async function emitEditorPage(input: EmitEditorPageInput): Promise<void> 
     );
   }
   const contentRoot = process.env.CONLOCA_CONTENT_ROOT;
-  const mismatch = contentRoot ? baseMismatch(await readSitesConfig(contentRoot), base) : undefined;
+  const sitesConfig = contentRoot ? await readSitesConfig(contentRoot) : undefined;
+  const mismatch = sitesConfig ? baseMismatch(sitesConfig, base) : undefined;
   if (mismatch !== undefined) logger.warn(mismatch);
   for (const { file, header } of await findFramingBlockers(input.root)) {
     logger.warn(
@@ -144,7 +160,18 @@ export async function emitEditorPage(input: EmitEditorPageInput): Promise<void> 
     ...(branchDeploys === undefined ? {} : { branchDeploys }),
     ...(contentPaths === undefined ? {} : { contentPaths }),
   };
-  await writeFile(join(folder, 'conloca.json'), `${JSON.stringify(written, null, 2)}\n`);
+  const collected = await collectStaticPageRoutes({
+    pagesDir: input.pagesDir,
+    serverOutput: input.serverOutput,
+    nonDefaultLocales: nonDefaultLocalesOf(sitesConfig ?? { sites: {} }, info.siteId, input.i18n),
+  });
+  const { routes, left } = routesFromBuild(collected, written);
+  if (left > 0) {
+    logger.warn(
+      `conloca.json lists ${routes.length} of ${routes.length + left} static page routes; the others have names outside the editor's route format or do not fit. \`npx @conloca/cli routes\` lists them all.`,
+    );
+  }
+  await writeFile(join(folder, 'conloca.json'), `${JSON.stringify({ ...written, routes }, null, 2)}\n`);
 
   const url = (file: string) => `${base}${EDITOR_DIR}/${file}`;
   const html = renderEditorPage(
@@ -201,6 +228,29 @@ export function contentPathsFromBuild(paths: readonly string[], repoRoot: string
     .filter((segments) => segments[0] !== '..')
     .map((segments) => segments.join('/'));
   return contentPathsOf({ contentPaths });
+}
+
+/**
+ * The prerendered routes in the editor's route format, in order, up to `ROUTES_MAX` and while the whole conloca.json
+ * stays within `CONLOCA_JSON_MAX_BYTES`; `left` counts the prerendered routes not written.
+ */
+export function routesFromBuild(
+  collected: readonly StaticPageRoute[],
+  written: Record<string, unknown>,
+): { routes: string[]; left: number } {
+  const prerendered = collected.filter((page) => page.prerendered);
+  const routes: string[] = [];
+  for (const { route } of prerendered) {
+    if (routes.length === ROUTES_MAX) break;
+    if (!isEditorRoute(route)) continue;
+    routes.push(route);
+    const bytes = new TextEncoder().encode(`${JSON.stringify({ ...written, routes }, null, 2)}\n`).length;
+    if (bytes > CONLOCA_JSON_MAX_BYTES) {
+      routes.pop();
+      break;
+    }
+  }
+  return { routes, left: prerendered.length - routes.length };
 }
 
 /**

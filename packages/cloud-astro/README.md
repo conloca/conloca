@@ -181,6 +181,10 @@ serves draft previews with the preview protocol it speaks (`preview`: `{ "mode":
 opens a preview with a single-use `conloca_code` link that the preview server trades for the pass with Conloca; a link
 that carries the pass itself (`conloca_preview`, protocol 1) still opens in this release and stops opening in the next.
 
+`conloca.json` also lists the build's prerendered page routes (`routes`, at most 500 and within 16 KiB for the whole
+file), which the workspace editor offers when a site has no Conloca pages yet; they are public with the deploy, like the
+pages themselves.
+
 `/_conloca/editor/data-schemas.json` publishes the JSON schema of each `dataSchemas` collection, the metadata the
 editor's entry forms already use, so agents can write data entries that match.
 
