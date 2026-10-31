@@ -111,7 +111,8 @@ export function CMSDashboard() {
         />
       </div>
 
-      {!pagesLoading && pagesCount === 0 ? (
+      {/* Only a load that succeeded empty means no pages; a failed load keeps Recent Activity. */}
+      {sitePages !== undefined && pagesCount === 0 ? (
         <NoPagesYet onCreatePage={() => setShowCreateDialog(true)} />
       ) : (
         /* Recent Activity */

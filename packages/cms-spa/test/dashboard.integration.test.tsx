@@ -1,8 +1,9 @@
 /// <reference lib="dom" />
 import { afterEach, beforeEach, describe, expect, setSystemTime, test } from 'bun:test';
+import { ErrorCodes } from '@conloca/content-api-client';
 import { cleanup, screen } from '@testing-library/react';
 import { CMSDashboard } from '../src/components/CMSDashboard.js';
-import { renderWithProviders, setupTestAPI, testApi } from './test-utils.js';
+import { API_ROUTES, mockAPIError, renderWithProviders, setupTestAPI, testApi } from './test-utils.js';
 
 // Cleanup after each test, including a clock a test stopped
 afterEach(() => {
@@ -104,6 +105,17 @@ describe('CMSDashboard Integration', () => {
     // Should show zero counts using the count-specific test IDs
     expect(screen.getByTestId('section-card-pages-count')).toHaveTextContent('0');
     expect(screen.getByTestId('section-card-fragments-count')).toHaveTextContent('0');
+  });
+
+  test('a failed pages load keeps Recent Activity and does not claim the site has no Conloca pages', async () => {
+    mockAPIError(API_ROUTES.SITE_PAGES('default'), 500, ErrorCodes.WRITE_ERROR, 'Server error');
+
+    renderWithProviders(<CMSDashboard />, {}, false);
+
+    // The pages count shows once the pages request has settled.
+    await screen.findByTestId('section-card-pages-count');
+    expect(screen.queryByRole('heading', { name: 'No Conloca pages yet' })).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Recent Activity' })).toBeTruthy();
   });
 
   test('recent activity calls a page a draft from the instant its unpublish time arrives', async () => {
