@@ -114,6 +114,14 @@ describe('the keyless migration', () => {
     expect(await keyless.plan({ projectDir: dir, repoRoot: dir })).toMatchObject({ state: 'done', edits: [] });
   });
 
+  test('is done when conlocaCloud(opts) takes no removed option and conlocaCMS() names fragmentPreviewRoute', async () => {
+    const config = KEYED_CONFIG.replace('export default', 'const opts = {};\n\nexport default')
+      .replace('conlocaCloud({ buildToken: process.env.CONLOCA_BUILD_TOKEN })', 'conlocaCloud(opts)')
+      .replace("{ contentRoot: './content' }", "{ contentRoot: './content', fragmentPreviewRoute: '/x/' }");
+    dir = await makeRepo({ 'astro.config.mjs': config }, []);
+    expect(await keyless.plan({ projectDir: dir, repoRoot: dir })).toMatchObject({ state: 'done', edits: [] });
+  });
+
   test('needs a person when the workflow edit is planned but the config needs one', async () => {
     const config = KEYED_CONFIG.replace(
       'export default',

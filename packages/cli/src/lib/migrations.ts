@@ -29,14 +29,16 @@ export interface Migration {
 const SEVERITY: StepState[] = ['done', 'changed', 'needs-you', 'failed'];
 
 /**
- * The removed options `source` still gives conlocaCloud(); the whole comment-free file only when its options cannot be
- * read, since conlocaCMS() still takes one of the names (fragmentPreviewRoute).
+ * The removed options `source` still gives conlocaCloud(). When its options cannot be read, the whole comment-free file,
+ * leaving out fragmentPreviewRoute: conlocaCMS() still takes that one.
  */
 function removedNames(source: string): string[] {
   const passed = removedKeyOptions(source);
   if (passed !== null) return passed;
   const code = stripComments(source);
-  return [...REMOVED_OPTIONS].filter((name) => new RegExp(`\\b${name}\\b`).test(code));
+  return [...REMOVED_OPTIONS].filter(
+    (name) => name !== 'fragmentPreviewRoute' && new RegExp(`\\b${name}\\b`).test(code),
+  );
 }
 
 /** The edit that drops removed options from conlocaCloud(), or needs-you when the config passes them some other way. */
