@@ -206,8 +206,8 @@ describe('Astro CMS Integration', () => {
     await waitFor(() => {
       // Check for the page heading
       expect(screen.getByRole('heading', { name: 'Pages' })).toBeDefined();
-      // Should show empty state with Create Page button
-      expect(screen.getByRole('button', { name: /create page/i })).toBeDefined();
+      // Should show the empty state with its Create a new page button
+      expect(screen.getByRole('button', { name: 'Create a new page' })).toBeDefined();
     });
   });
 });

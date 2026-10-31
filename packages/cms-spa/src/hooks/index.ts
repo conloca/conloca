@@ -16,6 +16,8 @@ export {
 export { useClickOutside } from './useClickOutside.js';
 export { useDialogState } from './useDialogState.js';
 export { useErrorModal } from './useErrorModal.js';
+export type { PageConversionOffer } from './usePageConversion.js';
+export { usePageConversion } from './usePageConversion.js';
 export { useSiteBaseUrl } from './useSiteBaseUrl.js';
 export { buildUploadFormData, useImportUrl, useUpload } from './useUpload.js';
 export type { UploadProgress, UseUploadFlowReturn } from './useUploadFlow.js';

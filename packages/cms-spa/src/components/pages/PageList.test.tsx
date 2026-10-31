@@ -10,6 +10,7 @@ import {
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { configureUI } from '../../ui-config.js';
 import { PageList } from './PageList.js';
 
 const LONG_AGO = '2026-01-10T09:00:00.000Z';
@@ -63,6 +64,7 @@ afterEach(() => {
   cleanup();
   globalThis.fetch = previousFetch;
   setContentAPIClient(previousClient);
+  configureUI({ readOnly: undefined });
 });
 
 async function renderPageList() {
@@ -121,5 +123,27 @@ describe('Pages list Status filter', () => {
     filterByStatus('published');
     await waitFor(() => expect(screen.queryByTestId('page-title-fresh')).toBeNull());
     expect(screen.getByTestId('page-title-live')).toBeTruthy();
+  });
+});
+
+describe('Pages list conversion offer', () => {
+  test('keeps offering conversion while some routes are not Conloca pages yet', async () => {
+    configureUI({
+      hosted: true,
+      pageConversion: { cliVersion: '0.2.4', site: 'default', routes: ['/live', '/team'] },
+      readOnly: undefined,
+    });
+    await renderPageList();
+    expect(screen.getByRole('button', { name: 'Make an existing page editable' })).toBeTruthy();
+  });
+
+  test('stops offering conversion once every route is a Conloca page', async () => {
+    configureUI({
+      hosted: true,
+      pageConversion: { cliVersion: '0.2.4', site: 'default', routes: ['/live', '/fresh/'] },
+      readOnly: undefined,
+    });
+    await renderPageList();
+    expect(screen.queryByRole('button', { name: 'Make an existing page editable' })).toBeNull();
   });
 });

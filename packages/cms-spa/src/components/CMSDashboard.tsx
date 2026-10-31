@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom';
 import { SectionCard } from './cards/SectionCard.js';
 import { RecentActivity } from './dashboard/RecentActivity.js';
 import { CreatePageFlow } from './dialogs/CreatePageFlow.js';
+import { NoPagesYet } from './pages/NoPagesYet.js';
 
 const DASHBOARD_SITE = 'default';
 
@@ -110,15 +111,19 @@ export function CMSDashboard() {
         />
       </div>
 
-      {/* Recent Activity */}
-      <div className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 rounded-lg">
-        <div className="px-4 py-3 border-b border-grey-09 dark:border-grey-03">
-          <h2 className="text-xs font-medium uppercase tracking-wider text-grey-05 dark:text-grey-06">
-            Recent Activity
-          </h2>
+      {!pagesLoading && pagesCount === 0 ? (
+        <NoPagesYet onCreatePage={() => setShowCreateDialog(true)} />
+      ) : (
+        /* Recent Activity */
+        <div className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 rounded-lg">
+          <div className="px-4 py-3 border-b border-grey-09 dark:border-grey-03">
+            <h2 className="text-xs font-medium uppercase tracking-wider text-grey-05 dark:text-grey-06">
+              Recent Activity
+            </h2>
+          </div>
+          <RecentActivity />
         </div>
-        <RecentActivity />
-      </div>
+      )}
 
       <CreatePageFlow open={showCreateDialog} onOpenChange={setShowCreateDialog} site={DASHBOARD_SITE} />
     </div>

@@ -1,8 +1,9 @@
 import { localesOf, pageStatusOf, useDeleteContent, useSitePages } from '@conloca/content-api-client';
+import cn from 'clsx';
 import { AlertCircle, Clock, Edit, FileCode, FileText, Loader2, Plus, Search, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useErrorModal, useSiteBaseUrl } from '../../hooks/index.js';
+import { useErrorModal, usePageConversion, useSiteBaseUrl } from '../../hooks/index.js';
 import type { Page } from '../../types.js';
 import { getUIConfig } from '../../ui-config.js';
 import { contentFailureMessage, isStaleWrite } from '../../utils/content-failure.js';
@@ -10,7 +11,9 @@ import { formatDate } from '../../utils/format-date.js';
 import { CreatePageFlow } from '../dialogs/CreatePageFlow.js';
 import { DeleteConfirmDialog } from '../dialogs/DeleteConfirmDialog.js';
 import { ErrorModal } from '../dialogs/ErrorModal.js';
+import { MakePagesEditableDialog } from '../dialogs/MakePagesEditableDialog.js';
 import { Tooltip } from '../ui/Tooltip.js';
+import { NoPagesYet } from './NoPagesYet.js';
 
 interface PageListProps {
   selectedSite?: string;
@@ -24,6 +27,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
   const [sortBy, setSortBy] = useState<'title' | 'modified' | 'path'>('modified');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showConvertDialog, setShowConvertDialog] = useState(false);
   const [deleteDialog, setDeleteDialog] = useState<{
     isOpen: boolean;
     pageId: string;
@@ -56,6 +60,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
 
   // Fetch pages for the current site
   const { data, isLoading, error } = useSitePages(currentSite, selectedLocale === 'all' ? undefined : selectedLocale);
+  const conversion = usePageConversion(data?.items ?? []);
 
   // Transform entries into Page objects
   const pages = useMemo<Page[]>(() => {
@@ -265,15 +270,28 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
       {/* Header */}
       <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
         <h1 className="text-2xl font-semibold text-grey-01 dark:text-grey-12">Pages</h1>
-        <button
-          type="button"
-          onClick={handleNewPage}
-          className="px-4 py-2 rounded-md bg-grey-01 text-grey-12 hover:bg-azure-04 hover:text-white dark:bg-grey-12 dark:text-grey-01 dark:hover:bg-azure-06 dark:hover:text-white transition-colors flex items-center gap-2 whitespace-nowrap"
-          data-testid="new-page-button"
-        >
-          <Plus className="h-4 w-4" />
-          New Page
-        </button>
+        <div className={cn('flex items-center gap-2 flex-wrap')}>
+          {pages.length > 0 && conversion && (
+            <button
+              type="button"
+              onClick={() => setShowConvertDialog(true)}
+              className={cn(
+                'px-4 py-2 rounded-md border border-line bg-panel text-grey-01 dark:text-grey-12 hover:bg-hover transition-colors whitespace-nowrap',
+              )}
+            >
+              Make an existing page editable
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleNewPage}
+            className="px-4 py-2 rounded-md bg-grey-01 text-grey-12 hover:bg-azure-04 hover:text-white dark:bg-grey-12 dark:text-grey-01 dark:hover:bg-azure-06 dark:hover:text-white transition-colors flex items-center gap-2 whitespace-nowrap"
+            data-testid="new-page-button"
+          >
+            <Plus className="h-4 w-4" />
+            New Page
+          </button>
+        </div>
       </div>
 
       {/* Search & Filter Toolbar */}
@@ -339,20 +357,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
 
       {/* Empty state */}
       {pages.length === 0 ? (
-        <div className="flex flex-col items-center justify-center min-h-[50vh] text-center">
-          <FileText className="h-12 w-12 text-grey-06 dark:text-grey-05 mb-4" />
-          <h2 className="text-xl font-semibold text-grey-01 dark:text-grey-12 mb-2" data-testid="no-pages-message">
-            No pages yet
-          </h2>
-          <p className="text-grey-04 dark:text-grey-07 mb-4">Create your first page to get started</p>
-          <button
-            type="button"
-            onClick={handleNewPage}
-            className="px-4 py-2 rounded-md bg-grey-01 text-grey-12 hover:bg-azure-04 hover:text-white dark:bg-grey-12 dark:text-grey-01 dark:hover:bg-azure-06 dark:hover:text-white transition-colors"
-          >
-            Create Page
-          </button>
-        </div>
+        <NoPagesYet onCreatePage={handleNewPage} />
       ) : filteredPages.length === 0 && (searchQuery || statusFilter !== 'all') ? (
         <div className="flex items-center justify-center min-h-[40vh] text-center">
           <p className="text-grey-04 dark:text-grey-07">No pages match your search</p>
@@ -556,6 +561,10 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
 
       {/* Create Page Flow: the dialog plus its own create-error modal */}
       <CreatePageFlow open={showCreateDialog} onOpenChange={setShowCreateDialog} site={currentSite} />
+
+      {conversion && (
+        <MakePagesEditableDialog open={showConvertDialog} onOpenChange={setShowConvertDialog} offer={conversion} />
+      )}
 
       {/* Delete Confirmation Dialog */}
       <DeleteConfirmDialog
