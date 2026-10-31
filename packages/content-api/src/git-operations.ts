@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -447,41 +447,4 @@ export function createGitOperations(config: GitConfig): GitOperations {
       }
     },
   };
-}
-
-const LFS_PATTERNS = [
-  '*.jpg filter=lfs diff=lfs merge=lfs -text',
-  '*.jpeg filter=lfs diff=lfs merge=lfs -text',
-  '*.png filter=lfs diff=lfs merge=lfs -text',
-  '*.gif filter=lfs diff=lfs merge=lfs -text',
-  '*.svg filter=lfs diff=lfs merge=lfs -text',
-  '*.webp filter=lfs diff=lfs merge=lfs -text',
-  '*.avif filter=lfs diff=lfs merge=lfs -text',
-  '*.ico filter=lfs diff=lfs merge=lfs -text',
-];
-
-/**
- * Ensure .gitattributes exists at contentRoot with LFS tracking patterns for web image extensions.
- * Creates the file if missing, or appends missing patterns if file exists.
- */
-export async function setupGitLfsAttributes(contentRoot: string): Promise<void> {
-  const gitattributesPath = join(contentRoot, '.gitattributes');
-  let existing = '';
-
-  try {
-    await access(gitattributesPath);
-    existing = await readFile(gitattributesPath, 'utf-8');
-  } catch {
-    // File doesn't exist — will create fresh
-  }
-
-  const missingPatterns = LFS_PATTERNS.filter((pattern) => !existing.includes(pattern));
-
-  if (missingPatterns.length === 0) return;
-
-  const newContent = existing
-    ? `${existing.trimEnd()}\n${missingPatterns.join('\n')}\n`
-    : `${missingPatterns.join('\n')}\n`;
-
-  await writeFile(gitattributesPath, newContent, 'utf-8');
 }

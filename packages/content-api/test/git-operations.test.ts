@@ -4,7 +4,7 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { createGitOperations, setupGitLfsAttributes } from '../src/git-operations.js';
+import { createGitOperations } from '../src/git-operations.js';
 
 /** `git ls-files --stage` output without the content entry the CMS commit adds. */
 function withoutContentEntry(index: string): string {
@@ -13,70 +13,6 @@ function withoutContentEntry(index: string): string {
     .filter((line) => line && !line.endsWith('content/page.json'))
     .join('\n');
 }
-
-describe('setupGitLfsAttributes', () => {
-  let tempDir: string;
-
-  beforeEach(async () => {
-    tempDir = join(tmpdir(), `conloca-lfs-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-    await mkdir(tempDir, { recursive: true });
-  });
-
-  afterEach(async () => {
-    await rm(tempDir, { recursive: true, force: true });
-  });
-
-  test('creates .gitattributes with all 8 LFS patterns when file does not exist', async () => {
-    await setupGitLfsAttributes(tempDir);
-    const content = await readFile(join(tempDir, '.gitattributes'), 'utf-8');
-    const lines = content.trim().split('\n');
-    expect(lines).toHaveLength(8);
-    expect(content).toContain('*.jpg filter=lfs diff=lfs merge=lfs -text');
-    expect(content).toContain('*.jpeg filter=lfs diff=lfs merge=lfs -text');
-    expect(content).toContain('*.png filter=lfs diff=lfs merge=lfs -text');
-    expect(content).toContain('*.gif filter=lfs diff=lfs merge=lfs -text');
-    expect(content).toContain('*.svg filter=lfs diff=lfs merge=lfs -text');
-    expect(content).toContain('*.webp filter=lfs diff=lfs merge=lfs -text');
-    expect(content).toContain('*.avif filter=lfs diff=lfs merge=lfs -text');
-    expect(content).toContain('*.ico filter=lfs diff=lfs merge=lfs -text');
-  });
-
-  test('preserves existing content and appends only missing patterns', async () => {
-    const existing = '*.jpg filter=lfs diff=lfs merge=lfs -text\n*.png filter=lfs diff=lfs merge=lfs -text\n';
-    await writeFile(join(tempDir, '.gitattributes'), existing);
-    await setupGitLfsAttributes(tempDir);
-    const content = await readFile(join(tempDir, '.gitattributes'), 'utf-8');
-    // Should still have original 2 + 6 missing = 8 patterns total
-    expect(content).toContain('*.jpg filter=lfs diff=lfs merge=lfs -text');
-    expect(content).toContain('*.png filter=lfs diff=lfs merge=lfs -text');
-    expect(content).toContain('*.jpeg filter=lfs diff=lfs merge=lfs -text');
-    expect(content).toContain('*.webp filter=lfs diff=lfs merge=lfs -text');
-    // Count total pattern lines (non-empty lines)
-    const patternLines = content
-      .trim()
-      .split('\n')
-      .filter((l) => l.trim());
-    expect(patternLines).toHaveLength(8);
-  });
-
-  test('does nothing when all patterns already present', async () => {
-    // Write all 8 patterns
-    await setupGitLfsAttributes(tempDir);
-    const contentBefore = await readFile(join(tempDir, '.gitattributes'), 'utf-8');
-    // Run again -- should be idempotent
-    await setupGitLfsAttributes(tempDir);
-    const contentAfter = await readFile(join(tempDir, '.gitattributes'), 'utf-8');
-    expect(contentAfter).toBe(contentBefore);
-  });
-
-  test('handles empty existing .gitattributes file', async () => {
-    await writeFile(join(tempDir, '.gitattributes'), '');
-    await setupGitLfsAttributes(tempDir);
-    const content = await readFile(join(tempDir, '.gitattributes'), 'utf-8');
-    const lines = content.trim().split('\n');
-    expect(lines).toHaveLength(8);
-  });
-});
 
 describe('createGitOperations', () => {
   let tempDir: string;

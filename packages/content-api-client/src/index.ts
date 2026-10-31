@@ -38,18 +38,30 @@ export type {
 // build a form; their form records live in `@conloca/cms-spa`, and the shapes
 // are validated by `@conloca/content-api/schemas`' generated validators.
 export {
+  DEFAULT_ACCEPTED_FORMATS,
+  DEFAULT_MAX_FILE_SIZE,
   DRAFT_MEDIA_REF_BASE,
   draftMediaRef,
   draftMediaRefPath,
   ErrorCodes,
   formatFileSize,
   IMAGE_EXTENSION_MIME,
+  importRefusal,
+  importTooLargeRefusal,
   isContentPublished,
+  JPEG_FALLBACK_QUALITY,
   localesOf,
+  MAX_IMAGE_EDGE,
   mediaRefPath,
   metaString,
   normalizeAndValidatePathname,
   pageReferenceOf,
+  tooLargeRefusal,
+  unreadableImageRefusal,
+  unsupportedTypeRefusal,
+  VIDEO_EXTENSIONS,
+  videoRefusal,
+  WEBP_QUALITY,
 } from '@conloca/content-api';
 
 export {

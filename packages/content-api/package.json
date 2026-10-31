@@ -20,6 +20,7 @@
     "jose": "^6.2.10",
     "nanoid": "^6.0.1",
     "sort-keys": "^6.0.1",
+    "svgo": "^4.1.0",
     "tslib": "^2.8.1",
     "typia": "^14.0.4",
     "xxhash-wasm": "^1.1.0",
@@ -32,6 +33,9 @@
     "vite": {
       "optional": true
     }
+  },
+  "optionalDependencies": {
+    "sharp": "^0.35.4"
   },
   "devDependencies": {
     "@stryker-mutator/core": "^10.0.0",
@@ -63,6 +67,11 @@
       "types": "./dist/content-path.d.ts",
       "import": "./dist/content-path.js",
       "default": "./dist/content-path.js"
+    },
+    "./upload-bytes": {
+      "types": "./dist/upload-bytes.d.ts",
+      "import": "./dist/upload-bytes.js",
+      "default": "./dist/upload-bytes.js"
     },
     "./draft-media-ref": {
       "types": "./dist/draft-media-ref.d.ts",

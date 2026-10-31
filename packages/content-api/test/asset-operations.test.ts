@@ -3,17 +3,35 @@ import { existsSync } from 'node:fs';
 import { chmod, mkdir, readdir, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
+import sharp from 'sharp';
 
+import { DEFAULT_MAX_FILE_SIZE } from '../src/asset-constraints.js';
 import { recordPath } from '../src/asset-metadata-store.js';
+import { folderCaseClashError, folderPathError } from '../src/asset-naming.js';
 import { AssetOperations } from '../src/asset-operations.js';
 import { InMemoryContentAPI } from '../src/in-memory-content-api.js';
 import { createContentAPIRouter } from '../src/middleware.js';
+import {
+  importRefusal,
+  importTooLargeRefusal,
+  shrinkUnavailableWarning,
+  tooLargeRefusal,
+  unreadableImageRefusal,
+  unsupportedTypeRefusal,
+  videoRefusal,
+} from '../src/upload-refusals.js';
+import { jpegBytes, pngBytes as onePixelPng } from './helpers/image-fixtures.js';
+import { LOCATION_PROBE, largePhoto, latin1, photoWithGps } from './helpers/photo-fixtures.js';
 import { withTimeout } from './test-helpers.js';
 
-/** Create a minimal valid JPEG-like File for upload tests */
-function createTestFile(name: string, sizeBytes = 100, type = 'image/jpeg'): File {
-  const data = new Uint8Array(sizeBytes);
-  return new File([data], name, { type });
+/** A real JPEG File of `sizeBytes` (the bare 1×1 JPEG when omitted) for upload tests */
+function createTestFile(name: string, sizeBytes?: number, type = 'image/jpeg'): File {
+  return new File([jpegBytes(sizeBytes)], name, { type });
+}
+
+/** A real 1×1 PNG File for upload tests */
+function pngFile(name: string): File {
+  return new File([onePixelPng()], name, { type: 'image/png' });
 }
 
 /** Helper to create a temp dir with unique name */
@@ -98,38 +116,76 @@ describe('AssetOperations', () => {
       }
     });
 
+    test('stores a WebP named photo.jpg as photo.webp, without its GPS', async () => {
+      const webp = await photoWithGps('webp');
+      const result = await ops.upload(new File([webp], 'photo.jpg', { type: 'image/jpeg' }));
+      if (!result.success) throw new Error(result.error);
+      expect(result.asset).toMatchObject({ filename: 'photo.webp', mimeType: 'image/webp' });
+      const stored = await readFile(join(assetsPath, 'photo.webp'));
+      expect(result.asset.size).toBe(stored.length);
+      expect(latin1(stored)).not.toContain(LOCATION_PROBE);
+    });
+
+    test('refuses text named .png as unreadable, and stores an SVG without its script', async () => {
+      const text = await ops.upload(new File(['not a picture'], 'plan.png', { type: 'image/png' }));
+      expect(text).toEqual({ success: false, error: unreadableImageRefusal('plan.png') });
+      const svg = '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script><rect/></svg>';
+      const result = await ops.upload(new File([svg], 'logo.svg', { type: 'image/svg+xml' }));
+      expect(result.success).toBe(true);
+      expect(await readFile(join(assetsPath, 'logo.svg'), 'utf8')).toBe(
+        '<svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>',
+      );
+    });
+
+    test("refuses a file whose bytes hold a format the site's acceptedFormats leaves out, whatever its name", async () => {
+      const pngAndJpg = new AssetOperations({ assetsPath, contentRoot, acceptedFormats: ['png', 'jpg'] });
+      const svg = new File(['<svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>'], 'logo.png');
+      const webp = new File([await photoWithGps('webp')], 'photo.jpg');
+      expect(await pngAndJpg.upload(svg)).toEqual({
+        success: false,
+        error: unsupportedTypeRefusal('logo.svg', ['png', 'jpg']),
+      });
+      expect(await pngAndJpg.upload(webp)).toEqual({
+        success: false,
+        error: unsupportedTypeRefusal('photo.webp', ['png', 'jpg']),
+      });
+      expect(await readdir(assetsPath)).toEqual([]);
+    });
+
     test('rejects upload of .exe file', async () => {
-      const file = createTestFile('malware.exe', 100, 'application/octet-stream');
+      const file = createTestFile('malware.exe', undefined, 'application/octet-stream');
       const result = await ops.upload(file);
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(result.error).toContain('Invalid format');
-      }
+      expect(result).toEqual({
+        success: false,
+        error: unsupportedTypeRefusal('malware.exe', ['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'svg', 'ico']),
+      });
+    });
+
+    test('refuses a video with the embed message', async () => {
+      const result = await ops.upload(createTestFile('Clip.MP4', undefined, 'video/mp4'));
+      expect(result).toEqual({ success: false, error: videoRefusal('Clip.MP4') });
     });
 
     test('accepts upload of .JPG file (case-insensitive)', async () => {
-      const file = createTestFile('PHOTO.JPG', 100);
+      const file = createTestFile('PHOTO.JPG');
       const result = await ops.upload(file);
       expect(result.success).toBe(true);
     });
 
     test('rejects file exceeding maxFileSize', async () => {
-      const smallOps = new AssetOperations({ assetsPath, contentRoot, maxFileSize: 50 });
-      const file = createTestFile('big.jpg', 100);
+      const smallOps = new AssetOperations({ assetsPath, contentRoot, maxFileSize: 150 });
+      const file = createTestFile('big.jpg', 200);
       const result = await smallOps.upload(file);
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(result.error).toContain('File too large');
-      }
+      expect(result).toEqual({ success: false, error: tooLargeRefusal('big.jpg', 200, 150) });
     });
 
     test('accepts file within maxFileSize', async () => {
-      const result = await ops.upload(createTestFile('small.jpg', 50));
+      const result = await ops.upload(createTestFile('small.jpg'));
       expect(result.success).toBe(true);
     });
 
     test('sanitizes filename: lowercase, spaces to dashes, strip special chars', async () => {
-      const file = createTestFile('My Photo (2).jpg', 100);
+      const file = createTestFile('My Photo (2).jpg');
       const result = await ops.upload(file);
       expect(result.success).toBe(true);
       if (result.success) {
@@ -139,24 +195,32 @@ describe('AssetOperations', () => {
 
     test('resolves filename collision by appending -1, -2', async () => {
       // Upload first file
-      await ops.upload(createTestFile('photo.jpg', 100));
+      await ops.upload(createTestFile('photo.jpg'));
       // Upload second file with same name -- should get -1 suffix
-      const result = await ops.upload(createTestFile('photo.jpg', 100));
+      const result = await ops.upload(createTestFile('photo.jpg'));
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.asset.filename).toBe('photo-1.jpg');
       }
     });
 
-    test('creates .gitattributes on first upload (LFS setup)', async () => {
-      await ops.upload(createTestFile('test.jpg', 100));
-      const gitattributes = await readFile(join(assetsPath, '.gitattributes'), 'utf-8');
-      expect(gitattributes).toContain('*.jpg filter=lfs diff=lfs merge=lfs -text');
+    test('leaves the media folder to the site: no Git LFS rules are written', async () => {
+      await ops.upload(createTestFile('test.jpg'));
+      expect(existsSync(join(assetsPath, '.gitattributes'))).toBe(false);
+      expect(await readdir(assetsPath)).toEqual(['test.jpg']);
+    });
+
+    test('keeps the LFS rules a site already has', async () => {
+      await writeFile(join(assetsPath, '.gitattributes'), '*.png filter=lfs diff=lfs merge=lfs -text\n');
+      await ops.upload(createTestFile('test.jpg'));
+      expect(await readFile(join(assetsPath, '.gitattributes'), 'utf-8')).toBe(
+        '*.png filter=lfs diff=lfs merge=lfs -text\n',
+      );
     });
 
     test('supports folder path in metadata', async () => {
       await mkdir(join(assetsPath, 'photos'), { recursive: true });
-      const result = await ops.upload(createTestFile('beach.jpg', 100), { folder: '/photos' });
+      const result = await ops.upload(createTestFile('beach.jpg'), { folder: '/photos' });
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.asset.folder).toBe('/photos');
@@ -164,10 +228,114 @@ describe('AssetOperations', () => {
     });
 
     test('rejects path traversal in folder metadata', async () => {
-      const result = await ops.upload(createTestFile('test.jpg', 100), { folder: '../../etc' });
+      const result = await ops.upload(createTestFile('test.jpg'), { folder: '../../etc' });
       expect(result.success).toBe(false);
       if (!result.success) {
         expect(result.error).toContain('Invalid folder path');
+      }
+    });
+
+    test('an upload whose name differs only in case from a file on disk gets -1', async () => {
+      await writeFile(join(assetsPath, 'Hero.jpg'), new Uint8Array(10));
+      const result = await ops.upload(createTestFile('hero.jpg'));
+      expect(result.success && result.asset.filename).toBe('hero-1.jpg');
+    });
+
+    test('keeps underscores and inner dots like the online editor', async () => {
+      const result = await ops.upload(pngFile('My_Photo.v2.PNG'));
+      expect(result.success && result.asset.filename).toBe('my_photo.v2.png');
+    });
+
+    test('never names an upload like a Windows device', async () => {
+      const result = await ops.upload(createTestFile('AUX.jpg'));
+      expect(result.success && result.asset.filename).toBe('aux-1.jpg');
+    });
+
+    test('refuses a new folder named .git', async () => {
+      const result = await ops.upload(createTestFile('x.jpg'), { folder: '/.git' });
+      expect(result).toEqual({ success: false, error: folderPathError('.git') ?? 'no refusal' });
+      expect(existsSync(join(assetsPath, '.git'))).toBe(false);
+    });
+
+    test('still uploads into an existing folder whose name has a space', async () => {
+      await mkdir(join(assetsPath, 'old photos'), { recursive: true });
+      const result = await ops.upload(createTestFile('x.jpg'), { folder: '/old photos' });
+      expect(result.success && result.asset.folder).toBe('/old photos');
+    });
+  });
+
+  describe('the local server shrinks photos the way the browser does', () => {
+    test('turns a 4000×3000 camera JPEG into a 2560 px WebP named .webp', async () => {
+      const result = await ops.upload(new File([await largePhoto(4000, 3000)], 'Team Office.JPG'));
+      if (!result.success) throw new Error(result.error);
+      expect(result.asset).toMatchObject({ filename: 'team-office.webp', mimeType: 'image/webp', width: 2560 });
+      expect(result.asset.height).toBe(1920);
+      expect(latin1(await readFile(join(assetsPath, 'team-office.webp')))).not.toContain(LOCATION_PROBE);
+    });
+
+    test('stands a sideways 4000 px photo upright', async () => {
+      const result = await ops.upload(new File([await largePhoto(4000, 3000, 'jpeg', 6)], 'phone.jpg'));
+      expect(result.success && [result.asset.width, result.asset.height]).toEqual([1920, 2560]);
+      const upright = await sharp(join(assetsPath, 'phone.webp')).metadata();
+      expect(upright.orientation).toBeUndefined();
+    });
+
+    test('keeps a 3000 px screenshot as PNG', async () => {
+      const result = await ops.upload(new File([await largePhoto(3000, 2000, 'png')], 'screenshot.png'));
+      expect(result.success && [result.asset.filename, result.asset.width]).toEqual(['screenshot.png', 2560]);
+    });
+
+    test('leaves a 1200 px JPEG as a JPEG without its GPS', async () => {
+      const result = await ops.upload(new File([await largePhoto(1200, 900)], 'small.jpg'));
+      expect(result.success && [result.asset.filename, result.asset.width]).toEqual(['small.jpg', 1200]);
+      expect(latin1(await readFile(join(assetsPath, 'small.jpg')))).not.toContain(LOCATION_PROBE);
+    });
+
+    test('resizes in JPEG when the host does not accept WebP', async () => {
+      const noWebp = new AssetOperations({ assetsPath, contentRoot, acceptedFormats: ['jpg', 'jpeg', 'png'] });
+      const result = await noWebp.upload(new File([await largePhoto(4000, 3000)], 'office.jpg'));
+      expect(result.success && [result.asset.filename, result.asset.width]).toEqual(['office.jpg', 2560]);
+    });
+
+    test('refuses a JPEG sharp cannot decode', async () => {
+      const cut = (await largePhoto(4000, 3000)).subarray(0, 2000);
+      const result = await ops.upload(new File([cut], 'cut.jpg'));
+      expect(result).toEqual({ success: false, error: unreadableImageRefusal('cut.jpg') });
+    });
+
+    test('stores the photo unshrunk with a warning when sharp is missing', async () => {
+      // A child process: a module this process has loaded cannot be made missing again.
+      const photoPath = `${assetsPath}-office.jpg`;
+      const scriptPath = `${assetsPath}-without-sharp.ts`;
+      await writeFile(photoPath, await largePhoto(4000, 3000));
+      await writeFile(
+        scriptPath,
+        [
+          "import { plugin } from 'bun';",
+          "plugin({ name: 'no-sharp', setup(build) { build.module('sharp', () => { throw new Error('Cannot find package sharp'); }); } });",
+          `const { AssetOperations } = await import(${JSON.stringify(new URL('../src/asset-operations.ts', import.meta.url).href)});`,
+          'const [assetsPath, contentRoot, photo] = process.argv.slice(2);',
+          "const file = new File([await Bun.file(photo).bytes()], 'Team Office.JPG');",
+          'console.log(JSON.stringify(await new AssetOperations({ assetsPath, contentRoot }).upload(file)));',
+        ].join('\n'),
+      );
+      try {
+        const child = Bun.spawn({
+          cmd: ['bun', 'run', scriptPath, assetsPath, contentRoot, photoPath],
+          stdout: 'pipe',
+          stderr: 'pipe',
+        });
+        const [stdout, stderr, code] = await Promise.all([
+          new Response(child.stdout).text(),
+          new Response(child.stderr).text(),
+          child.exited,
+        ]);
+        expect(code).toBe(0);
+        expect(JSON.parse(stdout).asset).toMatchObject({ filename: 'team-office.jpg', width: 4000 });
+        expect(stderr).toContain(shrinkUnavailableWarning('Team Office.JPG'));
+      } finally {
+        await rm(photoPath, { force: true });
+        await rm(scriptPath, { force: true });
       }
     });
   });
@@ -233,7 +401,7 @@ describe('AssetOperations', () => {
   describe('delete', () => {
     test('removes file from disk and manifest', async () => {
       // Upload a file first
-      await ops.upload(createTestFile('todelete.jpg', 50));
+      await ops.upload(createTestFile('todelete.jpg'));
       const result = await ops.delete('todelete.jpg');
       expect(result.success).toBe(true);
       // Verify file is gone
@@ -280,42 +448,47 @@ describe('AssetOperations', () => {
       }
     });
 
-    test('refuses a folder name the media library would hide', async () => {
-      for (const path of ['/.hidden', '/photos/.cache', '/Thumbs.db', '/desktop.ini', '/.', '/a/../b']) {
-        const result = await ops.createFolder(path);
-        expect(result).toEqual({
-          success: false,
-          error: "Folder names can't start with a dot or be a system file name like Thumbs.db",
-        });
-      }
-      for (const name of ['.hidden', 'photos', 'Thumbs.db', 'desktop.ini', 'a', 'b']) {
+    test('refuses a folder name git, Windows or an image link cannot hold', async () => {
+      const paths = ['/.hidden', '/photos/.cache', '/.git', '/.', '/a/../b', '/a#b', '/a?b', '/50%', '/a\\b'];
+      paths.push('/a\tb', '/a\nb', '/My Photos', '/con', '/trail.', '/a*b', '/a:b');
+      const results = await Promise.all(paths.map((path) => ops.createFolder(path)));
+      expect(results).toEqual(
+        paths.map((path) => ({ success: false, error: folderPathError(path.slice(1)) ?? 'no refusal' })),
+      );
+      for (const name of ['.hidden', 'photos', '.git', 'a', 'b', 'a#b', 'My Photos', 'con', 'trail.']) {
         expect(existsSync(join(assetsPath, name))).toBe(false);
       }
     });
 
-    test('refuses a folder name that would break the address of its images', async () => {
-      for (const name of ['a#b', 'a?b', '50%', 'a\\b']) {
-        const result = await ops.createFolder(`/${name}`);
-        expect(result).toEqual({ success: false, error: "Folder names can't contain #, ?, % or \\" });
-        expect(existsSync(join(assetsPath, name))).toBe(false);
-      }
+    test('refuses a folder named like a system file the media library hides', async () => {
+      const paths = ['/Thumbs.db', '/desktop.ini'];
+      const error = "Folder names can't start with a dot or be a system file name like Thumbs.db";
+      expect(await Promise.all(paths.map((path) => ops.createFolder(path)))).toEqual(
+        paths.map(() => ({ success: false, error })),
+      );
     });
 
-    test('refuses a folder name with a tab or line break, which browsers drop from image addresses', async () => {
-      for (const name of ['a\tb', 'a\nb', 'a\rb']) {
-        const result = await ops.createFolder(`/${name}`);
-        expect(result).toEqual({ success: false, error: "Folder names can't contain tabs or line breaks" });
-        expect(existsSync(join(assetsPath, name))).toBe(false);
-      }
-    });
-
-    test('still creates folders named in non-Latin letters or with spaces', async () => {
-      for (const path of ['/Фото', '/My Photos', '/Фото/2026 лето']) {
+    test('still creates folders named in non-Latin letters', async () => {
+      for (const path of ['/Фото', '/Фото/2026-лето']) {
         expect(await ops.createFolder(path)).toEqual({ success: true });
       }
       const tree = await ops.getFolderTree();
-      expect(tree[0].children.map((node) => node.path).sort()).toEqual(['/My Photos', '/Фото']);
-      expect(tree[0].children.find((node) => node.path === '/Фото')?.children[0].path).toBe('/Фото/2026 лето');
+      expect(tree[0].children.map((node) => node.path)).toEqual(['/Фото']);
+      expect(tree[0].children[0].children[0].path).toBe('/Фото/2026-лето');
+    });
+
+    test('refuses a folder that differs from an existing one only in case, at any depth', async () => {
+      expect(await ops.createFolder('/photos/summer')).toEqual({ success: true });
+      expect(await ops.createFolder('/Photos')).toEqual({
+        success: false,
+        error: folderCaseClashError('Photos', ['photos']) ?? 'no refusal',
+      });
+      expect(await ops.createFolder('/photos/Summer/beach')).toEqual({
+        success: false,
+        error: folderCaseClashError('Summer', ['summer']) ?? 'no refusal',
+      });
+      expect(await ops.createFolder('/photos/summer/beach')).toEqual({ success: true });
+      expect(await readdir(join(assetsPath, 'photos'))).toEqual(['summer']);
     });
   });
 
@@ -457,36 +630,40 @@ describe('AssetOperations', () => {
 
     test('returns error for private IP URL (SSRF blocked)', async () => {
       const result = await ops.importFromUrl('http://127.0.0.1/secret.jpg');
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(result.error).toContain('private/reserved IP address');
-      }
+      expect(result).toEqual({ success: false, error: importRefusal('it points to a private network') });
     });
 
     test('returns error for non-http scheme', async () => {
       const result = await ops.importFromUrl('file:///etc/passwd');
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(result.error).toContain('http or https');
-      }
+      expect(result).toEqual({ success: false, error: importRefusal('the address is not a web address') });
     });
 
     test('returns error when fetch fails (network error)', async () => {
       mockFetch(() => Promise.reject(new Error('Network error')));
       const result = await ops.importFromUrl('https://example.com/image.jpg');
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(result.error).toContain('Failed to fetch URL');
-      }
+      expect(result).toEqual({ success: false, error: importRefusal('the site could not be reached') });
     });
 
     test('returns error when response not ok (404)', async () => {
       mockFetch(() => Promise.resolve(new Response('Not Found', { status: 404 })));
       const result = await ops.importFromUrl('https://example.com/image.jpg');
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(result.error).toContain('Fetch failed with status 404');
-      }
+      expect(result).toEqual({ success: false, error: importRefusal('the site answered 404') });
+    });
+
+    test('a remote file over the limit is refused in plain words', async () => {
+      mockFetch(() =>
+        Promise.resolve(
+          new Response(new Uint8Array(50), {
+            status: 200,
+            headers: { 'content-length': String(DEFAULT_MAX_FILE_SIZE + 1), 'content-type': 'image/jpeg' },
+          }),
+        ),
+      );
+      const result = await ops.importFromUrl('https://example.com/big.jpg');
+      expect(result).toEqual({
+        success: false,
+        error: importRefusal('it is over the 25 MB limit for files stored in your site'),
+      });
     });
 
     test('returns error when Content-Length exceeds maxFileSize', async () => {
@@ -503,10 +680,7 @@ describe('AssetOperations', () => {
         ),
       );
       const result = await smallOps.importFromUrl('https://example.com/big.jpg');
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(result.error).toContain('Remote file too large');
-      }
+      expect(result).toEqual({ success: false, error: importTooLargeRefusal(100) });
     });
 
     test('returns error when actual body exceeds maxFileSize', async () => {
@@ -521,10 +695,7 @@ describe('AssetOperations', () => {
         ),
       );
       const result = await smallOps.importFromUrl('https://example.com/stealth-big.jpg');
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(result.error).toContain('Remote file too large');
-      }
+      expect(result).toEqual({ success: false, error: importTooLargeRefusal(50) });
     });
 
     test('stops reading an endless body once it passes maxFileSize', async () => {
@@ -542,8 +713,7 @@ describe('AssetOperations', () => {
         Promise.resolve(new Response(endless, { status: 200, headers: { 'content-type': 'image/jpeg' } })),
       );
       const result = await smallOps.importFromUrl('https://example.com/endless.jpg');
-      expect(result.success).toBe(false);
-      if (!result.success) expect(result.error).toContain('Remote file too large');
+      expect(result).toEqual({ success: false, error: importTooLargeRefusal(50) });
       expect(cancelled).toBe(true);
     });
 
@@ -561,11 +731,11 @@ describe('AssetOperations', () => {
       });
       const result = await slowOps.importFromUrl('https://example.com/stalled.jpg');
       expect(result.success).toBe(false);
-      if (!result.success) expect(result.error).toContain('timed out');
+      if (!result.success) expect(result.error).toContain('it took longer than');
     });
 
     test('succeeds for valid public URL with valid image response', async () => {
-      const imageData = new Uint8Array([0xff, 0xd8, 0xff, 0xe0]);
+      const imageData = jpegBytes();
       mockFetch(() =>
         Promise.resolve(
           new Response(imageData, {
@@ -582,10 +752,20 @@ describe('AssetOperations', () => {
       }
     });
 
+    test('an imported 4000 px JPEG is stored as a 2560 px WebP', async () => {
+      const photo = await largePhoto(4000, 3000);
+      mockFetch(() => Promise.resolve(new Response(photo, { status: 200, headers: { 'content-type': 'image/jpeg' } })));
+      const result = await ops.importFromUrl('https://example.com/office.jpg');
+      expect(result.success && [result.asset.filename, result.asset.width]).toEqual(['office.webp', 2560]);
+    });
+
     test('returns the dimensions of the imported image', async () => {
+      const png = await sharp({ create: { width: 800, height: 600, channels: 3, background: '#ffffff' } })
+        .png()
+        .toBuffer();
       mockFetch(() =>
         Promise.resolve(
-          new Response(pngBytes(800, 600), {
+          new Response(new Uint8Array(png), {
             status: 200,
             headers: { 'content-type': 'image/png' },
           }),
@@ -617,7 +797,7 @@ describe('AssetOperations', () => {
 
     /** A 200 response carrying a tiny JPEG payload */
     function imageResponse(): Response {
-      return new Response(new Uint8Array([0xff, 0xd8, 0xff, 0xe0]), {
+      return new Response(jpegBytes(), {
         status: 200,
         headers: { 'content-type': 'image/jpeg' },
       });
@@ -685,10 +865,7 @@ describe('AssetOperations', () => {
     test('refuses a redirect into a loopback address without requesting it', async () => {
       const requested = mockRedirects(() => redirectTo('http://127.0.0.1:8080/secret.jpg'));
       const result = await ops.importFromUrl('https://example.com/photo.jpg');
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(result.error).toContain('private/reserved IP address');
-      }
+      expect(result).toEqual({ success: false, error: importRefusal('it points to a private network') });
       // The loopback URL was never requested — the guard ran before the hop
       expect(requested).toEqual(['https://example.com/photo.jpg']);
     });
@@ -696,10 +873,7 @@ describe('AssetOperations', () => {
     test('refuses a redirect into the cloud metadata address without requesting it', async () => {
       const requested = mockRedirects(() => redirectTo('http://169.254.169.254/latest/meta-data/'));
       const result = await ops.importFromUrl('https://example.com/photo.jpg');
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(result.error).toContain('private/reserved IP address');
-      }
+      expect(result).toEqual({ success: false, error: importRefusal('it points to a private network') });
       expect(requested).toEqual(['https://example.com/photo.jpg']);
     });
 
@@ -728,10 +902,7 @@ describe('AssetOperations', () => {
         return redirectTo(`https://example.com/hop-${hop}.jpg`);
       });
       const result = await ops.importFromUrl('https://example.com/photo.jpg');
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(result.error).toContain('Too many redirects');
-      }
+      expect(result).toEqual({ success: false, error: importRefusal('it redirected too many times') });
       // Initial request plus the 5 permitted hops
       expect(requested.length).toBe(6);
     });
@@ -739,10 +910,7 @@ describe('AssetOperations', () => {
     test('fails closed on a redirect with no Location header', async () => {
       mockRedirects(() => new Response(null, { status: 302 }));
       const result = await ops.importFromUrl('https://example.com/photo.jpg');
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(result.error).toContain('Location');
-      }
+      expect(result).toEqual({ success: false, error: importRefusal('the site redirected without saying where to') });
     });
 
     test('fails closed on a redirect with an unparseable Location header', async () => {
@@ -755,10 +923,7 @@ describe('AssetOperations', () => {
     test('fails closed on a redirect to a non-http scheme', async () => {
       const requested = mockRedirects(() => redirectTo('file:///etc/passwd'));
       const result = await ops.importFromUrl('https://example.com/photo.jpg');
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(result.error).toContain('http or https');
-      }
+      expect(result).toEqual({ success: false, error: importRefusal('the address is not a web address') });
       expect(requested).toEqual(['https://example.com/photo.jpg']);
     });
   });
@@ -810,7 +975,7 @@ describe('AssetOperations', () => {
   describe('updateMetadata', () => {
     test('updates alt text in manifest for existing asset', async () => {
       // Upload a file first
-      await ops.upload(createTestFile('meta.jpg', 50));
+      await ops.upload(createTestFile('meta.jpg'));
       const result = await ops.updateMetadata('meta.jpg', { alt: 'New alt text' });
       expect(result.success).toBe(true);
       if (result.success) {
@@ -823,7 +988,7 @@ describe('AssetOperations', () => {
       // undefined, which JSON.stringify drops from the request body, so the
       // manifest merge kept the old value on exactly the path the editor
       // uses. Null is the wire form of clear, matching content metadata.
-      await ops.upload(createTestFile('clearable.jpg', 50));
+      await ops.upload(createTestFile('clearable.jpg'));
       await ops.updateMetadata('clearable.jpg', { alt: 'Doomed', tags: ['a', 'b'] });
 
       const result = await ops.updateMetadata('clearable.jpg', { alt: null, tags: null });
@@ -846,15 +1011,15 @@ describe('AssetOperations', () => {
   describe('resolveFilename collision resolution', () => {
     test('appends incrementing suffix for 3+ collisions', async () => {
       // Upload photo.jpg 3 times -- should produce photo.jpg, photo-1.jpg, photo-2.jpg
-      const r1 = await ops.upload(createTestFile('photo.jpg', 100));
+      const r1 = await ops.upload(createTestFile('photo.jpg'));
       expect(r1.success).toBe(true);
       if (r1.success) expect(r1.asset.filename).toBe('photo.jpg');
 
-      const r2 = await ops.upload(createTestFile('photo.jpg', 100));
+      const r2 = await ops.upload(createTestFile('photo.jpg'));
       expect(r2.success).toBe(true);
       if (r2.success) expect(r2.asset.filename).toBe('photo-1.jpg');
 
-      const r3 = await ops.upload(createTestFile('photo.jpg', 100));
+      const r3 = await ops.upload(createTestFile('photo.jpg'));
       expect(r3.success).toBe(true);
       if (r3.success) expect(r3.asset.filename).toBe('photo-2.jpg');
     });
@@ -863,22 +1028,22 @@ describe('AssetOperations', () => {
       // Create /photos folder, upload beach.jpg to /photos twice
       await mkdir(join(assetsPath, 'photos'), { recursive: true });
 
-      const r1 = await ops.upload(createTestFile('beach.jpg', 100), { folder: '/photos' });
+      const r1 = await ops.upload(createTestFile('beach.jpg'), { folder: '/photos' });
       expect(r1.success).toBe(true);
       if (r1.success) expect(r1.asset.filename).toBe('beach.jpg');
 
-      const r2 = await ops.upload(createTestFile('beach.jpg', 100), { folder: '/photos' });
+      const r2 = await ops.upload(createTestFile('beach.jpg'), { folder: '/photos' });
       expect(r2.success).toBe(true);
       if (r2.success) expect(r2.asset.filename).toBe('beach-1.jpg');
     });
 
     test('sanitizes AND deduplicates filenames', async () => {
       // Upload "My Photo.jpg" twice -- should produce my-photo.jpg, my-photo-1.jpg
-      const r1 = await ops.upload(createTestFile('My Photo.jpg', 100));
+      const r1 = await ops.upload(createTestFile('My Photo.jpg'));
       expect(r1.success).toBe(true);
       if (r1.success) expect(r1.asset.filename).toBe('my-photo.jpg');
 
-      const r2 = await ops.upload(createTestFile('My Photo.jpg', 100));
+      const r2 = await ops.upload(createTestFile('My Photo.jpg'));
       expect(r2.success).toBe(true);
       if (r2.success) expect(r2.asset.filename).toBe('my-photo-1.jpg');
     });
@@ -889,7 +1054,8 @@ describe('AssetOperations', () => {
       const names = ['Café.png', 'Café.png', 'Über uns.png', 'Ｐｈｏｔｏ.png'];
       const filenames: string[] = [];
       for (const name of names) {
-        const result = await ops.upload(createTestFile(name, 100, 'image/png'));
+        // oxlint-disable-next-line no-await-in-loop -- each name's suffix depends on the uploads before it.
+        const result = await ops.upload(pngFile(name));
         expect(result.success).toBe(true);
         if (result.success) filenames.push(result.asset.filename);
       }
@@ -902,7 +1068,8 @@ describe('AssetOperations', () => {
       const names = ['фото.png', '照片.PNG', 'мой фото.png', 'фото-кота.png'];
       const filenames: string[] = [];
       for (const name of names) {
-        const result = await ops.upload(createTestFile(name, 100, 'image/png'));
+        // oxlint-disable-next-line no-await-in-loop -- each name's suffix depends on the uploads before it.
+        const result = await ops.upload(pngFile(name));
         expect(result.success).toBe(true);
         if (result.success) filenames.push(result.asset.filename);
       }
@@ -922,15 +1089,15 @@ describe('AssetOperations', () => {
     test('keeps every image when several uploads whose names clean alike arrive at once', async () => {
       // The editor sends a multi-file selection as parallel requests, and all three names clean to 'file'
       const uploads = [
-        { name: 'фото.png', bytes: new Uint8Array([1, 1, 1]) },
-        { name: 'снимок.png', bytes: new Uint8Array([2, 2, 2]) },
-        { name: 'картинка.png', bytes: new Uint8Array([3, 3, 3]) },
+        { name: 'фото.jpg', bytes: jpegBytes(145) },
+        { name: 'снимок.jpg', bytes: jpegBytes(146) },
+        { name: 'картинка.jpg', bytes: jpegBytes(147) },
       ];
       const results = await Promise.all(
-        uploads.map(({ name, bytes }) => ops.upload(new File([bytes], name, { type: 'image/png' }))),
+        uploads.map(({ name, bytes }) => ops.upload(new File([bytes], name, { type: 'image/jpeg' }))),
       );
       const filenames = results.map((result) => (result.success ? result.asset.filename : result.error));
-      expect([...filenames].sort()).toEqual(['file-1.png', 'file-2.png', 'file.png']);
+      expect(new Set(filenames)).toEqual(new Set(['file.jpg', 'file-1.jpg', 'file-2.jpg']));
 
       // Each file holds the bytes of the upload that was given its name, and the library shows that upload's name
       for (const [index, filename] of filenames.entries()) {
@@ -946,7 +1113,7 @@ describe('AssetOperations', () => {
     test('gives an upload the next name when a broken link holds its name, without writing through the link', async () => {
       await symlink(join(assetsPath, 'missing.png'), join(assetsPath, 'photo.png'));
 
-      const result = await ops.upload(createTestFile('photo.png', 100, 'image/png'));
+      const result = await ops.upload(pngFile('photo.png'));
       expect(result.success).toBe(true);
       if (result.success) expect(result.asset.filename).toBe('photo-1.png');
       expect(existsSync(join(assetsPath, 'missing.png'))).toBe(false);
@@ -955,14 +1122,14 @@ describe('AssetOperations', () => {
     test('saves a very long upload name cut to 200 characters, so a second copy still fits with its number', async () => {
       // 254 bytes fit the 255-byte file name limit; the '-1' of a second copy would not
       const longName = `${'a'.repeat(250)}.png`;
-      const r1 = await ops.upload(createTestFile(longName, 100, 'image/png'));
+      const r1 = await ops.upload(pngFile(longName));
       expect(r1.success).toBe(true);
       if (r1.success) {
         expect(r1.asset.filename).toBe(`${'a'.repeat(200)}.png`);
         expect(r1.asset.originalName).toBe(longName);
       }
 
-      const r2 = await ops.upload(createTestFile(longName, 100, 'image/png'));
+      const r2 = await ops.upload(pngFile(longName));
       expect(r2.success).toBe(true);
       if (r2.success) {
         expect(r2.asset.filename).toBe(`${'a'.repeat(200)}-1.png`);
@@ -1011,7 +1178,7 @@ describe('AssetOperations', () => {
     });
 
     test('an upload into it is refused and writes nothing there', async () => {
-      const result = await ops.upload(createTestFile('photo.jpg', 100), { folder: beside });
+      const result = await ops.upload(createTestFile('photo.jpg'), { folder: beside });
 
       expect(result).toEqual({ success: false, error: 'Invalid folder path' });
       expect(existsSync(besidePath)).toBe(false);
@@ -1484,15 +1651,14 @@ describe('asset metadata stays out of the served media folder', () => {
   }
 
   test('an upload and an alt-text save leave nothing but the image in the served folder', async () => {
-    const uploaded = await perRequest().upload(new File([pngBytes(10, 20)], 'Hero.png', { type: 'image/png' }), {
+    const uploaded = await perRequest().upload(new File([onePixelPng()], 'Hero.png', { type: 'image/png' }), {
       folder: '/uploads',
     });
     expect(uploaded.success).toBe(true);
     const saved = await perRequest().updateMetadata('hero.png', { alt: 'Our team', tags: ['people'] }, '/uploads');
     expect(saved.success).toBe(true);
 
-    // The upload also writes the Git LFS rules for the media folder; that file is the site's, not the CMS's record
-    expect((await filesUnder(assetsPath)).filter((path) => path !== '.gitattributes')).toEqual(['uploads/hero.png']);
+    expect(await filesUnder(assetsPath)).toEqual(['uploads/hero.png']);
     expect(JSON.parse(await readFile(recordUnderContentRoot('uploads/hero.png'), 'utf-8'))).toMatchObject({
       alt: 'Our team',
       tags: ['people'],
@@ -1668,7 +1834,7 @@ describe('upgrading an existing .asset-manifest.json', () => {
       JSON.stringify({ alt: 'metadata from the image that used to be here', tags: ['confidential'] }),
     );
 
-    const uploaded = await perRequest().upload(new File([pngBytes(10, 20)], 'hero.png', { type: 'image/png' }));
+    const uploaded = await perRequest().upload(new File([onePixelPng()], 'hero.png', { type: 'image/png' }));
     expect(uploaded.success).toBe(true);
 
     const asset = await perRequest().getAsset('hero.png');

@@ -26,6 +26,9 @@ export { connectEditorFrame, type EditorFrame } from './frame/editor-frame.js';
 export { awaitParentHello } from './frame/parent-hello.js';
 // Export types from hooks (AssetEntry, etc.)
 export type { AssetEntry, AssetUsage, FolderListing, FolderTreeNode } from './hooks/index.js';
+export { buildUploadFormData } from './hooks/useUpload.js';
+// Shrinks and checks an image before upload; the editor's parent page runs it on every upload it forwards
+export { prepareImageUpload, prepareUploadForm } from './media/prepare-image-upload.js';
 // Export configuration function
 export {
   configureUI,

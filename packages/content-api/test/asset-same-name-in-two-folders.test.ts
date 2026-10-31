@@ -6,7 +6,10 @@ import { AssetOperations } from '../src/asset-operations.js';
 import type { AssetEntry } from '../src/asset-types.js';
 import { InMemoryContentAPI } from '../src/in-memory-content-api.js';
 import { createContentAPIRouter } from '../src/middleware.js';
+import { pngBytes } from './helpers/image-fixtures.js';
 import { testTempDir } from './test-temp-dir.js';
+
+const picture = () => new File([pngBytes()], 'beach.png', { type: 'image/png' });
 
 /**
  * Two pictures with the same name: `trip/beach.png`, uploaded first, and `beach.png` at the top of
@@ -24,7 +27,6 @@ describe('a picture at the top of the assets folder that shares its name with on
     assetsPath = testTempDir('same-name');
     contentRoot = `${assetsPath}-content`;
     ops = new AssetOperations({ assetsPath, contentRoot });
-    const picture = () => new File([new Uint8Array([0x89, 0x50])], 'beach.png', { type: 'image/png' });
     // Upload order is manifest order: the folder's picture is the first entry named beach.png.
     expect((await ops.upload(picture(), { folder: 'trip' })).success).toBe(true);
     expect((await ops.upload(picture())).success).toBe(true);

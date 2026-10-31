@@ -11,13 +11,33 @@ import {
   unlink,
   writeFile,
 } from 'node:fs/promises';
-import { basename, dirname, extname, join, parse, resolve, sep } from 'node:path';
+import { basename, dirname, extname, join, resolve, sep } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { imageSizeFromFile } from 'image-size/fromFile';
-import { DEFAULT_ACCEPTED_FORMATS, DEFAULT_MAX_FILE_SIZE, IMAGE_EXTENSION_MIME } from './asset-constraints.js';
+import {
+  DEFAULT_ACCEPTED_FORMATS,
+  DEFAULT_MAX_FILE_SIZE,
+  IMAGE_EXTENSION_MIME,
+  VIDEO_EXTENSIONS,
+} from './asset-constraints.js';
 import * as assetMetadata from './asset-metadata-store.js';
+import {
+  fileNameFromUrl,
+  folderCaseClashError,
+  folderPathError,
+  safeAssetFilename,
+  uniqueAssetName,
+} from './asset-naming.js';
 import type { AssetEntry, AssetMetadata, AssetMetadataPatch, FolderListing, FolderTreeNode } from './asset-types.js';
-import { setupGitLfsAttributes } from './git-operations.js';
+import { shrinkImage } from './image-shrink.js';
+import { conformUploadBytes } from './upload-bytes.js';
+import {
+  importRefusal,
+  importTooLargeRefusal,
+  tooLargeRefusal,
+  unsupportedTypeRefusal,
+  videoRefusal,
+} from './upload-refusals.js';
 import { validateFetchUrl } from './url-validation.js';
 
 export interface AssetConfig {
@@ -40,6 +60,18 @@ const SYSTEM_FILES = new Set(['.ds_store', 'thumbs.db', '.gitkeep', 'desktop.ini
 const MAX_IMPORT_REDIRECTS = 5;
 
 const DEFAULT_IMPORT_TIMEOUT_MS = 30_000;
+
+/** Why an import may not request `url`, in words for the person importing, or `null` when it may. */
+function fetchUrlProblem(url: string): string | null {
+  try {
+    validateFetchUrl(url);
+    return null;
+  } catch {
+    // It throws for a malformed or non-web address, and otherwise for a private host.
+    const web = URL.canParse(url) && /^https?:$/.test(new URL(url).protocol);
+    return web ? 'it points to a private network' : 'the address is not a web address';
+  }
+}
 
 /** Check if filename has a recognized web image extension */
 function isRecognizedImageExtension(filename: string): boolean {
@@ -65,7 +97,6 @@ function isBareFilename(filename: unknown): boolean {
 export class AssetOperations {
   private config: Required<AssetConfig>;
   private dirEnsured = false;
-  private lfsSetup = false;
 
   constructor(config: AssetConfig) {
     this.config = {
@@ -107,44 +138,16 @@ export class AssetOperations {
   }
 
   /**
-   * Resolve a unique filename by appending -1, -2, etc. if collision exists
-   * @param originalName Original filename
-   * @param folder Optional folder path (relative to assets root)
+   * The lowercased names already in an assets folder (`/` for the assets root), so a new name clashes with any case of
+   * them; none when the folder does not exist yet. Broken symlinks count too.
    */
-  private async resolveFilename(originalName: string, folder?: string): Promise<string> {
-    const { name, ext } = parse(originalName);
-    // Normalize compatibility forms and accents before restricting the stored filename.
-    const cleaned = name
-      .normalize('NFKD')
-      .toLowerCase()
-      .replace(/\s+/g, '-')
-      .replace(/[^a-z0-9-]/g, '')
-      .slice(0, 200);
-    const sanitized = /[a-z0-9]/.test(cleaned) ? cleaned : 'file';
-    const safeExt = ext.toLowerCase();
-
-    // Determine base directory (assetsPath or assetsPath/folder)
-    const baseDir =
-      folder && folder !== '/'
-        ? join(this.config.assetsPath, folder.replace(/^\/+|\/+$/g, ''))
-        : this.config.assetsPath;
-
-    let candidate = `${sanitized}${safeExt}`;
-    let counter = 0;
-
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-      try {
-        // lstat also reserves the name of a broken symlink.
-        await lstat(join(baseDir, candidate));
-        counter++;
-        candidate = `${sanitized}-${counter}${safeExt}`;
-      } catch {
-        break;
-      }
+  private async takenNames(folder: string): Promise<Set<string>> {
+    const dir = folder === '/' ? this.config.assetsPath : join(this.config.assetsPath, folder.slice(1));
+    try {
+      return new Set((await readdir(dir)).map((name) => name.toLowerCase()));
+    } catch {
+      return new Set();
     }
-
-    return candidate;
   }
 
   private validateFormat(filename: string): boolean {
@@ -213,14 +216,25 @@ export class AssetOperations {
     file: File,
     metadata?: { alt?: string; uploadedBy?: string; folder?: string },
   ): Promise<{ success: true; asset: AssetEntry } | { success: false; error: string }> {
+    if (VIDEO_EXTENSIONS.has(extname(file.name).slice(1).toLowerCase()) || file.type.startsWith('video/')) {
+      return { success: false, error: videoRefusal(file.name) };
+    }
     if (!this.validateFormat(file.name)) {
-      const allowed = this.config.acceptedFormats.join(', ');
-      return { success: false, error: `Invalid format. Accepted: ${allowed}` };
+      return { success: false, error: unsupportedTypeRefusal(file.name, this.config.acceptedFormats) };
     }
 
-    if (!this.validateSize(file.size)) {
-      const maxMB = Math.round(this.config.maxFileSize / (1024 * 1024));
-      return { success: false, error: `File too large. Maximum: ${maxMB}MB` };
+    const shrunk = await shrinkImage(new Uint8Array(await file.arrayBuffer()), file.name, this.config.acceptedFormats);
+    if ('refusal' in shrunk) return { success: false, error: shrunk.refusal };
+    if (shrunk.warning !== undefined) console.warn(shrunk.warning);
+    const conformed = conformUploadBytes(shrunk.bytes, shrunk.filename);
+    if (!conformed.ok) return { success: false, error: conformed.refusal };
+    // The bytes may hold another format than the name said; a site's own acceptedFormats still decides.
+    if (!this.validateFormat(conformed.filename)) {
+      return { success: false, error: unsupportedTypeRefusal(conformed.filename, this.config.acceptedFormats) };
+    }
+    const data = conformed.bytes;
+    if (!this.validateSize(data.byteLength)) {
+      return { success: false, error: tooLargeRefusal(file.name, data.byteLength, this.config.maxFileSize) };
     }
 
     // Normalize folder path
@@ -228,11 +242,19 @@ export class AssetOperations {
 
     // Validate folder path (prevent path traversal)
     if (folder !== '/') {
+      let folderPath: string;
       try {
-        this.validateSubpath(folder);
+        folderPath = this.validateSubpath(folder);
       } catch {
         return { success: false, error: 'Invalid folder path' };
       }
+      // Only a new folder has to follow the folder rule: uploads into a folder a site already has keep working.
+      const exists = await stat(folderPath).then(
+        (stats) => stats.isDirectory(),
+        () => false,
+      );
+      const folderError = exists ? null : folderPathError(folder.slice(1));
+      if (folderError !== null) return { success: false, error: folderError };
     }
 
     try {
@@ -248,16 +270,12 @@ export class AssetOperations {
       await this.ensureDir(folder.replace(/^\//, ''));
     }
 
-    if (!this.lfsSetup) {
-      await setupGitLfsAttributes(this.config.assetsPath);
-      this.lfsSetup = true;
-    }
-
-    const data = new Uint8Array(await file.arrayBuffer());
+    const sanitized = safeAssetFilename(conformed.filename);
+    const taken = await this.takenNames(folder);
     let filename: string;
     let filePath: string;
     for (;;) {
-      filename = await this.resolveFilename(file.name, folder);
+      filename = uniqueAssetName(sanitized, taken);
       filePath = this.getAssetPath(filename, folder);
       try {
         // oxlint-disable-next-line no-await-in-loop -- each exclusive create depends on the filename collision found by the preceding attempt.
@@ -265,6 +283,7 @@ export class AssetOperations {
         break;
       } catch (error) {
         if (!(error instanceof Error) || !('code' in error) || error.code !== 'EEXIST') throw error;
+        taken.add(filename.toLowerCase());
       }
     }
 
@@ -291,7 +310,7 @@ export class AssetOperations {
       filename,
       originalName: file.name,
       mimeType: IMAGE_EXTENSION_MIME[ext] || `image/${ext}`,
-      size: file.size,
+      size: data.byteLength,
       width,
       height,
       alt: metadata?.alt,
@@ -404,12 +423,14 @@ export class AssetOperations {
     url: string,
     metadata?: { alt?: string; uploadedBy?: string; folder?: string },
   ): Promise<{ success: true; asset: AssetEntry } | { success: false; error: string }> {
-    // Validate URL: block private IPs and non-http(s) schemes
-    try {
-      validateFetchUrl(url);
-    } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : 'Invalid URL' };
-    }
+    const blocked = fetchUrlProblem(url);
+    if (blocked !== null) return { success: false, error: importRefusal(blocked) };
+    const timedOut = {
+      success: false as const,
+      error: importRefusal(`it took longer than ${Math.ceil(this.config.importTimeoutMs / 1000)} seconds`),
+    };
+    const unreachable = { success: false as const, error: importRefusal('the site could not be reached') };
+    const tooLarge = { success: false as const, error: importTooLargeRefusal(this.config.maxFileSize) };
 
     // One wall-clock budget covers every hop AND the body read: a server that
     // sends headers promptly and then trickles bytes must not hold the import
@@ -433,32 +454,28 @@ export class AssetOperations {
           await hopResponse.body?.cancel().catch(() => {});
           const location = hopResponse.headers.get('location');
           if (location === null) {
-            return { success: false, error: 'Redirect missing Location header' };
+            return { success: false, error: importRefusal('the site redirected without saying where to') };
           }
-          try {
-            // A relative Location is legal and common; resolve it against the URL
-            // that produced it, then validate the absolute result.
-            current = validateFetchUrl(new URL(location, current).toString()).toString();
-          } catch (err) {
-            return { success: false, error: `Redirect blocked: ${err instanceof Error ? err.message : 'Invalid URL'}` };
-          }
+          // A relative Location is legal and common; resolve it against the URL
+          // that produced it, then validate the absolute result.
+          const next = new URL(location, current).toString();
+          const hopBlocked = fetchUrlProblem(next);
+          if (hopBlocked !== null) return { success: false, error: importRefusal(hopBlocked) };
+          current = next;
         }
       } catch {
-        return { success: false, error: controller.signal.aborted ? 'URL import timed out' : 'Failed to fetch URL' };
+        return controller.signal.aborted ? timedOut : unreachable;
       }
 
       // Budget exhausted without a final response — fail closed rather than
       // treating the last redirect as content
       if (!response) {
-        return { success: false, error: 'Too many redirects' };
+        return { success: false, error: importRefusal('it redirected too many times') };
       }
-
-      const maxMB = Math.round(this.config.maxFileSize / (1024 * 1024));
-      const tooLarge = { success: false as const, error: `Remote file too large. Maximum: ${maxMB}MB` };
 
       if (!response.ok) {
         await response.body?.cancel().catch(() => {});
-        return { success: false, error: `Fetch failed with status ${response.status}` };
+        return { success: false, error: importRefusal(`the site answered ${response.status}`) };
       }
 
       // Early size check from Content-Length header
@@ -469,14 +486,7 @@ export class AssetOperations {
       }
 
       const contentType = response.headers.get('content-type') || '';
-      const lastSegment = new URL(url).pathname.split('/').pop() || 'imported-image.jpg';
-      let urlFilename = lastSegment;
-      try {
-        const decoded = decodeURIComponent(lastSegment);
-        if (!/\p{Cc}/u.test(decoded)) urlFilename = decoded.split(/[/\\]/).pop() || lastSegment;
-      } catch {
-        // A malformed escape keeps the filename as written in the address.
-      }
+      const urlFilename = fileNameFromUrl(new URL(url));
 
       // Stream the body, stopping the moment it passes the limit: Content-Length
       // is optional and may lie, so it cannot be trusted to bound memory.
@@ -490,7 +500,7 @@ export class AssetOperations {
         try {
           while (true) {
             const { done, value } = await reader.read();
-            if (controller.signal.aborted) return { success: false, error: 'URL import timed out' };
+            if (controller.signal.aborted) return timedOut;
             if (done) break;
             received += value.byteLength;
             if (received > this.config.maxFileSize) {
@@ -501,7 +511,7 @@ export class AssetOperations {
           }
         } catch {
           await reader.cancel().catch(() => {});
-          return { success: false, error: controller.signal.aborted ? 'URL import timed out' : 'Failed to fetch URL' };
+          return controller.signal.aborted ? timedOut : unreachable;
         } finally {
           controller.signal.removeEventListener('abort', onAbort);
         }
@@ -586,15 +596,22 @@ export class AssetOperations {
       return { success: false, error: 'Invalid folder path' };
     }
 
-    const folderSegments = subpath.split('/').filter(Boolean);
-    if (folderSegments.some(isSystemFile)) {
+    const folderError = folderPathError(subpath.replace(/^\/+|\/+$/g, ''));
+    if (folderError !== null) return { success: false, error: folderError };
+    // The media library hides these names, so a folder named like one would vanish from it.
+    if (subpath.split('/').some(isSystemFile)) {
       return { success: false, error: "Folder names can't start with a dot or be a system file name like Thumbs.db" };
     }
-    if (/[#?%\\]/.test(subpath)) {
-      return { success: false, error: "Folder names can't contain #, ?, % or \\" };
-    }
-    if (/[\t\n\r]/.test(subpath)) {
-      return { success: false, error: "Folder names can't contain tabs or line breaks" };
+    // Walk down the folders that exist: a name another one holds in another case would merge with it on Mac and Windows.
+    let parent = this.config.assetsPath;
+    for (const name of subpath.replace(/^\/+|\/+$/g, '').split('/')) {
+      // oxlint-disable-next-line no-await-in-loop -- each level is read only once the one above it exists.
+      const siblings = await readdir(parent, { withFileTypes: true }).catch(() => []);
+      const folders = siblings.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+      const clash = folderCaseClashError(name, folders);
+      if (clash !== null) return { success: false, error: clash };
+      if (!folders.includes(name)) break;
+      parent = join(parent, name);
     }
 
     try {

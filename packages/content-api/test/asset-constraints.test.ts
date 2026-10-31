@@ -9,8 +9,8 @@ import * as browserEntry from '../src/index.js';
  * runtime without `node:fs` can reach them through the browser entry.
  */
 describe('asset upload constraints', () => {
-  test('the ceiling is 10 MB', () => {
-    expect(DEFAULT_MAX_FILE_SIZE).toBe(10 * 1024 * 1024);
+  test('the ceiling is 25 MB', () => {
+    expect(DEFAULT_MAX_FILE_SIZE).toBe(25 * 1024 * 1024);
   });
 
   test('the allowlist is images only, raster plus SVG and ICO', () => {

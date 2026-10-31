@@ -3,11 +3,14 @@ import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { $ } from 'bun';
+import sharp from 'sharp';
+import { jpegBytes } from '../../content-api/test/helpers/image-fixtures.js';
+import { largePhoto } from '../../content-api/test/helpers/photo-fixtures.js';
 
 const CLI = join(import.meta.dir, '..', 'dist', 'conloca.js');
 
-/** Stand-in image bytes: the upload checks the extension, and an unreadable header only means no dimensions. */
-const HERO = 'hero image bytes';
+/** A real JPEG: the upload reads what a file is from its bytes. */
+const HERO = jpegBytes();
 
 /** astro.config.mjs as `conloca connect` leaves a starter site, before data schemas are wired. */
 function connectedConfig(extra = '', cmsExtra = ''): string {
@@ -76,7 +79,7 @@ describe('conloca asset add', () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout.toString()).toContain('✓ Added /media/hero.jpg');
     expect(result.stdout.toString()).toContain(join('public', 'media', 'hero.jpg'));
-    expect(await readFile(join(dir, 'public', 'media', 'hero.jpg'), 'utf-8')).toBe(HERO);
+    expect(new Uint8Array(await readFile(join(dir, 'public', 'media', 'hero.jpg')))).toEqual(HERO);
   });
 
   test('keeps an existing file and stores the new one as hero-1.jpg', async () => {
@@ -94,7 +97,24 @@ describe('conloca asset add', () => {
     await writeFile(join(dir, 'Hero Shot.JPG'), HERO);
     const { report } = await addJson(dir, 'Hero Shot.JPG');
     expect(report.ref).toBe('/media/hero-shot.jpg');
-    expect(await readFile(join(dir, 'public', 'media', 'hero-shot.jpg'), 'utf-8')).toBe(HERO);
+    expect(new Uint8Array(await readFile(join(dir, 'public', 'media', 'hero-shot.jpg')))).toEqual(HERO);
+  });
+
+  test('stores My_Photo.JPG as my_photo.jpg', async () => {
+    const dir = await makeSite();
+    await writeFile(join(dir, 'My_Photo.JPG'), HERO);
+    const { report } = await addJson(dir, 'My_Photo.JPG');
+    expect(report.ref).toBe('/media/my_photo.jpg');
+  });
+
+  test('shrinks a 4000 px photo to <name>.webp and prints its reference', async () => {
+    const dir = await makeSite();
+    await writeFile(join(dir, 'Office.jpg'), await largePhoto(4000, 3000));
+    const { exitCode, report } = await addJson(dir, 'Office.jpg');
+    expect(exitCode).toBe(0);
+    expect(report.ref).toBe('/media/office.webp');
+    const stored = await sharp(join(dir, 'public', 'media', 'office.webp')).metadata();
+    expect(stored).toMatchObject({ format: 'webp', width: 2560, height: 1920 });
   });
 
   test('prefixes the site base', async () => {
@@ -106,7 +126,7 @@ describe('conloca asset add', () => {
     const dir = await makeSite();
     const { report } = await addJson(dir, 'hero.jpg', '--folder', 'team', '--alt', 'The team');
     expect(report.ref).toBe('/media/team/hero.jpg');
-    expect(await readFile(join(dir, 'public', 'media', 'team', 'hero.jpg'), 'utf-8')).toBe(HERO);
+    expect(new Uint8Array(await readFile(join(dir, 'public', 'media', 'team', 'hero.jpg')))).toEqual(HERO);
   });
 
   test('refuses a file that is not an image', async () => {
@@ -114,7 +134,7 @@ describe('conloca asset add', () => {
     await writeFile(join(dir, 'notes.txt'), 'notes');
     const { exitCode, report } = await addJson(dir, 'notes.txt');
     expect(exitCode).toBe(1);
-    expect(report).toMatchObject({ ok: false, error: expect.stringMatching(/Invalid format/) });
+    expect(report).toMatchObject({ ok: false, error: expect.stringMatching(/^notes\.txt is not an image the editor/) });
   });
 
   test('refuses a missing file before it wires the site', async () => {

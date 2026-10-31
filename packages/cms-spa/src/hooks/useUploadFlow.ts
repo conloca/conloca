@@ -1,5 +1,11 @@
-import { IMAGE_EXTENSION_MIME, useImportAssetUrl, useUploadAsset } from '@conloca/content-api-client';
+import {
+  DEFAULT_MAX_FILE_SIZE,
+  IMAGE_EXTENSION_MIME,
+  useImportAssetUrl,
+  useUploadAsset,
+} from '@conloca/content-api-client';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { prepareImageUpload } from '../media/prepare-image-upload.js';
 import { buildUploadFormData } from './useUpload.js';
 
 /**
@@ -60,6 +66,10 @@ export function useUploadFlow({ folder, onUploadComplete, onSuccess }: UseUpload
   const [activeTab, setActiveTab] = useState<'file' | 'url'>('file');
   const [importUrl, setImportUrl] = useState('');
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
+  /** A file refused in the browser, before any request. */
+  const [processingError, setProcessingError] = useState<Error | null>(null);
+  /** True while a picked photo is shrunk, so a second click cannot send it twice. */
+  const [isPreparing, setIsPreparing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const uploadMutation = useUploadAsset();
@@ -78,14 +88,16 @@ export function useUploadFlow({ folder, onUploadComplete, onSuccess }: UseUpload
     };
   }, [previewUrl]);
 
-  const isUploading = uploadMutation.isPending || importMutation.isPending || (uploadProgress?.inProgress ?? false);
-  const error = uploadMutation.error || importMutation.error;
+  const isUploading =
+    isPreparing || uploadMutation.isPending || importMutation.isPending || (uploadProgress?.inProgress ?? false);
+  const error = processingError || uploadMutation.error || importMutation.error;
 
   const reset = useCallback(() => {
     setPendingFile(null);
     setAltText('');
     setImportUrl('');
     setUploadProgress(null);
+    setProcessingError(null);
     setActiveTab('file');
     setIsDragOver(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -94,6 +106,7 @@ export function useUploadFlow({ folder, onUploadComplete, onSuccess }: UseUpload
   const handleSingleFile = useCallback((file: File) => {
     setPendingFile(file);
     setAltText('');
+    setProcessingError(null);
   }, []);
 
   const handleMultipleFiles = useCallback(
@@ -108,12 +121,24 @@ export function useUploadFlow({ folder, onUploadComplete, onSuccess }: UseUpload
       // Multi-file upload: upload all in parallel without alt text prompts
       setUploadProgress({ total: files.length, completed: 0, failed: 0, inProgress: true });
 
+      let refusal: Error | null = null;
+      // One file decoded at a time: decoding many camera photos at once can exhaust a phone's memory.
+      let previous: Promise<unknown> = Promise.resolve();
       const uploadPromises = files.map(async (file) => {
-        const formData = buildUploadFormData(file, undefined, folder);
-        return uploadMutation.mutateAsync(formData);
+        const preparing = previous.then(() => prepareImageUpload(file, DEFAULT_MAX_FILE_SIZE));
+        previous = preparing.catch(() => undefined);
+        let ready: File;
+        try {
+          ready = await preparing;
+        } catch (reason) {
+          refusal ??= reason instanceof Error ? reason : new Error(String(reason));
+          throw reason;
+        }
+        return uploadMutation.mutateAsync(buildUploadFormData(ready, undefined, folder));
       });
 
       const results = await Promise.allSettled(uploadPromises);
+      setProcessingError(refusal);
 
       const completed = results.filter((r) => r.status === 'fulfilled').length;
       const failed = results.filter((r) => r.status === 'rejected').length;
@@ -161,9 +186,20 @@ export function useUploadFlow({ folder, onUploadComplete, onSuccess }: UseUpload
   );
 
   const handleUpload = async () => {
-    if (!pendingFile) return;
+    if (!pendingFile || isUploading) return;
 
-    const formData = buildUploadFormData(pendingFile, altText || undefined, folder);
+    setProcessingError(null);
+    setIsPreparing(true);
+    let file: File;
+    try {
+      file = await prepareImageUpload(pendingFile, DEFAULT_MAX_FILE_SIZE);
+    } catch (reason) {
+      setProcessingError(reason instanceof Error ? reason : new Error(String(reason)));
+      return;
+    } finally {
+      setIsPreparing(false);
+    }
+    const formData = buildUploadFormData(file, altText || undefined, folder);
     uploadMutation.mutate(formData, {
       onSuccess: () => {
         // Reset shared state
@@ -196,6 +232,7 @@ export function useUploadFlow({ folder, onUploadComplete, onSuccess }: UseUpload
   const handleCancel = () => {
     setPendingFile(null);
     setAltText('');
+    setProcessingError(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 

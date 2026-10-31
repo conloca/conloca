@@ -1,4 +1,4 @@
-/** Site renderers receive loaded image bytes while editable data stays canonical. */
+/** Site renderers receive the loaded images while editable data stays canonical. */
 import { afterEach, beforeEach, describe, expect, jest, test } from 'bun:test';
 import type { Config } from '@puckeditor/core';
 import { createElement, memo, useState } from 'react';

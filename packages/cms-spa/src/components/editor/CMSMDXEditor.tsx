@@ -1,4 +1,4 @@
-import { useUploadAsset } from '@conloca/content-api-client';
+import { DEFAULT_MAX_FILE_SIZE, useUploadAsset } from '@conloca/content-api-client';
 import { BaseMDXEditor, type BaseMDXEditorProps } from '@conloca/mdx';
 // The editor stylesheet; it pulls MDXEditor's own sheet in first. Position
 // would not decide the cascade anyway: MDXEditor injects its CSS-module
@@ -12,6 +12,7 @@ import { useTheme } from '../../hooks/useTheme.js';
 import { buildUploadFormData } from '../../hooks/useUpload.js';
 import { useProbedHostStyles } from '../../host-style-probe.js';
 import { isJsxDescriptor, toJsxComponentDescriptor, useMdxComponents } from '../../mdx-components.js';
+import { prepareImageUpload } from '../../media/prepare-image-upload.js';
 import { deriveProseSurfaceStyles } from '../../prose-surface-css.js';
 import {
   type SiteStyles,
@@ -225,7 +226,7 @@ export const CMSMDXEditor = forwardRef<MDXEditorMethods, CMSMDXEditorProps>(({ p
   // so it round-trips identically to a path picked from the asset browser.
   const imageUploadHandler = useCallback(
     async (file: File) => {
-      const formData = buildUploadFormData(file, undefined, '/');
+      const formData = buildUploadFormData(await prepareImageUpload(file, DEFAULT_MAX_FILE_SIZE), undefined, '/');
       const asset = await uploadAsset.mutateAsync(formData);
       return assetRefOf(asset);
     },

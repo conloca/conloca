@@ -8,8 +8,20 @@
  * read them.
  */
 
-/** Upload ceiling in bytes: 10 MB. */
-export const DEFAULT_MAX_FILE_SIZE = 10 * 1024 * 1024;
+/** Upload ceiling in bytes, after processing: 25 MB. */
+export const DEFAULT_MAX_FILE_SIZE = 25 * 1024 * 1024;
+
+/** The longest edge, in pixels, an uploaded photo is shrunk to. */
+export const MAX_IMAGE_EDGE = 2560;
+
+/** WebP quality a shrunk photo is encoded at. */
+export const WEBP_QUALITY = 0.8;
+
+/** JPEG quality where a browser cannot encode WebP. */
+export const JPEG_FALLBACK_QUALITY = 0.82;
+
+/** Video extensions, refused with a pointer to the site's embed component rather than as an unknown type. */
+export const VIDEO_EXTENSIONS: ReadonlySet<string> = new Set(['mp4', 'mov', 'm4v', 'webm', 'avi', 'mkv']);
 
 /** Allowed image extension → the canonical content type it is stored and served as. */
 // Null prototype: lookups use arbitrary user-supplied extension strings, which

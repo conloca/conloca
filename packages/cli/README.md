@@ -450,12 +450,15 @@ conloca asset add <file> [path] [--folder <folder>] [--alt <text>] [--no-install
 ```
 
 The image lands in the `assetsPath` of `conlocaCMS()`, stored the way an editor upload stores it: the name lowercased
-and made URL-safe (`Hero Shot.JPG` becomes `hero-shot.jpg`), a name already taken stored as `hero-1.jpg`, and only web
-image formats up to 10 MB taken. `--folder` puts it in a folder inside the media folder; `--alt` records its alt text. A
-site without data schemas is wired first, as `data create` wires it: the schemas, the assets folder and the Typia
-packages. It prints the reference, such as `/media/hero.jpg` (with the site's `base` in front), and the file path;
-`--json` prints `{ok, ref, path, wired?, command?}`. A config that computes `assetsPath`, `publicDir` or `base` stops
-the command.
+and made URL-safe, keeping underscores and inner dots (`Hero Shot.JPG` becomes `hero-shot.jpg`, `My_Photo.JPG` becomes
+`my_photo.jpg`), a name already taken in any letter case stored as `hero-1.jpg`, and only web image formats up to 25 MB
+taken. A photo whose long edge is over 2560 pixels is stored as a 2560 pixel WebP named `.webp` (a PNG stays PNG),
+upright and without its location data; without the optional `sharp` package it is stored unshrunk with a warning.
+`--folder` puts it in a folder inside the media folder (a new folder must be a name Git and an image link can hold: no
+spaces, no leading dot, none of `# ? % & * : |`); `--alt` records its alt text. A site without data schemas is wired
+first, as `data create` wires it: the schemas, the assets folder and the Typia packages. It prints the reference, such
+as `/media/hero.jpg` (with the site's `base` in front), and the file path; `--json` prints
+`{ok, ref, path, wired?, command?}`. A config that computes `assetsPath`, `publicDir` or `base` stops the command.
 
 Example:
 

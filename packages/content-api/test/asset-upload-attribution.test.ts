@@ -7,6 +7,7 @@ import * as assetMetadata from '../src/asset-metadata-store.js';
 import type { AssetEntry } from '../src/asset-types.js';
 import { InMemoryContentAPI } from '../src/in-memory-content-api.js';
 import { createContentAPIRouter } from '../src/middleware.js';
+import { jpegBytes, pngBytes } from './helpers/image-fixtures.js';
 
 /**
  * Who uploaded a picture is an audit trail, and an audit trail anyone can write
@@ -44,9 +45,7 @@ describe('the uploader is never taken from the request', () => {
   /** Stand in for the network, with the `preconnect` property Bun's `typeof fetch` requires */
   function answerWithImage(): void {
     const mocked = mock(() =>
-      Promise.resolve(
-        new Response(new Uint8Array([0xff, 0xd8, 0xff, 0xe0]), { headers: { 'content-type': 'image/jpeg' } }),
-      ),
+      Promise.resolve(new Response(jpegBytes(), { headers: { 'content-type': 'image/jpeg' } })),
     );
     (mocked as { preconnect?: () => void }).preconnect = () => {};
     globalThis.fetch = mocked as unknown as typeof fetch;
@@ -54,7 +53,7 @@ describe('the uploader is never taken from the request', () => {
 
   test('an upload cannot stamp a name on the picture it sends', async () => {
     const form = new FormData();
-    form.append('file', new File([new Uint8Array([1, 2, 3])], 'hero.png', { type: 'image/png' }));
+    form.append('file', new File([pngBytes()], 'hero.png', { type: 'image/png' }));
     form.append('alt', 'Our team at work');
     form.append('uploadedBy', 'someone.else@example.com');
 

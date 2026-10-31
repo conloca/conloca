@@ -39,7 +39,8 @@
   "devDependencies": {
     "@conloca/cloud-astro": "workspace:*",
     "@types/bun": "1.4.2",
-    "commander": "^15.0.0"
+    "commander": "^15.0.0",
+    "sharp": "^0.35.4"
   },
   "nx": {
     "targets": {

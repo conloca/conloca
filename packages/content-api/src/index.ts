@@ -7,10 +7,26 @@
 
 // The address site and its base path, shared by every host that reads a sites.json.
 export { addressSiteName, isValidSiteBase } from './address-site.js';
-// Upload ceiling + image allowlist. Pure data, no node deps — the source of
+// Upload ceiling, image allowlist and processing constants. Pure data, no node deps — the source of
 // truth other asset backends read through this entry.
-// DEFAULT_ACCEPTED_FORMATS deliberately stays off the barrel — it is just the map's keys.
-export { DEFAULT_MAX_FILE_SIZE, IMAGE_EXTENSION_MIME } from './asset-constraints.js';
+export {
+  DEFAULT_ACCEPTED_FORMATS,
+  DEFAULT_MAX_FILE_SIZE,
+  IMAGE_EXTENSION_MIME,
+  JPEG_FALLBACK_QUALITY,
+  MAX_IMAGE_EDGE,
+  VIDEO_EXTENSIONS,
+  WEBP_QUALITY,
+} from './asset-constraints.js';
+// The one naming rule for uploads and media folders, shared by the browser and every server.
+export {
+  fileNameFromUrl,
+  folderCaseClashError,
+  folderPathError,
+  safeAssetFilename,
+  uniqueAssetName,
+  withNumberSuffix,
+} from './asset-naming.js';
 // Asset types (browser-safe, from asset-types.ts - no Node.js dependencies)
 export type {
   AssetEntry,
@@ -37,6 +53,8 @@ export { readEditorDataBindings } from './editor-data-bindings.js';
 export { Fragments } from './fragments.js';
 // Git types (browser-safe, pure interfaces - no Node.js dependencies)
 export type { GitCommitResult, GitPullResult, GitPushResult, GitStatus } from './git-operations.js';
+// Git LFS rule matching for uploads, shared by the online editor's upload check and its Publish.
+export { type GitAttributesFile, isAutoWrittenLfsAttributes, lfsRuleFor } from './lfs-attributes.js';
 // The page feed a data binding declares, shared by the published page and the editor.
 export { pageReferenceOf, pageTimestampsOf, selectPagesByPrefix } from './page-references.js';
 // Reader backend interface types (browser-safe; type-only re-export).
@@ -60,6 +78,18 @@ export type {
 } from './schemas/types.js';
 export { Site } from './site.js';
 export * from './types.js';
+// Every sentence an upload is refused or warned with, shared by the browser and every server.
+export {
+  importRefusal,
+  importTooLargeRefusal,
+  lfsRefusal,
+  repoNotReadyRefusal,
+  shrinkUnavailableWarning,
+  tooLargeRefusal,
+  unreadableImageRefusal,
+  unsupportedTypeRefusal,
+  videoRefusal,
+} from './upload-refusals.js';
 // SSRF host predicate — pure string/number logic, so any host's import guards can share it.
 export { isPrivateFetchHost } from './url-validation.js';
 export { ContentUtils } from './utils.js';

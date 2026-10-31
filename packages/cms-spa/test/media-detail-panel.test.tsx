@@ -147,7 +147,12 @@ describe('the details panel of the media library', () => {
     await waitForElementToBeRemoved(() => screen.queryByLabelText('Alt Text'));
 
     const upload = new FormData();
-    upload.append('file', new File([new Uint8Array([0x89, 0x50])], 'beach.png', { type: 'image/png' }));
+    // A real 1×1 PNG: the server reads what a file is from its bytes.
+    const png = Uint8Array.from(
+      atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='),
+      (c) => c.charCodeAt(0),
+    );
+    upload.append('file', new File([png], 'beach.png', { type: 'image/png' }));
     await client.uploadAsset(upload);
     await refreshListings();
     await screen.findAllByTitle('beach.png');
