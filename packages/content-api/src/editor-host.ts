@@ -11,13 +11,62 @@ export const EDITOR_HOST_PROTOCOLS = { min: 1, max: 1 } as const;
  */
 export const PREVIEW_PROTOCOL = 2;
 
-/** How a build serves draft previews: `d2` from the site's own deploy, `d4` from a separate preview deploy, `off` not at all. */
-export type PreviewMode = 'd2' | 'd4' | 'off';
+/**
+ * How a build serves draft previews: `d2` from the site's own server deploy, `d3` from a dispatcher in front of a
+ * static site under `<base>_conloca/preview/<branch slug>/`, `d4` from a separate preview deploy, `off` not at all.
+ */
+export type PreviewMode = 'd2' | 'd3' | 'd4' | 'off';
+
+const PREVIEW_MODES: readonly PreviewMode[] = ['d2', 'd3', 'd4', 'off'];
+
+function isPreviewMode(value: unknown): value is PreviewMode {
+  return PREVIEW_MODES.some((mode) => mode === value);
+}
 
 /** conloca.json `preview`: the build's preview mode and the preview protocol it speaks. */
 export interface PreviewSignal {
   mode: PreviewMode;
   protocol: number;
+}
+
+/** A branch name as one path segment and cookie-name suffix: its UTF-8 bytes as unpadded base64url, one slug per name. */
+export function previewBranchSlug(branch: string): string {
+  let binary = '';
+  for (const byte of new TextEncoder().encode(branch)) binary += String.fromCharCode(byte);
+  return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/u, '');
+}
+
+/** The branch a slug names, or null unless it is the slug of a valid branch name (at most 765 UTF-8 bytes, 1020 characters; 1360 bounds it with room). */
+export function branchOfPreviewSlug(slug: string): string | null {
+  if (!/^[A-Za-z0-9_-]{1,1360}$/u.test(slug)) return null;
+  let bytes: Uint8Array;
+  try {
+    bytes = Uint8Array.from(atob(slug.replaceAll('-', '+').replaceAll('_', '/')), (char) => char.charCodeAt(0));
+  } catch {
+    return null;
+  }
+  let branch: string;
+  try {
+    branch = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    return null;
+  }
+  return isValidBranchName(branch) && previewBranchSlug(branch) === slug ? branch : null;
+}
+
+/** Whether a branch's slug leaves room in a 1024-byte cookie `Path` (`<base>_conloca/preview/<slug>`). */
+export function previewSlugFits(branch: string): boolean {
+  return previewBranchSlug(branch).length <= 900;
+}
+
+/** conloca.json `preview`; `undefined` when absent or malformed, so a bad optional field never makes the page invalid. */
+export function previewSignalOf(info: ConlocaJson): PreviewSignal | undefined {
+  const value: unknown = Reflect.get(info, 'preview');
+  if (!isRecord(value)) return undefined;
+  const { mode, protocol } = value;
+  return isPreviewMode(mode) && typeof protocol === 'number' && Number.isSafeInteger(protocol)
+    ? { mode, protocol }
+    : undefined;
 }
 export const DEFAULT_EDITOR_ENDPOINT = 'https://app.conloca.com';
 /** Where the editor page is served, below the site's base. */

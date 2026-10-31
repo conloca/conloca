@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import {
   branchDeploysOf,
+  branchOfPreviewSlug,
   classifyEditorHostResponse,
   classifyFrameHeaders,
   contentPathsOf,
@@ -12,6 +13,9 @@ import {
   isValidBranchName,
   PREVIEW_PROTOCOL,
   parentRoot,
+  previewBranchSlug,
+  previewSignalOf,
+  previewSlugFits,
 } from '../src/editor-host.js';
 
 const info: EditorPageInfo = {
@@ -100,6 +104,65 @@ describe('preview signal', () => {
   });
   it('leaves a conloca.json with a malformed preview valid', () => {
     expect(isEditorPageInfo({ ...info, preview: 'd2' })).toBe(true);
+  });
+});
+
+describe('previewBranchSlug', () => {
+  it('round-trips every valid branch name', () => {
+    for (const branch of [
+      'main',
+      'feat/ü.x',
+      'release/2026.11',
+      'a-b_c',
+      'x'.repeat(255),
+      'ü'.repeat(255),
+      '𝒳'.repeat(127),
+    ]) {
+      const slug = previewBranchSlug(branch);
+      expect(slug).toMatch(/^[A-Za-z0-9_-]+$/);
+      expect(branchOfPreviewSlug(slug)).toBe(branch);
+    }
+  });
+
+  it('gives two branches two slugs', () => {
+    expect(previewBranchSlug('feat/a')).not.toBe(previewBranchSlug('feat-a'));
+  });
+
+  it('refuses a slug that is not one of a valid branch name', () => {
+    for (const slug of ['', 'not base64!', previewBranchSlug('a..b'), previewBranchSlug('-x'), '_w', 'blog']) {
+      expect(branchOfPreviewSlug(slug)).toBeNull();
+    }
+    // Padding and non-canonical encodings name no branch: one slug per branch.
+    expect(branchOfPreviewSlug(`${previewBranchSlug('main')}=`)).toBeNull();
+  });
+
+  it('keeps a slug short enough for a cookie path', () => {
+    expect(previewSlugFits('feat/ü.x')).toBe(true);
+    expect(previewSlugFits('x'.repeat(255))).toBe(true);
+    // 255 ü are 510 bytes, a 680-character slug: fits. 255 three-byte letters are 765 bytes, 1020 characters.
+    expect(previewSlugFits('ü'.repeat(255))).toBe(true);
+    expect(previewSlugFits('€'.repeat(255))).toBe(false);
+  });
+});
+
+describe('previewSignalOf', () => {
+  it('reads every mode with its protocol', () => {
+    for (const mode of ['d2', 'd3', 'd4', 'off'] as const) {
+      expect(previewSignalOf({ preview: { mode, protocol: 2 } })).toEqual({ mode, protocol: 2 });
+    }
+  });
+
+  it('drops a malformed signal', () => {
+    for (const preview of [
+      undefined,
+      null,
+      'd3',
+      { mode: 'd5', protocol: 2 },
+      { mode: 'd3' },
+      { mode: 'd3', protocol: 1.5 },
+    ]) {
+      expect(previewSignalOf({ preview })).toBeUndefined();
+    }
   });
 });
 

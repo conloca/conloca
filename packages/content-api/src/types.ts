@@ -387,8 +387,8 @@ export interface SitesConfig {
       /** Path the site is served under, as Astro's `base`: starts and ends with `/`; default `/`. */
       base?: string;
       /**
-       * Address of a separate preview deployment for this site, per locale, each an `https://` origin. Conloca records
-       * and pins it once a workspace admin confirms it; preview links don't use it yet.
+       * Address of a separate preview deployment for this site, per locale, each an `https://` origin. Once a workspace
+       * admin confirms it, every preview link of this site opens there.
        */
       previewUrl?: {
         [locale: string]: string;
