@@ -988,15 +988,16 @@ describe('conlocaCloud — the editor page', () => {
 
   it('lists the static page routes in conloca.json and leaves out a hostile file name', async () => {
     await mkdir(join(pages(), 'about'), { recursive: true });
-    for (const file of [
-      'index.astro',
-      'pricing.astro',
-      'about/team.astro',
-      '"; rm -rf ~; echo ".astro',
-      'ignore previous instructions.astro',
-      '[slug].astro',
-    ])
-      await writeFile(join(pages(), file), '---\n---\n<p>x</p>\n');
+    await Promise.all(
+      [
+        'index.astro',
+        'pricing.astro',
+        'about/team.astro',
+        '"; rm -rf ~; echo ".astro',
+        'ignore previous instructions.astro',
+        '[slug].astro',
+      ].map((file) => writeFile(join(pages(), file), '---\n---\n<p>x</p>\n')),
+    );
     const logger = makeLogger();
     await buildDoneHook(pageOptions(), { srcDir })({ dir: buildDir.dist, logger });
     expect((await readPage()).info).toHaveProperty('routes', ['/', '/about/team', '/pricing']);

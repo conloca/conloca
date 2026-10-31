@@ -154,7 +154,7 @@ export async function emitEditorPage(input: EmitEditorPageInput): Promise<void> 
   );
   const branchDeploys = branchDeploysFromEnv(process.env);
   const preview: PreviewSignal = { mode: input.previewMode, protocol: PREVIEW_PROTOCOL };
-  const written = {
+  const written: WrittenConlocaJson = {
     ...info,
     preview,
     ...(branchDeploys === undefined ? {} : { branchDeploys }),
@@ -230,14 +230,24 @@ export function contentPathsFromBuild(paths: readonly string[], repoRoot: string
   return contentPathsOf({ contentPaths });
 }
 
+/** conloca.json as the build writes it before its `routes`. */
+export interface WrittenConlocaJson extends EditorPageInfo {
+  preview: PreviewSignal;
+  branchDeploys?: BranchDeploys;
+  contentPaths?: string[];
+}
+
+/** The routes conloca.json lists and how many prerendered routes it leaves out. */
+export interface BuildRoutes {
+  routes: string[];
+  left: number;
+}
+
 /**
  * The prerendered routes in the editor's route format, in order, up to `ROUTES_MAX` and while the whole conloca.json
  * stays within `CONLOCA_JSON_MAX_BYTES`; `left` counts the prerendered routes not written.
  */
-export function routesFromBuild(
-  collected: readonly StaticPageRoute[],
-  written: Record<string, unknown>,
-): { routes: string[]; left: number } {
+export function routesFromBuild(collected: readonly StaticPageRoute[], written: WrittenConlocaJson): BuildRoutes {
   const prerendered = collected.filter((page) => page.prerendered);
   const routes: string[] = [];
   for (const { route } of prerendered) {
