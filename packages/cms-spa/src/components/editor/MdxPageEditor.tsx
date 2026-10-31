@@ -21,6 +21,7 @@ import { ErrorModal } from '../dialogs/ErrorModal.js';
 import { PageMetadataDialog } from '../dialogs/PageMetadataDialog.js';
 import { UnsavedChangesDialog } from '../dialogs/UnsavedChangesDialog.js';
 import { CMSMDXEditor } from './CMSMDXEditor.js';
+import { DocsPreviewButton } from './DocsPreviewButton.js';
 import { JsxPropsPanel } from './JsxPropsPanel.js';
 import { LocaleSelector } from './LocaleSelector.js';
 
@@ -382,6 +383,7 @@ export function MdxPageEditor() {
             availableLocales={availableLocales}
             onChange={handleLocaleChange}
           />
+          <DocsPreviewButton />
           {publishedPathname && (
             <a
               // Resolve against the site (siteBaseUrl), not

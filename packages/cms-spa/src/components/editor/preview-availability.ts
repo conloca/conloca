@@ -19,3 +19,6 @@ export const PREVIEW_UNAVAILABLE_TITLE = 'Preview is not available for this bran
  */
 export const PREVIEW_UNAVAILABLE_DETAIL =
   'This branch has no preview server, so there is no preview page to open. Your draft is still saved, and publishing and the live site are unaffected.';
+
+/** What the Preview control on a docs (MDX) page says until docs pages render drafts. */
+export const DOCS_PREVIEW_UNAVAILABLE = "Full-page preview isn't available for docs pages yet";
