@@ -43,6 +43,11 @@
       "import": "./dist/src/site-middleware.js",
       "default": "./dist/src/site-middleware.js"
     },
+    "./dispatcher": {
+      "types": "./dist/src/preview/dispatcher.d.ts",
+      "import": "./dist/src/preview/dispatcher.js",
+      "default": "./dist/src/preview/dispatcher.js"
+    },
     "./doctor": {
       "types": "./dist/src/doctor.d.ts",
       "import": "./dist/src/doctor.js",
@@ -78,6 +83,7 @@
     "@conloca/mdx": "workspace:*",
     "hast-util-from-html": "^2.0.3",
     "jose": "^6.2.10",
+    "jsonc-parser": "^3.3.1",
     "sass": "^1.103.1",
     "tslib": "^2.8.1"
   },
@@ -148,7 +154,8 @@
           "typecheck-tests",
           "build",
           "test-packed",
-          "test-editor-build"
+          "test-editor-build",
+          "test-preview-build"
         ],
         "inputs": [
           "{projectRoot}/**/*",
@@ -176,6 +183,26 @@
         ],
         "options": {
           "command": "bun test --timeout=180000 ./test-editor-build",
+          "cwd": "{projectRoot}",
+          "timeoutMs": 900000,
+          "killAfterMs": 10000
+        }
+      },
+      "test-preview-build": {
+        "//": "Real D3 and D4 builds (each runs the preview build too), a dry-run deploy and a local Cloudflare Worker: the slowest lane, with its own budget.",
+        "executor": "@smoothbricks/nx-plugin:bounded-exec",
+        "cache": true,
+        "inputs": [
+          "default",
+          "^production",
+          "{workspaceRoot}/bun.lock"
+        ],
+        "dependsOn": [
+          "build",
+          "^build"
+        ],
+        "options": {
+          "command": "bun test --timeout=600000 ./test-preview-build",
           "cwd": "{projectRoot}",
           "timeoutMs": 900000,
           "killAfterMs": 10000

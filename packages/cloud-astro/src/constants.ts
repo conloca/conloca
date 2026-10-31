@@ -5,11 +5,22 @@
 export const PACKAGE_NAME = '@conloca/cloud-astro';
 
 /**
- * Environment variable that the recursive preview build sets on the child
- * Astro process so the integration's own `astro:build:done` hook can detect
- * it and skip the editor page and further recursion.
+ * Environment variable that makes a build the preview server: the site's build sets it on the child build it starts,
+ * and a separate preview deploy (D4) builds with it set.
  */
 export const PREVIEW_BUILD_ENV_FLAG = 'CONLOCA_PREVIEW_BUILD';
+
+/**
+ * Environment variable the site's build names the child's mode in (`d2` or `d3`). A build started with
+ * {@link PREVIEW_BUILD_ENV_FLAG} alone, as a separate preview deploy runs it, has none: it is D4.
+ */
+export const PREVIEW_MODE_ENV = 'CONLOCA_PREVIEW_MODE';
+
+/**
+ * Environment variable the site's build names, for a D3 child, the routes it prerendered (a JSON list of their
+ * components): the child keeps exactly those prerendered, and every other route keeps its own setting.
+ */
+export const PREVIEW_PRERENDERED_ENV = 'CONLOCA_PREVIEW_PRERENDERED';
 
 /**
  * Adapters the preview build is refused under: they write their deployable

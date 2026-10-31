@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it, spyOn } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import type { ContentAPI } from '@conloca/content-api';
+import { previewBranchSlug } from '@conloca/content-api/editor-host';
 import { generateKeyPair, type JWTVerifyGetKey, SignJWT } from 'jose';
 import type { PreviewMiddlewareOptions } from '../preview/middleware.js';
 import { PREVIEW_COOKIE_NAME, PREVIEW_QUERY_PARAM } from '../preview/preview-path.js';
@@ -482,5 +483,78 @@ describe('createPreviewSiteMiddleware — ended share links', () => {
     ).text();
     expect(html).toContain('Ask &lt;img src=x onerror=alert(1)&gt; for a new link.');
     expect(html).not.toContain('<img');
+  });
+});
+
+const d3 = (): PreviewMiddlewareOptions => ({ ...opts(), mode: 'd3' });
+
+describe('createPreviewSiteMiddleware — D3', () => {
+  const slug = previewBranchSlug('feature/x');
+  function d3Context(cookie: string, named: boolean): PreviewMiddlewareContext {
+    const headers = new Headers({ cookie });
+    if (named) headers.set('conloca-preview-slug', slug);
+    return {
+      request: new Request('https://site.test/blog', { headers }),
+      locals: {},
+      url: new URL('https://site.test/blog'),
+    };
+  }
+
+  it('serves the live page with no draft context when the dispatcher named no slug', async () => {
+    const jwt = await mintJwt();
+    const fetchSpy = makeFetch([]);
+    const context = d3Context(`__Secure-conloca_preview_${slug}=${jwt}`, false);
+    const response = await createPreviewSiteMiddleware(d3, seams(fetchSpy.fn))(context, next);
+    expect(await response.text()).toBe(NEXT_BODY);
+    expect(context.locals.conlocaPreview).toBeUndefined();
+    expect(fetchSpy.calls).toEqual([]);
+  });
+
+  it('points the banner at the slug exit and names the page path', async () => {
+    const jwt = await mintJwt();
+    const onRequest = createPreviewSiteMiddleware(d3, seams(makeFetch([changed(), emptyListing()]).fn));
+    const html = await (
+      await onRequest(d3Context(`__Secure-conloca_preview_${slug}=${jwt}`, true), htmlNext('draft'))
+    ).text();
+    expect(html).toContain(`"exitPath":"/_conloca/preview/${slug}/__exit"`);
+    expect(html).toContain('"path":"/blog"');
+  });
+
+  it('a slug with an invalid pass gets the landing page', async () => {
+    // A pass the dispatcher saw (it forwards on any cookie) that doesn't verify: expired, a foreign key, a planted value.
+    const foreign = await generateKeyPair('RS256', { extractable: true });
+    const now = Math.floor(Date.now() / 1000);
+    const planted = await new SignJWT({
+      org: 'acme',
+      repo: 'acme/site',
+      site_id: 'website',
+      branch: 'feature/x',
+      scope: 'preview',
+    })
+      .setProtectedHeader({ alg: 'RS256' })
+      .setIssuedAt(now)
+      .setExpirationTime(now + 300)
+      .setIssuer(ISSUER)
+      .setAudience(AUDIENCE)
+      .sign(foreign.privateKey);
+    const fetchSpy = makeFetch([]);
+    const response = await createPreviewSiteMiddleware(d3, seams(fetchSpy.fn))(
+      d3Context(`__Secure-conloca_preview_${slug}=${planted}`, true),
+      next,
+    );
+    const body = await response.text();
+    expect(body).not.toBe(NEXT_BODY);
+    expect(body).toContain('Log in to edit');
+    expect(fetchSpy.calls).toEqual([]);
+  });
+
+  it("a slug with only another branch's pass gets the landing page", async () => {
+    // The default branch's server admits feature/y's pass through served_by, but not under feature/x's slug.
+    const other = await mintJwt('preview', { branch: 'feature/y', served_by: 'feature/x' });
+    const response = await createPreviewSiteMiddleware(d3, seams(makeFetch([]).fn))(
+      d3Context(`__Secure-conloca_preview_${slug}=${other}`, true),
+      next,
+    );
+    expect(await response.text()).toContain('Log in to edit');
   });
 });

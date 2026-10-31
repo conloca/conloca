@@ -1,54 +1,27 @@
 import { describe, expect, it } from 'bun:test';
-import { parseCookies, serializePreviewCookie } from '../preview/cookie.js';
+import { parseCookieValues, serializePreviewCookie } from '../preview/cookie.js';
 
 // ---------------------------------------------------------------------------
-// parseCookies — minimal RFC 6265 lookup table.
+// parseCookieValues — every value one name carries, in header order.
 // ---------------------------------------------------------------------------
 
-describe('parseCookies', () => {
-  it('returns an empty map for null / undefined / empty headers', () => {
-    expect(parseCookies(null).size).toBe(0);
-    expect(parseCookies(undefined).size).toBe(0);
-    expect(parseCookies('').size).toBe(0);
+describe('parseCookieValues', () => {
+  it('returns nothing for a missing or empty header', () => {
+    expect(parseCookieValues(null, 'a')).toEqual([]);
+    expect(parseCookieValues(undefined, 'a')).toEqual([]);
+    expect(parseCookieValues('', 'a')).toEqual([]);
   });
 
-  it('parses a single cookie pair', () => {
-    expect(parseCookies('a=1').get('a')).toBe('1');
+  it('returns every value under the name, in order, trimmed', () => {
+    expect(parseCookieValues(' a = 1 ; b=2; a=3', 'a')).toEqual(['1', '3']);
   });
 
-  it('parses multiple cookies separated by `; `', () => {
-    const c = parseCookies('a=1; b=2; c=three');
-    expect(c.get('a')).toBe('1');
-    expect(c.get('b')).toBe('2');
-    expect(c.get('c')).toBe('three');
+  it('skips malformed segments without throwing', () => {
+    expect(parseCookieValues('bad; =nope; ok=yes; =alsoNope', 'ok')).toEqual(['yes']);
   });
 
-  it('trims whitespace around names and values', () => {
-    const c = parseCookies(' a = 1 ; b = 2 ');
-    expect(c.get('a')).toBe('1');
-    expect(c.get('b')).toBe('2');
-  });
-
-  it('first occurrence wins for duplicate names — matches browser document.cookie reader', () => {
-    const c = parseCookies('foo=first; foo=second');
-    expect(c.get('foo')).toBe('first');
-  });
-
-  it('ignores malformed segments without throwing — a bad cookie must not crash the SSR handler', () => {
-    // No `=`, only `=`, empty name — none should appear in the result, and
-    // the well-formed pairs around them should still parse.
-    const c = parseCookies('bad; =nope; ok=yes; =alsoNope');
-    expect(c.has('bad')).toBe(false);
-    expect(c.has('')).toBe(false);
-    expect(c.get('ok')).toBe('yes');
-  });
-
-  it('preserves `=` characters inside the cookie value (JWT signatures use base64url padding)', () => {
-    // Bug bait: `split('=')` would chop the JWT. The implementation must
-    // split only on the first `=`.
-    const jwt = 'header.payload.sig==';
-    const c = parseCookies(`__Host-conloca_preview=${jwt}`);
-    expect(c.get('__Host-conloca_preview')).toBe(jwt);
+  it('keeps `=` inside a value', () => {
+    expect(parseCookieValues('t=a.b=c.d==', 't')).toEqual(['a.b=c.d==']);
   });
 });
 
@@ -82,5 +55,11 @@ describe('serializePreviewCookie', () => {
     // URL-encoding it would break verification.
     const jwt = 'h.p.s';
     expect(serializePreviewCookie('c', jwt)).toContain(`c=${jwt}`);
+  });
+
+  it('scopes the cookie to a path when given one', () => {
+    expect(serializePreviewCookie('n', 'v', 60, '/_conloca/preview/bWFpbg')).toBe(
+      'n=v; HttpOnly; Secure; SameSite=Lax; Path=/_conloca/preview/bWFpbg; Max-Age=60',
+    );
   });
 });

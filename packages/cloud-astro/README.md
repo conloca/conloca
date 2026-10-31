@@ -6,15 +6,15 @@ Astro integration that adds the editor page for Conloca's workspace editor to a 
 1. Write the editor page to `/_conloca/editor/` in every build: the site's Puck config compiled into one bundle
    (react/react-dom/jsx-runtime/`@puckeditor/core` stay external — the workspace editor supplies them at runtime), its
    styles, the MDX sandbox frame and `conloca.json`. The page carries no credential.
-2. When `previewBuild` is given as an object, run a recursive preview build that emits SSR routes for draft content.
-3. Wire preview SSR middleware that serves `/_conloca/preview/*` under the site's `base` and admits only passes, signed
-   by the endpoint's token issuer, for the repository, site and branch the preview build was made from.
+2. When `previewBuild` is given as an object, build the preview server that renders drafts: next to a static site on
+   Cloudflare Workers (under `/_conloca/preview/<branch>/`), on the site's own server deploy, or as a separate deploy.
+3. Wire preview middleware that admits only passes signed by the endpoint, for the repository, site and branch the
+   preview build was made from.
 4. Expose `PreviewContentAPI` for `.astro` pages to fetch draft content.
 5. Show share links: a viewer sees who shared the draft and when the link expires; an expired, turned-off, published or
    discarded link shows its own page.
 
-Items 2 to 5 serve draft previews, which are not available on your own deployment yet. They stay off unless
-`previewBuild` is given as an object (see [Draft previews](#draft-previews)).
+Items 2 to 5 stay off unless `previewBuild` is given as an object (see [Draft previews](#draft-previews)).
 
 ## Setup
 
@@ -176,10 +176,11 @@ branch's and a build of the branch it was created from (on a tie, in that order)
 [Branch deploys](#branch-deploys).
 
 `/_conloca/editor/conloca.json` publishes the repository's name, the build's branch and commit, and whether the build
-serves draft previews with the preview protocol it speaks (`preview`: `{ "mode": "d2", "protocol": 2 }` with
-`previewBuild`, else mode `off`). If the repository is not public, its name becomes public with the deploy. Protocol 2
-opens a preview with a single-use `conloca_code` link that the preview server trades for the pass with Conloca; a link
-that carries the pass itself (`conloca_preview`, protocol 1) still opens in this release and stops opening in the next.
+serves draft previews with the preview protocol it speaks (`preview`: `{ "mode": "d3", "protocol": 2 }` for a static
+site with `previewBuild`, `d2` with an adapter, `d4` with `separate: true`, else `off`). If the repository is not
+public, its name becomes public with the deploy. Protocol 2 opens a preview with a single-use `conloca_code` link that
+the preview server trades for the pass with Conloca; a link that carries the pass itself (`conloca_preview`, protocol 1)
+still opens in this release and stops opening in the next.
 
 `conloca.json` also lists the build's prerendered page routes (`routes`, at most 500 and within 16 KiB for the whole
 file), which the workspace editor offers when a site has no Conloca pages yet; they are public with the deploy, like the
@@ -323,15 +324,15 @@ Doctor names each check; the checklist in the workspace editor reports the same 
 
 ## Options
 
-| Name             | Required | Description                                                                                                                                      |
-| ---------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `endpoint`       | no       | The workspace editor's address, scheme and host only, no trailing slash; its host must start with `app.`. Defaults to `https://app.conloca.com`. |
-| `puckConfigPath` | no       | Puck config entry to compile. Defaults to the value `conlocaCMS` was given.                                                                      |
-| `repoUri`        | no       | Advanced `owner/repo` override; normally detected from CI or the Git remote.                                                                     |
-| `siteId`         | no       | Advanced site-id override for CMS-less builds; sites.json is authoritative.                                                                      |
-| `siteStyles`     | no       | Site CSS compiled into the canvas stylesheet, as in `conlocaCMS`.                                                                                |
-| `previewBuild`   | no       | `PreviewBuildOptions` or `false`. Off unless given as an object; refused under `@astrojs/vercel` and `@astrojs/netlify`.                         |
-| `saasIssuer`     | no       | Draft previews only. JWT `iss` the preview middleware pins (the endpoint's token issuer). Baked in; else set at runtime.                         |
+| Name             | Required | Description                                                                                                                                                     |
+| ---------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `endpoint`       | no       | The workspace editor's address, scheme and host only, no trailing slash; its host must start with `app.`. Defaults to `https://app.conloca.com`.                |
+| `puckConfigPath` | no       | Puck config entry to compile. Defaults to the value `conlocaCMS` was given.                                                                                     |
+| `repoUri`        | no       | Advanced `owner/repo` override; normally detected from CI or the Git remote.                                                                                    |
+| `siteId`         | no       | Advanced site-id override for CMS-less builds; sites.json is authoritative.                                                                                     |
+| `siteStyles`     | no       | Site CSS compiled into the canvas stylesheet, as in `conlocaCMS`.                                                                                               |
+| `previewBuild`   | no       | `PreviewBuildOptions` or `false`. Off unless given as an object. See [Draft previews](#draft-previews). Refused under `@astrojs/vercel` and `@astrojs/netlify`. |
+| `saasIssuer`     | no       | Draft previews only. Pins the JWT `iss` every pass must name; unset, passes are checked against the endpoint's keys alone.                                      |
 
 The `conlocaCMS` options `schemasPath`, `mdxComponentFolders`, `templates`, the `routing` data bindings, `editorStyles`
 and `editorCSS` reach the editor page automatically: the CMS publishes what it resolved, and the editor page renders
@@ -348,8 +349,75 @@ they did before.
 
 ## Draft previews
 
-Draft previews on your own deployment are not available yet. Keep `previewBuild: false` in your config: the preview
-build stays off, and a build produces only your normal site.
+The editor's Preview button opens the draft on your site. How depends on the site:
+
+| Your site                                                              | `previewBuild`       | Where drafts render                                                                                                                                                     |
+| ---------------------------------------------------------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Static, deployed to Cloudflare Workers                                 | `{}`                 | Next to the site: a dispatcher runs only on `/_conloca/preview/*` and your on-demand routes. Every other page stays a static file, and no visitor to it starts a Worker |
+| Static, on another host, or on Cloudflare without a domain of your own | `{ separate: true }` | A separate preview deploy; its address goes in `sites.json` `previewUrl`                                                                                                |
+| Server-rendered (`@astrojs/cloudflare`, `@astrojs/node`)               | `{}`                 | Your own deploy                                                                                                                                                         |
+
+### Next to a static site on Cloudflare Workers
+
+Install `@astrojs/cloudflare` and add `previewBuild: {}` to `conlocaCloud(...)`, then run `npx @conloca/cli connect`. It
+asks once whether your account is on the Cloudflare Workers Paid plan (pass `--cf-plan free` or `--cf-plan paid` when no
+one is at the terminal) and records the answer in `package.json` (`"conloca": { "cfPlan": "paid" }`). It writes
+`wrangler.jsonc`; on the Paid plan it adds the `ratelimits` entry below (Wrangler 4.36 or newer), on the Free plan it
+leaves it out:
+
+```jsonc
+{
+  "main": ".conloca/dispatcher/index.mjs",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "404-page",
+    "run_worker_first": ["/_conloca/preview", "/_conloca/preview/*"],
+  },
+  "ratelimits": [
+    { "name": "conlocaPreviewLimit", "namespace_id": "<chosen by connect>", "simple": { "limit": 60, "period": 10 } },
+  ],
+}
+```
+
+`run_worker_first` also lists every route the preview build renders on demand (API routes, Actions, and `/_image` for
+draft images). Every build checks the list, and on the Paid plan the rate limit, and fails with "run
+`conloca connect --update --yes`" when one is missing, so an API route can never silently 404 in production. A
+`wrangler.toml` can't carry these settings: convert it to `wrangler.jsonc` first. Keep `main` and `assets` out of
+`env.<name>` blocks; both are inherited from the top level. To try previews locally, run
+`wrangler dev --local-protocol https`: Safari refuses the preview's `Secure` cookies on plain-http `localhost`.
+
+If the preview build fails and `run_worker_first` lists only the two preview entries, the site still builds and deploys,
+and `/_conloca/preview/` answers "Preview couldn't load the draft". If it also lists your on-demand routes, or
+`not_found_handling` is `"none"`, the build fails instead: the preview server is what serves those routes, and shipping
+without it would break them.
+
+On the Cloudflare Workers Paid plan the dispatcher limits each visitor to 60 requests under `/_conloca/preview/` per 10
+seconds (the `ratelimits` binding, counted per Cloudflare location and approximately) and answers "Too many preview
+requests — try again in a few seconds" over it. On the Free plan there is no limit: a blocked request would still count
+against the day's requests, so a limit adds nothing there. A flood can then use up the day's requests and pause preview
+until 00:00 UTC, but never the published pages, which don't run the dispatcher. On the Free plan a site with API routes
+previews on a separate deploy instead. A rate-limiting rule on `/_conloca/preview/*` in the Cloudflare dashboard
+(Security → WAF) stops a flood before it reaches the dispatcher; it is optional, and doctor doesn't check it.
+
+Not suited to this mode: sites that navigate on the client (view transitions, `navigate()`), call same-origin APIs that
+should see drafts, load third-party tags that must not see draft content, open same-origin pages from scripts
+(`window.open` would let the opener read a draft), or register a service worker that handles navigations (it would see
+draft pages, and could cache them or answer published ones). Use a separate preview deploy.
+
+### A separate preview deploy
+
+Set `previewBuild: { separate: true }`. Your build then runs no preview build. Add a second deploy (for example a second
+Cloudflare Workers Builds project) that builds with `CONLOCA_PREVIEW_BUILD=1` and its Wrangler environment set to
+`preview` (the environment is chosen at build time, not at deploy) and deploys with a plain `wrangler deploy`. Put its
+address in `sites.json`:
+
+```json
+{ "sites": { "default": { "previewUrl": { "en": "https://preview.example.com" } } } }
+```
+
+A workspace admin confirms the address in the editor once; from then on every preview link opens there.
 
 ## Doctor
 

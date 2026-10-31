@@ -60,7 +60,7 @@ function renderPage(content: { title: string; heading: string; text: string; lin
  * The page is wrapped with `x-robots-tag: noindex` so a leak of the URL
  * cannot get indexed.
  */
-export function renderNoPreviewLanding(opts: { pathname: string; saasEndpoint: string }): Response {
+export function renderNoPreviewLanding(opts: { pathname: string; saasEndpoint: string; liveHref?: string }): Response {
   // The deep-link to the endpoint's editor preserves both the path the user
   // was trying to preview and the endpoint that issues the JWT.
   const loginUrl = new URL('/login', opts.saasEndpoint);
@@ -71,7 +71,7 @@ export function renderNoPreviewLanding(opts: { pathname: string; saasEndpoint: s
     text: 'To preview unreleased content you need to log in. Otherwise visit the production site.',
     links: [
       ['Log in to edit', loginUrl.toString()],
-      ['Go to production', opts.pathname],
+      ['Go to production', opts.liveHref ?? opts.pathname],
     ],
   });
   return new Response(body, { status: 200, headers: PAGE_HEADERS });

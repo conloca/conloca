@@ -1,18 +1,20 @@
-import { PREVIEW_PROTOCOL } from '@conloca/content-api/editor-host';
+import { PREVIEW_PROTOCOL, previewBranchSlug } from '@conloca/content-api/editor-host';
 import { createRemoteJWKSet, customFetch, type JWTPayload, type JWTVerifyGetKey, jwtVerify } from 'jose';
-import { parseCookies, serializePreviewCookie } from './cookie.js';
+import { parseCookieValues, serializePreviewCookie } from './cookie.js';
 import { exchangeEntryCode } from './entry-code.js';
 import { PREVIEW_CACHE_HEADERS } from './headers.js';
 import { previewLabel } from './label.js';
 import { renderNoPreviewLanding, renderPreviewUnavailable, renderShareEnded } from './landing.js';
 import {
   PREVIEW_CODE_PARAM,
-  PREVIEW_COOKIE_NAME,
-  PREVIEW_GRANT_COOKIE_NAME,
   PREVIEW_LABEL_HEADER,
+  PREVIEW_MODE_HEADER,
   PREVIEW_PROTOCOL_HEADER,
   PREVIEW_QUERY_PARAM,
+  type PreviewScope,
+  type PreviewServeMode,
   previewRoutePrefix,
+  previewScope,
   stripPreviewPrefix,
 } from './preview-path.js';
 import { GRANT_REF_RE, grantRef } from './redeem-url.js';
@@ -35,7 +37,8 @@ import { GRANT_REF_RE, grantRef } from './redeem-url.js';
  */
 export interface PreviewMiddlewareOptions {
   saasEndpoint: string;
-  saasIssuer: string;
+  /** When set, every pass must name it (`iss`); unset, the signature by the endpoint's published keys is the check. */
+  saasIssuer?: string;
   saasAudience: string;
   /** The repository the preview build was made from, as passes name it (`owner/name`). */
   repo: string;
@@ -72,10 +75,13 @@ export interface PreviewMiddlewareOptions {
   onMiss?: 'landing' | 'pass-through';
   /**
    * How this build serves previews. `d2` (default): on the site's own deploy, where a share viewer whose pass
-   * expires opens the share link again. `d4`: on a separate preview deploy that has no other visitors, so a grant
-   * cookie lets an expired pass renew through the share link.
+   * expires opens the share link again. `d3`: behind the dispatcher next to a static site, under the route and the
+   * branch slug, with cookies scoped there. `d4`: on a separate preview deploy that has no other visitors. Under D3 and
+   * D4 a grant cookie lets an expired pass renew through the share link.
    */
-  mode?: 'd2' | 'd4';
+  mode?: PreviewServeMode;
+  /** D3: the requested branch slug, as the dispatcher names it; a pass opens only under its own branch's slug. */
+  slug?: string;
 }
 
 /**
@@ -143,8 +149,8 @@ export type PreviewVerdict =
  *      stripped. A used code with a valid cookie redirects to the clean path.
  *   2. `?conloca_preview=<JWT>` query param (protocol 1) → validate; on
  *      success issue a 302 with the cookie set and the query stripped.
- *   3. `__Host-conloca_preview=<JWT>` cookie → validate; on success return a
- *      `preview` verdict with the decoded context.
+ *   3. The pass cookie (`__Host-conloca_preview`; under D3 `__Secure-conloca_preview_<slug>`) → every value sent,
+ *      the first that verifies; on success return a `preview` verdict with the decoded context.
  *   4. Neither present → no-preview landing page response.
  *
  * Invalid JWTs (tampered signature, expired, missing required claim, wrong
@@ -156,19 +162,51 @@ export type PreviewVerdict =
  */
 export async function handlePreviewRequest(request: Request, opts: PreviewMiddlewareOptions): Promise<PreviewVerdict> {
   const url = new URL(request.url);
+  const mode = opts.mode ?? 'd2';
 
   // 0. Exit route: the banner's "Exit Preview" target. The cookie is HttpOnly
   // on purpose, so leaving preview needs a server response that expires it.
   // Handled before the credential checks — an expired cookie must not strand
   // the visitor in a preview they can no longer exit. Its label lets the
   // endpoint's probe tell which repository, site and branch this server serves.
+  // Under D3 the dispatcher answers it through this same function, without loading the preview server.
   if (url.pathname === `${previewRoutePrefix(opts.base)}/__exit`) {
     const label = await previewLabel(opts.repo, opts.siteId, opts.branch);
-    return { kind: 'response', response: makeExitRedirect(url, opts.base, label) };
+    return { kind: 'response', response: makeExitRedirect(url, opts, label) };
   }
 
-  // 1. Entry code (protocol 2): trade it for the pass on the server.
+  const landing = (): PreviewVerdict => {
+    // Stripped: the landing's "Go to production" link is the same path
+    // relative — rendered under the preview route it loops back to itself.
+    const pathname = stripPreviewPrefix(url.pathname, opts.base);
+    // Under a D3 slug the dispatcher would move that path back under the route, where the same failing cookie lands
+    // here again: the slug's exit clears it and then leaves for the published page.
+    const liveHref =
+      mode === 'd3' && opts.slug !== undefined
+        ? `${previewScope('d3', opts.base, opts.slug).route}/__exit?to=${encodeURIComponent(pathname)}`
+        : undefined;
+    return {
+      kind: 'response',
+      response: renderNoPreviewLanding({
+        pathname,
+        saasEndpoint: opts.saasEndpoint,
+        ...(liveHref === undefined ? {} : { liveHref }),
+      }),
+    };
+  };
+  const cookie = request.headers.get('cookie');
   const code = url.searchParams.get(PREVIEW_CODE_PARAM);
+  // Under D3 only the dispatcher's slug makes a request a preview request, except an entry link without one (an older
+  // Conloca's, or a mint that couldn't read the mode): its slug comes from the pass. Anything else is the live site's.
+  const slugless = mode === 'd3' && opts.slug === undefined;
+  // A code counts only on the preview route: on the live site's own routes, trading it would let anyone make this
+  // server call Conloca once per request.
+  const entering = code !== null && stripPreviewPrefix(url.pathname, opts.base) !== url.pathname;
+  if (slugless && !entering) return opts.onMiss === 'pass-through' ? { kind: 'pass-through' } : landing();
+  // A slugless entry has no scope until the pass names its branch.
+  const scope = slugless ? null : previewScope(mode, opts.base, opts.slug);
+
+  // 1. Entry code (protocol 2): trade it for the pass on the server.
   if (code !== null) {
     const exchanged = await exchangeEntryCode({
       saasEndpoint: opts.saasEndpoint,
@@ -179,72 +217,54 @@ export async function handlePreviewRequest(request: Request, opts: PreviewMiddle
       fetchFn: opts.fetchFn,
     });
     const path = stripPreviewPrefix(url.pathname, opts.base);
-    const exitHref = `${previewRoutePrefix(opts.base)}/__exit?to=${encodeURIComponent(path)}`;
+    const route = scope?.route ?? previewRoutePrefix(opts.base);
+    const exitHref = `${route}/__exit?to=${encodeURIComponent(path)}`;
     if (exchanged.ok) {
       const ctx = await tryValidate(exchanged.pass, opts);
-      if (ctx !== null) return { kind: 'response', response: makeInitRedirect(url, exchanged.pass, ctx, opts) };
+      if (ctx !== null) {
+        const entered = scope ?? previewScope('d3', opts.base, previewBranchSlug(ctx.branch));
+        return { kind: 'response', response: makeInitRedirect(url, exchanged.pass, ctx, opts, entered) };
+      }
     } else if (exchanged.kind === 'ended') {
       return {
         kind: 'response',
         response: renderShareEnded(exchanged.ended.verdict, { sharedBy: exchanged.ended.sharedBy, liveHref: exitHref }),
       };
     } else if (exchanged.kind === 'unavailable') {
-      // Never the held pass: it may open another branch than the link names.
-      return {
-        kind: 'response',
-        response: renderPreviewUnavailable({ retryHref: `${url.pathname}${url.search}`, exitHref }),
-      };
-    } else {
+      // Never the held pass: it may open another branch than the link names. Under D3 the dispatcher forwarded the
+      // entry without its slug, so Retry rebuilds the link it came from; a slugless one is retried as it is.
+      const retryHref =
+        mode === 'd3' && scope !== null
+          ? `${scope.route}${pageUnderBase(path, opts.base)}${url.search}`
+          : `${url.pathname}${url.search}`;
+      return { kind: 'response', response: renderPreviewUnavailable({ retryHref, exitHref }) };
+    } else if (scope !== null && (await firstValid(parseCookieValues(cookie, scope.pass), opts)) !== null) {
       // A used code reopened from history while the cookie still holds a pass: open the page.
-      const held = parseCookies(request.headers.get('cookie')).get(PREVIEW_COOKIE_NAME);
-      if (held !== undefined && (await tryValidate(held, opts)) !== null) {
-        return { kind: 'response', response: makeCleanRedirect(url, opts.base) };
-      }
+      return { kind: 'response', response: makeCleanRedirect(url, opts, scope) };
     }
-    return {
-      kind: 'response',
-      response: renderNoPreviewLanding({
-        pathname: stripPreviewPrefix(url.pathname, opts.base),
-        saasEndpoint: opts.saasEndpoint,
-      }),
-    };
+    return landing();
   }
+  if (scope === null) return landing();
 
-  // 2. Query-param init path (protocol 1, read for one release).
-  const queryToken = url.searchParams.get(PREVIEW_QUERY_PARAM);
+  // 2. Query-param init path (protocol 1, read for one release). An invalid
+  // pass gets the landing page rather than a 401 (see docstring). D3 never had protocol-1 links, so it takes none.
+  const queryToken = mode === 'd3' ? null : url.searchParams.get(PREVIEW_QUERY_PARAM);
   if (queryToken !== null) {
     const ctx = await tryValidate(queryToken, opts);
-    if (ctx) {
-      return {
-        kind: 'response',
-        response: makeInitRedirect(url, queryToken, ctx, opts),
-      };
-    }
-    // Invalid query-param JWT — fall through to the landing page rather than
-    // issuing a 401 (see docstring).
-    return {
-      kind: 'response',
-      response: renderNoPreviewLanding({
-        pathname: stripPreviewPrefix(url.pathname, opts.base),
-        saasEndpoint: opts.saasEndpoint,
-      }),
-    };
+    return ctx === null
+      ? landing()
+      : { kind: 'response', response: makeInitRedirect(url, queryToken, ctx, opts, scope) };
   }
 
   // 3. Cookie path.
-  const cookies = parseCookies(request.headers.get('cookie'));
-  const cookieToken = cookies.get(PREVIEW_COOKIE_NAME);
-  if (cookieToken !== undefined) {
-    const ctx = await tryValidate(cookieToken, opts);
-    if (ctx) {
-      return { kind: 'preview', ctx };
-    }
-  }
+  const ctx = await firstValid(parseCookieValues(cookie, scope.pass), opts);
+  if (ctx !== null) return { kind: 'preview', ctx };
 
   // 4. No valid preview context.
-  // Under D4 a share viewer's expired pass renews through the share link the grant cookie names.
-  const ref = opts.mode === 'd4' ? cookies.get(PREVIEW_GRANT_COOKIE_NAME) : undefined;
-  if (ref !== undefined && GRANT_REF_RE.test(ref)) {
+  // Under D3 and D4 a share viewer's expired pass renews through the share link the grant cookie names.
+  const ref =
+    scope.grant === null ? undefined : parseCookieValues(cookie, scope.grant).find((v) => GRANT_REF_RE.test(v));
+  if (ref !== undefined) {
     const [org, grant] = ref.split('.');
     const to = encodeURIComponent(stripPreviewPrefix(url.pathname, opts.base));
     return {
@@ -258,18 +278,18 @@ export async function handlePreviewRequest(request: Request, opts: PreviewMiddle
       }),
     };
   }
-  if (opts.onMiss === 'pass-through') {
-    return { kind: 'pass-through' };
+  if (opts.onMiss === 'pass-through') return { kind: 'pass-through' };
+  return landing();
+}
+
+/** The first token that verifies, in order; a planted cookie sent first must not lock the viewer out. */
+async function firstValid(tokens: readonly string[], opts: PreviewMiddlewareOptions): Promise<PreviewContext | null> {
+  for (const token of tokens) {
+    // oxlint-disable-next-line no-await-in-loop -- in order: the first that verifies wins, the rest are never checked.
+    const ctx = await tryValidate(token, opts);
+    if (ctx !== null) return ctx;
   }
-  return {
-    kind: 'response',
-    // Stripped: the landing's "Go to production" link is the same path
-    // relative — rendered under the preview route it loops back to itself.
-    response: renderNoPreviewLanding({
-      pathname: stripPreviewPrefix(url.pathname, opts.base),
-      saasEndpoint: opts.saasEndpoint,
-    }),
-  };
+  return null;
 }
 
 /**
@@ -282,8 +302,8 @@ async function tryValidate(token: string, opts: PreviewMiddlewareOptions): Promi
   const getKey = opts.getKey ?? defaultJwksResolver(opts.saasEndpoint, opts.fetchFn);
   try {
     const { payload } = await jwtVerify(token, getKey, {
-      issuer: opts.saasIssuer,
       audience: opts.saasAudience,
+      ...(opts.saasIssuer === undefined ? {} : { issuer: opts.saasIssuer }),
     });
     return projectContext(payload, token, opts);
   } catch {
@@ -331,6 +351,9 @@ function projectContext(payload: JWTPayload, jwt: string, opts: PreviewMiddlewar
   if (!branch || !org || !repo) return null;
   if (repo !== opts.repo || readStringClaim(payload, 'site_id') !== opts.siteId) return null;
   if (branch !== opts.branch && readStringClaim(payload, 'served_by') !== opts.branch) return null;
+  // Under D3 the cookie lives under its branch's slug: a pass for another branch never opens this one's pages. A
+  // slugless entry has no slug yet; its scope comes from this branch (handlePreviewRequest).
+  if (opts.mode === 'd3' && opts.slug !== undefined && previewBranchSlug(branch) !== opts.slug) return null;
   const expiresInSeconds =
     typeof payload.exp === 'number' ? Math.max(0, payload.exp - Math.floor(Date.now() / 1000)) : undefined;
   // A share pass names its link and the link's expiry; a pass that names a link without one is malformed.
@@ -367,34 +390,41 @@ function readStringClaim(payload: JWTPayload, name: string): string | undefined 
 }
 
 /**
- * Builds the 302 that expires the preview cookie and returns the visitor to
- * the published page `?to=` names (see {@link exitTarget}). The
- * `conloca-preview` header carries this build's public label, and `conloca-preview-protocol` the preview protocol it speaks.
+ * Builds the 302 that expires the preview cookies and returns the visitor to
+ * the published page `?to=` names (see {@link exitTarget}). The headers carry
+ * this build's public label, the preview protocol it speaks and its mode.
  */
-function makeExitRedirect(url: URL, base: string, label: string): Response {
+function makeExitRedirect(url: URL, opts: PreviewMiddlewareOptions, label: string): Response {
+  const mode = opts.mode ?? 'd2';
   const headers = new Headers({
-    location: exitTarget(url, base),
-    'set-cookie': serializePreviewCookie(PREVIEW_COOKIE_NAME, '', 0),
+    location: exitTarget(url, opts),
     ...PREVIEW_CACHE_HEADERS,
     [PREVIEW_LABEL_HEADER]: label,
     // Lets Conloca refuse to link to a preview server below its protocol floor.
     [PREVIEW_PROTOCOL_HEADER]: String(PREVIEW_PROTOCOL),
+    // Lets Conloca shape the link: under D3 it starts with the branch slug.
+    [PREVIEW_MODE_HEADER]: mode,
   });
-  // Without this the D4 renewal would see the grant and send the viewer straight back in.
-  headers.append('set-cookie', serializePreviewCookie(PREVIEW_GRANT_COOKIE_NAME, '', 0));
+  // The probe asks a D3 server without a slug: it names no cookies, so none are expired.
+  if (mode === 'd3' && opts.slug === undefined) return new Response(null, { status: 302, headers });
+  const scope = previewScope(mode, opts.base, opts.slug);
+  headers.append('set-cookie', serializePreviewCookie(scope.pass, '', 0, scope.path));
+  // Without this the renewal would see the grant and send the viewer straight back in.
+  if (scope.grant !== null) headers.append('set-cookie', serializePreviewCookie(scope.grant, '', 0, scope.path));
   return new Response(null, { status: 302, headers });
 }
 
 /**
  * Where Exit sends the visitor: `?to=` resolved against this origin and kept
  * only while it stays there, as its path and query with the preview route
- * stripped. Anything else falls back to the site's base: another origin,
- * `//host`, and `/\host` or `/<tab>/host`, which browsers read as `//host`.
- * The emitted path is checked again, because the browser parses it again:
- * `https://site//host`, `/.//host` and `<preview route>//host` all leave a
- * same-origin parse as the path `//host`.
+ * (under D3, the route and the slug) stripped. Anything else falls back to the
+ * site's base: another origin, `//host`, and `/\host` or `/<tab>/host`, which
+ * browsers read as `//host`. The emitted path is checked again, because the
+ * browser parses it again: `https://site//host`, `/.//host` and
+ * `<preview route>//host` all leave a same-origin parse as the path `//host`.
  */
-function exitTarget(url: URL, base: string): string {
+function exitTarget(url: URL, opts: PreviewMiddlewareOptions): string {
+  const { base } = opts;
   const to = url.searchParams.get('to');
   if (to === null || to === '') return base;
   let target: URL;
@@ -404,37 +434,63 @@ function exitTarget(url: URL, base: string): string {
     return base;
   }
   if (target.origin !== url.origin) return base;
-  const location = `${stripPreviewPrefix(target.pathname, base)}${target.search}`;
+  const location = `${pageOf(target.pathname, opts)}${target.search}`;
   return new URL(location, url.origin).origin === url.origin ? location : base;
 }
 
+/** A pathname with the preview route stripped; under D3 the branch slug goes with it. */
+function pageOf(pathname: string, opts: PreviewMiddlewareOptions): string {
+  if (opts.mode === 'd3' && opts.slug !== undefined) {
+    const { route } = previewScope('d3', opts.base, opts.slug);
+    if (pathname === route || pathname.startsWith(`${route}/`)) {
+      return `${opts.base.replace(/\/+$/u, '')}${pathname.slice(route.length) || '/'}`;
+    }
+  }
+  return stripPreviewPrefix(pathname, opts.base);
+}
+
+/** A page path under the site's base, as it follows the D3 route: `/docs/blog` under `/docs/` is `/blog`. */
+function pageUnderBase(path: string, base: string): string {
+  return path.slice(base.replace(/\/+$/u, '').length) || '/';
+}
+
 /**
- * The requested URL without the code or pass parameter and without the preview route: once the cookie is set
- * (Path=/), every same-origin request carries it, so the visitor belongs on the real path. Other query
+ * The requested URL without the code or pass parameter. Under D2 and D4 the cookie is on `Path=/`, so the visitor
+ * belongs on the real path; under D3 the pass lives under the route and slug, so the page stays there. Other query
  * parameters (analytics tags) stay.
  */
-function cleanLocation(url: URL, base: string): string {
+function cleanLocation(url: URL, opts: PreviewMiddlewareOptions, scope: PreviewScope): string {
   const cleaned = new URL(url.toString());
   cleaned.searchParams.delete(PREVIEW_QUERY_PARAM);
   cleaned.searchParams.delete(PREVIEW_CODE_PARAM);
-  cleaned.pathname = stripPreviewPrefix(cleaned.pathname, base);
+  const page = stripPreviewPrefix(cleaned.pathname, opts.base);
+  cleaned.pathname = opts.mode === 'd3' ? `${scope.route}${pageUnderBase(page, opts.base)}` : page;
   const location = cleaned.toString();
   return cleaned.search === '' && location.endsWith('?') ? location.slice(0, -1) : location;
 }
 
-/** The 302 that sets the pass cookie (and, under D4, the grant cookie) and lands on the clean path. */
-function makeInitRedirect(url: URL, token: string, ctx: PreviewContext, opts: PreviewMiddlewareOptions): Response {
-  const headers = new Headers({ location: cleanLocation(url, opts.base), ...PREVIEW_CACHE_HEADERS });
-  headers.append('set-cookie', serializePreviewCookie(PREVIEW_COOKIE_NAME, token, ctx.expiresInSeconds));
+/** The 302 that sets the pass cookie (and, under D3 and D4, the grant cookie) and lands on the page. */
+function makeInitRedirect(
+  url: URL,
+  token: string,
+  ctx: PreviewContext,
+  opts: PreviewMiddlewareOptions,
+  scope: PreviewScope,
+): Response {
+  const headers = new Headers({ location: cleanLocation(url, opts, scope), ...PREVIEW_CACHE_HEADERS });
+  headers.append('set-cookie', serializePreviewCookie(scope.pass, token, ctx.expiresInSeconds, scope.path));
   const { org, grant } = ctx;
-  if (opts.mode === 'd4' && grant !== undefined) {
+  if (scope.grant !== null && grant !== undefined) {
     const lifetime = grant.expiresAt - Math.floor(Date.now() / 1000);
-    headers.append('set-cookie', serializePreviewCookie(PREVIEW_GRANT_COOKIE_NAME, grantRef(org, grant.id), lifetime));
+    headers.append('set-cookie', serializePreviewCookie(scope.grant, grantRef(org, grant.id), lifetime, scope.path));
   }
   return new Response(null, { status: 302, headers });
 }
 
-/** The 302 to the clean path for a visitor who already holds a valid pass. */
-function makeCleanRedirect(url: URL, base: string): Response {
-  return new Response(null, { status: 302, headers: { location: cleanLocation(url, base), ...PREVIEW_CACHE_HEADERS } });
+/** The 302 to the page for a visitor who already holds a valid pass. */
+function makeCleanRedirect(url: URL, opts: PreviewMiddlewareOptions, scope: PreviewScope): Response {
+  return new Response(null, {
+    status: 302,
+    headers: { location: cleanLocation(url, opts, scope), ...PREVIEW_CACHE_HEADERS },
+  });
 }

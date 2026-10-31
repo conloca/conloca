@@ -1,7 +1,7 @@
 import { type SpawnSyncReturns, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
-import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { existsSync, readFileSync } from 'node:fs';
+import { mkdir, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -36,6 +36,14 @@ export interface FixtureSiteOptions {
   trailingSlash?: 'never';
   /** Files added to, or replacing, the base fixture's, by path relative to the site. */
   extraFiles?: Record<string, string | Uint8Array>;
+  /** The argument written into `conlocaCloud(...)`, e.g. `{ previewBuild: {} }`; none by default. */
+  integrationOptions?: string;
+  /** Integration expressions written ahead of conlocaCloud() in `integrations`. */
+  extraIntegrations?: string[];
+  /** Astro's `redirects`. */
+  redirects?: Record<string, string>;
+  /** Astro's `image.service`: `passthrough` copies images as they are, so the build needs no sharp. */
+  imageService?: 'passthrough';
 }
 
 /** Each adapter's import and the call its config makes. */
@@ -125,7 +133,7 @@ function astroConfig(options: FixtureSiteOptions): string {
     "import react from '@astrojs/react';",
     "import sitemap from '@astrojs/sitemap';",
     "import { conlocaCMS } from '@conloca/astro-cms/node';",
-    "import { defineConfig } from 'astro/config';",
+    `import { defineConfig${options.imageService === undefined ? '' : ', passthroughImageService'} } from 'astro/config';`,
     ...(options.withoutIntegration ? [] : ["import { conlocaCloud } from '../../dist/src/index.js';"]),
     ...(options.adapter === undefined ? [] : [`import ${options.adapter} from '${ADAPTERS[options.adapter].module}';`]),
     '',
@@ -133,12 +141,15 @@ function astroConfig(options: FixtureSiteOptions): string {
     "  site: 'https://fixture.example',",
     ...(options.base === undefined ? [] : [`  base: ${JSON.stringify(options.base)},`]),
     ...(options.trailingSlash === undefined ? [] : [`  trailingSlash: ${JSON.stringify(options.trailingSlash)},`]),
+    ...(options.redirects === undefined ? [] : [`  redirects: ${JSON.stringify(options.redirects)},`]),
+    ...(options.imageService === undefined ? [] : ['  image: { service: passthroughImageService() },']),
     ...(adapter ? ["  output: 'server',", `  adapter: ${adapter.call},`] : []),
     '  integrations: [',
     '    react(),',
     '    sitemap(),',
     `    conlocaCMS({ ${cms} }),`,
-    ...(options.withoutIntegration ? [] : ['    conlocaCloud(),']),
+    ...(options.extraIntegrations ?? []).map((integration) => `    ${integration},`),
+    ...(options.withoutIntegration ? [] : [`    conlocaCloud(${options.integrationOptions ?? ''}),`]),
     '  ],',
     '});',
     '',
@@ -146,9 +157,11 @@ function astroConfig(options: FixtureSiteOptions): string {
 }
 
 /**
- * Writes a fresh site under this package's `tmp/` (gitignored), with no
- * `node_modules` of its own: Astro and the integrations resolve from the
- * folders above, as in a workspace whose dependencies are hoisted.
+ * Writes a fresh site under this package's `tmp/` (gitignored), with no `node_modules` of its own: Astro and the
+ * integrations resolve from the folders above, as in a workspace whose dependencies are hoisted. This package is linked
+ * into `tmp/node_modules`, because the preview build injects its routes, and the dispatcher imports it, by package name.
+ * Only its manifest, `dist` and `src` are linked: a link to the whole package would hold `tmp` itself, a cycle for any
+ * walk that follows links.
  */
 export async function createFixtureSite(name: string, options: FixtureSiteOptions = {}): Promise<string> {
   const site = join(PACKAGE_ROOT, 'tmp', name);
@@ -165,6 +178,16 @@ export async function createFixtureSite(name: string, options: FixtureSiteOption
       await mkdir(dirname(target), { recursive: true });
       await writeFile(target, content);
     }),
+  );
+  const link = join(PACKAGE_ROOT, 'tmp', 'node_modules', '@conloca', 'cloud-astro');
+  await mkdir(link, { recursive: true });
+  // The build lanes run in parallel processes: whichever links an entry first, the other finds it there.
+  await Promise.all(
+    ['package.json', 'dist', 'src'].map((entry) =>
+      symlink(join(PACKAGE_ROOT, entry), join(link, entry)).catch((error: unknown) => {
+        if (!existsSync(join(link, entry))) throw error;
+      }),
+    ),
   );
   return site;
 }
@@ -196,6 +219,17 @@ export function runAstroBuild(cwd: string, env: Record<string, string> = {}): Sp
   const astroManifest: { bin: { astro: string } } = JSON.parse(readFileSync(astroPackage, 'utf8'));
   const { bin } = astroManifest;
   return runNode(cwd, [join(dirname(astroPackage), bin.astro), 'build'], env);
+}
+
+/** Runs the wrangler this package develops with, in the site; the fixture's config sets `send_metrics: false`. */
+export function runWrangler(
+  cwd: string,
+  args: readonly string[],
+  env: Record<string, string> = {},
+): SpawnSyncReturns<string> {
+  const manifest = createRequire(join(cwd, 'package.json')).resolve('wrangler/package.json');
+  const { bin }: { bin: { wrangler: string } } = JSON.parse(readFileSync(manifest, 'utf8'));
+  return runNode(cwd, [join(dirname(manifest), bin.wrangler), ...args], env);
 }
 
 export function sha256(bytes: Uint8Array | string): string {

@@ -1,27 +1,18 @@
 /**
- * Minimal cookie-header parser. We only need to look up cookies by exact name
- * (the fixed `__Host-conloca_preview` cookie); a full RFC 6265 parser would be
- * overkill, and pulling in a dependency for this would be YAGNI.
- *
- * The parser intentionally rejects malformed segments silently rather than
- * throwing — a bad cookie header from a misbehaving client must not crash
- * the SSR handler. Callers always check whether the requested cookie was
- * actually present.
+ * Every value a cookie header carries under `name`, in header order. A browser sends one cookie per name, domain and
+ * path it holds, so a sibling subdomain can plant a second cookie with the preview's name: callers try each value,
+ * never just the first. Malformed segments are skipped, not thrown on: a bad header from a misbehaving client must
+ * not crash the handler.
  */
-export function parseCookies(cookieHeader: string | null | undefined): Map<string, string> {
-  const out = new Map<string, string>();
-  if (!cookieHeader) return out;
+export function parseCookieValues(cookieHeader: string | null | undefined, name: string): string[] {
+  if (!cookieHeader) return [];
+  const values: string[] = [];
   for (const segment of cookieHeader.split(';')) {
     const eq = segment.indexOf('=');
     if (eq <= 0) continue;
-    const name = segment.slice(0, eq).trim();
-    const value = segment.slice(eq + 1).trim();
-    if (!name) continue;
-    // First occurrence wins; matches the spec-compliant behaviour of the
-    // browsers' document.cookie reader for duplicate names.
-    if (!out.has(name)) out.set(name, value);
+    if (segment.slice(0, eq).trim() === name) values.push(segment.slice(eq + 1).trim());
   }
-  return out;
+  return values;
 }
 
 /**
@@ -42,16 +33,16 @@ export function parseCookies(cookieHeader: string | null | undefined): Map<strin
  * cross-site POSTs and subresource loads, which is the threat that matters for
  * a read-only preview credential.
  *
- * `Path=/` is load-bearing: the browser sends the cookie on every same-origin
- * request, which is what lets the preview follow internal links instead of
- * surviving exactly one page view.
+ * `Path=/` is load-bearing for D2 and D4: the browser sends the cookie on every same-origin request, which is what
+ * lets the preview follow internal links instead of surviving exactly one page view. D3 passes its route instead:
+ * there every page link is rewritten under it, and two branches keep two cookies.
  *
  * `maxAgeSeconds` bounds the cookie to the credential it carries — pass the
  * JWT's remaining lifetime so a stale cookie cannot outlive the token and
  * strand the visitor on the landing page.
  */
-export function serializePreviewCookie(name: string, value: string, maxAgeSeconds?: number): string {
-  const base = `${name}=${value}; HttpOnly; Secure; SameSite=Lax; Path=/`;
+export function serializePreviewCookie(name: string, value: string, maxAgeSeconds?: number, path = '/'): string {
+  const base = `${name}=${value}; HttpOnly; Secure; SameSite=Lax; Path=${path}`;
   if (maxAgeSeconds === undefined) return base;
   return `${base}; Max-Age=${Math.max(0, Math.floor(maxAgeSeconds))}`;
 }

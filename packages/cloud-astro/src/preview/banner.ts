@@ -16,10 +16,11 @@ import type { PreviewContext } from './middleware.js';
  * canonical way to embed server data in a same-origin inline script.
  */
 export function getBannerScriptText(
-  ctx: PreviewContext,
+  ctx: Pick<PreviewContext, 'branch' | 'grant'>,
   endpoint?: string,
   exitPath?: string,
   shareUrl?: string,
+  pagePath?: string,
 ): string {
   // Serialize then patch the `<` character that JSON.stringify does NOT
   // escape. Browsers terminate inline scripts on `</script>` regardless of
@@ -33,8 +34,13 @@ export function getBannerScriptText(
   // of the editor links. `undefined` values drop out of the JSON.
   const embedded =
     ctx.grant === undefined
-      ? { branch: ctx.branch, endpoint, exitPath, shareUrl }
-      : { branch: ctx.branch, exitPath, viewer: { sharedBy: ctx.grant.sharedBy, expiresAt: ctx.grant.expiresAt } };
+      ? { branch: ctx.branch, endpoint, exitPath, shareUrl, path: pagePath }
+      : {
+          branch: ctx.branch,
+          exitPath,
+          path: pagePath,
+          viewer: { sharedBy: ctx.grant.sharedBy, expiresAt: ctx.grant.expiresAt },
+        };
   const ctxJson = JSON.stringify(embedded).replace(/</g, '\\u003c');
   return [
     `var __conlocaPreview = ${ctxJson};`,
@@ -55,14 +61,14 @@ export function getBannerScriptText(
     // the endpoint's login route already knows how to send an authenticated
     // session into the editor for the requested page.
     "  var edit = document.createElement('a'); edit.textContent = 'Edit'; edit.style.color = '#9cf';",
-    "  if (__conlocaPreview.endpoint) { edit.href = __conlocaPreview.endpoint + '/login?return=' + encodeURIComponent(location.pathname); host.appendChild(edit); }",
+    "  if (__conlocaPreview.endpoint) { edit.href = __conlocaPreview.endpoint + '/login?return=' + encodeURIComponent(__conlocaPreview.path || location.pathname); host.appendChild(edit); }",
     // Share opens the editor's share dialog for this page in a new tab.
     "  if (__conlocaPreview.shareUrl) { var share = document.createElement('a'); share.textContent = 'Share'; share.style.color = '#9cf'; share.href = __conlocaPreview.shareUrl; share.target = '_blank'; share.rel = 'noopener'; host.appendChild(share); }",
     // "Exit Preview" must round-trip the server: the cookie is HttpOnly, so
     // only a Set-Cookie response can expire it. `to` returns the visitor to
     // this page, now published.
     "  var exitLink = document.createElement('a'); exitLink.textContent = 'Exit Preview'; exitLink.style.color = '#9cf';",
-    "  if (__conlocaPreview.exitPath) { exitLink.href = __conlocaPreview.exitPath + '?to=' + encodeURIComponent(location.pathname); host.appendChild(exitLink); }",
+    "  if (__conlocaPreview.exitPath) { exitLink.href = __conlocaPreview.exitPath + '?to=' + encodeURIComponent(__conlocaPreview.path || location.pathname); host.appendChild(exitLink); }",
     "  var collapse = document.createElement('button'); collapse.type = 'button'; collapse.textContent = __conlocaIsCollapsed() ? '+' : '-'; collapse.style.cssText = 'background:transparent;color:#fff;border:none;cursor:pointer;font-size:16px;line-height:1;'; host.appendChild(collapse);",
     "  collapse.addEventListener('click', function () { var c = !__conlocaIsCollapsed(); __conlocaSetCollapsed(c); host.style.display = c ? 'none' : ''; });",
     "  if (__conlocaIsCollapsed()) host.style.display = 'none';",
@@ -91,12 +97,13 @@ const SITE_ROBOTS_META_RE = /<meta\b[^>]*?\sname\s*=\s*["']?robots(?=["'\s/>])[^
  */
 export function injectPreviewBanner(
   html: string,
-  ctx: PreviewContext,
+  ctx: Pick<PreviewContext, 'branch' | 'grant'>,
   endpoint?: string,
   exitPath?: string,
   shareUrl?: string,
+  pagePath?: string,
 ): string {
-  const script = `<script>${getBannerScriptText(ctx, endpoint, exitPath, shareUrl)}</script>`;
+  const script = `<script>${getBannerScriptText(ctx, endpoint, exitPath, shareUrl, pagePath)}</script>`;
   let replaced = false;
   const page = html.replace(SITE_ROBOTS_META_RE, () => {
     const first = !replaced;

@@ -1,35 +1,64 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { PACKAGE_NAME, PREVIEW_BUILD_ENV_FLAG, REFUSED_PREVIEW_ADAPTERS } from './constants.js';
+import {
+  PACKAGE_NAME,
+  PREVIEW_BUILD_ENV_FLAG,
+  PREVIEW_MODE_ENV,
+  PREVIEW_PRERENDERED_ENV,
+  REFUSED_PREVIEW_ADAPTERS,
+} from './constants.js';
+import type { PreviewServeMode } from './preview/preview-path.js';
 import type { PreviewBuildOptions } from './types.js';
 
 /**
- * Whether the recursive preview build runs: only when `previewBuild` is given
- * as an object (strict opt-in, so a plain deploy never gets a second build),
- * and then only with an SSR adapter that is not refused. Throws for a refused
- * adapter or a missing one, so the build fails before it deploys anything.
+ * How the preview build serves, from the options and the adapter the preview server would build with
+ * (`previewBuild.adapter`, else the project's own): off unless `previewBuild` is given as an object; D4 with
+ * `separate: true`; D3 for a static site, whose preview server runs next to it on Cloudflare Workers; D2 when an
+ * adapter is named, since the site's own server deploy serves the drafts. Throws for a refused adapter, so the build
+ * fails before it deploys anything.
  */
 export function previewBuildMode(
   previewBuild: PreviewBuildOptions | false | undefined,
   adapterName: string | undefined,
-): 'off' | 'on' {
+): 'off' | PreviewServeMode {
   if (!previewBuild) return 'off';
-  if (adapterName === undefined) {
-    throw new Error(
-      `${PACKAGE_NAME}: the preview build needs an SSR adapter — the project is static and ` +
-        'previewBuild.adapter is not set. Pass one (e.g. previewBuild: { adapter: cloudflare() }) ' +
-        'or remove previewBuild.',
-    );
-  }
-  if (REFUSED_PREVIEW_ADAPTERS.includes(adapterName)) {
+  if (adapterName !== undefined && REFUSED_PREVIEW_ADAPTERS.includes(adapterName)) {
     throw new Error(
       `${PACKAGE_NAME}: previewBuild is not supported with ${adapterName} yet: that adapter writes its deployable ` +
         'output at the project root, so the preview build could replace the live site. ' +
         'Remove previewBuild from conlocaCloud(...).',
     );
   }
-  return 'on';
+  if (previewBuild.separate === true) return 'd4';
+  return adapterName === undefined ? 'd3' : 'd2';
+}
+
+/** The mode a preview build serves in: the site's build names D2 or D3; the flag alone is a separate preview deploy (D4). */
+export function previewChildMode(env: NodeJS.ProcessEnv): PreviewServeMode {
+  const named = env[PREVIEW_MODE_ENV];
+  return named === 'd2' || named === 'd3' ? named : 'd4';
+}
+
+/**
+ * One route the site's build prerendered, as a D3 child matches it: pattern and component together, since one
+ * entrypoint can be injected at two patterns, one published and one only the preview build has.
+ */
+export function prerenderedKey(pattern: string, component: string): string {
+  return JSON.stringify([pattern, component]);
+}
+
+/** The routes (`prerenderedKey`) a D3 child's site build prerendered (`buildPreviewChildEnv`); none for any other child. */
+export function previewChildPrerendered(env: NodeJS.ProcessEnv): Set<string> {
+  const text = env[PREVIEW_PRERENDERED_ENV];
+  if (previewChildMode(env) !== 'd3' || text === undefined) return new Set();
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    return new Set();
+  }
+  return new Set(Array.isArray(value) ? value.filter((item) => typeof item === 'string') : []);
 }
 
 /**
@@ -59,11 +88,16 @@ export type PreviewBuildSpawn = (
  * build vars (CF_PAGES_*, WORKERS_CI_*, GITHUB_*) reach the child, which reads
  * the branch and commit it serves from them.
  */
-export function buildPreviewChildEnv(parentEnv: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  return {
-    ...parentEnv,
-    [PREVIEW_BUILD_ENV_FLAG]: '1',
-  };
+export function buildPreviewChildEnv(
+  parentEnv: NodeJS.ProcessEnv,
+  mode: 'd2' | 'd3' = 'd2',
+  prerendered: readonly string[] = [],
+): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...parentEnv, [PREVIEW_BUILD_ENV_FLAG]: '1', [PREVIEW_MODE_ENV]: mode };
+  // Only a D3 child reads it; a stale one from the environment must not reach a D2 child.
+  delete env[PREVIEW_PRERENDERED_ENV];
+  if (mode === 'd3') env[PREVIEW_PRERENDERED_ENV] = JSON.stringify(prerendered);
+  return env;
 }
 
 /**
@@ -111,8 +145,12 @@ export function resolveAstroBin(cwd: string = process.cwd()): string {
  *   - `false` → resolves and logs a warning so onboarding setups can continue
  *     when the preview build is not yet wired correctly.
  */
-export async function spawnPreviewBuild(opts: PreviewBuildOptions): Promise<void> {
-  await _spawnPreviewBuildWith(spawn, opts);
+export async function spawnPreviewBuild(
+  opts: PreviewBuildOptions,
+  mode: 'd2' | 'd3' = 'd2',
+  prerendered: readonly string[] = [],
+): Promise<void> {
+  await _spawnPreviewBuildWith(spawn, opts, mode, prerendered);
 }
 
 /**
@@ -124,7 +162,12 @@ export async function spawnPreviewBuild(opts: PreviewBuildOptions): Promise<void
  * `src/index.ts` or `src/node.ts`.
  */
 // oxlint-disable-next-line no-underscore-dangle -- the internal test seam.
-export async function _spawnPreviewBuildWith(spawnFn: PreviewBuildSpawn, opts: PreviewBuildOptions): Promise<void> {
+export async function _spawnPreviewBuildWith(
+  spawnFn: PreviewBuildSpawn,
+  opts: PreviewBuildOptions,
+  mode: 'd2' | 'd3' = 'd2',
+  prerendered: readonly string[] = [],
+): Promise<void> {
   // Recursion guard: bail out before doing any work if we're already inside
   // a recursive preview build. This matches the short-circuit in the
   // integration's `astro:build:done` hook.
@@ -136,7 +179,7 @@ export async function _spawnPreviewBuildWith(spawnFn: PreviewBuildSpawn, opts: P
 
   const astroBin = resolveAstroBin();
   const child = spawnFn(astroBin, ['build'], {
-    env: buildPreviewChildEnv(process.env),
+    env: buildPreviewChildEnv(process.env, mode, prerendered),
     stdio: 'inherit',
   });
 

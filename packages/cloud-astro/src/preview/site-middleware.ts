@@ -33,7 +33,13 @@ import { PreviewContentAPI } from './content-api.js';
 import { applyPreviewHeaders, PREVIEW_CACHE_HEADERS } from './headers.js';
 import { renderPreviewUnavailable, renderShareEnded } from './landing.js';
 import { handlePreviewRequest, type PreviewContext, type PreviewMiddlewareOptions } from './middleware.js';
-import { normalizeTrailingSlash, pathUnderBase, previewRoutePrefix, stripPreviewPrefix } from './preview-path.js';
+import {
+  normalizeTrailingSlash,
+  PREVIEW_SLUG_HEADER,
+  pathUnderBase,
+  previewScope,
+  stripPreviewPrefix,
+} from './preview-path.js';
 
 /** The subset of Astro's middleware context this middleware touches. */
 export interface PreviewMiddlewareContext {
@@ -92,13 +98,20 @@ export function createPreviewSiteMiddleware(resolveOpts: () => PreviewMiddleware
       return next();
     }
 
+    // Under D3 the dispatcher names the requested branch's slug, after stripping any the browser sent.
+    const slug = opts.mode === 'd3' ? (context.request.headers.get(PREVIEW_SLUG_HEADER) ?? undefined) : undefined;
     const verdict = await handlePreviewRequest(context.request, {
       ...opts,
-      onMiss: 'pass-through',
+      ...(slug === undefined ? {} : { slug }),
+      // No silent fallback: under the slug, a pass that doesn't verify gets the landing page, never the
+      // published page at the draft URL. Only the live site's own requests (no slug) pass through.
+      onMiss: slug === undefined ? 'pass-through' : 'landing',
       fetchFn: opts.fetchFn ?? seams.fetchFn,
     });
     if (verdict.kind === 'response') return verdict.response;
     if (verdict.kind !== 'preview') return next();
+    // A preview verdict under D3 means the slug was named, so the scope always resolves.
+    const exitPath = `${previewScope(opts.mode ?? 'd2', opts.base, slug).route}/__exit`;
 
     // A valid credential on the preview route itself: canonicalize to the
     // clean site path instead of rendering under the route — links, assets
@@ -136,14 +149,14 @@ export function createPreviewSiteMiddleware(resolveOpts: () => PreviewMiddleware
       return renderPreviewUnavailable({
         // Collapse leading slashes: `//evil.test/x` would otherwise be a cross-origin link.
         retryHref: `/${rawPath.replace(/^\/+/u, '')}${context.url.search}`,
-        exitHref: `${previewRoutePrefix(opts.base)}/__exit?to=${encodeURIComponent(rawPath)}`,
+        exitHref: `${exitPath}?to=${encodeURIComponent(rawPath)}`,
       });
     }
 
     if (isShareEndedKind(status.kind) && 'sharedBy' in status) {
       return renderShareEnded(status.kind, {
         sharedBy: status.sharedBy,
-        liveHref: `${previewRoutePrefix(opts.base)}/__exit?to=${encodeURIComponent(path)}`,
+        liveHref: `${exitPath}?to=${encodeURIComponent(path)}`,
       });
     }
 
@@ -198,8 +211,10 @@ export function createPreviewSiteMiddleware(resolveOpts: () => PreviewMiddleware
       await rendered.text(),
       verdict.ctx,
       opts.saasEndpoint,
-      `${previewRoutePrefix(opts.base)}/__exit`,
+      exitPath,
       shareUrl,
+      // The page's own path: under D3 the address bar holds the route, which Edit and Exit must not carry.
+      rawPath,
     );
     return applyPreviewHeaders(new Response(html, { status: rendered.status, headers: rendered.headers }));
   };

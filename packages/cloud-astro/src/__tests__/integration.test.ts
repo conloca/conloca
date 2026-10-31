@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, mock } from 'bun
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, realpathSync } from 'node:fs';
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -10,9 +10,11 @@ import type { AstroI18nLocales } from '@conloca/astro-cms/checks';
 import { EDITOR_PAGE_INFO_FORMATS, type EditorHostPageData, isEditorPageInfo } from '@conloca/content-api/editor-host';
 import { buildSandboxSrcdoc } from '@conloca/mdx/sandbox-frame';
 import type { AstroIntegration, AstroIntegrationLogger, ViteUserConfig } from 'astro';
+import { writePreviewRoutes } from '../d3-build.js';
 import defaultExport, { conlocaCloud, PACKAGE_NAME, PREVIEW_BUILD_ENV_FLAG } from '../index.js';
 import nodeDefaultExport from '../node.js';
 import * as previewBuildModule from '../preview-build.js';
+import { prerenderedKey } from '../preview-build.js';
 import type { ConlocaCloudOptions, PreviewBuildOptions } from '../types.js';
 
 // The recursive preview build is a real `astro build`. Every case here records
@@ -20,10 +22,12 @@ import type { ConlocaCloudOptions, PreviewBuildOptions } from '../types.js';
 // rather than by not hanging. Bun updates the already imported module in place.
 const realSpawnPreviewBuild = previewBuildModule.spawnPreviewBuild;
 const spawned: PreviewBuildOptions[] = [];
+let failSpawn = false;
 await mock.module('../preview-build.js', () => ({
   ...previewBuildModule,
   spawnPreviewBuild: async (opts: PreviewBuildOptions) => {
     spawned.push(opts);
+    if (failSpawn) throw new Error('@conloca/cloud-astro: preview build failed (exit 1)');
   },
 }));
 // `bun test ./src` runs every file in one process, and a module mock outlives
@@ -76,6 +80,8 @@ function makeLogger(): AstroIntegrationLogger & { messages: { level: string; msg
  */
 const PIPELINE_ENV_VARS = [
   PREVIEW_BUILD_ENV_FLAG,
+  'CONLOCA_PREVIEW_MODE',
+  'CONLOCA_PREVIEW_PRERENDERED',
   'CF_PAGES_COMMIT_SHA',
   'CF_PAGES_BRANCH',
   'WORKERS_CI_BRANCH',
@@ -201,7 +207,10 @@ async function runConfigHooks(
   await configHook(
     hooks,
     'astro:config:done',
-  )({ config: { vite, ...(adapter ? { adapter } : {}), ...(base === undefined ? {} : { base }), ...config } });
+  )({
+    logger: makeLogger(),
+    config: { vite, ...(adapter ? { adapter } : {}), ...(base === undefined ? {} : { base }), ...config },
+  });
 }
 
 /**
@@ -324,6 +333,7 @@ describe('conlocaCloud — integration shape', () => {
       'astro:config:done',
       'astro:config:setup',
       'astro:route:setup',
+      'astro:routes:resolved',
     ]);
   });
 });
@@ -440,6 +450,12 @@ describe('conlocaCloud — astro:config:setup preview route injection', () => {
 // setup diagnostic, not at some later point deep inside the build.
 // ---------------------------------------------------------------------------
 
+/** A D3 child, told which routes the site's own (static) build prerendered. */
+function d3Child(prerendered: string[]): void {
+  process.env.CONLOCA_PREVIEW_MODE = 'd3';
+  process.env.CONLOCA_PREVIEW_PRERENDERED = JSON.stringify(prerendered);
+}
+
 describe('conlocaCloud — astro:config:setup preview build config', () => {
   let restore: () => void;
   beforeEach(() => {
@@ -451,11 +467,13 @@ describe('conlocaCloud — astro:config:setup preview build config', () => {
   afterEach(() => restore());
 
   const fakeAdapter = { name: 'fake-ssr-adapter', hooks: {} };
+  const CMS_PAGES = 'node_modules/@conloca/astro-cms/dist/internal/page-handler.astro';
 
   async function runPreviewConfigSetup(opts: {
     previewBuild?: import('../types.js').PreviewBuildOptions;
     configAdapter?: unknown;
-  }): Promise<{ updates: Record<string, unknown>[] }> {
+    root?: URL;
+  }) {
     const updates: Record<string, unknown>[] = [];
     const integration = conlocaCloud(
       validOptions({ siteId: 'website', ...(opts.previewBuild ? { previewBuild: opts.previewBuild } : {}) }),
@@ -473,10 +491,87 @@ describe('conlocaCloud — astro:config:setup preview build config', () => {
       injectRoute: () => undefined,
       updateConfig: (update) => updates.push(update),
       addMiddleware: () => undefined,
-      config: { adapter: opts.configAdapter, root: new URL('file:///tmp/site/') },
+      config: { adapter: opts.configAdapter, root: opts.root ?? new URL('file:///tmp/site/') },
     });
-    return { updates };
+    return { updates, integration };
   }
+
+  it("keeps a D3 child's routes prerendered where the site's build prerendered them, the CMS pages aside", async () => {
+    d3Child([
+      prerenderedKey('/blog/[slug]', 'src/pages/blog/[slug].astro'),
+      prerenderedKey('/rss.xml', 'src/pages/rss.xml.js'),
+      prerenderedKey('/[...path]', CMS_PAGES),
+    ]);
+    const { integration } = await runPreviewConfigSetup({ previewBuild: { adapter: fakeAdapter } });
+    const page = { component: 'src/pages/blog/[slug].astro', route: '/blog/[slug]', prerender: false };
+    await integration.hooks['astro:route:setup']?.({ route: page, logger: makeLogger() });
+    expect(page.prerender).toBe(true);
+    // An endpoint too: on demand, a getStaticPaths endpoint would lose its props.
+    const feed = { component: 'src/pages/rss.xml.js', route: '/rss.xml', type: 'endpoint', prerender: false };
+    await integration.hooks['astro:route:setup']?.({ route: feed, logger: makeLogger() });
+    expect(feed.prerender).toBe(true);
+    const cms = { component: CMS_PAGES, route: '/[...path]', prerender: true };
+    await integration.hooks['astro:route:setup']?.({ route: cms, logger: makeLogger() });
+    expect(cms.prerender).toBe(false);
+    const entry = { component: 'node_modules/@conloca/cloud-astro/src/preview-handler.astro', prerender: false };
+    await integration.hooks['astro:route:setup']?.({ route: entry, logger: makeLogger() });
+    expect(entry.prerender).toBe(false);
+  });
+
+  it("leaves a D3 child's own on-demand routes on demand", async () => {
+    d3Child([prerenderedKey('/about', 'src/pages/about.astro')]);
+    const { integration } = await runPreviewConfigSetup({ previewBuild: { adapter: fakeAdapter } });
+    const api = { component: 'src/api-ping.ts', route: '/api/ping', type: 'endpoint', prerender: false };
+    await integration.hooks['astro:route:setup']?.({ route: api, logger: makeLogger() });
+    expect(api.prerender).toBe(false);
+  });
+
+  it('matches what the site prerendered by pattern and component, so one entrypoint at two patterns stays apart', async () => {
+    d3Child([prerenderedKey('/feed.json', 'src/feed.ts')]);
+    const { integration } = await runPreviewConfigSetup({ previewBuild: { adapter: fakeAdapter } });
+    const published = { component: 'src/feed.ts', route: '/feed.json', type: 'endpoint', prerender: false };
+    await integration.hooks['astro:route:setup']?.({ route: published, logger: makeLogger() });
+    expect(published.prerender).toBe(true);
+    const previewOnly = { component: 'src/feed.ts', route: '/api/feed', type: 'endpoint', prerender: false };
+    await integration.hooks['astro:route:setup']?.({ route: previewOnly, logger: makeLogger() });
+    expect(previewOnly.prerender).toBe(false);
+  });
+
+  it("keeps a static site's D4 pages prerendered, so getStaticPaths pages keep their props, and its on-demand endpoints on demand", async () => {
+    // A separate preview deploy: built with the flag alone, no site build before it.
+    const { integration } = await runPreviewConfigSetup({ previewBuild: { adapter: fakeAdapter } });
+    const page = { component: 'src/pages/blog/[slug].astro', route: '/blog/[slug]', type: 'page', prerender: false };
+    await integration.hooks['astro:route:setup']?.({ route: page, logger: makeLogger() });
+    expect(page.prerender).toBe(true);
+    const api = { component: 'src/api-ping.ts', route: '/api/ping', type: 'endpoint', prerender: false };
+    await integration.hooks['astro:route:setup']?.({ route: api, logger: makeLogger() });
+    expect(api.prerender).toBe(false);
+    const cms = { component: CMS_PAGES, route: '/[...path]', type: 'page', prerender: true };
+    await integration.hooks['astro:route:setup']?.({ route: cms, logger: makeLogger() });
+    expect(cms.prerender).toBe(false);
+    const entry = {
+      component: 'node_modules/@conloca/cloud-astro/src/preview-handler.astro',
+      type: 'page',
+      prerender: false,
+    };
+    await integration.hooks['astro:route:setup']?.({ route: entry, logger: makeLogger() });
+    expect(entry.prerender).toBe(false);
+  });
+
+  it("keeps a D2 child's injected on-demand route on demand (an /mcp route on a static site)", async () => {
+    process.env.CONLOCA_PREVIEW_MODE = 'd2';
+    const { integration } = await runPreviewConfigSetup({ previewBuild: { adapter: fakeAdapter } });
+    const mcp = { component: 'src/server-routes/mcp.ts', type: 'endpoint', prerender: false };
+    await integration.hooks['astro:route:setup']?.({ route: mcp, logger: makeLogger() });
+    expect(mcp.prerender).toBe(false);
+  });
+
+  it('leaves the pages of a project with its own adapter as they are', async () => {
+    const { integration } = await runPreviewConfigSetup({ configAdapter: { name: 'project-ssr-adapter', hooks: {} } });
+    const page = { component: 'src/pages/api-page.astro', prerender: false };
+    await integration.hooks['astro:route:setup']?.({ route: page, logger: makeLogger() });
+    expect(page.prerender).toBe(false);
+  });
 
   it('switches the preview build to server output with the previewBuild adapter and a separate outDir', async () => {
     const { updates } = await runPreviewConfigSetup({ previewBuild: { adapter: fakeAdapter as never } });
@@ -614,6 +709,8 @@ describe('conlocaCloud — astro:build:done recursion guard', () => {
   it('short-circuits when CONLOCA_PREVIEW_BUILD=1 to prevent recursive-build loops', async () => {
     process.env[PREVIEW_BUILD_ENV_FLAG] = '1';
     process.env.CF_PAGES_BRANCH = 'main';
+    // The parent names the child's mode; with the flag alone the child is a separate preview deploy (D4).
+    process.env.CONLOCA_PREVIEW_MODE = 'd2';
     const logger = makeLogger();
     // The child build of a static site: its config:setup needs the preview adapter.
     const previewBuild = { adapter: { name: 'fake-ssr-adapter', hooks: {} } };
@@ -741,6 +838,8 @@ describe('conlocaCloud — astro:build:done preview-build wiring', () => {
     // object: the outer short-circuit must win and stop spawning.
     process.env[PREVIEW_BUILD_ENV_FLAG] = '1';
     process.env.CF_PAGES_BRANCH = 'main';
+    // The parent names the child's mode; with the flag alone the child is a separate preview deploy (D4).
+    process.env.CONLOCA_PREVIEW_MODE = 'd2';
     const logger = makeLogger();
     // The child build of a static site: its config:setup needs the preview adapter.
     const previewBuild = { adapter: { name: 'fake-ssr-adapter', hooks: {} } };
@@ -812,12 +911,10 @@ describe('conlocaCloud — the preview build is opt-in', () => {
     expect(spawned).toEqual([]);
   });
 
-  it('fails at config time for a static project with previewBuild and no adapter', async () => {
+  it('fails at config time for a static project whose preview server would need a Cloudflare adapter it has not installed', async () => {
     const { hooks } = conlocaCloud(validOptions({ previewBuild: {} }));
     await Promise.resolve(
-      expect(runConfigHooks(hooks, pathToFileURL(`${buildDir.root}/`))).rejects.toThrow(
-        'the preview build needs an SSR adapter',
-      ),
+      expect(runConfigHooks(hooks, pathToFileURL(`${buildDir.root}/`))).rejects.toThrow('install @astrojs/cloudflare'),
     );
   });
 
@@ -851,6 +948,7 @@ describe('conlocaCloud — the editor page', () => {
     buildDir = await makeBuildDir();
     srcDir = pathToFileURL(`${join(buildDir.root, 'src')}/`);
     spawned.length = 0;
+    failSpawn = false;
   });
   afterEach(async () => {
     restore();
@@ -1219,6 +1317,58 @@ describe('conlocaCloud — the editor page', () => {
     expect(logger.messages.filter((m) => m.level === 'warn').map((m) => m.msg)).toContain(
       'netlify.toml sets X-Frame-Options for the whole site and has no /_conloca/editor/ rule, so the workspace editor cannot frame the editor page. Add the rule (npx @conloca/cli connect writes it).',
     );
+  });
+
+  /** A Cloudflare adapter the project resolves, and a wrangler.jsonc that lists the preview route and the rate limit. */
+  async function d3Project(firsts = '["/_conloca/preview", "/_conloca/preview/*"]'): Promise<void> {
+    await mkdir(join(buildDir.root, 'node_modules', '@astrojs'), { recursive: true });
+    const adapter = join(Bun.resolveSync('@astrojs/cloudflare/package.json', import.meta.dir), '..');
+    await symlink(adapter, join(buildDir.root, 'node_modules', '@astrojs', 'cloudflare'), 'dir');
+    await writeFile(
+      join(buildDir.root, 'wrangler.jsonc'),
+      `{ "name": "site", "ratelimits": [{ "name": "conlocaPreviewLimit", "namespace_id": "1001", "simple": { "limit": 60, "period": 10 } }], "assets": { "run_worker_first": ${firsts} } }\n`,
+    );
+  }
+
+  it('names d3 in conloca.json for a static site and writes the dispatcher next to it', async () => {
+    await d3Project();
+    // The mocked preview build writes nothing; this is the report a real one leaves.
+    await writePreviewRoutes(join(buildDir.root, '.conloca', 'preview-server'), {
+      prerendered: [],
+      onDemand: [],
+      exit: { repo: 'acme/site', siteId: 'website', branch: 'main', audience: 'acme/site' },
+    });
+    await buildDoneHook(pageOptions({ previewBuild: {} }))({ dir: buildDir.dist, logger: makeLogger() });
+    expect((await readPage()).info).toHaveProperty('preview', { mode: 'd3', protocol: 2 });
+    expect(await readFile(join(buildDir.root, '.conloca/dispatcher/index.mjs'), 'utf8')).toContain('import(');
+  });
+
+  it('ships a prefix-only site when the D3 preview build fails, and says so', async () => {
+    await d3Project();
+    failSpawn = true;
+    const logger = makeLogger();
+    await buildDoneHook(pageOptions({ previewBuild: {} }))({ dir: buildDir.dist, logger });
+    expect(logger.messages.some((m) => m.level === 'warn' && m.msg.includes('the preview build failed'))).toBe(true);
+    expect(await readFile(join(buildDir.root, '.conloca/dispatcher/index.mjs'), 'utf8')).toContain(
+      'createDispatcher(config, null)',
+    );
+  });
+
+  it('fails the build when the D3 preview build fails and serves on-demand routes', async () => {
+    await d3Project('["/_conloca/preview", "/_conloca/preview/*", "/api/*"]');
+    failSpawn = true;
+    await expect(
+      buildDoneHook(pageOptions({ previewBuild: {} }))({ dir: buildDir.dist, logger: makeLogger() }),
+    ).rejects.toThrow("it serves this site's on-demand routes (/api/*)");
+  });
+
+  it('runs no preview build for a separate preview deploy, and names d4', async () => {
+    await buildDoneHook(pageOptions({ previewBuild: { separate: true } }))({
+      dir: buildDir.dist,
+      logger: makeLogger(),
+    });
+    expect(spawned).toEqual([]);
+    expect((await readPage()).info).toHaveProperty('preview', { mode: 'd4', protocol: 2 });
   });
 });
 

@@ -198,6 +198,23 @@ export async function mirrorEditorPage(fromDir: string, toDir: string): Promise<
 }
 
 /**
+ * A separate preview deploy (D4) serves no editor page, but it answers its own conloca.json: its release, protocol
+ * and mode, read next to the site's to tell when the two deploys run different releases.
+ */
+export async function emitPreviewServerInfo(
+  dir: string,
+  input: Pick<EmitEditorPageInput, 'root' | 'repoUri' | 'siteIdOverride' | 'logger'>,
+): Promise<void> {
+  const preview: PreviewSignal = { mode: 'd4', protocol: PREVIEW_PROTOCOL };
+  const folder = join(dir, EDITOR_DIR);
+  await mkdir(folder, { recursive: true });
+  await writeFile(
+    join(folder, 'conloca.json'),
+    `${JSON.stringify({ ...editorPageInfo(input, undefined), preview }, null, 2)}\n`,
+  );
+}
+
+/**
  * The Cloudflare Pages project that serves this site's branch builds: `CONLOCA_PAGES_PROJECT` (direct upload with
  * wrangler) wins, else the project in a Pages build's `CF_PAGES_URL` (`https://<hash>.<project>.pages.dev`).
  */
@@ -268,7 +285,7 @@ export function routesFromBuild(collected: readonly StaticPageRoute[], written: 
  * warning; a `builtWith` that cannot be formed fails the build, since the workspace editor would refuse the page.
  */
 function editorPageInfo(
-  input: EmitEditorPageInput,
+  input: Pick<EmitEditorPageInput, 'root' | 'repoUri' | 'siteIdOverride' | 'logger'>,
   componentManifest: { filename: string; hash: string } | undefined,
 ): EditorPageInfo {
   const { logger } = input;

@@ -6,6 +6,8 @@ import {
   buildPreviewChildEnv,
   type PreviewBuildSpawn,
   previewBuildMode,
+  previewChildMode,
+  previewChildPrerendered,
   spawnPreviewBuild,
 } from '../preview-build.js';
 
@@ -61,8 +63,14 @@ describe('previewBuildMode', () => {
     // A Vercel or Netlify site that never opted in still builds.
     expect(previewBuildMode(undefined, '@astrojs/vercel')).toBe('off');
     expect(previewBuildMode(false, '@astrojs/netlify')).toBe('off');
-    expect(previewBuildMode({}, '@astrojs/cloudflare')).toBe('on');
-    expect(previewBuildMode({}, '@astrojs/node')).toBe('on');
+  });
+
+  it('serves a static site next to it (D3), a site with an adapter from its own deploy (D2), and a separate deploy on request (D4)', () => {
+    expect(previewBuildMode({}, undefined)).toBe('d3');
+    expect(previewBuildMode({}, '@astrojs/cloudflare')).toBe('d2');
+    expect(previewBuildMode({}, '@astrojs/node')).toBe('d2');
+    expect(previewBuildMode({ separate: true }, undefined)).toBe('d4');
+    expect(previewBuildMode({ separate: true }, '@astrojs/node')).toBe('d4');
   });
 
   it('refuses the Vercel and Netlify adapters', () => {
@@ -73,9 +81,27 @@ describe('previewBuildMode', () => {
       'previewBuild is not supported with @astrojs/netlify yet',
     );
   });
+});
 
-  it('fails a static project with no adapter', () => {
-    expect(() => previewBuildMode({}, undefined)).toThrow('the preview build needs an SSR adapter');
+describe('previewChildMode', () => {
+  it('takes D2 or D3 from the parent, and reads a build started with the flag alone as D4', () => {
+    expect(previewChildMode({ CONLOCA_PREVIEW_MODE: 'd3' })).toBe('d3');
+    expect(previewChildMode({ CONLOCA_PREVIEW_MODE: 'd2' })).toBe('d2');
+    expect(previewChildMode({})).toBe('d4');
+    expect(previewChildMode({ CONLOCA_PREVIEW_MODE: 'd4' })).toBe('d4');
+  });
+});
+
+describe('previewChildPrerendered', () => {
+  it("hands a D3 child the routes the site's own build prerendered", () => {
+    const env = buildPreviewChildEnv({}, 'd3', ['src/pages/rss.xml.js', 'src/pages/blog/[slug].astro']);
+    expect([...previewChildPrerendered(env)]).toEqual(['src/pages/rss.xml.js', 'src/pages/blog/[slug].astro']);
+  });
+
+  it('reads nothing from a D2 child, or from a value that is not a list of names', () => {
+    expect(previewChildPrerendered(buildPreviewChildEnv({}, 'd2', ['src/pages/a.astro'])).size).toBe(0);
+    expect(previewChildPrerendered({ CONLOCA_PREVIEW_PRERENDERED: '{"a":1}' }).size).toBe(0);
+    expect(previewChildPrerendered({ CONLOCA_PREVIEW_PRERENDERED: 'not json' }).size).toBe(0);
   });
 });
 
@@ -88,13 +114,19 @@ describe('buildPreviewChildEnv', () => {
     expect(buildPreviewChildEnv({})[PREVIEW_BUILD_ENV_FLAG]).toBe('1');
   });
 
-  it('adds only CONLOCA_PREVIEW_BUILD=1 to the parent environment', () => {
-    expect(buildPreviewChildEnv({ PATH: '/bin', CF_PAGES_BRANCH: 'main' })).toEqual({
+  it('adds CONLOCA_PREVIEW_BUILD=1 and the mode to the parent environment', () => {
+    expect(buildPreviewChildEnv({ PATH: '/bin', CF_PAGES_BRANCH: 'main' }, 'd3')).toEqual({
       PATH: '/bin',
       CF_PAGES_BRANCH: 'main',
       CONLOCA_PREVIEW_BUILD: '1',
+      CONLOCA_PREVIEW_MODE: 'd3',
+      CONLOCA_PREVIEW_PRERENDERED: '[]',
     });
-    expect(buildPreviewChildEnv({ PATH: '/bin' })).toEqual({ PATH: '/bin', CONLOCA_PREVIEW_BUILD: '1' });
+    expect(buildPreviewChildEnv({ PATH: '/bin' })).toEqual({
+      PATH: '/bin',
+      CONLOCA_PREVIEW_BUILD: '1',
+      CONLOCA_PREVIEW_MODE: 'd2',
+    });
   });
 
   it('inherits parent env entries (PATH, credentials, host vars)', () => {

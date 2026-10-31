@@ -51,6 +51,11 @@ describe('resolveFromBaked', () => {
     expect(opts.saasIssuer).toBe('https://iss.test');
   });
 
+  it('leaves the issuer unpinned when neither the build nor the environment names one', () => {
+    const opts = resolveFromBaked({ ...complete, saasIssuer: undefined }, () => undefined);
+    expect('saasIssuer' in opts).toBe(false);
+  });
+
   it('carries the baked build commit, and omits it for an artifact baked without one', () => {
     expect(resolveFromBaked({ ...complete, buildCommit: 'c'.repeat(40) }, () => undefined).buildCommit).toBe(
       'c'.repeat(40),

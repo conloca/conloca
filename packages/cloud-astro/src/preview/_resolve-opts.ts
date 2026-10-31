@@ -1,4 +1,5 @@
 import type { PreviewMiddlewareOptions } from './middleware.js';
+import type { PreviewServeMode } from './preview-path.js';
 
 /** Values the preview build can bake into the artifact at build time. */
 export interface BakedPreviewOpts {
@@ -14,7 +15,7 @@ export interface BakedPreviewOpts {
   /** Astro's `base` at build time. */
   base?: string;
   /** How this build serves previews (`d2` when not baked). */
-  mode?: 'd2' | 'd4';
+  mode?: PreviewServeMode;
 }
 
 /** A value only the build can bake; the deployment cannot supply it. */
@@ -58,9 +59,10 @@ export function resolveFromBaked(
         `set ${envName} on the deployment to override.`,
     );
   };
+  const saasIssuer = readEnvVar('CONLOCA_SAAS_ISSUER') || baked.saasIssuer;
   return {
     saasEndpoint: pick('CONLOCA_SAAS_ENDPOINT', baked.saasEndpoint),
-    saasIssuer: pick('CONLOCA_SAAS_ISSUER', baked.saasIssuer),
+    ...(saasIssuer ? { saasIssuer } : {}),
     saasAudience: pick('CONLOCA_SAAS_AUDIENCE', baked.saasAudience),
     repo: bakedOnly('repo', baked.repo),
     siteId: bakedOnly('siteId', baked.siteId),

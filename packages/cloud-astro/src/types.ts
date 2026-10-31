@@ -1,13 +1,10 @@
 import type { AstroIntegration } from 'astro';
 
 /**
- * Configuration for a recursive preview build that runs immediately after the
- * site's production build completes. The preview build emits the SSR routes
- * that serve draft preview.
- *
- * Off unless given as an object: the second build that serves draft previews.
- * It needs an SSR adapter (the project's own or `adapter` here) and is refused
- * under `@astrojs/vercel` and `@astrojs/netlify`.
+ * The second build that serves draft previews. Off unless given as an object. A static site's preview server runs on
+ * Cloudflare Workers under `/_conloca/preview/` next to the site (it needs `@astrojs/cloudflare` installed); a site
+ * with an adapter serves drafts from its own server deploy; `separate: true` builds a separate preview deploy.
+ * Refused under `@astrojs/vercel` and `@astrojs/netlify`.
  */
 export interface PreviewBuildOptions {
   /**
@@ -26,10 +23,17 @@ export interface PreviewBuildOptions {
    */
   outDir?: string;
   /**
-   * If true, fail the parent build when the preview build fails. Defaults to
-   * true; set false while setting up.
+   * If true, fail the site's build when a D2 preview build fails. Defaults to true; set false while setting up.
+   * A failed D3 preview build fails the site's build only when its server also serves the live site (`run_worker_first`
+   * lists routes beyond the preview route, or `not_found_handling` is `"none"`); otherwise the site ships and its
+   * preview route answers "preview unavailable". This option changes neither.
    */
   required?: boolean;
+  /**
+   * Serve previews from a separate deploy (D4) instead of next to the site. The site's build then runs no preview
+   * build; a second deploy builds with `CONLOCA_PREVIEW_BUILD=1`, and its address goes in sites.json `previewUrl`.
+   */
+  separate?: boolean;
 }
 
 /**
@@ -80,9 +84,8 @@ export interface ConlocaCloudOptions {
    */
   previewBuild?: PreviewBuildOptions | false;
   /**
-   * The token issuer (the JWT `iss` the preview middleware pins).
-   * Set it to bake the value into the preview artifact; otherwise the
-   * deployment must supply `CONLOCA_SAAS_ISSUER` at runtime.
+   * The token issuer (the JWT `iss`) every pass must name. Unset, the preview server checks the pass against the
+   * endpoint's published keys alone, so a site sets nothing at runtime; set it (or `CONLOCA_SAAS_ISSUER`) to pin it.
    */
   saasIssuer?: string;
 }

@@ -17,7 +17,8 @@
     "src/**/__tests__/**/*.ts",
     "src/**/__tests__/**/*.tsx",
     "src/test-suite-tracer.ts",
-    "test-editor-build/**/*.ts"
+    "test-editor-build/**/*.ts",
+    "test-preview-build/**/*.ts"
   ],
   "references": [
     {

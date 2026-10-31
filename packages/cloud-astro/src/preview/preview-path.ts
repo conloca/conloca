@@ -22,6 +22,43 @@ export const PREVIEW_LABEL_HEADER = 'conloca-preview';
 /** Response header on the exit route's redirect that names the preview protocol this build speaks. */
 export const PREVIEW_PROTOCOL_HEADER = 'conloca-preview-protocol';
 
+/** D3: the request header the dispatcher names the requested branch slug in. It strips any the browser sent. */
+export const PREVIEW_SLUG_HEADER = 'conloca-preview-slug';
+
+/** Response header on the exit route's redirect that names how this build serves previews. */
+export const PREVIEW_MODE_HEADER = 'conloca-preview-mode';
+
+/** How one preview server is reached: D2 and D4 at the page's own path, D3 under the route and the branch slug. */
+export type PreviewServeMode = 'd2' | 'd3' | 'd4';
+
+/** One preview's cookie names, the path they live on, and the route its links and exit sit under. */
+export interface PreviewScope {
+  pass: string;
+  /** The share link's cookie; D2 has none (a viewer whose pass expired opens the link again). */
+  grant: string | null;
+  path: string;
+  route: string;
+}
+
+/**
+ * D3 scopes both cookies to `<base>_conloca/preview/<slug>`, so two tabs on two branches keep two passes. D2 and D4
+ * keep the `__Host-` names on `Path=/`, which is what lets the pass follow every same-origin link there.
+ */
+export function previewScope(mode: PreviewServeMode, base: string, slug: string | undefined): PreviewScope {
+  const prefix = previewRoutePrefix(base);
+  if (mode !== 'd3') {
+    return {
+      pass: PREVIEW_COOKIE_NAME,
+      grant: mode === 'd4' ? PREVIEW_GRANT_COOKIE_NAME : null,
+      path: '/',
+      route: prefix,
+    };
+  }
+  if (slug === undefined) throw new Error('@conloca/cloud-astro: a d3 preview scope needs the branch slug');
+  const route = `${prefix}/${slug}`;
+  return { pass: `__Secure-conloca_preview_${slug}`, grant: `__Secure-conloca_grant_${slug}`, path: route, route };
+}
+
 /** The preview route under Astro's `base` (`'/'` → `/_conloca/preview`, `'/docs/'` → `/docs/_conloca/preview`). */
 export function previewRoutePrefix(base: string): string {
   return `${base.replace(/\/+$/u, '')}${PREVIEW_ROUTE_SEGMENT}`;
