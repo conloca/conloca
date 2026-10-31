@@ -113,6 +113,29 @@ describe('preview frame runtime — what React would draw', () => {
     const plain = await renderPreview('![Hero](/assets/hero.png)');
     expect(plain.querySelector('img')?.getAttribute('src')).toBe('/assets/hero.png');
   });
+
+  test('a component gets the sent bytes for a string prop at any depth, never for its children or other text', () => {
+    const runtime = createSandboxRuntime({ '/assets/hero.png': 'data:x' });
+    const seen: unknown[] = [];
+    const Card = (props: unknown) => {
+      seen.push(props);
+      return document.createElement('div');
+    };
+    runtime.jsx(Card, {
+      image: '/assets/hero.png',
+      cards: [{ src: '/assets/hero.png' }],
+      alt: '/assets/hero.png is here',
+      inherited: 'constructor',
+      children: '/assets/hero.png',
+    });
+    expect(seen[0]).toEqual({
+      image: 'data:x',
+      cards: [{ src: 'data:x' }],
+      alt: '/assets/hero.png is here',
+      inherited: 'constructor',
+      children: '/assets/hero.png',
+    });
+  });
 });
 
 /** Puts the test window at `origin`, inside a frame whose parent records what it is posted when `framed`. */
@@ -182,6 +205,25 @@ describe('the preview frame refuses to run unless it is sandboxed', () => {
     );
     await rendered.promise;
     expect(document.querySelector('#__sandbox_root img')?.getAttribute('src')).toBe(images['/assets/hero.png']);
+  });
+
+  test('HTML mode shows the sent bytes for an element src and keeps every other src', () => {
+    frameAs('null', true);
+    sandboxFrameMain({ createSandboxRuntime, runCompiledMdx });
+    const images = { '/assets/hero.png': 'data:image/png;base64,AA==' };
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: {
+          __conlocaSandbox: true,
+          kind: 'render',
+          mode: 'html',
+          payload: '<p><img src="/assets/hero.png" alt="h"><img src="/assets/other.png"></p>',
+          images,
+        },
+      }),
+    );
+    const srcs = [...document.querySelectorAll('#__sandbox_root img')].map((img) => img.getAttribute('src'));
+    expect(srcs).toEqual(['data:image/png;base64,AA==', '/assets/other.png']);
   });
 
   test('the response policy adds the sandbox directive', () => {

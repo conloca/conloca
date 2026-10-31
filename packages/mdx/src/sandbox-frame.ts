@@ -22,7 +22,10 @@ export interface SandboxRenderMessage {
   payload: string;
   /** Optional stylesheet text injected into the frame for preview fidelity. */
   styles?: string;
-  /** Data URLs to show instead of an `<img>` `src` the frame cannot load itself, keyed by that `src` (mode `mdx`). */
+  /**
+   * Data URLs to show instead of an image the frame cannot load itself, keyed by its stored value: an element's
+   * `src` in both modes, and an MDX component's string prop.
+   */
   images?: Record<string, string>;
 }
 
@@ -88,6 +91,25 @@ export function createSandboxRuntime(images?: Record<string, string>): {
     }
     return el;
   };
+  // A component takes images as props of any name, so every string prop at any depth the host sent bytes for is
+  // swapped; `children` is content, not a link, and stays as written.
+  // oxlint-disable-next-line unicorn/consistent-function-scoping, anti-slop/no-unknown-returns, anti-slop/no-known-value-widening -- the frame receives this function as source text, so its helpers stay inside it; props are whatever the component takes, so every value passes through as it came.
+  const withSentImages = (value: unknown, sent: Record<string, string>): unknown => {
+    if (typeof value === 'string') {
+      // Inherited keys are never strings, so only a value the host sent is swapped.
+      const data = sent[value];
+      return typeof data === 'string' ? data : value;
+    }
+    if (Array.isArray(value)) return value.map((item) => withSentImages(item, sent));
+    if (value === null || typeof value !== 'object') return value;
+    const prototype: unknown = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) return value;
+    // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- a copy of the component's own props, values as they came.
+    const out: Record<string, unknown> = {};
+    for (const [key, item] of Object.entries(value)) out[key] = key === 'children' ? item : withSentImages(item, sent);
+    // oxlint-disable-next-line anti-slop/no-known-value-widening -- the copy is as open as the props it came from.
+    return out;
+  };
   const jsx = (type: unknown, props: Record<string, unknown>): Node => {
     const p = props || {};
     if (type === Fragment) {
@@ -95,7 +117,14 @@ export function createSandboxRuntime(images?: Record<string, string>): {
       for (const child of toNodes(p.children)) frag.appendChild(child);
       return frag;
     }
-    if (typeof type === 'function') return (type as (props: Record<string, unknown>) => Node)(p);
+    if (typeof type === 'function') {
+      // SAFETY: `p` is a plain props object, and withSentImages copies a plain object into a plain object.
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion, anti-slop/no-unsafe-dictionary-type -- same reason as the SAFETY note.
+      const componentProps = images ? (withSentImages(p, images) as Record<string, unknown>) : p;
+      // SAFETY: compiled MDX passes only components, which take one props object and return this runtime's DOM nodes.
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion, anti-slop/no-unsafe-dictionary-type -- same reason as the SAFETY note.
+      return (type as (props: Record<string, unknown>) => Node)(componentProps);
+    }
     if (typeof type === 'string') return element(type, p, false);
     const missing = document.createElement('span');
     missing.setAttribute('data-sandbox-unknown', '');
@@ -210,10 +239,20 @@ export function sandboxFrameMain(deps: {
         });
       });
   };
-  const renderHtml = (html: string): void => {
+  const renderHtml = (html: string, images: Record<string, string> | undefined): void => {
     // Already allowlist-sanitized by the host; the sandbox contains anything
     // that slips through (opaque origin, no privileged globals, strict CSP).
-    root.innerHTML = html;
+    // Parsed inert first, so nothing loads before a sent src replaces the stored one.
+    const parsed = new DOMParser().parseFromString(html, 'text/html');
+    if (images) {
+      parsed.querySelectorAll('[src]').forEach((el) => {
+        // Inherited keys are never strings, so only a src the host sent is swapped.
+        const sent = images[el.getAttribute('src') ?? ''];
+        if (typeof sent === 'string') el.setAttribute('src', sent);
+      });
+    }
+    // A leading <style> or <link> lands in the parsed head; keep it with the body, as innerHTML did.
+    root.replaceChildren(...Array.from(parsed.head.childNodes), ...Array.from(parsed.body.childNodes));
     post({ __conlocaSandbox: true, kind: 'rendered' });
     postHeight();
   };
@@ -226,7 +265,7 @@ export function sandboxFrameMain(deps: {
     if (typeof data.styles === 'string') applyStyles(data.styles);
     try {
       if (data.mode === 'mdx') renderMdx(data.payload, data.images);
-      else renderHtml(data.payload);
+      else renderHtml(data.payload, data.images);
     } catch (error: unknown) {
       post({ __conlocaSandbox: true, kind: 'error', message: error instanceof Error ? error.message : String(error) });
     }

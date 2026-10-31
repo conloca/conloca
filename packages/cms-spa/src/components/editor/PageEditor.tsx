@@ -285,11 +285,7 @@ export function PageEditor({
   onReload,
   onPublish,
 }: PageEditorProps) {
-  const draftAssetsBasePath = getUIConfig().draftAssetsBasePath;
-  const renderConfig = useMemo(
-    () => withDraftMediaRendering(config, draftAssetsBasePath),
-    [config, draftAssetsBasePath],
-  );
+  const renderConfig = useMemo(() => withDraftMediaRendering(config), [config]);
   const [data, setData] = useState(entry.localized.content.puckData);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [isDirty, setIsDirty] = useState(false);

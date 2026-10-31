@@ -29,8 +29,8 @@ function ensureSandboxHeightBus(win: Window): void {
 }
 
 /**
- * Data URLs of the draft images in `code`, which the opaque-origin frame cannot fetch from the site or read as
- * this page's blob URLs; `null` while they load (bounded by `draftImageData`), `undefined` when `code` is `undefined`.
+ * Data URLs of the images in `code` (compiled MDX or sanitized HTML), which the opaque-origin frame cannot fetch
+ * from the site or read as this page's blob URLs; `null` while they load (bounded by `draftImageData`), `undefined` when `code` is `undefined`.
  */
 function useDraftImageData(code: string | undefined): Record<string, string> | null | undefined {
   const [loaded, setLoaded] = useState<{ code: string; images: Record<string, string> }>();
@@ -100,7 +100,7 @@ export function ContentSandbox({
   modeRef.current = mode;
   contentRef.current = content;
   stylesRef.current = styles;
-  const images = useDraftImageData(mode === 'mdx' && getUIConfig().loadMedia ? content : undefined);
+  const images = useDraftImageData(getUIConfig().loadMedia ? content : undefined);
   const imagesRef = useRef(images);
   imagesRef.current = images;
 

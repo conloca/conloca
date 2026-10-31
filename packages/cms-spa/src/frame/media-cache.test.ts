@@ -1,7 +1,16 @@
-import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, jest, spyOn, test } from 'bun:test';
 import { act, renderHook } from '@testing-library/react';
 import { configureUI } from '../ui-config.js';
-import { clearMediaCache, loadedMedia, MEDIA_CACHE_LIMIT, mediaObjectUrl, useMediaObjectUrl } from './media-cache.js';
+import {
+  clearMediaCache,
+  loadedMedia,
+  MEDIA_CACHE_LIMIT,
+  MEDIA_RETRY_AFTER_MS,
+  mediaLoadState,
+  mediaObjectUrl,
+  useMediaCacheVersion,
+  useMediaObjectUrl,
+} from './media-cache.js';
 import type { MediaLoadInput } from './protocol.js';
 
 let loads: MediaLoadInput[] = [];
@@ -32,26 +41,26 @@ afterEach(() => {
 
 describe('the media object-URL cache', () => {
   test('a miss starts one load; the URL arrives for every later reader', async () => {
-    expect(mediaObjectUrl('draft', 'hero.png')).toBeUndefined();
-    expect(mediaObjectUrl('draft', 'hero.png')).toBeUndefined();
+    expect(mediaObjectUrl('repo', 'hero.png')).toBeUndefined();
+    expect(mediaObjectUrl('repo', 'hero.png')).toBeUndefined();
     await Bun.sleep(0);
-    expect(loads).toEqual([{ route: 'draft', path: 'hero.png' }]);
-    expect(mediaObjectUrl('draft', 'hero.png')).toStartWith('blob:');
+    expect(loads).toEqual([{ route: 'repo', path: 'hero.png' }]);
+    expect(mediaObjectUrl('repo', 'hero.png')).toStartWith('blob:');
   });
 
-  test('serve and draft bytes of one path are separate entries', async () => {
+  test('serve and repo bytes of one path are separate entries', async () => {
     mediaObjectUrl('serve', 'hero.png');
-    mediaObjectUrl('draft', 'hero.png');
+    mediaObjectUrl('repo', 'hero.png');
     await Bun.sleep(0);
     expect(loads).toEqual([
       { route: 'serve', path: 'hero.png' },
-      { route: 'draft', path: 'hero.png' },
+      { route: 'repo', path: 'hero.png' },
     ]);
     const served = mediaObjectUrl('serve', 'hero.png');
-    const draft = mediaObjectUrl('draft', 'hero.png');
+    const repo = mediaObjectUrl('repo', 'hero.png');
     expect(served).toStartWith('blob:');
-    expect(draft).toStartWith('blob:');
-    expect(served).not.toBe(draft);
+    expect(repo).toStartWith('blob:');
+    expect(served).not.toBe(repo);
   });
 
   test('the 301st image evicts the least recently used and revokes its URL', async () => {
@@ -69,7 +78,23 @@ describe('the media object-URL cache', () => {
     expect(mediaObjectUrl('serve', `k${MEDIA_CACHE_LIMIT}`)).toStartWith('blob:');
   });
 
-  test('a failed load is not retried until the cache is cleared', async () => {
+  test('reports a load as loading, then loaded or failed', async () => {
+    expect(mediaLoadState('repo', 'hero.png')).toEqual({ status: 'loading' });
+    await Bun.sleep(0);
+    expect(mediaLoadState('repo', 'hero.png')).toEqual({
+      status: 'loaded',
+      url: defined(mediaObjectUrl('repo', 'hero.png')),
+    });
+    configureUI({ loadMedia: async () => Promise.reject(new Error('404')) });
+    mediaLoadState('repo', 'gone.png');
+    await Bun.sleep(0);
+    expect(mediaLoadState('repo', 'gone.png')).toEqual({ status: 'failed' });
+    configureUI({});
+    expect(mediaLoadState('repo', 'never.png')).toBeUndefined();
+  });
+
+  test(`a failed load is tried again on the first read after ${MEDIA_RETRY_AFTER_MS} ms, and listeners hear when`, async () => {
+    jest.useFakeTimers();
     let calls = 0;
     configureUI({
       loadMedia: async () => {
@@ -77,15 +102,32 @@ describe('the media object-URL cache', () => {
         throw new Error('404');
       },
     });
-    mediaObjectUrl('draft', 'gone.png');
-    await Bun.sleep(0);
-    mediaObjectUrl('draft', 'gone.png');
-    await Bun.sleep(0);
-    expect(calls).toBe(1);
-    clearMediaCache();
-    mediaObjectUrl('draft', 'gone.png');
-    await Bun.sleep(0);
-    expect(calls).toBe(2);
+    const { result, unmount } = renderHook(() => useMediaCacheVersion());
+    try {
+      expect(mediaLoadState('repo', 'gone.png')).toEqual({ status: 'loading' });
+      await act(() => settled('gone.png'));
+      expect(mediaLoadState('repo', 'gone.png')).toEqual({ status: 'failed' });
+      expect(calls).toBe(1);
+      const failedVersion = result.current;
+      act(() => {
+        jest.advanceTimersByTime(MEDIA_RETRY_AFTER_MS - 1);
+      });
+      expect(mediaLoadState('repo', 'gone.png')).toEqual({ status: 'failed' });
+      expect(result.current).toBe(failedVersion);
+      act(() => {
+        jest.advanceTimersByTime(1);
+      });
+      expect(result.current).toBe(failedVersion + 1);
+      expect(mediaLoadState('repo', 'gone.png')).toEqual({ status: 'loading' });
+      await act(() => settled('gone.png'));
+      expect(calls).toBe(2);
+      act(() => clearMediaCache());
+      await act(() => settled('gone.png'));
+      expect(calls).toBe(3);
+    } finally {
+      unmount();
+      jest.useRealTimers();
+    }
   });
 
   test('clearing revokes every URL, and a load that lands after the clear is discarded', async () => {
@@ -114,13 +156,13 @@ describe('the media object-URL cache', () => {
   });
 
   test('awaiting the bytes shares the one load and URL of the synchronous readers', async () => {
-    expect(mediaObjectUrl('draft', 'hero.png')).toBeUndefined();
-    const loaded = await loadedMedia('draft', 'hero.png');
-    expect(loads).toEqual([{ route: 'draft', path: 'hero.png' }]);
-    expect(loaded?.url).toBe(mediaObjectUrl('draft', 'hero.png'));
+    expect(mediaObjectUrl('repo', 'hero.png')).toBeUndefined();
+    const loaded = await loadedMedia('repo', 'hero.png');
+    expect(loads).toEqual([{ route: 'repo', path: 'hero.png' }]);
+    expect(loaded?.url).toBe(mediaObjectUrl('repo', 'hero.png'));
     expect(await loaded?.blob.text()).toBe('png');
     configureUI({ loadMedia: undefined });
-    expect(await loadedMedia('draft', 'other.png')).toBeUndefined();
+    expect(await loadedMedia('repo', 'other.png')).toBeUndefined();
   });
 
   test('a thumbnail whose entry was evicted keeps its URL and asks for no new load', async () => {
@@ -137,6 +179,11 @@ describe('the media object-URL cache', () => {
     unmount();
   });
 });
+
+/** Waits until the load of `path` on the repo route settles, whichever way. */
+async function settled(path: string): Promise<void> {
+  await loadedMedia('repo', path);
+}
 
 /** Narrows a URL the test already read, so a missing one fails on the assertion that uses it. */
 function defined(url: string | undefined): string {

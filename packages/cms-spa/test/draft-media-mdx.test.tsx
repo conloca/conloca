@@ -5,7 +5,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { createRef, type Ref } from 'react';
 import { CMSMDXEditor } from '../src/components/editor/CMSMDXEditor.js';
-import { DRAFT_IMAGE_WAIT_MS, draftImageData } from '../src/components/editor/draft-media-config.js';
+import {
+  DRAFT_IMAGE_PLACEHOLDER,
+  DRAFT_IMAGE_WAIT_MS,
+  draftImageData,
+} from '../src/components/editor/draft-media-config.js';
 import { ContentSandbox } from '../src/components/sandbox/ContentSandbox.js';
 import { clearMediaCache } from '../src/frame/media-cache.js';
 import type { MediaLoadInput } from '../src/frame/protocol.js';
@@ -53,14 +57,25 @@ function renderEditor(markdown: string, ref?: Ref<MDXEditorMethods>) {
   );
 }
 
-describe('a draft image in the MDX editor canvas', () => {
+describe('an image in the MDX editor canvas', () => {
   test('shows the bytes the page loads through UIConfig.loadMedia, while the markdown keeps its /assets src', async () => {
     configureUI({ loadMedia });
     const ref = createRef<MDXEditorMethods>();
     const { container } = renderEditor('![Hero](/assets/media/hero.png)', ref);
     await waitFor(() => expect(container.querySelector('img')?.getAttribute('src')).toStartWith('blob:'));
-    expect(loads).toEqual([{ route: 'draft', path: 'media/hero.png' }]);
+    expect(loads).toEqual([{ route: 'repo', path: 'media/hero.png' }]);
     expect(ref.current?.getMarkdown()).toContain('](/assets/media/hero.png)');
+  });
+
+  test('a repository image that fails keeps its link; a draft address that fails shows the placeholder', async () => {
+    configureUI({ loadMedia: async () => Promise.reject(new Error('404')) });
+    const { container } = renderEditor('![Hero](/assets/hero.png)\n\n![Upload](/api/v1/assets/serve/a.png)');
+    await waitFor(() =>
+      expect([...container.querySelectorAll('img')].map((img) => img.getAttribute('src'))).toEqual([
+        '/assets/hero.png',
+        DRAFT_IMAGE_PLACEHOLDER,
+      ]),
+    );
   });
 
   test('keeps its canonical src without a loader', async () => {
@@ -71,8 +86,8 @@ describe('a draft image in the MDX editor canvas', () => {
 });
 
 /** The render messages `ContentSandbox` posts into its frame once the frame reports loaded. */
-async function renderMessages(content: string) {
-  const { container } = render(<ContentSandbox mode="mdx" content={content} />);
+async function renderMessages(content: string, mode: 'mdx' | 'html' = 'mdx') {
+  const { container } = render(<ContentSandbox mode={mode} content={content} />);
   const iframe = container.querySelector('iframe');
   const frameWindow = iframe?.contentWindow;
   if (!iframe || !frameWindow) throw new Error('the sandbox frame did not mount');
@@ -95,7 +110,20 @@ describe('a draft image in the sandboxed MDX preview', () => {
         images: { '/assets/hero.png': 'data:image/png;base64,iVBORw==' },
       });
     }
-    expect(loads).toEqual([{ route: 'draft', path: 'hero.png' }]);
+    expect(loads).toEqual([{ route: 'repo', path: 'hero.png' }]);
+  });
+
+  test('crosses as a data URL into an HTML preview too', async () => {
+    configureUI({ loadMedia });
+    const html = '<p><img src="/assets/hero.png" alt="Hero"></p>';
+    const messages = await renderMessages(html, 'html');
+    for (const message of messages) {
+      expect(message).toMatchObject({
+        mode: 'html',
+        payload: html,
+        images: { '/assets/hero.png': 'data:image/png;base64,iVBORw==' },
+      });
+    }
   });
 
   test('crosses unchanged without a loader', async () => {
@@ -127,6 +155,25 @@ describe('the draft image data of a preview update', () => {
     }
     jest.advanceTimersByTime(DRAFT_IMAGE_WAIT_MS);
     expect(await pending).toEqual({ '/assets/hero.png': 'data:image/png;base64,iVBORw==' });
+  });
+
+  test('collects an MDX component prop and an HTML src attribute as well as an img src', async () => {
+    configureUI({ loadMedia });
+    const data = 'data:image/png;base64,iVBORw==';
+    expect(await draftImageData('_jsx(Card, {image: "/assets/hero.png", title: "Hello"})')).toEqual({
+      '/assets/hero.png': data,
+    });
+    expect(await draftImageData('<p><img src="/assets/other.png" alt="x"></p>')).toEqual({ '/assets/other.png': data });
+  });
+
+  test(`gives a draft address not loaded within ${DRAFT_IMAGE_WAIT_MS} ms the placeholder, and leaves a repository image out`, async () => {
+    configureUI({ loadMedia: () => new Promise<Blob>(() => {}) });
+    jest.useFakeTimers();
+    const pending = draftImageData(
+      '[_jsx("img", {src: "/api/v1/assets/serve/a.png"}), _jsx("img", {src: "/assets/b.png"})]',
+    );
+    jest.advanceTimersByTime(DRAFT_IMAGE_WAIT_MS);
+    expect(await pending).toEqual({ '/api/v1/assets/serve/a.png': DRAFT_IMAGE_PLACEHOLDER });
   });
 
   test('encodes each loaded image once across updates', async () => {

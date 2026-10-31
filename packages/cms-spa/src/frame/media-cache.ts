@@ -7,10 +7,17 @@ import type { MediaLoadInput } from './protocol.js';
 /** shortcut: count cap, not bytes; switch to a byte budget if large libraries show memory pressure. */
 export const MEDIA_CACHE_LIMIT = 300;
 
-/** No `url` means loading or failed; either way the key is not loaded again until the cache is cleared. */
+/** A failed load is tried again on the first read after this long, so a busy or briefly missing image recovers. */
+export const MEDIA_RETRY_AFTER_MS = 30_000;
+
+/** Where the bytes of a path stand. */
+export type MediaLoadState = { status: 'loaded'; url: string } | { status: 'loading' } | { status: 'failed' };
+
+/** No `url` means loading, or failed when `failedAt` is set. */
 interface MediaEntry {
   url?: string;
   blob?: Blob;
+  failedAt?: number;
   /** Settles when the load does, whether it loaded, failed or was discarded. */
   loaded?: Promise<void>;
 }
@@ -60,11 +67,14 @@ function evict() {
   }
 }
 
-/** The entry of `path` on `route`: a hit refreshes its recency; a miss starts its one load. `undefined` without a loader. */
+/**
+ * The entry of `path` on `route`: a hit refreshes its recency; a miss, or a failure older than
+ * `MEDIA_RETRY_AFTER_MS`, starts its one load. `undefined` without a loader.
+ */
 function entryFor(route: MediaLoadInput['route'], path: string): MediaEntry | undefined {
   const key = `${route}:${path}`;
   const entry = touch(key);
-  if (entry) return entry;
+  if (entry && (entry.failedAt === undefined || Date.now() - entry.failedAt < MEDIA_RETRY_AFTER_MS)) return entry;
   const loadMedia = getUIConfig().loadMedia;
   if (!loadMedia) return undefined;
   const pending: MediaEntry = {};
@@ -79,9 +89,23 @@ function entryFor(route: MediaLoadInput['route'], path: string): MediaEntry | un
       evict();
       notify();
     },
-    () => {},
+    () => {
+      if (entries.get(key) !== pending) return;
+      pending.failedAt = Date.now();
+      notify();
+      // Mounted images read again when the retry is due.
+      setTimeout(notify, MEDIA_RETRY_AFTER_MS);
+    },
   );
   return pending;
+}
+
+/** Where the bytes of `path` on `route` stand; starts the load on a miss. `undefined` without a loader. */
+export function mediaLoadState(route: MediaLoadInput['route'], path: string): MediaLoadState | undefined {
+  const entry = entryFor(route, path);
+  if (entry === undefined) return undefined;
+  if (entry.url) return { status: 'loaded', url: entry.url };
+  return entry.failedAt === undefined ? { status: 'loading' } : { status: 'failed' };
 }
 
 /**

@@ -1,4 +1,4 @@
-/** Site renderers receive draft URLs while editable data stays canonical. */
+/** Site renderers receive loaded image bytes while editable data stays canonical. */
 import { afterEach, beforeEach, describe, expect, jest, test } from 'bun:test';
 import type { Config } from '@puckeditor/core';
 import { createElement, memo, useState } from 'react';
@@ -14,7 +14,6 @@ import { clearMediaCache } from '../src/frame/media-cache.js';
 import type { MediaLoadInput } from '../src/frame/protocol.js';
 import { configureUI } from '../src/ui-config.js';
 
-const BASE = 'https://editor.example/api/v1/assets/draft';
 const config: Config = {
   components: {
     Hero: {
@@ -51,37 +50,132 @@ function propsFor(url: string) {
   };
 }
 
+let loads: MediaLoadInput[] = [];
+let failing = false;
+
+async function loadMedia(input: MediaLoadInput): Promise<Blob> {
+  loads.push(input);
+  if (failing) throw new Error('404');
+  return new Blob(['png']);
+}
+
+beforeEach(() => {
+  loads = [];
+  failing = false;
+  configureUI({ loadMedia });
+});
+
+afterEach(() => {
+  jest.useRealTimers();
+  clearMediaCache();
+  configureUI({});
+});
 /** The `src` the wrapped Hero renders for an image field holding `url`. */
 function imageOf(wrapped: Config, url: string): string | undefined {
   const html = renderToStaticMarkup(createElement(wrapped.components.Hero.render, { ...propsFor(url), items: [] }));
   return /data-image="([^"]*)"/.exec(html)?.[1];
 }
 
-describe('draft media render configuration', () => {
-  test('resolves nested declared image fields and preserves hooks, slots and cyclic runtime metadata', () => {
+describe('canvas render configuration', () => {
+  test('resolves nested declared image fields and preserves hooks, slots and cyclic runtime metadata', async () => {
     const props = propsFor('/assets/hero.png');
-    const wrapped = withDraftMediaRendering(config, BASE);
+    const wrapped = withDraftMediaRendering(config);
+    renderToStaticMarkup(createElement(wrapped.components.Hero.render, props));
+    await Bun.sleep(0);
     const html = renderToStaticMarkup(createElement(wrapped.components.Hero.render, props));
-    expect(html).toContain(`data-image="${BASE}/hero.png"`);
-    expect(html).toContain(`data-item="${BASE}/nested/other.PNG"`);
+    expect(html).toMatch(/data-image="blob:/);
+    expect(html).toMatch(/data-item="blob:/);
+    expect(loads).toEqual([
+      { route: 'repo', path: 'hero.png' },
+      { route: 'repo', path: 'nested/other.PNG' },
+    ]);
     expect(html).toContain('data-hook="hook works"');
     expect(html).toContain('<strong>Keep React title</strong>');
     expect(html).toContain('Keep slot');
     expect(props.image.url).toBe('/assets/hero.png');
     expect(props.items[0]?.url).toBe('/assets/nested/other.PNG');
     expect(props.puck.metadata.self).toBe(props.puck.metadata);
+    expect(config.components.Hero.render).not.toBe(wrapped.components.Hero.render);
   });
 
-  test('an unrelated editable value remains canonical after another render', () => {
-    const props = propsFor('/assets/uploads/hero.png');
-    const wrapped = withDraftMediaRendering(config, BASE);
-    renderToStaticMarkup(createElement(wrapped.components.Hero.render, props));
-    const edited = { ...props, title: 'Edited heading' };
-    const html = renderToStaticMarkup(createElement(wrapped.components.Hero.render, edited));
-    expect(html).toContain(`data-image="${BASE}/uploads/hero.png"`);
-    expect(edited.image).toBe(props.image);
-    expect(edited.image.url).toBe('/assets/uploads/hero.png');
-    expect(config.components.Hero.render).not.toBe(wrapped.components.Hero.render);
+  test('resolves declared root image fields like component fields, and renders a memoized root', async () => {
+    const plainRoot: Config = {
+      components: {},
+      root: {
+        fields: { backgroundImage: { type: 'text' } },
+        // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- Puck types root props as an open record.
+        render: ({ backgroundImage }: Record<string, unknown>) => <main data-background={String(backgroundImage)} />,
+      },
+    };
+    const Root = memo(({ backgroundImage }: { backgroundImage: string }) => <main data-background={backgroundImage} />);
+    const memoConfig = { components: {}, root: { fields: { backgroundImage: { type: 'text' } }, render: Root } };
+    // SAFETY: Puck renders a memo component as a root at runtime; its Config type only names plain functions.
+    // oxlint-disable-next-line anti-slop/no-chained-type-assertions, typescript/no-unsafe-type-assertion -- same reason as the SAFETY note.
+    const memoRoot = memoConfig as unknown as Config;
+    for (const rootConfig of [plainRoot, memoRoot]) {
+      const props = { backgroundImage: '/assets/hero.png', puck: { isEditing: true } };
+      const render = withDraftMediaRendering(rootConfig).root?.render;
+      if (!render) throw new Error('Root renderer was dropped');
+      // SAFETY: both roots take these props; Puck's render prop type differs per config, so the call site cannot name it.
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- same reason as the SAFETY note.
+      renderToStaticMarkup(createElement(render, props as never));
+      // oxlint-disable-next-line no-await-in-loop -- each root must get its load before it is checked.
+      await Bun.sleep(0);
+      // SAFETY: as above, both roots take these props.
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- same reason as the SAFETY note.
+      expect(renderToStaticMarkup(createElement(render, props as never))).toMatch(/data-background="blob:/);
+      expect(props.backgroundImage).toBe('/assets/hero.png');
+    }
+  });
+
+  test('without a loader the configuration is returned untouched', () => {
+    configureUI({});
+    expect(withDraftMediaRendering(config)).toBe(config);
+  });
+});
+
+describe('repository images in the canvas', () => {
+  test('a repo link shows the placeholder while loading, then the branch bytes, and loads from the repo route', async () => {
+    const wrapped = withDraftMediaRendering(config);
+    expect(imageOf(wrapped, '/assets/hero.png')).toBe(DRAFT_IMAGE_PLACEHOLDER);
+    await Bun.sleep(0);
+    expect(imageOf(wrapped, '/assets/hero.png')).toStartWith('blob:');
+    expect(loads).toEqual([{ route: 'repo', path: 'hero.png' }]);
+  });
+
+  test('a repository image that fails to load keeps its stored link; a draft address shows the placeholder', async () => {
+    failing = true;
+    const wrapped = withDraftMediaRendering(config);
+    imageOf(wrapped, '/assets/hero.png');
+    imageOf(wrapped, '/api/v1/assets/serve/uploads/a.png');
+    await Bun.sleep(0);
+    expect(imageOf(wrapped, '/assets/hero.png')).toBe('/assets/hero.png');
+    expect(imageOf(wrapped, '/api/v1/assets/serve/uploads/a.png')).toBe(DRAFT_IMAGE_PLACEHOLDER);
+  });
+
+  test.each([
+    ['/assets/my%20photo.jpg', 'my photo.jpg'],
+    ['/assets/%E1%83%A4%E1%83%9D%E1%83%A2%E1%83%9D/a%20b.jpeg', 'ფოტო/a b.jpeg'],
+    ['/assets/ფოტო/Team/HERO.PNG', 'ფოტო/Team/HERO.PNG'],
+    ['/assets/100%2525.png', '100%25.png'],
+  ])('the link %s loads the file the site serves for it', async (url, path) => {
+    imageOf(withDraftMediaRendering(config), url);
+    await Bun.sleep(0);
+    expect(loads).toEqual([{ route: 'repo', path }]);
+  });
+
+  test.each([
+    '/assets/a%2Fb.png',
+    '/assets/a%5Cb.png',
+    '/assets/%2e%2e/x.png',
+    '/assets/%2E/x.png',
+    '/assets/%E0%A4%A.png',
+    '/assets/a%00.png',
+  ])('an escape that would change the path (%p) loads nothing and stays as stored', async (url) => {
+    const wrapped = withDraftMediaRendering(config);
+    expect(imageOf(wrapped, url)).toBe(url);
+    await Bun.sleep(0);
+    expect(loads).toEqual([]);
   });
 
   test.each([
@@ -92,146 +186,102 @@ describe('draft media render configuration', () => {
     '/assets/png',
     '/assets/../hero.png',
     '/assets/folder//hero.png',
-  ])('leaves noncanonical reference %s untouched', (url) => {
-    const wrapped = withDraftMediaRendering(config, BASE);
-    const html = renderToStaticMarkup(createElement(wrapped.components.Hero.render, propsFor(url)));
-    expect(html).toContain(`data-image="${url}"`);
-  });
-
-  test.each(['ფოტო', '%E1%83%A4%E1%83%9D%E1%83%A2%E1%83%9D', 'marketing%20images', '%2e%2e', '100% ready'])(
-    'preserves the literal canonical folder %s while encoding URL transport',
-    (folder) => {
-      const path = `/assets/${folder}/hero.PNG`;
-      const wrapped = withDraftMediaRendering(config, BASE);
-      const props = propsFor(path);
-      const html = renderToStaticMarkup(createElement(wrapped.components.Hero.render, props));
-      expect(html).toContain(`${BASE}/${encodeURIComponent(folder)}/hero.PNG`);
-      expect(props.image.url).toBe(path);
-    },
-  );
-
-  test.each(['marketing images', "quotes' & (images)"])(
-    'renders an ordinary folder name %s as safe URL segments',
-    (folder) => {
-      const wrapped = withDraftMediaRendering(config, BASE);
-      const path = `/assets/${folder}/hero.png`;
-      const encoded = encodeURIComponent(folder).replace(
-        /[!'()*]/g,
-        (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
-      );
-      const html = renderToStaticMarkup(createElement(wrapped.components.Hero.render, propsFor(path)));
-      expect(html).toContain(`data-image="${BASE}/${encoded}/hero.png"`);
-    },
-  );
-
-  test('resolves declared root image fields like component fields', () => {
-    const rootConfig: Config = {
-      components: {},
-      root: {
-        fields: { backgroundImage: { type: 'text' } },
-        render: ({ backgroundImage }: Record<string, unknown>) => <main data-background={String(backgroundImage)} />,
-      },
-    };
-    const props = { backgroundImage: '/assets/hero.png', puck: { isEditing: true } };
-    const wrapped = withDraftMediaRendering(rootConfig, BASE);
-    const render = wrapped.root?.render;
-    if (!render) throw new Error('Root renderer was dropped');
-    const html = renderToStaticMarkup(createElement(render, props as never));
-    expect(html).toContain(`data-background="${BASE}/hero.png"`);
-    expect(props.backgroundImage).toBe('/assets/hero.png');
-  });
-
-  test('renders a memoized root component instead of calling it', () => {
-    const Root = memo(({ backgroundImage }: { backgroundImage: string }) => <main data-background={backgroundImage} />);
-    const rootConfig = {
-      components: {},
-      root: { fields: { backgroundImage: { type: 'text' } }, render: Root },
-    } as unknown as Config;
-    const render = withDraftMediaRendering(rootConfig, BASE).root?.render;
-    if (!render) throw new Error('Root renderer was dropped');
-    const html = renderToStaticMarkup(createElement(render, { backgroundImage: '/assets/hero.png' } as never));
-    expect(html).toContain(`data-background="${BASE}/hero.png"`);
-  });
-});
-
-describe('workspace-scoped draft renderer bases', () => {
-  test('places scope after the encoded image path without changing the canonical field', () => {
-    const props = propsFor('/assets/literal%20folder/hero.png');
-    const wrapped = withDraftMediaRendering(config, `${BASE}/?editorWorkspace=%257BscopeA%257D`);
-    const html = renderToStaticMarkup(createElement(wrapped.components.Hero.render, props));
-    expect(html).toContain(`data-image="${BASE}/literal%2520folder/hero.png?editorWorkspace=%257BscopeA%257D"`);
-    expect(props.image.url).toBe('/assets/literal%20folder/hero.png');
-  });
-
-  test('keeps an older renderer bound to its original scope when another scope is created', () => {
-    const props = propsFor('/assets/hero.png');
-    const original = withDraftMediaRendering(config, `${BASE}?editorWorkspace=scopeA`);
-    const next = withDraftMediaRendering(config, `${BASE}?editorWorkspace=scopeB`);
-    const laterHtml = renderToStaticMarkup(createElement(next.components.Hero.render, props));
-    const originalHtml = renderToStaticMarkup(createElement(original.components.Hero.render, props));
-    expect(laterHtml).toContain(`${BASE}/hero.png?editorWorkspace=scopeB`);
-    expect(originalHtml).toContain(`${BASE}/hero.png?editorWorkspace=scopeA`);
-    expect(originalHtml).not.toContain('scopeB');
-    expect(props.image.url).toBe('/assets/hero.png');
-  });
-});
-
-describe('canvas images loaded through the page loader', () => {
-  let loads: MediaLoadInput[] = [];
-
-  beforeEach(() => {
-    loads = [];
-    configureUI({
-      loadMedia: async (input) => {
-        loads.push(input);
-        return new Blob(['png']);
-      },
-    });
-  });
-
-  afterEach(() => {
-    clearMediaCache();
-    configureUI({});
-  });
-
-  test('with a loader the canvas shows the site copy first, then the branch bytes', async () => {
-    const wrapped = withDraftMediaRendering(config, BASE);
-    const first = renderToStaticMarkup(createElement(wrapped.components.Hero.render, propsFor('/assets/hero.png')));
-    expect(first).toContain('data-image="/assets/hero.png"');
+    '/assets/a.txt',
+    '/api/v1/assets/serve/../a.png',
+  ])('unsafe or non-image value %s stays unchanged and loads nothing', async (url) => {
+    const wrapped = withDraftMediaRendering(config);
+    expect(imageOf(wrapped, url)).toBe(url);
     await Bun.sleep(0);
-    const second = renderToStaticMarkup(createElement(wrapped.components.Hero.render, propsFor('/assets/hero.png')));
-    expect(second).toMatch(/data-image="blob:/);
-    expect(loads).toContainEqual({ route: 'draft', path: 'hero.png' });
+    expect(loads).toEqual([]);
   });
 
-  test('with a loader, unsafe or non-image values stay canonical and load nothing', async () => {
-    const wrapped = withDraftMediaRendering(config, undefined);
-    for (const url of ['/assets/../x.png', '/assets/a.txt']) {
-      const props = { ...propsFor(url), items: [] };
-      renderToStaticMarkup(createElement(wrapped.components.Hero.render, props));
-      // oxlint-disable-next-line no-await-in-loop -- each value must get its chance to load before it is checked.
-      await Bun.sleep(0);
-      const html = renderToStaticMarkup(createElement(wrapped.components.Hero.render, props));
-      expect(html).toContain(`data-image="${url}"`);
+  test('links follow the site media URL: /docs/assets/x.png loads, /assets/x.png does not', async () => {
+    configureUI({ loadMedia, assetRefBase: '/docs/assets' });
+    const wrapped = withDraftMediaRendering(config);
+    imageOf(wrapped, '/docs/assets/x.png');
+    expect(imageOf(wrapped, '/assets/x.png')).toBe('/assets/x.png');
+    await Bun.sleep(0);
+    expect(loads).toEqual([{ route: 'repo', path: 'x.png' }]);
+  });
+
+  test('a media folder served at the root makes /hero.png a repository image but not https://, //cdn or data: values', async () => {
+    configureUI({ loadMedia, assetRefBase: '' });
+    const wrapped = withDraftMediaRendering(config);
+    for (const url of ['https://cdn.example/hero.png', '//cdn.example/hero.png', 'data:image/png;base64,AA==']) {
+      expect(imageOf(wrapped, url)).toBe(url);
     }
-    expect(loads).toEqual([]);
+    imageOf(wrapped, '/hero.png');
+    await Bun.sleep(0);
+    expect(loads).toEqual([{ route: 'repo', path: 'hero.png' }]);
+  });
+});
+
+describe('page settings images in the canvas', () => {
+  const published = new Date('2026-09-08T00:00:00.000Z');
+  const page = {
+    id: 'post',
+    pathname: '/blog/post',
+    meta: { title: 'Post', featuredImage: '/assets/cover.jpg', gallery: ['/api/v1/assets/serve/uploads/b.png'] },
+    timestamps: { published },
+  };
+  const related = { id: 'other', pathname: '/blog/other', meta: { featuredImage: '/assets/other.png' } };
+  const metadata = { page, pages: [related], siteName: 'site' };
+  /** A block like the website's article header: no image field of its own, it shows the page settings it reads. */
+  const pageConfig: Config = {
+    components: {
+      Cover: {
+        fields: {},
+        render: ({ puck }) => {
+          // SAFETY: the test hands this block `metadata` below; Puck types metadata as an open record.
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- see the SAFETY note.
+          const context = puck.metadata as typeof metadata;
+          return (
+            <figure
+              data-cover={context.page.meta.featuredImage}
+              data-gallery={context.page.meta.gallery[0]}
+              data-related={context.pages[0]?.meta.featuredImage}
+              data-date={context.page.timestamps.published === published}
+            />
+          );
+        },
+      },
+    },
+  };
+  const puck = { isEditing: true, metadata, dragRef: null, renderDropZone: () => null };
+  const render = (wrapped: Config) =>
+    renderToStaticMarkup(createElement(wrapped.components.Cover.render, { id: 'cover', puck }));
+
+  test('a page setting image shows what its field would: placeholder, then the loaded bytes, from repo or serve', async () => {
+    const wrapped = withDraftMediaRendering(pageConfig);
+    expect(render(wrapped)).toContain(`data-cover="${DRAFT_IMAGE_PLACEHOLDER}"`);
+    await Bun.sleep(0);
+    const html = render(wrapped);
+    expect(html).toMatch(/data-cover="blob:/);
+    expect(html).toMatch(/data-gallery="blob:/);
+    expect(html).toMatch(/data-related="blob:/);
+    expect(html).toContain('data-date="true"');
+    expect(loads).toEqual([
+      { route: 'repo', path: 'cover.jpg' },
+      { route: 'serve', path: 'uploads/b.png' },
+      { route: 'repo', path: 'other.png' },
+    ]);
+    expect(page.meta.featuredImage).toBe('/assets/cover.jpg');
+    expect(page.meta.gallery).toEqual(['/api/v1/assets/serve/uploads/b.png']);
+    expect(related.meta.featuredImage).toBe('/assets/other.png');
+  });
+
+  test('a page setting repository image that fails to load keeps its stored link', async () => {
+    failing = true;
+    const wrapped = withDraftMediaRendering(pageConfig);
+    render(wrapped);
+    await Bun.sleep(0);
+    const html = render(wrapped);
+    expect(html).toContain('data-cover="/assets/cover.jpg"');
+    expect(html).toContain(`data-gallery="${DRAFT_IMAGE_PLACEHOLDER}"`);
   });
 });
 
 describe('draft addresses', () => {
-  let loads: MediaLoadInput[] = [];
-
-  beforeEach(() => {
-    loads = [];
-  });
-
-  afterEach(() => {
-    jest.useRealTimers();
-    clearMediaCache();
-    // configureUI merges, so the loader is cleared explicitly.
-    configureUI({ loadMedia: undefined });
-  });
-
   test('shows the placeholder, then the loaded bytes, never the address itself', async () => {
     const loaded = Promise.withResolvers<Blob>();
     configureUI({
@@ -240,7 +290,7 @@ describe('draft addresses', () => {
         return loaded.promise;
       },
     });
-    const wrapped = withDraftMediaRendering(config, undefined);
+    const wrapped = withDraftMediaRendering(config);
     expect(imageOf(wrapped, '/api/v1/assets/serve/uploads/a b.png')).toBe(DRAFT_IMAGE_PLACEHOLDER);
     expect(loads).toEqual([{ route: 'serve', path: 'uploads/a b.png' }]);
     loaded.resolve(new Blob(['png']));
@@ -248,29 +298,7 @@ describe('draft addresses', () => {
     expect(imageOf(wrapped, '/api/v1/assets/serve/uploads/a b.png')).toStartWith('blob:');
   });
 
-  test('keeps the placeholder after a failed load', async () => {
-    configureUI({
-      loadMedia: async () => {
-        throw new Error('404');
-      },
-    });
-    const wrapped = withDraftMediaRendering(config, BASE);
-    imageOf(wrapped, '/api/v1/assets/serve/uploads/a.png');
-    await Bun.sleep(0);
-    expect(imageOf(wrapped, '/api/v1/assets/serve/uploads/a.png')).toBe(DRAFT_IMAGE_PLACEHOLDER);
-  });
-
-  test.each([undefined, BASE])('shows the placeholder without a loader (base %s)', (base) => {
-    expect(imageOf(withDraftMediaRendering(config, base), '/api/v1/assets/serve/uploads/a.png')).toBe(
-      DRAFT_IMAGE_PLACEHOLDER,
-    );
-  });
-
-  test('still renders a site image link as stored without a loader', () => {
-    expect(imageOf(withDraftMediaRendering(config, undefined), '/assets/x.png')).toBe('/assets/x.png');
-  });
-
-  test('MDX preview data covers draft addresses, with the placeholder when not loaded in time', async () => {
+  test('MDX preview data covers draft addresses and repository images, with the placeholder only for a draft address not loaded in time', async () => {
     configureUI({ loadMedia: () => new Promise<Blob>(() => {}) });
     jest.useFakeTimers();
     const pending = draftImageData('x("/api/v1/assets/serve/a.png", "/assets/b.png")');
@@ -278,26 +306,14 @@ describe('draft addresses', () => {
     expect(await pending).toEqual({ '/api/v1/assets/serve/a.png': DRAFT_IMAGE_PLACEHOLDER });
   });
 
-  test('MDX editor preview returns the placeholder for an unloaded draft address', async () => {
-    configureUI({
-      loadMedia: async () => {
-        throw new Error('404');
-      },
-    });
+  test('MDX editor preview returns the placeholder for an unloaded draft address and the link for a repository image', async () => {
+    failing = true;
     expect(await draftImagePreview('/api/v1/assets/serve/a.png')).toBe(DRAFT_IMAGE_PLACEHOLDER);
     expect(await draftImagePreview('/assets/a.png')).toBe('/assets/a.png');
-  });
-
-  test('never loads a draft address with traversal', async () => {
-    configureUI({
-      loadMedia: async (input) => {
-        loads.push(input);
-        return new Blob(['png']);
-      },
-    });
-    const wrapped = withDraftMediaRendering(config, undefined);
-    expect(imageOf(wrapped, '/api/v1/assets/serve/../a.png')).toBe('/api/v1/assets/serve/../a.png');
     expect(await draftImagePreview('/api/v1/assets/serve/../a.png')).toBe('/api/v1/assets/serve/../a.png');
-    expect(loads).toEqual([]);
+    expect(loads).toEqual([
+      { route: 'serve', path: 'a.png' },
+      { route: 'repo', path: 'a.png' },
+    ]);
   });
 });
