@@ -665,7 +665,7 @@ async function checkSiteStyles(
     return outcome;
   }
   if (pages.length === 0) return outcome;
-  // Only a missing src/ means no stylesheets; any other read error must not pass silently.
+  // Only a missing src/ means no stylesheets; any other failure to list it must not pass silently.
   const names = await readdir(join(projectDir, 'src'), { recursive: true }).catch(
     (error: NodeJS.ErrnoException): string[] | string =>
       error.code === 'ENOENT' ? [] : `src/ could not be read (${error.code ?? error.message})`,
