@@ -165,7 +165,9 @@ export type BranchDeploys = { host: 'cloudflare-pages'; project: string };
 const PAGES_PROJECT_RE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 
 /** A parsed conloca.json object, whether or not it passed `isEditorPageInfo`, as the optional-field readers take it. */
-export type ConlocaJson = EditorPageInfo | { branchDeploys?: unknown; contentPaths?: unknown; preview?: unknown };
+export type ConlocaJson =
+  | EditorPageInfo
+  | { branchDeploys?: unknown; contentPaths?: unknown; preview?: unknown; routes?: unknown };
 
 /** conloca.json `branchDeploys`; `undefined` when absent or malformed, so a bad optional field never makes the page invalid. */
 export function branchDeploysOf(info: ConlocaJson): BranchDeploys | undefined {
@@ -195,6 +197,27 @@ export function contentPathsOf(info: ConlocaJson): string[] | undefined {
   if (!Array.isArray(value) || value.length === 0 || value.length > CONTENT_PATHS_MAX) return undefined;
   if (!value.every(isContentPath)) return undefined;
   return [...new Set<string>(value)];
+}
+
+/** The most bytes of conloca.json the workspace editor reads; a build never writes more. */
+export const CONLOCA_JSON_MAX_BYTES = 16 * 1024;
+
+/** A page route: `/` then at most 200 unreserved URL characters or `/`, so no route carries prompt or shell syntax. */
+export const EDITOR_ROUTE_RE = /^\/[A-Za-z0-9._~\-\/]{0,200}$/;
+export const ROUTES_MAX = 500;
+
+export function isEditorRoute(route: unknown): route is string {
+  return typeof route === 'string' && EDITOR_ROUTE_RE.test(route);
+}
+
+/**
+ * conloca.json `routes`: the page routes a build lists, those outside `EDITOR_ROUTE_RE` and duplicates dropped,
+ * at most `ROUTES_MAX`; `undefined` when absent or not a list, so a bad optional field never makes the page invalid.
+ */
+export function routesOf(info: ConlocaJson): string[] | undefined {
+  const value: unknown = Reflect.get(info, 'routes');
+  if (!Array.isArray(value)) return undefined;
+  return [...new Set(value.filter(isEditorRoute))].slice(0, ROUTES_MAX);
 }
 
 // `~^:?*[\`, `..`, `@{` and `//` anywhere (`git check-ref-format`); space and control characters are checked apart.

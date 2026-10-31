@@ -51,8 +51,13 @@ export {
 export {
   EDITOR_HOST_PROTOCOL,
   EDITOR_HOST_PROTOCOLS,
+  EDITOR_ROUTE_RE,
   type EditorFrameFailure,
   type EditorHostPageData,
+  isEditorRoute,
+  ROUTES_MAX,
+  routesOf,
+  SITE_ID_RE,
 } from '@conloca/content-api/editor-host';
 
 export * from './client.js';
