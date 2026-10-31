@@ -234,6 +234,12 @@ never executed):
   warning)
 - when Conloca pages exist and `src/` holds a stylesheet, `siteStyles` brings it into the editor (a warning)
 
+Repository check, when the project is in a Git repository (it reads the local index only):
+
+- Git tracks no dependency or build folder at the project root — `node_modules`, `dist`, `build`, `.astro`, `.next`,
+  `.nuxt`, `.output`, `.vercel`, `.netlify`, `.turbo`, `.cache`, `coverage` or `vendor` (a warning naming the
+  `git rm -r --cached` command that stops tracking it; some sites commit `dist` on purpose)
+
 Anything doctor cannot determine becomes an explicit warning, never a silent pass, and it never modifies files. The exit
 code is 1 when any error is found; warnings alone exit 0. `--json` prints a single `{ok, problems}` object, each problem
 carrying `check`, `level`, `message`, and usually `path`. Pointing doctor at a directory already named `content` uses
@@ -257,6 +263,7 @@ Checking /path/to/my-astro-project/content
 ✓ C13 the site has Conloca pages to edit
 ✓ C14 pages use only components and fields the Puck config declares
 ✓ C15 siteStyles styles Conloca pages in the editor
+✓ C16 dependency and build folders are not committed
 
 Found 1 error, 0 warnings
 ```

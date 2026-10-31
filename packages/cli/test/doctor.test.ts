@@ -235,4 +235,59 @@ describe('conloca doctor', () => {
       await rm(dir, { recursive: true, force: true });
     }
   });
+
+  test('C16 warns once about dependency and build folders Git tracks at the project root', async () => {
+    const dir = await makeProject('conloca-doctor-c16-');
+    try {
+      await Bun.write(join(dir, 'dist', 'index.html'), '<h1>Built</h1>\n');
+      await Bun.write(join(dir, 'node_modules', 'pkg', 'index.js'), 'export {};\n');
+      await Bun.write(join(dir, '.astro', 'x'), 'generated\n');
+      await Bun.write(join(dir, 'src', 'dist', 'x'), 'kept\n');
+      // -f: a developer's global excludes file must not hide these folders from the index.
+      await $`git init -q && git add -A -f`.cwd(dir).quiet();
+
+      const result = await $`${CLI} doctor --json ${dir}`.quiet();
+      const report = JSON.parse(result.stdout.toString());
+      expect(report.ok).toBe(true);
+      expect(report.problems).toEqual([
+        {
+          check: 'C16',
+          level: 'warn',
+          message:
+            "Git tracks node_modules/, dist/ and .astro/ — these folders usually don't belong in Git. To stop tracking them, run git rm -r --cached node_modules dist .astro and add them to .gitignore.",
+        },
+      ]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('C16 passes when Git ignores those folders', async () => {
+    const dir = await makeProject('conloca-doctor-c16-ignored-');
+    try {
+      await Bun.write(join(dir, '.gitignore'), 'node_modules/\ndist/\n');
+      await Bun.write(join(dir, 'dist', 'index.html'), '<h1>Built</h1>\n');
+      await Bun.write(join(dir, 'node_modules', 'pkg', 'index.js'), 'export {};\n');
+      await $`git init -q && git add -A`.cwd(dir).quiet();
+
+      const result = await $`${CLI} doctor ${dir}`.quiet();
+      expect(result.stdout.toString()).toContain('✓ C16 dependency and build folders are not committed');
+      expect(result.stdout.toString()).toContain('No problems');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('C16 is skipped outside a Git repository', async () => {
+    const dir = await makeProject('conloca-doctor-c16-nogit-');
+    try {
+      const result = await $`${CLI} doctor ${dir}`.quiet();
+      expect(result.stdout.toString()).toContain(
+        '- C16 dependency and build folders are not committed (skipped: not a git repository)',
+      );
+      expect(result.exitCode).toBe(0);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
 });

@@ -1,5 +1,7 @@
+import { execFile as execFileCallback } from 'node:child_process';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
+import { promisify } from 'node:util';
 import { invalidLocaleMessage, isContentLocale } from '@conloca/content-api/content-path';
 import { ContentIndex, FileSystemReaderBackend, type SitesConfig } from '@conloca/content-api/node';
 import { contentRootOf } from '../lib/content-root.js';
@@ -8,6 +10,8 @@ import { messageOf } from '../lib/message-of.js';
 import { CONTENT_GLOB, type ConlocaPageRef, pagesOf } from '../lib/site-routes.js';
 import { runAstroChecks } from './doctor-astro.js';
 import { runExtensionChecks } from './doctor-extensions.js';
+
+const execFile = promisify(execFileCallback);
 
 export interface DoctorProblem {
   check: string;
@@ -232,6 +236,53 @@ async function checkContentIndex(
   return { outcome, pages };
 }
 
+/** Root folders that hold installed dependencies or build output, in report order. */
+const GENERATED_FOLDERS = [
+  'node_modules',
+  'dist',
+  'build',
+  '.astro',
+  '.next',
+  '.nuxt',
+  '.output',
+  '.vercel',
+  '.netlify',
+  '.turbo',
+  '.cache',
+  'coverage',
+  'vendor',
+];
+
+/**
+ * C16 — Git tracks no dependency or build folder at the project root. A
+ * warning only: some sites commit their build output on purpose.
+ */
+async function checkTrackedFolders(projectDir: string): Promise<CheckOutcome> {
+  const problems: DoctorProblem[] = [];
+  const outcome: CheckOutcome = { id: 'C16', label: 'dependency and build folders are not committed', problems };
+  let stdout: string;
+  try {
+    ({ stdout } = await execFile('git', ['ls-files', '-z'], { cwd: projectDir, maxBuffer: 256 * 1024 * 1024 }));
+  } catch (error) {
+    // A numeric code is git's own exit status; anything else means git never ran (missing binary or folder).
+    outcome.skipped = isRecord(error) && typeof error.code === 'number' ? 'not a git repository' : 'git could not run';
+    return outcome;
+  }
+
+  // A root-level file yields '', so only folders match.
+  const roots = new Set(stdout.split('\0').map((path) => path.slice(0, path.indexOf('/') + 1)));
+  const tracked = GENERATED_FOLDERS.filter((name) => roots.has(`${name}/`));
+  if (tracked.length > 0) {
+    const list = new Intl.ListFormat('en-GB', { type: 'conjunction' }).format(tracked.map((name) => `${name}/`));
+    problems.push({
+      check: 'C16',
+      level: 'warn',
+      message: `Git tracks ${list} — these folders usually don't belong in Git. To stop tracking them, run git rm -r --cached ${tracked.join(' ')} and add them to .gitignore.`,
+    });
+  }
+  return outcome;
+}
+
 export interface DoctorOptions {
   /** Let extensions contact the services they configure. Off by default: doctor itself never networks. */
   live: boolean;
@@ -249,6 +300,7 @@ export async function runDoctor(
   const contentIndex = await checkContentIndex(contentRoot, sitesFile.config);
   checks.push(contentIndex.outcome);
   checks.push(...(await runAstroChecks(projectDir, sitesFile.config, contentIndex.pages)));
+  checks.push(await checkTrackedFolders(projectDir));
   checks.push(...(await runExtensionChecks(projectDir, contentRoot, options.live)));
 
   const problems = checks.flatMap((check) => check.problems);
