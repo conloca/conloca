@@ -1,6 +1,7 @@
 /* oxlint-disable no-underscore-dangle -- __UI_CONFIG__ is the existing browser-global compatibility contract read by embedded hosts. */
 import type { ContentAPIClient, EditorDataBindings } from '@conloca/content-api-client';
 import type { QueryClientConfig } from '@tanstack/react-query';
+import type { PageConversionFacts } from './convert-pages.js';
 import type { MediaLoadInput, PreviewOpenResult } from './frame/protocol.js';
 import type { MediaBridge } from './media/types.js';
 
@@ -217,6 +218,11 @@ export interface UIConfig {
    * dev-server endpoints do not exist.
    */
   memoryRouter?: MemoryRouterConfig;
+  /**
+   * Set by the workspace editor around the framed editor or by the local
+   * integration; absent means the editor does not offer page conversion.
+   */
+  pageConversion?: PageConversionFacts;
 }
 
 /** How the editor routes when a parent frame owns the address bar. */
@@ -257,6 +263,9 @@ declare global {
 
 let config: UIConfig = { ...defaultConfig };
 
+/** Fired on window when a parent frame changes `readOnly` or `pageConversion` after `configureUI`. */
+export const EDITOR_CONFIG_CHANGED_EVENT = 'conloca:editor-config-changed';
+
 export function configureUI(options: Partial<UIConfig>) {
   // `readOnly` survives a reinstall unless the caller states a new answer.
   //
@@ -294,6 +303,17 @@ export function setEditorReadOnly(readOnly: EditorWriteRefusal | null) {
   // The runtime mirror `getUIConfig` reads from.
   const runtimeConfig = window.__UI_CONFIG__;
   if (runtimeConfig) runtimeConfig.readOnly = next;
+  window.dispatchEvent(new Event(EDITOR_CONFIG_CHANGED_EVENT));
+}
+
+/** Install (or clear, with `null`) the page conversion facts after `configureUI`, like {@link setEditorReadOnly}. */
+export function setPageConversion(facts: PageConversionFacts | null) {
+  const next = facts ?? undefined;
+  config.pageConversion = next;
+  if (typeof window === 'undefined') return;
+  const runtimeConfig = window.__UI_CONFIG__;
+  if (runtimeConfig) runtimeConfig.pageConversion = next;
+  window.dispatchEvent(new Event(EDITOR_CONFIG_CHANGED_EVENT));
 }
 
 /**
