@@ -69,10 +69,10 @@ export function packageNameOf(directory: string): string {
 const SCAFFOLD_CONLOCA_PACKAGES = ['@conloca/astro-cms', '@conloca/content-api'] as const;
 
 /**
- * What a created project should ask npm for. The CLI's own dependency range is the only version
- * of a sibling package known to exist: releases are independent, so the CLI can be published on
- * its own and its own version then names a release nobody ever cut. Inside this repo the range is
- * still `workspace:*`, which becomes a real version only at pack time, so it falls back. Optional peers count too.
+ * What a created project should ask npm for. The packages release together on one version, and
+ * the CLI's own dependency range names the sibling release it was packed against. Inside this repo the range is
+ * still `workspace:*`, which becomes a real version only at pack time, so it falls back to the CLI's version
+ * (the same release). Optional peers count too.
  */
 export function conlocaRange(manifest: CliManifest, name: string): string {
   const declared = manifest.dependencies?.[name] ?? manifest.peerDependencies?.[name];
