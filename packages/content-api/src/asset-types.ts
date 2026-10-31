@@ -27,6 +27,8 @@ export interface AssetEntry {
   folder?: string;
   /** Tags for categorization/filtering */
   tags?: string[];
+  /** The link a pick stores, when the backend serves this image from somewhere other than the site's media folder. */
+  ref?: string;
 }
 
 /** Asset usage reference - tracks where an asset is used */

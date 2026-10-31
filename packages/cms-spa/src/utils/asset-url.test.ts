@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { configureUI } from '../ui-config.js';
-import { buildAssetPath, buildAssetRef, buildAssetServeUrl } from './asset-url.js';
+import { assetRefOf, buildAssetPath, buildAssetRef, buildAssetServeUrl } from './asset-url.js';
 
 /**
  * `buildAssetPath` produces the path, relative to the media library root, that
@@ -164,5 +164,17 @@ describe('buildAssetRef — injected base', () => {
 
     expect(buildAssetRef('/', 'a.png')).toBe('/a.png');
     expect(buildAssetRef('/photos', 'a.png')).toBe('/photos/a.png');
+  });
+});
+
+describe('assetRefOf', () => {
+  it('stores the link the server gave the asset', () => {
+    expect(assetRefOf({ folder: '/uploads', filename: 'a.png', ref: '/api/v1/assets/serve/uploads/a.png' })).toBe(
+      '/api/v1/assets/serve/uploads/a.png',
+    );
+  });
+
+  it('falls back to the site link without one', () => {
+    expect(assetRefOf({ folder: '/photos', filename: 'a.png' })).toBe('/assets/photos/a.png');
   });
 });

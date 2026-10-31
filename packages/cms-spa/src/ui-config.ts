@@ -209,7 +209,9 @@ export interface UIConfig {
   editorCss?: string;
   /**
    * Loads the bytes of a media file. When set, media surfaces never hand media
-   * URLs to `<img>`; they show object URLs of the loaded bytes.
+   * URLs to `<img>`; they show object URLs of the loaded bytes. Draft addresses
+   * (`/api/v1/assets/serve/<path>`) load through it from `serve` and show a
+   * transparent placeholder until their bytes arrive.
    */
   loadMedia?: (input: MediaLoadInput) => Promise<Blob>;
   /**

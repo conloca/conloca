@@ -22,7 +22,7 @@ import {
   useSiteStyles,
 } from '../../site-styles.js';
 import { getUIConfig, inEditorFrame } from '../../ui-config.js';
-import { buildAssetRef } from '../../utils/asset-url.js';
+import { assetRefOf } from '../../utils/asset-url.js';
 import { draftImagePreview } from './draft-media-config.js';
 import { GenericBlock } from './GenericBlock.js';
 import { hostWrapperPlugin } from './host-wrapper-plugin.js';
@@ -221,14 +221,13 @@ export const CMSMDXEditor = forwardRef<MDXEditorMethods, CMSMDXEditorProps>(({ p
 
   // Wire paste/drop image uploads to the same backend mutation that powers
   // the asset library's UploadModal. The library expects a Promise<string>
-  // resolving to the image src; we hand back the stored reference
-  // buildAssetRef builds, so it round-trips identically to a path picked
-  // from the asset browser.
+  // resolving to the image src; we hand back the link `assetRefOf` stores,
+  // so it round-trips identically to a path picked from the asset browser.
   const imageUploadHandler = useCallback(
     async (file: File) => {
       const formData = buildUploadFormData(file, undefined, '/');
       const asset = await uploadAsset.mutateAsync(formData);
-      return buildAssetRef(asset.folder, asset.filename);
+      return assetRefOf(asset);
     },
     [uploadAsset],
   );
@@ -241,8 +240,8 @@ export const CMSMDXEditor = forwardRef<MDXEditorMethods, CMSMDXEditorProps>(({ p
       disableImageSettingsButton={true}
       imageButtonRef={insertImageRef}
       imageUploadHandler={imageUploadHandler}
-      // The site does not serve branch drafts; with a loader, draft images show their loaded bytes.
-      imagePreviewHandler={getUIConfig().loadMedia ? draftImagePreview : undefined}
+      // The site does not serve branch drafts: draft images show their loaded bytes, draft addresses a placeholder until then.
+      imagePreviewHandler={draftImagePreview}
       jsxComponentDescriptors={jsxComponentDescriptors}
       extraPlugins={extraPlugins}
       extraToolbarItems={<InsertMdxComponentButton />}

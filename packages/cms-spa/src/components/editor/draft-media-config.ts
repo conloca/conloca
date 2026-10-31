@@ -1,37 +1,25 @@
 /** Resolve unpublished draft images for site renderers without changing Puck's persisted data. */
 /* oxlint-disable anti-slop/no-unsafe-dictionary-type, anti-slop/no-unknown-returns -- block props are whatever the site's components take; this walk only swaps image strings and passes every other value through as it came. */
-import { IMAGE_EXTENSION_MIME } from '@conloca/content-api-client';
+import { DRAFT_MEDIA_REF_BASE, draftMediaRefPath, mediaRefPath } from '@conloca/content-api-client';
 import type { Config, Field, Fields } from '@puckeditor/core';
 import { type ComponentType, createElement, isValidElement } from 'react';
 import { loadedMedia, mediaObjectUrl, useMediaCacheVersion } from '../../frame/media-cache.js';
+import type { MediaLoadInput } from '../../frame/protocol.js';
 import { getUIConfig } from '../../ui-config.js';
 import { appendAssetUrlPath } from '../../utils/asset-url.js';
 
-/** What a validated draft image path renders as; `undefined` keeps the canonical value. */
-type DraftImageResolver = (path: string) => string | undefined;
+/** A 1×1 transparent GIF: what a draft address shows until its bytes arrive, and after a failed load. */
+export const DRAFT_IMAGE_PLACEHOLDER = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 
-/** The raw media path of a canonical `/assets/<path>` image reference, or `undefined` when it is not a safe image path. */
-function draftImagePath(value: string): string | undefined {
-  if (!value.startsWith('/assets/')) return undefined;
-  const path = value.slice('/assets/'.length);
-  if (/[\\?#]/.test(path)) return undefined;
-  const segments = path.split('/');
-  for (const part of segments) {
-    if (
-      part === '' ||
-      part === '.' ||
-      part === '..' ||
-      [...part].some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127)
-    ) {
-      return undefined;
-    }
-  }
-  const filename = segments[segments.length - 1] ?? '';
-  const dot = filename.lastIndexOf('.');
-  if (dot <= 0) return undefined;
-  const extension = filename.slice(dot + 1).toLowerCase();
-  if (!Object.prototype.hasOwnProperty.call(IMAGE_EXTENSION_MIME, extension)) return undefined;
-  return path;
+/** What a stored image link renders as; `undefined` keeps the stored value. */
+type DraftImageResolver = (source: MediaLoadInput) => string | undefined;
+
+/** Where the bytes of a stored image link load from: a draft address from `serve`, a site `/assets/` link from `draft`. */
+function mediaSourceOf(value: string): MediaLoadInput | undefined {
+  const draftPath = draftMediaRefPath(value);
+  if (draftPath !== undefined) return { route: 'serve', path: draftPath };
+  const path = mediaRefPath(value, '/assets');
+  return path === undefined ? undefined : { route: 'draft', path };
 }
 
 function draftImageUrl(path: string, base: string): string {
@@ -44,13 +32,16 @@ function draftImageUrl(path: string, base: string): string {
 }
 
 /**
- * What the MDX editor canvas shows for an image `src`: the loaded bytes of a draft image, else `src` itself.
+ * What the MDX editor canvas shows for an image `src`: the loaded bytes of a draft image, else the placeholder for a
+ * draft address, else `src` itself.
  * The URL is the media cache's own, which a media write or eviction revokes; mdxeditor resolves an image again only
  * when its `src` changes or it remounts, so a mounted image keeps painting its decoded bytes from a revoked URL.
  */
 export async function draftImagePreview(src: string): Promise<string> {
-  const path = draftImagePath(src);
-  return (path === undefined ? undefined : (await loadedMedia('draft', path))?.url) ?? src;
+  const source = mediaSourceOf(src);
+  if (source === undefined) return src;
+  const url = (await loadedMedia(source.route, source.path))?.url;
+  return url ?? (source.route === 'serve' ? DRAFT_IMAGE_PLACEHOLDER : src);
 }
 
 function dataUrl(blob: Blob): Promise<string> {
@@ -71,9 +62,8 @@ function dataUrl(blob: Blob): Promise<string> {
 // Keyed by the cached Blob, so a cleared or evicted cache entry frees its string too.
 const dataUrls = new WeakMap<Blob, Promise<string>>();
 
-async function draftImageDataUrl(src: string): Promise<string | undefined> {
-  const path = draftImagePath(src);
-  const media = path === undefined ? undefined : await loadedMedia('draft', path);
+async function draftImageDataUrl({ route, path }: MediaLoadInput): Promise<string | undefined> {
+  const media = await loadedMedia(route, path);
   if (!media) return undefined;
   let url = dataUrls.get(media.blob);
   if (!url) {
@@ -87,13 +77,14 @@ async function draftImageDataUrl(src: string): Promise<string | undefined> {
 export const DRAFT_IMAGE_WAIT_MS = 5000;
 
 /**
- * Data URLs of the draft images a compiled MDX body names, keyed by their canonical `src`, for the
+ * Data URLs of the draft images a compiled MDX body names, keyed by their stored `src`, for the
  * opaque-origin preview frame, which cannot read this page's blob URLs. Images that fail to load, or are
- * still loading after `DRAFT_IMAGE_WAIT_MS`, are left out.
+ * still loading after `DRAFT_IMAGE_WAIT_MS`, show the placeholder for a draft address and are left out otherwise.
  */
 export async function draftImageData(code: string): Promise<Record<string, string>> {
   // shortcut: finds srcs only as plain double-quoted literals, the form the MDX compiler emits for these paths; widen if an escaped path must preview.
-  const srcs = new Set(code.match(/"\/assets\/[^"\\]*"/g)?.map((literal) => literal.slice(1, -1)));
+  const literals = code.match(new RegExp(`"(?:/assets|${DRAFT_MEDIA_REF_BASE})/[^"\\\\]*"`, 'g'));
+  const srcs = new Set(literals?.map((literal) => literal.slice(1, -1)));
   const images: Record<string, string> = {};
   let timer: number | undefined;
   const expired = new Promise<undefined>((resolve) => {
@@ -101,8 +92,11 @@ export async function draftImageData(code: string): Promise<Record<string, strin
   });
   await Promise.all(
     [...srcs].map(async (src) => {
-      const url = await Promise.race([draftImageDataUrl(src).catch(() => undefined), expired]);
-      if (url !== undefined) images[src] = url;
+      const source = mediaSourceOf(src);
+      if (source === undefined) return;
+      const url = await Promise.race([draftImageDataUrl(source).catch(() => undefined), expired]);
+      const shown = url ?? (source.route === 'serve' ? DRAFT_IMAGE_PLACEHOLDER : undefined);
+      if (shown !== undefined) images[src] = shown;
     }),
   );
   window.clearTimeout(timer);
@@ -118,8 +112,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function fieldValue(value: unknown, field: Field, resolve: DraftImageResolver): unknown {
   if (field.type === 'slot') return value;
   if (typeof value === 'string') {
-    const path = draftImagePath(value);
-    return path === undefined ? value : (resolve(path) ?? value);
+    const source = mediaSourceOf(value);
+    return source === undefined ? value : (resolve(source) ?? value);
   }
   if (field.type === 'object' && isRecord(value)) return fieldProps(value, field.objectFields, resolve);
   if (field.type === 'array' && Array.isArray(value)) {
@@ -148,16 +142,16 @@ function fieldProps(
 
 /**
  * Static declared fields bound traversal; dynamic field resolvers and runtime contexts remain untouched.
- * With `UIConfig.loadMedia` set, `base` is ignored: draft images show object URLs of the loaded bytes,
- * the canonical value until they arrive.
+ * Draft addresses show object URLs of their loaded bytes, the placeholder until then and without `UIConfig.loadMedia`.
+ * With `loadMedia` set, `base` is ignored: site `/assets/` links show their loaded bytes, the stored value until then.
  */
 export function withDraftMediaRendering(config: Config, base: string | undefined): Config {
-  const resolve: DraftImageResolver | undefined = getUIConfig().loadMedia
-    ? (path) => mediaObjectUrl('draft', path)
-    : base === undefined
-      ? undefined
-      : (path) => draftImageUrl(path, base);
-  if (resolve === undefined) return config;
+  const loads = getUIConfig().loadMedia !== undefined;
+  const resolve: DraftImageResolver = ({ route, path }) => {
+    if (route === 'serve') return mediaObjectUrl(route, path) ?? DRAFT_IMAGE_PLACEHOLDER;
+    if (loads) return mediaObjectUrl(route, path);
+    return base === undefined ? undefined : draftImageUrl(path, base);
+  };
   const root = config.root;
   const rootRender = root?.render;
   return {

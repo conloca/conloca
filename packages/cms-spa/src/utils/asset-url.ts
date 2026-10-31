@@ -1,3 +1,4 @@
+import type { AssetEntry } from '@conloca/content-api-client';
 import { getUIConfig } from '../ui-config.js';
 
 /** An asset path relative to the media root; this is the identity accepted by asset routes. */
@@ -27,4 +28,9 @@ export function buildAssetServeUrl(basePath: string, folder: string | undefined,
 /** The content reference written when the editor picks an asset. */
 export function buildAssetRef(folder: string | undefined, filename: string): string {
   return buildAssetServeUrl(getUIConfig().assetRefBase ?? '/assets', folder, filename);
+}
+
+/** The link a pick of `asset` stores: the one the server gave it, else the site link `buildAssetRef` builds. */
+export function assetRefOf(asset: Pick<AssetEntry, 'folder' | 'filename' | 'ref'>): string {
+  return asset.ref ?? buildAssetRef(asset.folder, asset.filename);
 }

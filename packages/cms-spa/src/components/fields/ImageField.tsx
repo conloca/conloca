@@ -1,7 +1,7 @@
 import { FolderOpen } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { AssetEntry } from '../../hooks/index.js';
-import { buildAssetRef } from '../../utils/asset-url.js';
+import { assetRefOf } from '../../utils/asset-url.js';
 import { ImagePicker } from '../media/ImagePicker.js';
 import { Input } from '../ui/index.js';
 
@@ -33,7 +33,7 @@ export function ImageFieldRender({ value, onChange, inputId }: ImageFieldRenderP
   }, [value]);
 
   const handleSelect = (asset: AssetEntry) => {
-    const assetPath = buildAssetRef(asset.folder, asset.filename);
+    const assetPath = assetRefOf(asset);
     onChange(assetPath);
     setLocalValue(assetPath);
     setModalOpen(false);

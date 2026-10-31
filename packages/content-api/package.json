@@ -64,6 +64,11 @@
       "import": "./dist/content-path.js",
       "default": "./dist/content-path.js"
     },
+    "./draft-media-ref": {
+      "types": "./dist/draft-media-ref.d.ts",
+      "import": "./dist/draft-media-ref.js",
+      "default": "./dist/draft-media-ref.js"
+    },
     "./content-file-id": {
       "types": "./dist/content-file-id.d.ts",
       "import": "./dist/content-file-id.js",

@@ -1,9 +1,15 @@
 /** Site renderers receive draft URLs while editable data stays canonical. */
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, jest, test } from 'bun:test';
 import type { Config } from '@puckeditor/core';
 import { createElement, memo, useState } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { withDraftMediaRendering } from '../src/components/editor/draft-media-config.js';
+import {
+  DRAFT_IMAGE_PLACEHOLDER,
+  DRAFT_IMAGE_WAIT_MS,
+  draftImageData,
+  draftImagePreview,
+  withDraftMediaRendering,
+} from '../src/components/editor/draft-media-config.js';
 import { clearMediaCache } from '../src/frame/media-cache.js';
 import type { MediaLoadInput } from '../src/frame/protocol.js';
 import { configureUI } from '../src/ui-config.js';
@@ -43,6 +49,12 @@ function propsFor(url: string) {
     puck: { isEditing: true, metadata, dragRef: null, renderDropZone: () => null },
     undeclared: metadata,
   };
+}
+
+/** The `src` the wrapped Hero renders for an image field holding `url`. */
+function imageOf(wrapped: Config, url: string): string | undefined {
+  const html = renderToStaticMarkup(createElement(wrapped.components.Hero.render, { ...propsFor(url), items: [] }));
+  return /data-image="([^"]*)"/.exec(html)?.[1];
 }
 
 describe('draft media render configuration', () => {
@@ -140,10 +152,6 @@ describe('draft media render configuration', () => {
     const html = renderToStaticMarkup(createElement(render, { backgroundImage: '/assets/hero.png' } as never));
     expect(html).toContain(`data-background="${BASE}/hero.png"`);
   });
-
-  test('keeps standalone configuration identical', () => {
-    expect(withDraftMediaRendering(config, undefined)).toBe(config);
-  });
 });
 
 describe('workspace-scoped draft renderer bases', () => {
@@ -206,6 +214,90 @@ describe('canvas images loaded through the page loader', () => {
       const html = renderToStaticMarkup(createElement(wrapped.components.Hero.render, props));
       expect(html).toContain(`data-image="${url}"`);
     }
+    expect(loads).toEqual([]);
+  });
+});
+
+describe('draft addresses', () => {
+  let loads: MediaLoadInput[] = [];
+
+  beforeEach(() => {
+    loads = [];
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+    clearMediaCache();
+    // configureUI merges, so the loader is cleared explicitly.
+    configureUI({ loadMedia: undefined });
+  });
+
+  test('shows the placeholder, then the loaded bytes, never the address itself', async () => {
+    const loaded = Promise.withResolvers<Blob>();
+    configureUI({
+      loadMedia: (input) => {
+        loads.push(input);
+        return loaded.promise;
+      },
+    });
+    const wrapped = withDraftMediaRendering(config, undefined);
+    expect(imageOf(wrapped, '/api/v1/assets/serve/uploads/a b.png')).toBe(DRAFT_IMAGE_PLACEHOLDER);
+    expect(loads).toEqual([{ route: 'serve', path: 'uploads/a b.png' }]);
+    loaded.resolve(new Blob(['png']));
+    await Bun.sleep(0);
+    expect(imageOf(wrapped, '/api/v1/assets/serve/uploads/a b.png')).toStartWith('blob:');
+  });
+
+  test('keeps the placeholder after a failed load', async () => {
+    configureUI({
+      loadMedia: async () => {
+        throw new Error('404');
+      },
+    });
+    const wrapped = withDraftMediaRendering(config, BASE);
+    imageOf(wrapped, '/api/v1/assets/serve/uploads/a.png');
+    await Bun.sleep(0);
+    expect(imageOf(wrapped, '/api/v1/assets/serve/uploads/a.png')).toBe(DRAFT_IMAGE_PLACEHOLDER);
+  });
+
+  test.each([undefined, BASE])('shows the placeholder without a loader (base %s)', (base) => {
+    expect(imageOf(withDraftMediaRendering(config, base), '/api/v1/assets/serve/uploads/a.png')).toBe(
+      DRAFT_IMAGE_PLACEHOLDER,
+    );
+  });
+
+  test('still renders a site image link as stored without a loader', () => {
+    expect(imageOf(withDraftMediaRendering(config, undefined), '/assets/x.png')).toBe('/assets/x.png');
+  });
+
+  test('MDX preview data covers draft addresses, with the placeholder when not loaded in time', async () => {
+    configureUI({ loadMedia: () => new Promise<Blob>(() => {}) });
+    jest.useFakeTimers();
+    const pending = draftImageData('x("/api/v1/assets/serve/a.png", "/assets/b.png")');
+    jest.advanceTimersByTime(DRAFT_IMAGE_WAIT_MS);
+    expect(await pending).toEqual({ '/api/v1/assets/serve/a.png': DRAFT_IMAGE_PLACEHOLDER });
+  });
+
+  test('MDX editor preview returns the placeholder for an unloaded draft address', async () => {
+    configureUI({
+      loadMedia: async () => {
+        throw new Error('404');
+      },
+    });
+    expect(await draftImagePreview('/api/v1/assets/serve/a.png')).toBe(DRAFT_IMAGE_PLACEHOLDER);
+    expect(await draftImagePreview('/assets/a.png')).toBe('/assets/a.png');
+  });
+
+  test('never loads a draft address with traversal', async () => {
+    configureUI({
+      loadMedia: async (input) => {
+        loads.push(input);
+        return new Blob(['png']);
+      },
+    });
+    const wrapped = withDraftMediaRendering(config, undefined);
+    expect(imageOf(wrapped, '/api/v1/assets/serve/../a.png')).toBe('/api/v1/assets/serve/../a.png');
+    expect(await draftImagePreview('/api/v1/assets/serve/../a.png')).toBe('/api/v1/assets/serve/../a.png');
     expect(loads).toEqual([]);
   });
 });

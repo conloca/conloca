@@ -3,7 +3,7 @@
 // as the editor internals, avoiding React context isolation issues.
 import { closeImageDialog$, imageDialogState$, insertImage$, useCellValue, usePublisher } from '@mdxeditor/editor';
 import type { AssetEntry } from '../../hooks/index.js';
-import { buildAssetRef } from '../../utils/asset-url.js';
+import { assetRefOf } from '../../utils/asset-url.js';
 import { ImagePicker } from '../media/ImagePicker.js';
 
 /**
@@ -17,7 +17,7 @@ export function ImagePickerDialog() {
 
   const handleSelect = (asset: AssetEntry) => {
     // Insert image at cursor - no alt text per CONTEXT.md
-    insertImage({ src: buildAssetRef(asset.folder, asset.filename) });
+    insertImage({ src: assetRefOf(asset) });
     closeDialog();
   };
 

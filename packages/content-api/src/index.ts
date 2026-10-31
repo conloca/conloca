@@ -30,6 +30,8 @@ export * from './content-operations.js';
 export type { PathnameValidationReason, PathnameValidationResult } from './content-utils.js';
 export * from './content-utils.js';
 export { normalizeAndValidatePathname } from './content-utils.js';
+// The address an unpublished upload is linked by until it is published.
+export { DRAFT_MEDIA_REF_BASE, draftMediaRef, draftMediaRefPath, mediaRefPath } from './draft-media-ref.js';
 // The one validator for a site's data bindings arriving from outside the editor.
 export { readEditorDataBindings } from './editor-data-bindings.js';
 export { Fragments } from './fragments.js';
