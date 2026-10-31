@@ -4,6 +4,7 @@
  * parent origins the page accepts. Both sides import it from here.
  */
 import type { ContentAPIClient } from '@conloca/content-api-client';
+import { type PageConversionFacts, readPageConversionFacts } from '../convert-pages.js';
 import type { ThemePreference } from '../theme.js';
 import type { EditorWriteRefusal, PreviewCapability } from '../ui-config.js';
 
@@ -13,6 +14,7 @@ export {
   type EditorFrameFailure,
   type EditorHostPageData,
 } from '@conloca/content-api-client';
+export type { PageConversionFacts } from '../convert-pages.js';
 export { CONTENT_METHOD_CLASSIFICATION } from '../write-access.js';
 
 export interface ProtocolRange {
@@ -52,6 +54,8 @@ export interface Init {
   theme: ThemePreference;
   locales?: { list: string[]; defaultLocale: string };
   mediaEnabled: boolean;
+  /** Facts the prompt for converting existing pages needs; absent while the parent does not know them. */
+  pageConversion?: PageConversionFacts;
 }
 
 export interface Ready {
@@ -128,6 +132,7 @@ export interface FrameEventPayloads {
   'readOnly.changed': { readOnly: EditorWriteRefusal | null };
   'previewCapability.changed': { previewCapability: PreviewCapability };
   'theme.changed': { theme: ThemePreference };
+  'pageConversion.changed': { pageConversion: PageConversionFacts | null };
 }
 
 /** Content methods the page may call; the parent refuses every other client method. */
@@ -270,6 +275,9 @@ function readInit(data: unknown): Init | undefined {
     theme: data.theme,
     mediaEnabled: data.mediaEnabled,
   };
+  // Unlike `locales`, malformed facts only cost the prompt, not the whole init.
+  const pageConversion = 'pageConversion' in data ? readPageConversionFacts(data.pageConversion) : undefined;
+  if (pageConversion) init.pageConversion = pageConversion;
   if (!('locales' in data) || data.locales === undefined) return init;
   const locales = readLocales(data.locales);
   return locales ? { ...init, locales } : undefined;

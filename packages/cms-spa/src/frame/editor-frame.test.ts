@@ -221,6 +221,21 @@ describe('connecting the editor to its parent frame', () => {
     expect(getUIConfig().readOnly).toBeUndefined();
   });
 
+  test('page conversion facts come with the init and follow the parent', async () => {
+    const facts = { cliVersion: '0.2.4', site: 'default' };
+    const { config } = await connected({ ...INIT, pageConversion: facts });
+    expect(config.pageConversion).toEqual(facts);
+    configureUI(config);
+
+    outer.emit('pageConversion.changed', { pageConversion: { ...facts, routes: ['/', '/pricing', '/x"; rm'] } });
+    await delivered();
+    expect(getUIConfig().pageConversion?.routes).toEqual(['/', '/pricing']);
+
+    outer.emit('pageConversion.changed', { pageConversion: null });
+    await delivered();
+    expect(getUIConfig().pageConversion).toBeUndefined();
+  });
+
   test('media loads, preview opens and live-site opens are calls to the parent', async () => {
     const { config } = await connected();
     const blob = new Blob(['png']);

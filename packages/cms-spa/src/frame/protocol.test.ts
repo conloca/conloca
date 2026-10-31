@@ -8,7 +8,9 @@ import {
   FRAME_CONTENT_METHODS,
   FRAME_HOST_METHODS,
   FRAME_METHOD_MAX_ARGS,
+  type Init,
   isFramePath,
+  readControlMessage,
 } from './protocol.js';
 
 const REFUSED = [
@@ -20,6 +22,14 @@ const REFUSED = [
   'getCurrentUser',
 ];
 const appOnly = (label: string) => label === 'app';
+const BASE_INIT: Init = {
+  kind: 'init',
+  initialPath: '/',
+  readOnly: null,
+  previewCapability: 'unknown',
+  theme: 'system',
+  mediaEnabled: false,
+};
 
 describe('the editor frame contract', () => {
   test('the page speaks a protocol inside the parent range', () => {
@@ -58,6 +68,18 @@ describe('the editor frame contract', () => {
     for (const bad of ['', 'pages', '//evil.test', '/a//b', '/a#h', '/a b', `/${'a'.repeat(513)}`, '/a?x=<']) {
       expect(isFramePath(bad)).toBe(false);
     }
+  });
+
+  test('an init carries the facts for converting pages, without hostile routes', () => {
+    const read = readControlMessage({
+      ...BASE_INIT,
+      pageConversion: { cliVersion: '0.2.4', site: 'default', routes: ['/', '/x"; rm -rf ~'] },
+    });
+    expect(read).toMatchObject({ pageConversion: { cliVersion: '0.2.4', site: 'default', routes: ['/'] } });
+  });
+
+  test('an init with malformed page conversion facts stays valid, without them', () => {
+    expect(readControlMessage({ ...BASE_INIT, pageConversion: { cliVersion: 'x' } })).toEqual(BASE_INIT);
   });
 });
 
