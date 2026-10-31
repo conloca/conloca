@@ -15,6 +15,8 @@ import { deriveComponentPaths, type HydrationDiscovery, scanForHydratableCompone
 import { resolveLocale } from './lib/resolve-locale.js';
 import { resolveSiteName } from './lib/resolve-site-name.js';
 import { normalizeRoutingConfig, resolveRouteConfig, toEditorDataBindings } from './lib/routing-config.js';
+import { nonDefaultLocalesOf, type StaticPageRoutesInput } from './lib/static-page-routes.js';
+import { createStaticRoutesEndpoint } from './lib/static-routes-endpoint.js';
 import type { ConlocaLocales } from './locales-helpers.js';
 import { createComponentsEndpoint, endpointReaderOptions } from './puck-manifest/components-endpoint.js';
 import { createContentWrapperEndpoint } from './site-styles/content-wrapper-endpoint.js';
@@ -561,6 +563,7 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
     assetsBasePath: string;
     assetRefBase?: string;
     dataBindings?: EditorDataBindings;
+    pageConversion?: UIConfig['pageConversion'];
   } = {
     basename: cmsRoute,
     apiBaseUrl: `${cmsRoute}/api`,
@@ -605,6 +608,14 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
     componentFolders: options.mdxComponentFolders ?? ['src/components/mdx'],
     projectRoot,
   };
+
+  // The site's pages, for `/api/static-routes`; re-pointed at Astro's own
+  // config in config:setup and read per request.
+  let staticRoutesInput = (): StaticPageRoutesInput => ({
+    pagesDir: join(projectRoot, 'src', 'pages'),
+    serverOutput: false,
+    nonDefaultLocales: [],
+  });
 
   let refreshConlocaContent: (() => Promise<void>) | undefined;
 
@@ -662,6 +673,14 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
         spaConfig.dataBindings = resolvedRoutingConfig?.enabled
           ? toEditorDataBindings(resolvedRoutingConfig)
           : undefined;
+        // The editor's prompt for making existing Astro pages editable runs the
+        // newest CLI against this site; the routes come from the dev server.
+        spaConfig.pageConversion = { cliVersion: 'latest', site: siteName };
+        staticRoutesInput = () => ({
+          pagesDir: fileURLToPath(new URL('pages/', config.srcDir)),
+          serverOutput: config.output === 'server',
+          nonDefaultLocales: nonDefaultLocalesOf(sitesConfig, siteName, config.i18n),
+        });
 
         registryScan = { ...registryScan, contentRoot: resolvedMdxPages ?? options.contentRoot };
         // Publish the resolved editor descriptors for other integrations in
@@ -1209,6 +1228,11 @@ if (import.meta.hot) {
                 configureServer(server) {
                   const registry = createRegistryEndpoint(registryScan);
                   server.middlewares.use(`${cmsRoute}/api/registry`, registry.handler);
+                  // The editor offers these pages for conversion; scanned per request.
+                  server.middlewares.use(
+                    `${cmsRoute}/api/static-routes`,
+                    createStaticRoutesEndpoint(() => staticRoutesInput()),
+                  );
                   server.middlewares.use(
                     `${cmsRoute}/api/render`,
                     createRenderEndpoint(server, registry.getAllowedSources),
