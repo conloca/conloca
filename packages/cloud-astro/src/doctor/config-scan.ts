@@ -215,3 +215,17 @@ export function previewBuildSetting(scan: ConfigScan): 'off' | 'adapter' | 'on' 
   if (containsOutsideStrings(text, 'adapter')) return 'adapter';
   return value[1] === '{' ? 'on' : 'unknown';
 }
+
+/**
+ * How the preview build serves, as the config text shows it (the rule of `previewBuildMode`): `separate: true` is D4,
+ * an adapter named anywhere (the site's or previewBuild's) is D2, a static site is D3; 'unknown' when the text cannot
+ * tell.
+ */
+export function previewServeSetting(scan: ConfigScan): 'off' | 'd2' | 'd3' | 'd4' | 'unknown' {
+  const setting = previewBuildSetting(scan);
+  if (setting === 'off' || setting === 'unknown') return setting;
+  if (scan.kind !== 'read' || typeof scan.config.conlocaCloud === 'string') return 'unknown';
+  if (/\bseparate\s*:\s*true\b/u.test(scan.config.conlocaCloud.text)) return 'd4';
+  if (setting === 'adapter' || scan.config.site.adapter) return 'd2';
+  return scan.config.site.output === 'unknown' ? 'unknown' : 'd3';
+}

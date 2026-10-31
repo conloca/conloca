@@ -1,5 +1,5 @@
 import type { RepositoryEnvironment } from '../repository.js';
-import { type ConfigScan, hasOption, optionLiteral, previewBuildSetting } from './config-scan.js';
+import { type ConfigScan, hasOption, optionLiteral, previewServeSetting } from './config-scan.js';
 import { type CheckOutcome, outcomeOf, skipped } from './types.js';
 
 /** Doctor-only override for an endpoint the config computes (e.g. from an env var). */
@@ -53,35 +53,26 @@ export function checkWiring(scan: ConfigScan, repoUri: string | undefined): Chec
   return outcome;
 }
 
-/**
- * CC8 — only a previewBuild given as an object starts the preview build, which needs an SSR adapter: the project's own
- * or previewBuild.adapter. A static project with neither fails astro build at config time. Only what the config text
- * shows is judged.
- */
+const SERVE_DETAIL = {
+  d2: "the site's own server deploy renders drafts (D2)",
+  d3: 'the preview server runs next to the static site on Cloudflare Workers (D3)',
+  d4: "a separate preview deploy (D4): its address goes in sites.json's previewUrl",
+  unknown: 'not verified — doctor cannot read previewBuild, output or the adapter from the config text',
+} as const;
+
+/** CC8 — how the preview build serves drafts, read from the config text. */
 export function checkPreviewBuildAdapter(scan: ConfigScan): CheckOutcome {
   if (scan.kind !== 'read') {
     return skipped('CC8', scan.kind === 'none' ? 'no astro.config found' : 'astro config could not be read');
   }
   if (scan.config.conlocaCloud === 'absent') return skipped('CC8', INTEGRATION_NOT_CALLED);
   const outcome = outcomeOf('CC8');
-  const previewBuild = previewBuildSetting(scan);
-  const { output, adapter } = scan.config.site;
-  if (previewBuild === 'off') {
-    outcome.detail = hasOption(scan, 'previewBuild')
-      ? 'previewBuild: false — no preview build runs'
-      : 'previewBuild is not set — no preview build runs';
-  } else if (previewBuild === 'adapter' || adapter) {
-    outcome.detail = 'the preview build has an SSR adapter';
-  } else if (previewBuild === 'unknown' || output !== 'static') {
-    outcome.detail = 'not verified — doctor cannot read previewBuild, output or the adapter from the config text';
-  } else {
-    outcome.problems.push({
-      check: 'CC8',
-      level: 'error',
-      message:
-        'previewBuild is set, but the project is static and has no SSR adapter, so astro build fails at config time — add one (previewBuild: { adapter }) or remove previewBuild from conlocaCloud(...)',
-      path: scan.config.path,
-    });
-  }
+  const mode = previewServeSetting(scan);
+  outcome.detail =
+    mode === 'off'
+      ? hasOption(scan, 'previewBuild')
+        ? 'previewBuild: false — no preview build runs'
+        : 'previewBuild is not set — no preview build runs'
+      : SERVE_DETAIL[mode];
   return outcome;
 }

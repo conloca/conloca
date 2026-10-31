@@ -143,7 +143,26 @@ describe('doctor --live — the deployed editor page', () => {
 
   it('no longer reports CC2–CC7 or CC4', async () => {
     const { result } = await runLive();
-    expect(result.checks.map((c) => c.id)).toEqual(['CC1', 'CC9', 'CC10', 'CC14', 'CC8', 'CC11', 'CC12', 'CC13']);
+    expect(result.checks.map((c) => c.id)).toEqual([
+      'CC1',
+      'CC9',
+      'CC10',
+      'CC14',
+      'CC8',
+      'CC15',
+      'CC16',
+      'CC17',
+      'CC18',
+      'CC19',
+      'CC20',
+      'CC21',
+      'CC22',
+      'CC23',
+      'CC11',
+      'CC12',
+      'CC13',
+      'CC24',
+    ]);
   });
 
   it('asks every git question in the project directory', async () => {

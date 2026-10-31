@@ -32,13 +32,34 @@ export interface PackageManagerCommands {
   run: string;
   /** Prefix that adds a dependency to package.json, e.g. `npm install @conloca/cloud-astro`. */
   add: string;
+  /** Prefix that runs a binary the project installed, e.g. `npx wrangler deploy`. */
+  exec: string;
 }
 
 const COMMANDS = {
-  bun: { install: 'bun install', frozenInstall: 'bun install --frozen-lockfile', run: 'bun run', add: 'bun add' },
-  npm: { install: 'npm install', frozenInstall: 'npm ci', run: 'npm run', add: 'npm install' },
-  pnpm: { install: 'pnpm install', frozenInstall: 'pnpm install --frozen-lockfile', run: 'pnpm run', add: 'pnpm add' },
-  yarn: { install: 'yarn install', frozenInstall: 'yarn install --frozen-lockfile', run: 'yarn', add: 'yarn add' },
+  bun: {
+    install: 'bun install',
+    frozenInstall: 'bun install --frozen-lockfile',
+    run: 'bun run',
+    add: 'bun add',
+    exec: 'bunx',
+  },
+  npm: { install: 'npm install', frozenInstall: 'npm ci', run: 'npm run', add: 'npm install', exec: 'npx' },
+  // `pnpm exec`, not `pnpm dlx`: it runs the project's own installed version, as npx and bunx do.
+  pnpm: {
+    install: 'pnpm install',
+    frozenInstall: 'pnpm install --frozen-lockfile',
+    run: 'pnpm run',
+    add: 'pnpm add',
+    exec: 'pnpm exec',
+  },
+  yarn: {
+    install: 'yarn install',
+    frozenInstall: 'yarn install --frozen-lockfile',
+    run: 'yarn',
+    add: 'yarn add',
+    exec: 'yarn',
+  },
 } satisfies Record<PackageManager, PackageManagerCommands>;
 
 export function packageManagerCommands(pm: PackageManager): PackageManagerCommands {

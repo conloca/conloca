@@ -10,8 +10,15 @@ import { listAstroProjects } from '../lib/astro-projects.js';
 import { fail, withStdoutRedirected } from '../lib/cli-output.js';
 import { callOptions, stringLiteral, stripComments } from '../lib/config-text.js';
 import { ASTRO_CONFIG_FILES, readAstroSite, wireAstroConfig } from '../lib/connect/astro-config.js';
+import { type CfPlan, cfPlanEdit, recordedCfPlan, sharedQuotaRoutes } from '../lib/connect/cf-plan.js';
 import { framingStep } from '../lib/connect/framing.js';
 import { leftoversStep } from '../lib/connect/leftovers.js';
+import {
+  previewDeployStep,
+  previewSetupOf,
+  readWranglerFile,
+  type WranglerFile,
+} from '../lib/connect/preview-deploy.js';
 import { writeSiteAddress } from '../lib/connect/site-domain.js';
 import { type FileEdit, jsonLike, type StepResult, type StepState, writeEdits } from '../lib/connect/step.js';
 import { contentRootOf } from '../lib/content-root.js';
@@ -38,9 +45,23 @@ export interface ConnectOptions {
   install: boolean;
   build: boolean;
   json: boolean;
+  /** Refresh the preview settings in wrangler.jsonc from a fresh build, and nothing else. */
+  update?: boolean;
+  /** The Cloudflare Workers plan, for runs with no one at a terminal; asked once otherwise. */
+  cfPlan?: CfPlan;
+  /** Chosen by the site owner, never inferred: misses go to the dispatcher (`not_found_handling: "none"`). */
+  negotiate404?: boolean;
 }
 
-export type ConnectStepId = 'project' | 'packages' | 'config' | 'address' | 'framing' | 'build' | 'leftovers';
+export type ConnectStepId =
+  | 'project'
+  | 'packages'
+  | 'config'
+  | 'address'
+  | 'framing'
+  | 'preview'
+  | 'build'
+  | 'leftovers';
 
 export interface ConnectReport {
   ok: boolean;
@@ -55,8 +76,10 @@ export interface ConnectReport {
 export interface ConnectIo {
   isTTY: boolean;
   confirm(question: string): Promise<boolean>;
-  /** Runs a shell command in `cwd`; true when it exits 0. */
-  run(cmd: string, cwd: string): Promise<boolean>;
+  /** Asks a question with no default; the answer as typed. */
+  ask(question: string): Promise<string>;
+  /** Runs a shell command in `cwd`, with `env` added to the environment; true when it exits 0. */
+  run(cmd: string, cwd: string, env?: Record<string, string>): Promise<boolean>;
 }
 
 interface Step {
@@ -101,6 +124,47 @@ export async function gitText(args: string[], cwd: string): Promise<string | nul
 
 async function readText(path: string): Promise<string | null> {
   return readFile(path, 'utf8').catch(() => null);
+}
+
+/** Whether package.json lists wrangler, so the project's own runner finds it rather than fetching one. */
+function listsWrangler(packageJson: string | null): boolean {
+  try {
+    const manifest: unknown = JSON.parse(packageJson ?? '');
+    return (
+      isRecord(manifest) &&
+      [manifest.dependencies, manifest.devDependencies].some((deps) => isRecord(deps) && deps.wrangler !== undefined)
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isStrings(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string');
+}
+
+/** The route list the last build wrote for wrangler.jsonc `run_worker_first`, or null when there is none. */
+async function readWorkerFirstList(projectDir: string): Promise<string[] | null> {
+  try {
+    const value: unknown = JSON.parse(
+      (await readText(join(projectDir, '.conloca', 'dispatcher', 'run_worker_first.json'))) ?? '',
+    );
+    return isStrings(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+const PLAN_QUESTION = 'Is this account on the Cloudflare Workers Paid or Free plan? [paid/free]';
+
+/** The plan, asked until the answer reads as paid or free (or p, f): a stray Enter must never record one for good. */
+async function askPlan(io: ConnectIo): Promise<CfPlan> {
+  for (;;) {
+    // oxlint-disable-next-line no-await-in-loop -- one question at a time, until an answer reads.
+    const answer = (await io.ask(PLAN_QUESTION)).trim().toLowerCase();
+    if (answer === 'paid' || answer === 'p') return 'paid';
+    if (answer === 'free' || answer === 'f') return 'free';
+  }
 }
 
 function isInside(path: string, folder: string): boolean {
@@ -221,7 +285,8 @@ async function siteIdOf(sitesPath: string): Promise<string> {
 
 /** Run the project's own build, then check the editor page it wrote. */
 async function buildStep(projectDir: string, siteId: string, command: string, io: ConnectIo): Promise<StepResult> {
-  if (!(await io.run(command, projectDir))) {
+  // CONLOCA_CONNECT: the build writes the route list connect reads, and only warns about the one in wrangler.jsonc.
+  if (!(await io.run(command, projectDir, { CONLOCA_CONNECT: '1' }))) {
     return { state: 'failed', message: `${command} failed; fix the build, then run connect again`, edits: [] };
   }
   const folder = ['dist', join('dist', 'client')]
@@ -345,6 +410,8 @@ export async function runConnect(path: string, options: ConnectOptions, io: Conn
     packages.result = { state: 'skipped', message: `not installed (--no-install): run ${packages.command}`, edits: [] };
     packages.command = undefined;
   }
+  // --update refreshes the preview settings only: nothing is installed, and no starter or framing file is written.
+  if (options.update) packages.command = undefined;
 
   const configText = await readFile(picked.configFile, 'utf8');
   const code = stripComments(configText);
@@ -353,7 +420,7 @@ export async function runConnect(path: string, options: ConnectOptions, io: Conn
     id: 'config',
     result: wireAstroConfig({ path: picked.configFile, text: configText, repoUri }),
   };
-  const starter = cmsOptions.state === 'no-call' && config.result.state === 'changed';
+  const starter = !options.update && cmsOptions.state === 'no-call' && config.result.state === 'changed';
   if (starter) {
     const contentConfig = join(projectDir, 'src', 'content.config.ts');
     if (!existsSync(contentConfig))
@@ -390,10 +457,61 @@ export async function runConnect(path: string, options: ConnectOptions, io: Conn
 
   const framing: Step = { id: 'framing', result: await framingStep(projectDir, undefined) };
   // The framing rules come from the project's own @conloca/cloud-astro, which the package step may be about to add.
-  const framingAfterInstall = framing.result.state === 'skipped' && packages.command !== undefined;
+  const framingAfterInstall = !options.update && framing.result.state === 'skipped' && packages.command !== undefined;
   const leftovers: Step = { id: 'leftovers', result: await leftoversStep(root) };
   const build: Step = { id: 'build', result: { state: 'skipped', message: '', edits: [] } };
-  const steps = [project, packages, config, address, framing, build, leftovers];
+
+  const preview = previewSetupOf(
+    callOptions(code, 'conlocaCloud'),
+    callOptions(code, 'defineConfig'),
+    astroSite === 'computed' ? null : astroSite.base,
+  );
+  const sitesText = (await readText(sitesPath)) ?? '';
+  // Only a D3 site needs the plan, asked once and recorded, never read from Cloudflare. It is settled first, since it
+  // decides whether the rate limit is written (Paid only).
+  const manifestPath = join(projectDir, 'package.json');
+  const manifestText = await readText(manifestPath);
+  const recorded = recordedCfPlan(manifestText);
+  const wranglerRunner = listsWrangler(manifestText) ? commands.exec : 'npx';
+  let plan: CfPlan | undefined = preview.kind === 'd3' ? (options.cfPlan ?? recorded) : undefined;
+  if (preview.kind === 'd3' && plan === undefined && io.isTTY && !options.yes && !options.dryRun) {
+    plan = await askPlan(io);
+  }
+  const settledPlan = plan;
+  const previewStep = (file: WranglerFile, routes: readonly string[] | null) =>
+    previewDeployStep({
+      file,
+      setup: preview,
+      routes,
+      buildCommand: `${commands.run} build`,
+      exec: wranglerRunner,
+      previewUrl: /"previewUrl"\s*:/u.test(sitesText),
+      negotiate404: options.negotiate404 === true,
+      cfPlan: settledPlan,
+    });
+  // The config as it was before this run: the summary after the build covers both passes from here.
+  const wranglerBefore = await readWranglerFile(projectDir);
+  const deploy: Step = { id: 'preview', result: previewStep(wranglerBefore, null) };
+  const withPreview = preview.kind === 'd3' || preview.kind === 'd4';
+
+  // With no plan known, nothing D3 is written: the plan decides whether the rate limit is. Otherwise the settings are
+  // written now, and the routes the build reports are added after it.
+  const deferD3 = preview.kind === 'd3' && plan === undefined;
+  if (deferD3) {
+    deploy.result = { state: 'done', message: 'the preview settings wait for your Cloudflare plan', edits: [] };
+  }
+  const planEdit = plan === undefined ? null : cfPlanEdit(manifestPath, (await readText(manifestPath)) ?? '', plan);
+  if (planEdit !== null) {
+    deploy.result = {
+      ...deploy.result,
+      state: deploy.result.state === 'done' ? 'changed' : deploy.result.state,
+      message: `${deploy.result.message}; records the Cloudflare Workers ${plan === 'paid' ? 'Paid' : 'Free'} plan in package.json`,
+      edits: [...deploy.result.edits, planEdit],
+    };
+  }
+  const steps = options.update
+    ? [project, deploy, build]
+    : [project, packages, config, address, framing, ...(withPreview ? [deploy] : []), build, leftovers];
 
   for (const step of steps) {
     for (const edit of step.result.edits) console.log(patchOf(edit, start));
@@ -411,7 +529,14 @@ export async function runConnect(path: string, options: ConnectOptions, io: Conn
     // Data schema files come with their astro.config wiring (wireDataSchemas), never as files nothing loads.
     if (starter) await setup(projectDir, DEFAULT_SITE_NAME, { dataSchemas: false });
     // The package manager writes package.json itself; its edit above is only the preview.
-    await writeEdits(steps.flatMap((step) => (step === packages ? [] : step.result.edits)));
+    await writeEdits(
+      steps.flatMap((step) => (step === packages ? [] : step.result.edits.filter((edit) => edit !== planEdit))),
+    );
+    if (plan !== undefined && planEdit !== null) {
+      // The package manager may have rewritten package.json since the diff above: record the plan in what it wrote.
+      const fresh = cfPlanEdit(manifestPath, (await readText(manifestPath)) ?? '', plan);
+      if (fresh !== null) await writeEdits([fresh]);
+    }
     if (io.isTTY && !options.yes) {
       for (const step of steps) {
         const replacement = step.result.replacement ?? [];
@@ -445,11 +570,69 @@ export async function runConnect(path: string, options: ConnectOptions, io: Conn
 
   const siteId = await siteIdOf(sitesPath);
   // A kept value (`differs`) is still a wired config, so the build proves it too.
-  const blocked = [packages, config].find((step) => !['done', 'changed', 'differs'].includes(step.result.state));
+  const blocked = options.update
+    ? undefined
+    : [packages, config].find((step) => !['done', 'changed', 'differs'].includes(step.result.state));
   if (!options.build) build.result.message = 'not built (--no-build)';
   else if (!accepted) build.result.message = `not built: nothing was written (${why})`;
   else if (blocked !== undefined) build.result.message = `not built: the ${blocked.id} step is not done`;
   else build.result = await buildStep(projectDir, siteId, `${commands.run} build`, io);
+
+  // D3: the build reports the routes the dispatcher must run on, which only a build knows.
+  const planEdits = planEdit === null ? [] : [planEdit];
+  if (preview.kind === 'd3' && plan !== undefined && build.result.state === 'done') {
+    const routes = await readWorkerFirstList(projectDir);
+    const shared = plan === 'free' ? sharedQuotaRoutes(routes, preview.prefix) : [];
+    if (routes === null) {
+      deploy.result = {
+        state: 'needs-you',
+        message:
+          'the build wrote no .conloca/dispatcher/run_worker_first.json, so the routes the dispatcher needs are unknown: update @conloca/cloud-astro, then run connect again',
+        edits: deploy.result.edits,
+      };
+    } else {
+      const refreshed = previewStep(await readWranglerFile(projectDir), routes);
+      let written = true;
+      if (refreshed.edits.length > 0) {
+        for (const edit of refreshed.edits) console.log(patchOf(edit, start));
+        written = options.yes || (await io.confirm('Write these route changes too?'));
+        if (written) await writeEdits(refreshed.edits);
+      }
+      if (!written) {
+        deploy.result = {
+          ...refreshed,
+          state: 'needs-you',
+          message: `${refreshed.message} (not written: declined)`,
+          edits: planEdits,
+        };
+      } else if (refreshed.state !== 'changed' && refreshed.state !== 'done') {
+        // A refusal (a wrangler.toml, the site's own main, ...) reaches the report, never a silent `done`.
+        deploy.result = { ...refreshed, edits: planEdits };
+      } else {
+        const summary = previewStep(wranglerBefore, routes);
+        // A warning, not a refusal: on Free the site's own on-demand routes still need the dispatcher next to them.
+        const warning =
+          shared.length > 0
+            ? `On the Free plan, previews and your on-demand routes (${shared.join(', ')}) share one daily request quota; a flood of preview requests can stop those routes until 00:00 UTC. Cloudflare Workers Paid removes the daily limit.`
+            : undefined;
+        deploy.result = {
+          ...summary,
+          state: summary.state === 'done' && planEdits.length > 0 ? 'changed' : summary.state,
+          // Its own sentence, printed once with the step and carried in the --json report.
+          message: warning === undefined ? summary.message : `${summary.message}. ${warning}`,
+          edits: [...summary.edits, ...planEdits],
+        };
+      }
+    }
+  }
+  if (preview.kind === 'd3' && plan === undefined) {
+    deploy.result = {
+      ...deploy.result,
+      state: 'needs-you',
+      message: `${deploy.result.message}; connect needs your Cloudflare Workers plan: run it again with --cf-plan paid or --cf-plan free`,
+      lines: ['conloca connect --yes --cf-plan paid   # or: --cf-plan free'],
+    };
+  }
 
   const report: ConnectReport = {
     ok: steps.every((step) => step.result.state !== 'failed' && step.result.state !== 'needs-you'),
@@ -490,11 +673,24 @@ export function terminalIo(json: boolean): ConnectIo {
         prompt.close();
       }
     },
-    run(cmd, cwd) {
+    async ask(question) {
+      const prompt = createInterface({ input: process.stdin, output: process.stderr });
+      try {
+        return await prompt.question(`${question} `);
+      } finally {
+        prompt.close();
+      }
+    },
+    run(cmd, cwd, env = {}) {
       console.error(`$ ${cmd}`);
       return new Promise((done) => {
         // In --json mode stdout carries only the report, so the command's own output goes to stderr.
-        const child = spawn(cmd, { cwd, shell: true, stdio: ['ignore', json ? process.stderr : 'inherit', 'inherit'] });
+        const child = spawn(cmd, {
+          cwd,
+          shell: true,
+          env: { ...process.env, ...env },
+          stdio: ['ignore', json ? process.stderr : 'inherit', 'inherit'],
+        });
         child.on('error', () => done(false));
         child.on('close', (code) => done(code === 0));
       });

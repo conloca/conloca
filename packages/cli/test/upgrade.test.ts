@@ -56,6 +56,7 @@ function fakeIo(mode: 'ok' | 'fail-install' | 'skew', manifests: string[] = ['pa
   const io: ConnectIo = {
     isTTY: false,
     confirm: async () => false,
+    ask: async () => '',
     run: async (cmd, cwd) => {
       calls.push({ cmd, cwd });
       const lockfile = LOCKFILES.find((name) => existsSync(join(cwd, name))) ?? 'package-lock.json';

@@ -102,12 +102,31 @@ function check(result: { checks: CheckOutcome[] }, id: string): CheckOutcome {
 const messages = (outcome: CheckOutcome) => outcome.problems.map((p) => `${p.level}: ${p.message}`);
 
 describe('doctor extension — contract', () => {
-  it('answers contract 1 with CC1, CC9, CC10, CC14, CC8 and skips the live checks without --live', async () => {
+  it('answers contract 1 with every check, skipping the live ones without --live', async () => {
     const result = await run({
       [CONFIG]: config("{ endpoint: 'https://cms.example.com', puckConfigPath: './src/puck.config.tsx' }"),
     });
     expect(result.contractVersion).toBe(1);
-    expect(result.checks.map((c) => c.id)).toEqual(['CC1', 'CC9', 'CC10', 'CC14', 'CC8', 'CC11', 'CC12', 'CC13']);
+    expect(result.checks.map((c) => c.id)).toEqual([
+      'CC1',
+      'CC9',
+      'CC10',
+      'CC14',
+      'CC8',
+      'CC15',
+      'CC16',
+      'CC17',
+      'CC18',
+      'CC19',
+      'CC20',
+      'CC21',
+      'CC22',
+      'CC23',
+      'CC11',
+      'CC12',
+      'CC13',
+      'CC24',
+    ]);
     for (const id of ['CC11', 'CC12', 'CC13']) {
       expect(check(result, id).skipped).toBe('live checks run only with --live');
     }
@@ -327,9 +346,7 @@ describe('CC14 — no build key leftovers', () => {
   });
 });
 
-describe('CC8 — the preview build, when previewBuild is set, has an SSR adapter', () => {
-  const STATIC_ERROR =
-    'error: previewBuild is set, but the project is static and has no SSR adapter, so astro build fails at config time — add one (previewBuild: { adapter }) or remove previewBuild from conlocaCloud(...)';
+describe('CC8 — how the preview build serves drafts', () => {
   const NOT_VERIFIED = 'not verified — doctor cannot read previewBuild, output or the adapter from the config text';
 
   /** A config with the site's own settings (output, adapter, ...) ahead of the integrations. */
@@ -342,16 +359,20 @@ describe('CC8 — the preview build, when previewBuild is set, has an SSR adapte
     ].join('\n');
   }
 
-  it('errors on a static project without an adapter when previewBuild is set', async () => {
+  it('reads a static project without an adapter as previews next to the site (D3)', async () => {
     for (const text of [
       config("{ endpoint: 'https://x.test', previewBuild: {} }"),
-      config("{ endpoint: 'https://x.test', previewBuild: { outDir: '.preview' } }"),
       siteConfig("output: 'static',", "{ endpoint: 'https://x.test', previewBuild: {} }"),
     ]) {
       const outcome = check(await run({ [CONFIG]: text }), 'CC8');
-      expect(messages(outcome)).toEqual([STATIC_ERROR]);
-      expect(outcome.problems[0].path).toBe(CONFIG);
+      expect(outcome.problems).toEqual([]);
+      expect(outcome.detail).toBe('the preview server runs next to the static site on Cloudflare Workers (D3)');
     }
+  });
+
+  it('reads separate: true as a separate preview deploy (D4)', async () => {
+    const outcome = check(await run({ [CONFIG]: config('{ previewBuild: { separate: true } }') }), 'CC8');
+    expect(outcome.detail).toBe("a separate preview deploy (D4): its address goes in sites.json's previewUrl");
   });
 
   it('reports no preview build when previewBuild is absent, even on a static project', async () => {
@@ -383,7 +404,7 @@ describe('CC8 — the preview build, when previewBuild is set, has an SSR adapte
     ]) {
       const outcome = check(await run({ [CONFIG]: text }), 'CC8');
       expect(outcome.problems).toEqual([]);
-      expect(outcome.detail).toBe('the preview build has an SSR adapter');
+      expect(outcome.detail).toBe("the site's own server deploy renders drafts (D2)");
     }
   });
 

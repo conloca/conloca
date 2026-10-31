@@ -72,7 +72,7 @@ describe('legacyKeyFinding', () => {
       await writeFile(join(dir, 'fix.diff'), finding?.diff ?? '');
       execFileSync('git', ['init', '-q'], { cwd: dir });
       execFileSync('git', ['apply', 'fix.diff'], { cwd: dir });
-      const expected = Bun.YAML.parse(OLD_NPM.replaceAll(/        env:\n          CONLOCA_BUILD_TOKEN:[^\n]*\n/g, ''));
+      const expected = Bun.YAML.parse(OLD_NPM.replaceAll(/ {8}env:\n {10}CONLOCA_BUILD_TOKEN:[^\n]*\n/g, ''));
       const migrated = await readFile(join(dir, path), 'utf8');
       expect(Bun.YAML.parse(migrated)).toEqual(expected);
       expect(legacyKeyFinding(path, migrated)).toBeNull();

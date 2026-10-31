@@ -12,7 +12,7 @@ import { readSitesConfig } from '@conloca/content-api/node';
 import { PACKAGE_NAME } from './constants.js';
 import { parseWranglerConfig, wranglerConfigPath } from './preview/cloudflare-adapter.js';
 import type { DispatcherConfig, DispatcherExit } from './preview/dispatcher.js';
-import { previewRoutePrefix } from './preview/preview-path.js';
+import { previewOwnEntries, previewRoutePrefix } from './preview/preview-path.js';
 
 /** What the preview build tells the site's build: its pages, its on-demand routes and the exit values it baked. */
 export interface PreviewRoutes {
@@ -179,8 +179,7 @@ export async function recordedCfPlan(root: string): Promise<'free' | 'paid' | un
  * answers every miss). A failed preview build must not ship over any of these.
  */
 export function servedBeyondPrefix(config: unknown, base: string): string[] {
-  const prefix = previewRoutePrefix(base);
-  const own = new Set([prefix, `${prefix}/*`, `${base.replace(/\/+$/u, '')}/_image`]);
+  const own = new Set(previewOwnEntries(base));
   const served = new Set<string>();
   for (const { block, inherited } of blocksOf(config)) {
     const listed = workerFirstOf(block, inherited);

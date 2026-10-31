@@ -3,6 +3,8 @@ import { gitOutput, resolveRepositoryUri } from '../git.js';
 import { checkFramingHeaders, checkKeyLeftovers, checkSiteAddress } from './checks-address.js';
 import { runLiveChecks } from './checks-live.js';
 import { checkPreviewBuildAdapter, checkWiring, suppliedEndpoint } from './checks-offline.js';
+import { runPreviewChecks } from './checks-preview.js';
+import { runPreviewLimitChecks } from './checks-preview-limits.js';
 import { optionLiteral, scanAstroConfig } from './config-scan.js';
 import type { CloudDoctorContext, CloudDoctorResult, DoctorDeps } from './types.js';
 
@@ -31,6 +33,8 @@ export async function runDoctor(
     await checkFramingHeaders(scan, context.projectDir, suppliedEndpoint(scan, deps.env), deps),
     checkKeyLeftovers(scan, context.projectDir, deps),
     checkPreviewBuildAdapter(scan),
+    ...runPreviewChecks(scan, context.projectDir, deps),
+    ...runPreviewLimitChecks(scan, context.projectDir, deps),
     ...(await runLiveChecks({ context, deps, scan, address: site.address, repoUri })),
   ];
   return { contractVersion: 1, checks };

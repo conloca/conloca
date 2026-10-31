@@ -36,7 +36,7 @@ conloca doctor --live     # sends no credential: only your site's host and the e
 conloca doctor            # offline: wiring, sites.json host, committed framing headers, key leftovers
 ```
 
-This package's checks are `CC1` and `CC8`–`CC14`:
+This package's checks are `CC1` and `CC8`–`CC24`:
 
 - **CC9** — `sites.json`: the site named `default` (or the only one) has a bare host in `domains[defaultLocale]` and a
   valid `base`. The editor opens `https://<host><base>_conloca/editor/`; it refuses IPs, `localhost`, `*.conloca.com`.
@@ -49,6 +49,16 @@ This package's checks are `CC1` and `CC8`–`CC14`:
 - **CC13** (live) — the page's protocol is in the editor's range; too old → rebuild with a newer `@conloca/cloud-astro`.
 - **CC14** — a workflow or the config still names `CONLOCA_BUILD_TOKEN`, `buildToken`, `publicBaseUrl`, `previewDomain`
   or `requireRegistration`. Remove them; nothing reads them for the editor page.
+- **CC15–CC21** — draft previews on a static site: `wrangler.jsonc` on Cloudflare Workers, wrangler ≥ 4.36, the
+  dispatcher `main`, `run_worker_first` covering the preview route and every on-demand route, no deploy redirect into
+  `.conloca/preview-server`, a 404 page, middleware negotiation, no tag manager. Fix:
+  `npx @conloca/cli connect --update --yes`, then deploy. A `wrangler.toml` must be converted to `wrangler.jsonc` first.
+- **CC22–CC23** — the preview rate-limit binding (`conlocaPreviewLimit`, 60 per 10 s, in every env block) on the Paid
+  plan, none on the Free plan, and the Cloudflare plan recorded in `package.json` (`conloca.cfPlan`). Fix:
+  `connect --update --yes`; for the plan, ask the site's owner which plan the Cloudflare account is on and run
+  `connect --yes --cf-plan paid` (or `free`). On Free with API routes, CC23 warns that previews and those routes share
+  one daily request quota; Cloudflare Workers Paid removes the limit.
+- **CC24** (live) — a separate preview deploy's `conloca.json` answers as D4.
 
 ## Framing: only when the site forbids it
 

@@ -268,9 +268,12 @@ describe('Conloca CLI', () => {
 
   test('connect --help lists every connect flag', async () => {
     const result = await $`./dist/conloca.js connect --help`.cwd(`${import.meta.dir}/..`).quiet();
-    for (const flag of ['--project', '--site-url', '--yes', '--dry-run', '--no-install', '--no-build', '--json']) {
+    const flags = ['--project', '--site-url', '--yes', '--dry-run', '--no-install', '--no-build', '--json'];
+    for (const flag of [...flags, '--update', '--cf-plan', '--negotiate-404']) {
       expect(result.stdout.toString()).toContain(flag);
     }
+    expect(result.stdout.toString()).toContain('asks before it writes');
+    expect(result.stdout.toString()).not.toContain('asks once');
     expect(result.exitCode).toBe(0);
   });
 

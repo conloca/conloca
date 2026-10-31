@@ -53,10 +53,20 @@ const CHECK_LABELS = {
   CC9: 'the site domain is declared in sites.json',
   CC10: 'committed headers allow framing the editor page',
   CC14: 'no build key leftovers',
-  CC8: 'the preview build, when previewBuild is set, has an SSR adapter',
+  CC8: 'how the preview build serves drafts',
+  CC15: 'the preview deploys to Cloudflare Workers',
+  CC16: 'Wrangler is 4.36 or newer',
+  CC17: 'wrangler.jsonc runs the preview dispatcher',
+  CC18: 'run_worker_first lists every on-demand route',
+  CC19: 'a plain wrangler deploy ships the site',
+  CC20: 'misses and negotiated pages reach the right place',
+  CC21: 'no tag manager runs on draft pages',
+  CC22: "the preview route's rate limit fits the plan",
+  CC23: 'the recorded Cloudflare plan fits draft previews',
   CC11: 'the deployed editor page answers',
   CC12: 'the deployed editor page may be framed',
   CC13: "the editor speaks this page's protocol",
+  CC24: 'the separate preview deploy runs this release',
 } as const;
 
 /** A typo in a check id fails tsc here; the CLI would otherwise drop a label-less outcome silently. */

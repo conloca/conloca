@@ -146,6 +146,7 @@
         "@conloca/astro-cms": "workspace:*",
         "@conloca/content-api": "workspace:*",
         "diff": "^9.0.0",
+        "jsonc-parser": "^3.3.1",
         "linkedom": "^0.18.13",
         "magicast": "^0.5.5",
       },

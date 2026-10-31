@@ -64,6 +64,12 @@ export function previewRoutePrefix(base: string): string {
   return `${base.replace(/\/+$/u, '')}${PREVIEW_ROUTE_SEGMENT}`;
 }
 
+/** The `run_worker_first` entries that belong to the preview, not the site: its route, and the image endpoint drafts use. */
+export function previewOwnEntries(base: string): string[] {
+  const prefix = previewRoutePrefix(base);
+  return [prefix, `${prefix}/*`, `${base.replace(/\/+$/u, '')}/_image`];
+}
+
 /**
  * Strip the preview route from a pathname, leaving the page path under the
  * base. Only the route at the base matches: `/blog/_conloca/preview/x` and

@@ -39,7 +39,7 @@ on unless you pass `--no-install` or `--no-git`, and the command never prompts.
 Set up an existing Astro site's editor page, so your workspace editor at `<slug>.conloca.com` can edit it:
 
 ```bash
-conloca connect [path] [--project <dir>] [--site-url <url>] [--yes] [--dry-run] [--no-install] [--no-build] [--json]
+conloca connect [path] [--project <dir>] [--site-url <url>] [--yes] [--dry-run] [--no-install] [--no-build] [--update] [--cf-plan <free|paid>] [--negotiate-404] [--json]
 ```
 
 An agent can do it in one line:
@@ -67,10 +67,32 @@ Run it in the site's folder or the repository holding it. In order, it:
 7. **Removes the old build key:** workflow lines that still pass `CONLOCA_BUILD_TOKEN`, which the editor page does not
    need.
 
-Every change is printed as a diff first. In a terminal `connect` asks once; `--yes` accepts without asking; `--dry-run`,
-or no terminal and no `--yes`, writes nothing. A value you set yourself (another domain, your own `conlocaCloud()`
-options, your own `/_conloca/editor/` header rule) is kept and reported as `differs`; only an explicit answer in a
-terminal replaces it, never `--yes`. A second run on a connected site changes nothing.
+Every change is printed as a diff first. In a terminal `connect` asks before it writes (and, for a static site
+previewing next to itself, once for your Cloudflare plan); `--yes` accepts without asking; `--dry-run`, or no terminal
+and no `--yes`, writes nothing. A value you set yourself (another domain, your own `conlocaCloud()` options, your own
+`/_conloca/editor/` header rule) is kept and reported as `differs`; only an explicit answer in a terminal replaces it,
+never `--yes`. A second run on a connected site changes nothing.
+
+When `conlocaCloud(...)` has `previewBuild`, `connect` also writes the draft preview settings into `wrangler.jsonc`
+(comments kept): the dispatcher `main`, `nodejs_compat`, the static assets, `run_worker_first`, and, on the Cloudflare
+Workers Paid plan, a rate-limit binding that allows each visitor 60 preview requests per 10 seconds (Wrangler 4.36 or
+newer). It never overwrites a setting the site chose; a conflicting `main`, `run_worker_first` or
+single-page-application 404 handling is reported instead, and a `wrangler.toml` is asked to become `wrangler.jsonc`.
+When your middleware negotiates responses (it reads `Accept` or answers 404 pages itself) and you want those misses
+rendered, pass `--negotiate-404`: `connect` then sets `not_found_handling: "none"` and asks you to list the pages it
+negotiates. It never sets it on its own, since with `"none"` a failed preview build fails your build; `conloca doctor`
+points out a middleware that negotiates (CC20).
+
+For a static site previewing next to itself, `connect` asks once whether your account is on the Cloudflare Workers Paid
+plan and records the answer in `package.json` (`"conloca": { "cfPlan": "paid" }`). Coding agents and CI pass
+`--cf-plan paid` or `--cf-plan free` instead. On the Free plan the site previews next to itself with no rate limit,
+since a blocked request would still count against the day's requests. A site with on-demand routes (API routes, `/mcp`)
+keeps them next to the preview, and `connect` warns that previews and those routes share one daily request quota: a
+flood of preview requests can stop those routes until 00:00 UTC. Cloudflare Workers Paid removes the daily limit. When
+`--update --cf-plan free` changes a Paid answer, `connect` removes the rate limit it wrote.
+
+`conloca connect --update --yes` builds the site and refreshes only the preview settings; it installs nothing. Run it
+when a build fails with "run `conloca connect --update --yes`", after you add an API route.
 
 `connect` never commits, pushes or deploys, and the package install is its only network use. Next steps: commit, push to
 the default branch, deploy as usual, then open your workspace editor at `<slug>.conloca.com`.

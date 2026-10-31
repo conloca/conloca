@@ -11,6 +11,7 @@ import {
 import { messageOf } from '../message-of.js';
 import { resolveBuildSiteId } from '../site-id.js';
 import { INTEGRATION_NOT_CALLED, suppliedEndpoint } from './checks-offline.js';
+import { runPreviewLiveChecks } from './checks-preview-live.js';
 import { type ConfigScan, optionLiteral } from './config-scan.js';
 import {
   type CheckId,
@@ -21,7 +22,7 @@ import {
   skipped,
 } from './types.js';
 
-const LIVE_CHECK_IDS: readonly CheckId[] = ['CC11', 'CC12', 'CC13'];
+const LIVE_CHECK_IDS: readonly CheckId[] = ['CC11', 'CC12', 'CC13', 'CC24'];
 
 /** Every doctor request is bounded: a hanging host must never hang `conloca doctor` (the CLI seam has no timer of its own). */
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -295,8 +296,8 @@ async function checkProtocol(
 }
 
 /**
- * CC11–CC13. Networks only under --live, sends no credential, and contacts only the site's own domain and the editor UI's
- * public protocols.json — so it runs anywhere, forks and Dependabot included.
+ * CC11–CC13 and CC24. Networks only under --live and sends no credential: it contacts only the site's own domain, the
+ * editor UI's public protocols.json and the site's previewUrl, so it runs anywhere, forks and Dependabot included.
  */
 export async function runLiveChecks(input: LiveInput): Promise<CheckOutcome[]> {
   const { context, deps, scan, address } = input;
@@ -308,5 +309,10 @@ export async function runLiveChecks(input: LiveInput): Promise<CheckOutcome[]> {
     checkEditorPage(input, address),
     checkFrameHeaders(address, origin, deps.fetch),
   ]);
-  return [page.outcome, frame, await checkProtocol(page.info, origin, deps.fetch)];
+  return [
+    page.outcome,
+    frame,
+    await checkProtocol(page.info, origin, deps.fetch),
+    ...(await runPreviewLiveChecks({ context, deps, scan, info: page.info })),
+  ];
 }

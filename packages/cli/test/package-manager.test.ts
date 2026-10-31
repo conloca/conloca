@@ -32,30 +32,34 @@ describe('detectPackageManager', () => {
 });
 
 describe('packageManagerCommands', () => {
-  test('knows the install, frozen install, run, and add forms of each manager', () => {
+  test('knows the install, frozen install, run, add and exec forms of each manager', () => {
     expect(packageManagerCommands('bun')).toEqual({
       install: 'bun install',
       frozenInstall: 'bun install --frozen-lockfile',
       run: 'bun run',
       add: 'bun add',
+      exec: 'bunx',
     });
     expect(packageManagerCommands('npm')).toEqual({
       install: 'npm install',
       frozenInstall: 'npm ci',
       run: 'npm run',
       add: 'npm install',
+      exec: 'npx',
     });
     expect(packageManagerCommands('pnpm')).toEqual({
       install: 'pnpm install',
       frozenInstall: 'pnpm install --frozen-lockfile',
       run: 'pnpm run',
       add: 'pnpm add',
+      exec: 'pnpm exec',
     });
     expect(packageManagerCommands('yarn')).toEqual({
       install: 'yarn install',
       frozenInstall: 'yarn install --frozen-lockfile',
       run: 'yarn',
       add: 'yarn add',
+      exec: 'yarn',
     });
   });
 

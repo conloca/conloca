@@ -388,6 +388,30 @@ draft images). Every build checks the list, and on the Paid plan the rate limit,
 `env.<name>` blocks; both are inherited from the top level. To try previews locally, run
 `wrangler dev --local-protocol https`: Safari refuses the preview's `Secure` cookies on plain-http `localhost`.
 
+A static site can't hold an on-demand route itself: Astro refuses `export const prerender = false` without an adapter,
+and an adapter would make the site preview from its own server deploy instead. Add such a route to the preview build
+only, which runs with `CONLOCA_PREVIEW_BUILD=1`: the dispatcher then serves it next to the static site, and the build
+reports it for `run_worker_first`. Keep its file outside `src/pages`:
+
+```js
+export default defineConfig({
+  integrations: [
+    // ...conlocaCMS(...), conlocaCloud({ previewBuild: {} }),
+    ...(process.env.CONLOCA_PREVIEW_BUILD === '1'
+      ? [
+          {
+            name: 'preview-only-routes',
+            hooks: {
+              'astro:config:setup': ({ injectRoute }) =>
+                injectRoute({ pattern: '/api/ping', entrypoint: './src/api/ping.ts', prerender: false }),
+            },
+          },
+        ]
+      : []),
+  ],
+});
+```
+
 If the preview build fails and `run_worker_first` lists only the two preview entries, the site still builds and deploys,
 and `/_conloca/preview/` answers "Preview couldn't load the draft". If it also lists your on-demand routes, or
 `not_found_handling` is `"none"`, the build fails instead: the preview server is what serves those routes, and shipping
@@ -397,9 +421,12 @@ On the Cloudflare Workers Paid plan the dispatcher limits each visitor to 60 req
 seconds (the `ratelimits` binding, counted per Cloudflare location and approximately) and answers "Too many preview
 requests — try again in a few seconds" over it. On the Free plan there is no limit: a blocked request would still count
 against the day's requests, so a limit adds nothing there. A flood can then use up the day's requests and pause preview
-until 00:00 UTC, but never the published pages, which don't run the dispatcher. On the Free plan a site with API routes
-previews on a separate deploy instead. A rate-limiting rule on `/_conloca/preview/*` in the Cloudflare dashboard
-(Security → WAF) stops a flood before it reaches the dispatcher; it is optional, and doctor doesn't check it.
+until 00:00 UTC, but never the published pages, which don't run the dispatcher. A site with on-demand routes (API
+routes, `/mcp`) still previews next to itself on the Free plan, since those routes need the dispatcher too, and
+`conloca connect` and doctor (CC23) warn that previews and those routes share one daily request quota: a flood of
+preview requests can stop those routes until 00:00 UTC. Cloudflare Workers Paid removes the daily limit. A rate-limiting
+rule on `/_conloca/preview/*` in the Cloudflare dashboard (Security → WAF) stops a flood before it reaches the
+dispatcher; it is optional, and doctor doesn't check it.
 
 Not suited to this mode: sites that navigate on the client (view transitions, `navigate()`), call same-origin APIs that
 should see drafts, load third-party tags that must not see draft content, open same-origin pages from scripts
@@ -409,9 +436,9 @@ draft pages, and could cache them or answer published ones). Use a separate prev
 ### A separate preview deploy
 
 Set `previewBuild: { separate: true }`. Your build then runs no preview build. Add a second deploy (for example a second
-Cloudflare Workers Builds project) that builds with `CONLOCA_PREVIEW_BUILD=1` and its Wrangler environment set to
-`preview` (the environment is chosen at build time, not at deploy) and deploys with a plain `wrangler deploy`. Put its
-address in `sites.json`:
+Cloudflare Workers Builds project) that builds with `CONLOCA_PREVIEW_BUILD=1 CLOUDFLARE_ENV=preview` before your build
+command (`CLOUDFLARE_ENV` picks the Wrangler environment at build time, not at deploy) and deploys with a plain
+`wrangler deploy`. Put its address in `sites.json`:
 
 ```json
 { "sites": { "default": { "previewUrl": { "en": "https://preview.example.com" } } } }
@@ -424,20 +451,31 @@ A workspace admin confirms the address in the editor once; from then on every pr
 This package is a `conloca doctor` extension (`conloca.doctor` in package.json): `conloca doctor` in a project that
 depends on it runs this package's checks after the CMS ones, offline by default.
 
-| Check | What it verifies                                                                                                                                                                                             |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| CC1   | `conlocaCloud(...)` is wired next to `conlocaCMS(...)` (an absent `conlocaCMS` is an error); notes that the deployed `conloca.json` publishes the repository's name                                          |
-| CC8   | `previewBuild` is absent or `false`, or the preview build has an SSR adapter (the project's own or `previewBuild.adapter`); `previewBuild` on a static project with neither is an error: `astro build` fails |
-| CC9   | `sites.json` gives the site named `default` (or the only site) a bare host in `domains[defaultLocale]` and a valid `base`; Astro's `site` and `base`, when the config shows them, agree (warnings)           |
-| CC10  | No committed `public/_headers`, `netlify.toml` or `vercel.json` sets `X-Frame-Options` or `frame-ancestors` for the whole site without a `/_conloca/editor/` rule; the error carries the rule to add         |
-| CC11  | `--live`: `<host><base>_conloca/editor/conloca.json` is deployed, public, and names this repository and site; warns when it serves another commit than your checkout                                         |
-| CC12  | `--live`: the deployed `/_conloca/editor/` may be framed by `https://*.conloca.com` and its `script-src` allows the editor's origin                                                                          |
-| CC13  | `--live`: the page's protocol is in the range the editor publishes at `/host/protocols.json`                                                                                                                 |
-| CC14  | No tracked workflow and not the astro config still names `CONLOCA_BUILD_TOKEN`, `buildToken`, `publicBaseUrl`, `previewDomain` or `requireRegistration` (warnings)                                           |
+| Check | What it verifies                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CC1   | `conlocaCloud(...)` is wired next to `conlocaCMS(...)` (an absent `conlocaCMS` is an error); notes that the deployed `conloca.json` publishes the repository's name                                                                                                                                                                                                                                                                      |
+| CC8   | How the preview build serves drafts: next to a static site on Cloudflare Workers (D3), from the site's own server deploy (D2), or a separate deploy (D4)                                                                                                                                                                                                                                                                                 |
+| CC9   | `sites.json` gives the site named `default` (or the only site) a bare host in `domains[defaultLocale]` and a valid `base`; Astro's `site` and `base`, when the config shows them, agree (warnings)                                                                                                                                                                                                                                       |
+| CC10  | No committed `public/_headers`, `netlify.toml` or `vercel.json` sets `X-Frame-Options` or `frame-ancestors` for the whole site without a `/_conloca/editor/` rule; the error carries the rule to add                                                                                                                                                                                                                                     |
+| CC11  | `--live`: `<host><base>_conloca/editor/conloca.json` is deployed, public, and names this repository and site; warns when it serves another commit than your checkout                                                                                                                                                                                                                                                                     |
+| CC12  | `--live`: the deployed `/_conloca/editor/` may be framed by `https://*.conloca.com` and its `script-src` allows the editor's origin                                                                                                                                                                                                                                                                                                      |
+| CC13  | `--live`: the page's protocol is in the range the editor publishes at `/host/protocols.json`                                                                                                                                                                                                                                                                                                                                             |
+| CC14  | No tracked workflow and not the astro config still names `CONLOCA_BUILD_TOKEN`, `buildToken`, `publicBaseUrl`, `previewDomain` or `requireRegistration` (warnings)                                                                                                                                                                                                                                                                       |
+| CC15  | D3/D4: a `wrangler.jsonc` deploys to Cloudflare Workers, not Pages; a `wrangler.toml` is asked to become `wrangler.jsonc`                                                                                                                                                                                                                                                                                                                |
+| CC16  | D3: the project's wrangler is 4.36 or newer (`run_worker_first` patterns and the `ratelimits` binding); a warning when it is not installed                                                                                                                                                                                                                                                                                               |
+| CC17  | D3: `main` is the dispatcher, `nodejs_compat` is on, assets bind as `ASSETS`, `run_worker_first` covers the preview route (no `!` exclusion, at most 100 entries), no env block replaces `main` or `assets`, and 404 handling is not single-page-application. D4: `main` no longer names the D3 dispatcher, and without a `main` there is no assets `binding` and no `run_worker_first`, which Wrangler refuses on an assets-only deploy |
+| CC18  | D3: `run_worker_first` lists every route the last build renders on demand                                                                                                                                                                                                                                                                                                                                                                |
+| CC19  | D3: no `.wrangler/deploy/config.json` points a plain `wrangler deploy` at the preview server                                                                                                                                                                                                                                                                                                                                             |
+| CC20  | D3 (warning): the site has a 404 page (read from the build when there is one), unless `not_found_handling` is `"none"`; a middleware that negotiates responses gets the `"none"`-or-static choice                                                                                                                                                                                                                                        |
+| CC21  | D3: no tracked file loads a tag manager, which would run on draft pages (warning; recommends `separate: true`)                                                                                                                                                                                                                                                                                                                           |
+| CC22  | D3, Paid plan (or none recorded): `wrangler.jsonc` (and every `env` block in it) has the `conlocaPreviewLimit` rate-limit binding at 60 requests per 10 s. Free plan: none expected, and one that is there is only noted. A rule in the Cloudflare dashboard is optional and not checked                                                                                                                                                 |
+| CC23  | D3: `package.json` records the Cloudflare plan (`conloca.cfPlan`); on Free, a warning: with on-demand routes, that previews and those routes share one daily request quota                                                                                                                                                                                                                                                               |
+| CC24  | `--live`, D4: `previewUrl`'s `conloca.json` answers as D4 and names the site's release                                                                                                                                                                                                                                                                                                                                                   |
 
-`conloca doctor --live` sends no credential: it contacts only your site's host and the editor's public
-`/host/protocols.json`. When the config computes `endpoint` (for example from an environment variable), set
-`CONLOCA_ENDPOINT` so doctor can read it.
+`conloca doctor` reads the rate-limit binding and the recorded plan from your project's files; it never contacts
+Cloudflare and needs no token. `conloca doctor --live` sends no credential: it contacts your site's host, its
+`previewUrl` and the editor's public `/host/protocols.json`. When the config computes `endpoint` (for example from an
+environment variable), set `CONLOCA_ENDPOINT` so doctor can read it.
 
 The integration also scaffolds a one-page agent skill at `.claude/skills/conloca-cloud/SKILL.md` — in the nearest
 `.claude/` directory between the Astro project and the git root — on any Astro command that loads the config (build,

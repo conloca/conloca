@@ -1,4 +1,4 @@
-import { Command } from 'commander';
+import { Command, Option } from 'commander';
 import { type AssetAddOptions, assetAdd } from './commands/asset-add.js';
 import { compare } from './commands/compare.js';
 import { components } from './commands/components.js';
@@ -12,6 +12,7 @@ import { type PageUpdateOptions, pageUpdate } from './commands/page-update.js';
 import { routes } from './commands/routes.js';
 import { DEFAULT_SITE_NAME, printSetupNextSteps, setup } from './commands/setup.js';
 import { upgrade } from './commands/upgrade.js';
+import { isCfPlan } from './lib/connect/cf-plan.js';
 import { PACKAGE_MANAGERS } from './lib/package-manager.js';
 import { readCliManifest } from './lib/project-template.js';
 
@@ -176,6 +177,17 @@ program
   .option('--dry-run', 'Show the changes, write nothing')
   .option('--no-install', 'Do not install packages; print the command instead')
   .option('--no-build', 'Skip the local build check')
+  .option('--update', 'Refresh the draft preview settings in wrangler.jsonc from a fresh build, and nothing else')
+  .addOption(
+    new Option(
+      '--cf-plan <plan>',
+      'Your Cloudflare Workers plan, for draft previews of a static site (asked on a terminal otherwise)',
+    ).choices(['free', 'paid']),
+  )
+  .option(
+    '--negotiate-404',
+    'Send every miss to the draft preview dispatcher (not_found_handling "none"), for middleware that negotiates responses',
+  )
   .option('--json', 'One JSON report on stdout')
   .description("Set up an Astro site's editor page for your workspace editor")
   .addHelpText(
@@ -186,9 +198,14 @@ project's own package manager, wires react(), conlocaCMS() and conlocaCloud()
 into astro.config, writes the site's domain into sites.json, allows the
 workspace editor to frame the editor page where a committed header forbids
 it, builds the site once to prove the editor page is there, and removes the
-old build key from workflows. Every change is shown as a diff first; in a
-terminal it asks once, --yes accepts, and without a terminal or --yes nothing
-is written. A value you set yourself is kept and reported as "differs".
+old build key from workflows. With previewBuild in conlocaCloud(), it also
+writes the draft preview settings into wrangler.jsonc; --update refreshes only
+those, from a fresh build, --cf-plan answers the plan question without a
+terminal, and --negotiate-404 sends every miss to the preview dispatcher.
+Every change is shown as a diff first; in a terminal it asks before it writes
+(and, for a static site previewing next to itself, once for your Cloudflare
+plan), --yes accepts, and without a terminal or --yes nothing is written. A
+value you set yourself is kept and reported as "differs".
 Never commits, pushes or deploys. A site whose @conloca packages are older
 than this CLI is handed to 'conloca upgrade' with nothing written (exit 2).
 Exits 0 when done, 1 when a step failed, 2 when a step needs you.`,
@@ -204,6 +221,9 @@ Exits 0 when done, 1 when a step failed, 2 when a step needs you.`,
         install: boolean;
         build: boolean;
         json?: boolean;
+        update?: boolean;
+        cfPlan?: string;
+        negotiate404?: boolean;
       },
     ) => {
       await connect(path, {
@@ -214,6 +234,9 @@ Exits 0 when done, 1 when a step failed, 2 when a step needs you.`,
         install: options.install,
         build: options.build,
         json: options.json === true,
+        update: options.update === true,
+        negotiate404: options.negotiate404 === true,
+        ...(isCfPlan(options.cfPlan) ? { cfPlan: options.cfPlan } : {}),
       });
     },
   );

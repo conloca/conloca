@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { join, relative } from 'node:path';
 import { $ } from 'bun';
 import {
   type ConnectIo,
@@ -74,6 +74,41 @@ const BUN_MONOREPO = {
   'sites/b/astro.config.mjs': STATIC_CONFIG,
 };
 
+const D3_CONFIG = `import react from '@astrojs/react';
+import { conlocaCMS } from '@conloca/astro-cms/node';
+import { conlocaCloud } from '@conloca/cloud-astro';
+import { defineConfig } from 'astro/config';
+
+export default defineConfig({
+  site: 'https://www.example.com',
+  integrations: [react(), conlocaCMS({ contentRoot: './content' }), conlocaCloud({ repoUri: 'o/r', previewBuild: {} })],
+});
+`;
+
+const D3_WRANGLER = '{\n  // the site\n  "name": "site",\n  "compatibility_date": "2026-03-15"\n}\n';
+const D3_SITE = {
+  ...PNPM_WITH_CMS,
+  'astro.config.mjs': D3_CONFIG,
+  'content/sites.json': sitesJson({ domains: { en: 'www.example.com' } }),
+  'wrangler.jsonc': D3_WRANGLER,
+};
+const PREFIX_ROUTES = ['/_conloca/preview', '/_conloca/preview/*'];
+const QUESTION = 'Is this account on the Cloudflare Workers Paid or Free plan? [paid/free]';
+const manifestOf = async (dir: string) => JSON.parse(await readFile(join(dir, 'package.json'), 'utf8'));
+
+/** Every file under `dir` but Git's and the build's output, by relative path. */
+async function filesUnder(dir: string): Promise<Map<string, string>> {
+  const files = new Map<string, string>();
+  for (const entry of await readdir(dir, { recursive: true, withFileTypes: true })) {
+    if (!entry.isFile()) continue;
+    const path = relative(dir, join(entry.parentPath, entry.name));
+    if (/^(\.git|dist|\.conloca|node_modules)(\/|$)/u.test(path)) continue;
+    // oxlint-disable-next-line no-await-in-loop -- a handful of fixture files, read in order.
+    files.set(path, await readFile(join(dir, path), 'utf8'));
+  }
+  return files;
+}
+
 let root = '';
 let printed: string[] = [];
 
@@ -96,19 +131,34 @@ async function makeRepo(files: Record<string, string>, installAt?: string[]): Pr
   return root;
 }
 
-/** Stands in for the package manager: `add` writes the named ranges, `build` writes the editor page output. */
-function fakeIo(isTTY = false, answers: boolean[] = []) {
-  const calls: { cmd: string; cwd: string }[] = [];
+/**
+ * Stands in for the package manager: `add` writes the named ranges, `build` writes the editor page output and, given
+ * `routes`, the route list the dispatcher build reports.
+ */
+function fakeIo(isTTY = false, answers: boolean[] = [], routes?: string[], replies: string[] = []) {
+  const calls: { cmd: string; cwd: string; env?: Record<string, string> }[] = [];
+  const questions: string[] = [];
   const io: ConnectIo = {
     isTTY,
-    confirm: async () => answers.shift() ?? false,
-    run: async (cmd, cwd) => {
-      calls.push({ cmd, cwd });
+    confirm: async (question) => {
+      questions.push(question);
+      return answers.shift() ?? false;
+    },
+    ask: async (question) => {
+      questions.push(question);
+      return replies.shift() ?? 'paid';
+    },
+    run: async (cmd, cwd, env) => {
+      calls.push({ cmd, cwd, ...(env === undefined ? {} : { env }) });
       if (cmd.endsWith(' build')) {
         const editor = join(cwd, 'dist', '_conloca', 'editor');
         await mkdir(editor, { recursive: true });
         await writeFile(join(editor, 'index.html'), '<!doctype html>\n');
         await writeFile(join(editor, 'conloca.json'), `${JSON.stringify({ siteId: 'default', protocol: 1 })}\n`);
+        if (routes !== undefined) {
+          await mkdir(join(cwd, '.conloca', 'dispatcher'), { recursive: true });
+          await writeFile(join(cwd, '.conloca', 'dispatcher', 'run_worker_first.json'), JSON.stringify(routes));
+        }
       } else {
         const path = join(cwd, 'package.json');
         const manifest = JSON.parse(await readFile(path, 'utf8'));
@@ -118,7 +168,17 @@ function fakeIo(isTTY = false, answers: boolean[] = []) {
       return true;
     },
   };
-  return { io, calls };
+  return { io, calls, questions };
+}
+
+/** `fakeIo` whose build command fails. */
+function failingBuild(routes: string[]) {
+  const fake = fakeIo(false, [], routes);
+  const io: ConnectIo = {
+    ...fake.io,
+    run: async (cmd, cwd, env) => (cmd.endsWith(' build') ? false : fake.io.run(cmd, cwd, env)),
+  };
+  return io;
 }
 
 function options(overrides: Partial<ConnectOptions> = {}): ConnectOptions {
@@ -363,5 +423,214 @@ describe('runConnect', () => {
     }
     expect(report.ok).toBe(true);
     expect(result.exitCode).toBe(0);
+  });
+
+  test('writes the preview deploy settings and rate limit, records the plan, then the routes its own build reports', async () => {
+    const dir = await makeRepo(D3_SITE);
+    const { io, calls, questions } = fakeIo(false, [], [...PREFIX_ROUTES, '/api/*']);
+    const report = await runConnect(dir, options({ cfPlan: 'paid' }), io);
+    expect(stateOf(report, 'preview')).toBe('changed');
+    // The summary names what both passes wrote: the settings before the build and the routes after it.
+    const message = report.steps.find((step) => step.id === 'preview')?.message ?? '';
+    expect(message).toContain('main');
+    expect(message).toContain('/_conloca/preview/*');
+    expect(message).toContain('/api/*');
+    const wrangler = await readFile(join(dir, 'wrangler.jsonc'), 'utf8');
+    expect(wrangler).toContain('// the site');
+    expect(wrangler).toContain('"main": ".conloca/dispatcher/index.mjs"');
+    expect(wrangler).toContain('"conlocaPreviewLimit"');
+    expect(wrangler).toContain('"/api/*"');
+    expect((await manifestOf(dir)).conloca).toEqual({ cfPlan: 'paid' });
+    expect(questions).not.toContain(QUESTION);
+    expect(calls.find((call) => call.cmd.endsWith(' build'))?.env).toEqual({ CONLOCA_CONNECT: '1' });
+  });
+
+  test('asks for the plan once on a terminal, until it reads paid or free, and never again once recorded', async () => {
+    const dir = await makeRepo(D3_SITE);
+    const first = fakeIo(true, [true], PREFIX_ROUTES, ['', 'maybe', 'p']);
+    await runConnect(dir, options({ yes: false }), first.io);
+    expect(first.questions.slice(0, 3)).toEqual([QUESTION, QUESTION, QUESTION]);
+    expect((await manifestOf(dir)).conloca).toEqual({ cfPlan: 'paid' });
+    const second = fakeIo(true, [true, true], PREFIX_ROUTES);
+    await runConnect(dir, options({ yes: false }), second.io);
+    expect(second.questions).not.toContain(QUESTION);
+  });
+
+  test('reads f as the Free plan', async () => {
+    const dir = await makeRepo(D3_SITE);
+    await runConnect(dir, options({ yes: false }), fakeIo(true, [true, true], PREFIX_ROUTES, ['F']).io);
+    expect((await manifestOf(dir)).conloca).toEqual({ cfPlan: 'free' });
+  });
+
+  test('without a terminal and without --cf-plan, writes nothing D3, names the flag and records nothing', async () => {
+    const dir = await makeRepo(D3_SITE);
+    const { io, questions } = fakeIo(false, [], PREFIX_ROUTES);
+    const report = await runConnect(dir, options(), io);
+    expect(questions).toEqual([]);
+    expect(stateOf(report, 'preview')).toBe('needs-you');
+    expect(report.steps.find((step) => step.id === 'preview')?.message).toContain('--cf-plan');
+    expect(exitCodeOf(report)).toBe(2);
+    expect((await manifestOf(dir)).conloca).toBeUndefined();
+    // The plan decides D3 or D4, so no D3 setting is written before it is known.
+    expect(await readFile(join(dir, 'wrangler.jsonc'), 'utf8')).toBe(D3_WRANGLER);
+  });
+
+  test('sets not_found_handling "none" only with --negotiate-404', async () => {
+    const plain = await makeRepo(D3_SITE);
+    await runConnect(plain, options({ cfPlan: 'paid' }), fakeIo(false, [], PREFIX_ROUTES).io);
+    expect(await readFile(join(plain, 'wrangler.jsonc'), 'utf8')).toContain('"not_found_handling": "404-page"');
+    const asked = await makeRepo(D3_SITE);
+    await runConnect(asked, options({ cfPlan: 'paid', negotiate404: true }), fakeIo(false, [], PREFIX_ROUTES).io);
+    expect(await readFile(join(asked, 'wrangler.jsonc'), 'utf8')).toContain('"not_found_handling": "none"');
+  });
+
+  test('records the plan in the package.json the package manager wrote', async () => {
+    const dir = await makeRepo({ ...D3_SITE, 'package.json': packageJson({ astro: '^7.3.1' }) });
+    await runConnect(dir, options({ cfPlan: 'free' }), fakeIo(false, [], PREFIX_ROUTES).io);
+    const manifest = await manifestOf(dir);
+    expect(manifest.dependencies['@conloca/cloud-astro']).toBeDefined();
+    expect(manifest.conloca).toEqual({ cfPlan: 'free' });
+  });
+
+  test('on the Free plan, previews next to a site with on-demand routes, warns that they share the daily quota, and is done', async () => {
+    const dir = await makeRepo(D3_SITE);
+    const report = await runConnect(
+      dir,
+      options({ cfPlan: 'free' }),
+      fakeIo(false, [], [...PREFIX_ROUTES, '/_image', '/api/*', '/mcp']).io,
+    );
+    const step = report.steps.find((entry) => entry.id === 'preview');
+    expect(step?.state).toBe('changed');
+    expect(exitCodeOf(report)).toBe(0);
+    const warning =
+      'On the Free plan, previews and your on-demand routes (/api/*, /mcp) share one daily request quota; a flood of preview requests can stop those routes until 00:00 UTC. Cloudflare Workers Paid removes the daily limit.';
+    // Its own sentence in the step's message (which --json carries), printed once in the summary.
+    expect(step?.message).toContain(`. ${warning}`);
+    expect(printed.join('\n').split(warning)).toHaveLength(2);
+    const wrangler = await readFile(join(dir, 'wrangler.jsonc'), 'utf8');
+    expect(wrangler).toContain('"main": ".conloca/dispatcher/index.mjs"');
+    expect(wrangler).toContain('"/mcp"');
+    expect(wrangler).not.toContain('conlocaPreviewLimit');
+    expect((await manifestOf(dir)).conloca).toEqual({ cfPlan: 'free' });
+  });
+
+  test('on the Free plan, a site with no on-demand routes gets the D3 settings, no rate limit and no warning', async () => {
+    const dir = await makeRepo(D3_SITE);
+    const report = await runConnect(dir, options({ cfPlan: 'free' }), fakeIo(false, [], PREFIX_ROUTES).io);
+    expect(stateOf(report, 'preview')).toBe('changed');
+    expect(report.steps.find((step) => step.id === 'preview')?.message).not.toContain('daily request quota');
+    const wrangler = await readFile(join(dir, 'wrangler.jsonc'), 'utf8');
+    expect(wrangler).toContain('"main": ".conloca/dispatcher/index.mjs"');
+    // On Free a blocked request still counts against the quota, so no binding is written.
+    expect(wrangler).not.toContain('conlocaPreviewLimit');
+  });
+
+  test('removes the rate limit it wrote when --update changes the plan from paid to free', async () => {
+    const dir = await makeRepo(D3_SITE);
+    await runConnect(dir, options({ cfPlan: 'paid' }), fakeIo(false, [], PREFIX_ROUTES).io);
+    expect(await readFile(join(dir, 'wrangler.jsonc'), 'utf8')).toContain('conlocaPreviewLimit');
+    await runConnect(dir, options({ update: true, cfPlan: 'free' }), fakeIo(false, [], PREFIX_ROUTES).io);
+    expect(await readFile(join(dir, 'wrangler.jsonc'), 'utf8')).not.toContain('conlocaPreviewLimit');
+    expect((await manifestOf(dir)).conloca).toEqual({ cfPlan: 'free' });
+  });
+
+  test('on the Free plan, writes the D3 settings before the build, as on Paid, so --no-build and a failed build keep them', async () => {
+    const unbuilt = await makeRepo(D3_SITE);
+    const report = await runConnect(unbuilt, options({ cfPlan: 'free', build: false }), fakeIo(false, []).io);
+    expect(stateOf(report, 'preview')).toBe('changed');
+    expect(await readFile(join(unbuilt, 'wrangler.jsonc'), 'utf8')).toContain(
+      '"main": ".conloca/dispatcher/index.mjs"',
+    );
+    const failed = await makeRepo(D3_SITE);
+    const broken = await runConnect(failed, options({ cfPlan: 'free' }), failingBuild(PREFIX_ROUTES));
+    expect(stateOf(broken, 'build')).toBe('failed');
+    expect(stateOf(broken, 'preview')).toBe('changed');
+  });
+
+  test('on the Free plan, reports what the wrangler config refuses, a wrangler.toml included', async () => {
+    const { 'wrangler.jsonc': _jsonc, ...withoutJsonc } = D3_SITE;
+    const toml = await makeRepo({ ...withoutJsonc, 'wrangler.toml': 'name = "site"\n' });
+    const report = await runConnect(toml, options({ cfPlan: 'free' }), fakeIo(false, [], PREFIX_ROUTES).io);
+    expect(stateOf(report, 'preview')).toBe('needs-you');
+    expect(report.steps.find((step) => step.id === 'preview')?.message).toContain('convert it to wrangler.jsonc');
+    expect(exitCodeOf(report)).toBe(2);
+    const own = await makeRepo({ ...D3_SITE, 'wrangler.jsonc': '{ "name": "site", "main": "src/entry.ts" }\n' });
+    const refused = await runConnect(own, options({ cfPlan: 'free' }), fakeIo(false, [], PREFIX_ROUTES).io);
+    expect(refused.steps.find((step) => step.id === 'preview')?.message).toContain('sets its own main');
+  });
+
+  test('needs you when the build reports no routes', async () => {
+    const dir = await makeRepo(D3_SITE);
+    const report = await runConnect(dir, options({ cfPlan: 'free' }), fakeIo(false, []).io);
+    expect(stateOf(report, 'preview')).toBe('needs-you');
+    expect(report.steps.find((step) => step.id === 'preview')?.message).toContain('run_worker_first.json');
+  });
+
+  test('on the Free plan, a rerun with nothing to change is done, and waits for nothing', async () => {
+    const dir = await makeRepo(D3_SITE);
+    await runConnect(dir, options({ cfPlan: 'free' }), fakeIo(false, [], PREFIX_ROUTES).io);
+    const report = await runConnect(dir, options(), fakeIo(false, [], PREFIX_ROUTES).io);
+    expect(stateOf(report, 'preview')).toBe('done');
+    expect(report.steps.find((step) => step.id === 'preview')?.message).not.toContain('wait');
+  });
+
+  test('a separate preview deploy is deployed with the project’s own runner when it lists wrangler, else npx', async () => {
+    const d4 = D3_CONFIG.replace('previewBuild: {}', 'previewBuild: { separate: true }');
+    const listed = await makeRepo({
+      ...D3_SITE,
+      'astro.config.mjs': d4,
+      'package.json': `${JSON.stringify({ ...JSON.parse(packageJson(ALL_PACKAGES)), devDependencies: { wrangler: '^4.141.0' } }, null, 2)}\n`,
+    });
+    await runConnect(listed, options(), fakeIo(false, []).io);
+    expect(printed.join('\n')).toContain('Deploy command: pnpm exec wrangler deploy');
+    printed = [];
+    const unlisted = await makeRepo({ ...D3_SITE, 'astro.config.mjs': d4 });
+    await runConnect(unlisted, options(), fakeIo(false, []).io);
+    expect(printed.join('\n')).toContain('Deploy command: npx wrangler deploy');
+  });
+
+  test('--update builds and refreshes only the preview settings', async () => {
+    const dir = await makeRepo(D3_SITE);
+    await runConnect(dir, options({ cfPlan: 'paid' }), fakeIo(false, [], PREFIX_ROUTES).io);
+    const { io, calls } = fakeIo(false, [], [...PREFIX_ROUTES, '/api/new']);
+    const report = await runConnect(dir, options({ update: true }), io);
+    expect(report.steps.map((step) => step.id)).toEqual(['project', 'preview', 'build']);
+    expect(calls.map((call) => call.cmd)).toEqual(['pnpm run build']);
+    expect(await readFile(join(dir, 'wrangler.jsonc'), 'utf8')).toContain('"/api/new"');
+  });
+
+  test('--update installs nothing and writes no file of its own but wrangler.jsonc and the plan, even when packages are missing', async () => {
+    // D3_SITE already holds src/content.config.ts and a conlocaCMS() call, so the proof is that nothing else moved.
+    const fixture = { ...D3_SITE, 'package.json': packageJson({ astro: '^7.3.1' }) };
+    const dir = await makeRepo(fixture);
+    const before = await filesUnder(dir);
+    const { io, calls } = fakeIo(false, [], PREFIX_ROUTES);
+    await runConnect(dir, options({ update: true, cfPlan: 'paid' }), io);
+    expect(calls.map((call) => call.cmd)).toEqual(['pnpm run build']);
+    const after = await filesUnder(dir);
+    for (const [path, text] of before) {
+      if (path !== 'wrangler.jsonc' && path !== 'package.json') expect(after.get(path), path).toBe(text);
+    }
+    expect([...after.keys()].filter((path) => !before.has(path))).toEqual([]);
+    expect(JSON.parse(after.get('package.json') ?? '{}').dependencies).toEqual(
+      JSON.parse(fixture['package.json']).dependencies,
+    );
+  });
+
+  test('leaves a wrangler.jsonc with its own main as it is, and says why', async () => {
+    const text = '{ "name": "site", "main": "src/entry.ts" }\n';
+    const dir = await makeRepo({ ...D3_SITE, 'wrangler.jsonc': text });
+    const report = await runConnect(dir, options({ cfPlan: 'paid' }), fakeIo(false, [], PREFIX_ROUTES).io);
+    expect(stateOf(report, 'preview')).toBe('needs-you');
+    expect(exitCodeOf(report)).toBe(2);
+    expect(await readFile(join(dir, 'wrangler.jsonc'), 'utf8')).toBe(text);
+  });
+
+  test('adds no preview step to a site without previewBuild, and asks nothing', async () => {
+    const dir = await makeRepo(FRESH_NPM);
+    const { io, questions } = fakeIo(true, [true]);
+    const report = await runConnect(dir, options(), io);
+    expect(report.steps.map((step) => step.id)).not.toContain('preview');
+    expect(questions).not.toContain(QUESTION);
   });
 });
