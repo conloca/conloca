@@ -48,14 +48,17 @@ export function readPageConversionFacts(value: unknown): PageConversionFacts | u
   return facts;
 }
 
-/** The collection converted pages go into: the first page collection the bindings route, else `pages`. */
+/** The collection converted pages go into: `pages` when the bindings route it, else the first they route, else `pages`. */
 export function pageCollection(bindings: EditorDataBindings | undefined): string {
-  return Object.keys(bindings?.routes ?? {}).find((collection) => COLLECTION_RE.test(collection)) ?? 'pages';
+  const collections = Object.keys(bindings?.routes ?? {}).filter((collection) => COLLECTION_RE.test(collection));
+  return collections.includes('pages') ? 'pages' : (collections[0] ?? 'pages');
 }
+
+/** `route` without its trailing `/`, the root staying `/`. */
+const trimmed = (route: string): string => route.replace(/\/+$/, '') || '/';
 
 /** `routes` that no locale of `pages` serves, comparing without a trailing `/`. */
 export function unconvertedRoutes(routes: readonly string[], pages: readonly ContentManifest[]): string[] {
-  const trimmed = (route: string): string => route.replace(/\/+$/, '') || '/';
   const served = new Set<string>();
   for (const page of pages) {
     for (const { pathname } of localesOf(page)) if (pathname !== undefined) served.add(trimmed(pathname));

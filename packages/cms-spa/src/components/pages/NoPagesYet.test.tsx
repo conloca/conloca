@@ -37,7 +37,8 @@ const renderNoPagesYet = () =>
 const convertButton = (): HTMLElement | null =>
   screen.queryByRole('button', { name: 'Make an existing page editable' });
 const copyButton = () => screen.getByRole('button', { name: 'Copy prompt' });
-const prompt = () => (screen.getByRole('textbox', { name: 'Prompt' }) as HTMLTextAreaElement).value;
+const clickConvert = () => fireEvent.click(screen.getByRole('button', { name: 'Make an existing page editable' }));
+const prompt = () => screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Prompt' }).value;
 
 describe('No Conloca pages yet', () => {
   it('explains the empty site and offers both actions, without reading as an error', () => {
@@ -52,8 +53,8 @@ describe('No Conloca pages yet', () => {
   it('preselects nothing and copies a prompt naming exactly the chosen route', async () => {
     configureUI({ hosted: true, pageConversion: FACTS, readOnly: undefined });
     renderNoPagesYet();
-    fireEvent.click(convertButton()!);
-    expect((screen.getAllByRole('checkbox') as HTMLInputElement[]).map((box) => box.checked)).toEqual([false, false]);
+    clickConvert();
+    expect(screen.getAllByRole<HTMLInputElement>('checkbox').map((box) => box.checked)).toEqual([false, false]);
     expect(screen.queryByText(/rm -rf/)).toBeNull();
     expect(copyButton().hasAttribute('disabled')).toBe(true);
     fireEvent.click(screen.getByRole('checkbox', { name: '/pricing' }));
@@ -66,7 +67,7 @@ describe('No Conloca pages yet', () => {
   it('offers the upgrade-first prompt while the route list is unknown', () => {
     configureUI({ hosted: true, pageConversion: NO_ROUTES, readOnly: undefined });
     renderNoPagesYet();
-    fireEvent.click(convertButton()!);
+    clickConvert();
     expect(screen.getByText(NOT_LISTED)).toBeTruthy();
     expect(screen.queryAllByRole('checkbox')).toEqual([]);
     expect(copyButton().hasAttribute('disabled')).toBe(false);
@@ -76,7 +77,7 @@ describe('No Conloca pages yet', () => {
   it('shows the routes once the workspace editor learns them', () => {
     configureUI({ hosted: true, pageConversion: NO_ROUTES, readOnly: undefined });
     renderNoPagesYet();
-    fireEvent.click(convertButton()!);
+    clickConvert();
     act(() => setPageConversion(FACTS));
     expect(screen.getAllByRole('checkbox')).toHaveLength(2);
     expect(screen.queryByText(NOT_LISTED)).toBeNull();
@@ -86,7 +87,7 @@ describe('No Conloca pages yet', () => {
     refuse = true;
     configureUI({ hosted: true, pageConversion: FACTS, readOnly: undefined });
     renderNoPagesYet();
-    fireEvent.click(convertButton()!);
+    clickConvert();
     fireEvent.click(screen.getByRole('checkbox', { name: '/' }));
     fireEvent.click(copyButton());
     await screen.findByText('Copying failed. Select the prompt and copy it yourself.');
@@ -114,7 +115,7 @@ describe('No Conloca pages yet', () => {
     const previous = globalThis.fetch;
     globalThis.fetch = Object.assign(
       async (url: string | URL | Request) => {
-        requested.push(String(url));
+        requested.push(url instanceof Request ? url.url : url.toString());
         return Response.json({ routes: ['/', '/about', '/x y'] });
       },
       { preconnect: () => {} },

@@ -18,9 +18,34 @@ const FACTS: PageConversionFacts = {
   siteUrl: 'https://acme.example/',
   mcpUrl: 'https://app.example.com/mcp',
 };
+/** The prompt's JSON data block, as `conversionPrompt` writes it. */
+interface PromptValues {
+  site: string;
+  collection: string;
+  repository?: string;
+  branch?: string;
+  siteUrl?: string;
+  mcp?: string;
+  routes?: string[];
+}
+const PROMPT_TEXT_FIELDS = new Set(['site', 'collection', 'repository', 'branch', 'siteUrl', 'mcp']);
+
+/** Whether `value` has exactly the fields `PromptValues` allows, each of its type. */
+function isPromptValues(value: unknown): value is PromptValues {
+  if (typeof value !== 'object' || value === null || !('site' in value) || !('collection' in value)) return false;
+  return Object.entries(value).every(([key, field]) =>
+    key === 'routes'
+      ? Array.isArray(field) && field.every((route) => typeof route === 'string')
+      : PROMPT_TEXT_FIELDS.has(key) && typeof field === 'string',
+  );
+}
+
 /** The JSON data block at the end of the prompt. */
-const data = (prompt: string): unknown =>
-  JSON.parse(prompt.slice(prompt.lastIndexOf('```json\n') + 8, prompt.lastIndexOf('\n```')));
+function data(prompt: string): PromptValues {
+  const values: unknown = JSON.parse(prompt.slice(prompt.lastIndexOf('```json\n') + 8, prompt.lastIndexOf('\n```')));
+  if (!isPromptValues(values)) throw new Error(`malformed prompt data block: ${JSON.stringify(values)}`);
+  return values;
+}
 
 /** A page served at `pathname`, shaped like the editor's page list. */
 function pageAt(pathname: string): ContentManifest {
@@ -113,6 +138,15 @@ describe('pageCollection', () => {
       'blog',
     );
     expect(pageCollection(undefined)).toBe('pages');
+  });
+  it('prefers pages when the bindings route it after another collection', () => {
+    expect(
+      pageCollection({
+        siteName: 'default',
+        locale: 'en',
+        routes: { blog: { pages: { prefix: '/blog/' } }, pages: { pages: { prefix: '/' } } },
+      }),
+    ).toBe('pages');
   });
 });
 describe('setPageConversion', () => {
