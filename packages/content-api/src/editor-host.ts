@@ -203,9 +203,11 @@ export function contentPathsOf(info: ConlocaJson): string[] | undefined {
 export const CONLOCA_JSON_MAX_BYTES = 16 * 1024;
 
 /** A page route: `/` then at most 200 unreserved URL characters or `/`, so no route carries prompt or shell syntax. */
-export const EDITOR_ROUTE_RE = /^\/[A-Za-z0-9._~\-\/]{0,200}$/;
+export const EDITOR_ROUTE_RE = /^\/[A-Za-z0-9._~\-/]{0,200}$/;
+/** The most routes a conloca.json lists. */
 export const ROUTES_MAX = 500;
 
+/** Whether `route` is a string matching `EDITOR_ROUTE_RE`. */
 export function isEditorRoute(route: unknown): route is string {
   return typeof route === 'string' && EDITOR_ROUTE_RE.test(route);
 }
