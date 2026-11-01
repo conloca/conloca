@@ -1,8 +1,8 @@
-import { useAssetServeSrc } from '../../frame/media-cache.js';
 import type { AssetEntry } from '../../hooks/index.js';
 import { AssetScopePill } from '../../media/AssetScopePill.js';
 import { MediaIssueBadge } from '../../media/MediaIssueBadge.js';
 import { useAssetScope } from '../../media/use-asset-scope.js';
+import { useAssetServeSrc } from '../../media/use-asset-serve-src.js';
 import { useMediaIssue } from '../../media/use-media-issue.js';
 import { cn } from '../../utils/cn.js';
 
@@ -33,7 +33,7 @@ export function AssetCard({
   // reports. Returns null when the host has no opinion — surfaces
   // degrade exactly like the scope pill in standalone mounts.
   const issue = useMediaIssue(asset.filename, asset.folder);
-  const src = useAssetServeSrc(assetsBasePath, asset.folder, asset.filename);
+  const src = useAssetServeSrc(assetsBasePath, asset);
 
   const handleClick = () => {
     onClick?.();
@@ -78,8 +78,8 @@ export function AssetCard({
 
       {/* Info - filename only */}
       <div className="px-2 py-1.5">
-        <p className="text-xs text-grey-01 dark:text-grey-12 truncate" title={asset.originalName}>
-          {asset.originalName}
+        <p className="text-xs text-grey-01 dark:text-grey-12 truncate" title={asset.filename}>
+          {asset.filename}
         </p>
       </div>
     </button>

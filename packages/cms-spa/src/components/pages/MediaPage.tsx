@@ -8,6 +8,7 @@ import { cn } from '../../utils/cn.js';
 import { DeleteConfirmDialog, MoveFolderDialog } from '../dialogs/index.js';
 import {
   AssetDetailSidebar,
+  AssetUsageList,
   BulkActionBar,
   FolderTreeSidebar,
   MediaLibrary,
@@ -47,12 +48,16 @@ export function MediaPage() {
   const [showMoveDialog, setShowMoveDialog] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
+  // Whether the pages using the selected images are known: a bulk move or delete waits until they are shown.
+  const [usageSettled, setUsageSettled] = useState(false);
 
   // Bulk delete state
   const [bulkDeleteResult, setBulkDeleteResult] = useState<{ success: number; failed: number } | null>(null);
 
   // Queries and mutations
   const folderListing = useAssetFolders(currentFolder);
+  // Selected in the folder on screen; a name alone could match a file in another folder
+  const selectedPaths = Array.from(selectedAssets, (filename) => assetPath(currentFolder, filename));
   const moveAssets = useMoveAssets();
   const bulkDelete = useBulkDeleteAssets();
 
@@ -110,11 +115,9 @@ export function MediaPage() {
 
   // Bulk delete selected assets
   const handleBulkDelete = async () => {
-    // Selected in the folder on screen, like a bulk move; its name alone could match a file in another folder
-    const paths = Array.from(selectedAssets, (filename) => assetPath(currentFolder, filename));
     setBulkDeleteResult(null);
 
-    const result = await bulkDelete.mutateAsync(paths);
+    const result = await bulkDelete.mutateAsync(selectedPaths);
     setBulkDeleteResult({ success: result.successCount, failed: result.failCount });
 
     if (result.successCount > 0) {
@@ -265,7 +268,10 @@ export function MediaPage() {
         onMove={handleBulkMove}
         onCancel={() => setShowMoveDialog(false)}
         isMoving={moveAssets.isPending}
-      />
+        confirmDisabled={!usageSettled}
+      >
+        <AssetUsageList paths={selectedPaths} onSettled={setUsageSettled} />
+      </MoveFolderDialog>
 
       {/* Delete confirmation dialog */}
       <DeleteConfirmDialog
@@ -275,7 +281,10 @@ export function MediaPage() {
         onConfirm={handleBulkDelete}
         onCancel={() => setShowDeleteConfirm(false)}
         isDeleting={bulkDelete.isPending}
-      />
+        confirmDisabled={!usageSettled}
+      >
+        <AssetUsageList paths={selectedPaths} onSettled={setUsageSettled} />
+      </DeleteConfirmDialog>
 
       {/* Upload modal */}
       <UploadModal isOpen={showUploadModal} onClose={() => setShowUploadModal(false)} folder={currentFolder} />

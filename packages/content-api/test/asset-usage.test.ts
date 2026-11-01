@@ -6,6 +6,7 @@ import type { AssetUsage } from '../src/asset-types.js';
 import type { ContentAPI } from '../src/content-api.interface.js';
 import { FileSystemContentAPI } from '../src/filesystem-content-api.js';
 import { InMemoryContentAPI } from '../src/in-memory-content-api.js';
+import { findAssetUsage } from '../src/index.js';
 import { createContentAPIRouter } from '../src/middleware.js';
 import { testTempDir } from './test-temp-dir.js';
 
@@ -207,6 +208,20 @@ describe('which content uses a picture', () => {
     const api = await FileSystemContentAPI.create({ contentRoot, canvasDir: join(root, 'canvas') });
 
     expect(await usage(api, 'beach.png')).toEqual([{ page: '/getting-started (en)', field: 'content.mdx' }]);
+  });
+
+  test('a listing that arrives asynchronously finds the same uses', async () => {
+    const api = store();
+    await page(api, '/beach-day', { ogImage: '/assets/beach.png' });
+    const source = {
+      sitesConfig: api.sitesConfig,
+      getLocalized: api.getLocalized.bind(api),
+      listAllContent: async function* () {
+        yield* api.listAllContent();
+      },
+    };
+
+    expect(await findAssetUsage(source, 'beach.png')).toEqual([{ page: '/beach-day (en)', field: 'meta.ogImage' }]);
   });
 
   // A second lookup on the asset operations matched the bare file name in .vxjson files only, so it

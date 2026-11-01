@@ -1,5 +1,13 @@
 import type { AssetUsage } from './asset-types.js';
 import type { ContentAPI } from './content-api.interface.js';
+import type { ContentManifest } from './types.js';
+
+/** What the usage scan reads: the sites, each entry language, and a listing that may arrive asynchronously. */
+export interface AssetUsageSource {
+  sitesConfig: ContentAPI['sitesConfig'];
+  getLocalized: ContentAPI['getLocalized'];
+  listAllContent(): Iterable<ContentManifest> | AsyncIterable<ContentManifest>;
+}
 
 /**
  * Every page, fragment and data entry language whose meta or content links to an asset. The editor
@@ -8,13 +16,19 @@ import type { ContentAPI } from './content-api.interface.js';
  * `/assets/beach.png.bak`. A full URL such as `https://…/assets/beach.png` never counts, even one to this
  * site, whose address is not known here.
  */
-export async function findAssetUsage(api: ContentAPI, path: string, assetRefBase = '/assets'): Promise<AssetUsage[]> {
+export async function findAssetUsage(
+  api: AssetUsageSource,
+  path: string,
+  assetRefBase = '/assets',
+): Promise<AssetUsage[]> {
   const link = `${assetRefBase}/${path.replace(/^\/+|\/+$/g, '')}`;
   const whole = new RegExp(`(?<![\\w.~%/-])${link.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w./-])`);
   const usage: AssetUsage[] = [];
   const severalSites = Object.keys(api.sitesConfig.sites).length > 1;
   // Listed first: reading an entry can re-index it, which must not disturb the listing being walked
-  for (const manifest of [...api.listAllContent()]) {
+  const manifests: ContentManifest[] = [];
+  for await (const manifest of api.listAllContent()) manifests.push(manifest);
+  for (const manifest of manifests) {
     for (const locale of Object.keys(manifest.locales)) {
       const entry = await api.getLocalized(manifest.id, locale);
       if (!entry) continue;

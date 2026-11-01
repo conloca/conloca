@@ -1,16 +1,17 @@
 import { formatFileSize } from '@conloca/content-api-client';
 import { FolderInput, Loader2, Trash2, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { useAssetServeSrc } from '../../frame/media-cache.js';
 import type { AssetEntry } from '../../hooks/index.js';
 import { useAssetUsage, useDeleteAsset, useMoveAssets, useUpdateAssetMetadata } from '../../hooks/index.js';
 import { AssetScopePill } from '../../media/AssetScopePill.js';
 import { MediaIssueBadge } from '../../media/MediaIssueBadge.js';
 import { useAssetScope } from '../../media/use-asset-scope.js';
+import { useAssetServeSrc } from '../../media/use-asset-serve-src.js';
 import { useMediaIssue } from '../../media/use-media-issue.js';
 import { buildAssetPath } from '../../utils/asset-url.js';
 import { MoveFolderDialog } from '../dialogs/index.js';
 import { Button, IconButton, Input } from '../ui/index.js';
+import { AssetUsageList } from './AssetUsageList.js';
 
 function formatDate(dateString: string): string {
   const date = new Date(dateString);
@@ -48,6 +49,8 @@ export function AssetDetailSidebar({
   const [storedTags, setStoredTags] = useState<string[]>(asset.tags ?? []);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showMoveDialog, setShowMoveDialog] = useState(false);
+  // Whether the pages using this image are known, so a move or delete cannot be confirmed before they are shown.
+  const [usageSettled, setUsageSettled] = useState(false);
   // Only with a host bridge: branch vs published scope. Returns null
   // when no host bridge is installed, so the pill is naturally hidden
   // in astro-cms / local dev.
@@ -56,7 +59,7 @@ export function AssetDetailSidebar({
   // Returns null when the host has no opinion or the asset is
   // healthy; the badge collapses to nothing in either case.
   const issue = useMediaIssue(asset.filename, asset.folder);
-  const src = useAssetServeSrc(assetsBasePath, asset.folder, asset.filename);
+  const src = useAssetServeSrc(assetsBasePath, asset);
   // Folder + filename is the asset identity used by metadata, usage and delete routes.
   const path = useMemo(() => buildAssetPath(asset.folder, asset.filename), [asset.folder, asset.filename]);
 
@@ -158,8 +161,8 @@ export function AssetDetailSidebar({
         {/* Header */}
         <div className="flex items-start justify-between gap-3 px-4 py-3 border-b border-line">
           <div className="flex-1 min-w-0 flex flex-col gap-1">
-            <h3 className="font-semibold text-grey-01 dark:text-grey-12 truncate" title={asset.originalName}>
-              {asset.originalName}
+            <h3 className="font-semibold text-grey-01 dark:text-grey-12 truncate" title={asset.filename}>
+              {asset.filename}
             </h3>
             {/* Scope pill — `md` variant here (vs `sm` on AssetCard
                 corners). Sits below the filename so the branch
@@ -190,22 +193,28 @@ export function AssetDetailSidebar({
               <dt className="text-xs text-grey-04 dark:text-grey-07 uppercase tracking-wide">Filename</dt>
               <dd className="text-sm text-grey-01 dark:text-grey-12 break-all">{asset.filename}</dd>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <dt className="text-xs text-grey-04 dark:text-grey-07 uppercase tracking-wide">Size</dt>
-                <dd className="text-sm text-grey-01 dark:text-grey-12">{formatFileSize(asset.size)}</dd>
+            {(asset.size > 0 || dimensions) && (
+              <div className="grid grid-cols-2 gap-3">
+                {asset.size > 0 && (
+                  <div>
+                    <dt className="text-xs text-grey-04 dark:text-grey-07 uppercase tracking-wide">Size</dt>
+                    <dd className="text-sm text-grey-01 dark:text-grey-12">{formatFileSize(asset.size)}</dd>
+                  </div>
+                )}
+                {dimensions && (
+                  <div>
+                    <dt className="text-xs text-grey-04 dark:text-grey-07 uppercase tracking-wide">Dimensions</dt>
+                    <dd className="text-sm text-grey-01 dark:text-grey-12">{dimensions}</dd>
+                  </div>
+                )}
               </div>
-              {dimensions && (
-                <div>
-                  <dt className="text-xs text-grey-04 dark:text-grey-07 uppercase tracking-wide">Dimensions</dt>
-                  <dd className="text-sm text-grey-01 dark:text-grey-12">{dimensions}</dd>
-                </div>
-              )}
-            </div>
-            <div>
-              <dt className="text-xs text-grey-04 dark:text-grey-07 uppercase tracking-wide">Uploaded</dt>
-              <dd className="text-sm text-grey-01 dark:text-grey-12">{formatDate(asset.uploadedAt)}</dd>
-            </div>
+            )}
+            {asset.uploadedAt && (
+              <div>
+                <dt className="text-xs text-grey-04 dark:text-grey-07 uppercase tracking-wide">Uploaded</dt>
+                <dd className="text-sm text-grey-01 dark:text-grey-12">{formatDate(asset.uploadedAt)}</dd>
+              </div>
+            )}
             {asset.mimeType && (
               <div>
                 <dt className="text-xs text-grey-04 dark:text-grey-07 uppercase tracking-wide">Type</dt>
@@ -290,14 +299,15 @@ export function AssetDetailSidebar({
           {/* Delete section */}
           <div className="p-4">
             {confirmDelete ? (
-              <div className="space-y-2">
+              <div className="space-y-2" data-testid="asset-delete-confirm">
                 <p className="text-sm text-red-04 dark:text-red-08">Delete this asset permanently?</p>
+                <AssetUsageList paths={[path]} onSettled={setUsageSettled} />
                 <div className="flex gap-2">
                   <Button
                     variant="destructive"
                     size="sm"
                     onClick={handleDelete}
-                    disabled={deleteAsset.isPending}
+                    disabled={deleteAsset.isPending || !usageSettled}
                     className="flex-1"
                   >
                     {deleteAsset.isPending ? 'Deleting...' : 'Yes, Delete'}
@@ -328,7 +338,10 @@ export function AssetDetailSidebar({
           onMove={handleMove}
           onCancel={() => setShowMoveDialog(false)}
           isMoving={moveAssets.isPending}
-        />
+          confirmDisabled={!usageSettled}
+        >
+          <AssetUsageList paths={[path]} onSettled={setUsageSettled} />
+        </MoveFolderDialog>
       </div>
     </>
   );

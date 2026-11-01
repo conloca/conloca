@@ -94,19 +94,21 @@ export function MediaLibrary({
   // Sort assets
   const sortedAssets = useMemo(() => {
     const sorted = [...filteredAssets];
+    // An image with no known upload date sorts as the oldest.
+    const time = (asset: AssetEntry) => Date.parse(asset.uploadedAt) || 0;
 
     switch (sort) {
       case 'date-newest':
-        sorted.sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
+        sorted.sort((a, b) => time(b) - time(a));
         break;
       case 'date-oldest':
-        sorted.sort((a, b) => new Date(a.uploadedAt).getTime() - new Date(b.uploadedAt).getTime());
+        sorted.sort((a, b) => time(a) - time(b));
         break;
       case 'name-asc':
-        sorted.sort((a, b) => a.originalName.localeCompare(b.originalName));
+        sorted.sort((a, b) => a.filename.localeCompare(b.filename));
         break;
       case 'name-desc':
-        sorted.sort((a, b) => b.originalName.localeCompare(a.originalName));
+        sorted.sort((a, b) => b.filename.localeCompare(a.filename));
         break;
       case 'size-largest':
         sorted.sort((a, b) => b.size - a.size);

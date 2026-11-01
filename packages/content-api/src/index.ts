@@ -18,6 +18,14 @@ export {
   VIDEO_EXTENSIONS,
   WEBP_QUALITY,
 } from './asset-constraints.js';
+// One asset's metadata record as committed: its path and exact bytes, shared by every writer.
+export {
+  assetMetadataRecordPath,
+  parseAssetMetadata,
+  patchAssetMetadata,
+  sameAssetMetadata,
+  serializeAssetMetadata,
+} from './asset-metadata-record.js';
 // The one naming rule for uploads and media folders, shared by the browser and every server.
 export {
   fileNameFromUrl,
@@ -38,6 +46,8 @@ export type {
   FolderTreeNode,
 } from './asset-types.js';
 export { ASSET_METADATA_DIR } from './asset-types.js';
+// Which pages link an asset, over any listing of the content.
+export { type AssetUsageSource, findAssetUsage } from './asset-usage.js';
 // Browser-safe exports
 export * from './component-registry.types.js';
 export type { ContentAPI } from './content-api.interface.js';

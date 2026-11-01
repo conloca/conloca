@@ -88,6 +88,11 @@
       "import": "./dist/lfs-attributes.js",
       "default": "./dist/lfs-attributes.js"
     },
+    "./asset-metadata-record": {
+      "types": "./dist/asset-metadata-record.d.ts",
+      "import": "./dist/asset-metadata-record.js",
+      "default": "./dist/asset-metadata-record.js"
+    },
     "./content-file-id": {
       "types": "./dist/content-file-id.d.ts",
       "import": "./dist/content-file-id.js",

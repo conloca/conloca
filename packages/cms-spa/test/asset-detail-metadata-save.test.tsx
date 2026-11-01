@@ -96,7 +96,7 @@ const recordingFetch = async (input: URL | RequestInfo, init?: RequestInit): Pro
       ],
     });
   }
-  if (pathname.startsWith(`${API}/assets/usage/`)) return json([]);
+  if (pathname.startsWith(`${API}/assets/usage/`)) return json({ usage: [] });
   return json({ error: { code: 'NOT_FOUND', message: url } }, 404);
 };
 // Bun's `typeof fetch` carries preconnect, which the client option asks for.
@@ -335,6 +335,9 @@ describe('AssetDetailSidebar asset addressing', () => {
     renderSidebar(nestedAsset);
 
     fireEvent.click(screen.getByText('Delete Asset'));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Yes, Delete' }).hasAttribute('disabled')).toBe(false),
+    );
     fireEvent.click(screen.getByText('Yes, Delete'));
 
     await waitFor(() => expect(deletes).toHaveLength(1));
@@ -345,6 +348,9 @@ describe('AssetDetailSidebar asset addressing', () => {
     renderSidebar();
 
     fireEvent.click(screen.getByText('Delete Asset'));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Yes, Delete' }).hasAttribute('disabled')).toBe(false),
+    );
     fireEvent.click(screen.getByText('Yes, Delete'));
 
     await waitFor(() => expect(deletes).toHaveLength(1));

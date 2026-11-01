@@ -1,5 +1,6 @@
 export { AssetCard } from './AssetCard.js';
 export { AssetDetailSidebar } from './AssetDetailSidebar.js';
+export { AssetUsageList } from './AssetUsageList.js';
 export { BulkActionBar } from './BulkActionBar.js';
 export { FolderNav } from './FolderNav.js';
 export { FolderTreeSidebar } from './FolderTreeSidebar.js';

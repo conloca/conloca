@@ -44,7 +44,10 @@ let rootAssets: (typeof photo)[];
 /** Answers like a content API whose root holds photo.png and notes.png, with folders archive/ and old/. */
 async function serve(input: RequestInfo | URL, init?: RequestInit) {
   const url = new URL(String(input), 'http://localhost');
-  switch (`${init?.method ?? 'GET'} ${url.pathname.slice(BASE_URL.length)}`) {
+  const route = url.pathname.slice(BASE_URL.length);
+  // No page uses any image here, so a move is never held waiting on its usage list.
+  if (route.startsWith('/assets/usage/')) return json({ usage: [] });
+  switch (`${init?.method ?? 'GET'} ${route}`) {
     case 'GET /assets/folders':
       return json({
         assets: url.searchParams.get('path') === '/' ? rootAssets : [],
@@ -60,8 +63,6 @@ async function serve(input: RequestInfo | URL, init?: RequestInit) {
           { name: 'old', path: '/old', assetCount: 0, children: [] },
         ],
       });
-    case 'GET /assets/usage/photo.png':
-      return json([]);
     case 'POST /assets/move':
       return answerMove(JSON.parse(String(init?.body)));
   }
@@ -116,6 +117,8 @@ async function openBulkMove(names = ['photo.png']) {
   fireEvent.click(screen.getByRole('button', { name: 'Select' }));
   for (const name of names) fireEvent.click(await screen.findByTitle(name));
   fireEvent.click(screen.getByRole('button', { name: 'Move' }));
+  // Move waits until the dialog knows which pages use the images.
+  await waitFor(() => expect(screen.queryByText('Checking which pages use this image…') === null).toBe(true));
 }
 
 /** Open photo.png's details and its Move dialog. */

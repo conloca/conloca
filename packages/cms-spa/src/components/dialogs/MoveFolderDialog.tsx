@@ -1,5 +1,5 @@
 import { Folder, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { type FolderTreeNode, useFolderTree } from '../../hooks/index.js';
 import { cn } from '../../utils/cn.js';
 import { contentFailureMessage } from '../../utils/content-failure.js';
@@ -13,6 +13,10 @@ interface MoveFolderDialogProps {
   onMove: (targetFolder: string) => Promise<void>;
   onCancel: () => void;
   isMoving?: boolean;
+  /** Shown above the folder list, e.g. the pages that link what is about to move. */
+  children?: ReactNode;
+  /** Holds the Move button until the caller is ready, e.g. until those pages are known. */
+  confirmDisabled?: boolean;
 }
 
 interface FolderOptionProps {
@@ -69,6 +73,8 @@ export function MoveFolderDialog({
   onMove,
   onCancel,
   isMoving = false,
+  children,
+  confirmDisabled = false,
 }: MoveFolderDialogProps) {
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
   const [moveError, setMoveError] = useState<string | null>(null);
@@ -117,7 +123,7 @@ export function MoveFolderDialog({
 
   if (!isOpen) return null;
 
-  const canMove = selectedFolder !== null && selectedFolder !== currentFolder;
+  const canMove = selectedFolder !== null && selectedFolder !== currentFolder && !confirmDisabled;
 
   return (
     <div
@@ -134,6 +140,7 @@ export function MoveFolderDialog({
           <IconButton icon={X} ariaLabel="Cancel" onClick={onCancel} variant="ghost" />
         </div>
 
+        {children ? <div className="px-6 pt-4">{children}</div> : null}
         {/* Folder list */}
         <div className="p-4 max-h-80 overflow-y-auto">
           {isLoading ? (

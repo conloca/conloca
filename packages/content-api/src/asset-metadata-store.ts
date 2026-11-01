@@ -2,12 +2,17 @@ import { mkdir, readdir, readFile, rename, unlink } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
 
 import {
+  isAssetMetadata,
+  parseAssetMetadata,
+  patchAssetMetadata,
+  serializeAssetMetadata,
+} from './asset-metadata-record.js';
+import {
   ASSET_METADATA_DIR,
   type AssetManifestData,
   type AssetMetadata,
   type AssetMetadataPatch,
 } from './asset-types.js';
-import { applyNullClearPatch } from './content-utils.js';
 import type { JsonValue } from './types.js';
 import { atomicWriteFile } from './utils/atomic-write.js';
 
@@ -123,16 +128,6 @@ type StoredRecord = { state: 'ok'; metadata: AssetMetadata } | { state: 'absent'
 
 type ParsedJson = JsonValue | AssetMetadata | AssetManifestData;
 
-/** Validate known fields without dropping forward-compatible extension fields. */
-function isAssetMetadata(value: ParsedJson): value is AssetMetadata {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
-  if ('alt' in value && typeof value.alt !== 'string') return false;
-  if ('uploadedAt' in value && typeof value.uploadedAt !== 'string') return false;
-  if ('uploadedBy' in value && typeof value.uploadedBy !== 'string') return false;
-  if ('originalName' in value && typeof value.originalName !== 'string') return false;
-  return !('tags' in value) || (Array.isArray(value.tags) && value.tags.every((tag) => typeof tag === 'string'));
-}
-
 function isLegacyManifest(value: ParsedJson): value is AssetManifestData {
   return (
     value !== null && typeof value === 'object' && !Array.isArray(value) && Object.values(value).every(isAssetMetadata)
@@ -144,14 +139,10 @@ function parseRecord(raw: string, path: string): StoredRecord {
     console.warn(`[asset-metadata] empty record ${path} — reading the asset as having no metadata`);
     return { state: 'damaged' };
   }
-  try {
-    const metadata: ParsedJson = JSON.parse(raw);
-    if (!isAssetMetadata(metadata)) throw new Error('Invalid asset metadata shape');
-    return { state: 'ok', metadata };
-  } catch {
-    console.warn(`[asset-metadata] unreadable record ${path} — reading the asset as having no metadata`);
-    return { state: 'damaged' };
-  }
+  const metadata = parseAssetMetadata(raw);
+  if (metadata !== null) return { state: 'ok', metadata };
+  console.warn(`[asset-metadata] unreadable record ${path} — reading the asset as having no metadata`);
+  return { state: 'damaged' };
 }
 
 async function readLegacyManifest(roots: MetadataRoots): Promise<AssetManifestData | undefined> {
@@ -251,7 +242,7 @@ export async function readFolder(roots: MetadataRoots, folder: string): Promise<
 async function writeRecord(roots: MetadataRoots, relativePath: string, metadata: AssetMetadata): Promise<void> {
   const path = recordPath(roots, relativePath);
   await mkdir(dirname(path), { recursive: true });
-  await atomicWriteFile(path, JSON.stringify(metadata, null, 2));
+  await atomicWriteFile(path, serializeAssetMetadata(metadata));
 }
 
 /** Replace an asset's record wholesale. Upload uses this: a new file must not inherit the previous occupant's alt text */
@@ -281,7 +272,7 @@ export async function update(
     }
     const existing =
       record.state === 'ok' ? record.metadata : ((await readLegacyManifest(roots))?.[relativePath] ?? {});
-    const merged: AssetMetadata = applyNullClearPatch(existing, patch);
+    const merged = patchAssetMetadata(existing, patch);
     await writeRecord(roots, relativePath, merged);
     return merged;
   });

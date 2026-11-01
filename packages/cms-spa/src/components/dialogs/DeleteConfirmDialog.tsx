@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Button } from '../ui/index.js';
 
 interface DeleteConfirmDialogProps {
@@ -8,6 +9,10 @@ interface DeleteConfirmDialogProps {
   message?: string;
   itemName?: string;
   isDeleting?: boolean;
+  /** Shown above the warning, e.g. the pages that use what is about to go. */
+  children?: ReactNode;
+  /** Holds the confirm button until the caller is ready, e.g. until those pages are known. */
+  confirmDisabled?: boolean;
 }
 
 export function DeleteConfirmDialog({
@@ -18,6 +23,8 @@ export function DeleteConfirmDialog({
   message,
   itemName,
   isDeleting = false,
+  children,
+  confirmDisabled = false,
 }: DeleteConfirmDialogProps) {
   if (!isOpen) return null;
 
@@ -35,6 +42,7 @@ export function DeleteConfirmDialog({
               "{itemName}"
             </p>
           )}
+          {children}
           <p className="text-red-04 dark:text-red-08 text-sm mt-3" data-testid="delete-warning-message">
             This action cannot be undone.
           </p>
@@ -44,7 +52,12 @@ export function DeleteConfirmDialog({
           <Button variant="outline" onClick={onCancel} disabled={isDeleting}>
             Cancel
           </Button>
-          <Button variant="destructive" onClick={onConfirm} disabled={isDeleting} className="flex items-center gap-2">
+          <Button
+            variant="destructive"
+            onClick={onConfirm}
+            disabled={isDeleting || confirmDisabled}
+            className="flex items-center gap-2"
+          >
             {isDeleting ? (
               <>
                 <span className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white" />

@@ -113,6 +113,9 @@ describe('a picture that shares its name with one in another folder', () => {
     );
 
     fireEvent.click(screen.getByText('Delete Asset'));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Yes, Delete' }).hasAttribute('disabled')).toBe(false),
+    );
     fireEvent.click(screen.getByText('Yes, Delete'));
 
     await waitFor(() => expect(closed).toBe(true));
@@ -283,6 +286,9 @@ describe('a picture that shares its name with one in another folder', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Select' }));
     fireEvent.click(await screen.findByTitle('beach.png'));
     fireEvent.click(screen.getByRole('button', { name: /^Delete/ }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Confirm Delete' }).hasAttribute('disabled')).toBe(false),
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Confirm Delete' }));
 
     await screen.findByText(/1 deleted/);

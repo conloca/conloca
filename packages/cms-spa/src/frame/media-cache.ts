@@ -1,7 +1,6 @@
 /** Object URLs of media bytes loaded through `UIConfig.loadMedia`, for surfaces that cannot point `<img>` at a media route. */
 import { useRef, useSyncExternalStore } from 'react';
 import { getUIConfig } from '../ui-config.js';
-import { assetPath, buildAssetServeUrl } from '../utils/asset-url.js';
 import type { MediaLoadInput } from './protocol.js';
 
 /** shortcut: count cap, not bytes; switch to a byte budget if large libraries show memory pressure. */
@@ -155,14 +154,4 @@ export function useMediaObjectUrl(route: MediaLoadInput['route'], path: string):
   const url = mediaObjectUrl(route, path);
   if (url) shown.current = { key, url, generation };
   return url;
-}
-
-/** The `src` of an asset thumbnail: an object URL of loaded bytes with a loader, else the serve URL. */
-export function useAssetServeSrc(
-  assetsBasePath: string,
-  folder: string | undefined,
-  filename: string,
-): string | undefined {
-  const loaded = useMediaObjectUrl('serve', assetPath(folder, filename));
-  return getUIConfig().loadMedia ? loaded : buildAssetServeUrl(assetsBasePath, folder, filename);
 }
