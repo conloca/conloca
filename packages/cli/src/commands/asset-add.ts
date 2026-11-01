@@ -37,7 +37,7 @@ async function readMediaOptions(
 }
 
 /**
- * Copy the image `file` into the site's media folder, wiring the folder first when the site has none, and print the
+ * Copy the image `file` into the image folder of the site, wiring the folder first when the site has none, and print the
  * reference a field stores.
  */
 export async function assetAdd(file: string, directory: string, options: AssetAddOptions): Promise<void> {

@@ -14,7 +14,7 @@ export const DRAFT_IMAGE_PLACEHOLDER = 'data:image/gif;base64,R0lGODlhAQABAIAAAA
 type DraftImageResolver = (source: MediaLoadInput) => string | undefined;
 
 /**
- * The one decision of where an image value's bytes come from: a draft address, or a link under the site's media
+ * The one decision of where an image value's bytes come from: a draft address, or a link under the image folder
  * URL (`UIConfig.assetRefBase`, `/assets` by default). A link is URL text, so each segment is decoded once, as
  * the site's static host does; an escape that would change the path (a bad one, or a decoded `/`, `\`, control
  * character, `.` or `..`) makes it no image of ours.
@@ -39,21 +39,15 @@ export function mediaSourceOf(value: string): MediaLoadInput | undefined {
   return { route: 'repo', path: segments.join('/') };
 }
 
-/**
- * What an image value shows in the canvas once a loader is set: its bytes when loaded, the placeholder while
- * loading and for a draft address that failed, the stored value (`undefined`) for a repository image that failed.
- */
-function shownImage({ route, path }: MediaLoadInput): string | undefined {
+/** What an image value shows in the canvas once a loader is set: its bytes when loaded, else the placeholder. */
+function shownImage({ route, path }: MediaLoadInput): string {
   const state = mediaLoadState(route, path);
-  if (state?.status === 'loaded') return state.url;
-  // shortcut: until PR 4 publishes the real media folder, a repository image the guessed folder misses keeps showing the deployed copy; PR 4 shows the placeholder instead.
-  if (state?.status === 'failed' && route === 'repo') return undefined;
-  return DRAFT_IMAGE_PLACEHOLDER;
+  return state?.status === 'loaded' ? state.url : DRAFT_IMAGE_PLACEHOLDER;
 }
 
 /**
- * What the MDX editor canvas shows for an image `src`: the loaded bytes of a draft image, else the placeholder for a
- * draft address, else `src` itself.
+ * What the MDX editor canvas shows for an image `src`: the loaded bytes of a draft or repository image, else the
+ * placeholder; any other `src` itself, as is a repository link when no loader is set (the site serves it).
  * The URL is the media cache's own, which a media write or eviction revokes; mdxeditor resolves an image again only
  * when its `src` changes or it remounts, so a mounted image keeps painting its decoded bytes from a revoked URL.
  */
@@ -61,7 +55,8 @@ export async function draftImagePreview(src: string): Promise<string> {
   const source = mediaSourceOf(src);
   if (source === undefined) return src;
   const url = (await loadedMedia(source.route, source.path))?.url;
-  return url ?? (source.route === 'serve' ? DRAFT_IMAGE_PLACEHOLDER : src);
+  if (url !== undefined) return url;
+  return source.route === 'repo' && !getUIConfig().loadMedia ? src : DRAFT_IMAGE_PLACEHOLDER;
 }
 
 function dataUrl(blob: Blob): Promise<string> {
@@ -99,8 +94,8 @@ export const DRAFT_IMAGE_WAIT_MS = 5000;
 /**
  * Data URLs of the images compiled MDX or sanitized HTML names, keyed by their stored value, for the opaque-origin
  * preview frame, which cannot read this page's blob URLs: an `src`, an HTML `src="…"` attribute or an MDX
- * component's prop. Images that fail to load, or are still loading after `DRAFT_IMAGE_WAIT_MS`, show the
- * placeholder for a draft address and are left out for a repository image, which then keeps its stored link.
+ * component's prop. Images that fail to load, or are still loading after `DRAFT_IMAGE_WAIT_MS`, show the placeholder;
+ * without a loader a repository link is left out, so the frame loads it from the site.
  */
 export async function draftImageData(code: string): Promise<Record<string, string>> {
   // shortcut: finds values only as plain double-quoted literals, the form the MDX compiler and the HTML sanitizer emit; widen if an escaped path must preview.
@@ -111,13 +106,13 @@ export async function draftImageData(code: string): Promise<Record<string, strin
   const expired = new Promise<undefined>((resolve) => {
     timer = window.setTimeout(resolve, DRAFT_IMAGE_WAIT_MS, undefined);
   });
+  const loader = getUIConfig().loadMedia !== undefined;
   await Promise.all(
     [...srcs].map(async (src) => {
       const source = mediaSourceOf(src);
-      if (source === undefined) return;
+      if (source === undefined || (source.route === 'repo' && !loader)) return;
       const url = await Promise.race([draftImageDataUrl(source).catch(() => undefined), expired]);
-      const shown = url ?? (source.route === 'serve' ? DRAFT_IMAGE_PLACEHOLDER : undefined);
-      if (shown !== undefined) images[src] = shown;
+      images[src] = url ?? DRAFT_IMAGE_PLACEHOLDER;
     }),
   );
   window.clearTimeout(timer);

@@ -3,7 +3,11 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { EDITOR_DESCRIPTORS_ENV_VAR, readEditorDescriptors } from '../src/editor-descriptors.js';
+import {
+  EDITOR_DESCRIPTORS_ENV_VAR,
+  type EditorDescriptorChannel,
+  readEditorDescriptors,
+} from '../src/editor-descriptors.js';
 import { conlocaCMS } from '../src/plugin-spa.js';
 
 const registry = { contentRoot: './content', componentFolders: ['src/components/mdx'], projectRoot: '/site' };
@@ -106,7 +110,11 @@ describe('the content paths conlocaCMS publishes', () => {
   });
 
   /** A temp Astro project laid out like the website, then the build's config hook run in it. */
-  async function publishFrom(mdxPages: string | undefined, assetsPath?: string): Promise<string[] | undefined> {
+  async function publishFrom(
+    mdxPages: string | undefined,
+    assetsPath?: string,
+    layout: { publicDir?: string; base?: string } = {},
+  ): Promise<EditorDescriptorChannel | undefined> {
     const sites = { sites: { default: { locales: ['en'], defaultLocale: 'en', mdxPages } }, globalLocales: ['en'] };
     projectRoot = realpathSync(mkdtempSync(join(tmpdir(), 'conloca-content-paths-')));
     mkdirSync(join(projectRoot, 'content'), { recursive: true });
@@ -129,8 +137,8 @@ describe('the content paths conlocaCMS publishes', () => {
       config: {
         output: 'static',
         root: pathToFileURL(`${projectRoot}/`),
-        publicDir: pathToFileURL(`${projectRoot}/public/`),
-        base: '/',
+        publicDir: pathToFileURL(`${projectRoot}/${layout.publicDir ?? 'public'}/`),
+        base: layout.base ?? '/',
       },
       updateConfig: noop,
       injectRoute: noop,
@@ -138,22 +146,34 @@ describe('the content paths conlocaCMS publishes', () => {
       logger: { info: noop, warn: noop, error: noop, debug: noop },
     } as never);
     // oxlint-enable typescript/no-unsafe-type-assertion
-    return readEditorDescriptors(process.env)?.contentPaths;
+    return readEditorDescriptors(process.env);
   }
 
   it("publishes the website's real relative configuration as absolute content paths, and reads them back", async () => {
-    const paths = await publishFrom('./src/content/docs', './public/assets');
+    const channel = await publishFrom('./src/content/docs', './public/assets');
 
-    expect(paths).toEqual([
+    expect(channel?.contentPaths).toEqual([
       join(projectRoot, 'content'),
       join(projectRoot, 'src/content/docs'),
       join(projectRoot, 'public/assets'),
     ]);
   });
 
-  it('publishes only the content root when no site declares mdxPages and no assetsPath is set', async () => {
-    const paths = await publishFrom(undefined);
+  it('lists the media folder in contentPaths even when assetsPath is unset', async () => {
+    const channel = await publishFrom(undefined);
 
-    expect(paths).toEqual([join(projectRoot, 'content')]);
+    expect(channel?.contentPaths).toEqual([join(projectRoot, 'content'), join(projectRoot, 'public/assets')]);
+  });
+
+  it('publishes the configured media folder and the URL it is served at', async () => {
+    const channel = await publishFrom(undefined, './public/media');
+
+    expect(channel).toMatchObject({ assetsPath: join(projectRoot, 'public/media'), assetRefBase: '/media' });
+  });
+
+  it('publishes <publicDir>/assets for a site without assetsPath', async () => {
+    const channel = await publishFrom(undefined, undefined, { publicDir: 'static', base: '/docs/' });
+
+    expect(channel).toMatchObject({ assetsPath: join(projectRoot, 'static/assets'), assetRefBase: '/docs/assets' });
   });
 });

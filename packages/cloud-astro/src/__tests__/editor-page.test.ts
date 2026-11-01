@@ -11,6 +11,7 @@ import { EDITOR_BUNDLE_EXTERNALS } from '../editor-page/bundle.js';
 import {
   branchDeploysFromEnv,
   contentPathsFromBuild,
+  mediaFromBuild,
   routesFromBuild,
   type WrittenConlocaJson,
 } from '../editor-page/emit.js';
@@ -154,6 +155,21 @@ describe('contentPathsFromBuild', () => {
   it('records nothing without a repository root or without paths', () => {
     expect(contentPathsFromBuild(['/r/content'], undefined)).toBeUndefined();
     expect(contentPathsFromBuild([], '/r')).toBeUndefined();
+  });
+});
+
+describe('mediaFromBuild', () => {
+  it('writes the media folder as a path from the repository root', () => {
+    expect(mediaFromBuild({ assetsPath: '/r/site/static/assets', assetRefBase: '/assets' }, '/r')).toEqual({
+      path: 'site/static/assets',
+      refBase: '/assets',
+    });
+  });
+  it('records nothing for a folder outside the repository, the repository root, or without a repository', () => {
+    expect(mediaFromBuild({ assetsPath: '/elsewhere/media', assetRefBase: '/media' }, '/r')).toBeUndefined();
+    expect(mediaFromBuild({ assetsPath: '/r', assetRefBase: '' }, '/r')).toBeUndefined();
+    expect(mediaFromBuild({ assetsPath: '/r/public/assets', assetRefBase: '/assets' }, undefined)).toBeUndefined();
+    expect(mediaFromBuild(undefined, '/r')).toBeUndefined();
   });
 });
 

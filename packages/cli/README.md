@@ -472,7 +472,7 @@ echo '{"siteName":"Corner Bakery"}' | conloca data create settings --name site -
 
 ### Add an image
 
-Copy an image into the site's media folder and print the reference an image field stores:
+Copy an image into the image folder of the site and print the reference an image field stores:
 
 ```bash
 conloca asset add <file> [path] [--folder <folder>] [--alt <text>] [--no-install] [--json]

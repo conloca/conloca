@@ -92,8 +92,8 @@ async function collectConfigUpdates({
   editorStyles,
   editorCSS,
   assetsPath,
-  publicDir,
-  base,
+  publicDir = pathToFileURL(`${process.cwd()}/public/`),
+  base = '/',
   root = pathToFileURL(`${process.cwd()}/`),
   route,
   fragmentPreviewRoute,
@@ -808,18 +808,21 @@ describe('the asset paths the integration hands to Astro and Vite', () => {
     const entrypoints: string[] = [];
     const updates: Record<string, unknown>[] = [];
 
+    // SAFETY: the setup hook reads only the config fields, callbacks, command and logger stubbed here.
+    // oxlint-disable typescript/no-unsafe-type-assertion -- same reason as the SAFETY note.
     await builtConlocaCMS({
       contentRoot: './test',
       puckConfigPath: './src/puck.config.tsx',
       routing: { enabled: true, routes: { pages: { pattern: '/[...slug]' } } },
       // Dev with on-demand output is the only run that injects all of them.
     }).hooks['astro:config:setup']?.({
-      config: { output: 'server' },
+      config: { output: 'server', publicDir: pathToFileURL(`${process.cwd()}/public/`), base: '/' },
       updateConfig: (config: Record<string, unknown>) => updates.push(config),
       injectRoute: ({ entrypoint }: { entrypoint: string }) => entrypoints.push(entrypoint),
       command: 'dev',
       logger: { info: noop, warn: noop, error: noop, debug: noop },
     } as never);
+    // oxlint-enable typescript/no-unsafe-type-assertion
 
     const vitePlugins = updates.flatMap((update) => {
       const vite = update.vite as
@@ -869,13 +872,16 @@ async function routesResolvedHook(routing: ConlocaCMSOptions['routing'], output:
   const integration = conlocaCMS({ contentRoot: './test', puckConfigPath: './src/puck.config.tsx', routing });
   const injected: { pattern: string; entrypoint: string }[] = [];
   const noop = () => {};
+  // SAFETY: the setup hook reads only the config fields, callbacks, command and logger stubbed here.
+  // oxlint-disable typescript/no-unsafe-type-assertion -- same reason as the SAFETY note.
   await integration.hooks['astro:config:setup']?.({
-    config: { output },
+    config: { output, publicDir: pathToFileURL(`${process.cwd()}/public/`), base: '/' },
     updateConfig: noop,
     injectRoute: (route: { pattern: string; entrypoint: string }) => injected.push(route),
     command: 'build',
     logger: { info: noop, warn: noop, error: noop, debug: noop },
   } as never);
+  // oxlint-enable typescript/no-unsafe-type-assertion
   await integration.hooks['astro:config:done']?.({ config: { output } } as never);
   const own = injected[0];
   if (!own) throw new Error('Conloca did not inject its pages route');

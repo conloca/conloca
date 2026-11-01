@@ -58,6 +58,8 @@ export interface EditorBundleDescriptors {
    * same routes the published page resolves with.
    */
   dataBindings?: EditorDataBindings;
+  /** The URL the site serves its media folder at (conlocaCMS `assetRefBase`), which every picked image link starts with. */
+  assetRefBase?: string;
 }
 
 export interface EditorPageBundleInput {
@@ -176,6 +178,9 @@ export async function bundleEditorPage(input: EditorPageBundleInput): Promise<Ed
     ...(discovered.length > 0 ? [`export const discoveredMdxComponents = ${JSON.stringify(discovered)};`] : []),
     ...(descriptors?.templates ? [`export const templates = ${JSON.stringify(descriptors.templates)};`] : []),
     ...(descriptors?.dataBindings ? [`export const dataBindings = ${JSON.stringify(descriptors.dataBindings)};`] : []),
+    ...(descriptors?.assetRefBase === undefined
+      ? []
+      : [`export const assetRefBase = ${JSON.stringify(descriptors.assetRefBase)};`]),
   ].join('\n');
 
   const jsAssets: EditorAsset[] = [];

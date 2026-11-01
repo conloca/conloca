@@ -143,13 +143,13 @@ describe('repository images in the canvas', () => {
     expect(loads).toEqual([{ route: 'repo', path: 'hero.png' }]);
   });
 
-  test('a repository image that fails to load keeps its stored link; a draft address shows the placeholder', async () => {
+  test('shows the placeholder for an image from the repository that fails to load, as for a draft address', async () => {
     failing = true;
     const wrapped = withDraftMediaRendering(config);
     imageOf(wrapped, '/assets/hero.png');
     imageOf(wrapped, '/api/v1/assets/serve/uploads/a.png');
     await Bun.sleep(0);
-    expect(imageOf(wrapped, '/assets/hero.png')).toBe('/assets/hero.png');
+    expect(imageOf(wrapped, '/assets/hero.png')).toBe(DRAFT_IMAGE_PLACEHOLDER);
     expect(imageOf(wrapped, '/api/v1/assets/serve/uploads/a.png')).toBe(DRAFT_IMAGE_PLACEHOLDER);
   });
 
@@ -195,7 +195,7 @@ describe('repository images in the canvas', () => {
     expect(loads).toEqual([]);
   });
 
-  test('links follow the site media URL: /docs/assets/x.png loads, /assets/x.png does not', async () => {
+  test('links follow the URL the image folder is served at: /docs/assets/x.png loads, /assets/x.png does not', async () => {
     configureUI({ loadMedia, assetRefBase: '/docs/assets' });
     const wrapped = withDraftMediaRendering(config);
     imageOf(wrapped, '/docs/assets/x.png');
@@ -270,13 +270,14 @@ describe('page settings images in the canvas', () => {
     expect(related.meta.featuredImage).toBe('/assets/other.png');
   });
 
-  test('a page setting repository image that fails to load keeps its stored link', async () => {
+  test('a page setting repository image that fails to load shows the placeholder, as a block field would', async () => {
     failing = true;
     const wrapped = withDraftMediaRendering(pageConfig);
     render(wrapped);
     await Bun.sleep(0);
     const html = render(wrapped);
-    expect(html).toContain('data-cover="/assets/cover.jpg"');
+    expect(html).toContain(`data-cover="${DRAFT_IMAGE_PLACEHOLDER}"`);
+    expect(html).not.toContain('/assets/cover.jpg');
     expect(html).toContain(`data-gallery="${DRAFT_IMAGE_PLACEHOLDER}"`);
   });
 });
@@ -298,18 +299,21 @@ describe('draft addresses', () => {
     expect(imageOf(wrapped, '/api/v1/assets/serve/uploads/a b.png')).toStartWith('blob:');
   });
 
-  test('MDX preview data covers draft addresses and repository images, with the placeholder only for a draft address not loaded in time', async () => {
+  test('MDX preview data covers draft addresses and repository images, with the placeholder for each not loaded in time', async () => {
     configureUI({ loadMedia: () => new Promise<Blob>(() => {}) });
     jest.useFakeTimers();
     const pending = draftImageData('x("/api/v1/assets/serve/a.png", "/assets/b.png")');
     jest.advanceTimersByTime(DRAFT_IMAGE_WAIT_MS);
-    expect(await pending).toEqual({ '/api/v1/assets/serve/a.png': DRAFT_IMAGE_PLACEHOLDER });
+    expect(await pending).toEqual({
+      '/api/v1/assets/serve/a.png': DRAFT_IMAGE_PLACEHOLDER,
+      '/assets/b.png': DRAFT_IMAGE_PLACEHOLDER,
+    });
   });
 
-  test('MDX editor preview returns the placeholder for an unloaded draft address and the link for a repository image', async () => {
+  test('MDX editor preview returns the placeholder for an unloaded draft address or repository image', async () => {
     failing = true;
     expect(await draftImagePreview('/api/v1/assets/serve/a.png')).toBe(DRAFT_IMAGE_PLACEHOLDER);
-    expect(await draftImagePreview('/assets/a.png')).toBe('/assets/a.png');
+    expect(await draftImagePreview('/assets/a.png')).toBe(DRAFT_IMAGE_PLACEHOLDER);
     expect(await draftImagePreview('/api/v1/assets/serve/../a.png')).toBe('/api/v1/assets/serve/../a.png');
     expect(loads).toEqual([
       { route: 'serve', path: 'a.png' },

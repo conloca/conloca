@@ -706,6 +706,12 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
               resolve(fileURLToPath(config.root), path),
             )
           : undefined;
+        // Uploaded images go to the configured media folder, else `<publicDir>/assets`; the workspace editor reads
+        // both from here. Derived once, so a configured folder the site cannot serve fails the build here.
+        const mediaFolder = options.assetsPath
+          ? resolve(options.assetsPath)
+          : join(fileURLToPath(config.publicDir), 'assets');
+        const assetRefBase = deriveAssetRefBase(mediaFolder, config.publicDir, config.base);
         const editorDescriptors: EditorDescriptorChannel = {
           ...(options.schemasPath ? { schemasPath: resolve(options.schemasPath) } : {}),
           puckConfigPath: resolve(options.puckConfigPath),
@@ -719,8 +725,10 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
           contentPaths: [
             resolve(options.contentRoot),
             ...(resolvedMdxPages ? [resolve(resolvedMdxPages)] : []),
-            ...(options.assetsPath ? [resolve(options.assetsPath)] : []),
+            mediaFolder,
           ],
+          assetsPath: mediaFolder,
+          assetRefBase,
         };
         process.env[EDITOR_DESCRIPTORS_ENV_VAR] = JSON.stringify(editorDescriptors);
 
@@ -759,12 +767,8 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
           logger.warn(hint);
         }
 
-        // Every image the editor picks is stored under this base and served
-        // as-is by the published site. Derived in build too, so a media
-        // folder the site cannot serve fails there as well as in dev.
-        if (options.assetsPath) {
-          spaConfig.assetRefBase = deriveAssetRefBase(options.assetsPath, config.publicDir, config.base);
-        }
+        // Every image the local editor picks is stored under this base and served as-is by the published site.
+        if (options.assetsPath) spaConfig.assetRefBase = assetRefBase;
 
         if (command === 'dev' && !contentAbsolute.startsWith(astroRoot)) {
           logger.info(`Auto-allowing contentRoot in Vite fs.allow: ${options.contentRoot}`);

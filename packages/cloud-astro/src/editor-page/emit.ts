@@ -17,11 +17,13 @@ import {
   contentPathsOf,
   EDITOR_HOST_PROTOCOL,
   EDITOR_PAGE_INFO_FORMATS,
+  type EditorMedia,
   type EditorPageInfo,
   editorUiOrigin,
   isEditorPageInfo,
   isEditorRoute,
   isValidBranchName,
+  mediaOf,
   PREVIEW_PROTOCOL,
   type PreviewMode,
   type PreviewSignal,
@@ -148,10 +150,14 @@ export async function emitEditorPage(input: EmitEditorPageInput): Promise<void> 
   if (!isEditorPageInfo(info)) {
     throw new Error(`${PACKAGE_NAME}: internal error: conloca.json failed its own format check`);
   }
-  const contentPaths = contentPathsFromBuild(
-    channel?.contentPaths ?? [],
-    gitOutput(['rev-parse', '--show-toplevel'], input.root),
-  );
+  const repoRoot = gitOutput(['rev-parse', '--show-toplevel'], input.root);
+  const contentPaths = contentPathsFromBuild(channel?.contentPaths ?? [], repoRoot);
+  const media = mediaFromBuild(channel, repoRoot);
+  if (media === undefined && repoRoot !== undefined && channel?.assetsPath !== undefined) {
+    logger.warn(
+      `the media folder ${channel.assetsPath} is not a folder of this site's repository, so the workspace editor cannot add images to it`,
+    );
+  }
   const branchDeploys = branchDeploysFromEnv(process.env);
   const preview: PreviewSignal = { mode: input.previewMode, protocol: PREVIEW_PROTOCOL };
   const written: WrittenConlocaJson = {
@@ -159,6 +165,7 @@ export async function emitEditorPage(input: EmitEditorPageInput): Promise<void> 
     preview,
     ...(branchDeploys === undefined ? {} : { branchDeploys }),
     ...(contentPaths === undefined ? {} : { contentPaths }),
+    ...(media === undefined ? {} : { media }),
   };
   const collected = await collectStaticPageRoutes({
     pagesDir: input.pagesDir,
@@ -252,6 +259,7 @@ export interface WrittenConlocaJson extends EditorPageInfo {
   preview: PreviewSignal;
   branchDeploys?: BranchDeploys;
   contentPaths?: string[];
+  media?: EditorMedia;
 }
 
 /** The routes conloca.json lists and how many prerendered routes it leaves out. */
@@ -278,6 +286,20 @@ export function routesFromBuild(collected: readonly StaticPageRoute[], written: 
     }
   }
   return { routes, left: prerendered.length - routes.length };
+}
+
+/** The media folder written from the repository root, with its link base; undefined outside the repository. */
+export function mediaFromBuild(
+  channel: { assetsPath?: string; assetRefBase?: string } | undefined,
+  repoRoot: string | undefined,
+): EditorMedia | undefined {
+  if (repoRoot === undefined || channel?.assetsPath === undefined || channel.assetRefBase === undefined) {
+    return undefined;
+  }
+  const path = relative(repoRoot, channel.assetsPath);
+  const segments = path.split(sep);
+  if (isAbsolute(path) || segments[0] === '..') return undefined;
+  return mediaOf({ media: { path: segments.join('/'), refBase: channel.assetRefBase } });
 }
 
 /**

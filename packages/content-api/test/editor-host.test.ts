@@ -11,6 +11,7 @@ import {
   isEditorPageInfo,
   isFromVercel,
   isValidBranchName,
+  mediaOf,
   PREVIEW_PROTOCOL,
   parentRoot,
   previewBranchSlug,
@@ -129,6 +130,35 @@ describe('routesOf', () => {
   });
   it('leaves a conloca.json with malformed routes valid', () => {
     expect(isEditorPageInfo({ ...info, routes: ['/x y'] })).toBe(true);
+  });
+});
+
+describe('mediaOf', () => {
+  it('reads media from conloca.json and drops a malformed one', () => {
+    expect(mediaOf({ media: { path: 'site/static/assets', refBase: '/docs/assets' } })).toEqual({
+      path: 'site/static/assets',
+      refBase: '/docs/assets',
+    });
+    expect(mediaOf({ media: { path: 'public', refBase: '' } })).toEqual({ path: 'public', refBase: '' });
+    for (const media of [
+      undefined,
+      'public/assets',
+      { path: '', refBase: '/assets' },
+      { path: '../x', refBase: '/assets' },
+      { path: 'a/.git/b', refBase: '/assets' },
+      { path: 'public/assets', refBase: 'assets/' },
+      { path: 'public/assets', refBase: '/assets/' },
+      { path: 'public/assets', refBase: `/${'x'.repeat(255)}` },
+      ...['//other.host', '/a b', '/a"b', '/a)b', '/a\\b', '/a<b', '/a{b', '/a/../b', '/.', '/a?b', '/a#b'].map(
+        (refBase) => ({ path: 'public/assets', refBase }),
+      ),
+      { path: 'public/assets' },
+    ]) {
+      expect(mediaOf({ media })).toBeUndefined();
+    }
+  });
+  it('leaves a conloca.json with a malformed media valid', () => {
+    expect(isEditorPageInfo({ ...info, media: { path: '' } })).toBe(true);
   });
 });
 

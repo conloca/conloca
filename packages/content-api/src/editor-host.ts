@@ -1,3 +1,4 @@
+import { folderPathError } from './asset-naming.js';
 import { isRecord } from './component-vocabulary.js';
 
 /** The wire protocol an editor page built by this release speaks; the editor UI path is /host/v<this>/. */
@@ -167,7 +168,7 @@ const PAGES_PROJECT_RE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 /** A parsed conloca.json object, whether or not it passed `isEditorPageInfo`, as the optional-field readers take it. */
 export type ConlocaJson =
   | EditorPageInfo
-  | { branchDeploys?: unknown; contentPaths?: unknown; preview?: unknown; routes?: unknown };
+  | { branchDeploys?: unknown; contentPaths?: unknown; preview?: unknown; routes?: unknown; media?: unknown };
 
 /** conloca.json `branchDeploys`; `undefined` when absent or malformed, so a bad optional field never makes the page invalid. */
 export function branchDeploysOf(info: ConlocaJson): BranchDeploys | undefined {
@@ -220,6 +221,29 @@ export function routesOf(info: ConlocaJson): string[] | undefined {
   const value: unknown = Reflect.get(info, 'routes');
   if (!Array.isArray(value)) return undefined;
   return [...new Set(value.filter(isEditorRoute))].slice(0, ROUTES_MAX);
+}
+
+/** conloca.json `media`: the repository folder uploaded images go to and the URL the site serves it at. */
+export interface EditorMedia {
+  path: string;
+  refBase: string;
+}
+
+/** A link base: `''`, or `/`-led segments of URL-safe characters with no `.` or `..` segment and no trailing `/`. */
+const REF_BASE_RE = /^(\/(?!\.\.?(?:\/|$))[A-Za-z0-9._~-]+)*$/;
+
+/**
+ * conloca.json `media`; `undefined` when absent or malformed (the repository root, a folder `folderPathError`
+ * refuses, or a link base {@link REF_BASE_RE} refuses), so a bad optional field never makes the page invalid. The
+ * link base is written into saved pages, so it may hold nothing a page's JSON, front matter or MDX would read.
+ */
+export function mediaOf(info: ConlocaJson): EditorMedia | undefined {
+  const value: unknown = Reflect.get(info, 'media');
+  if (!isRecord(value)) return undefined;
+  const { path, refBase } = value;
+  if (typeof path !== 'string' || path === '' || path.length > 255 || folderPathError(path) !== null) return undefined;
+  if (typeof refBase !== 'string' || refBase.length > 255 || !REF_BASE_RE.test(refBase)) return undefined;
+  return { path, refBase };
 }
 
 // `~^:?*[\`, `..`, `@{` and `//` anywhere (`git check-ref-format`); space and control characters are checked apart.

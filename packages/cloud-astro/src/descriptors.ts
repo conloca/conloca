@@ -68,12 +68,13 @@ export async function resolveEditorDescriptors(
   }
 
   const templateCount = Object.keys(channel.templates ?? {}).length;
-  const { dataBindings } = channel;
+  const { dataBindings, assetRefBase } = channel;
   if (
     channel.schemasPath === undefined &&
     discovered.length === 0 &&
     templateCount === 0 &&
-    dataBindings === undefined
+    dataBindings === undefined &&
+    assetRefBase === undefined
   ) {
     return undefined;
   }
@@ -88,5 +89,6 @@ export async function resolveEditorDescriptors(
     ...(discovered.length === 0 ? {} : { discoveredMdxComponents: discovered }),
     ...(templateCount === 0 ? {} : { templates: channel.templates }),
     ...(dataBindings === undefined ? {} : { dataBindings }),
+    ...(assetRefBase === undefined ? {} : { assetRefBase }),
   };
 }

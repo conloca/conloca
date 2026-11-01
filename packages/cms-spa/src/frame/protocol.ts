@@ -103,7 +103,7 @@ export interface WireError {
 
 /** The argument of `media.load`. */
 export interface MediaLoadInput {
-  /** `'serve'` loads a draft address, `'repo'` a file of the site's media folder on the branch; `'draft'` is what editor pages built before this release send, and this package never sends it. */
+  /** `'serve'` loads a draft address, `'repo'` an image file on the branch; `'draft'` is what editor pages built before this release send, and this package never sends it. */
   route: 'serve' | 'repo' | 'draft';
   /** Relative to the media root (`uploads/hero.png`): raw, never URL-encoded, no leading slash. */
   path: string;

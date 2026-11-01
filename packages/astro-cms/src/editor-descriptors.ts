@@ -38,6 +38,10 @@ export interface EditorDescriptorChannel {
   dataBindings?: EditorDataBindings;
   /** Absolute paths of every folder the content API writes to: the content root, the MDX pages root, the media folder. */
   contentPaths?: string[];
+  /** Absolute path of the folder uploaded images go to: the `assetsPath` option, else `<publicDir>/assets`. */
+  assetsPath?: string;
+  /** The URL the site serves that folder at, which every stored image link starts with. */
+  assetRefBase?: string;
 }
 
 /**
@@ -67,6 +71,8 @@ export function readEditorDescriptors(
   const templateValue = 'templates' in parsed ? parsed.templates : undefined;
   const dataBindingValue = 'dataBindings' in parsed ? parsed.dataBindings : undefined;
   const contentPathValue = 'contentPaths' in parsed ? parsed.contentPaths : undefined;
+  const assetsPath = 'assetsPath' in parsed ? parsed.assetsPath : undefined;
+  const assetRefBase = 'assetRefBase' in parsed ? parsed.assetRefBase : undefined;
   if (typeof registry !== 'object' || registry === null) return undefined;
   const contentRoot = 'contentRoot' in registry ? registry.contentRoot : undefined;
   const componentFolders = 'componentFolders' in registry ? registry.componentFolders : undefined;
@@ -109,6 +115,8 @@ export function readEditorDescriptors(
     ...(templates === undefined ? {} : { templates }),
     ...(dataBindings === undefined ? {} : { dataBindings }),
     ...(contentPaths === undefined ? {} : { contentPaths }),
+    ...(typeof assetsPath === 'string' && isAbsolute(assetsPath) ? { assetsPath } : {}),
+    ...(typeof assetRefBase === 'string' ? { assetRefBase } : {}),
   };
 }
 

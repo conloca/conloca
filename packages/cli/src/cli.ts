@@ -408,7 +408,7 @@ asset
   .option('--alt <text>', 'Alt text the editor shows for the image')
   .option('--no-install', 'Do not install the packages the data schemas need; print the command instead')
   .option('--json', 'Report as a single JSON object on stdout')
-  .description("Copy an image into the site's media folder")
+  .description('Copy an image into the image folder of the site')
   .addHelpText(
     'after',
     `

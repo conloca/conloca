@@ -406,6 +406,7 @@ describe('bundleEditorPage — editor descriptors', () => {
       discoveredMdxComponents?: unknown;
       templates?: unknown;
       dataBindings?: unknown;
+      assetRefBase?: unknown;
     } = await import(pathToFileURL(join(editorDir, result.site)).href);
     return { bundleModule, logger };
   }
@@ -446,6 +447,12 @@ describe('bundleEditorPage — editor descriptors', () => {
     const { bundleModule } = await bundleWithDescriptors({ dataBindings });
 
     expect(bundleModule.dataBindings).toEqual(dataBindings);
+  });
+
+  it('exports assetRefBase from the editor bundle', async () => {
+    const { bundleModule } = await bundleWithDescriptors({ assetRefBase: '/docs/assets' });
+
+    expect(bundleModule.assetRefBase).toBe('/docs/assets');
   });
 
   it('runs the site build-only Vite transforms over the schemas module', async () => {

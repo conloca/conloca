@@ -78,6 +78,16 @@
       "import": "./dist/draft-media-ref.js",
       "default": "./dist/draft-media-ref.js"
     },
+    "./asset-naming": {
+      "types": "./dist/asset-naming.d.ts",
+      "import": "./dist/asset-naming.js",
+      "default": "./dist/asset-naming.js"
+    },
+    "./lfs-attributes": {
+      "types": "./dist/lfs-attributes.d.ts",
+      "import": "./dist/lfs-attributes.js",
+      "default": "./dist/lfs-attributes.js"
+    },
     "./content-file-id": {
       "types": "./dist/content-file-id.d.ts",
       "import": "./dist/content-file-id.js",

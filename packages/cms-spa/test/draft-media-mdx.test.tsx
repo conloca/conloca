@@ -67,12 +67,12 @@ describe('an image in the MDX editor canvas', () => {
     expect(ref.current?.getMarkdown()).toContain('](/assets/media/hero.png)');
   });
 
-  test('a repository image that fails keeps its link; a draft address that fails shows the placeholder', async () => {
+  test('shows the placeholder for an image from the repository that fails to load, as for a draft address', async () => {
     configureUI({ loadMedia: async () => Promise.reject(new Error('404')) });
     const { container } = renderEditor('![Hero](/assets/hero.png)\n\n![Upload](/api/v1/assets/serve/a.png)');
     await waitFor(() =>
       expect([...container.querySelectorAll('img')].map((img) => img.getAttribute('src'))).toEqual([
-        '/assets/hero.png',
+        DRAFT_IMAGE_PLACEHOLDER,
         DRAFT_IMAGE_PLACEHOLDER,
       ]),
     );
@@ -140,7 +140,7 @@ describe('the draft image data of a preview update', () => {
     jest.useRealTimers();
   });
 
-  test(`leaves out an image still loading after ${DRAFT_IMAGE_WAIT_MS} ms`, async () => {
+  test(`gives an image still loading after ${DRAFT_IMAGE_WAIT_MS} ms the placeholder`, async () => {
     configureUI({
       loadMedia: (input) => (input.path === 'other.png' ? new Promise<Blob>(() => {}) : loadMedia(input)),
     });
@@ -154,7 +154,10 @@ describe('the draft image data of a preview update', () => {
       await Promise.resolve();
     }
     jest.advanceTimersByTime(DRAFT_IMAGE_WAIT_MS);
-    expect(await pending).toEqual({ '/assets/hero.png': 'data:image/png;base64,iVBORw==' });
+    expect(await pending).toEqual({
+      '/assets/hero.png': 'data:image/png;base64,iVBORw==',
+      '/assets/other.png': DRAFT_IMAGE_PLACEHOLDER,
+    });
   });
 
   test('collects an MDX component prop and an HTML src attribute as well as an img src', async () => {
@@ -166,14 +169,17 @@ describe('the draft image data of a preview update', () => {
     expect(await draftImageData('<p><img src="/assets/other.png" alt="x"></p>')).toEqual({ '/assets/other.png': data });
   });
 
-  test(`gives a draft address not loaded within ${DRAFT_IMAGE_WAIT_MS} ms the placeholder, and leaves a repository image out`, async () => {
+  test(`gives a draft address and a repository image not loaded within ${DRAFT_IMAGE_WAIT_MS} ms the placeholder`, async () => {
     configureUI({ loadMedia: () => new Promise<Blob>(() => {}) });
     jest.useFakeTimers();
     const pending = draftImageData(
       '[_jsx("img", {src: "/api/v1/assets/serve/a.png"}), _jsx("img", {src: "/assets/b.png"})]',
     );
     jest.advanceTimersByTime(DRAFT_IMAGE_WAIT_MS);
-    expect(await pending).toEqual({ '/api/v1/assets/serve/a.png': DRAFT_IMAGE_PLACEHOLDER });
+    expect(await pending).toEqual({
+      '/api/v1/assets/serve/a.png': DRAFT_IMAGE_PLACEHOLDER,
+      '/assets/b.png': DRAFT_IMAGE_PLACEHOLDER,
+    });
   });
 
   test('encodes each loaded image once across updates', async () => {
@@ -184,7 +190,7 @@ describe('the draft image data of a preview update', () => {
     expect(read).toHaveBeenCalledTimes(1);
   });
 
-  test('leaves out only the image whose bytes cannot be read', async () => {
+  test('gives only the image whose bytes cannot be read the placeholder', async () => {
     configureUI({ loadMedia: async (input) => new Blob([PNG], { type: `image/${input.path}` }) });
     // A reader that fails only on the bytes of other.png.
     spyOn(FileReader.prototype, 'readAsDataURL').mockImplementation(function (this: FileReader, blob: Blob) {
@@ -192,6 +198,9 @@ describe('the draft image data of a preview update', () => {
       if (!failed) Object.defineProperty(this, 'result', { value: 'data:image/png;base64,iVBORw==' });
       queueMicrotask(() => this.dispatchEvent(new ProgressEvent(failed ? 'error' : 'load')));
     });
-    expect(await draftImageData(BOTH)).toEqual({ '/assets/hero.png': 'data:image/png;base64,iVBORw==' });
+    expect(await draftImageData(BOTH)).toEqual({
+      '/assets/hero.png': 'data:image/png;base64,iVBORw==',
+      '/assets/other.png': DRAFT_IMAGE_PLACEHOLDER,
+    });
   });
 });
