@@ -49,8 +49,12 @@ in {
   # processes.ping.exec = "ping example.com";
 
   # https://devenv.sh/scripts/#entershell
-  # enterShell needs nothing repo-specific here: devenv.smoo.nix's prologue and
-  # epilogue already do the whole shell entry.
+  # devenv.smoo.nix's prologue and epilogue do the shell entry; this only puts
+  # libstdc++ on the loader path, which native Node.js modules (sharp,
+  # @parcel/watcher) need on Linux.
+  enterShell = ''
+    export LD_LIBRARY_PATH="${pkgs.stdenv.cc.cc.lib}/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+  '';
 
   # See full reference at https://devenv.sh/reference/options/
 }
