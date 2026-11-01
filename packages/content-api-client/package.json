@@ -50,7 +50,6 @@
   },
   "nx": {
     "targets": {
-      "clean": {},
       "lint": {},
       "test": {
         "executor": "@smoothbricks/nx-plugin:bounded-exec",

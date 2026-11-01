@@ -190,7 +190,6 @@
   },
   "nx": {
     "targets": {
-      "clean": {},
       "dev": {
         "executor": "nx:run-commands",
         "dependsOn": [

@@ -45,7 +45,6 @@
   },
   "nx": {
     "targets": {
-      "clean": {},
       "lint": {},
       "typecheck": {
         "//": "No tsconfig.lib.json -- the published bundle is built by the `build` target, not by tsc -- so inference derives no typecheck. tsconfig.json is the library program here (19 files).",

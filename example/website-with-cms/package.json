@@ -33,7 +33,6 @@
   },
   "nx": {
     "targets": {
-      "clean": {},
       "typecheck": {
         "//": "`astro check` also typechecks .astro templates, which tsc cannot parse; inference only ever derives a tsc program.",
         "executor": "nx:run-commands",

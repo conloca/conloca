@@ -20,7 +20,15 @@
       "!{projectRoot}/**/*.spec.*",
       "!{projectRoot}/**/*.md"
     ],
-    "sharedGlobals": ["{workspaceRoot}/.github/workflows/ci.yml"]
+    "sharedGlobals": ["{workspaceRoot}/.github/workflows/ci.yml"],
+    "liveState": [
+      {
+        "runtime": "od -An -N16 -tx1 /dev/urandom"
+      }
+    ]
+  },
+  "affected": {
+    "legacy": true
   },
   "plugins": [
     {
@@ -30,8 +38,7 @@
         "devTargetName": "dev",
         "startTargetName": "start",
         "watchDepsTargetName": "watch-deps",
-        "buildDepsTargetName": "build-deps",
-        "typecheckTargetName": "typecheck"
+        "buildDepsTargetName": "build-deps"
       }
     },
     "@smoothbricks/nx-plugin"
@@ -47,10 +54,6 @@
     }
   },
   "targetDefaults": {
-    "clean": {
-      "executor": "@smoothbricks/nx-plugin:clean-outputs",
-      "cache": false
-    },
     "lint": {
       "cache": true
     },

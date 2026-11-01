@@ -109,7 +109,6 @@
       "npm:public"
     ],
     "targets": {
-      "clean": {},
       "lint": {},
       "typecheck": {
         "dependsOn": [

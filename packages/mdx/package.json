@@ -77,7 +77,6 @@
   },
   "nx": {
     "targets": {
-      "clean": {},
       "test": {
         "dependsOn": [
           "typecheck-tests",

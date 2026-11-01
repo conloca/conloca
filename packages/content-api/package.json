@@ -136,7 +136,6 @@
   ],
   "nx": {
     "targets": {
-      "clean": {},
       "lint": {},
       "typecheck-tests": {
         "//": "The test program also compiles the shared git-isolation harness it imports from tooling/.",
@@ -168,11 +167,16 @@
       },
       "mutation": {
         "executor": "nx:run-commands",
-        "cache": false,
+        "cache": true,
         "options": {
           "command": "stryker run stryker.pilot.config.mjs",
           "cwd": "{projectRoot}"
-        }
+        },
+        "inputs": [
+          "default",
+          "^default"
+        ],
+        "outputs": []
       },
       "test-packed": {
         "//": "The packed shape is a function of the built outputs, the manifest and the locked dependency closure; cached on exactly those.",

@@ -90,6 +90,49 @@ index f6ee81fb1af41deea022b92e838a7c4665eb9778..112faf913ce38b1f4624b38db3783937
  }
  
  // forceNoEmit sets noEmit so the program type-checks without writing files.
+diff --git a/lib/internal/javascriptRuntimeCapabilities.js b/lib/internal/javascriptRuntimeCapabilities.js
+--- a/lib/internal/javascriptRuntimeCapabilities.js
++++ b/lib/internal/javascriptRuntimeCapabilities.js
+@@ -43,6 +43,19 @@
+  * @evidence contracts/performance.md#bound-retention-and-release-resources The synchronous probe owns child completion and fallback captures; finally attempts capture close/removal, whose helper suppresses cleanup failures, so native/file release is unconfirmed on failure. Capability entries retain absolute spellings and path/identity text with no eviction quota; failed identity validation can remove an entry. Returned capability copies transfer to callers.
+  */
+ function javascriptRuntimeCapabilities(runtime, env, cwd, identities) {
++    // The running process answers for itself. Under Bun, process.execPath names
++    // Bun (pluginDescriptorRuntimeBinary), and a probe of it can fail for reasons
++    // that say nothing about the executable: its 30 s timeout under load, or a
++    // spawn the host refused. Read as "not Bun", that failure handed Bun Node's
++    // `--input-type ""`, which Bun runs as an empty `bun run` script, so the
++    // plugin descriptor produced no output. This process knows what it is.
++    if (node_path_1.default.isAbsolute(runtime) && sameRuntimeExecutable(runtime, process.execPath)) {
++        return {
++            bun: typeof globalThis.Bun === "object",
++            executable: process.execPath,
++            registerHooks: typeof require("node:module").registerHooks === "function",
++        };
++    }
+     // Inside a ttsx run this is the user's NODE_OPTIONS, not ttsx's preloads,
+     // which would refuse the cache and run in the probe (#1740).
+     const effectiveEnv = TtsxNodeOptions_1.TtsxNodeOptions.forHelpers(SidecarEnvironment_1.SidecarEnvironment.merge(process.env, env));
+diff --git a/lib/plugin/internal/source/GoSourceInputs.js b/lib/plugin/internal/source/GoSourceInputs.js
+--- a/lib/plugin/internal/source/GoSourceInputs.js
++++ b/lib/plugin/internal/source/GoSourceInputs.js
+@@ -73,6 +73,16 @@
+     function goBuildEnv(goBinary, goBuildCacheRoot, effectiveEnv = process.env) {
+         const env = { ...effectiveEnv };
+         env.GOWORK = "auto";
++        // GOWORK=auto puts go in workspace mode wherever a go.work lies (typia's
++        // native plugin ships one), where go accepts only -mod=readonly or
++        // -mod=vendor. A caller's GOFLAGS -mod=mod, a host shell's say, failed
++        // every invocation; ttsc owns the workspace, so it drops that flag and
++        // keeps the caller's others.
++        if (env.GOFLAGS) {
++            env.GOFLAGS = env.GOFLAGS.split(/\s+/)
++                .filter((flag) => flag !== "" && !/^--?mod=/.test(flag))
++                .join(" ");
++        }
+         // Only the actual `go build` needs ttsc's GOCACHE; read-only metadata spawns
+         // (`go mod edit`, `go env`, `go version`) call goBuildEnv with no cache root
+         // and inherit ambient GOCACHE rather than receiving the managed build
 diff --git a/lib/plugin/internal/source/PluginBuildEnvironmentReadings.js b/lib/plugin/internal/source/PluginBuildEnvironmentReadings.js
 --- a/lib/plugin/internal/source/PluginBuildEnvironmentReadings.js
 +++ b/lib/plugin/internal/source/PluginBuildEnvironmentReadings.js
@@ -117,3 +160,99 @@ diff --git a/lib/plugin/internal/source/PluginBuildEnvironmentReadings.js b/lib/
          worker = created;
          const retire = () => {
              if (worker === created)
+diff --git a/lib/plugin/internal/source/inspectPluginBuildLock.js b/lib/plugin/internal/source/inspectPluginBuildLock.js
+--- a/lib/plugin/internal/source/inspectPluginBuildLock.js
++++ b/lib/plugin/internal/source/inspectPluginBuildLock.js
+@@ -65,9 +65,16 @@
+ const PLUGIN_BUILD_LOCK_OBSERVER = node_crypto_1.default.randomBytes(16).toString("hex");
+ function inspectV3PluginBuildLock(lockDir) {
+     const generationDir = node_path_1.default.join(lockDir, PluginBuildLockProtocol_1.PluginBuildLockProtocol.PLUGIN_BUILD_LOCK_CURRENT_DIR);
++    // `current` changes only by whole-directory renames: a holder retires it
++    // onto its tombstone, and the next holder publishes a directory that
++    // already holds its generation. A read that finds no valid generation
++    // proves the lock malformed only when the same directory was `current`
++    // before and after it. Otherwise the read straddled a handoff of the key,
++    // and a handoff is a release: the caller observes the key again.
++    const observed = pluginBuildLockDirectoryIdentity(generationDir);
+     const generation = readPluginBuildLockGeneration(generationDir);
+     if (generation === null) {
+-        if (pluginBuildLockPathMissing(generationDir)) {
++        if (observed === null || observed !== pluginBuildLockDirectoryIdentity(generationDir)) {
+             return { state: "released" };
+         }
+         throw new Error(`ttsc plugin build lock has no valid ${PluginBuildLockProtocol_1.PluginBuildLockProtocol.PLUGIN_BUILD_LOCK_GENERATION_FILE}: ${generationDir}`);
+@@ -269,6 +276,22 @@
+         return null;
+     }
+ }
++/**
++ * The device and inode of a lock directory, or null when a lookup proves it
++ * absent. A permission or sharing failure proves nothing and propagates.
++ */
++function pluginBuildLockDirectoryIdentity(directory) {
++    try {
++        const stat = node_fs_1.default.statSync(directory, { bigint: true });
++        return `${stat.dev}:${stat.ino}`;
++    }
++    catch (error) {
++        if (PluginBuildLockProtocol_1.PluginBuildLockProtocol.isMissingPathError(error)) {
++            return null;
++        }
++        throw error;
++    }
++}
+ /**
+  * Whether a path lookup proves absence. Permission and sharing failures are
+  * inconclusive, never evidence of a released or old abandoned generation.
+diff --git a/lib/plugin/internal/source/waitForPluginBinary.js b/lib/plugin/internal/source/waitForPluginBinary.js
+--- a/lib/plugin/internal/source/waitForPluginBinary.js
++++ b/lib/plugin/internal/source/waitForPluginBinary.js
+@@ -25,6 +25,12 @@
+  * run. An opted-in synchronous owner can cancel observation or interrupt a
+  * polling sleep; cancellation never retires the holder's generation.
+  *
++ * A published binary is not admission: the caller registers as its reader
++ * under the key, which only release or retirement frees. Each poll therefore
++ * inspects the lock before it reports publication, so a holder that died
++ * holding the key after its binary was published is reported abandoned
++ * instead of outwaiting the admission budget.
++ *
+  * @evidence contracts/common.md#principled-implementation Polling first refuses unknown/malformed native guards, suppresses publication while pending and rechecks after observed release; actual abandoned-owner observations retain their exact generation, while budget expiry fails without revoking a possibly active payload task.
+  * @evidence contracts/common.md#clear-and-simple-design The loop separates publication, release, retirement and periodic status reporting; generation interpretation belongs to inspectPluginBuildLock.
+  * @evidence contracts/common.md#prohibited-implementation-shortcuts Budget expiry throws instead of retiring a live-looking generation and compensating for concurrent callbacks; status output never substitutes for ownership evidence.
+@@ -43,22 +49,9 @@
+         OwnedSynchronousProcess_1.OwnedSynchronousProcess.checkpoint();
+         SourceNativeRetirement_1.SourceNativeRetirement.assertAvailable(protocolDir);
+         const protectedNativeInputs = SourceNativeRetirement_1.SourceNativeRetirement.isProtected(protocolDir);
+-        if (!protectedNativeInputs && node_fs_1.default.existsSync(opts.binaryPath)) {
+-            OwnedSynchronousProcess_1.OwnedSynchronousProcess.checkpoint();
+-            return { outcome: "published" };
+-        }
+         const clock = performance.now();
+         const lock = (0, inspectPluginBuildLock_1.inspectPluginBuildLock)(opts.lockDir);
+         OwnedSynchronousProcess_1.OwnedSynchronousProcess.checkpoint();
+-        if (lock.state === "released") {
+-            // The holder retired its generation between the binary check above and
+-            // this observation. That is a normal release, not abandonment: prefer the
+-            // binary when it landed inside that window, otherwise hand the free key
+-            // back to the caller.
+-            return !protectedNativeInputs && node_fs_1.default.existsSync(opts.binaryPath)
+-                ? { outcome: "published" }
+-                : { outcome: "released" };
+-        }
+         if (lock.state === "abandoned") {
+             return {
+                 outcome: "abandoned",
+@@ -66,6 +59,12 @@
+                 fence: lock.fence,
+             };
+         }
++        if (!protectedNativeInputs && node_fs_1.default.existsSync(opts.binaryPath)) {
++            return { outcome: "published" };
++        }
++        if (lock.state === "released") {
++            return { outcome: "released" };
++        }
+         if (clock - startedAt >= opts.timeoutMs) {
+             throw new Error(`ttsc: timed out after ${(0, formatDuration_1.formatDuration)(clock - startedAt)} waiting for ` +
+                 `${opts.lockInfo.label} "${opts.lockInfo.pluginName}" at ${opts.lockDir}; ` +

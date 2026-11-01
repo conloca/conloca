@@ -8,8 +8,7 @@
   },
   "scripts": {
     "build:all": "nx run-many -t build",
-    "check:linux": "tooling/devenv -P linux-cross shell -- nx run-many -t cargo-lint-cross",
-    "clean": "nx run-many -t clean",
+    "check:linux": "nx run-many -t cargo-lint-cross",
     "clean:ignored": "git clean -dfX -- packages/* targets/* && find packages targets -depth -mindepth 1 -type d -empty -delete",
     "clean:node_modules": "rm -rf node_modules && find e* t* p* -type d -name node_modules -print0 | xargs -0 rm -rvf",
     "dev:conloca": "nx run website-with-cms:dev --outputStyle=dynamic-legacy",
@@ -45,13 +44,13 @@
     "@biomejs/biome": "^2.5.14",
     "@conloca/content-api": "workspace:*",
     "@conloca/tooling": "workspace:*",
-    "@nx/js": "23.2.1",
-    "@nx/react": "23.2.1",
-    "@nx/web": "23.2.1",
-    "@nx/workspace": "23.2.1",
+    "@nx/js": "24.0.3",
+    "@nx/react": "24.0.3",
+    "@nx/web": "24.0.3",
+    "@nx/workspace": "24.0.3",
     "@oxlint/plugins": "1.85.0",
-    "@smoothbricks/cowshed": "^0.3.0",
-    "@smoothbricks/nx-plugin": "^0.6.2",
+    "@smoothbricks/cowshed": "^0.4.4",
+    "@smoothbricks/nx-plugin": "^0.7.3",
     "@testing-library/dom": "10.4.1",
     "@testing-library/react": "^16.3.3",
     "@ttsc/unplugin": "0.34.1",
@@ -70,7 +69,7 @@
     "eslint-stdout": "^1.1.2",
     "jiti": "2.7.0",
     "jsdom": "^30.0.1",
-    "nx": "23.2.1",
+    "nx": "24.0.3",
     "oxlint": "1.85.0",
     "oxlint-tsgolint": "7.0.2003",
     "prettier": "^3.9.6",
@@ -141,10 +140,10 @@
     "source-map-js": "1.2.2",
     "follow-redirects": "1.16.2",
     "@verdaccio/hooks>handlebars": "4.7.10",
-    "nx": "23.2.1"
+    "nx": "24.0.3"
   },
   "patchedDependencies": {
-    "nx@23.2.1": "patches/nx@23.2.1.patch",
+    "nx@24.0.3": "patches/nx@24.0.3.patch",
     "ttsc@0.34.1": "patches/ttsc@0.34.1.patch"
   },
   "sherif": {
