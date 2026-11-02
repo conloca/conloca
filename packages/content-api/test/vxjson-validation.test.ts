@@ -109,6 +109,7 @@ describe('a saved .vxjson file', () => {
     const a = VXJSON.calculateETags(new TextEncoder().encode(withNewline));
     const b = VXJSON.calculateETags(new TextEncoder().encode(withoutNewline));
 
+    expect(a.success).toBe(true);
     expect(a).toEqual(b);
   });
 });
