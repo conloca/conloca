@@ -6,15 +6,17 @@
 #
 # Exports ttsc's environment for this workspace: TTSC_TSGO_BINARY, the native
 # TypeScript compiler (ttsc resolves only the unscoped `typescript` package by
-# default, which here is the JavaScript compiler API), and TTSC_CACHE_DIR and
-# TTSC_GO_CACHE_DIR, where ttsc keeps the plugin binaries it compiles and the
-# Go build cache that compiles them.
+# default, which here is the JavaScript compiler API), TTSC_CACHE_DIR, where ttsc
+# keeps the plugin binaries it compiles (<checkout>/.cache/ttsc-plugins, the path
+# a repository's ttsc plugin build target declares as its output), and
+# TTSC_GO_CACHE_DIR, the Go build cache that compiles them
+# (<checkout>/.cache/ttsc/go-build), a byproduct kept outside that output.
 #
 # This checkout is the directory the script is sourced from: devenv.smoo.nix's
 # enterShell enters the workspace root first, and each git hook enters
 # `git rev-parse --show-toplevel`. Sourced from any other directory, $PWD names
 # no checkout, and every cache below would land beside that directory instead:
-# a shell in HOME would create ~/.cache/ttsc. That directory is refused.
+# a shell in HOME would create ~/.cache/ttsc-plugins. That directory is refused.
 if [ ! -f "$PWD/tooling/direnv/ttsc-env.sh" ]; then
   echo "ttsc-env.sh: not a workspace root (no tooling/direnv/ttsc-env.sh): $PWD; source it from the checkout root" >&2
   return 1
@@ -43,6 +45,6 @@ if [ -f "$PWD/tooling/direnv/typescript-go.nix" ]; then
 else
   export TTSC_TSGO_BINARY="$PWD/node_modules/@typescript/native/bin/tsc"
 fi
-export TTSC_CACHE_DIR="${TTSC_CACHE_DIR:-$PWD/.cache/ttsc}"
-export TTSC_GO_CACHE_DIR="${TTSC_GO_CACHE_DIR:-$TTSC_CACHE_DIR/go-build}"
+export TTSC_CACHE_DIR="${TTSC_CACHE_DIR:-$PWD/.cache/ttsc-plugins}"
+export TTSC_GO_CACHE_DIR="${TTSC_GO_CACHE_DIR:-$PWD/.cache/ttsc/go-build}"
 mkdir -p "$TTSC_GO_CACHE_DIR"
