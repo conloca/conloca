@@ -1,5 +1,4 @@
 import { localesOf, pageStatusOf, useDeleteContent, useSitePages } from '@conloca/content-api-client';
-import cn from 'clsx';
 import { AlertCircle, Clock, Edit, FileCode, FileText, Loader2, Plus, Search, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -12,6 +11,7 @@ import { CreatePageFlow } from '../dialogs/CreatePageFlow.js';
 import { DeleteConfirmDialog } from '../dialogs/DeleteConfirmDialog.js';
 import { ErrorModal } from '../dialogs/ErrorModal.js';
 import { MakePagesEditableDialog } from '../dialogs/MakePagesEditableDialog.js';
+import { Button } from '../ui/index.js';
 import { Tooltip } from '../ui/Tooltip.js';
 import { NoPagesYet } from './NoPagesYet.js';
 
@@ -270,17 +270,11 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
       {/* Header */}
       <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
         <h1 className="text-2xl font-semibold text-grey-01 dark:text-grey-12">Pages</h1>
-        <div className={cn('flex items-center gap-2 flex-wrap')}>
+        <div className="flex items-center gap-2 flex-wrap">
           {pages.length > 0 && conversion && (
-            <button
-              type="button"
-              onClick={() => setShowConvertDialog(true)}
-              className={cn(
-                'px-4 py-2 rounded-md border border-line bg-panel text-grey-01 dark:text-grey-12 hover:bg-hover transition-colors whitespace-nowrap',
-              )}
-            >
+            <Button variant="outline" onClick={() => setShowConvertDialog(true)} className="whitespace-nowrap">
               Make an existing page editable
-            </button>
+            </Button>
           )}
           <button
             type="button"
@@ -357,7 +351,9 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
 
       {/* Empty state */}
       {pages.length === 0 ? (
-        <NoPagesYet onCreatePage={handleNewPage} />
+        <div className="flex items-center justify-center min-h-[50vh]">
+          <NoPagesYet onCreatePage={handleNewPage} />
+        </div>
       ) : filteredPages.length === 0 && (searchQuery || statusFilter !== 'all') ? (
         <div className="flex items-center justify-center min-h-[40vh] text-center">
           <p className="text-grey-04 dark:text-grey-07">No pages match your search</p>

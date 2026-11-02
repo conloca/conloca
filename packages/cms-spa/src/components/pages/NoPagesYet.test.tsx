@@ -46,7 +46,7 @@ describe('No Conloca pages yet', () => {
     renderNoPagesYet();
     expect(screen.getByRole('heading', { name: 'No Conloca pages yet' })).toBeTruthy();
     expect(convertButton()).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Create a new page' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Create Page' })).toBeTruthy();
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
@@ -59,19 +59,21 @@ describe('No Conloca pages yet', () => {
     expect(copyButton().hasAttribute('disabled')).toBe(true);
     fireEvent.click(screen.getByRole('checkbox', { name: '/pricing' }));
     fireEvent.click(copyButton());
-    await screen.findByText('Copied');
+    await screen.findByText('Copied. Paste it into your coding agent.');
     expect(written).toHaveLength(1);
     expect(written[0]).toContain('"routes": [\n    "/pricing"\n  ]');
   });
 
-  it('offers the upgrade-first prompt while the route list is unknown', () => {
+  it('offers the upgrade-first prompt while the route list is unknown', async () => {
     configureUI({ hosted: true, pageConversion: NO_ROUTES, readOnly: undefined });
     renderNoPagesYet();
     clickConvert();
     expect(screen.getByText(NOT_LISTED)).toBeTruthy();
     expect(screen.queryAllByRole('checkbox')).toEqual([]);
     expect(copyButton().hasAttribute('disabled')).toBe(false);
-    expect(prompt()).toContain('`npx @conloca/cli@0.2.4 routes`');
+    fireEvent.click(copyButton());
+    await screen.findByText('Copied. Paste it into your coding agent.');
+    expect(written[0]).toContain('`npx @conloca/cli@0.2.4 routes`');
   });
 
   it('shows the routes once the workspace editor learns them', () => {
@@ -90,8 +92,8 @@ describe('No Conloca pages yet', () => {
     clickConvert();
     fireEvent.click(screen.getByRole('checkbox', { name: '/' }));
     fireEvent.click(copyButton());
-    await screen.findByText('Copying failed. Select the prompt and copy it yourself.');
-    expect(screen.queryByText('Copied')).toBeNull();
+    await screen.findByText('Copying failed. Select the prompt above and copy it yourself.');
+    expect(screen.queryByText(/^Copied/)).toBeNull();
     expect(prompt()).toContain('"/"');
   });
 
@@ -107,7 +109,7 @@ describe('No Conloca pages yet', () => {
     configureUI({ hosted: true, readOnly: undefined });
     renderNoPagesYet();
     expect(convertButton()).toBeNull();
-    expect(screen.getByRole('button', { name: 'Create a new page' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Create Page' })).toBeTruthy();
   });
 
   it('reads the route list from the dev server in the local editor', async () => {

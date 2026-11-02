@@ -1,5 +1,4 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import cn from 'clsx';
 import { X } from 'lucide-react';
 import { useState } from 'react';
 import { conversionPrompt } from '../../convert-pages.js';
@@ -17,15 +16,13 @@ export function MakePagesEditableDialog({ open, onOpenChange, offer }: MakePages
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className={cn('fixed inset-0 z-50 bg-black/50 backdrop-blur-sm')} />
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" />
         <Dialog.Content
-          className={cn(
-            'fixed top-1/2 left-1/2 z-50 -translate-x-1/2 -translate-y-1/2 bg-overlay rounded-lg shadow-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto',
-          )}
+          className="fixed top-1/2 left-1/2 z-50 -translate-x-1/2 -translate-y-1/2 bg-overlay rounded-lg shadow-lg p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto"
           aria-describedby={undefined}
         >
-          <div className={cn('flex items-center justify-between mb-4')}>
-            <Dialog.Title className={cn('text-lg font-semibold')}>Make existing pages editable</Dialog.Title>
+          <div className="flex items-center justify-between mb-4">
+            <Dialog.Title className="text-lg font-semibold">Make existing pages editable</Dialog.Title>
             <Dialog.Close asChild>
               <IconButton icon={X} ariaLabel="Close" variant="ghost" />
             </Dialog.Close>
@@ -62,43 +59,54 @@ function RoutePicker({ offer }: { offer: PageConversionOffer }) {
   };
 
   return (
-    <div className={cn('space-y-4 text-sm')}>
+    <div className="space-y-4 text-sm">
       {candidates === undefined ? (
-        <p className={cn('text-grey-04 dark:text-grey-07')}>
+        <p className="text-grey-04 dark:text-grey-07">
           Conloca doesn't have this site's page list yet. The prompt asks your coding agent to update Conloca first,
           then list the pages so you can choose.
         </p>
       ) : (
         <>
-          <p className={cn('text-grey-04 dark:text-grey-07')}>
+          <p className="text-grey-04 dark:text-grey-07">
             Choose the pages to convert. Pages you don't choose stay as they are.
           </p>
-          <ul className={cn('max-h-60 overflow-y-auto space-y-1')}>
+          <ul className="max-h-60 overflow-y-auto space-y-2">
             {candidates.map((route) => (
               <li key={route}>
-                <label className={cn('flex items-center gap-2 font-mono text-grey-01 dark:text-grey-12')}>
-                  <input type="checkbox" checked={checked.has(route)} onChange={() => toggle(route)} />
-                  {route}
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={checked.has(route)}
+                    onChange={() => toggle(route)}
+                    className="w-4 h-4 rounded-md border-grey-09 text-azure-04 focus:ring-azure-04"
+                  />
+                  <span className="text-sm font-medium text-grey-01 dark:text-grey-12">{route}</span>
                 </label>
               </li>
             ))}
           </ul>
         </>
       )}
-      <Textarea aria-label="Prompt" readOnly value={prompt} rows={10} className={cn('font-mono text-xs')} />
-      <div className={cn('flex items-center gap-3')}>
-        <Button onClick={copy} disabled={candidates !== undefined && chosen.length === 0}>
+      <p className="text-grey-04 dark:text-grey-07">
+        Copy the prompt, then paste it into your coding agent or send it to your developer. Review the changes, then
+        commit, push and deploy; converted pages then show up here.
+      </p>
+      {/* Only shown when the clipboard refuses, so the prompt can still be copied by hand. */}
+      {copied === 'failed' && <Textarea aria-label="Prompt" readOnly value={prompt} rows={6} />}
+      <p role="status" className="text-grey-04 dark:text-grey-07 min-h-5">
+        {copied === 'copied' && 'Copied. Paste it into your coding agent.'}
+        {copied === 'failed' && 'Copying failed. Select the prompt above and copy it yourself.'}
+      </p>
+      <div className="flex gap-2 pt-4">
+        <Button onClick={copy} disabled={candidates !== undefined && chosen.length === 0} className="flex-1">
           Copy prompt
         </Button>
-        <p role="status" className={cn('text-grey-04 dark:text-grey-07')}>
-          {copied === 'copied' && 'Copied'}
-          {copied === 'failed' && 'Copying failed. Select the prompt and copy it yourself.'}
-        </p>
+        <Dialog.Close asChild>
+          <Button variant="outline" className="flex-1">
+            Close
+          </Button>
+        </Dialog.Close>
       </div>
-      <p className={cn('text-grey-04 dark:text-grey-07')}>
-        Paste it into your coding agent or send it to your developer. Review the changes, then commit, push and deploy;
-        converted pages then show up here.
-      </p>
     </div>
   );
 }

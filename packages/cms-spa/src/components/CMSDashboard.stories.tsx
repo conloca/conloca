@@ -11,6 +11,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { expect, userEvent, within } from 'storybook/test';
 import '../main.css';
 import { ThemeProvider } from '../hooks/useTheme.js';
+import { configureUI, getUIConfig } from '../ui-config.js';
 import { CMSDashboard } from './CMSDashboard.js';
 
 /**
@@ -42,6 +43,8 @@ function page(id: string, title: string, pathname: string): ContentManifest {
 }
 
 const PAGES = [page('vx-home', 'Home', '/'), page('vx-pricing', 'Pricing', '/pricing')];
+// The pages the content API answers with; a story may swap in its own for its run.
+let storyPages = PAGES;
 
 type StoryResponseBody = ContentListResult | { tree: never[] } | { success: false; error: string };
 
@@ -57,7 +60,7 @@ function requestUrl(input: RequestInfo | URL): string {
 async function respond(input: RequestInfo | URL): Promise<Response> {
   const { pathname } = new URL(requestUrl(input), window.location.origin);
   if (pathname === '/__conloca/api/default/pages') {
-    const body: ContentListResult = { items: PAGES, total: PAGES.length };
+    const body: ContentListResult = { items: storyPages, total: storyPages.length };
     return json(body);
   }
   if (pathname === '/__conloca/api/assets/folder-tree') return json({ tree: [] });
@@ -119,5 +122,30 @@ export const NewPageOpensDialog: Story = {
     await expect(await within(document.body).findByTestId('page-title-input')).toBeVisible();
     await expect(canvas.getByTestId('dashboard-title')).toBeVisible();
     await expect(canvas.queryByTestId('pages-route')).toBeNull();
+  },
+};
+
+/** A site without Conloca pages shows the empty state inside the Dashboard's card, in place of Recent Activity. */
+export const NoPagesYet: Story = {
+  beforeEach: () => {
+    // The UI config is module state shared across stories, so put back whatever was installed.
+    const previous = getUIConfig();
+    configureUI({
+      ...previous,
+      hosted: true,
+      readOnly: undefined,
+      pageConversion: { cliVersion: '0.3.0', site: 'default', routes: ['/', '/pricing'] },
+    });
+    storyPages = [];
+    return () => {
+      configureUI(previous);
+      storyPages = PAGES;
+    };
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByRole('heading', { name: 'No Conloca pages yet' })).toBeVisible();
+    await expect(canvas.queryByText('Recent Activity')).toBeNull();
+    await expect(canvas.getByRole('button', { name: 'Make an existing page editable' })).toBeEnabled();
   },
 };

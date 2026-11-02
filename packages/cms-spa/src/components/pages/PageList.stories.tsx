@@ -171,13 +171,13 @@ export const LoadFailed: Story = {
   },
 };
 
-/** A site with no Conloca pages explains why, and its Create a new page action opens the create dialog. */
+/** A site with no Conloca pages explains why, and its Create Page action opens the create dialog. */
 export const NoPagesYet: Story = {
   render: () => <PageListStory pages={{ kind: 'pages', items: [] }} />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(await canvas.findByRole('heading', { name: 'No Conloca pages yet' })).toBeVisible();
-    await userEvent.click(canvas.getByRole('button', { name: 'Create a new page' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Create Page' }));
     await expect(await within(document.body).findByTestId('page-title-input')).toBeVisible();
   },
 };

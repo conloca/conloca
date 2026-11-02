@@ -113,7 +113,9 @@ export function CMSDashboard() {
 
       {/* Only a load that succeeded empty means no pages; a failed load keeps Recent Activity. */}
       {sitePages !== undefined && pagesCount === 0 ? (
-        <NoPagesYet onCreatePage={() => setShowCreateDialog(true)} />
+        <div className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 rounded-lg">
+          <NoPagesYet onCreatePage={() => setShowCreateDialog(true)} />
+        </div>
       ) : (
         /* Recent Activity */
         <div className="bg-white dark:bg-grey-02 border border-grey-09 dark:border-grey-03 rounded-lg">

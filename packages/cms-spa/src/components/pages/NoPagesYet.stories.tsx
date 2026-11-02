@@ -49,6 +49,6 @@ export const WithAstroPages: Story = {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole('heading', { name: 'No Conloca pages yet' })).toBeVisible();
     await expect(canvas.getByRole('button', { name: 'Make an existing page editable' })).toBeEnabled();
-    await expect(canvas.getByRole('button', { name: 'Create a new page' })).toBeEnabled();
+    await expect(canvas.getByRole('button', { name: 'Create Page' })).toBeEnabled();
   },
 };

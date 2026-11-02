@@ -32,7 +32,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Nothing is chosen at first; choosing a route names it in the prompt and lets it be copied. */
+/** Nothing is chosen at first; choosing a route lets the prompt be copied. */
 export const ChooseAndCopy: Story = {
   play: async ({ canvasElement }) => {
     const dialog = within(await within(canvasElement.ownerDocument.body).findByRole('dialog'));
@@ -40,8 +40,7 @@ export const ChooseAndCopy: Story = {
     await expect(pricing).not.toBeChecked();
     await expect(dialog.getByRole('button', { name: 'Copy prompt' })).toBeDisabled();
     await userEvent.click(pricing);
-    await expect(dialog.getByRole<HTMLTextAreaElement>('textbox', { name: 'Prompt' }).value).toContain('"/pricing"');
     await userEvent.click(dialog.getByRole('button', { name: 'Copy prompt' }));
-    await expect(await dialog.findByText('Copied')).toBeVisible();
+    await expect(await dialog.findByText('Copied. Paste it into your coding agent.')).toBeVisible();
   },
 };
