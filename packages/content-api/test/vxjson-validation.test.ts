@@ -82,3 +82,33 @@ describe('VXJSON format validation', () => {
     expect(result.contentStartPos).toBeGreaterThan(0);
   });
 });
+
+describe('a saved .vxjson file', () => {
+  const page = {
+    id: 'page-1',
+    type: 'puck' as const,
+    created: '2024-01-01T00:00:00.000Z',
+    modified: '2024-01-02T00:00:00.000Z',
+    meta: { title: 'Home' },
+    content: { puckData: { root: { props: {} }, content: [] } },
+  };
+
+  test('ends with exactly one newline, so Git never shows its last line as changed', () => {
+    const serialized = VXJSON.serialize(page);
+
+    expect(serialized.endsWith('}\n')).toBe(true);
+    expect(serialized.endsWith('\n\n')).toBe(false);
+    expect(JSON.parse(serialized)).toEqual(page);
+  });
+
+  test('keeps the same ETag whether or not it ends with a newline', () => {
+    // Files written before the newline fix, and files an editor touched, must not read as changed.
+    const withoutNewline = VXJSON.serialize(page).trimEnd();
+    const withNewline = `${withoutNewline}\n`;
+
+    const a = VXJSON.calculateETags(Buffer.from(withNewline, 'utf-8') as Uint8Array);
+    const b = VXJSON.calculateETags(Buffer.from(withoutNewline, 'utf-8') as Uint8Array);
+
+    expect(a).toEqual(b);
+  });
+});

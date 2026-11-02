@@ -210,7 +210,7 @@ function calculateEtagsFromVXJSONBuffer(
   const contentView = new JsonWhitespaceSkippingView(contentHasher);
 
   contentHasher.update(openBrace); // {
-  contentView.updateBuffer(buffer, contentStartPos, buffer.length - 1); // content field to end, exclude final }
+  contentView.updateBuffer(buffer, contentStartPos, pos); // content field to the root's closing }, excluded with any trailing whitespace
   contentHasher.update(closeBrace); // }
 
   const contentEtag = toUrlSafeBase64(contentHasher.digest() as Uint8Array);

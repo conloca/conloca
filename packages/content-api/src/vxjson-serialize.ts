@@ -61,6 +61,6 @@ export function serializeVxjson(data: VXJSONFile): string {
     );
   }
 
-  // Build final JSON string efficiently
-  return `${metadataWithoutClosing}${contentFieldPrefix}${contentJson}\n}`;
+  // Build final JSON string efficiently; end with a newline like any text file Git tracks
+  return `${metadataWithoutClosing}${contentFieldPrefix}${contentJson}\n}\n`;
 }
