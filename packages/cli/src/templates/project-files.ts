@@ -43,6 +43,7 @@ export default defineConfig({
 /** The native Typia transform for \`src/schemas/\`, the modules that author \`typia.*<T>()\` call sites. */
 export const TYPIA_VITE_TEMPLATE = `import { fileURLToPath } from 'node:url';
 import ttsc from '@ttsc/unplugin/vite';
+import { TtscCompiler } from 'ttsc';
 
 const project = fileURLToPath(new URL('./tsconfig.typia.json', import.meta.url));
 
@@ -54,6 +55,9 @@ const project = fileURLToPath(new URL('./tsconfig.typia.json', import.meta.url))
  * @returns {import('vite').Plugin[]}
  */
 export function schemaTypia() {
+  // Builds ttsc's typia plugin now, before Vite runs: a first build on a cold cache takes minutes, and Astro's content
+  // sync gives the module that needs it 60 s. Warm, this only checks the cache.
+  new TtscCompiler({ tsconfig: project }).prepare();
   const plugins = ttsc({ project });
   return (Array.isArray(plugins) ? plugins : [plugins]).map((plugin) => {
     const transform = plugin.transform;

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import { type DataSchemasWiring, wireDataSchemas } from '../src/lib/connect/data-schemas.js';
@@ -248,6 +248,44 @@ describe('wireDataSchemas on a site made with conloca create', () => {
       'tsconfig.typia.json': TYPIA_TSCONFIG_TEMPLATE,
     });
     expect(await wireDataSchemas(dir)).toMatchObject({ state: 'done', edits: [], packages: [] });
+  });
+});
+
+/** A stand-in package `main` whose entry, and `./vite`, is `source`. */
+function stubPackage(main: string, source: string) {
+  return {
+    [`node_modules/${main}/package.json`]: JSON.stringify({
+      name: main,
+      type: 'module',
+      exports: { '.': './index.js', './vite': './index.js' },
+    }),
+    [`node_modules/${main}/index.js`]: source,
+  };
+}
+
+describe('typia-vite.mjs', () => {
+  test("builds ttsc's plugins before handing Vite the transform, so a cold cache cannot outlast Astro's 60 s module load", async () => {
+    // Stand-ins for ttsc and @ttsc/unplugin that record the order they are called in.
+    await makeSite({
+      'typia-vite.mjs': TYPIA_VITE_TEMPLATE,
+      ...stubPackage(
+        'ttsc',
+        'export class TtscCompiler { constructor(c) { this.c = c; } prepare() { globalThis.calls.push(["prepare", this.c.tsconfig]); return []; } }',
+      ),
+      ...stubPackage(
+        '@ttsc/unplugin',
+        'export default (o) => { globalThis.calls.push(["plugin", o.project]); return { name: "ttsc" }; };',
+      ),
+    });
+    const calls: [string, string][] = [];
+    Object.assign(globalThis, { calls });
+    const { schemaTypia } = await import(join(dir, 'typia-vite.mjs'));
+    expect(schemaTypia()).toEqual([{ name: 'ttsc' }]);
+    const tsconfig = join(await realpath(dir), 'tsconfig.typia.json');
+    expect(calls).toEqual([
+      ['prepare', tsconfig],
+      ['plugin', tsconfig],
+    ]);
   });
 });
 
