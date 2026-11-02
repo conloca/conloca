@@ -15,7 +15,7 @@ export const THIRD_PARTY_VERSIONS = {
   '@vitejs/plugin-react': '^5.2.0',
   react: '19.2.8',
   'react-dom': '19.2.8',
-  typia: '^14.0.4',
+  typia: '^14.0.6',
   // Exact and equal to ttsc: a newer @ttsc/unplugin asks for a newer ttsc peer, which npm refuses against the pin.
   '@ttsc/unplugin': '0.34.1',
   ttsc: '0.34.1',

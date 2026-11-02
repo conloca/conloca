@@ -116,7 +116,7 @@ describe('wireDataSchemas on a site connect set up', () => {
     expect(result.packages).toEqual([
       ['@ttsc/unplugin', '0.34.1'],
       ['ttsc', '0.34.1'],
-      ['typia', '^14.0.4'],
+      ['typia', '^14.0.6'],
     ]);
     expect(result.state).toBe('changed');
   });
