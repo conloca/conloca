@@ -12,6 +12,7 @@ import {
   THIRD_PARTY_VERSIONS,
 } from '../src/lib/project-template.js';
 import { renderAstroConfig } from '../src/templates/project-files.js';
+import { unsatisfiablePeers } from './peer-ranges.js';
 
 const EXAMPLE_PACKAGE_JSON = join(import.meta.dir, '..', '..', '..', 'example', 'website-with-cms', 'package.json');
 
@@ -19,7 +20,9 @@ describe('renderPackageJson', () => {
   test('pins third-party packages to the example site ranges so the two cannot drift', async () => {
     const example = JSON.parse(await Bun.file(EXAMPLE_PACKAGE_JSON).text());
     const exampleRanges = { ...example.dependencies, ...example.devDependencies };
-    for (const [name, range] of Object.entries(THIRD_PARTY_VERSIONS)) {
+    // The workspace's ttsc is smoo's pin, which still asks for TypeScript 7; the peer test below covers the scaffold's.
+    const ahead = new Set(['@ttsc/unplugin', 'ttsc']);
+    for (const [name, range] of Object.entries(THIRD_PARTY_VERSIONS).filter(([pkg]) => !ahead.has(pkg))) {
       expect({ name, range }).toEqual({ name, range: exampleRanges[name] });
     }
   });
@@ -32,27 +35,7 @@ describe('renderPackageJson', () => {
 
   test('declares no two packages whose peer ranges for one package no version satisfies, so npm installs without ERESOLVE', async () => {
     const rendered = JSON.parse(renderPackageJson({ name: 'my-site', manifest: await readCliManifest() }));
-    const declared = new Map(Object.entries<string>({ ...rendered.dependencies, ...rendered.devDependencies }));
-    // The example installs the same set; @conloca/cli is not in it, and its peers are workspace ranges pack time rewrites.
-    const installed = [...declared.keys()].filter((pkg) => pkg !== '@conloca/cli');
-    const manifests = await Promise.all(
-      installed.map((pkg) => Bun.file(join(EXAMPLE_PACKAGE_JSON, '..', 'node_modules', pkg, 'package.json')).json()),
-    );
-    const ranges = new Map<string, string[]>();
-    for (const manifest of manifests) {
-      for (const [peer, range] of Object.entries<string>(manifest.peerDependencies ?? {})) {
-        const own = declared.get(peer);
-        ranges.set(peer, [...(ranges.get(peer) ?? (own ? [own] : [])), range]);
-      }
-    }
-    // A non-empty intersection of these ranges contains one of their own bounds, so those are the candidates.
-    const unsatisfiable = [...ranges]
-      .filter(([, list]) => {
-        const candidates = list.flatMap((range) => range.match(/\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?/g) ?? []);
-        return !candidates.some((version) => list.every((range) => Bun.semver.satisfies(version, range)));
-      })
-      .map(([peer, list]) => `${peer}: ${list.join(' & ')}`);
-    expect(unsatisfiable).toEqual([]);
+    expect(await unsatisfiablePeers({ ...rendered.dependencies, ...rendered.devDependencies })).toEqual([]);
   });
 
   test('pins Conloca packages to the releases this CLI itself depends on, not to its own version', () => {

@@ -515,6 +515,9 @@ conloca astro setup
 conloca doctor
 ```
 
+ttsc compiles with native TypeScript 7. A site that keeps TypeScript 5 or 6, as `@astrojs/check` requires, adds it under
+an alias: `npm install -D typescript@^6.0.3 '@typescript/native@npm:typescript@^7.0.2'`.
+
 ## Development
 
 ### Building

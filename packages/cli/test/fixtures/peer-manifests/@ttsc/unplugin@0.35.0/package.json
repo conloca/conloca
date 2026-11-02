@@ -1,0 +1,7 @@
+{
+  "name": "@ttsc/unplugin",
+  "version": "0.35.0",
+  "peerDependencies": {
+    "ttsc": "^0.35.0"
+  }
+}

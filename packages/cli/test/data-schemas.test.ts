@@ -114,8 +114,8 @@ describe('wireDataSchemas on a site connect set up', () => {
       'typia-vite.mjs',
     ]);
     expect(result.packages).toEqual([
-      ['@ttsc/unplugin', '0.34.1'],
-      ['ttsc', '0.34.1'],
+      ['@ttsc/unplugin', '0.35.0'],
+      ['ttsc', '0.35.0'],
       ['typia', '^14.0.6'],
     ]);
     expect(result.state).toBe('changed');
@@ -126,6 +126,36 @@ describe('wireDataSchemas on a site connect set up', () => {
     await writeEdits((await wireDataSchemas(dir)).edits);
     await addDependencies(dir, ['@ttsc/unplugin', 'ttsc', 'typia']);
     expect(await wireDataSchemas(dir)).toMatchObject({ state: 'done', edits: [], packages: [] });
+  });
+});
+
+/** What the wiring asks for beyond the Typia packages, for a connected site declaring `dependencies`. */
+async function typescriptPackages(dependencies: Record<string, string>): Promise<[string, string][]> {
+  const manifest = { name: 'site', dependencies: { astro: '^7.3.1', ...dependencies } };
+  await makeSite({ ...CONNECTED, 'package.json': JSON.stringify(manifest) });
+  return (await wireDataSchemas(dir)).packages.filter(([name]) => !['@ttsc/unplugin', 'ttsc', 'typia'].includes(name));
+}
+
+describe('wireDataSchemas and the TypeScript ttsc compiles with', () => {
+  const NATIVE: [string, string] = ['@typescript/native', 'npm:typescript@^7.0.2'];
+
+  test('asks for none when ttsc brings TypeScript 7 or the site declares it', async () => {
+    expect(await typescriptPackages({})).toEqual([]);
+    expect(await typescriptPackages({ typescript: '^7.0.2' })).toEqual([]);
+  });
+
+  test('adds native TypeScript under an alias beside the TypeScript 6 @astrojs/check needs', async () => {
+    expect(await typescriptPackages({ '@astrojs/check': '^0.9.10', typescript: '^6.0.3' })).toEqual([NATIVE]);
+  });
+
+  test('declares TypeScript 6 for @astrojs/check alone, and raises TypeScript 5 to it, the lowest ttsc accepts', async () => {
+    const both: [string, string][] = [['typescript', '^6.0.3'], NATIVE];
+    expect(await typescriptPackages({ '@astrojs/check': '^0.9.10' })).toEqual(both);
+    expect(await typescriptPackages({ typescript: '~5.9.3' })).toEqual(both);
+  });
+
+  test('keeps a native TypeScript alias the site already declares', async () => {
+    expect(await typescriptPackages({ typescript: '^6.0.3', tsgo: 'npm:typescript@^7.1.0' })).toEqual([]);
   });
 });
 

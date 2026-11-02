@@ -5,7 +5,7 @@ import { type PackageManager, packageManagerCommands } from './package-manager.j
 /**
  * Third-party ranges a created project starts with. Kept equal to
  * example/website-with-cms/package.json by a test, so the scaffold and the
- * canonical example never drift apart.
+ * canonical example never drift apart; ttsc and @ttsc/unplugin alone run ahead.
  */
 export const THIRD_PARTY_VERSIONS = {
   astro: '^7.3.1',
@@ -17,11 +17,13 @@ export const THIRD_PARTY_VERSIONS = {
   'react-dom': '19.2.8',
   typia: '^14.0.6',
   // Exact and equal to ttsc: a newer @ttsc/unplugin asks for a newer ttsc peer, which npm refuses against the pin.
-  '@ttsc/unplugin': '0.34.1',
-  ttsc: '0.34.1',
+  // 0.35, ahead of the workspace's smoo-pinned 0.34.1: 0.34 asks for TypeScript 7, which @astrojs/check refuses.
+  '@ttsc/unplugin': '0.35.0',
+  ttsc: '0.35.0',
 } as const;
 
-// No @astrojs/check: it is the example's typecheck tool, and its TypeScript <=6 peer excludes the TypeScript 7 ttsc needs.
+// No @astrojs/check: a created project runs no `astro check`, and its TypeScript <=6 peer would hold the project below
+// the native TypeScript 7 ttsc compiles with, so it would need a second, aliased TypeScript.
 const DEV_ONLY = new Set(['@ttsc/unplugin', 'ttsc']);
 
 // Where this module sits inside the package differs between the shipped bundle

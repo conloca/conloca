@@ -19,6 +19,9 @@ The second line is the full peer set — the CMS expects the host site to own th
 optional: the editor is a React application, and this integration does not register Astro's React renderer for you. A
 site that omits it serves the editor route with no editor in it.
 
+ttsc compiles with native TypeScript 7. A site that keeps TypeScript 5 or 6, as `@astrojs/check` requires, adds it under
+an alias: `npm install -D typescript@^6.0.3 '@typescript/native@npm:typescript@^7.0.2'`.
+
 ### The four files a site needs
 
 A working site needs all four of these. Omitting any one of them breaks the site or the editor, in most cases without an

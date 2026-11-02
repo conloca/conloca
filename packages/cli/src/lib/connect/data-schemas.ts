@@ -28,6 +28,25 @@ export interface DataSchemasWiring extends StepResult {
 /** What typia-vite.mjs compiles the default schemas with, sorted by name. */
 const TYPIA_PACKAGES = ['@ttsc/unplugin', 'ttsc', 'typia'] as const;
 
+/** ttsc compiles with native TypeScript (7+) only; a site keeping TypeScript 6 for @astrojs/check gets it aliased. */
+const NATIVE_TYPESCRIPT: [string, string] = ['@typescript/native', 'npm:typescript@^7.0.2'];
+
+/** The lowest TypeScript both ttsc's peer range and @astrojs/check's accept. */
+const LEGACY_TYPESCRIPT: [string, string] = ['typescript', '^6.0.3'];
+
+/**
+ * The TypeScript packages ttsc needs beside what the site declares: none when the site gets TypeScript 7 (declared, or
+ * as ttsc's own peer) or already aliases it; else the native alias, raising TypeScript 5 to 6 so ttsc's peer is met.
+ */
+function typescriptPackages(declared: Record<string, string>): [string, string][] {
+  if (Object.values(declared).some((spec) => spec.startsWith('npm:typescript@'))) return [];
+  const spec = declared.typescript;
+  // Undeclared beside @astrojs/check, npm installs the TypeScript 6 that check's peer allows.
+  const major = spec !== undefined ? Number(spec.match(/\d+/)?.[0]) : '@astrojs/check' in declared ? 0 : 7;
+  if (!(major < 7)) return [];
+  return major >= 6 ? [NATIVE_TYPESCRIPT] : [LEGACY_TYPESCRIPT, NATIVE_TYPESCRIPT];
+}
+
 const CONTENT_SOURCE = '@conloca/astro-cms/node/content';
 
 /** Declare the data collections in the content config Astro loads, importing `dataSchemas` from `schemasPath`. */
@@ -120,11 +139,18 @@ export async function wireDataSchemas(projectDir: string): Promise<DataSchemasWi
       ['tsconfig.typia.json', TYPIA_TSCONFIG_TEMPLATE],
     );
     const manifest: unknown = JSON.parse(await readFile(join(projectDir, 'package.json'), 'utf8').catch(() => '{}'));
-    const declared = isRecord(manifest) ? [manifest.dependencies, manifest.devDependencies].filter(isRecord) : [];
-    packages = TYPIA_PACKAGES.filter((name) => !declared.some((list) => name in list)).map((name) => [
-      name,
-      THIRD_PARTY_VERSIONS[name],
-    ]);
+    const declared: Record<string, string> = {};
+    const lists = isRecord(manifest) ? [manifest.dependencies, manifest.devDependencies].filter(isRecord) : [];
+    for (const [name, range] of lists.flatMap((list) => Object.entries(list))) {
+      if (typeof range === 'string') declared[name] = range;
+    }
+    packages = [
+      ...TYPIA_PACKAGES.filter((name) => !(name in declared)).map((name): [string, string] => [
+        name,
+        THIRD_PARTY_VERSIONS[name],
+      ]),
+      ...typescriptPackages(declared),
+    ];
   }
   const files: FileEdit[] = scaffold
     .map(([file, after]) => ({ path: resolve(projectDir, file), before: null, after }))

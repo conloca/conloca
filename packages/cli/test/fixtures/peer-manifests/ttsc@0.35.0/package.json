@@ -1,0 +1,7 @@
+{
+  "name": "ttsc",
+  "version": "0.35.0",
+  "peerDependencies": {
+    "typescript": ">=6.0.0 || >=7.1.0-0"
+  }
+}

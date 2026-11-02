@@ -10,8 +10,10 @@ import {
   olderPackages,
   runConnect,
 } from '../src/commands/connect.js';
+import { wireDataSchemas } from '../src/lib/connect/data-schemas.js';
 import { readCliManifest } from '../src/lib/project-template.js';
 import { makeRepo as newRepo, OLD_WORKFLOW, treeHashes } from './fixture-repo.js';
+import { unsatisfiablePeers } from './peer-ranges.js';
 
 const STATIC_CONFIG = `import { defineConfig } from 'astro/config';
 
@@ -637,4 +639,17 @@ describe('runConnect', () => {
     expect(report.steps.map((step) => step.id)).not.toContain('preview');
     expect(questions).not.toContain(QUESTION);
   });
+});
+
+describe('connect, then the data wiring, on a site that type-checks with @astrojs/check', () => {
+  for (const typescript of ['^5.9.3', '^6.0.3']) {
+    test(`leaves no peer npm cannot satisfy beside typescript ${typescript}, so npm installs without ERESOLVE`, async () => {
+      const site = { astro: '^7.3.1', '@astrojs/check': '^0.9.10', typescript };
+      const dir = await makeRepo({ ...FRESH_NPM, 'package.json': packageJson(site) });
+      expect((await runConnect(dir, options(), fakeIo().io)).ok).toBe(true);
+      const wiring = await wireDataSchemas(dir);
+      const declared = { ...(await manifestOf(dir)).dependencies, ...Object.fromEntries(wiring.packages) };
+      expect(await unsatisfiablePeers(declared)).toEqual([]);
+    });
+  }
 });
