@@ -16,13 +16,13 @@ export const THIRD_PARTY_VERSIONS = {
   react: '19.2.8',
   'react-dom': '19.2.8',
   typia: '^14.0.4',
-  '@astrojs/check': '^0.9.10',
   // Exact and equal to ttsc: a newer @ttsc/unplugin asks for a newer ttsc peer, which npm refuses against the pin.
   '@ttsc/unplugin': '0.34.1',
   ttsc: '0.34.1',
 } as const;
 
-const DEV_ONLY = new Set(['@astrojs/check', '@ttsc/unplugin', 'ttsc']);
+// No @astrojs/check: it is the example's typecheck tool, and its TypeScript <=6 peer excludes the TypeScript 7 ttsc needs.
+const DEV_ONLY = new Set(['@ttsc/unplugin', 'ttsc']);
 
 // Where this module sits inside the package differs between the shipped bundle
 // (one file at dist/conloca.js) and the source the tests import (src/lib/), so

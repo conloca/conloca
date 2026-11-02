@@ -30,6 +30,27 @@ describe('renderPackageJson', () => {
     expect(unplugin).toBe(ttsc);
   });
 
+  test('declares no two packages whose peer ranges for one package no version satisfies, so npm installs without ERESOLVE', async () => {
+    const rendered = JSON.parse(renderPackageJson({ name: 'my-site', manifest: await readCliManifest() }));
+    const declared: Record<string, string> = { ...rendered.dependencies, ...rendered.devDependencies };
+    const ranges = new Map<string, string[]>();
+    // The example installs the same set; @conloca/cli is not in it, and its peers are workspace ranges pack time rewrites.
+    for (const name of Object.keys(declared).filter((name) => name !== '@conloca/cli')) {
+      const manifest = await Bun.file(join(EXAMPLE_PACKAGE_JSON, '..', 'node_modules', name, 'package.json')).json();
+      for (const [peer, range] of Object.entries<string>(manifest.peerDependencies ?? {})) {
+        ranges.set(peer, [...(ranges.get(peer) ?? (declared[peer] ? [declared[peer]] : [])), range]);
+      }
+    }
+    // A non-empty intersection of these ranges contains one of their own bounds, so those are the candidates.
+    const unsatisfiable = [...ranges]
+      .filter(([, list]) => {
+        const candidates = list.flatMap((range) => range.match(/\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?/g) ?? []);
+        return !candidates.some((version) => list.every((range) => Bun.semver.satisfies(version, range)));
+      })
+      .map(([peer, list]) => `${peer}: ${list.join(' & ')}`);
+    expect(unsatisfiable).toEqual([]);
+  });
+
   test('pins Conloca packages to the releases this CLI itself depends on, not to its own version', () => {
     // The shape npm publishes: pack time rewrites `workspace:*` to the sibling version
     // that was on disk at the release commit, so an independent CLI bump names a release
