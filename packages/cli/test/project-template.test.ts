@@ -32,13 +32,17 @@ describe('renderPackageJson', () => {
 
   test('declares no two packages whose peer ranges for one package no version satisfies, so npm installs without ERESOLVE', async () => {
     const rendered = JSON.parse(renderPackageJson({ name: 'my-site', manifest: await readCliManifest() }));
-    const declared: Record<string, string> = { ...rendered.dependencies, ...rendered.devDependencies };
-    const ranges = new Map<string, string[]>();
+    const declared = new Map(Object.entries<string>({ ...rendered.dependencies, ...rendered.devDependencies }));
     // The example installs the same set; @conloca/cli is not in it, and its peers are workspace ranges pack time rewrites.
-    for (const name of Object.keys(declared).filter((name) => name !== '@conloca/cli')) {
-      const manifest = await Bun.file(join(EXAMPLE_PACKAGE_JSON, '..', 'node_modules', name, 'package.json')).json();
+    const installed = [...declared.keys()].filter((pkg) => pkg !== '@conloca/cli');
+    const manifests = await Promise.all(
+      installed.map((pkg) => Bun.file(join(EXAMPLE_PACKAGE_JSON, '..', 'node_modules', pkg, 'package.json')).json()),
+    );
+    const ranges = new Map<string, string[]>();
+    for (const manifest of manifests) {
       for (const [peer, range] of Object.entries<string>(manifest.peerDependencies ?? {})) {
-        ranges.set(peer, [...(ranges.get(peer) ?? (declared[peer] ? [declared[peer]] : [])), range]);
+        const own = declared.get(peer);
+        ranges.set(peer, [...(ranges.get(peer) ?? (own ? [own] : [])), range]);
       }
     }
     // A non-empty intersection of these ranges contains one of their own bounds, so those are the candidates.
