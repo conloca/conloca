@@ -20,6 +20,8 @@ export interface MigrationPlan extends StepResult {
 
 export interface Migration {
   id: string;
+  /** The package whose release `since` introduced this migration. */
+  package: string;
   since: string;
   description: string;
   plan(context: MigrationContext): Promise<MigrationPlan>;
@@ -63,6 +65,7 @@ async function removedOptionsStep(projectDir: string, repoRoot: string): Promise
 
 const keyless: Migration = {
   id: 'keyless',
+  package: '@conloca/cloud-astro',
   since: '0.2.3',
   description: 'remove the old build key from the workflows and conlocaCloud()',
   async plan({ projectDir, repoRoot }) {
@@ -82,6 +85,7 @@ const keyless: Migration = {
 
 const dataSchemas: Migration = {
   id: 'data-schemas',
+  package: '@conloca/astro-cms',
   since: '0.2.4',
   description: 'wire data entries and uploaded media: schemas, conlocaData() and the Typia packages',
   plan: ({ projectDir }) => wireDataSchemas(projectDir),
@@ -90,7 +94,16 @@ const dataSchemas: Migration = {
 /** Every migration the running CLI ships, in release order. */
 export const MIGRATIONS: readonly Migration[] = [keyless, dataSchemas];
 
-/** The migrations a site whose oldest Conloca package is `from` still needs: every one with since > from. */
-export function migrationsSince(from: string, migrations: readonly Migration[] = MIGRATIONS): Migration[] {
-  return migrations.filter((migration) => compareVersions(migration.since, from) > 0);
+/**
+ * The migrations a site still needs, given the lowest version it declares of each Conloca package: every one whose
+ * package is below its `since`. A site that does not declare a migration's package skips it.
+ */
+export function migrationsSince(
+  floors: ReadonlyMap<string, string>,
+  migrations: readonly Migration[] = MIGRATIONS,
+): Migration[] {
+  return migrations.filter((migration) => {
+    const floor = floors.get(migration.package);
+    return floor !== undefined && compareVersions(migration.since, floor) > 0;
+  });
 }

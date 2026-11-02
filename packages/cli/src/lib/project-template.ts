@@ -69,21 +69,23 @@ export function packageNameOf(directory: string): string {
 const SCAFFOLD_CONLOCA_PACKAGES = ['@conloca/astro-cms', '@conloca/content-api'] as const;
 
 /**
- * What a created project should ask npm for. The packages release together on one version, and
- * the CLI's own dependency range names the sibling release it was packed against. Inside this repo the range is
- * still `workspace:*`, which becomes a real version only at pack time, so it falls back to the CLI's version
- * (the same release). Optional peers count too.
+ * What a site should ask npm for: each package has its own version, and this CLI's manifest pins the set that goes
+ * together (smoo's pack writes exact versions). Inside this repo a pin is still `workspace:*`, which becomes a version
+ * only at pack time, so it falls back to the CLI's own version. This CLI pins itself at its own version; any other
+ * name it does not pin is undefined, and callers leave that entry alone.
  */
-export function conlocaRange(manifest: CliManifest, name: string): string {
+export function conlocaRange(manifest: CliManifest, name: string): string | undefined {
+  if (name === '@conloca/cli') return manifest.version;
   const declared = manifest.dependencies?.[name] ?? manifest.peerDependencies?.[name];
-  return declared === undefined || declared.startsWith('workspace:') ? manifest.version : declared;
+  return declared?.startsWith('workspace:') ? manifest.version : declared;
 }
 
 /** The package.json a created project starts with: Conloca pinned to what this CLI depends on, everything else to the example site. */
 export function renderPackageJson(input: { name: string; manifest: CliManifest }): string {
   const dependencies: Record<string, string> = {};
   for (const name of SCAFFOLD_CONLOCA_PACKAGES) {
-    dependencies[name] = conlocaRange(input.manifest, name);
+    const range = conlocaRange(input.manifest, name);
+    if (range !== undefined) dependencies[name] = range;
   }
   const devDependencies: Record<string, string> = { '@conloca/cli': input.manifest.version };
   for (const [name, range] of Object.entries(THIRD_PARTY_VERSIONS)) {

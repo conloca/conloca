@@ -18,10 +18,22 @@
     "magicast": "^0.5.5"
   },
   "peerDependencies": {
-    "@conloca/cloud-astro": "workspace:*"
+    "@conloca/cloud-astro": "workspace:*",
+    "@conloca/cms-spa": "workspace:*",
+    "@conloca/content-api-client": "workspace:*",
+    "@conloca/mdx": "workspace:*"
   },
   "peerDependenciesMeta": {
     "@conloca/cloud-astro": {
+      "optional": true
+    },
+    "@conloca/cms-spa": {
+      "optional": true
+    },
+    "@conloca/content-api-client": {
+      "optional": true
+    },
+    "@conloca/mdx": {
       "optional": true
     }
   },

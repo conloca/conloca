@@ -38,18 +38,31 @@ afterEach(async () => {
   dir = '';
 });
 
+/** A site's lowest declared version of the packages that introduced `keyless` and `data-schemas`. */
+function site(keylessFloor: string, dataSchemasFloor: string): Map<string, string> {
+  return new Map([
+    ['@conloca/cloud-astro', keylessFloor],
+    ['@conloca/astro-cms', dataSchemasFloor],
+  ]);
+}
+
 describe('migrationsSince', () => {
-  test('runs the keyless step for a 0.2.1 site and skips it for a 0.2.3 site', () => {
-    expect(migrationsSince('0.2.1').map((m) => m.id)).toEqual(['keyless', 'data-schemas']);
-    expect(migrationsSince('0.2.3').map((m) => m.id)).toEqual(['data-schemas']);
+  test('runs each migration while its own package is below the release that introduced it', () => {
+    expect(migrationsSince(site('0.2.1', '0.2.1')).map((m) => m.id)).toEqual(['keyless', 'data-schemas']);
+    expect(migrationsSince(site('0.2.3', '0.2.1')).map((m) => m.id)).toEqual(['data-schemas']);
+    expect(migrationsSince(site('0.2.1', '0.2.4')).map((m) => m.id)).toEqual(['keyless']);
   });
 
   test('runs the 0.2.4 step for a site on a 0.2.4 prerelease', () => {
-    expect(migrationsSince('0.2.4-next.0').map((m) => m.id)).toEqual(['data-schemas']);
+    expect(migrationsSince(site('0.2.3', '0.2.4-next.0')).map((m) => m.id)).toEqual(['data-schemas']);
   });
 
-  test('needs none when the site is on the newest migration release', () => {
-    expect(migrationsSince('0.2.4')).toEqual([]);
+  test('skips a migration whose package the site does not declare', () => {
+    expect(migrationsSince(new Map([['@conloca/astro-cms', '0.2.1']])).map((m) => m.id)).toEqual(['data-schemas']);
+  });
+
+  test('needs none when every package is on its newest migration release', () => {
+    expect(migrationsSince(site('0.2.3', '0.2.4'))).toEqual([]);
   });
 });
 

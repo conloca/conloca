@@ -280,7 +280,7 @@ describe('runConnect', () => {
     expect(report.ok).toBe(false);
     expect(stateOf(report, 'packages')).toBe('needs-you');
     expect(report.steps[1]?.message).toBe(
-      `this site's @conloca packages (@conloca/astro-cms 0.2.1) are older than this CLI (${TO}): upgrade them first`,
+      `this site's @conloca packages (@conloca/astro-cms 0.2.1) are older than the versions this CLI (${TO}) pins: upgrade them first`,
     );
     const output = printed.join('\n');
     expect(output).toContain(`npx @conloca/cli@${TO} upgrade\n`);
@@ -310,13 +310,17 @@ describe('runConnect', () => {
     expect(exitCodeOf(report)).toBe(2);
   });
 
-  test('compares each package with the release upgrade writes for it, not the CLI version', async () => {
-    const cli = { version: '0.2.4', dependencies: { '@conloca/astro-cms': '^0.2.3' } };
+  test('compares each package with the version upgrade writes for it, and skips one this CLI does not pin', async () => {
+    const cli = {
+      version: '0.2.5',
+      dependencies: { '@conloca/astro-cms': '^0.2.3' },
+      peerDependencies: { '@conloca/cloud-astro': '0.2.4' },
+    };
     const lagging = await makeRepo({ 'package.json': packageJson({ '@conloca/astro-cms': '^0.2.3' }) });
     expect(await olderPackages(lagging, cli)).toEqual([]);
     await writeFile(
       join(lagging, 'package.json'),
-      packageJson({ '@conloca/astro-cms': '^0.2.2', '@conloca/cloud-astro': '^0.2.3' }),
+      packageJson({ '@conloca/astro-cms': '^0.2.2', '@conloca/cloud-astro': '^0.2.3', '@conloca/mdx': '^0.2.1' }),
     );
     expect(await olderPackages(lagging, cli)).toEqual(['@conloca/astro-cms 0.2.2', '@conloca/cloud-astro 0.2.3']);
   });

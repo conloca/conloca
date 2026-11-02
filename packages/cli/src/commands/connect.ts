@@ -233,7 +233,10 @@ async function packagesStep(projectDir: string, commands: PackageManagerCommands
   const devDependencies = isRecord(manifest.devDependencies) ? manifest.devDependencies : {};
   const cli = await readCliManifest();
   const wanted: [string, string][] = [
-    ...CONLOCA_PACKAGES.map((name): [string, string] => [name, conlocaRange(cli, name)]),
+    ...CONLOCA_PACKAGES.flatMap((name): [string, string][] => {
+      const range = conlocaRange(cli, name);
+      return range === undefined ? [] : [[name, range]];
+    }),
     ...PEER_PACKAGES.map((name): [string, string] => [name, THIRD_PARTY_VERSIONS[name]]),
   ];
   const missing = wanted.filter(([name]) => !(name in dependencies) && !(name in devDependencies));
@@ -268,8 +271,9 @@ export async function olderPackages(projectDir: string, cli: CliManifest): Promi
   if (!isRecord(manifest)) return [];
   return conlocaDependencies(manifest).flatMap(({ name, spec }) => {
     const floor = versionFloor(spec);
-    const wanted = versionFloor(conlocaRange(cli, name)) ?? cli.version;
-    return floor !== null && compareVersions(floor, wanted) < 0 ? [`${name} ${floor}`] : [];
+    const range = conlocaRange(cli, name);
+    const wanted = range === undefined ? null : versionFloor(range);
+    return floor !== null && wanted !== null && compareVersions(floor, wanted) < 0 ? [`${name} ${floor}`] : [];
   });
 }
 
@@ -381,14 +385,14 @@ export async function runConnect(path: string, options: ConnectOptions, io: Conn
     },
   };
 
-  // A site on an older release goes through upgrade first, so connect never mixes two releases.
+  // A site below the versions this CLI pins goes through upgrade first, so connect never mixes CLI releases.
   const cli = await readCliManifest();
   const to = cli.version;
   const older = await olderPackages(projectDir, cli);
   if (older.length > 0) {
     const name = relative(start, projectDir) || '.';
     const target = name === '.' ? '' : ` ${name}`;
-    const message = `this site's @conloca packages (${older.join(', ')}) are older than this CLI (${to}): upgrade them first`;
+    const message = `this site's @conloca packages (${older.join(', ')}) are older than the versions this CLI (${to}) pins: upgrade them first`;
     console.log(`needs-you: ${message}`);
     const lines = [`npx @conloca/cli@${to} upgrade${target}`, `npx @conloca/cli@${to} connect${target}`];
     for (const line of lines) console.log(`  ${line}`);

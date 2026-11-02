@@ -247,19 +247,21 @@ program
   .option('--project <dir>', 'Astro project to upgrade, when the repository has several')
   .option('--dry-run', 'Show the changes, write nothing')
   .option('--json', 'One JSON report on stdout')
-  .description('Bring every @conloca package of the site to this CLI release')
+  .description('Bring every @conloca package of the site to the version this CLI pins')
   .addHelpText(
     'after',
     `
-Refuses specs a version range cannot replace (catalog:, workspace:, link:,
-file:), overrides pinning @conloca packages, and any @conloca package newer
-than this CLI; then dry-runs every migration between the site's release and
-this one and stops before touching anything if one fails or needs you; then
-saves package.json and the lockfile, raises every @conloca package in one
-package manager install, applies the migrations and refreshes the agent
-skills (an edited skill is kept, its new text written to SKILL.new.md beside
-it); finally checks every installed @conloca package has the same version and
-runs doctor. On any failure the saved files are put back. Never commits or
+Each @conloca package has its own version; this CLI pins the set that goes
+together. Refuses specs a version range cannot replace (catalog:, workspace:,
+link:, file:), overrides pinning @conloca packages, and any @conloca package
+newer than this CLI pins; then dry-runs every migration a package introduced
+since the site's version of it and stops before touching anything if one
+fails or needs you; then saves package.json and the lockfile, raises each
+@conloca package to its pinned version in one package manager install,
+applies the migrations and refreshes the agent skills (an edited skill is
+kept, its new text written to SKILL.new.md beside it); finally checks every
+installed @conloca package is at the version it wrote and runs doctor. On
+any failure the saved files are put back. Never commits or
 pushes. Exits 0 when done, 1 when a step failed (the site is restored), 2
 when a step needs you (nothing was touched).`,
   )

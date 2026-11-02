@@ -24,6 +24,9 @@
     {
       "path": "../content-api/tsconfig.lib.json"
     },
-    { "path": "../cloud-astro/tsconfig.lib.json" }
+    { "path": "../cloud-astro/tsconfig.lib.json" },
+    { "path": "../cms-spa/tsconfig.lib.json" },
+    { "path": "../content-api-client/tsconfig.lib.json" },
+    { "path": "../mdx/tsconfig.lib.json" }
   ]
 }

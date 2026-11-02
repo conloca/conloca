@@ -14,7 +14,7 @@ import {
   type PackageManagerCommands,
   packageManagerCommands,
 } from '../lib/package-manager.js';
-import { conlocaRange, readCliManifest } from '../lib/project-template.js';
+import { type CliManifest, conlocaRange, readCliManifest } from '../lib/project-template.js';
 import { planSkillRefresh } from '../lib/skills.js';
 import { compareVersions, conlocaDependencies, versionFloor } from '../lib/versions.js';
 import { type ConnectIo, exitCodeOf, gitText, patchOf, pickProject, terminalIo } from './connect.js';
@@ -63,6 +63,7 @@ interface Manifest {
 
 /** What the dry run decided: the edits to write, in order, and where the package manager installs. */
 interface Plan {
+  cli: CliManifest;
   start: string;
   projectDir: string;
   repoRoot: string;
@@ -93,12 +94,18 @@ function needsYou(message: string): StepResult {
   return { state: 'needs-you', message, edits: [] };
 }
 
+/** The version upgrade writes for `name`, or null when this CLI does not pin it and leaves the entry alone. */
+function targetOf(cli: CliManifest, name: string): string | null {
+  const range = conlocaRange(cli, name);
+  return range === undefined ? null : versionFloor(range);
+}
+
 /** Why the packages cannot be raised safely, or null when they can; `installed` is what node_modules holds now. */
 async function refusalOf(
   manifests: Manifest[],
   installed: { name: string; version: string | null }[],
   installDir: string,
-  to: string,
+  cli: CliManifest,
 ): Promise<StepResult | null> {
   const entries = manifests.flatMap((manifest) => conlocaDependencies(manifest.value));
   const pinned = entries.find((entry) => entry.spec.includes(':') || entry.spec.includes('/'));
@@ -121,32 +128,34 @@ async function refusalOf(
   if (workspace.includes('@conloca/')) {
     return needsYou('pnpm-workspace.yaml names @conloca packages (a catalog or override): remove them first');
   }
-  // An installed release counts too: a range may have pulled in one newer than this CLI.
+  // An installed release counts too: a range may have pulled in one newer than this CLI pins.
   const floors = [
     ...entries.map((entry) => ({ name: entry.name, floor: versionFloor(entry.spec) })),
     ...installed.map((entry) => ({ name: entry.name, floor: entry.version })),
-  ].flatMap(({ name, floor }) => (floor === null ? [] : [{ name, floor }]));
-  floors.sort((a, b) => compareVersions(b.floor, a.floor));
-  const [newest] = floors;
-  if (newest !== undefined && compareVersions(newest.floor, to) > 0) {
-    return needsYou(
-      `${newest.name} is at ${newest.floor}, newer than this CLI (${to}); never moving a site back: run npx @conloca/cli@${newest.floor} upgrade`,
-    );
+  ];
+  for (const { name, floor } of floors) {
+    const target = targetOf(cli, name);
+    if (floor !== null && target !== null && compareVersions(floor, target) > 0) {
+      return needsYou(
+        `${name} is at ${floor}, newer than ${target}, which this CLI (${cli.version}) pins; never moving a site back: run npx @conloca/cli@latest upgrade`,
+      );
+    }
   }
   return null;
 }
 
-/** Every manifest's Conloca entries set to this release, plus the migrations' packages in the project's dependencies. */
+/** Every manifest's Conloca entries set to the version this CLI pins (unpinned ones left alone), plus the migrations' packages in the project's dependencies. */
 function manifestEditsOf(
   manifests: Manifest[],
-  ranges: (name: string) => string,
+  ranges: (name: string) => string | undefined,
   added: [string, string][],
 ): FileEdit[] {
   return manifests.flatMap((manifest, index) => {
     const value = structuredClone(manifest.value);
     for (const entry of conlocaDependencies(value)) {
       const section = value[entry.section];
-      if (isRecord(section)) section[entry.name] = ranges(entry.name);
+      const range = ranges(entry.name);
+      if (isRecord(section) && range !== undefined) section[entry.name] = range;
     }
     const dependencies = isRecord(value.dependencies) ? value.dependencies : {};
     const devDependencies = isRecord(value.devDependencies) ? value.devDependencies : {};
@@ -195,10 +204,10 @@ async function planUpgrade(
   path: string,
   options: UpgradeOptions,
   io: ConnectIo,
+  cli: CliManifest,
   migrations: readonly Migration[],
 ): Promise<Plan | UpgradeReport> {
   const start = resolve(path);
-  const cli = await readCliManifest();
   const to = cli.version;
   // --show-cdup, not --show-toplevel, as in connect: the top level comes back with symlinks resolved.
   const up = await gitText(['rev-parse', '--show-cdup'], start);
@@ -251,16 +260,21 @@ async function planUpgrade(
     });
   }
   const installed = await installedVersions(manifests, projectDir, install.installDir);
-  const refusal = await refusalOf(manifests, installed, install.installDir, to);
+  const refusal = await refusalOf(manifests, installed, install.installDir, cli);
   if (refusal !== null) return stop('packages', refusal);
-  const floors = manifests.flatMap((manifest) =>
-    conlocaDependencies(manifest.value).flatMap((entry) => versionFloor(entry.spec) ?? []),
-  );
-  floors.sort(compareVersions);
-  report.from = floors[0] ?? '0.0.0';
+  // The lowest declared version of each package: each migration belongs to the package that introduced it.
+  const floors = new Map<string, string>();
+  for (const entry of manifests.flatMap((manifest) => conlocaDependencies(manifest.value))) {
+    const floor = versionFloor(entry.spec);
+    const known = floors.get(entry.name);
+    if (floor !== null && (known === undefined || compareVersions(floor, known) < 0)) floors.set(entry.name, floor);
+  }
+  const lowest = [...floors.values()];
+  lowest.sort(compareVersions);
+  report.from = lowest[0] ?? '0.0.0';
 
   const planned = await Promise.all(
-    migrationsSince(report.from, migrations).map(async (migration) => ({
+    migrationsSince(floors, migrations).map(async (migration) => ({
       migration,
       step: { id: migration.id, result: await runMigrationPlan(migration, projectDir, repoRoot) },
     })),
@@ -271,8 +285,12 @@ async function planUpgrade(
     id: 'packages',
     result:
       manifestEdits.length === 0
-        ? { state: 'done', message: `every @conloca package is at ${to}`, edits: [] }
-        : { state: 'changed', message: `raises every @conloca package to ${to}`, edits: manifestEdits },
+        ? { state: 'done', message: 'every @conloca package is at the version this CLI pins', edits: [] }
+        : {
+            state: 'changed',
+            message: 'raises each @conloca package to the version this CLI pins',
+            edits: manifestEdits,
+          },
   };
   steps.push(packages, ...planned.map(({ step }) => step));
   for (const step of steps) for (const edit of step.result.edits) console.log(patchOf(edit, start));
@@ -289,6 +307,7 @@ async function planUpgrade(
     return reportOf({ start, steps, report });
   }
   return {
+    cli,
     start,
     projectDir,
     repoRoot,
@@ -326,16 +345,22 @@ async function installedVersions(
   );
 }
 
-/** Whether every Conloca package is installed, all at one version. */
+/** Whether every Conloca package is installed, each at the version upgrade wrote for it. */
 async function versionsStep(plan: Plan): Promise<StepResult> {
   const installed = await installedVersions(plan.manifests, plan.projectDir, plan.install.installDir);
-  const versions = new Set(installed.map((entry) => entry.version));
-  const [only] = versions;
-  if (versions.size !== 1 || only === null || only === undefined) {
-    const list = installed.map((entry) => `${entry.name} ${entry.version ?? 'not installed'}`).join(', ');
-    return { state: 'failed', message: `the installed @conloca packages disagree: ${list}`, edits: [] };
+  const off = installed.flatMap(({ name, version }) => {
+    const target = targetOf(plan.cli, name);
+    if (version !== null && (target === null || version === target)) return [];
+    return [`${name} ${version ?? 'not installed'}${target === null ? '' : ` (upgrade wrote ${target})`}`];
+  });
+  if (off.length > 0) {
+    return {
+      state: 'failed',
+      message: `installed @conloca packages differ from what upgrade wrote: ${off.join(', ')}`,
+      edits: [],
+    };
   }
-  return { state: 'done', message: `every @conloca package is installed at ${only}`, edits: [] };
+  return { state: 'done', message: 'every @conloca package is installed at the version this CLI pins', edits: [] };
 }
 
 /** Re-plan one migration against the disk, then write its edits after `save` has kept each file. */
@@ -471,17 +496,18 @@ export async function restoreJournal(
 }
 
 /**
- * Bring every @conloca package of a site to this CLI's release: refuse what a range cannot replace, dry-run every
- * migration, raise the packages in one install, apply the migrations, refresh the agent skills, then check the
- * installed versions and run doctor. Any failure puts the saved files back. Never commits or pushes.
+ * Bring every @conloca package of a site to the version `cli` (this CLI's manifest) pins: refuse what a range cannot
+ * replace, dry-run every migration, raise the packages in one install, apply the migrations, refresh the agent skills,
+ * then check the installed versions and run doctor. Any failure puts the saved files back. Never commits or pushes.
  */
 export async function runUpgrade(
   path: string,
   options: UpgradeOptions,
   io: ConnectIo,
+  cli: CliManifest,
   migrations: readonly Migration[] = MIGRATIONS,
 ): Promise<UpgradeReport> {
-  const plan = await planUpgrade(path, options, io, migrations);
+  const plan = await planUpgrade(path, options, io, cli, migrations);
   return 'install' in plan ? applyUpgrade(plan, io) : plan;
 }
 
@@ -489,7 +515,8 @@ export async function runUpgrade(
 export async function upgrade(path: string, options: UpgradeOptions): Promise<never> {
   let report: UpgradeReport;
   try {
-    report = await withStdoutRedirected(options.json, () => runUpgrade(path, options, terminalIo(options.json)));
+    const cli = await readCliManifest();
+    report = await withStdoutRedirected(options.json, () => runUpgrade(path, options, terminalIo(options.json), cli));
   } catch (error) {
     fail(options.json, messageOf(error));
   }

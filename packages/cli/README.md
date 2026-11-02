@@ -12,7 +12,8 @@ bun add -g @conloca/cli
 
 ## Usage
 
-`conloca --version` prints the CLI's release, the one `upgrade` brings a site to.
+`conloca --version` prints the CLI's own version. Each `@conloca/*` package has its own version; one CLI release pins
+the set that goes together, and `upgrade` moves each package to the version this CLI pins.
 
 ### Create a Project
 
@@ -49,8 +50,8 @@ Run it in the site's folder or the repository holding it. In order, it:
 
 1. **Finds the project:** the Astro project in `[path]`. A repository with several asks which one in a terminal; without
    one it lists them and stops, so you pass `--project <dir>`. The editor needs the repository on GitHub; without a
-   GitHub `origin` it continues and says so. A site whose `@conloca/*` packages are older than this CLI is handed to
-   `upgrade`: `connect` prints the `upgrade` and `connect` commands to run, writes nothing and exits `2`.
+   GitHub `origin` it continues and says so. A site whose `@conloca/*` packages are older than this CLI pins is handed
+   to `upgrade`: `connect` prints the `upgrade` and `connect` commands to run, writes nothing and exits `2`.
 2. **Adds packages:** `@conloca/astro-cms`, `@conloca/cloud-astro`, `@astrojs/react` and `@vitejs/plugin-react`,
    whichever `package.json` lacks, with the package manager of the nearest lockfile. `--no-install` prints the command
    instead.
@@ -103,7 +104,7 @@ one object: `{ok, project, siteId, packageManager, steps: [{id, state, files?, m
 
 ### Upgrade a site
 
-Bring every `@conloca/*` package of a site to the release of the CLI you run, with the changes that release needs:
+Bring every `@conloca/*` package of a site to the version the CLI you run pins, with the changes those versions need:
 
 ```bash
 npx @conloca/cli@latest upgrade [path] [--project <dir>] [--dry-run] [--json]
@@ -114,15 +115,15 @@ it:
 
 1. **Refuses what it cannot raise safely:** a `@conloca/*` spec that is no version range (`catalog:`, `workspace:`,
    `link:`, `file:`), `overrides` or `resolutions` pinning a `@conloca/*` package, and any `@conloca/*` package newer
-   than this CLI, which it never moves back (it names the release to run instead). A site with no `@conloca/*` package
-   is sent to `connect`.
-2. **Dry-runs every migration** between the site's oldest `@conloca/*` release and this one, and stops before touching
+   than this CLI pins, which it never moves back (it tells you to run the latest CLI instead). A site with no
+   `@conloca/*` package is sent to `connect`.
+2. **Dry-runs every migration** a package introduced since the site's version of that package, and stops before touching
    anything when one fails or needs you.
 3. **Writes:** saves `package.json` and the lockfile, raises every `@conloca/*` package in one package manager install
    (each stays in its own section, `devDependencies` included, also in a workspace root's `package.json`), applies the
    migrations and refreshes the agent skills. A skill page you edited is never overwritten: the new text goes to
    `SKILL.new.md` beside it.
-4. **Checks:** every installed `@conloca/*` package has the same version, then runs `doctor`.
+4. **Checks:** every installed `@conloca/*` package is at the version upgrade wrote for it, then runs `doctor`.
 
 The package and migration changes are printed as a diff first; `--dry-run` stops there. The agent skill refresh is not
 previewed: it reads the `@conloca/cloud-astro` the install brings, and only reports which pages it wrote. On any failure

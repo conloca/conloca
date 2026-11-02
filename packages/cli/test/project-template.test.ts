@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PACKAGE_MANAGERS, type PackageManager, packageManagerCommands } from '../src/lib/package-manager.js';
 import {
+  conlocaRange,
   packageNameOf,
   readCliManifest,
   renderPackageJson,
@@ -62,7 +63,7 @@ describe('renderPackageJson', () => {
     }
   });
 
-  test('leaves @conloca/mdx out: astro-cms brings it, and the CLI declares no range that could name it', () => {
+  test('leaves @conloca/mdx out of a created project: astro-cms brings it', () => {
     const rendered = JSON.parse(
       renderPackageJson({
         name: 'my-site',
@@ -96,6 +97,28 @@ describe('renderPackageJson', () => {
     for (const name of pinned) {
       expect({ name, declared: manifest.dependencies?.[name] !== undefined }).toEqual({ name, declared: true });
     }
+  });
+});
+
+describe('conlocaRange', () => {
+  test('pins the siblings a site may list without the CLI installing them, as optional peers', async () => {
+    const manifest = JSON.parse(await Bun.file(join(import.meta.dir, '..', 'package.json')).text());
+    const cli = await readCliManifest();
+    for (const name of ['@conloca/mdx', '@conloca/cms-spa', '@conloca/content-api-client']) {
+      expect({ name, range: manifest.peerDependencies[name], meta: manifest.peerDependenciesMeta[name] }).toEqual({
+        name,
+        range: 'workspace:*',
+        meta: { optional: true },
+      });
+      expect(conlocaRange(cli, name)).toBeDefined();
+    }
+  });
+
+  test('names no version for a package this CLI does not pin, and its own version for itself', () => {
+    const manifest = { version: '0.2.6', dependencies: { '@conloca/astro-cms': '0.2.5' } };
+    expect(conlocaRange(manifest, '@conloca/astro-cms')).toBe('0.2.5');
+    expect(conlocaRange(manifest, '@conloca/mdx')).toBeUndefined();
+    expect(conlocaRange(manifest, '@conloca/cli')).toBe('0.2.6');
   });
 });
 

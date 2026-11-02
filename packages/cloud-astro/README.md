@@ -83,9 +83,9 @@ export default defineConfig({
 
 By hand: on a site without `conlocaCMS`, run `npx @conloca/cli astro setup` first. Then
 `bun add @conloca/astro-cms @conloca/cloud-astro` (plus the React peers), add `conlocaCloud()` right after
-`conlocaCMS(...)`, and follow steps 2 and 3. `@conloca/cloud-astro` needs Astro 7.3.1 or a later 7.x release, and
-`@conloca/astro-cms` at its own version: the `@conloca/*` packages are released together, so keep them on one version
-and update them together.
+`conlocaCMS(...)`, and follow steps 2 and 3. `@conloca/cloud-astro` needs Astro 7.3.1 or a later 7.x release, and a
+matching `@conloca/astro-cms`: each `@conloca/*` package has its own version, so use `conloca upgrade` to move them to
+the versions one CLI release pins.
 
 ### 2. Your site's host in `sites.json`
 
