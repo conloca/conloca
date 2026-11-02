@@ -121,13 +121,24 @@ runs:
     # job by design (act/runner/run_context.go: MustRandName), so a restored
     # cache could never match. The workspace is therefore bind-mounted at a
     # stable path (a symlink would not do: Nix canonicalises) and devenv is
-    # evaluated from there; every later step still runs in the checkout, which
-    # is the same tree. DEVENV_WORKDIR names the path the devenv steps use.
+    # evaluated from there. DEVENV_WORKDIR names the path the devenv steps use.
+    # Later steps start in the checkout, but the shell environment they inherit
+    # names the stable path (PATH, NX_WORKSPACE_ROOT_PATH), so Nx and every task
+    # it runs see the workspace there.
     # The mount target is the instance's own /work, not the shared bind: only
     # the path's spelling must be stable, and a bind onto the idmapped cache
     # dataset failed inside the job (move_mount: ENOENT) where a container-fs
-    # target does not. If the mount is refused the job goes on from the
-    # checkout and pays the evaluation: this is an optimisation, never a gate.
+    # target does not. An instance that already ran a job of this scope still
+    # holds that job's bind at the stable path, onto a checkout the runner has
+    # since deleted, and a bind over it fails with ENOENT too. Binds stack there
+    # when an earlier job's checkout outlived it. On Linux the step detaches
+    # each first, lazily: a process an earlier job left behind may still hold
+    # it. A detach that fails leaves the bind to the kernel's answer below.
+    # If the mount is still refused the job goes on from the checkout: devenv
+    # evaluates again, and every task sees the checkout's path instead of the
+    # stable one. That can change verdicts, not just cost: Biome's scanner skips
+    # every path with a .cache component, and act's default checkout lies under
+    # ~/.cache/act, so lint loaded no nested .gitignore and checked build output.
     - name: 📂 Locate devenv state on the shared bind
       if: steps.runner-kind.outputs.host == 'true'
       shell: bash
@@ -145,12 +156,16 @@ runs:
         ln -s "$root/.devenv" tooling/direnv/.devenv
         ln -s "$root/.direnv" tooling/direnv/.direnv
         stable="/work/$DEVENV_STATE_REPO/${lane:-default}/$DEVENV_STATE_JOB/$scope"
+        while [ "$RUNNER_OS" = Linux ] && mountpoint -q "$stable"; do
+          echo "detaching an earlier job's bind at $stable"
+          sudo umount --lazy "$stable" || break
+        done
         if mkdir -p "$stable" && sudo mount --bind "$GITHUB_WORKSPACE" "$stable"; then
           echo "DEVENV_WORKDIR=$stable" >> "$GITHUB_ENV"
           echo "devenv state: $root (workspace bind-mounted at $stable)"
         else
           echo "DEVENV_WORKDIR=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
-          echo "::warning::stable devenv path unavailable (bind mount refused); evaluating from the checkout"
+          echo "::warning::stable devenv path unavailable (bind mount refused); devenv and every task run from the checkout at $GITHUB_WORKSPACE"
           echo "devenv state: $root (workspace at $GITHUB_WORKSPACE)"
         fi
 

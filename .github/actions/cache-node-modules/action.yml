@@ -8,7 +8,7 @@ runs:
       uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         # Isolated Bun links and their targets are one dependency tree.
-        # ttsc plugin/GOCACHE stay under $TTSC_CACHE_DIR (.cache/ttsc).
+        # ttsc plugins stay under $TTSC_CACHE_DIR (.cache/ttsc-plugins), its Go build cache under .cache/ttsc/go-build.
         # v2 isolates restore-keys from older Darwin caches with a broken TS dual-package hoist.
         path: |
           node_modules

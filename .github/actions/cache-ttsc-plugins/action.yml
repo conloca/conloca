@@ -1,9 +1,10 @@
 name: Cache ttsc plugins
 description: >
-  Restore or save the compiled ttsc native plugin binaries (typia, etc.) under TTSC_CACHE_DIR/plugins. ttsc names every
-  entry by a hash of what it was compiled from and skips the multi-minute `go build` when one matches. Setup restores
-  them, and save-nix-devenv saves the entries the job used when the job ends, red or green. The Go object cache
-  (go-build/) is NOT cached: it is multi-GB and only helps when the plugin key misses.
+  Restore or save the compiled ttsc native plugin binaries (typia, etc.) under TTSC_CACHE_DIR/plugins
+  (.cache/ttsc-plugins/plugins). ttsc names every entry by a hash of what it was compiled from and skips the
+  multi-minute `go build` when one matches. Setup restores them, and save-nix-devenv saves the entries the job used when
+  the job ends, red or green. The Go object cache (.cache/ttsc/go-build, outside the plugin root) is NOT cached: it is
+  multi-GB and only helps when the plugin key misses.
 
 inputs:
   mode:
@@ -22,8 +23,8 @@ runs:
       if: inputs.mode == 'restore'
       shell: bash
       run: |
-        mkdir -p .cache/ttsc
-        grep -E '^ +"(@ttsc/[^"]+|ttsc(/[^"]+)?)": |"ttsc": "' bun.lock > .cache/ttsc/plugin-lock-entries
+        mkdir -p .cache/ttsc-plugins
+        grep -E '^ +"(@ttsc/[^"]+|ttsc(/[^"]+)?)": |"ttsc": "' bun.lock > .cache/ttsc-plugins/plugin-lock-entries
 
     # A prefix hit is safe. ttsc names every entry by a hash of what it was compiled from (the ttsc and tsgo versions,
     # platform and architecture, the Go toolchain and its build environment, the plugin sources) and runs an entry only
@@ -35,10 +36,10 @@ runs:
       uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         # Only the compiled plugin binaries (~30MB each). Path is relative to the
-        # workspace; devenv sets TTSC_CACHE_DIR to <repo>/.cache/ttsc.
-        path: .cache/ttsc/plugins
+        # workspace; devenv sets TTSC_CACHE_DIR to <repo>/.cache/ttsc-plugins.
+        path: .cache/ttsc-plugins/plugins
         # prettier-ignore
-        key: ${{ runner.os }}-${{ runner.arch }}-ttsc-plugins-v1-${{ hashFiles('.cache/ttsc/plugin-lock-entries', 'patches/ttsc@*.patch', 'tooling/direnv/devenv.lock', 'tooling/direnv/devenv.smoo.nix') }}
+        key: ${{ runner.os }}-${{ runner.arch }}-ttsc-plugins-v1-${{ hashFiles('.cache/ttsc-plugins/plugin-lock-entries', 'patches/ttsc@*.patch', 'tooling/direnv/devenv.lock', 'tooling/direnv/devenv.smoo.nix') }}
         restore-keys: |
           ${{ runner.os }}-${{ runner.arch }}-ttsc-plugins-v1-
 
@@ -73,7 +74,7 @@ runs:
         shopt -s nullglob
         : "${SMOO_TTSC_PLUGINS_RESTORED_AT_MS:?the restore of this action records when the job restored the cache}"
         kept=0
-        for entry in "$GITHUB_WORKSPACE"/.cache/ttsc/plugins/*/; do
+        for entry in "$GITHUB_WORKSPACE"/.cache/ttsc-plugins/plugins/*/; do
           entry="${entry%/}"
           case "$entry" in *.lock | *.lock.*) continue ;; esac
           used=0
@@ -92,5 +93,5 @@ runs:
       if: inputs.mode == 'save' && steps.prune.outputs.kept > 0
       uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
-        path: .cache/ttsc/plugins
+        path: .cache/ttsc-plugins/plugins
         key: ${{ env.SMOO_TTSC_PLUGINS_SAVE_KEY }}

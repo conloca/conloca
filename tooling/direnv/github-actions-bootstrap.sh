@@ -11,11 +11,7 @@ repo_root="$(cd "$script_dir/../.." && pwd)"
 # A separate name on purpose: assigning to TTSC_CACHE_DIR itself would mutate
 # the (possibly exported) environment that persist_devenv_environment later
 # fingerprints as the pre-shell baseline.
-ttsc_cache_dir_default="${TTSC_CACHE_DIR:-$repo_root/.cache/ttsc}"
-
-add_repo_paths() {
-  "$repo_root/tooling/direnv/repo-path" --github-path
-}
+ttsc_cache_dir_default="${TTSC_CACHE_DIR:-$repo_root/.cache/ttsc-plugins}"
 
 # The CLI that evaluates the shell must be the commit whose modules the shell is
 # locked to, so this installs the commit devenv.lock's `devenv` node names and
@@ -171,9 +167,6 @@ build_devenv_shell() {
   if [ "${SMOO_ROOT_BUILD_INPUTS:-false}" = true ]; then
     root_build_inputs "$since"
   fi
-  # Add repo-local tools only after the shell exists; cleanup steps use an
-  # explicit PATH because failures before this point must still refresh caches.
-  add_repo_paths
 }
 
 # The store cache's post phase collects garbage down to the live roots before
@@ -218,6 +211,8 @@ root_build_inputs() {
 persist_devenv_environment() {
   [ -n "${GITHUB_ENV:-}" ] || return 0
   local name entry value captured bkey persisted=""
+  local i
+  local -a path_entries
   # Baseline: this step's own exported variables, before shell influence.
   # Stored as smoo_baseline_<name> pseudo-map entries (printf -v), not a
   # bash-4 associative array — macOS runners still ship bash 3.2. compgen -e
@@ -238,8 +233,23 @@ persist_devenv_environment() {
     name="${entry%%=*}"
     value="${entry#*=}"
     case "$name" in
-      # The runner step owns these; PATH persistence is add_repo_paths' job.
-      PATH | PWD | OLDPWD | SHLVL | SHELL | HOME | USER | LOGNAME | HOSTNAME | TERM | TMPDIR | TMP | TEMP | _ | PS1) continue ;;
+      PATH)
+        # The profile alone is not the shell: mbx removes its Cargo shim's
+        # directory, which also holds the profile's linker. Keep the individual
+        # package bins the shell already selected, not a second tool list.
+        path_entries=()
+        while [[ "$value" == *:* ]]; do
+          path_entries+=("${value%%:*}")
+          value="${value#*:}"
+        done
+        path_entries+=("$value")
+        # GITHUB_PATH prepends; reverse to retain the shell's search order.
+        for (( i=${#path_entries[@]}-1; i>=0; i-- )); do
+          printf '%s\n' "${path_entries[i]}"
+        done >> "$GITHUB_PATH"
+        continue ;;
+      # The runner step owns these.
+      PWD | OLDPWD | SHLVL | SHELL | HOME | USER | LOGNAME | HOSTNAME | TERM | TMPDIR | TMP | TEMP | _ | PS1) continue ;;
       GITHUB_* | RUNNER_* | ACTIONS_* | CI) continue ;;
       # Shell-session bookkeeping, meaningful only inside the shell itself.
       DIRENV_* | DEVENV_* | NIX_* | BASH* | XDG_* | IN_NIX_SHELL | SMOO_ENV_CAPTURE_OUT) continue ;;

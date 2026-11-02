@@ -212,6 +212,9 @@ const POST_COMMIT_BLOCK = [
 // points the packages `smoo.developerLinks` declares at their local checkouts.
 // devenv's smoo:developer-links task uses `--links --check` as its status:
 // links can change without any smoo:install input changing.
+// `--links --refusal` is the question the managed enterShell prologue asks once the tasks have run (devenv.smoo.nix):
+// silent and exit 0 unless the planner refuses the declared links now, then its reason and exit 1. It reads the
+// providers' state at that entry, and nothing is kept for the next.
 // Declared above the bootstrap block for the same hoisting reason as above.
 const { values: flags } = parseArgs({
   options: {
@@ -219,15 +222,11 @@ const { values: flags } = parseArgs({
     cargo: { type: 'boolean' },
     links: { type: 'boolean' },
     check: { type: 'boolean' },
+    refusal: { type: 'boolean' },
     'repair-missing-payload': { type: 'string' },
   },
 });
 const cargoMode = flags.cargo === true;
-// What a `--links` exec that refused leaves for the enterShell prologue (devenv.smoo.nix), which then fails shell entry
-// with its reason: a shell must not run on links the declaration does not describe (a live checkout whose build is
-// stale with no sealed snapshot to serve, a declaration smoo refuses), and the repair is in the provider checkout, not
-// in this shell. Every `--links` run that finds the links current, or makes them so, removes it.
-const linksRefusal = path.join(projectRoot, 'node_modules', '.smoo-links-refused');
 
 // The Nx plugin's test for a Cargo workspace root manifest (CARGO_WORKSPACE_PATTERN), which
 // cargoWorkspaces applies during the bootstrap block; declared above it for the same reason.
@@ -237,6 +236,11 @@ const CARGO_WORKSPACE = /^\s*\[workspace\]/m;
 process.chdir(projectRoot);
 
 try {
+  if (flags.refusal === true && (flags.links !== true || flags.check === true)) {
+    reportSetupFailure(
+      new Error("--refusal is shell entry's question about the declared links: it takes --links and no --check"),
+    );
+  }
   const requestedPayload = flags['repair-missing-payload'];
   if (requestedPayload !== undefined) {
     if (flags.links === true || flags.check === true || cargoMode || flags.python !== undefined) {
@@ -251,6 +255,11 @@ try {
     if (process.env.GITHUB_ACTIONS === 'true') {
       process.exit(0);
     }
+    if (flags.refusal === true) {
+      // Asked once the tasks have run, so a refusal here is one they could not repair; it reaches the catch below.
+      await planDeclaredLinks(projectRoot);
+      process.exit(0);
+    }
     if (flags.check === true) {
       const plan = await planDeclaredLinks(projectRoot);
       // A refused or unclaimed snapshot is current only when said: the exec that follows names its cause.
@@ -258,12 +267,13 @@ try {
         plan.changes.length === 0 && plan.unavailable.every((unavailable) => unavailable.kind === 'absent');
       // A stale pin is informational, not a stale install: say it even when devenv skips the exec.
       if (current && plan.reports.length > 0) applyDeclaredLinks(projectRoot, plan);
-      const linked =
+      process.exit(
         current &&
-        !hasStaleDeveloperLinks(projectRoot, ['nx']) &&
-        danglingStoreLinks(projectRoot, () => workspaceMemberModules(projectRoot)).length === 0;
-      if (linked) rmSync(linksRefusal, { force: true });
-      process.exit(linked ? 0 : 1);
+          !hasStaleDeveloperLinks(projectRoot, ['nx']) &&
+          danglingStoreLinks(projectRoot, () => workspaceMemberModules(projectRoot)).length === 0
+          ? 0
+          : 1,
+      );
     }
     // Planning reads, apart from a snapshot it may capture, which seals by an atomic rename (linked-snapshots.ts),
     // and applying a plan with no changes only says what this machine cannot honour. So an entry with nothing to
@@ -276,7 +286,6 @@ try {
       !hasStaleDeveloperLinks(projectRoot, ['nx'])
     ) {
       applyDeclaredLinks(projectRoot, plan);
-      rmSync(linksRefusal, { force: true });
       process.exit(0);
     }
     await withInstallLock(async () => {
@@ -295,7 +304,6 @@ try {
       }
       applyDeclaredLinks(projectRoot, await planDeclaredLinks(projectRoot));
     });
-    rmSync(linksRefusal, { force: true });
     process.exit(0);
   }
   // Bootstrap only: install deps + wire local git hooks/config.
@@ -303,10 +311,14 @@ try {
   // and package resolution/Typia transforms are not available yet.
   const bunInputs = bunInstallInputs();
   const cargoFetches = cargoMode ? cargoWorkspaces(bunInputs).map(cargoFetcher) : [];
-  if (flags.check === true) {
+  if (flags.check === true && cargoMode) {
     process.exit(cargoFetches.every((fetch) => fetch.isCurrent()) ? 0 : 1);
   }
   const uvInputs = cargoMode ? [] : uvSyncInputs();
+  if (flags.check === true) {
+    const uv = uvInstaller(uvInputs, { locked: process.env.GITHUB_ACTIONS === 'true' });
+    process.exit(bunInstaller(bunInputs).isCurrent() && (uv === null || uv.isCurrent()) ? 0 : 1);
+  }
   // A CI runner is GitHub Actions or Forgejo Actions, which mirrors every FORGEJO_*
   // variable as GITHUB_*. Not `CI`: agent harnesses set CI=true on every command
   // they run, and this branch installs unconditionally.
@@ -416,10 +428,11 @@ try {
     }
   }
 } catch (error) {
-  // Thrown out of a `--links` exec, an error is the links refused (an install failure reports itself and exits).
-  if (flags.links === true && flags.check !== true) {
-    mkdirSync(path.dirname(linksRefusal), { recursive: true });
-    writeFileSync(linksRefusal, `${error instanceof Error ? error.message : String(error)}\n`);
+  // Thrown out of the refusal question, an error is the planner refusing the declared links.
+  if (flags.refusal === true) {
+    console.error(
+      "smoo:developer-links refuses this checkout's declared links; shell entry fails while the planner refuses them:",
+    );
   }
   reportSetupFailure(error);
 }
@@ -1007,9 +1020,11 @@ function bunInstaller(inputs: readonly string[]): Installer {
  * decides, because an outer shell's UV_PROJECT_ENVIRONMENT leaks into a
  * checkout that syncs nothing.
  *
- * Every package of the workspace and every dependency group is installed,
- * which is what `bun install` does for the JavaScript half: a development
- * shell carries the whole workspace. CI adds `--locked`, the counterpart of
+ * Every package of the workspace, every dependency group and every optional
+ * extra is installed, which is what `bun install` does for the JavaScript
+ * half: a development shell carries the whole workspace. Readers run under
+ * UV_NO_SYNC, so a target's `uv run --extra <name>` finds the extra only
+ * because this sync installed it. CI adds `--locked`, the counterpart of
  * `--frozen-lockfile`.
  *
  * Like node_modules, the environment is location-independent, so a copy of
@@ -1047,7 +1062,15 @@ function uvInstaller(inputs: readonly string[], options: { locked: boolean }): I
     );
   }
   const stampPath = path.join(environment, '.smoo-sync');
-  const argv = ['sync', '--python', python, '--all-packages', '--all-groups', ...(options.locked ? ['--locked'] : [])];
+  const argv = [
+    'sync',
+    '--python',
+    python,
+    '--all-packages',
+    '--all-groups',
+    '--all-extras',
+    ...(options.locked ? ['--locked'] : []),
+  ];
   const create = ['venv', '--relocatable', '--python', python, environment];
   const uv = Bun.which('uv');
   const identity = [
@@ -1063,9 +1086,11 @@ function uvInstaller(inputs: readonly string[], options: { locked: boolean }): I
       return stampOk && witnessOk;
     },
     install: async ({ quiet }) => {
-      // An inherited VIRTUAL_ENV names some other environment; uv would warn
-      // that it does not match the project environment and ignore it.
-      const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => name !== 'VIRTUAL_ENV'));
+      // The managed installer is the only environment writer. An inherited VIRTUAL_ENV names another checkout;
+      // UV_NO_SYNC belongs to reader commands, not to this deliberate sync.
+      const env = Object.fromEntries(
+        Object.entries(process.env).filter(([name]) => name !== 'VIRTUAL_ENV' && name !== 'UV_NO_SYNC'),
+      );
       // Replacement is gated on the same witness currentness uses, not only on the config
       // line: a valid config beside an absolute launcher or .pth would otherwise sync over
       // the escape and stamp it. uv venv refuses a directory that already holds an

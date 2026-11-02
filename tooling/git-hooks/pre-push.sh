@@ -11,8 +11,8 @@
 # 2. The macOS-only Linux cross-compile gate. It asks Nx for cargo-lint-cross,
 # whose hit means a real `cargo-zigbuild clippy --target x86_64-unknown-linux-gnu`
 # already passed for exactly this tree, so the push is safe with no toolchain
-# present. From a plain shell the cross target itself never compiles here: on
-# a miss its guard refuses. Its dependencies are ordinary Nx tasks whose outputs
+# present. The probe asks the cross target to replay and never to compile: on a
+# miss its guard refuses. Its dependencies are ordinary Nx tasks whose outputs
 # the cross key reads, so Nx restores them from the cache or, for a tree no gate
 # ran, builds them. A refusal names the one command that fixes it; any other
 # failure is said as that, never as a cache miss.
@@ -27,26 +27,26 @@
 # SDK. Under the checkout's environment the keys are the gate's, and a dependency
 # that does miss builds the way the gate builds it.
 #
-# Why the cross target never compiles here. The cross-clippy needs zig and
-# cargo-zigbuild, which a macOS host carries only in the linux-cross devenv
-# profile, not in the default shell `direnv exec` enters. A hook that entered
-# that profile spent minutes compiling on a push the user expected to take a
-# second. Pushing is not the place to discover that the tree has not been
-# compiled for Linux: the land gate, or `bun run check:linux`, is.
+# Why the cross target never compiles here. Every checkout shell carries zig,
+# cargo-zigbuild and the Linux rust-std the cross clippy needs, so a miss would
+# compile, and a push the user expected to take a second would spend minutes
+# in clippy. Pushing is not the place to discover that the tree has not been
+# compiled for Linux: the land gate, whose Nx graph holds cargo-lint-cross, or
+# `bun run check:linux`, is.
 #
-# The target's own guard refuses to start when cargo-zigbuild is not on PATH,
-# which is what turns a miss into a refusal here. A push made from a shell that
-# already carries cargo-zigbuild — an entered linux-cross shell — passes that
-# guard, so there a miss runs the check itself: the same clippy `check:linux`
-# runs, in the toolchain the user entered for it.
+# SMOO_CROSS_LINT_REPLAY_ONLY=1 makes the target's own guard refuse before it
+# starts cargo-zigbuild, which is what turns a miss into a refusal here. Nx
+# hashes no environment a target does not declare, so the variable leaves the
+# probe's key the gate's, and a hit replays as before.
 #
 # The denylist gate needs only tooling/direnv/repo-path's PATH; the cross gate
 # needs direnv on the caller's PATH, and the checkout's own devenv through it,
-# not a devenv the caller entered. It must never pretend a check ran that did not.
+# not a devenv the caller entered. It must never pretend a check ran that did
+# not.
 
 cd "$(git rev-parse --show-toplevel)"
 TOOLING="$PWD/tooling"
-# A push to the `backup` remote is a private mirror, not publication: both
+# A push to the `backup` remote is a private mirror, not publication: the
 # gates below guard publication only, so they do not apply.
 if [ "${1:-}" = backup ]; then exit 0; fi
 
@@ -76,50 +76,52 @@ if [ "${#pushed[@]}" -gt 0 ]; then
   }
 fi
 
-case "$(uname -s)" in
-  Darwin) ;;
-  *) exit 0 ;;
-esac
+cross_gate() {
+  # The refusal uses shell builtins alone: without direnv nothing proves the
+  # caller's PATH carries coreutils, and a Nix-built host's /usr/bin and /bin
+  # hold none of them.
+  if ! command -v direnv >/dev/null; then
+    printf '%s\n' \
+      'pre-push: direnv is not on PATH, so the Linux cross-compile check cannot run in' \
+      "this checkout's environment, and a check run in any other environment keys on" \
+      'values the land gate never used. Put direnv on PATH, then push again.' >&2
+    return 1
+  fi
 
-# The refusal uses shell builtins alone: without direnv nothing proves the
-# caller's PATH carries coreutils, and a Nix-built host's /usr/bin and /bin
-# hold none of them.
-if ! command -v direnv >/dev/null; then
-  printf '%s\n' \
-    'pre-push: direnv is not on PATH, so the Linux cross-compile check cannot run in' \
-    "this checkout's environment, and a check run in any other environment keys on" \
-    'values the land gate never used. Put direnv on PATH, then push again.' >&2
-  exit 1
-fi
+  # The guard's refusal (nx-plugin cross-check-policy.ts CARGO_CROSS_LINT_REFUSAL,
+  # under CARGO_CROSS_LINT_REPLAY_ONLY_ENV) is the one line that means the key
+  # missed. Nx exits 1 for every task failure, so the hook reads the output for it
+  # rather than guessing from the status.
+  output=$(mktemp "${TMPDIR:-/tmp}/pre-push-cross.XXXXXX") || return 1
+  trap 'rm -f "$output"' EXIT
+  set -o pipefail
+  SMOO_CROSS_LINT_REPLAY_ONLY=1 direnv exec "$PWD" nx run-many -t cargo-lint-cross --output-style=static 2>&1 | tee "$output"
+  status=$?
+  [ "$status" -eq 0 ] && return 0
 
-# The guard's refusal (nx-plugin cross-check-policy.ts CARGO_CROSS_LINT_REFUSAL)
-# is the one line that means the key missed. Nx exits 1 for every task failure,
-# so the hook reads the output for it rather than guessing from the status.
-output=$(mktemp "${TMPDIR:-/tmp}/pre-push-cross.XXXXXX") || exit 1
-trap 'rm -f "$output"' EXIT
-set -o pipefail
-direnv exec "$PWD" nx run-many -t cargo-lint-cross --output-style=static 2>&1 | tee "$output"
-status=$?
-[ "$status" -eq 0 ] && exit 0
-
-if grep -qF 'cargo-lint-cross needs cargo-zigbuild from the linux-cross toolchain; run: bun run check:linux' "$output"; then
-  cat >&2 <<'EOF'
+  if grep -qF 'cargo-lint-cross is not cached for this tree; run: bun run check:linux' "$output"; then
+    cat >&2 <<'EOF'
 
 pre-push: the Linux cross-compile check is NOT cached for this tree, so this
-push would ship code that has never been compiled for Linux. The "needs
-cargo-zigbuild" line above is the cross target refusing to compile here, not a
-broken toolchain.
+push would ship code that has never been compiled for Linux. The "not cached"
+line above is the cross target refusing to compile here, as the probe asked,
+not a broken toolchain.
 
   Run:  bun run check:linux
   Wait for it to pass, then push again.
 EOF
-else
-  cat >&2 <<EOF
+  else
+    cat >&2 <<EOF
 
 pre-push: the Linux cross-compile check failed (exit $status) before it reached
 a cache verdict, in Nx or in direnv entering this checkout's environment; the
 output above names why. This is not a cache miss, and bun run check:linux will
 not fix it.
 EOF
-fi
-exit 1
+  fi
+  return 1
+}
+
+case "$(uname -s)" in
+  Darwin) cross_gate || exit 1 ;;
+esac

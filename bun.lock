@@ -393,7 +393,7 @@
       "name": "@conloca/tooling",
       "version": "0.0.1",
       "dependencies": {
-        "@smoothbricks/cli": "^0.13.3",
+        "@smoothbricks/cli": "^0.13.8",
       },
     },
   },
@@ -1714,7 +1714,7 @@
 
     "@smoothbricks/cargo-retain": ["@smoothbricks/cargo-retain@0.0.2", "", { "dependencies": { "tslib": "^2.8.1", "typia": "15.2.1" }, "bin": { "smoo-nx-cargo-retain": "dist/ts/node-cli.js" } }, "sha512-yPhqmo6wEIop4Sn7PrIK7W9C9GADcuLo2YFfZOc4Y5S0FDPFPQRME8Nc5tMiQ+qfb1UENI9hOnl+mZRUK/+wog=="],
 
-    "@smoothbricks/cli": ["@smoothbricks/cli@0.13.3", "", { "dependencies": { "@arethetypeswrong/core": "^0.18.2", "@smoothbricks/build-inputs": "0.0.2", "@smoothbricks/failure-summary": "0.0.1", "@smoothbricks/nextest-extract": "0.0.2", "@smoothbricks/nx-plugin": "0.7.3", "@smoothbricks/validation": "0.1.13", "commander": "^14.0.3", "nx": "latest", "prettier": "^3.9.8", "publint": "^0.3.18", "semver": "^7.7.4", "sherif": "^1.11.1", "toml-eslint-parser": "^1.0.3", "tslib": "^2.8.1", "typia": "15.2.1" }, "bin": { "smoo": "bin/smoo" } }, "sha512-i0oZPP4/VIY5x4VEjtnJVoHJe/dBAW2z1Et1Yxvm205+ZQ5EOuigtkVKuJsRqRVFB3bYFgQ3Wrl7uUf61JpBWw=="],
+    "@smoothbricks/cli": ["@smoothbricks/cli@0.13.8", "", { "dependencies": { "@arethetypeswrong/core": "^0.18.2", "@smoothbricks/build-inputs": "0.0.2", "@smoothbricks/failure-summary": "0.0.1", "@smoothbricks/nextest-extract": "0.0.2", "@smoothbricks/nx-plugin": "0.7.7", "@smoothbricks/validation": "0.1.13", "commander": "^14.0.3", "nx": "latest", "prettier": "^3.9.8", "publint": "^0.3.18", "semver": "^7.7.4", "sherif": "^1.11.1", "toml-eslint-parser": "^1.0.3", "tslib": "^2.8.1", "typia": "15.2.1" }, "bin": { "smoo": "bin/smoo" } }, "sha512-aDbDXz9B77jI7BIVFkEfM9LXXSCW+BREjL3sY9DkS46KIygHudK4S9408LC1bOWZogjVH5GB9s2+q0ZJCsgd1g=="],
 
     "@smoothbricks/cowshed": ["@smoothbricks/cowshed@0.4.4", "", { "dependencies": { "@smoothbricks/nx-cache-server": "0.1.4", "typia": "15.2.1" }, "bin": { "cowshed": "bin/cowshed" } }, "sha512-nV8px4J0uKoI6kNow8Iopdux3It7sadmh6n9n0QxG6DG4bv6WdZ8M3dRd/ebEXHkNWQDE2h/oZk+ZIKKRCQO8w=="],
 
@@ -4486,6 +4486,8 @@
 
     "@rollup/pluginutils/picomatch": ["picomatch@4.0.7", "", {}, "sha512-qcJu88Q2IWqJsDD529JKMdwGm/dvInW4HvQnRwiH9JtihJvzGOscDtHE3x1pBKeUOTysQ8kVmLnJ2kJu7yhcGA=="],
 
+    "@smoothbricks/cli/@smoothbricks/nx-plugin": ["@smoothbricks/nx-plugin@0.7.7", "", { "dependencies": { "@nx/js": "24.0.3", "@smoothbricks/build-inputs": "0.0.2", "@smoothbricks/cargo-retain": "0.0.2", "@smoothbricks/cowshed": "0.4.5", "@smoothbricks/nextest-extract": "0.0.2", "jsonc-parser": "^3.3.1", "minimatch": "10.2.5", "nx": "latest", "prettier": "^3.9.8", "smol-toml": "^1.6.1", "tslib": "^2.8.1", "typescript": "^6.0.3", "typia": "15.2.1", "yaml": "^2.9.0" }, "bin": { "smoo-nx-exec": "dist/bin/smoo-nx-exec.js", "smoo-nx-publish": "dist/bin/smoo-nx-publish.js", "smoo-nx-cargo-hash": "dist/bin/smoo-nx-cargo-hash.js", "smoo-nx-test-walks": "dist/bin/smoo-nx-test-walks.js", "smoo-nx-go-test-run": "dist/bin/smoo-nx-go-test-run.js", "smoo-nx-test-clocks": "dist/bin/smoo-nx-test-clocks.js", "smoo-nx-go-test-build": "dist/bin/smoo-nx-go-test-build.js", "smoo-nx-bound-failures": "dist/bin/smoo-nx-bound-failures.js", "smoo-nx-cargo-toolchain": "dist/bin/smoo-nx-cargo-toolchain.js", "smoo-nx-nextest-timings": "dist/bin/smoo-nx-nextest-timings.js", "smoo-nx-forbidden-spellings": "dist/bin/smoo-nx-forbidden-spellings.js" } }, "sha512-tQ5gCqHrIwF7SiSQc0pmETssU9VAs+yR3eicg3p8rPmk5H3wPcUOPvYAXvJ3I80L7axOSRTENTwqtnYXpy2adQ=="],
+
     "@smoothbricks/cli/commander": ["commander@14.0.3", "", {}, "sha512-H+y0Jo/T1RZ9qPP4Eh1pkcQcLRglraJaSLoyOtHxu6AapkjWVCy2Sit1QQ4x3Dng8qDlSsZEet7g5Pq06MvTgw=="],
 
     "@smoothbricks/cli/typia": ["typia@15.2.1", "", { "dependencies": { "@typia/interface": "^15.2.1", "@typia/utils": "^15.2.1", "randexp": "^0.5.3" }, "peerDependencies": { "ttsc": ">=0.34.1" }, "optionalPeers": ["ttsc"] }, "sha512-xZteA3gioMuUl4tQpvoyY7VqcnBz4rvkrCE7OIsm+97LcgLPnxw7xSyo+LyK9fGac0eZc37YfQjegK4TQn46Gg=="],
@@ -5160,6 +5162,8 @@
 
     "@oxc-resolver/binding-wasm32-wasi/@napi-rs/wasm-runtime/@tybys/wasm-util": ["@tybys/wasm-util@0.10.4", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-W3c4gRigFS0T/Ma4qIYF3GDAc5AQdHb1yL5znJT1Zv1YaD9Kitx656wBjvr19qbiosmZT8lWDM5BEMynUqX65A=="],
 
+    "@smoothbricks/cli/@smoothbricks/nx-plugin/@smoothbricks/cowshed": ["@smoothbricks/cowshed@0.4.5", "", { "dependencies": { "@smoothbricks/nx-cache-server": "0.1.4", "typia": "15.2.1" }, "bin": { "cowshed": "bin/cowshed" } }, "sha512-re1HfaS5trWBVvXJwWZejs6ouv1ogVcGjbUhdnh00/dpyTFx5NjRulpHyly/VOAPR4XiI3d+jEfypkdj32HRJQ=="],
+
     "@smoothbricks/cli/typia/@typia/interface": ["@typia/interface@15.2.1", "", {}, "sha512-55ltbJ/AglRV5YPkT1CUOstmhfRZF2HTWkA8O/zJydHywhYwHBEKwzIFZLjboNVSwQklW83PNQQr/+pKRUNgwA=="],
 
     "@smoothbricks/cli/typia/@typia/utils": ["@typia/utils@15.2.1", "", { "dependencies": { "@typia/interface": "^15.2.1" } }, "sha512-vpt7qcHrjyIHi7tH2y1RHmhHfDoQF2Rz4tHcsp4yumk5tjaXIppUEdK1lqgr79e79IAQxU1AVs8gCgd6/LUAmg=="],
@@ -5721,6 +5725,8 @@
     "@nx/react/@babel/preset-react/@babel/plugin-transform-react-jsx/@babel/types": ["@babel/types@7.29.8", "", { "dependencies": { "@babel/helper-string-parser": "^7.29.7", "@babel/helper-validator-identifier": "^7.29.7" } }, "sha512-Vj1jF3cPfxg7OAfoI7QnVKLoILlm2JF9pnVHrX8qx7AHMiYWT+NDAA7jChlNgRS4WTLc/fD1lXLmPixluj+3Gg=="],
 
     "@nx/react/@babel/preset-react/@babel/plugin-transform-react-pure-annotations/@babel/helper-annotate-as-pure": ["@babel/helper-annotate-as-pure@7.29.7", "", { "dependencies": { "@babel/types": "^7.29.7" } }, "sha512-OoK6239jHPuSQOoS0kfTVKn0b/rVTk0seKq4Gd2UMLtmOVLjDC0ki3e+c90Trqv2gMfvJFqkiljrr568+qddiw=="],
+
+    "@smoothbricks/cli/@smoothbricks/nx-plugin/@smoothbricks/cowshed/typia": ["typia@14.0.6", "", { "dependencies": { "@typia/interface": "^14.0.6", "@typia/utils": "^14.0.6", "randexp": "^0.5.3" }, "peerDependencies": { "ttsc": ">=0.19.2" }, "optionalPeers": ["ttsc"] }, "sha512-dWtC9sMgmlR26yms6BAHWO0/P4Vzfw/cs1Mg+ZRYFlGub1CXRnF343EVgoZcxQdzoaPh50nTOtgd2Oaym73pIg=="],
 
     "@stryker-mutator/instrumenter/@babel/plugin-proposal-decorators/@babel/helper-create-class-features-plugin/@babel/helper-member-expression-to-functions": ["@babel/helper-member-expression-to-functions@8.0.5", "", { "dependencies": { "@babel/traverse": "^8.0.5", "@babel/types": "^8.0.5" } }, "sha512-GLe05QD98BkNFTkjaqeqF9QSRoHLKrrB4tpoplyQuuPrQJ72rtmkM4wvqJLX/sjZPqkbK5MUYSsuUTqdJoOVjA=="],
 

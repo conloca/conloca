@@ -281,12 +281,13 @@ function referencedStoreEntries(
 
 /**
  * The store links the installed tree reaches whose target in Bun's install cache is gone. Under
- * `globalStore` each node_modules/.bun/<entry> is a link into that cache, and one that dangles
- * names a cache entry that no longer exists: the install is out of date, as it is while a
- * developer link dangles, and `bun install` links the entry again (measured, Bun 1.4.3). A
- * dangling variant nothing live reaches is superseded garbage the install leaves in place (see
- * verifyInstalledBunLinks), so it never makes the install stale: no install would change it.
- * The closure is walked only when some store link dangles, so `members` is asked for only then.
+ * `globalStore` a node_modules/.bun/<entry> is a link into that cache or a directory of its own (Bun keeps
+ * some packages in the project, most of them peer variants `<name>@<version>+<hash>`), and only a link can
+ * dangle: one that does names a cache entry that no longer exists, the install is out of date, as it is
+ * while a developer link dangles, and `bun install` links the entry again (measured, Bun 1.4.3 and 1.4.4).
+ * A dangling variant nothing live reaches is superseded garbage the install leaves in place (see
+ * verifyInstalledBunLinks), so it never makes the install stale: no install would change it. The closure
+ * is walked only when some store link dangles, so `members` is asked for only then.
  */
 export function danglingStoreLinks(root: string, members: () => readonly string[]): string[] {
   const store = path.join(root, 'node_modules', '.bun');
