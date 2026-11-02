@@ -7,6 +7,7 @@ import { SectionCard } from './cards/SectionCard.js';
 import { RecentActivity } from './dashboard/RecentActivity.js';
 import { CreatePageFlow } from './dialogs/CreatePageFlow.js';
 import { NoPagesYet } from './pages/NoPagesYet.js';
+import { Button } from './ui/index.js';
 
 const DASHBOARD_SITE = 'default';
 
@@ -37,14 +38,10 @@ export function CMSDashboard() {
           <p className="text-grey-04 dark:text-grey-07 mt-1">Overview of your content and recent activity.</p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setShowCreateDialog(true)}
-            className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium whitespace-nowrap bg-grey-01 text-grey-12 hover:bg-azure-04 hover:text-white dark:bg-grey-12 dark:text-grey-01 dark:hover:bg-azure-06 dark:hover:text-white transition-colors"
-          >
+          <Button onClick={() => setShowCreateDialog(true)} className="gap-2 text-sm font-medium whitespace-nowrap">
             <Plus className="h-4 w-4" />
             New Page
-          </button>
+          </Button>
           <Link
             to="/media"
             className="flex items-center gap-2 px-3 py-2 border border-grey-09 dark:border-grey-03 rounded-md text-sm font-medium whitespace-nowrap text-grey-01 dark:text-grey-12 hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"

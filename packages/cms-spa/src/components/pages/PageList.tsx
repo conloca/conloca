@@ -276,15 +276,10 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
               Make an existing page editable
             </Button>
           )}
-          <button
-            type="button"
-            onClick={handleNewPage}
-            className="px-4 py-2 rounded-md bg-grey-01 text-grey-12 hover:bg-azure-04 hover:text-white dark:bg-grey-12 dark:text-grey-01 dark:hover:bg-azure-06 dark:hover:text-white transition-colors flex items-center gap-2 whitespace-nowrap"
-            data-testid="new-page-button"
-          >
+          <Button onClick={handleNewPage} className="gap-2 whitespace-nowrap" data-testid="new-page-button">
             <Plus className="h-4 w-4" />
             New Page
-          </button>
+          </Button>
         </div>
       </div>
 

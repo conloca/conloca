@@ -27,7 +27,7 @@ import { DataPropertiesDialog } from '../dialogs/DataPropertiesDialog.js';
 import { DeleteConfirmDialog } from '../dialogs/DeleteConfirmDialog.js';
 import { ErrorModal } from '../dialogs/ErrorModal.js';
 import { DataEditor } from '../editors/DataEditor.js';
-import { Select } from '../ui/index.js';
+import { Button, Select } from '../ui/index.js';
 
 /**
  * Generates a VSCode URI to open the schemas file.
@@ -380,16 +380,15 @@ export function DataList({ dataSchemas }: DataListProps) {
               ))}
             </Select>
           )}
-          <button
-            type="button"
+          <Button
             onClick={() => openCreateDialog({})}
             disabled={collections.length === 0}
-            className="px-4 py-2 rounded-md bg-grey-01 text-grey-12 hover:bg-azure-04 hover:text-white dark:bg-grey-12 dark:text-grey-01 dark:hover:bg-azure-06 dark:hover:text-white transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="gap-2"
             data-testid="new-data-button"
           >
             <Plus className="h-4 w-4" />
             New Entry
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -405,15 +404,7 @@ export function DataList({ dataSchemas }: DataListProps) {
               ? 'Create a data collection folder first (e.g., content/data/authors/)'
               : 'Create data entries to store structured content'}
           </p>
-          {collections.length > 0 && (
-            <button
-              type="button"
-              onClick={() => openCreateDialog({})}
-              className="px-4 py-2 rounded-md bg-grey-01 text-grey-12 hover:bg-azure-04 hover:text-white dark:bg-grey-12 dark:text-grey-01 dark:hover:bg-azure-06 dark:hover:text-white transition-colors"
-            >
-              Create Entry
-            </button>
-          )}
+          {collections.length > 0 && <Button onClick={() => openCreateDialog({})}>Create Entry</Button>}
         </div>
       ) : filteredEntries.length === 0 ? (
         <div className="flex items-center justify-center min-h-[40vh] text-center">
