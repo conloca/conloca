@@ -21,6 +21,8 @@ export {
   notifyEditorDirtyChanged,
   registerEditorFlushHandler,
 } from './editor-flush.js';
+// Refreshes the editor's caches after a host Save, here or in a framed editor page
+export { invalidateEditorQueries, registerEditorQueriesForwarder, type StaleEditorQueries } from './editor-queries.js';
 // The editor page's side of a parent frame
 export { connectEditorFrame, type EditorFrame } from './frame/editor-frame.js';
 export { awaitParentHello } from './frame/parent-hello.js';

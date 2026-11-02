@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, type Mock, spyOn, test } from 'bun:test';
+import { QueryClient } from '@tanstack/react-query';
 import { type FakePort, fakePortPair } from '../../test/fake-ports.js';
 import { notifyEditorDirtyChanged, registerEditorFlushHandler } from '../editor-flush.js';
 import type { MediaIssue } from '../media/types.js';
@@ -234,6 +235,36 @@ describe('connecting the editor to its parent frame', () => {
     outer.emit('pageConversion.changed', { pageConversion: null });
     await delivered();
     expect(getUIConfig().pageConversion).toBeUndefined();
+  });
+
+  test("the parent's Save marks the page's own cached content or media stale", async () => {
+    await connected();
+    const client = new QueryClient();
+    const keys = [
+      ['content', 'abc'],
+      ['sites', 'default', 'pages', 'en'],
+      ['sites', 'default', 'pathname', '/'],
+      ['asset-scope', 'hero.png'],
+      ['media-issue', 'hero.png'],
+    ];
+    for (const key of keys) client.setQueryData(key, 1);
+    const stale = () => keys.filter((key) => client.getQueryState(key)?.isInvalidated);
+    // oxlint-disable-next-line no-underscore-dangle -- the browser global `CmsSpaApp` commits its client under.
+    window.__QUERY_CLIENT__ = client;
+    try {
+      outer.emit('queries.stale', { queries: 'content' });
+      outer.emit('queries.stale', { queries: 'everything' });
+      await delivered();
+      expect(stale()).toEqual([keys[0], keys[1]]);
+
+      outer.emit('queries.stale', { queries: 'media' });
+      await delivered();
+      expect(stale()).toEqual([keys[0], keys[1], keys[3], keys[4]]);
+    } finally {
+      // oxlint-disable-next-line no-underscore-dangle -- the browser global `CmsSpaApp` commits its client under.
+      delete window.__QUERY_CLIENT__;
+      client.clear();
+    }
   });
 
   test('media loads, preview opens and live-site opens are calls to the parent', async () => {

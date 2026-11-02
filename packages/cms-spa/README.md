@@ -69,7 +69,8 @@ on the parent's `init` with an `EditorFrame`:
 - `ready()`, `reportStale()` and `reportLoadFailed(stage, message)`: messages to the parent.
 
 While connected, the parent can flush the open editor, and the page reports dirty state, Cmd/Ctrl+S (also inside the
-editing canvas) and route changes to it.
+editing canvas) and route changes to it. A parent's `invalidateEditorQueries('content' | 'media')` after its own save
+reaches the page's caches too, once the parent registers `registerEditorQueriesForwarder` to send `queries.stale`.
 
 Four `UIConfig` fields make this work; without them nothing changes:
 

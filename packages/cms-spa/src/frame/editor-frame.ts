@@ -1,5 +1,6 @@
 import { readPageConversionFacts } from '../convert-pages.js';
 import { EDITOR_DIRTY_CHANGED_EVENT, flushOpenEditor, isOpenEditorDirty } from '../editor-flush.js';
+import { invalidateEditorQueries } from '../editor-queries.js';
 import type { AssetScope, MediaIssue } from '../media/types.js';
 import { THEME_CHANGED_EVENT, THEME_STORAGE_KEY } from '../theme.js';
 import { setEditorReadOnly, setPageConversion, setPreviewCapability, type UIConfig } from '../ui-config.js';
@@ -77,7 +78,8 @@ async function checkedCall<T>(
 /**
  * Opens the channel on the port the parent handed over and resolves on the parent's first `init`; later ones are
  * ignored. From then on the parent can flush the open editor, and dirty state and Cmd/Ctrl+S go to the parent.
- * Route, read-only, preview capability, theme and page conversion facts follow the parent's events.
+ * Route, read-only, preview capability, theme and page conversion facts follow the parent's events, and the parent's
+ * Save marks the caches it changed stale.
  */
 export function connectEditorFrame(port: FramePort): Promise<EditorFrame> {
   const routeListeners = new Set<(path: string) => void>();
@@ -116,6 +118,12 @@ export function connectEditorFrame(port: FramePort): Promise<EditorFrame> {
         } else if (name === 'theme.changed' && 'theme' in payload && isThemePreference(payload.theme)) {
           localStorage.setItem(THEME_STORAGE_KEY, payload.theme);
           window.dispatchEvent(new Event(THEME_CHANGED_EVENT));
+        } else if (
+          name === 'queries.stale' &&
+          'queries' in payload &&
+          (payload.queries === 'content' || payload.queries === 'media')
+        ) {
+          invalidateEditorQueries(payload.queries);
         }
       },
     });

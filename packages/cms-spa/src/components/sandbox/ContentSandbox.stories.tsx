@@ -13,7 +13,8 @@ import { ContentSandbox } from './ContentSandbox.js';
  * cookies, or React tree.
  */
 
-interface EscapeWindow extends Window {
+// The planted `__QUERY_CLIENT__` is a bait value, not the `QueryClient` the global declares.
+interface EscapeWindow extends Omit<Window, '__QUERY_CLIENT__'> {
   __SANDBOX_ESCAPED__?: boolean;
   __SANDBOX_CLIENT_CALLED__?: boolean;
   __CONTENT_API_CLIENT__?: { mutate: () => void };

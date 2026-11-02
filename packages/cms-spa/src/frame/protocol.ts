@@ -5,6 +5,7 @@
  */
 import type { ContentAPIClient } from '@conloca/content-api-client';
 import { type PageConversionFacts, readPageConversionFacts } from '../convert-pages.js';
+import type { StaleEditorQueries } from '../editor-queries.js';
 import type { ThemePreference } from '../theme.js';
 import type { EditorWriteRefusal, PreviewCapability } from '../ui-config.js';
 
@@ -134,6 +135,7 @@ export interface FrameEventPayloads {
   'previewCapability.changed': { previewCapability: PreviewCapability };
   'theme.changed': { theme: ThemePreference };
   'pageConversion.changed': { pageConversion: PageConversionFacts | null };
+  'queries.stale': { queries: StaleEditorQueries };
 }
 
 /** Content methods the page may call; the parent refuses every other client method. */
