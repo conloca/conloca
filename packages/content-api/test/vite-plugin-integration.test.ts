@@ -62,7 +62,7 @@ describe('Vite Plugin - File Watching Integration', () => {
 
     // Configure the server - create a minimal plugin context
     const mockContext = {
-      meta: { rollupVersion: '0.0.0', watchMode: true, viteVersion: '5.0.0' },
+      meta: { rollupVersion: '0.0.0', rolldownVersion: '0.0.0', watchMode: true, viteVersion: '8.0.0' },
       error: (e: any): never => {
         console.error(e);
         throw e;
