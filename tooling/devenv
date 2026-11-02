@@ -4,7 +4,6 @@
 
 # Save the current working directory
 ORIGINAL_PWD="$(pwd)"
-SELF_PATH="$(realpath "$0")"
 
 # Locate this repository's tooling/ from the INVOCATION path, not from
 # realpath($0). WHY: tooling/devenv is a symlink into
@@ -29,7 +28,7 @@ fi
 # Find the actual Nix-built devenv binary, skipping every wrapper script.
 # WHY: PATH routinely holds more than one of these wrappers at once — this
 # repo's tooling/devenv, sibling repos' wrappers, and direnv-stacked parent
-# environments. A plain "not equal to SELF_PATH" check happily selects a
+# environments. Excluding only this wrapper's own path happily selects a
 # *different* wrapper and exec's it, so `devenv` bounces into the wrong repo
 # (or self-execs forever on cheap checks like `devenv version`). The real devenv
 # is always the Nix-managed executable under /nix/store, so match that and ignore

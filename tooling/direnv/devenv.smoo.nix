@@ -95,13 +95,11 @@
     ln -s ${pkgs.python3Packages.pyflakes}/bin/pyflakes "$out/bin/pyflakes"
   '';
 
-  # Builds every Linux Rust artifact and the cross clippy; see
-  # `profiles.linux-cross` below for where it applies and why. zig itself is in
-  # the base shell (see `pkgs.zig` in `packages`). The rust-std set is every
-  # Linux triple an artifact ships for except x86_64-unknown-linux-gnu, which the
-  # base shell already carries.
+  # The Linux rust-std set every Linux Rust artifact ships for except
+  # x86_64-unknown-linux-gnu, which the base shell already carries; see
+  # `profiles.linux-cross` below for where it applies and why. zig and
+  # cargo-zigbuild are in the base shell (see `packages`).
   linuxToolchain = {
-    packages = [pkgs.cargo-zigbuild];
     languages.rust.targets = [
       "aarch64-unknown-linux-gnu"
       "x86_64-unknown-linux-musl"
@@ -190,7 +188,7 @@ in {
       # its own process. Measured on a 56-project consumer's shed (2026-10-22,
       # three restarts each): the same project graph and the same hash for all
       # 443 tasks of `nx run-many -t lint`; the daemon tree went from 8
-      # processes, about 1.75 GB RSS, to 1 process, about 0.65 GB. Nx 23.2.1
+      # processes, about 1.75 GB RSS, to 1 process, about 0.65 GB. Nx 24.0.3
       # reads only "false" as off (project-graph/plugins/isolation/enabled.js).
       NX_ISOLATE_PLUGINS = "false";
       SMOO_TYPECHECK_TSC = "${typecheckTsc}/bin/tsc";
@@ -256,8 +254,8 @@ in {
     # type-check the arm CI compiles. rust-std alone reaches every crate whose
     # dependency graph is pure Rust; a dependency that compiles C for the target
     # — ring, openssl-sys, libgit2-sys, libz-sys — additionally needs a C
-    # compiler for the target, which is zig in the `linux-cross` toolchain
-    # below, kept off every macOS shell and macOS runner.
+    # compiler for the target: zig, driven by cargo-zigbuild, both in every
+    # shell (see `packages` below).
     #
     # The reverse direction is not available at any price: type-checking an Apple
     # target from Linux needs an Apple SDK for those same C-building
@@ -270,35 +268,32 @@ in {
       ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux linuxToolchain.languages.rust.targets;
   };
 
-  # The Linux Rust toolchain: cargo-zigbuild driving zig, plus the Linux
+  # The Linux Rust toolchain is cargo-zigbuild driving zig, plus the Linux
   # rust-std set. It builds every published Linux Rust artifact — static musl
-  # CLIs, glibc 2.17 N-API addons — and `check:linux`'s cross clippy, with the
+  # CLIs, glibc 2.17 N-API addons — and the `cargo-lint-cross` clippy, with the
   # same command on every host. zig carries glibc symbol-version stubs for every
   # glibc and the musl sources inside its own store path, so nothing on the
   # build machine reaches the artifact: no loader path, no RUNPATH, no build
   # host's glibc floor. cargo-zigbuild supplies the `zig cc` shims and per-triple
   # compiler variables itself, so this module sets no environment.
   #
-  # A Linux host carries it in the base shell, because its ordinary `build`
-  # includes its own platform's artifacts. A macOS host opts in through the
-  # `linux-cross` profile, activated by `devenv -P linux-cross` and driven by
-  # the root `check:linux` script: the three rust-std targets are about 0.5 GiB
-  # and nothing else on Darwin needs them. zig is not in the profile: every
-  # host's base shell carries it, because the scriptc-<arch>-<family> targets
-  # compile every platform's executables through `zig cc` on every host, the
-  # host's own platform included (see `pkgs.zig` in `packages` below). devenv
-  # 2.2.3 has first-class profiles, so this is one gated module in the shared
-  # file rather than a second config directory that would re-import and re-pin
-  # everything here.
+  # Every host's base shell carries zig, cargo-zigbuild and the
+  # x86_64-unknown-linux-gnu rust-std, which is all the cross clippy needs, so
+  # `cargo-lint-cross` runs in any checkout's shell and in the land gate's one Nx
+  # graph beside every other gate task. A Linux host also carries the remaining
+  # Linux rust-std set in the base shell, because its ordinary `build` includes
+  # its own platform's artifacts. A macOS host opts into that set through the
+  # `linux-cross` profile, activated by `devenv -P linux-cross`: the three
+  # rust-std targets are about 0.5 GiB and only a Linux artifact built on Darwin
+  # needs them. devenv 2.2.3 has first-class profiles, so this is one gated
+  # module in the shared file rather than a second config directory that would
+  # re-import and re-pin everything here.
   #
-  # The profile supplies the toolchain and nothing else. CARGO_BUILD_TARGET is
-  # deliberately NOT set: the triple belongs to the Nx target that asks for it
-  # (`cargo-lint-cross` passes `--target` explicitly), not to the ambient
-  # environment. An ambient triple would make the check silently host-local
-  # whenever the profile was forgotten — reporting green having compiled macOS.
-  # With the flag on the target instead, running it outside this profile fails
-  # loudly on the missing cargo-zigbuild, and a host lint can never be mistaken
-  # for a cross one.
+  # Neither shell sets CARGO_BUILD_TARGET: the triple belongs to the Nx target
+  # that asks for it (`cargo-lint-cross` passes `--target` explicitly), not to
+  # the ambient environment. An ambient triple would make the check silently
+  # host-local wherever it was missing, reporting green having compiled macOS,
+  # and a host lint can never be mistaken for a cross one.
   profiles.linux-cross.module = {
     config = lib.mkIf (!pkgs.stdenv.hostPlatform.isLinux) linuxToolchain;
   };
@@ -424,8 +419,12 @@ in {
       # on profiles below). The closure is about 380 MiB, fetched once per Nix
       # store, not per checkout.
       pkgs.zig
+      # Drives zig as the C compiler and linker of every Linux triple, for the
+      # Linux artifacts and for the `cargo-lint-cross` clippy, which therefore
+      # runs in every shell and in the land gate's Nx graph.
+      pkgs.cargo-zigbuild
     ]
-    ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux ([pkgs.chromium] ++ linuxToolchain.packages);
+    ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [pkgs.chromium];
 
   # devenv wraps the Python interpreter to find native libraries in
   # `languages.python.libraries`, whose default is this checkout's
@@ -487,6 +486,11 @@ in {
   # digest under the install lock, so two shells entering at once install once.
   # The scripts themselves are inputs: a new setup-environment.ts reruns.
   #
+  # A uv project also has live installed state: a copied environment can hold
+  # an absolute editable mapping while every input digest is unchanged. Its
+  # status joins the installer's own input stamps and relocation witness;
+  # non-Python projects retain the input-only task cache below.
+  #
   # smoo:cargo-fetch establishes what the Nx plugin's offline `cargo metadata
   # --locked` needs: every Cargo workspace's locked packages in CARGO_HOME. Its
   # stamps live in smoo's user cache and count only while CARGO_HOME names the
@@ -515,17 +519,25 @@ in {
   # links its declaration does not describe runs another build than it says
   # (a live checkout whose build is stale, with no sealed snapshot to serve
   # instead), and the repair is in the provider checkout, not in this shell.
-  # The refused exec leaves node_modules/.smoo-links-refused, which the
-  # prologue below says and fails on; the next `--links` run that finds the
-  # links current removes it. CI runs both with `devenv tasks run`, which
-  # does fail; setup-environment.ts is strict there.
+  # So the prologue below asks `setup-environment.ts --links --refusal` once
+  # the tasks have run, and fails entry with the planner's reason: the answer
+  # is read from the providers at that entry, so the entry after the provider
+  # is rebuilt goes in with no step between, and nothing of a refusal outlives
+  # it. devenv also evaluates the whole enterShell script once before it runs
+  # any task, only to capture the environment (it sets DEVENV_SKIP_TASKS), and
+  # a script that fails in that pass stops the tasks that would repair: it
+  # asks nothing there, and a manifest that declares no links starts no
+  # process. CI runs both with `devenv tasks run`, which does fail;
+  # setup-environment.ts is strict there.
   tasks = let
     setup = ''bun "$DEVENV_ROOT/setup-environment.ts"'';
+    install = setup + lib.optionalString uvProject " --python ${python.package.interpreter}";
   in {
     "smoo:install" = {
       description = "bun install / uv sync when what they read changed";
-      exec = setup + lib.optionalString uvProject " --python ${python.package.interpreter}";
-      execIfModified = [
+      exec = install;
+      status = lib.mkIf uvProject (install + " --check");
+      execIfModified = lib.optionals (!uvProject) [
         "../../package.json"
         "../../bun.lock"
         "../../bun.lockb"
@@ -569,7 +581,9 @@ in {
     # Prologue, in order:
     #
     # 1. The devenv wrapper runs from tooling/direnv; every later step expects the
-    #    workspace root.
+    #    workspace root. Once the tasks have run, the planner's refusal of the
+    #    declared links (smoo:developer-links above) fails entry before any
+    #    later step.
     # 2. PATH order is most-specific → least-specific, the same list the git hooks
     #    use, so a hook and a shell resolve one binary the same way. The Rust
     #    toolchain's store bin then goes ahead of all of it (rustToolchainBin
@@ -577,8 +591,10 @@ in {
     #    owns.
     # 3. ttsc drives the native TypeScript 7 binary while Nx imports the TypeScript
     #    6 API, so the two must be named separately.
-    # 4. ttsc caches in the checkout's .cache/ttsc (the path the CI ttsc-plugin
-    #    cache restores), its Go build cache in a directory of its own so
+    # 4. ttsc caches its plugin binaries in the checkout's .cache/ttsc-plugins (the
+    #    path the CI ttsc-plugin cache restores, and the output a repository's
+    #    plugin build target declares), its Go build cache in .cache/ttsc/go-build,
+    #    a directory of its own outside that output, so
     #    `ttsc clean` can reclaim it: ttsc never deletes a GOCACHE it did not
     #    resolve itself, and sharing GOCACHE once left 35G nothing could empty.
     #    GOFLAGS carries -trimpath, Go's stable way to keep absolute build paths
@@ -658,12 +674,11 @@ in {
     # they run.
     (lib.mkBefore ''
       cd "$DEVENV_ROOT/../.."
-      # smoo:developer-links refused the declared links (tasks above): fail
-      # shell entry with its reason rather than run on links it refused.
-      if [ -f node_modules/.smoo-links-refused ]; then
-        echo "smoo:developer-links refused this checkout's declared links; shell entry fails until they are current:" >&2
-        cat node_modules/.smoo-links-refused >&2
-        exit 1
+      # smoo:developer-links (tasks above) refusing the declared links fails
+      # shell entry with the planner's reason, asked of the providers now. Only
+      # the entry proper asks, and only a manifest that declares links.
+      if [ -z "''${DEVENV_SKIP_TASKS:-}" ] && grep -qF developerLinks package.json; then
+        bun "$DEVENV_ROOT/setup-environment.ts" --links --refusal || exit $?
       fi
       # A bare assignment: export's status would hide repo-path's refusal of a
       # cowshed workspace it could not serve, and the shell would enter with an
@@ -694,6 +709,9 @@ in {
       unset GOROOT
       ${lib.optionalString uvProject ''
         if [ -f pyproject.toml ]; then
+          # The installer above owns sync and rewrites editable mappings after it.
+          # A reader's uv run must not rewrite them to this checkout's absolute path.
+          export UV_NO_SYNC=1
           export VIRTUAL_ENV="$UV_PROJECT_ENVIRONMENT"
           export PATH="$VIRTUAL_ENV/bin:$PATH"
         fi
