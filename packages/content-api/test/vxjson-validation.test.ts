@@ -106,8 +106,8 @@ describe('a saved .vxjson file', () => {
     const withoutNewline = VXJSON.serialize(page).trimEnd();
     const withNewline = `${withoutNewline}\n`;
 
-    const a = VXJSON.calculateETags(Buffer.from(withNewline, 'utf-8') as Uint8Array);
-    const b = VXJSON.calculateETags(Buffer.from(withoutNewline, 'utf-8') as Uint8Array);
+    const a = VXJSON.calculateETags(new TextEncoder().encode(withNewline));
+    const b = VXJSON.calculateETags(new TextEncoder().encode(withoutNewline));
 
     expect(a).toEqual(b);
   });
