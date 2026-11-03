@@ -10,6 +10,7 @@ import {
   editorUiOrigin,
   isEditorPageInfo,
   isFromVercel,
+  isSluggedPreviewMode,
   isValidBranchName,
   mediaOf,
   PREVIEW_PROTOCOL,
@@ -227,6 +228,22 @@ describe('previewSignalOf', () => {
     ]) {
       expect(previewSignalOf({ preview })).toBeUndefined();
     }
+  });
+
+  it('reads a d8 build', () => {
+    expect(previewSignalOf({ preview: { mode: 'd8', protocol: 2 } })).toEqual({ mode: 'd8', protocol: 2 });
+  });
+
+  it('isSluggedPreviewMode is d3 and d8 only', () => {
+    expect((['d2', 'd3', 'd4', 'd8', 'off', null, undefined] as const).map(isSluggedPreviewMode)).toEqual([
+      false,
+      true,
+      false,
+      true,
+      false,
+      false,
+      false,
+    ]);
   });
 });
 

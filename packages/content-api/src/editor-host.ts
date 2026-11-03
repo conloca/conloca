@@ -14,14 +14,20 @@ export const PREVIEW_PROTOCOL = 2;
 
 /**
  * How a build serves draft previews: `d2` from the site's own server deploy, `d3` from a dispatcher in front of a
- * static site under `<base>_conloca/preview/<branch slug>/`, `d4` from a separate preview deploy, `off` not at all.
+ * static site under `<base>_conloca/preview/<branch slug>/`, `d4` from a separate preview deploy, `d8` from the site's
+ * own Astro adapter in its single build, under the same slugged route as `d3`, `off` not at all.
  */
-export type PreviewMode = 'd2' | 'd3' | 'd4' | 'off';
+export type PreviewMode = 'd2' | 'd3' | 'd4' | 'd8' | 'off';
 
-const PREVIEW_MODES: readonly PreviewMode[] = ['d2', 'd3', 'd4', 'off'];
+const PREVIEW_MODES: readonly PreviewMode[] = ['d2', 'd3', 'd4', 'd8', 'off'];
 
 function isPreviewMode(value: unknown): value is PreviewMode {
   return PREVIEW_MODES.some((mode) => mode === value);
+}
+
+/** Whether a mode serves previews under `<base>_conloca/preview/<branch slug>/`. */
+export function isSluggedPreviewMode(mode: PreviewMode | null | undefined): boolean {
+  return mode === 'd3' || mode === 'd8';
 }
 
 /** conloca.json `preview`: the build's preview mode and the preview protocol it speaks. */
