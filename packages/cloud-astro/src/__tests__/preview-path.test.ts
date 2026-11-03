@@ -1,5 +1,22 @@
 import { describe, expect, it } from 'bun:test';
-import { pathUnderBase, previewRoutePrefix, previewScope, stripPreviewPrefix } from '../preview/preview-path.js';
+import {
+  cleanPagePath,
+  pathUnderBase,
+  previewRoutePrefix,
+  previewScope,
+  stripPreviewPrefix,
+} from '../preview/preview-path.js';
+
+describe('cleanPagePath', () => {
+  it("gives the page path production's trailing-slash form", () => {
+    expect(cleanPagePath('/fr/about', 'ignore', 'directory')).toBe('/fr/about/');
+    expect(cleanPagePath('/fr/about/', 'ignore', 'file')).toBe('/fr/about');
+    expect(cleanPagePath('/about/', 'never', 'directory')).toBe('/about');
+    expect(cleanPagePath('/about', 'always', 'file')).toBe('/about/');
+    expect(cleanPagePath('/', 'never', 'file')).toBe('/');
+    expect(cleanPagePath('/rss.xml', 'always', 'directory')).toBe('/rss.xml');
+  });
+});
 
 it('gives the page path under the base, as the editor names pages', () => {
   expect(pathUnderBase('/docs/guide', '/docs/')).toBe('/guide');
@@ -41,16 +58,18 @@ describe('previewScope', () => {
     expect(previewScope('d4', '/', undefined).grant).toBe('__Host-conloca_grant');
   });
 
-  it('scopes D3 to the branch slug under the base', () => {
-    expect(previewScope('d3', '/docs/', 'bWFpbg')).toEqual({
-      pass: '__Secure-conloca_preview_bWFpbg',
-      grant: '__Secure-conloca_grant_bWFpbg',
-      path: '/docs/_conloca/preview/bWFpbg',
-      route: '/docs/_conloca/preview/bWFpbg',
+  for (const mode of ['d3', 'd8'] as const) {
+    it(`scopes ${mode} to the branch slug under the base`, () => {
+      expect(previewScope(mode, '/docs/', 'bWFpbg')).toEqual({
+        pass: '__Secure-conloca_preview_bWFpbg',
+        grant: '__Secure-conloca_grant_bWFpbg',
+        path: '/docs/_conloca/preview/bWFpbg',
+        route: '/docs/_conloca/preview/bWFpbg',
+      });
     });
-  });
 
-  it('refuses a D3 scope without a slug', () => {
-    expect(() => previewScope('d3', '/', undefined)).toThrow('needs the branch slug');
-  });
+    it(`refuses a ${mode} scope without a slug`, () => {
+      expect(() => previewScope(mode, '/', undefined)).toThrow('needs the branch slug');
+    });
+  }
 });

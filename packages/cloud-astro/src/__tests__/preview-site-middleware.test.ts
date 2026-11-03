@@ -558,3 +558,173 @@ describe('createPreviewSiteMiddleware — D3', () => {
     expect(await response.text()).toContain('Log in to edit');
   });
 });
+
+const d8 = (): PreviewMiddlewareOptions => ({ ...opts(), mode: 'd8' });
+const d8Seams = (fetchFn: typeof fetch): PreviewRenderSeams => ({
+  ...seams(fetchFn),
+  baked: { trailingSlash: 'ignore', buildFormat: 'directory', domains: [] },
+});
+
+describe('createPreviewSiteMiddleware — D8', () => {
+  const slug = previewBranchSlug('feature/x');
+  const prefixed = (path: string) => `https://site.test/_conloca/preview/${slug}${path}`;
+  async function d8Context(path: string, headers: Record<string, string> = {}): Promise<PreviewMiddlewareContext> {
+    const url = prefixed(path);
+    return {
+      request: new Request(url, {
+        headers: { cookie: `__Secure-conloca_preview_${slug}=${await mintJwt()}`, ...headers },
+      }),
+      locals: {},
+      url: new URL(url),
+    };
+  }
+
+  it('renders at the clean page path before next(), keeping the request and Exit prefixed', async () => {
+    const context = await d8Context('/fr/about');
+    let seen: string | undefined;
+    const response = await createPreviewSiteMiddleware(d8, d8Seams(makeFetch([changed(), emptyListing()]).fn))(
+      context,
+      async () => {
+        seen = context.url.pathname;
+        return htmlNext('draft')();
+      },
+      slug,
+    );
+    expect(seen).toBe('/fr/about/');
+    expect(context.request.url).toBe(prefixed('/fr/about'));
+    const html = await response.text();
+    expect(html).toContain(`"exitPath":"/_conloca/preview/${slug}/__exit"`);
+    expect(html).toContain('"path":"/fr/about"');
+  });
+
+  it('mutates the path before anything can read currentLocale', async () => {
+    const reads: string[] = [];
+    const plain = await d8Context('/fr/about');
+    const context = {
+      ...plain,
+      get currentLocale() {
+        reads.push(plain.url.pathname);
+        return 'fr';
+      },
+    };
+    await createPreviewSiteMiddleware(d8, d8Seams(makeFetch([changed(), emptyListing()]).fn))(
+      context,
+      async () => {
+        expect(context.currentLocale).toBe('fr');
+        return htmlNext('draft')();
+      },
+      slug,
+    );
+    expect(reads).toEqual(['/fr/about/']);
+  });
+
+  it('ignores a conloca-preview-slug header: the slug comes only from the path', async () => {
+    const context = await d8Context('/fr/about', { 'conloca-preview-slug': previewBranchSlug('other') });
+    const fetchSpy = makeFetch([]);
+    const response = await createPreviewSiteMiddleware(d8, d8Seams(fetchSpy.fn))(context, next);
+    // No slug argument: the header does not stand in for it, so nothing previews.
+    expect(await response.text()).toBe(NEXT_BODY);
+    expect(context.locals.conlocaPreview).toBeUndefined();
+    expect(fetchSpy.calls).toEqual([]);
+  });
+
+  it('retries the prefixed path when page-status fails', async () => {
+    const context = await d8Context('/fr/about');
+    const response = await createPreviewSiteMiddleware(
+      d8,
+      d8Seams(makeFetch([new Response('deploying', { status: 503 })]).fn),
+    )(context, next, slug);
+    const html = await response.text();
+    expect(html).toContain(`<a class="btn primary" href="/_conloca/preview/${slug}/fr/about">Retry</a>`);
+    expect(html).toContain(`href="/_conloca/preview/${slug}/__exit?to=%2Ffr%2Fabout"`);
+  });
+
+  it('keeps the draft links under the preview route, and leaves D3 links alone', async () => {
+    const d8Html = await (
+      await createPreviewSiteMiddleware(d8, d8Seams(makeFetch([changed(), emptyListing()]).fn))(
+        await d8Context('/fr/about'),
+        htmlNext('<a href="/contact">c</a>'),
+        slug,
+      )
+    ).text();
+    expect(d8Html).toContain(`href="/_conloca/preview/${slug}/contact"`);
+
+    const headers = new Headers({ cookie: `__Secure-conloca_preview_${slug}=${await mintJwt()}` });
+    headers.set('conloca-preview-slug', slug);
+    const d3Html = await (
+      await createPreviewSiteMiddleware(d3, seams(makeFetch([changed(), emptyListing()]).fn))(
+        {
+          request: new Request('https://site.test/blog', { headers }),
+          locals: {},
+          url: new URL('https://site.test/blog'),
+        },
+        htmlNext('<a href="/contact">c</a>'),
+      )
+    ).text();
+    expect(d3Html).toContain('<a href="/contact">c</a>');
+  });
+
+  it("keeps an unchanged page's links under the preview route, without a banner", async () => {
+    const html = await (
+      await createPreviewSiteMiddleware(d8, d8Seams(makeFetch([new Response(null, { status: 304 })]).fn))(
+        await d8Context('/fr/about'),
+        htmlNext('<a href="/contact">c</a>'),
+        slug,
+      )
+    ).text();
+    expect(html).toContain(`href="/_conloca/preview/${slug}/contact"`);
+    expect(html).not.toContain('conloca-preview-banner');
+  });
+
+  it('keeps a page-status redirect under the preview route', async () => {
+    const response = await createPreviewSiteMiddleware(
+      d8,
+      d8Seams(makeFetch([new Response(null, { status: 302, headers: { location: '/moved' } })]).fn),
+    )(await d8Context('/old'), next, slug);
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toBe(`/_conloca/preview/${slug}/moved`);
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+  });
+
+  it.each([
+    ['/404', `/_conloca/preview/${slug}/404`],
+    ['https://elsewhere.test/x', 'https://elsewhere.test/x'],
+  ] as const)("moves the site's own redirect to %s under the route only when same-site", async (location, expected) => {
+    const response = await createPreviewSiteMiddleware(d8, d8Seams(makeFetch([changed(), emptyListing()]).fn))(
+      await d8Context('/gone'),
+      async () => new Response(null, { status: 307, headers: { location } }),
+      slug,
+    );
+    expect(response.headers.get('location')).toBe(expected);
+  });
+
+  it('moves links under a non-root base', async () => {
+    const url = `https://site.test/docs/_conloca/preview/${slug}/guide`;
+    const context: PreviewMiddlewareContext = {
+      request: new Request(url, { headers: { cookie: `__Secure-conloca_preview_${slug}=${await mintJwt()}` } }),
+      locals: {},
+      url: new URL(url),
+    };
+    const html = await (
+      await createPreviewSiteMiddleware(
+        () => ({ ...d8(), base: '/docs/' }),
+        d8Seams(makeFetch([changed(), emptyListing()]).fn),
+      )(context, htmlNext('<a href="/docs/contact">c</a>'), slug)
+    ).text();
+    expect(context.url.pathname).toBe('/docs/guide/');
+    expect(html).toContain(`href="/docs/_conloca/preview/${slug}/contact"`);
+  });
+
+  it('renders under the path slug when a header names another branch', async () => {
+    const context = await d8Context('/fr/about', { 'conloca-preview-slug': previewBranchSlug('other') });
+    const html = await (
+      await createPreviewSiteMiddleware(d8, d8Seams(makeFetch([changed(), emptyListing()]).fn))(
+        context,
+        htmlNext('draft'),
+        slug,
+      )
+    ).text();
+    expect(html).toContain(`"exitPath":"/_conloca/preview/${slug}/__exit"`);
+    expect(context.url.pathname).toBe('/fr/about/');
+  });
+});

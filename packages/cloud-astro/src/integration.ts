@@ -12,7 +12,7 @@ import { gitOutput, resolveBuildRef, resolveRepositoryUri } from './git.js';
 import { messageOf } from './message-of.js';
 import type { BakedPreviewOpts } from './preview/_resolve-opts.js';
 import { cloudflareAdapter, resolveCloudflareAdapter } from './preview/cloudflare-adapter.js';
-import type { DispatcherExit } from './preview/dispatcher.js';
+import type { PreviewExit } from './preview/prefix-router.js';
 import { normalizeTrailingSlash, PREVIEW_ROUTE_SEGMENT, type PreviewServeMode } from './preview/preview-path.js';
 import {
   prerenderedKey,
@@ -62,7 +62,7 @@ export function conlocaCloud(options: ConlocaCloudOptions = {}): AstroIntegratio
   // module below. Server-only — never reaches a browser bundle.
   let previewOptsModule: BakedPreviewOpts | undefined;
   // The exit values the preview build baked (its config:setup), reported to the site's build for the dispatcher.
-  let childExit: DispatcherExit | undefined;
+  let childExit: PreviewExit | undefined;
   // The Astro command, recorded in config:setup: only `astro build` starts
   // the preview build, so only it checks the preview adapter at config:done.
   let astroCommand: string | undefined;

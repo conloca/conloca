@@ -1,3 +1,5 @@
+import { isSluggedPreviewMode, type PreviewMode } from '@conloca/content-api/editor-host';
+
 /**
  * The fixed preview route and the names it uses.
  *
@@ -28,8 +30,8 @@ export const PREVIEW_SLUG_HEADER = 'conloca-preview-slug';
 /** Response header on the exit route's redirect that names how this build serves previews. */
 export const PREVIEW_MODE_HEADER = 'conloca-preview-mode';
 
-/** How one preview server is reached: D2 and D4 at the page's own path, D3 under the route and the branch slug. */
-export type PreviewServeMode = 'd2' | 'd3' | 'd4';
+/** How one preview server is reached: D2 and D4 at the page's own path, D3 and D8 under the route and the branch slug. */
+export type PreviewServeMode = Exclude<PreviewMode, 'off'>;
 
 /** One preview's cookie names, the path they live on, and the route its links and exit sit under. */
 export interface PreviewScope {
@@ -41,12 +43,12 @@ export interface PreviewScope {
 }
 
 /**
- * D3 scopes both cookies to `<base>_conloca/preview/<slug>`, so two tabs on two branches keep two passes. D2 and D4
+ * D3 and D8 scope both cookies to `<base>_conloca/preview/<slug>`, so two tabs on two branches keep two passes. D2 and D4
  * keep the `__Host-` names on `Path=/`, which is what lets the pass follow every same-origin link there.
  */
 export function previewScope(mode: PreviewServeMode, base: string, slug: string | undefined): PreviewScope {
   const prefix = previewRoutePrefix(base);
-  if (mode !== 'd3') {
+  if (!isSluggedPreviewMode(mode)) {
     return {
       pass: PREVIEW_COOKIE_NAME,
       grant: mode === 'd4' ? PREVIEW_GRANT_COOKIE_NAME : null,
@@ -54,7 +56,7 @@ export function previewScope(mode: PreviewServeMode, base: string, slug: string 
       route: prefix,
     };
   }
-  if (slug === undefined) throw new Error('@conloca/cloud-astro: a d3 preview scope needs the branch slug');
+  if (slug === undefined) throw new Error(`@conloca/cloud-astro: a ${mode} preview scope needs the branch slug`);
   const route = `${prefix}/${slug}`;
   return { pass: `__Secure-conloca_preview_${slug}`, grant: `__Secure-conloca_grant_${slug}`, path: route, route };
 }
@@ -100,4 +102,15 @@ export function pathUnderBase(path: string, base: string): string {
 export function normalizeTrailingSlash(pathname: string): string {
   const stripped = pathname.replace(/\/+$/u, '');
   return stripped === '' ? '/' : stripped;
+}
+
+/** A page path in production's pathname form, so a d8 draft renders at the `Astro.url` its live page has. */
+export function cleanPagePath(
+  inner: string,
+  trailingSlash: 'always' | 'never' | 'ignore',
+  format: 'directory' | 'file' | 'preserve',
+): string {
+  if (inner === '/' || inner.slice(inner.lastIndexOf('/') + 1).includes('.')) return inner;
+  const bare = inner.replace(/\/+$/u, '');
+  return trailingSlash === 'always' || (trailingSlash === 'ignore' && format === 'directory') ? `${bare}/` : bare;
 }

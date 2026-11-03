@@ -14,8 +14,13 @@ export interface BakedPreviewOpts {
   branch?: string;
   /** Astro's `base` at build time. */
   base?: string;
-  /** How this build serves previews (`d2` when not baked). */
+  /** How this build serves previews: `d2`, `d3`, `d4` or `d8` (`d2` when not baked). */
   mode?: PreviewServeMode;
+  /** D8: hosts sites.json declares, so links to them are links to this site. */
+  domains?: string[];
+  /** D8: Astro's `trailingSlash` and `build.format`, for the links the draft render moves under the route. */
+  trailingSlash?: 'always' | 'never' | 'ignore';
+  buildFormat?: 'directory' | 'file' | 'preserve';
 }
 
 /** A value only the build can bake; the deployment cannot supply it. */

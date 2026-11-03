@@ -35,7 +35,7 @@ export function previewBuildMode(
 }
 
 /** The mode a preview build serves in: the site's build names D2 or D3; the flag alone is a separate preview deploy (D4). */
-export function previewChildMode(env: NodeJS.ProcessEnv): PreviewServeMode {
+export function previewChildMode(env: NodeJS.ProcessEnv): Exclude<PreviewServeMode, 'd8'> {
   const named = env[PREVIEW_MODE_ENV];
   return named === 'd2' || named === 'd3' ? named : 'd4';
 }

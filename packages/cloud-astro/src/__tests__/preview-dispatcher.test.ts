@@ -1,8 +1,9 @@
 import { beforeAll, describe, expect, it } from 'bun:test';
 import { previewBranchSlug } from '@conloca/content-api/editor-host';
 import { exportJWK, generateKeyPair, type JSONWebKeySet, SignJWT } from 'jose';
-import { createDispatcher, type DispatcherConfig, limitKey, previewHref } from '../preview/dispatcher.js';
+import { createDispatcher, type DispatcherConfig, limitKey } from '../preview/dispatcher.js';
 import { previewLabel } from '../preview/label.js';
+import { previewHref } from '../preview/links.js';
 
 const SLUG = previewBranchSlug('main');
 const CONFIG: DispatcherConfig = {
@@ -364,12 +365,14 @@ describe('createDispatcher — under the preview route', () => {
     });
     const { dispatcher, env, served } = harness({ serverAnswer: landed });
     const answer = await dispatcher.fetch(
-      navigate(`https://site.test/_conloca/preview/${SLUG}/about/?conloca_code=x.y`),
+      navigate(`https://site.test/_conloca/preview/${SLUG}/about/?conloca_code=Z2l0aHViOjc.abcdefghijklmnopqrstuv`),
       env,
       {},
     );
     // Through the preview build's own entry route: a prerendered page never reaches the middleware.
-    expect(served[0]?.url).toBe('https://site.test/_conloca/preview/about/?conloca_code=x.y');
+    expect(served[0]?.url).toBe(
+      'https://site.test/_conloca/preview/about/?conloca_code=Z2l0aHViOjc.abcdefghijklmnopqrstuv',
+    );
     expect(served[0]?.headers.get('conloca-preview-slug')).toBe(SLUG);
     expect(answer.headers.get('location')).toBe(`https://site.test/_conloca/preview/${SLUG}/about/`);
   });
@@ -378,7 +381,7 @@ describe('createDispatcher — under the preview route', () => {
     const failed = new Response('<a href="/about/">Go to production</a>', { headers: { 'content-type': 'text/html' } });
     const { dispatcher, env } = harness({ serverAnswer: failed });
     const answer = await dispatcher.fetch(
-      navigate(`https://site.test/_conloca/preview/${SLUG}/about/?conloca_code=x.y`),
+      navigate(`https://site.test/_conloca/preview/${SLUG}/about/?conloca_code=Z2l0aHViOjc.abcdefghijklmnopqrstuv`),
       env,
       {},
     );
@@ -394,11 +397,13 @@ describe('createDispatcher — under the preview route', () => {
     });
     const { dispatcher, env, served } = harness({ serverAnswer: landed });
     const answer = await dispatcher.fetch(
-      navigate('https://site.test/_conloca/preview/blog/x?conloca_code=x.y'),
+      navigate('https://site.test/_conloca/preview/blog/x?conloca_code=Z2l0aHViOjc.abcdefghijklmnopqrstuv'),
       env,
       {},
     );
-    expect(served[0]?.url).toBe('https://site.test/_conloca/preview/blog/x?conloca_code=x.y');
+    expect(served[0]?.url).toBe(
+      'https://site.test/_conloca/preview/blog/x?conloca_code=Z2l0aHViOjc.abcdefghijklmnopqrstuv',
+    );
     expect(served[0]?.headers.get('conloca-preview-slug')).toBeNull();
     expect(answer.headers.get('location')).toBe(`https://site.test/_conloca/preview/${SLUG}/blog/x`);
   });

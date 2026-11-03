@@ -212,7 +212,9 @@ describe('handlePreviewRequest — entry code', () => {
     const pass = await mintJwt();
     const { fetchFn, bodies } = exchangeAnswering(pass);
     const v = await handlePreviewRequest(
-      makeRequest(`https://site.test/_conloca/preview/blog?${PREVIEW_CODE_PARAM}=Z2l0aHViOjc.s3cret&utm=keep`),
+      makeRequest(
+        `https://site.test/_conloca/preview/blog?${PREVIEW_CODE_PARAM}=Z2l0aHViOjc.abcdefghijklmnopqrstuv&utm=keep`,
+      ),
       makeOptions({ fetchFn }),
     );
     if (v.kind !== 'response') throw new Error('expected the init redirect');
@@ -222,7 +224,7 @@ describe('handlePreviewRequest — entry code', () => {
       expect.stringMatching(new RegExp(`^${PREVIEW_COOKIE_NAME}=${pass};`)),
     ]);
     expect(bodies).toEqual([
-      { code: 'Z2l0aHViOjc.s3cret', origin: 'https://site.test', repo: 'acme/site', siteId: 'website' },
+      { code: 'Z2l0aHViOjc.abcdefghijklmnopqrstuv', origin: 'https://site.test', repo: 'acme/site', siteId: 'website' },
     ]);
   });
 
@@ -230,7 +232,7 @@ describe('handlePreviewRequest — entry code', () => {
     const { fetchFn } = exchangeAnswering(null);
     await expectLanding(
       await handlePreviewRequest(
-        makeRequest(`https://site.test/_conloca/preview/?${PREVIEW_CODE_PARAM}=x.y`),
+        makeRequest(`https://site.test/_conloca/preview/?${PREVIEW_CODE_PARAM}=Z2l0aHViOjc.abcdefghijklmnopqrstuv`),
         makeOptions({ fetchFn }),
       ),
     );
@@ -240,7 +242,7 @@ describe('handlePreviewRequest — entry code', () => {
     const { fetchFn } = exchangeAnswering(await mintJwt({ siteId: 'docs' }));
     await expectLanding(
       await handlePreviewRequest(
-        makeRequest(`https://site.test/_conloca/preview/?${PREVIEW_CODE_PARAM}=x.y`),
+        makeRequest(`https://site.test/_conloca/preview/?${PREVIEW_CODE_PARAM}=Z2l0aHViOjc.abcdefghijklmnopqrstuv`),
         makeOptions({ fetchFn }),
       ),
     );
@@ -250,7 +252,7 @@ describe('handlePreviewRequest — entry code', () => {
     const held = await mintJwt();
     const { fetchFn } = exchangeAnswering(null);
     const v = await handlePreviewRequest(
-      makeRequest(`https://site.test/_conloca/preview/about?${PREVIEW_CODE_PARAM}=x.y`, {
+      makeRequest(`https://site.test/_conloca/preview/about?${PREVIEW_CODE_PARAM}=Z2l0aHViOjc.abcdefghijklmnopqrstuv`, {
         headers: { cookie: `${PREVIEW_COOKIE_NAME}=${held}` },
       }),
       makeOptions({ fetchFn }),
@@ -267,7 +269,7 @@ describe('handlePreviewRequest — entry code', () => {
       Response.json({ error: 'grant-revoked', sharedBy: 'Ana' }, { status: 410 }),
     );
     const v = await handlePreviewRequest(
-      makeRequest(`https://site.test/_conloca/preview/about?${PREVIEW_CODE_PARAM}=x.y`, {
+      makeRequest(`https://site.test/_conloca/preview/about?${PREVIEW_CODE_PARAM}=Z2l0aHViOjc.abcdefghijklmnopqrstuv`, {
         headers: { cookie: `${PREVIEW_COOKIE_NAME}=${held}` },
       }),
       makeOptions({ fetchFn }),
@@ -288,7 +290,7 @@ describe('handlePreviewRequest — entry code', () => {
     const held = await mintJwt();
     const { fetchFn } = exchangeAnswering(answer);
     const v = await handlePreviewRequest(
-      makeRequest(`https://site.test/_conloca/preview/about?${PREVIEW_CODE_PARAM}=x.y`, {
+      makeRequest(`https://site.test/_conloca/preview/about?${PREVIEW_CODE_PARAM}=Z2l0aHViOjc.abcdefghijklmnopqrstuv`, {
         headers: { cookie: `${PREVIEW_COOKIE_NAME}=${held}` },
       }),
       makeOptions({ fetchFn }),
@@ -298,7 +300,7 @@ describe('handlePreviewRequest — entry code', () => {
     expect(v.response.headers.get('set-cookie')).toBeNull();
     const html = await v.response.text();
     expect(html).toContain('Retry');
-    expect(html).toContain('href="/_conloca/preview/about?conloca_code=x.y"');
+    expect(html).toContain('href="/_conloca/preview/about?conloca_code=Z2l0aHViOjc.abcdefghijklmnopqrstuv"');
     expect(html).toContain('href="/_conloca/preview/__exit?to=%2Fabout"');
   });
 
@@ -307,7 +309,7 @@ describe('handlePreviewRequest — entry code', () => {
     const pass = await mintJwt({ extra: { grant: 'AAAAAAAAAAAAAAAAAAAAAA', grant_exp: grantExp, shared_by: 'Ana' } });
     const { fetchFn } = exchangeAnswering(pass);
     const v = await handlePreviewRequest(
-      makeRequest(`https://site.test/_conloca/preview/?${PREVIEW_CODE_PARAM}=x.y`),
+      makeRequest(`https://site.test/_conloca/preview/?${PREVIEW_CODE_PARAM}=Z2l0aHViOjc.abcdefghijklmnopqrstuv`),
       makeOptions({ fetchFn, mode: 'd4' }),
     );
     if (v.kind !== 'response') throw new Error('expected the init redirect');
@@ -325,7 +327,7 @@ describe('handlePreviewRequest — entry code', () => {
     const pass = await mintJwt({ extra: { grant: 'AAAAAAAAAAAAAAAAAAAAAA', grant_exp: grantExp, shared_by: 'Ana' } });
     const { fetchFn } = exchangeAnswering(pass);
     const v = await handlePreviewRequest(
-      makeRequest(`https://site.test/_conloca/preview/?${PREVIEW_CODE_PARAM}=x.y`),
+      makeRequest(`https://site.test/_conloca/preview/?${PREVIEW_CODE_PARAM}=Z2l0aHViOjc.abcdefghijklmnopqrstuv`),
       makeOptions({ fetchFn }),
     );
     if (v.kind !== 'response') throw new Error('expected the init redirect');
@@ -336,7 +338,7 @@ describe('handlePreviewRequest — entry code', () => {
     const { fetchFn } = exchangeAnswering(await mintJwt({ extra: { grant: 'AAAAAAAAAAAAAAAAAAAAAA' } }));
     await expectLanding(
       await handlePreviewRequest(
-        makeRequest(`https://site.test/_conloca/preview/?${PREVIEW_CODE_PARAM}=x.y`),
+        makeRequest(`https://site.test/_conloca/preview/?${PREVIEW_CODE_PARAM}=Z2l0aHViOjc.abcdefghijklmnopqrstuv`),
         makeOptions({ fetchFn }),
       ),
     );
@@ -680,6 +682,15 @@ describe('applyPreviewHeaders', () => {
     const resp = applyPreviewHeaders(new Response('ok'));
     expect(resp.headers.get('referrer-policy')).toBe('same-origin');
     expect(resp.headers.get('vercel-cdn-cache-control')).toBe('no-store');
+  });
+
+  it("overrides Netlify's own CDN cache header", async () => {
+    const { applyPreviewHeaders, PREVIEW_CACHE_HEADERS } = await import('../preview/headers.js');
+    const resp = applyPreviewHeaders(
+      new Response('x', { headers: { 'netlify-cdn-cache-control': 'public, max-age=31536000' } }),
+    );
+    expect(resp.headers.get('netlify-cdn-cache-control')).toBe('no-store');
+    expect(PREVIEW_CACHE_HEADERS['netlify-cdn-cache-control']).toBe('no-store');
   });
 
   it('adds Vary and the frame policy once, however often it runs', async () => {
@@ -1027,180 +1038,197 @@ describe('handlePreviewRequest — issuer', () => {
 
 const at = (cookie: string, path = '/about') => new Request(`https://site.test${path}`, { headers: { cookie } });
 
-describe('handlePreviewRequest — D3, the pass under the branch slug', () => {
-  const slug = previewBranchSlug('main');
-  const pass = `__Secure-conloca_preview_${slug}`;
-  const d3 = (overrides: Partial<PreviewMiddlewareOptions> = {}) => makeOptions({ mode: 'd3', slug, ...overrides });
+for (const mode of ['d3', 'd8'] as const)
+  describe(`handlePreviewRequest — the pass under the branch slug (${mode})`, () => {
+    const slug = previewBranchSlug('main');
+    const pass = `__Secure-conloca_preview_${slug}`;
+    const d3 = (overrides: Partial<PreviewMiddlewareOptions> = {}) => makeOptions({ mode, slug, ...overrides });
 
-  it('reads the pass from the slug cookie only', async () => {
-    const jwt = await mintJwt();
-    expect((await handlePreviewRequest(at(`${pass}=${jwt}`), d3())).kind).toBe('preview');
-    expect((await handlePreviewRequest(at(`${PREVIEW_COOKIE_NAME}=${jwt}`), d3({ onMiss: 'pass-through' }))).kind).toBe(
-      'pass-through',
-    );
+    it('reads the pass from the slug cookie only', async () => {
+      const jwt = await mintJwt();
+      expect((await handlePreviewRequest(at(`${pass}=${jwt}`), d3())).kind).toBe('preview');
+      expect(
+        (await handlePreviewRequest(at(`${PREVIEW_COOKIE_NAME}=${jwt}`), d3({ onMiss: 'pass-through' }))).kind,
+      ).toBe('pass-through');
+    });
+
+    it('serves no preview without the slug the dispatcher names', async () => {
+      const jwt = await mintJwt();
+      const v = await handlePreviewRequest(at(`${pass}=${jwt}`), d3({ slug: undefined, onMiss: 'pass-through' }));
+      expect(v.kind).toBe('pass-through');
+    });
+
+    it("ignores another branch's pass", async () => {
+      // A draft pass the default branch's server admits, sent under main's slug: it opens only under its own.
+      const draft = await mintJwt({ branch: 'feature/y', servedBy: 'main' });
+      expect((await handlePreviewRequest(at(`${pass}=${draft}`), d3({ onMiss: 'pass-through' }))).kind).toBe(
+        'pass-through',
+      );
+      const own = previewBranchSlug('feature/y');
+      const v = await handlePreviewRequest(at(`__Secure-conloca_preview_${own}=${draft}`), d3({ slug: own }));
+      expect(v.kind).toBe('preview');
+    });
+
+    it('uses the first pass that verifies', async () => {
+      const jwt = await mintJwt();
+      const planted = await mintJwt({ signWith: foreignPrivateKey });
+      expect((await handlePreviewRequest(at(`${pass}=${planted}; ${pass}=${jwt}`), d3())).kind).toBe('preview');
+    });
+
+    it('accepts a branch name with slash, dot and ü', async () => {
+      const branch = 'feat/ü.x';
+      const own = previewBranchSlug(branch);
+      const jwt = await mintJwt({ branch, servedBy: 'main' });
+      const v = await handlePreviewRequest(at(`__Secure-conloca_preview_${own}=${jwt}`), d3({ slug: own }));
+      expect(v.kind === 'preview' ? v.ctx.branch : null).toBe(branch);
+      expect(
+        () => new Headers({ 'set-cookie': `__Secure-conloca_preview_${own}=x; Path=/_conloca/preview/${own}` }),
+      ).not.toThrow();
+    });
+
+    it('sets the pass on the slug route at entry and lands under the route and slug', async () => {
+      const jwt = await mintJwt();
+      const { fetchFn } = exchangeAnswering(jwt);
+      // The dispatcher forwards an entry to the preview build's own entry route, without the slug.
+      const v = await handlePreviewRequest(
+        makeRequest(
+          `https://site.test/_conloca/preview/blog?${PREVIEW_CODE_PARAM}=Z2l0aHViOjc.abcdefghijklmnopqrstuv&utm=1`,
+        ),
+        d3({ fetchFn }),
+      );
+      if (v.kind !== 'response') throw new Error('expected the init redirect');
+      expect(v.response.headers.get('location')).toBe(`https://site.test/_conloca/preview/${slug}/blog?utm=1`);
+      expect(v.response.headers.getSetCookie()).toEqual([
+        expect.stringMatching(
+          new RegExp(`^${pass}=${jwt}; HttpOnly; Secure; SameSite=Lax; Path=/_conloca/preview/${slug}; Max-Age=\\d+$`),
+        ),
+      ]);
+    });
+
+    it('derives the slug from the pass for a slugless entry', async () => {
+      // An older Conloca, or a mint that couldn't read the mode, sends `<route>/<page>?conloca_code=`.
+      const draft = await mintJwt({ branch: 'feature/y', servedBy: 'main' });
+      const own = previewBranchSlug('feature/y');
+      const { fetchFn } = exchangeAnswering(draft);
+      const v = await handlePreviewRequest(
+        makeRequest(`https://site.test/_conloca/preview/blog?${PREVIEW_CODE_PARAM}=Z2l0aHViOjc.abcdefghijklmnopqrstuv`),
+        d3({ slug: undefined, fetchFn }),
+      );
+      if (v.kind !== 'response') throw new Error('expected the init redirect');
+      expect(v.response.headers.get('location')).toBe(`https://site.test/_conloca/preview/${own}/blog`);
+      expect(v.response.headers.getSetCookie()[0]).toMatch(
+        new RegExp(`^__Secure-conloca_preview_${own}=${draft}; .*Path=/_conloca/preview/${own};`),
+      );
+    });
+
+    it('keeps the route and slug in the Retry link when the exchange is unavailable', async () => {
+      const { fetchFn } = exchangeAnswering(() => new Response('busy', { status: 503 }));
+      const v = await handlePreviewRequest(
+        makeRequest(`https://site.test/_conloca/preview/blog?${PREVIEW_CODE_PARAM}=Z2l0aHViOjc.abcdefghijklmnopqrstuv`),
+        d3({ fetchFn }),
+      );
+      if (v.kind !== 'response') throw new Error('expected the unavailable page');
+      const html = await v.response.text();
+      expect(html).toContain(
+        `href="/_conloca/preview/${slug}/blog?${PREVIEW_CODE_PARAM}=Z2l0aHViOjc.abcdefghijklmnopqrstuv"`,
+      );
+      expect(html).toContain(`href="/_conloca/preview/${slug}/__exit?to=%2Fblog"`);
+    });
+
+    it('takes no protocol-1 pass from the link', async () => {
+      const jwt = await mintJwt();
+      const v = await handlePreviewRequest(
+        makeRequest(`https://site.test/_conloca/preview/blog?${PREVIEW_QUERY_PARAM}=${jwt}`),
+        d3({ onMiss: 'pass-through' }),
+      );
+      expect(v.kind).toBe('pass-through');
+    });
+
+    it('sets the grant cookie on the slug route for a share pass', async () => {
+      const grantExp = Math.floor(Date.now() / 1000) + 86_400;
+      const jwt = await mintJwt({ extra: { grant: 'AAAAAAAAAAAAAAAAAAAAAA', grant_exp: grantExp, shared_by: 'Ana' } });
+      const { fetchFn } = exchangeAnswering(jwt);
+      const v = await handlePreviewRequest(
+        makeRequest(`https://site.test/?${PREVIEW_CODE_PARAM}=Z2l0aHViOjc.abcdefghijklmnopqrstuv`),
+        d3({ fetchFn }),
+      );
+      if (v.kind !== 'response') throw new Error('expected the init redirect');
+      expect(v.response.headers.getSetCookie()[1]).toMatch(
+        new RegExp(
+          `^__Secure-conloca_grant_${slug}=YWNtZQ\\.AAAAAAAAAAAAAAAAAAAAAA; .*Path=/_conloca/preview/${slug};`,
+        ),
+      );
+    });
+
+    it('renews an expired share pass through the slug grant cookie', async () => {
+      const v = await handlePreviewRequest(
+        at(`__Secure-conloca_grant_${slug}=YWNtZQ.AAAAAAAAAAAAAAAAAAAAAA`, '/pricing'),
+        d3({ onMiss: 'pass-through' }),
+      );
+      if (v.kind !== 'response') throw new Error('expected the renewal redirect');
+      expect(v.response.headers.get('location')).toBe(
+        `${ENDPOINT}/preview/redeem/YWNtZQ/AAAAAAAAAAAAAAAAAAAAAA?renew=1&to=%2Fpricing`,
+      );
+    });
+
+    it('expires both slug cookies on their own path at exit, and names the mode', async () => {
+      const v = await handlePreviewRequest(
+        makeRequest(
+          `https://site.test/_conloca/preview/__exit?to=${encodeURIComponent(`/_conloca/preview/${slug}/about`)}`,
+        ),
+        d3(),
+      );
+      if (v.kind !== 'response') throw new Error('expected the exit redirect');
+      expect(v.response.headers.get('location')).toBe('/about');
+      expect(v.response.headers.get('conloca-preview-mode')).toBe(mode);
+      expect(v.response.headers.getSetCookie()).toEqual([
+        `${pass}=; HttpOnly; Secure; SameSite=Lax; Path=/_conloca/preview/${slug}; Max-Age=0`,
+        `__Secure-conloca_grant_${slug}=; HttpOnly; Secure; SameSite=Lax; Path=/_conloca/preview/${slug}; Max-Age=0`,
+      ]);
+    });
+
+    it('answers the probe, which names no slug, with its label and mode and expires nothing', async () => {
+      const v = await handlePreviewRequest(
+        makeRequest('https://site.test/_conloca/preview/__exit?to=%2F'),
+        d3({ slug: undefined }),
+      );
+      if (v.kind !== 'response') throw new Error('expected the exit redirect');
+      expect(v.response.headers.get('conloca-preview')).toBe(await previewLabel('acme/site', 'website', 'main'));
+      expect(v.response.headers.get('conloca-preview-mode')).toBe(mode);
+      expect(v.response.headers.getSetCookie()).toEqual([]);
+    });
+
+    it('ignores a conloca-preview-slug request header', async () => {
+      const jwt = await mintJwt();
+      const req = new Request('https://site.test/about', {
+        headers: { cookie: `${pass}=${jwt}`, 'conloca-preview-slug': slug },
+      });
+      expect((await handlePreviewRequest(req, d3({ slug: undefined, onMiss: 'pass-through' }))).kind).toBe(
+        'pass-through',
+      );
+    });
+
+    it("sends a slug's landing page to production through the exit, which clears the pass that failed", async () => {
+      const v = await handlePreviewRequest(at(`${pass}=not.a.pass`, '/pricing'), d3());
+      if (v.kind !== 'response') throw new Error('expected the landing page');
+      const html = await v.response.text();
+      expect(html).toContain(`href="/_conloca/preview/${slug}/__exit?to=%2Fpricing"`);
+      expect(html).not.toContain('href="/pricing"');
+    });
+
+    it("trades no code on the live site's own routes", async () => {
+      const { fetchFn, bodies } = exchangeAnswering(await mintJwt());
+      const v = await handlePreviewRequest(
+        makeRequest(`https://site.test/api/ping?${PREVIEW_CODE_PARAM}=Z2l0aHViOjc.abcdefghijklmnopqrstuv`),
+        d3({ slug: undefined, onMiss: 'pass-through', fetchFn }),
+      );
+      expect(v.kind).toBe('pass-through');
+      expect(bodies).toEqual([]);
+    });
   });
 
-  it('serves no preview without the slug the dispatcher names', async () => {
-    const jwt = await mintJwt();
-    const v = await handlePreviewRequest(at(`${pass}=${jwt}`), d3({ slug: undefined, onMiss: 'pass-through' }));
-    expect(v.kind).toBe('pass-through');
-  });
-
-  it("ignores another branch's pass", async () => {
-    // A draft pass the default branch's server admits, sent under main's slug: it opens only under its own.
-    const draft = await mintJwt({ branch: 'feature/y', servedBy: 'main' });
-    expect((await handlePreviewRequest(at(`${pass}=${draft}`), d3({ onMiss: 'pass-through' }))).kind).toBe(
-      'pass-through',
-    );
-    const own = previewBranchSlug('feature/y');
-    const v = await handlePreviewRequest(at(`__Secure-conloca_preview_${own}=${draft}`), d3({ slug: own }));
-    expect(v.kind).toBe('preview');
-  });
-
-  it('uses the first pass that verifies', async () => {
-    const jwt = await mintJwt();
-    const planted = await mintJwt({ signWith: foreignPrivateKey });
-    expect((await handlePreviewRequest(at(`${pass}=${planted}; ${pass}=${jwt}`), d3())).kind).toBe('preview');
-  });
-
-  it('accepts a branch name with slash, dot and ü', async () => {
-    const branch = 'feat/ü.x';
-    const own = previewBranchSlug(branch);
-    const jwt = await mintJwt({ branch, servedBy: 'main' });
-    const v = await handlePreviewRequest(at(`__Secure-conloca_preview_${own}=${jwt}`), d3({ slug: own }));
-    expect(v.kind === 'preview' ? v.ctx.branch : null).toBe(branch);
-    expect(
-      () => new Headers({ 'set-cookie': `__Secure-conloca_preview_${own}=x; Path=/_conloca/preview/${own}` }),
-    ).not.toThrow();
-  });
-
-  it('sets the pass on the slug route at entry and lands under the route and slug', async () => {
-    const jwt = await mintJwt();
-    const { fetchFn } = exchangeAnswering(jwt);
-    // The dispatcher forwards an entry to the preview build's own entry route, without the slug.
-    const v = await handlePreviewRequest(
-      makeRequest(`https://site.test/_conloca/preview/blog?${PREVIEW_CODE_PARAM}=x.y&utm=1`),
-      d3({ fetchFn }),
-    );
-    if (v.kind !== 'response') throw new Error('expected the init redirect');
-    expect(v.response.headers.get('location')).toBe(`https://site.test/_conloca/preview/${slug}/blog?utm=1`);
-    expect(v.response.headers.getSetCookie()).toEqual([
-      expect.stringMatching(
-        new RegExp(`^${pass}=${jwt}; HttpOnly; Secure; SameSite=Lax; Path=/_conloca/preview/${slug}; Max-Age=\\d+$`),
-      ),
-    ]);
-  });
-
-  it('derives the slug from the pass for a slugless entry', async () => {
-    // An older Conloca, or a mint that couldn't read the mode, sends `<route>/<page>?conloca_code=`.
-    const draft = await mintJwt({ branch: 'feature/y', servedBy: 'main' });
-    const own = previewBranchSlug('feature/y');
-    const { fetchFn } = exchangeAnswering(draft);
-    const v = await handlePreviewRequest(
-      makeRequest(`https://site.test/_conloca/preview/blog?${PREVIEW_CODE_PARAM}=x.y`),
-      d3({ slug: undefined, fetchFn }),
-    );
-    if (v.kind !== 'response') throw new Error('expected the init redirect');
-    expect(v.response.headers.get('location')).toBe(`https://site.test/_conloca/preview/${own}/blog`);
-    expect(v.response.headers.getSetCookie()[0]).toMatch(
-      new RegExp(`^__Secure-conloca_preview_${own}=${draft}; .*Path=/_conloca/preview/${own};`),
-    );
-  });
-
-  it('keeps the route and slug in the Retry link when the exchange is unavailable', async () => {
-    const { fetchFn } = exchangeAnswering(() => new Response('busy', { status: 503 }));
-    const v = await handlePreviewRequest(
-      makeRequest(`https://site.test/_conloca/preview/blog?${PREVIEW_CODE_PARAM}=x.y`),
-      d3({ fetchFn }),
-    );
-    if (v.kind !== 'response') throw new Error('expected the unavailable page');
-    const html = await v.response.text();
-    expect(html).toContain(`href="/_conloca/preview/${slug}/blog?${PREVIEW_CODE_PARAM}=x.y"`);
-    expect(html).toContain(`href="/_conloca/preview/${slug}/__exit?to=%2Fblog"`);
-  });
-
-  it('takes no protocol-1 pass from the link under D3', async () => {
-    const jwt = await mintJwt();
-    const v = await handlePreviewRequest(
-      makeRequest(`https://site.test/_conloca/preview/blog?${PREVIEW_QUERY_PARAM}=${jwt}`),
-      d3({ onMiss: 'pass-through' }),
-    );
-    expect(v.kind).toBe('pass-through');
-  });
-
-  it('sets the grant cookie on the slug route for a share pass', async () => {
-    const grantExp = Math.floor(Date.now() / 1000) + 86_400;
-    const jwt = await mintJwt({ extra: { grant: 'AAAAAAAAAAAAAAAAAAAAAA', grant_exp: grantExp, shared_by: 'Ana' } });
-    const { fetchFn } = exchangeAnswering(jwt);
-    const v = await handlePreviewRequest(makeRequest(`https://site.test/?${PREVIEW_CODE_PARAM}=x.y`), d3({ fetchFn }));
-    if (v.kind !== 'response') throw new Error('expected the init redirect');
-    expect(v.response.headers.getSetCookie()[1]).toMatch(
-      new RegExp(`^__Secure-conloca_grant_${slug}=YWNtZQ\\.AAAAAAAAAAAAAAAAAAAAAA; .*Path=/_conloca/preview/${slug};`),
-    );
-  });
-
-  it('renews an expired share pass through the slug grant cookie', async () => {
-    const v = await handlePreviewRequest(
-      at(`__Secure-conloca_grant_${slug}=YWNtZQ.AAAAAAAAAAAAAAAAAAAAAA`, '/pricing'),
-      d3({ onMiss: 'pass-through' }),
-    );
-    if (v.kind !== 'response') throw new Error('expected the renewal redirect');
-    expect(v.response.headers.get('location')).toBe(
-      `${ENDPOINT}/preview/redeem/YWNtZQ/AAAAAAAAAAAAAAAAAAAAAA?renew=1&to=%2Fpricing`,
-    );
-  });
-
-  it('expires both slug cookies on their own path at exit, and names d3', async () => {
-    const v = await handlePreviewRequest(
-      makeRequest(
-        `https://site.test/_conloca/preview/__exit?to=${encodeURIComponent(`/_conloca/preview/${slug}/about`)}`,
-      ),
-      d3(),
-    );
-    if (v.kind !== 'response') throw new Error('expected the exit redirect');
-    expect(v.response.headers.get('location')).toBe('/about');
-    expect(v.response.headers.get('conloca-preview-mode')).toBe('d3');
-    expect(v.response.headers.getSetCookie()).toEqual([
-      `${pass}=; HttpOnly; Secure; SameSite=Lax; Path=/_conloca/preview/${slug}; Max-Age=0`,
-      `__Secure-conloca_grant_${slug}=; HttpOnly; Secure; SameSite=Lax; Path=/_conloca/preview/${slug}; Max-Age=0`,
-    ]);
-  });
-
-  it('answers the probe, which names no slug, with its label and mode and expires nothing', async () => {
-    const v = await handlePreviewRequest(
-      makeRequest('https://site.test/_conloca/preview/__exit?to=%2F'),
-      d3({ slug: undefined }),
-    );
-    if (v.kind !== 'response') throw new Error('expected the exit redirect');
-    expect(v.response.headers.get('conloca-preview')).toBe(await previewLabel('acme/site', 'website', 'main'));
-    expect(v.response.headers.get('conloca-preview-mode')).toBe('d3');
-    expect(v.response.headers.getSetCookie()).toEqual([]);
-  });
-
-  it('names d2 on a D2 exit', async () => {
-    const v = await handlePreviewRequest(
-      makeRequest('https://site.test/_conloca/preview/__exit?to=%2F'),
-      makeOptions(),
-    );
-    if (v.kind !== 'response') throw new Error('expected the exit redirect');
-    expect(v.response.headers.get('conloca-preview-mode')).toBe('d2');
-  });
-
-  it("sends a slug's landing page to production through the exit, which clears the pass that failed", async () => {
-    const v = await handlePreviewRequest(at(`${pass}=not.a.pass`, '/pricing'), d3());
-    if (v.kind !== 'response') throw new Error('expected the landing page');
-    const html = await v.response.text();
-    expect(html).toContain(`href="/_conloca/preview/${slug}/__exit?to=%2Fpricing"`);
-    expect(html).not.toContain('href="/pricing"');
-  });
-
-  it("trades no code on the live site's own routes", async () => {
-    const { fetchFn, bodies } = exchangeAnswering(await mintJwt());
-    const v = await handlePreviewRequest(
-      makeRequest(`https://site.test/api/ping?${PREVIEW_CODE_PARAM}=x.y`),
-      d3({ slug: undefined, onMiss: 'pass-through', fetchFn }),
-    );
-    expect(v.kind).toBe('pass-through');
-    expect(bodies).toEqual([]);
-  });
+it('names d2 on a D2 exit', async () => {
+  const v = await handlePreviewRequest(makeRequest('https://site.test/_conloca/preview/__exit?to=%2F'), makeOptions());
+  if (v.kind !== 'response') throw new Error('expected the exit redirect');
+  expect(v.response.headers.get('conloca-preview-mode')).toBe('d2');
 });

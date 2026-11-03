@@ -1,4 +1,4 @@
-import { PREVIEW_PROTOCOL, previewBranchSlug } from '@conloca/content-api/editor-host';
+import { isSluggedPreviewMode, PREVIEW_PROTOCOL, previewBranchSlug } from '@conloca/content-api/editor-host';
 import { createRemoteJWKSet, customFetch, type JWTPayload, type JWTVerifyGetKey, jwtVerify } from 'jose';
 import { parseCookieValues, serializePreviewCookie } from './cookie.js';
 import { exchangeEntryCode } from './entry-code.js';
@@ -17,7 +17,7 @@ import {
   previewScope,
   stripPreviewPrefix,
 } from './preview-path.js';
-import { GRANT_REF_RE, grantRef } from './redeem-url.js';
+import { GRANT_REF_RE, grantRef, orgToken } from './redeem-url.js';
 
 /**
  * Options consumed by {@link handlePreviewRequest}.
@@ -76,11 +76,12 @@ export interface PreviewMiddlewareOptions {
   /**
    * How this build serves previews. `d2` (default): on the site's own deploy, where a share viewer whose pass
    * expires opens the share link again. `d3`: behind the dispatcher next to a static site, under the route and the
-   * branch slug, with cookies scoped there. `d4`: on a separate preview deploy that has no other visitors. Under D3 and
-   * D4 a grant cookie lets an expired pass renew through the share link.
+   * branch slug, with cookies scoped there. `d4`: on a separate preview deploy that has no other visitors. `d8`: on
+   * the site's own server under the route and the branch slug. Under D3 and D4 a grant cookie lets an expired pass
+   * renew through the share link.
    */
   mode?: PreviewServeMode;
-  /** D3: the requested branch slug, as the dispatcher names it; a pass opens only under its own branch's slug. */
+  /** D3: the requested branch slug, as the dispatcher names it; a pass opens only under its own branch's slug. D8 reads the slug from the path and ignores this. */
   slug?: string;
 }
 
@@ -182,8 +183,8 @@ export async function handlePreviewRequest(request: Request, opts: PreviewMiddle
     // Under a D3 slug the dispatcher would move that path back under the route, where the same failing cookie lands
     // here again: the slug's exit clears it and then leaves for the published page.
     const liveHref =
-      mode === 'd3' && opts.slug !== undefined
-        ? `${previewScope('d3', opts.base, opts.slug).route}/__exit?to=${encodeURIComponent(pathname)}`
+      isSluggedPreviewMode(mode) && opts.slug !== undefined
+        ? `${previewScope(mode, opts.base, opts.slug).route}/__exit?to=${encodeURIComponent(pathname)}`
         : undefined;
     return {
       kind: 'response',
@@ -195,10 +196,12 @@ export async function handlePreviewRequest(request: Request, opts: PreviewMiddle
     };
   };
   const cookie = request.headers.get('cookie');
-  const code = url.searchParams.get(PREVIEW_CODE_PARAM);
+  // A code that can't be one is no code: this server never calls Conloca for it.
+  const raw = url.searchParams.get(PREVIEW_CODE_PARAM);
+  const code = raw !== null && isEntryCodeShape(raw) ? raw : null;
   // Under D3 only the dispatcher's slug makes a request a preview request, except an entry link without one (an older
   // Conloca's, or a mint that couldn't read the mode): its slug comes from the pass. Anything else is the live site's.
-  const slugless = mode === 'd3' && opts.slug === undefined;
+  const slugless = isSluggedPreviewMode(mode) && opts.slug === undefined;
   // A code counts only on the preview route: on the live site's own routes, trading it would let anyone make this
   // server call Conloca once per request.
   const entering = code !== null && stripPreviewPrefix(url.pathname, opts.base) !== url.pathname;
@@ -222,7 +225,7 @@ export async function handlePreviewRequest(request: Request, opts: PreviewMiddle
     if (exchanged.ok) {
       const ctx = await tryValidate(exchanged.pass, opts);
       if (ctx !== null) {
-        const entered = scope ?? previewScope('d3', opts.base, previewBranchSlug(ctx.branch));
+        const entered = scope ?? previewScope(mode, opts.base, previewBranchSlug(ctx.branch));
         return { kind: 'response', response: makeInitRedirect(url, exchanged.pass, ctx, opts, entered) };
       }
     } else if (exchanged.kind === 'ended') {
@@ -234,7 +237,7 @@ export async function handlePreviewRequest(request: Request, opts: PreviewMiddle
       // Never the held pass: it may open another branch than the link names. Under D3 the dispatcher forwarded the
       // entry without its slug, so Retry rebuilds the link it came from; a slugless one is retried as it is.
       const retryHref =
-        mode === 'd3' && scope !== null
+        isSluggedPreviewMode(mode) && scope !== null
           ? `${scope.route}${pageUnderBase(path, opts.base)}${url.search}`
           : `${url.pathname}${url.search}`;
       return { kind: 'response', response: renderPreviewUnavailable({ retryHref, exitHref }) };
@@ -248,7 +251,7 @@ export async function handlePreviewRequest(request: Request, opts: PreviewMiddle
 
   // 2. Query-param init path (protocol 1, read for one release). An invalid
   // pass gets the landing page rather than a 401 (see docstring). D3 never had protocol-1 links, so it takes none.
-  const queryToken = mode === 'd3' ? null : url.searchParams.get(PREVIEW_QUERY_PARAM);
+  const queryToken = isSluggedPreviewMode(mode) ? null : url.searchParams.get(PREVIEW_QUERY_PARAM);
   if (queryToken !== null) {
     const ctx = await tryValidate(queryToken, opts);
     return ctx === null
@@ -353,7 +356,8 @@ function projectContext(payload: JWTPayload, jwt: string, opts: PreviewMiddlewar
   if (branch !== opts.branch && readStringClaim(payload, 'served_by') !== opts.branch) return null;
   // Under D3 the cookie lives under its branch's slug: a pass for another branch never opens this one's pages. A
   // slugless entry has no slug yet; its scope comes from this branch (handlePreviewRequest).
-  if (opts.mode === 'd3' && opts.slug !== undefined && previewBranchSlug(branch) !== opts.slug) return null;
+  if (isSluggedPreviewMode(opts.mode) && opts.slug !== undefined && previewBranchSlug(branch) !== opts.slug)
+    return null;
   const expiresInSeconds =
     typeof payload.exp === 'number' ? Math.max(0, payload.exp - Math.floor(Date.now() / 1000)) : undefined;
   // A share pass names its link and the link's expiry; a pass that names a link without one is malformed.
@@ -406,7 +410,7 @@ function makeExitRedirect(url: URL, opts: PreviewMiddlewareOptions, label: strin
     [PREVIEW_MODE_HEADER]: mode,
   });
   // The probe asks a D3 server without a slug: it names no cookies, so none are expired.
-  if (mode === 'd3' && opts.slug === undefined) return new Response(null, { status: 302, headers });
+  if (isSluggedPreviewMode(mode) && opts.slug === undefined) return new Response(null, { status: 302, headers });
   const scope = previewScope(mode, opts.base, opts.slug);
   headers.append('set-cookie', serializePreviewCookie(scope.pass, '', 0, scope.path));
   // Without this the renewal would see the grant and send the viewer straight back in.
@@ -440,8 +444,8 @@ function exitTarget(url: URL, opts: PreviewMiddlewareOptions): string {
 
 /** A pathname with the preview route stripped; under D3 the branch slug goes with it. */
 function pageOf(pathname: string, opts: PreviewMiddlewareOptions): string {
-  if (opts.mode === 'd3' && opts.slug !== undefined) {
-    const { route } = previewScope('d3', opts.base, opts.slug);
+  if (opts.mode !== undefined && isSluggedPreviewMode(opts.mode) && opts.slug !== undefined) {
+    const { route } = previewScope(opts.mode, opts.base, opts.slug);
     if (pathname === route || pathname.startsWith(`${route}/`)) {
       return `${opts.base.replace(/\/+$/u, '')}${pathname.slice(route.length) || '/'}`;
     }
@@ -464,7 +468,7 @@ function cleanLocation(url: URL, opts: PreviewMiddlewareOptions, scope: PreviewS
   cleaned.searchParams.delete(PREVIEW_QUERY_PARAM);
   cleaned.searchParams.delete(PREVIEW_CODE_PARAM);
   const page = stripPreviewPrefix(cleaned.pathname, opts.base);
-  cleaned.pathname = opts.mode === 'd3' ? `${scope.route}${pageUnderBase(page, opts.base)}` : page;
+  cleaned.pathname = isSluggedPreviewMode(opts.mode) ? `${scope.route}${pageUnderBase(page, opts.base)}` : page;
   const location = cleaned.toString();
   return cleaned.search === '' && location.endsWith('?') ? location.slice(0, -1) : location;
 }
@@ -493,4 +497,21 @@ function makeCleanRedirect(url: URL, opts: PreviewMiddlewareOptions, scope: Prev
     status: 302,
     headers: { location: cleanLocation(url, opts, scope), ...PREVIEW_CACHE_HEADERS },
   });
+}
+
+/**
+ * Whether a link's code has the shape Conloca mints, `<org token>.<secret>`: the org token is the canonical unpadded
+ * base64url of a non-empty UTF-8 id. Checked before the exchange so junk never makes this server call out.
+ */
+export function isEntryCodeShape(code: string): boolean {
+  const [token = '', secret = '', ...extra] = code.split('.');
+  if (extra.length > 0 || !/^[A-Za-z0-9_-]{1,200}$/u.test(token) || !/^[A-Za-z0-9_-]{16,256}$/u.test(secret))
+    return false;
+  try {
+    const binary = atob(token.replace(/-/gu, '+').replace(/_/gu, '/'));
+    const org = new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from(binary, (c) => c.charCodeAt(0)));
+    return org !== '' && orgToken(org) === token;
+  } catch {
+    return false;
+  }
 }

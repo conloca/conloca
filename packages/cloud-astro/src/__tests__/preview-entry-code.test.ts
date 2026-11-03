@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { exchangeEntryCode } from '../preview/entry-code.js';
+import { handlePreviewRequest } from '../preview/middleware.js';
 import { grantRef, orgToken } from '../preview/redeem-url.js';
 
 const input = {
@@ -73,5 +74,30 @@ describe('orgToken', () => {
   it('is the unpadded base64url of the org id, the same vector Conloca uses', () => {
     expect(orgToken('github:7')).toBe('Z2l0aHViOjc');
     expect(grantRef('github:7', 'AAAAAAAAAAAAAAAAAAAAAA')).toBe('Z2l0aHViOjc.AAAAAAAAAAAAAAAAAAAAAA');
+  });
+});
+
+describe('handlePreviewRequest — the entry code shape', () => {
+  it('never calls Conloca for a code that is not `<org token>.<secret>`', async () => {
+    let calls = 0;
+    const fetchFn = Object.assign(
+      async () => {
+        calls++;
+        return Response.json({ pass: 'header.pass.sig' });
+      },
+      { preconnect: fetch.preconnect },
+    );
+    await Promise.all(
+      ['x', 'a.b', 'Z2l0aHViOjd.abcdefghijklmnopqrstuv'].map((code) =>
+        handlePreviewRequest(new Request(`https://site.test/_conloca/preview/blog?conloca_code=${code}`), {
+          ...input,
+          saasAudience: 'acme/site',
+          branch: 'main',
+          base: '/',
+          fetchFn,
+        }),
+      ),
+    );
+    expect(calls).toBe(0);
   });
 });

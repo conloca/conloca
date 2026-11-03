@@ -8,29 +8,20 @@
  * the preview server at their own path with the branch slug in a request header only it sets.
  */
 
-import { branchOfPreviewSlug } from '@conloca/content-api/editor-host';
 import { injectPreviewBanner } from './banner.js';
-import { parseCookieValues } from './cookie.js';
-import { applyPreviewHeaders, PREVIEW_CACHE_HEADERS } from './headers.js';
-import { renderNoPreviewLanding, renderPreviewUnavailable } from './landing.js';
+import { applyPreviewHeaders } from './headers.js';
+import { renderNoPreviewLanding } from './landing.js';
+import { isNavigation, movedSrcset, previewHref } from './links.js';
 import { handlePreviewRequest, type PreviewContext, type PreviewMiddlewareOptions } from './middleware.js';
 import {
-  normalizeTrailingSlash,
-  PREVIEW_CODE_PARAM,
-  PREVIEW_SLUG_HEADER,
-  previewRoutePrefix,
-  previewScope,
-} from './preview-path.js';
-
-/** What the exit route needs to answer without the preview server: the build's own repository, site and branch. */
-export interface DispatcherExit {
-  repo: string;
-  siteId: string;
-  branch: string;
-  audience: string;
-  /** The issuer every pass must name, when the integration options name one. */
-  issuer?: string;
-}
+  answerExit,
+  finishEntry,
+  holdsPreviewCredential,
+  type PreviewExit,
+  previewUnavailable,
+  routePrefixed,
+} from './prefix-router.js';
+import { normalizeTrailingSlash, PREVIEW_CODE_PARAM, PREVIEW_SLUG_HEADER, previewRoutePrefix } from './preview-path.js';
 
 /** What the build writes next to the dispatcher (`.conloca/dispatcher/dispatcher.json`). */
 export interface DispatcherConfig {
@@ -43,7 +34,7 @@ export interface DispatcherConfig {
   /** Hosts sites.json declares: links to them are links to this site. */
   domains: string[];
   /** The exit route's values; null when the preview build failed, so the probe reads "no preview server". */
-  exit: DispatcherExit | null;
+  exit: PreviewExit | null;
 }
 
 /** A Cloudflare Workers rate-limit binding, as the dispatcher calls it. */
@@ -117,70 +108,7 @@ interface Attributes {
   setAttribute(name: string, value: string): void;
 }
 
-/**
- * `value` under the preview route when it names a page of this site, else null (left as it is). It is resolved
- * against `page`, the unprefixed URL the page was rendered for, so `../x` and `?q` keep their meaning. Files, built
- * assets, the image endpoint, `/_conloca/` and other sites stay where they are.
- */
-export function previewHref(
-  value: string,
-  page: URL,
-  route: string,
-  root: string,
-  hosts: ReadonlySet<string>,
-): string | null {
-  if (value === '' || value.startsWith('#')) return null;
-  let target: URL;
-  try {
-    target = new URL(value, page);
-  } catch {
-    return null;
-  }
-  if (target.protocol !== 'http:' && target.protocol !== 'https:') return null;
-  const own = target.host === page.host;
-  if (!own && !hosts.has(target.hostname)) return null;
-  const { pathname } = target;
-  if (root !== '' && pathname !== root && !pathname.startsWith(`${root}/`)) return null;
-  const rest = pathname.slice(root.length) || '/';
-  if (rest.startsWith('/_conloca/') || rest.startsWith('/_astro/') || rest === '/_image') return null;
-  const last = rest.slice(rest.lastIndexOf('/') + 1);
-  if (last.includes('.') && !last.endsWith('.html')) return null;
-  const moved = `${route}${rest}${target.search}${target.hash}`;
-  return own ? moved : `${target.origin}${moved}`;
-}
-
-/** A navigation, the only request that may receive draft HTML; without Sec-Fetch-*, one that asks for HTML. */
-function isNavigation(request: Request): boolean {
-  const mode = request.headers.get('sec-fetch-mode');
-  if (mode !== null) return mode === 'navigate';
-  return (request.headers.get('accept') ?? '').includes('text/html');
-}
-
-/**
- * `srcset` with each candidate URL that `move` answers for replaced, everything else kept byte for byte; null when none
- * moved. A URL runs to the next whitespace, as the HTML parser reads it, so a `data:` URL's commas stay inside it.
- */
-function movedSrcset(value: string, move: (href: string) => string | null): string | null {
-  let out = '';
-  let rest = value;
-  let moved = false;
-  while (rest !== '') {
-    const gap = /^[\s,]*/u.exec(rest)?.[0] ?? '';
-    const token = /^\S*/u.exec(rest.slice(gap.length))?.[0] ?? '';
-    const commas = /,*$/u.exec(token)?.[0] ?? '';
-    const href = token.slice(0, token.length - commas.length);
-    rest = rest.slice(gap.length + token.length);
-    // Descriptors (`1x`, `400w`) run to the next comma, unless the URL already ended at one.
-    const descriptor = commas === '' ? (/^[^,]*/u.exec(rest)?.[0] ?? '') : '';
-    rest = rest.slice(descriptor.length);
-    const target = href === '' ? null : move(href);
-    if (target !== null) moved = true;
-    out += `${gap}${target ?? href}${commas}${descriptor}`;
-  }
-  return moved ? out : null;
-}
-
-function linkRewriter(page: URL, route: string, root: string, hosts: ReadonlySet<string>): HTMLRewriter {
+export function linkRewriter(page: URL, route: string, root: string, hosts: ReadonlySet<string>): HTMLRewriter {
   // A `<base href>` changes what relative links resolve against for every link after it.
   let resolveAgainst = page;
   const move = (element: Attributes, name: string): boolean => {
@@ -221,7 +149,7 @@ function linkRewriter(page: URL, route: string, root: string, hosts: ReadonlySet
 /** How the dispatcher checks a pass: with the values the preview build baked, and the overrides its server reads. */
 function passOptions(
   config: DispatcherConfig,
-  exit: DispatcherExit,
+  exit: PreviewExit,
   env: DispatcherEnv,
   slug: string,
 ): PreviewMiddlewareOptions {
@@ -255,37 +183,6 @@ export function createDispatcher(config: DispatcherConfig, loadServer: (() => Pr
   const prerendered = new Set(config.prerendered);
   const hosts = new Set(config.domains);
 
-  /** The exit route, from the build's own values: the probe never waits for the preview server. */
-  async function exit(url: URL, slug: string | undefined): Promise<Response> {
-    if (config.exit === null) {
-      // No label: Conloca reads "no preview server" and says so, instead of minting a link to a 503 page.
-      return new Response(null, { status: 302, headers: { location: config.base, ...PREVIEW_CACHE_HEADERS } });
-    }
-    const verdict = await handlePreviewRequest(new Request(`${url.origin}${prefix}/__exit${url.search}`), {
-      saasEndpoint: config.endpoint,
-      saasAudience: config.exit.audience,
-      repo: config.exit.repo,
-      siteId: config.exit.siteId,
-      branch: config.exit.branch,
-      base: config.base,
-      mode: 'd3',
-      ...(slug === undefined ? {} : { slug }),
-    });
-    // The exit branch always answers a response; anything else would be a bug in this call, so fail closed.
-    return verdict.kind === 'response'
-      ? applyPreviewHeaders(verdict.response)
-      : applyPreviewHeaders(new Response(null, { status: 302, headers: { location: config.base } }));
-  }
-
-  /** An entry answer (a redirect or Conloca's own page): headers and `Location` only, never its HTML. */
-  function finishEntry(answer: Response, page: URL, route: string): Response {
-    const out = applyPreviewHeaders(answer);
-    const location = out.headers.get('location');
-    const moved = location === null ? null : previewHref(location, page, route, root, hosts);
-    if (moved !== null) out.headers.set('location', moved);
-    return out;
-  }
-
   /** The draft answer with the route put back on its location and links. */
   async function finish(
     answer: Response,
@@ -293,7 +190,7 @@ export function createDispatcher(config: DispatcherConfig, loadServer: (() => Pr
     route: string,
     published: Pick<PreviewContext, 'branch' | 'grant'> | null,
   ): Promise<Response> {
-    const out = finishEntry(answer, page, route);
+    const out = finishEntry(answer, page, route, root, hosts);
     if (!(out.headers.get('content-type') ?? '').includes('text/html')) return out;
     const rewriter = linkRewriter(page, route, root, hosts);
     if (published === null) return rewriter.transform(out);
@@ -324,7 +221,8 @@ export function createDispatcher(config: DispatcherConfig, loadServer: (() => Pr
         return (await load()).default.fetch(forwarded, env, ctx);
       };
 
-      if (url.pathname !== prefix && !url.pathname.startsWith(`${prefix}/`)) {
+      let at = routePrefixed(url, config.base, 'd3');
+      if (at.kind === 'outside') {
         // `<base>_image` is listed for draft pages only (the live site's pages are prerendered), so it is the
         // preview's to pay for: it counts against the preview route's limit.
         if (url.pathname === `${root}/_image` && !(await withinLimit(request, env)))
@@ -334,22 +232,18 @@ export function createDispatcher(config: DispatcherConfig, loadServer: (() => Pr
         // when the site lists nothing beyond the prefix (`finishD3Build`), so this fallback is never a live API route.
         return loadServer === null ? env.ASSETS.fetch(request) : forward(loadServer, url, undefined);
       }
-      const [first = '', ...rest] = url.pathname.slice(prefix.length + 1).split('/');
       // The probe, and a page's own exit: answered here, never counted, never loading the server.
-      if (first === '__exit' && rest.length === 0) return exit(url, undefined);
-      const branch = branchOfPreviewSlug(first);
-      if (branch !== null && rest.length === 1 && rest[0] === '__exit') return exit(url, first);
+      if (at.kind === 'exit') return answerExit(url, at.slug, config.exit, config.base, config.endpoint, 'd3');
+      // D3's image endpoint is `<base>_image`: under the route `_image` is a stray path, as any other slugless one.
+      if (at.kind === 'image')
+        at = { kind: 'slugless', inner: `${root}/_image`, entering: url.searchParams.has(PREVIEW_CODE_PARAM) };
 
       // Every other request under the route counts, `__status` included, before any other work.
       if (!(await withinLimit(request, env))) return renderTooManyPreviewRequests();
-      const entering = url.searchParams.has(PREVIEW_CODE_PARAM);
-      const inner = branch === null ? `${root}/${[first, ...rest].join('/')}` : `${root}/${rest.join('/')}`;
-      const route = branch === null ? prefix : previewScope('d3', config.base, first).route;
+      const { inner, entering } = at;
+      const route = at.kind === 'slugged' ? at.route : prefix;
       const { exit: baked } = config;
-      if (loadServer === null || baked === null) {
-        const page = renderPreviewUnavailable({ retryHref: `${url.pathname}${url.search}`, exitHref: config.base });
-        return applyPreviewHeaders(new Response(page.body, { status: 503, headers: page.headers }));
-      }
+      if (loadServer === null || baked === null) return previewUnavailable(`${url.pathname}${url.search}`, config.base);
       // Under the route a preview server that throws (a Node-only import, a render error) answers
       // "Preview couldn't load the draft", never Cloudflare's own error page.
       const guarded = async (target: URL, slug: string | undefined): Promise<Response> => {
@@ -357,34 +251,26 @@ export function createDispatcher(config: DispatcherConfig, loadServer: (() => Pr
           return await forward(loadServer, target, slug);
         } catch (error) {
           console.error('@conloca/cloud-astro: the preview server failed', error);
-          const page = renderPreviewUnavailable({
-            retryHref: `${url.pathname}${url.search}`,
-            exitHref: `${route}/__exit?to=${encodeURIComponent(inner)}`,
-          });
-          return applyPreviewHeaders(new Response(page.body, { status: 503, headers: page.headers }));
+          return previewUnavailable(`${url.pathname}${url.search}`, `${route}/__exit?to=${encodeURIComponent(inner)}`);
         }
       };
       const landing = () =>
         applyPreviewHeaders(renderNoPreviewLanding({ pathname: inner, saasEndpoint: config.endpoint }));
 
-      if (branch === null) {
+      if (at.kind === 'slugless') {
         // A slugless entry link: the preview server exchanges the code and takes the slug from the pass.
         if (!entering) return landing();
-        return finishEntry(await guarded(url, undefined), url, prefix);
+        return finishEntry(await guarded(url, undefined), url, prefix, root, hosts);
       }
-      const scope = previewScope('d3', config.base, first);
-      const cookie = request.headers.get('cookie');
-      const holds =
-        parseCookieValues(cookie, scope.pass).length > 0 ||
-        (scope.grant !== null && parseCookieValues(cookie, scope.grant).length > 0);
+      const { slug, page } = at;
       // Refused before the preview server loads: a request with no credential never pays for its start-up.
-      if (!entering && !holds) return landing();
-      const page = new URL(`${inner}${url.search}`, url.origin);
+      if (!entering && !holdsPreviewCredential(request.headers.get('cookie'), 'd3', config.base, slug))
+        return landing();
       if (entering) {
         // The adapter serves a prerendered page from the static files before any middleware runs, so the code goes
         // to the preview build's entry route (`<prefix>/[...path]`, always on demand), as under D2.
         const entry = new URL(`${prefix}${inner.slice(root.length)}${url.search}`, url.origin);
-        return finishEntry(await guarded(entry, first), page, scope.route);
+        return finishEntry(await guarded(entry, slug), page, route, root, hosts);
       }
       if (!isNavigation(request)) {
         // Scripts never read drafts: a fetch under the route gets published bytes.
@@ -395,13 +281,13 @@ export function createDispatcher(config: DispatcherConfig, loadServer: (() => Pr
         // other: one that fails gets the landing page (or the share link's renewal), never the banner.
         const verdict = await handlePreviewRequest(
           new Request(page.href, { headers }),
-          passOptions(config, baked, env, first),
+          passOptions(config, baked, env, slug),
         );
         if (verdict.kind !== 'preview')
-          return finishEntry(verdict.kind === 'response' ? verdict.response : landing(), page, scope.route);
-        return finish(await env.ASSETS.fetch(new Request(page.href, { headers })), page, scope.route, verdict.ctx);
+          return finishEntry(verdict.kind === 'response' ? verdict.response : landing(), page, route, root, hosts);
+        return finish(await env.ASSETS.fetch(new Request(page.href, { headers })), page, route, verdict.ctx);
       }
-      return finish(await guarded(page, first), page, scope.route, null);
+      return finish(await guarded(page, slug), page, route, null);
     },
   };
 }

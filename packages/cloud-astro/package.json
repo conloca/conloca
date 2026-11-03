@@ -43,6 +43,11 @@
       "import": "./dist/src/site-middleware.js",
       "default": "./dist/src/site-middleware.js"
     },
+    "./d8-middleware": {
+      "types": "./dist/src/d8-middleware.d.ts",
+      "import": "./dist/src/d8-middleware.js",
+      "default": "./dist/src/d8-middleware.js"
+    },
     "./dispatcher": {
       "types": "./dist/src/preview/dispatcher.d.ts",
       "import": "./dist/src/preview/dispatcher.js",
@@ -82,6 +87,7 @@
     "@conloca/content-api": "workspace:*",
     "@conloca/mdx": "workspace:*",
     "hast-util-from-html": "^2.0.3",
+    "htmlparser2": "^10.1.0",
     "jose": "^6.2.10",
     "jsonc-parser": "^3.3.1",
     "sass": "^1.103.1",

@@ -11,7 +11,8 @@ import { isRecord } from '@conloca/content-api/component-vocabulary';
 import { readSitesConfig } from '@conloca/content-api/node';
 import { PACKAGE_NAME } from './constants.js';
 import { parseWranglerConfig, wranglerConfigPath } from './preview/cloudflare-adapter.js';
-import type { DispatcherConfig, DispatcherExit } from './preview/dispatcher.js';
+import type { DispatcherConfig } from './preview/dispatcher.js';
+import type { PreviewExit } from './preview/prefix-router.js';
 import { previewOwnEntries, previewRoutePrefix } from './preview/preview-path.js';
 
 /** What the preview build tells the site's build: its pages, its on-demand routes and the exit values it baked. */
@@ -21,7 +22,7 @@ export interface PreviewRoutes {
   /** `run_worker_first` globs under the base. */
   onDemand: string[];
   /** What the dispatcher's exit route answers with. */
-  exit: DispatcherExit;
+  exit: PreviewExit;
 }
 
 const ROUTES_FILE = 'routes.json';
@@ -61,7 +62,7 @@ function isStrings(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === 'string');
 }
 
-function isExit(value: unknown): value is DispatcherExit {
+function isExit(value: unknown): value is PreviewExit {
   return (
     isRecord(value) &&
     typeof value.repo === 'string' &&

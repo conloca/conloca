@@ -27,19 +27,25 @@
  */
 
 import type { ContentAPI } from '@conloca/content-api';
+import { isSluggedPreviewMode } from '@conloca/content-api/editor-host';
 import { fetchPageStatus, isShareEndedKind, type PageStatus } from './_dispatch.js';
+import type { BakedPreviewOpts } from './_resolve-opts.js';
 import { injectPreviewBanner } from './banner.js';
 import { PreviewContentAPI } from './content-api.js';
 import { applyPreviewHeaders, PREVIEW_CACHE_HEADERS } from './headers.js';
 import { renderPreviewUnavailable, renderShareEnded } from './landing.js';
+import { rewritePreviewLinks } from './links.js';
 import { handlePreviewRequest, type PreviewContext, type PreviewMiddlewareOptions } from './middleware.js';
+import { finishEntry, routePrefixed } from './prefix-router.js';
 import {
+  cleanPagePath,
   normalizeTrailingSlash,
   PREVIEW_SLUG_HEADER,
   pathUnderBase,
   previewScope,
   stripPreviewPrefix,
 } from './preview-path.js';
+import { NO_SITE_PAGES, type SitePageSource } from './site-pages.js';
 
 /** The subset of Astro's middleware context this middleware touches. */
 export interface PreviewMiddlewareContext {
@@ -54,7 +60,7 @@ export type PreviewMiddlewareNext = () => Promise<Response>;
  * Render dependencies the binding entry supplies. A seam object (not module
  * imports) because the collection-backed baseline needs `astro:content` and
  * the routing config — both exist only inside the site's own build graph,
- * which the entry module (`src/site-middleware.ts`) is compiled into.
+ * which the seams module (`src/preview-render-seams.ts`) is compiled into.
  */
 export interface PreviewRenderSeams {
   /** Lazily builds the collection-backed baseline reader. Called per preview render. */
@@ -70,6 +76,10 @@ export interface PreviewRenderSeams {
    * with a plain fetch by hostname.
    */
   fetchFn?: typeof fetch;
+  /** D8: the baked routing values the clean page path and the moved links follow. */
+  baked?: Pick<BakedPreviewOpts, 'trailingSlash' | 'buildFormat' | 'domains'>;
+  /** D8: pages the site prerendered itself, kept inside the preview. Defaults to none. */
+  sitePages?: SitePageSource;
 }
 
 /**
@@ -80,7 +90,11 @@ export interface PreviewRenderSeams {
  * request with a diagnosable error, not prevent the whole site from booting.
  */
 export function createPreviewSiteMiddleware(resolveOpts: () => PreviewMiddlewareOptions, seams: PreviewRenderSeams) {
-  return async function onRequest(context: PreviewMiddlewareContext, next: PreviewMiddlewareNext): Promise<Response> {
+  return async function onRequest(
+    context: PreviewMiddlewareContext,
+    next: PreviewMiddlewareNext,
+    slugFromPath?: string,
+  ): Promise<Response> {
     // Already inside a preview render — don't re-run the credential check.
     if (context.locals.conlocaPreview) return next();
 
@@ -98,8 +112,9 @@ export function createPreviewSiteMiddleware(resolveOpts: () => PreviewMiddleware
       return next();
     }
 
-    // Under D3 the dispatcher names the requested branch's slug, after stripping any the browser sent.
-    const slug = opts.mode === 'd3' ? (context.request.headers.get(PREVIEW_SLUG_HEADER) ?? undefined) : undefined;
+    // Under D3 the dispatcher names the requested branch's slug, after stripping any the browser sent. Under D8 the
+    // front parses it from the path; D8 trusts no header.
+    const slug = opts.mode === 'd3' ? (context.request.headers.get(PREVIEW_SLUG_HEADER) ?? undefined) : slugFromPath;
     const verdict = await handlePreviewRequest(context.request, {
       ...opts,
       ...(slug === undefined ? {} : { slug }),
@@ -113,17 +128,38 @@ export function createPreviewSiteMiddleware(resolveOpts: () => PreviewMiddleware
     // A preview verdict under D3 means the slug was named, so the scope always resolves.
     const exitPath = `${previewScope(opts.mode ?? 'd2', opts.base, slug).route}/__exit`;
 
-    // A valid credential on the preview route itself: canonicalize to the
-    // clean site path instead of rendering under the route — links, assets
-    // and the page lookup all assume clean paths.
+    // D8 serves the draft under the route: `rawPath` (captured before the path changes below) keeps the prefix for
+    // Retry, `pagePath` is the page's own.
     const rawPath = context.url.pathname;
-    const path = normalizeTrailingSlash(stripPreviewPrefix(rawPath, opts.base));
-    if (stripPreviewPrefix(rawPath, opts.base) !== rawPath) {
+    const d8 = opts.mode === 'd8' ? routePrefixed(context.url, opts.base, 'd8') : null;
+    if (d8 !== null && d8.kind !== 'slugged') return next();
+    const pagePath = d8?.inner ?? rawPath;
+    const path = normalizeTrailingSlash(stripPreviewPrefix(pagePath, opts.base));
+    // D2/D4 with a valid credential on the preview route itself: canonicalize to the clean site path instead of
+    // rendering under the route — links, assets and the page lookup all assume clean paths.
+    if (!isSluggedPreviewMode(opts.mode ?? 'd2') && stripPreviewPrefix(rawPath, opts.base) !== rawPath) {
       return new Response(null, {
         status: 302,
         headers: { location: path, ...PREVIEW_CACHE_HEADERS },
       });
     }
+    // Before anything reads `currentLocale`: the render sees the live page's `Astro.url`, canonical and locale.
+    if (d8 !== null) {
+      context.url.pathname = cleanPagePath(
+        d8.inner,
+        seams.baked?.trailingSlash ?? 'ignore',
+        seams.baked?.buildFormat ?? 'directory',
+      );
+    }
+    // D8 has no dispatcher: whatever the render answers stays under the route, HTML links and same-site `Location`.
+    const root = opts.base.replace(/\/+$/u, '');
+    const hosts = new Set(seams.baked?.domains ?? []);
+    const stay = (response: Response, html?: string): Response => {
+      const init = { status: response.status, headers: response.headers };
+      if (d8 === null) return applyPreviewHeaders(html === undefined ? response : new Response(html, init));
+      if (html === undefined) return finishEntry(response, d8.page, d8.route, root, hosts);
+      return applyPreviewHeaders(new Response(rewritePreviewLinks(html, d8.page, d8.route, root, hosts), init));
+    };
 
     context.locals.conlocaPreview = verdict.ctx;
     // An endpoint failure (5xx mid-deploy, auth envelope, network) must neither
@@ -149,7 +185,7 @@ export function createPreviewSiteMiddleware(resolveOpts: () => PreviewMiddleware
       return renderPreviewUnavailable({
         // Collapse leading slashes: `//evil.test/x` would otherwise be a cross-origin link.
         retryHref: `/${rawPath.replace(/^\/+/u, '')}${context.url.search}`,
-        exitHref: `${exitPath}?to=${encodeURIComponent(rawPath)}`,
+        exitHref: `${exitPath}?to=${encodeURIComponent(pagePath)}`,
       });
     }
 
@@ -160,20 +196,45 @@ export function createPreviewSiteMiddleware(resolveOpts: () => PreviewMiddleware
       });
     }
 
-    if (status.kind === 'unchanged') {
-      // Production-equivalent bytes: render the ordinary route against the
-      // build's own collections. No banner — same delegated semantics as
-      // before — but preview responses always carry the robots/cache headers.
-      return applyPreviewHeaders(await next());
-    }
+    // The banner the draft and a site-authored page both carry.
+    const banner = (html: string): string => {
+      let shareUrl: string | undefined;
+      if (verdict.ctx.editorUrl !== undefined) {
+        const url = new URL(verdict.ctx.editorUrl);
+        url.searchParams.set('share', pathUnderBase(path, opts.base));
+        shareUrl = url.toString();
+      }
+      // The page's own path: under D3 and D8 the address bar holds the route, which Edit and Exit must not carry.
+      return injectPreviewBanner(html, verdict.ctx, opts.saasEndpoint, exitPath, shareUrl, pagePath);
+    };
 
     if (status.kind === 'redirect') {
       // Always 302 (fetchPageStatus already downgraded 301) so a stale preview
       // redirect can never be cached by intermediaries.
-      return new Response(null, {
-        status: 302,
-        headers: { location: status.target, ...PREVIEW_CACHE_HEADERS },
-      });
+      return stay(new Response(null, { status: 302, headers: { location: status.target } }));
+    }
+
+    // A page the site prerendered itself stays in the preview with its published bytes; unreadable, it goes out.
+    const sitePages = seams.sitePages ?? NO_SITE_PAGES;
+    if (d8 !== null && (await sitePages.has(path))) {
+      const page = await sitePages.read(path);
+      const type = page?.headers.get('content-type') ?? '';
+      if (page === null || page.status !== 200 || !type.includes('text/html')) {
+        return applyPreviewHeaders(
+          new Response(null, { status: 302, headers: { location: `${d8.page.pathname}${d8.page.search}` } }),
+        );
+      }
+      // Only the type carries over: production's encoding, length, cookies and validators don't fit the rewritten bytes.
+      return stay(new Response(null, { headers: { 'content-type': type } }), banner(await page.text()));
+    }
+
+    if (status.kind === 'unchanged') {
+      // Production-equivalent bytes: render the ordinary route against the
+      // build's own collections. No banner — same delegated semantics as
+      // before — but preview responses always carry the robots/cache headers.
+      const live = await next();
+      const liveHtml = d8 !== null && (live.headers.get('content-type') ?? '').includes('text/html');
+      return stay(live, liveHtml ? await live.text() : undefined);
     }
 
     // 'changed' and 'deleted' both render through the site's own route with
@@ -199,24 +260,9 @@ export function createPreviewSiteMiddleware(resolveOpts: () => PreviewMiddleware
     if (!contentType.includes('text/html')) {
       // Redirects (e.g. the not-found fallback) and non-HTML responses pass
       // through with the preview headers only.
-      return applyPreviewHeaders(rendered);
+      return stay(rendered);
     }
-    let shareUrl: string | undefined;
-    if (verdict.ctx.editorUrl !== undefined) {
-      const url = new URL(verdict.ctx.editorUrl);
-      url.searchParams.set('share', pathUnderBase(path, opts.base));
-      shareUrl = url.toString();
-    }
-    const html = injectPreviewBanner(
-      await rendered.text(),
-      verdict.ctx,
-      opts.saasEndpoint,
-      exitPath,
-      shareUrl,
-      // The page's own path: under D3 the address bar holds the route, which Edit and Exit must not carry.
-      rawPath,
-    );
-    return applyPreviewHeaders(new Response(html, { status: rendered.status, headers: rendered.headers }));
+    return stay(rendered, banner(await rendered.text()));
   };
 }
 

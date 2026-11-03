@@ -134,7 +134,10 @@ describe('D3 on a local Cloudflare Worker', () => {
   });
 
   it('opens a preview from a code, then serves the page with the banner, then exits', async () => {
-    const entered = await fetch(`${ORIGIN}/_conloca/preview/${SLUG}/about/?conloca_code=x.y`, navigate());
+    const entered = await fetch(
+      `${ORIGIN}/_conloca/preview/${SLUG}/about/?conloca_code=Z2l0aHViOjc.abcdefghijklmnopqrstuv`,
+      navigate(),
+    );
     expect(entered.status).toBe(302);
     expect(entered.headers.get('location')).toBe(`${ORIGIN}/_conloca/preview/${SLUG}/about/`);
     const cookie = entered.headers.getSetCookie()[0] ?? '';
@@ -168,7 +171,10 @@ describe('D3 on a local Cloudflare Worker', () => {
   });
 
   it('opens a slugless link from an older Conloca under the slug of the pass', async () => {
-    const entered = await fetch(`${ORIGIN}/_conloca/preview/about/?conloca_code=x.y`, navigate());
+    const entered = await fetch(
+      `${ORIGIN}/_conloca/preview/about/?conloca_code=Z2l0aHViOjc.abcdefghijklmnopqrstuv`,
+      navigate(),
+    );
     expect(entered.status).toBe(302);
     expect(entered.headers.get('location')).toBe(`${ORIGIN}/_conloca/preview/${SLUG}/about/`);
     expect(entered.headers.getSetCookie()[0]).toContain(`__Secure-conloca_preview_${SLUG}=`);

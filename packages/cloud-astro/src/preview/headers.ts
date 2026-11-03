@@ -8,6 +8,8 @@
  *   - `cdn-cache-control: no-store` and `vercel-cdn-cache-control: no-store` —
  *     CDNs read these before `cache-control` (RFC 9213), so a site-wide CDN
  *     rule that caches pages can't cache a draft.
+ *   - `netlify-cdn-cache-control: no-store` — Netlify reads its own name
+ *     first, and `_headers` don't apply to function output.
  *   - `referrer-policy: same-origin` — a link out of a draft never tells
  *     another site the draft's address.
  *   - `vary: Cookie` — the same URL answers differently with and without the
@@ -17,6 +19,7 @@ export const PREVIEW_CACHE_HEADERS = {
   'cache-control': 'private, no-store',
   'cdn-cache-control': 'no-store',
   'vercel-cdn-cache-control': 'no-store',
+  'netlify-cdn-cache-control': 'no-store',
   'referrer-policy': 'same-origin',
   vary: 'Cookie',
 } as const;
@@ -45,7 +48,13 @@ export const PREVIEW_CACHE_HEADERS = {
 export function applyPreviewHeaders(response: Response): Response {
   const headers = new Headers(response.headers);
   headers.set('x-robots-tag', 'noindex');
-  for (const name of ['cache-control', 'cdn-cache-control', 'vercel-cdn-cache-control', 'referrer-policy'] as const) {
+  for (const name of [
+    'cache-control',
+    'cdn-cache-control',
+    'vercel-cdn-cache-control',
+    'netlify-cdn-cache-control',
+    'referrer-policy',
+  ] as const) {
     headers.set(name, PREVIEW_CACHE_HEADERS[name]);
   }
   // Appended, so the site's own Vary and CSP survive; once, because the dispatcher wraps what the server wrapped.
