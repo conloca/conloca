@@ -36,11 +36,14 @@ const LEGACY_TYPESCRIPT: [string, string] = ['typescript', '^6.0.3'];
 
 /**
  * The TypeScript packages ttsc needs beside what the site declares: none when the site declares TypeScript 7 or
- * already aliases it; else the native alias, raising TypeScript 5 to 6 so ttsc's peer is met. Never ttsc's peer alone: a
- * TypeScript below 7 already installed (a workspace root's, a dependency's) stands in for it, so 7 never arrives.
+ * aliases it (ttsc skips an alias below 7); else the native alias, raising TypeScript 5 to 6 so ttsc's peer is met.
+ * Never ttsc's peer alone: a TypeScript below 7 already installed (a workspace root's, a dependency's) stands in for
+ * it, so 7 never arrives.
  */
 function typescriptPackages(declared: Record<string, string>): [string, string][] {
-  if (Object.values(declared).some((spec) => spec.startsWith('npm:typescript@'))) return [];
+  // An alias with no parseable major (`latest`) may well be 7, and a second one would make ttsc refuse both.
+  const aliases = Object.values(declared).filter((spec) => spec.startsWith('npm:typescript@'));
+  if (aliases.some((spec) => !(Number(spec.match(/^npm:typescript@\D*(\d+)/)?.[1]) < 7))) return [];
   const spec = declared.typescript;
   // Undeclared beside @astrojs/check, npm installs the TypeScript 6 that check's peer allows.
   const major = spec !== undefined ? Number(spec.match(/\d+/)?.[0]) : '@astrojs/check' in declared ? 0 : Number.NaN;

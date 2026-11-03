@@ -165,6 +165,12 @@ describe('wireDataSchemas and the TypeScript ttsc compiles with', () => {
 
   test('keeps a native TypeScript alias the site already declares', async () => {
     expect(await typescriptPackages({ typescript: '^6.0.3', tsgo: 'npm:typescript@^7.1.0' })).toEqual([]);
+    // A second alias would install a second TypeScript 7, which ttsc refuses as ambiguous.
+    expect(await typescriptPackages({ tsgo: 'npm:typescript@latest' })).toEqual([]);
+  });
+
+  test('adds native TypeScript beside an alias below 7, which ttsc skips', async () => {
+    expect(await typescriptPackages({ typescript: '^6.0.3', ts6: 'npm:typescript@^6.0.3' })).toEqual([NATIVE]);
   });
 });
 
