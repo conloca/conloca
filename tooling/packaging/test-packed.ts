@@ -31,6 +31,7 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readPackedManifest, SCOPE, unsatisfiedClosureRanges } from './closure-ranges.ts';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const projectName = process.argv[2];
@@ -72,8 +73,6 @@ const NODE_ENTRIES = {
   // them.
   'cloud-astro': ['.', './node', './preview', './doctor', './satteri-workerd'],
 } satisfies Record<string, string[] | 'all'>;
-
-const SCOPE = '@conloca/';
 
 type ExportTarget = string | null | { [condition: string]: ExportTarget };
 type PackageManifest = {
@@ -132,11 +131,10 @@ const assertPublishableExports = (packageName: string, exportsMap: Record<string
   }
 };
 
-// Every workspace package the consumer will need, this one included: a release
-// publishes them together, so the throwaway project resolves them all from
-// tarballs rather than from the workspace. A workspace peer is one of them —
-// the consumer installs it next to the package, and the release closes over
-// peers as it does over dependencies.
+// Every workspace package the consumer will need, this one included: the
+// throwaway project resolves them all from tarballs rather than from the
+// workspace. A workspace peer is one of them — the consumer installs it next to
+// the package, and the release closes over peers as it does over dependencies.
 const packClosure = (rootProject: string) => {
   const found = new Map<string, PackageManifest>();
   const queue = [rootProject];
@@ -317,12 +315,6 @@ try {
   const overrides: Record<string, string> = {};
   for (const [project, packageManifest] of closure) {
     assertPublishableExports(packageManifest.name, packageManifest.exports);
-    // `overrides` pins every packed name to its tarball, which would otherwise
-    // hide a dependency range the closure does not actually satisfy.
-    assert.ok(
-      packageManifest.version === manifest.version,
-      `${packageManifest.name}@${packageManifest.version} does not match ${manifest.name}@${manifest.version}`,
-    );
     const tarball = join(packDir, `${unscoped(packageManifest.name)}-${packageManifest.version}.tgz`);
     execFileSync('bun', ['pm', 'pack', '--filename', tarball, '--ignore-scripts', '--quiet'], {
       cwd: packageDirOf(project),
@@ -438,10 +430,17 @@ try {
       `${SCOPE}${name} was installed from ${descriptor}, not from the tarball packed for this run`,
     );
   }
+  //    `overrides` pins every scope name to its tarball, which would otherwise
+  //    hide a range in a packed manifest that the closure does not satisfy.
+  //    Members release on their own versions, so the range is what must hold.
+  const scopeDir = join(consumer, 'node_modules', SCOPE.slice(0, -1));
+  const unsatisfied = unsatisfiedClosureRanges(
+    [...closure.values()].map((packageManifest) => readPackedManifest(join(scopeDir, unscoped(packageManifest.name)))),
+  );
+  assert.deepEqual(unsatisfied, [], unsatisfied.join('\n'));
 
   // 4. Every installed package ships the files its own code imports.
   let relativeImports = 0;
-  const scopeDir = join(consumer, 'node_modules', SCOPE.slice(0, -1));
   for (const packageManifest of closure.values()) {
     const installed = realpathSync(join(scopeDir, unscoped(packageManifest.name)));
     relativeImports += assertRelativeImportsResolve(packageManifest.name, installed);
