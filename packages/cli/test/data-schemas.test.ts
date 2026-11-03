@@ -80,10 +80,10 @@ function newFiles(result: DataSchemasWiring): string[] {
 }
 
 /** What the package manager does for the packages the wiring asks for. */
-async function addDependencies(site: string, names: string[]): Promise<void> {
+async function addDependencies(site: string, packages: [string, string][]): Promise<void> {
   const path = join(site, 'package.json');
   const manifest = JSON.parse(await readFile(path, 'utf8'));
-  for (const name of names) manifest.dependencies[name] = '*';
+  for (const [name, range] of packages) manifest.dependencies[name] = range;
   await writeFile(path, JSON.stringify(manifest));
 }
 
@@ -117,14 +117,16 @@ describe('wireDataSchemas on a site connect set up', () => {
       ['@ttsc/unplugin', '0.35.0'],
       ['ttsc', '0.35.0'],
       ['typia', '^14.0.6'],
+      ['@typescript/native', 'npm:typescript@^7.0.2'],
     ]);
     expect(result.state).toBe('changed');
   });
 
   test('is done after its edits are written', async () => {
     await makeSite(CONNECTED);
-    await writeEdits((await wireDataSchemas(dir)).edits);
-    await addDependencies(dir, ['@ttsc/unplugin', 'ttsc', 'typia']);
+    const result = await wireDataSchemas(dir);
+    await writeEdits(result.edits);
+    await addDependencies(dir, result.packages);
     expect(await wireDataSchemas(dir)).toMatchObject({ state: 'done', edits: [], packages: [] });
   });
 });
@@ -139,9 +141,16 @@ async function typescriptPackages(dependencies: Record<string, string>): Promise
 describe('wireDataSchemas and the TypeScript ttsc compiles with', () => {
   const NATIVE: [string, string] = ['@typescript/native', 'npm:typescript@^7.0.2'];
 
-  test('asks for none when ttsc brings TypeScript 7 or the site declares it', async () => {
-    expect(await typescriptPackages({})).toEqual([]);
+  test('asks for none when the site declares TypeScript 7', async () => {
     expect(await typescriptPackages({ typescript: '^7.0.2' })).toEqual([]);
+  });
+
+  test("adds native TypeScript when the site declares none: a TypeScript 6 already installed meets ttsc's peer", async () => {
+    expect(await typescriptPackages({})).toEqual([NATIVE]);
+  });
+
+  test('adds native TypeScript when the declared range names no major', async () => {
+    expect(await typescriptPackages({ typescript: 'latest' })).toEqual([NATIVE]);
   });
 
   test('adds native TypeScript under an alias beside the TypeScript 6 @astrojs/check needs', async () => {
@@ -169,10 +178,7 @@ describe('wireDataSchemas on a site that already has parts of it', () => {
     expect(editOf(result, 'astro.config.mjs')).toContain('plugins: [tailwind(), ...schemaTypia()]');
 
     await writeEdits(result.edits);
-    await addDependencies(
-      dir,
-      result.packages.map(([name]) => name),
-    );
+    await addDependencies(dir, result.packages);
     expect(await wireDataSchemas(dir)).toMatchObject({ state: 'done', edits: [], packages: [] });
     const config = await readFile(join(dir, 'astro.config.mjs'), 'utf8');
     expect(config.match(/schemaTypia/g)).toHaveLength(2);

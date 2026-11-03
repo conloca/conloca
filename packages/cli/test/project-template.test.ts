@@ -71,6 +71,11 @@ describe('renderPackageJson', () => {
     }
   });
 
+  test("declares the native TypeScript 7 ttsc compiles with: a TypeScript 6 already installed would meet ttsc's peer", async () => {
+    const rendered = JSON.parse(renderPackageJson({ name: 'my-site', manifest: await readCliManifest() }));
+    expect(rendered.devDependencies.typescript).toBe('^7.0.2');
+  });
+
   test('leaves @conloca/mdx out of a created project: astro-cms brings it', () => {
     const rendered = JSON.parse(
       renderPackageJson({

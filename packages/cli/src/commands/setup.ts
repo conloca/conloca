@@ -812,8 +812,8 @@ export function printSetupNextSteps(): void {
        vite: { plugins: [...schemaTypia()] },
      });`);
   console.log('\n   The schemas file is generated code: add typia, and ttsc + @ttsc/unplugin as dev');
-  console.log('   dependencies, so typia-vite.mjs can compile it. ttsc needs native TypeScript 7: a site');
-  console.log("   keeping TypeScript 6 adds '@typescript/native@npm:typescript@^7.0.2' beside it.");
+  console.log('   dependencies, so typia-vite.mjs can compile it. ttsc needs native TypeScript 7 declared by');
+  console.log("   the site: typescript@^7.0.2, or '@typescript/native@npm:typescript@^7.0.2' beside a TypeScript 6.");
   console.log('\n   `layout` on its own turns on a catch-all /[...slug] route over the pages');
   console.log('   collection. Adding `routing` replaces that route, and the top-level `layout`');
   console.log('   is then ignored — name it under routing.routes.<name>.layout instead.');

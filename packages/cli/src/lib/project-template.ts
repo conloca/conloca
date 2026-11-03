@@ -93,6 +93,8 @@ export function renderPackageJson(input: { name: string; manifest: CliManifest }
   for (const [name, range] of Object.entries(THIRD_PARTY_VERSIONS)) {
     (DEV_ONLY.has(name) ? devDependencies : dependencies)[name] = range;
   }
+  // Declared, not left to ttsc's peer: a TypeScript below 7 already installed (a workspace root's) would stand in for it.
+  devDependencies.typescript = '^7.0.2';
   const sorted = (record: Record<string, string>) =>
     Object.fromEntries(Object.entries(record).sort(([a], [b]) => a.localeCompare(b)));
   return `${JSON.stringify(
