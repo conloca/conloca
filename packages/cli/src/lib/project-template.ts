@@ -38,6 +38,36 @@ export interface CliManifest {
   peerDependencies?: Record<string, string>;
 }
 
+/**
+ * The manifest with its pins as npm reads them. Inside this repo a pin is still `workspace:*`, which becomes a version
+ * only at pack time; the workspace links that sibling at its own version, so that is read from its manifest beside this
+ * package's. Each package releases on its own version, so the CLI's own version stands in for none of them.
+ */
+async function withWorkspacePins(manifest: CliManifest, location: URL): Promise<CliManifest> {
+  const pinsOf = async (specs: Record<string, string> | undefined) => {
+    if (specs === undefined) return undefined;
+    const pins = await Promise.all(
+      Object.entries(specs).map(async ([name, spec]): Promise<[string, string]> => {
+        if (!spec.startsWith('workspace:')) return [name, spec];
+        // shortcut: every workspace spec reads as an exact version, as `workspace:*` packs; a `workspace:^` would pack a range.
+        const sibling: Partial<CliManifest> = JSON.parse(
+          await readFile(new URL(`../${basename(name)}/package.json`, location), 'utf-8'),
+        );
+        if (typeof sibling.version !== 'string') {
+          throw new Error(`could not read the version of workspace package ${name}`);
+        }
+        return [name, sibling.version];
+      }),
+    );
+    return Object.fromEntries(pins);
+  };
+  const [dependencies, peerDependencies] = await Promise.all([
+    pinsOf(manifest.dependencies),
+    pinsOf(manifest.peerDependencies),
+  ]);
+  return { version: manifest.version, dependencies, peerDependencies };
+}
+
 /** Reads this CLI's own manifest: it names both the CLI version and the Conloca releases a created project must pin. */
 export async function readCliManifest(): Promise<CliManifest> {
   for (const candidate of MANIFEST_CANDIDATES) {
@@ -48,11 +78,10 @@ export async function readCliManifest(): Promise<CliManifest> {
       continue;
     }
     if (typeof manifest.version === 'string') {
-      return {
-        version: manifest.version,
-        dependencies: manifest.dependencies,
-        peerDependencies: manifest.peerDependencies,
-      };
+      return withWorkspacePins(
+        { version: manifest.version, dependencies: manifest.dependencies, peerDependencies: manifest.peerDependencies },
+        new URL(candidate, import.meta.url),
+      );
     }
   }
   throw new Error('could not read the version of @conloca/cli from its own package.json');
@@ -72,14 +101,12 @@ const SCAFFOLD_CONLOCA_PACKAGES = ['@conloca/astro-cms', '@conloca/content-api']
 
 /**
  * What a site should ask npm for: each package has its own version, and this CLI's manifest pins the set that goes
- * together (smoo's pack writes exact versions). Inside this repo a pin is still `workspace:*`, which becomes a version
- * only at pack time, so it falls back to the CLI's own version. This CLI pins itself at its own version; any other
- * name it does not pin is undefined, and callers leave that entry alone.
+ * together (pack time writes exact versions). This CLI pins itself at its own version; any other name it does not pin
+ * is undefined, and callers leave that entry alone.
  */
 export function conlocaRange(manifest: CliManifest, name: string): string | undefined {
   if (name === '@conloca/cli') return manifest.version;
-  const declared = manifest.dependencies?.[name] ?? manifest.peerDependencies?.[name];
-  return declared?.startsWith('workspace:') ? manifest.version : declared;
+  return manifest.dependencies?.[name] ?? manifest.peerDependencies?.[name];
 }
 
 /** The package.json a created project starts with: Conloca pinned to what this CLI depends on, everything else to the example site. */

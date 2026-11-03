@@ -8,12 +8,14 @@ import { $ } from 'bun';
 import { type ConnectIo, exitCodeOf } from '../src/commands/connect.js';
 import { restoreJournal, runUpgrade, type UpgradeOptions, type UpgradeReport } from '../src/commands/upgrade.js';
 import type { Migration } from '../src/lib/migrations.js';
-import { type CliManifest, readCliManifest } from '../src/lib/project-template.js';
+import { type CliManifest, conlocaRange, readCliManifest } from '../src/lib/project-template.js';
 import { CONLOCA_SKILL_PATH } from '../src/lib/skills.js';
 import { OLD_WORKFLOW, treeHashes } from './fixture-repo.js';
 
 const CLI_MANIFEST = await readCliManifest();
 const TO = CLI_MANIFEST.version;
+// Each package releases on its own version, so astro-cms's pin is its own, not the CLI's.
+const ASTRO_CMS = conlocaRange(CLI_MANIFEST, '@conloca/astro-cms');
 const opts: UpgradeOptions = { dryRun: false, json: false };
 const CLI = join(import.meta.dir, '..', 'dist', 'conloca.js');
 const LOCKFILES = ['bun.lock', 'bun.lockb', 'pnpm-lock.yaml', 'yarn.lock', 'package-lock.json'];
@@ -137,7 +139,7 @@ describe('runUpgrade', () => {
     expect(report).toMatchObject({ ok: true, from: '0.2.1', to: TO, restored: false });
     expect(calls.map((call) => call.cmd)).toEqual(['npm install']);
     const manifest = JSON.parse(await readFile(join(dir, 'package.json'), 'utf8'));
-    expect(manifest.dependencies['@conloca/astro-cms']).toBe(TO);
+    expect(manifest.dependencies['@conloca/astro-cms']).toBe(ASTRO_CMS);
     expect(manifest.devDependencies['@conloca/cli']).toBe(TO);
     expect(await readFile(join(dir, '.github/workflows/conloca.yml'), 'utf8')).not.toContain('CONLOCA_BUILD_TOKEN');
     expect(await readFile(join(dir, 'astro.config.mjs'), 'utf8')).toContain('assetsPath');
@@ -177,7 +179,7 @@ describe('runUpgrade', () => {
     const report = await runUpgrade(dir, opts, io, CLI_MANIFEST);
     expect(stepOf(report, 'packages')).toMatchObject({
       state: 'needs-you',
-      message: expect.stringContaining(`at 99.0.1, newer than ${TO}`),
+      message: expect.stringContaining(`at 99.0.1, newer than ${ASTRO_CMS}`),
     });
     expect(calls).toEqual([]);
     expect(await treeHashes(dir)).toEqual(before);
@@ -399,7 +401,7 @@ describe('runUpgrade', () => {
     const { io, calls } = fakeIo('ok');
     const report = await runUpgrade(dir, opts, io, CLI_MANIFEST);
     expect(stepOf(report, 'packages')?.state).toBe('needs-you');
-    expect(stepOf(report, 'packages')?.message).toContain(`@conloca/astro-cms is at 99.0.0, newer than ${TO}`);
+    expect(stepOf(report, 'packages')?.message).toContain(`@conloca/astro-cms is at 99.0.0, newer than ${ASTRO_CMS}`);
     expect(calls).toEqual([]);
     expect(await treeHashes(dir)).toEqual(before);
   });
@@ -546,7 +548,7 @@ describe('runUpgrade', () => {
     expect(calls).toEqual([]);
     expect(await treeHashes(dir)).toEqual(before);
     const output = printed.join('\n');
-    expect(output).toContain(`+    "@conloca/astro-cms": "${TO}"`);
+    expect(output).toContain(`+    "@conloca/astro-cms": "${ASTRO_CMS}"`);
     expect(output).toContain('-          CONLOCA_BUILD_TOKEN');
     expect(exitCodeOf(report)).toBe(0);
   });

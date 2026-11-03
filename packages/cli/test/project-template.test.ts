@@ -87,21 +87,6 @@ describe('renderPackageJson', () => {
     expect(rendered.devDependencies['@conloca/mdx']).toBeUndefined();
   });
 
-  test('falls back to the CLI version for a dependency still carrying the workspace protocol', () => {
-    // Inside this repo the manifest reads `workspace:*`, which is not installable.
-    const rendered = JSON.parse(
-      renderPackageJson({
-        name: 'my-site',
-        manifest: {
-          version: '0.1.15',
-          dependencies: { '@conloca/astro-cms': 'workspace:*', '@conloca/content-api': 'workspace:*' },
-        },
-      }),
-    );
-    expect(rendered.dependencies['@conloca/astro-cms']).toBe('0.1.15');
-    expect(rendered.dependencies['@conloca/content-api']).toBe('0.1.15');
-  });
-
   test('this CLI depends on every Conloca package the scaffold pins, so a release always has a version to write', async () => {
     const manifest = await readCliManifest();
     const pinned = Object.keys(
@@ -216,11 +201,19 @@ describe('renderAstroConfig', () => {
 });
 
 describe('readCliManifest', () => {
-  test('reads the version and dependencies of this very package', async () => {
+  test("reads the version and dependencies of this very package, each workspace pin as that sibling's own version", async () => {
+    // Inside this repo a pin reads `workspace:*`, and the workspace links the sibling at its own version, which is
+    // what `bun pm pack` writes. The packages release on their own versions, so the CLI's version is not that.
     const expected = JSON.parse(await Bun.file(join(import.meta.dir, '..', 'package.json')).text());
     const manifest = await readCliManifest();
     expect(manifest.version).toBe(expected.version);
-    expect(manifest.dependencies).toEqual(expected.dependencies);
+    const pinned = await Promise.all(
+      Object.entries<string>({ ...expected.dependencies, ...expected.peerDependencies }).map(async ([name, spec]) => {
+        const sibling = join(import.meta.dir, '..', '..', name.slice('@conloca/'.length), 'package.json');
+        return [name, spec.startsWith('workspace:') ? JSON.parse(await Bun.file(sibling).text()).version : spec];
+      }),
+    );
+    expect({ ...manifest.dependencies, ...manifest.peerDependencies }).toEqual(Object.fromEntries(pinned));
   });
 });
 
