@@ -138,7 +138,7 @@
     },
     "packages/cli": {
       "name": "@conloca/cli",
-      "version": "0.2.6",
+      "version": "0.2.7-next.0",
       "bin": {
         "conloca": "./dist/conloca.js",
       },
