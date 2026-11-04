@@ -9,7 +9,7 @@ import { type PackageManager, packageManagerCommands } from './package-manager.j
  */
 export const THIRD_PARTY_VERSIONS = {
   astro: '^7.3.1',
-  '@astrojs/node': '^11.1.5',
+  '@astrojs/node': '11.1.9',
   '@astrojs/react': '^6.0.5',
   '@puckeditor/core': '^0.23.0',
   '@vitejs/plugin-react': '^5.2.0',
