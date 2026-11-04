@@ -122,10 +122,15 @@ describe('doctor extension — contract', () => {
       'CC21',
       'CC22',
       'CC23',
+      'CC25',
+      'CC26',
+      'CC27',
+      'CC28',
       'CC11',
       'CC12',
       'CC13',
       'CC24',
+      'CC29',
     ]);
     for (const id of ['CC11', 'CC12', 'CC13']) {
       expect(check(result, id).skipped).toBe('live checks run only with --live');
@@ -393,18 +398,24 @@ describe('CC8 — how the preview build serves drafts', () => {
     expect(outcome.detail).toBe('previewBuild: false — no preview build runs');
   });
 
-  it('passes when the project or previewBuild names an adapter', async () => {
+  it("reads the site's own adapter as drafts rendered in the site build (d8)", async () => {
+    const text = siteConfig(
+      "output: 'server', adapter: node({ mode: 'standalone' }),",
+      "{ endpoint: 'https://x.test', previewBuild: {} }",
+    );
+    const outcome = check(await run({ [CONFIG]: text }), 'CC8');
+    expect(outcome.problems).toEqual([]);
+    expect(outcome.detail).toBe("drafts render in the site's own build, through its adapter (d8)");
+  });
+
+  it('names previewBuild.adapter as what to remove', async () => {
     for (const text of [
-      siteConfig(
-        "output: 'server', adapter: node({ mode: 'standalone' }),",
-        "{ endpoint: 'https://x.test', previewBuild: {} }",
-      ),
       config("{ endpoint: 'https://x.test', previewBuild: { adapter: cloudflare() } }"),
       config("{ endpoint: 'https://x.test', previewBuild: { adapter } }"),
     ]) {
       const outcome = check(await run({ [CONFIG]: text }), 'CC8');
       expect(outcome.problems).toEqual([]);
-      expect(outcome.detail).toBe("the site's own server deploy renders drafts (D2)");
+      expect(outcome.detail).toBe('remove previewBuild.adapter; put the adapter in astro.config');
     }
   });
 

@@ -3,7 +3,7 @@ import { isRecord } from '@conloca/content-api/component-vocabulary';
 import { parseWranglerConfig } from '../preview/cloudflare-adapter.js';
 import { previewOwnEntries, previewRoutePrefix } from '../preview/preview-path.js';
 import { INTEGRATION_NOT_CALLED } from './checks-offline.js';
-import { type ConfigScan, previewServeSetting } from './config-scan.js';
+import { type ConfigScan, previewServeSetting, separateRefused } from './config-scan.js';
 import { type CheckId, type CheckOutcome, type DoctorDeps, outcomeOf, skipped } from './types.js';
 
 type PreviewDeps = Pick<DoctorDeps, 'exists' | 'readFile' | 'git'>;
@@ -64,12 +64,17 @@ const onlyD3 = (id: CheckId) => skipped(id, 'a separate preview deploy (D4) runs
 export function runPreviewChecks(scan: ConfigScan, projectDir: string, deps: PreviewDeps): CheckOutcome[] {
   const mode = previewServeSetting(scan);
   if (mode !== 'd3' && mode !== 'd4') {
+    const refused = separateRefused(scan);
     const reason =
       scan.kind === 'read' && scan.config.conlocaCloud === 'absent'
         ? INTEGRATION_NOT_CALLED
-        : mode === 'unknown'
-          ? 'doctor cannot read previewBuild from the config text'
-          : 'only a static site previewing next to itself (D3) or on a separate deploy (D4) needs these';
+        : refused !== undefined
+          ? `the build refuses separate: true under ${refused} (see CC26)`
+          : mode === 'unknown'
+            ? 'doctor cannot read previewBuild from the config text'
+            : mode === 'd8'
+              ? "drafts render in the site's own build (d8): CC25–CC28 check its adapter and host"
+              : 'only a static site previewing next to itself (D3) or on a separate deploy (D4) needs these';
     return IDS.map((id) => skipped(id, reason));
   }
   const base = scan.kind === 'read' ? (scan.config.site.base ?? '/') : '/';

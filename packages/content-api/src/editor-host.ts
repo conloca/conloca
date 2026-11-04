@@ -174,7 +174,35 @@ const PAGES_PROJECT_RE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 /** A parsed conloca.json object, whether or not it passed `isEditorPageInfo`, as the optional-field readers take it. */
 export type ConlocaJson =
   | EditorPageInfo
-  | { branchDeploys?: unknown; contentPaths?: unknown; preview?: unknown; routes?: unknown; media?: unknown };
+  | {
+      branchDeploys?: unknown;
+      contentPaths?: unknown;
+      preview?: unknown;
+      routes?: unknown;
+      media?: unknown;
+      host?: unknown;
+    };
+
+/** The host whose CI ran the production build, recorded in conloca.json `host`. */
+export type DeployHost = 'vercel' | 'netlify' | 'cloudflare' | 'render' | 'github-actions';
+
+const DEPLOY_HOSTS: readonly DeployHost[] = ['vercel', 'netlify', 'cloudflare', 'render', 'github-actions'];
+
+/** conloca.json `host`; `undefined` when absent or unknown. */
+export function hostOf(info: ConlocaJson): DeployHost | undefined {
+  const value: unknown = Reflect.get(info, 'host');
+  return DEPLOY_HOSTS.find((host) => host === value);
+}
+
+/** The host from its build variables; GitHub Actions last, since a host's own CI may run inside it. */
+export function deployHostFromEnv(env: Record<string, string | undefined>): DeployHost | undefined {
+  if (env.VERCEL) return 'vercel';
+  if (env.NETLIFY === 'true') return 'netlify';
+  if (env.CF_PAGES || env.WORKERS_CI) return 'cloudflare';
+  if (env.RENDER) return 'render';
+  if (env.GITHUB_ACTIONS === 'true') return 'github-actions';
+  return undefined;
+}
 
 /** conloca.json `branchDeploys`; `undefined` when absent or malformed, so a bad optional field never makes the page invalid. */
 export function branchDeploysOf(info: ConlocaJson): BranchDeploys | undefined {

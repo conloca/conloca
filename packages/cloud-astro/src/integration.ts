@@ -194,9 +194,12 @@ export function conlocaCloud(options: ConlocaCloudOptions = {}): AstroIntegratio
                 mode = 'off';
               }
             }
+            if (mode !== 'off' && command === 'build' && previewBuild?.required !== undefined) {
+              logger.warn('previewBuild.required has no effect: a failed preview build is handled the same either way');
+            }
             // Only `astro build` serves d8 drafts: dev, sync, check and preview read no git or sites.json for it.
             if (mode === 'd8' && command === 'build') {
-              for (const name of ['config', 'outDir', 'required'] as const) {
+              for (const name of ['config', 'outDir'] as const) {
                 if (previewBuild?.[name] !== undefined) {
                   logger.warn(`previewBuild.${name} has no effect on this site: drafts render in the site's own build`);
                 }

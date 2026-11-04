@@ -16,7 +16,7 @@ import {
 } from '../lib/package-manager.js';
 import { type CliManifest, conlocaRange, readCliManifest } from '../lib/project-template.js';
 import { planSkillRefresh } from '../lib/skills.js';
-import { compareVersions, conlocaDependencies, versionFloor } from '../lib/versions.js';
+import { compareVersions, conlocaDependencies, installedVersion, versionFloor } from '../lib/versions.js';
 import { type ConnectIo, exitCodeOf, gitText, patchOf, pickProject, terminalIo } from './connect.js';
 import { printReport, runDoctor } from './doctor.js';
 
@@ -332,16 +332,7 @@ async function installedVersions(
     manifests.flatMap((manifest) => conlocaDependencies(manifest.value).map((entry) => entry.name)),
   );
   return Promise.all(
-    [...names].map(async (name) => {
-      for (let dir = projectDir; ; dir = dirname(dir)) {
-        // oxlint-disable-next-line no-await-in-loop -- the nearest node_modules wins, as Node resolves it.
-        const manifest = await readManifest(join(dir, 'node_modules', name, 'package.json'));
-        if (manifest !== null) {
-          return { name, version: typeof manifest.value.version === 'string' ? manifest.value.version : null };
-        }
-        if (dir === installDir || dir === dirname(dir)) return { name, version: null };
-      }
-    }),
+    [...names].map(async (name) => ({ name, version: await installedVersion(name, projectDir, installDir) })),
   );
 }
 

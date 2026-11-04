@@ -110,19 +110,22 @@ export function containsOutsideStrings(text: string, needle: string): boolean {
 
 export interface ObjectEntries {
   entries: Map<string, string>;
+  /** Keys written as shorthand (`{ adapter }`), whose value is the variable of that name. */
+  shorthands: Set<string>;
   hasSpread: boolean;
 }
 
 /**
  * The top-level key/value pairs of an object literal, values as raw text.
- * Depth-1 only — nested objects stay inside their value text. Methods,
- * computed keys and shorthands are skipped; spreads are flagged because they
- * can carry any key, which downgrades "missing" findings to warnings.
+ * Depth-1 only — nested objects stay inside their value text. Methods and
+ * computed keys are skipped; shorthands are listed apart; spreads are flagged
+ * because they can carry any key, which downgrades "missing" findings to warnings.
  */
 export function parseObjectEntries(objectText: string): ObjectEntries | null {
   if (!objectText.startsWith('{') || !objectText.endsWith('}')) return null;
   const body = objectText.slice(1, -1);
   const entries = new Map<string, string>();
+  const shorthands = new Set<string>();
   let hasSpread = false;
   let i = 0;
   while (i < body.length) {
@@ -137,7 +140,10 @@ export function parseObjectEntries(objectText: string): ObjectEntries | null {
     }
     const keyMatch = /^(?:([$A-Za-z_][$\w]*)|'([^']*)'|"([^"]*)")\s*:/.exec(body.slice(i));
     if (!keyMatch) {
-      i = skipValue(body, i);
+      const end = skipValue(body, i);
+      const word = body.slice(i, end).trim();
+      if (/^[$A-Za-z_][$\w]*$/u.test(word)) shorthands.add(word);
+      i = end;
       continue;
     }
     const valueStart = i + keyMatch[0].length;
@@ -145,7 +151,7 @@ export function parseObjectEntries(objectText: string): ObjectEntries | null {
     entries.set(keyMatch[1] ?? keyMatch[2] ?? keyMatch[3] ?? '', body.slice(valueStart, valueEnd).trim());
     i = valueEnd;
   }
-  return { entries, hasSpread };
+  return { entries, shorthands, hasSpread };
 }
 
 /** The contents of a plain single- or double-quoted string literal, else null. */

@@ -59,6 +59,17 @@ describe('runPreviewChecks', () => {
     expect([...all.values()].every((outcome) => outcome.skipped !== undefined)).toBe(true);
   });
 
+  it('skips every check when the build refuses separate: true under Vercel', () => {
+    const config = [
+      "import vercel from '@astrojs/vercel';",
+      "import { conlocaCloud } from '@conloca/cloud-astro';",
+      'export default { adapter: vercel(), integrations: [conlocaCloud({ previewBuild: { separate: true } })] };',
+    ].join('\n');
+    const all = checks({ 'astro.config.mjs': config, 'wrangler.jsonc': GOOD });
+    expect([...all.values()].every((outcome) => outcome.skipped !== undefined)).toBe(true);
+    expect(all.get('CC15')?.skipped).toBe('the build refuses separate: true under @astrojs/vercel (see CC26)');
+  });
+
   it('CC15 errors without a wrangler config, on a TOML one and on a Pages one', () => {
     expect(errors(checks({}).get('CC15'))).toEqual([
       'error: no wrangler.jsonc: draft previews of a static site deploy to Cloudflare Workers — run `conloca connect --yes`',

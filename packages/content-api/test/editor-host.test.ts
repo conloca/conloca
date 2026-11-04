@@ -5,9 +5,12 @@ import {
   classifyEditorHostResponse,
   classifyFrameHeaders,
   contentPathsOf,
+  type DeployHost,
+  deployHostFromEnv,
   EDITOR_UI_MODULE_FILES,
   type EditorPageInfo,
   editorUiOrigin,
+  hostOf,
   isEditorPageInfo,
   isFromVercel,
   isSluggedPreviewMode,
@@ -31,6 +34,32 @@ const info: EditorPageInfo = {
   builtWith: '@conloca/cloud-astro@1.2.3',
   componentManifest: { path: 'component-manifest.0123456789abcdef.json', sha256: 'b'.repeat(64) },
 };
+
+describe('deployHostFromEnv', () => {
+  it('names the host whose build runs, a host CI ahead of GitHub Actions', () => {
+    const table: [Record<string, string | undefined>, DeployHost | undefined][] = [
+      [{ VERCEL: '1' }, 'vercel'],
+      [{ NETLIFY: 'true' }, 'netlify'],
+      [{ NETLIFY: 'false' }, undefined],
+      [{ CF_PAGES: '1' }, 'cloudflare'],
+      [{ WORKERS_CI: '1' }, 'cloudflare'],
+      [{ RENDER: 'true' }, 'render'],
+      [{ GITHUB_ACTIONS: 'true' }, 'github-actions'],
+      [{ GITHUB_ACTIONS: 'false' }, undefined],
+      [{ VERCEL: '1', GITHUB_ACTIONS: 'true' }, 'vercel'],
+      [{}, undefined],
+    ];
+    for (const [env, host] of table) expect(deployHostFromEnv(env)).toBe(host);
+  });
+});
+
+describe('hostOf', () => {
+  it('reads a known host and rejects anything else', () => {
+    expect(hostOf({ host: 'netlify' })).toBe('netlify');
+    for (const host of ['x', 'cloudflare-pages', 1, null]) expect(hostOf({ host })).toBeUndefined();
+    expect(hostOf(info)).toBeUndefined();
+  });
+});
 
 describe('branchDeploysOf', () => {
   it('reads a Cloudflare Pages project', () => {

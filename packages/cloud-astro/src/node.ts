@@ -9,6 +9,10 @@ export {
   type EditorHostPageData,
   type EditorPageInfo,
 } from '@conloca/content-api/editor-host';
+// The adapter releases and host rate-limit lines connect and doctor share.
+export { D8_TESTED_ADAPTERS, d8RateLimitLines } from './d8-adapters.js';
+// The d8 config-text refusals `conloca connect` checks before it writes an adapter's options.
+export { d8ConfigRefusal, d8EdgeRefusal } from './d8-guards.js';
 // The /_conloca/editor/ header rules that `conloca connect` writes and doctor checks.
 export {
   type FramingBlocker,

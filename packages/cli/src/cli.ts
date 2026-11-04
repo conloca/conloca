@@ -16,6 +16,9 @@ import { isCfPlan } from './lib/connect/cf-plan.js';
 import { PACKAGE_MANAGERS } from './lib/package-manager.js';
 import { readCliManifest } from './lib/project-template.js';
 
+/** The hosts `connect --host` takes: the ones whose adapter renders drafts, and Cloudflare. */
+const CONNECT_HOSTS = ['vercel', 'netlify', 'cloudflare', 'node'] as const;
+
 const program = new Command();
 
 program
@@ -184,6 +187,12 @@ program
       'Your Cloudflare Workers plan, for draft previews of a static site (asked on a terminal otherwise)',
     ).choices(['free', 'paid']),
   )
+  .addOption(
+    new Option(
+      '--host <host>',
+      'Where the site deploys, for draft previews (detected from its files otherwise)',
+    ).choices(CONNECT_HOSTS),
+  )
   .option(
     '--negotiate-404',
     'Send every miss to the draft preview dispatcher (not_found_handling "none"), for middleware that negotiates responses',
@@ -199,9 +208,15 @@ into astro.config, writes the site's domain into sites.json, allows the
 workspace editor to frame the editor page where a committed header forbids
 it, builds the site once to prove the editor page is there, and removes the
 old build key from workflows. With previewBuild in conlocaCloud(), it also
-writes the draft preview settings into wrangler.jsonc; --update refreshes only
-those, from a fresh build, --cf-plan answers the plan question without a
-terminal, and --negotiate-404 sends every miss to the preview dispatcher.
+finds where the site deploys (--host names it), adds that host's official
+Astro adapter so drafts render in the site's own build (Vercel, Netlify), and
+prints the host's deploy step, or writes the draft preview settings into
+wrangler.jsonc on Cloudflare; --update refreshes only those, from a fresh
+build, and never adds an adapter, --cf-plan answers the plan question without
+a terminal, and --negotiate-404 sends every miss to the preview dispatcher.
+On Vercel and Netlify, an astro.config without site gets site proposed from
+sites.json (or --site-url) and asked for first, since site changes canonical,
+sitemap, RSS and Open Graph URLs; --yes never writes it.
 Every change is shown as a diff first; in a terminal it asks before it writes
 (and, for a static site previewing next to itself, once for your Cloudflare
 plan), --yes accepts, and without a terminal or --yes nothing is written. A
@@ -223,9 +238,11 @@ Exits 0 when done, 1 when a step failed, 2 when a step needs you.`,
         json?: boolean;
         update?: boolean;
         cfPlan?: string;
+        host?: string;
         negotiate404?: boolean;
       },
     ) => {
+      const host = CONNECT_HOSTS.find((choice) => choice === options.host);
       await connect(path, {
         project: options.project,
         siteUrl: options.siteUrl,
@@ -237,6 +254,7 @@ Exits 0 when done, 1 when a step failed, 2 when a step needs you.`,
         update: options.update === true,
         negotiate404: options.negotiate404 === true,
         ...(isCfPlan(options.cfPlan) ? { cfPlan: options.cfPlan } : {}),
+        ...(host === undefined ? {} : { host }),
       });
     },
   );

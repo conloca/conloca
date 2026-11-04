@@ -6,8 +6,9 @@ Astro integration that adds the editor page for Conloca's workspace editor to a 
 1. Write the editor page to `/_conloca/editor/` in every build: the site's Puck config compiled into one bundle
    (react/react-dom/jsx-runtime/`@puckeditor/core` stay external — the workspace editor supplies them at runtime), its
    styles, the MDX sandbox frame and `conloca.json`. The page carries no credential.
-2. When `previewBuild` is given as an object, build the preview server that renders drafts: next to a static site on
-   Cloudflare Workers (under `/_conloca/preview/<branch>/`), on the site's own server deploy, or as a separate deploy.
+2. When `previewBuild` is given as an object, serve draft previews: in the site's own build through its adapter
+   (`@astrojs/vercel`, `@astrojs/netlify`, `@astrojs/node`, `@astrojs/cloudflare`), next to a static site on Cloudflare
+   Workers (under `/_conloca/preview/<branch>/`), or from a separate deploy.
 3. Wire preview middleware that admits only passes signed by the endpoint, for the repository, site and branch the
    preview build was made from.
 4. Expose `PreviewContentAPI` for `.astro` pages to fetch draft content.
@@ -177,7 +178,7 @@ branch's and a build of the branch it was created from (on a tie, in that order)
 
 `/_conloca/editor/conloca.json` publishes the repository's name, the build's branch and commit, and whether the build
 serves draft previews with the preview protocol it speaks (`preview`: `{ "mode": "d3", "protocol": 2 }` for a static
-site with `previewBuild`, `d2` with an adapter, `d4` with `separate: true`, else `off`). If the repository is not
+site with `previewBuild`, `d8` with an adapter, `d4` with `separate: true`, else `off`). If the repository is not
 public, its name becomes public with the deploy. Protocol 2 opens a preview with a single-use `conloca_code` link that
 the preview server trades for the pass with Conloca; a link that carries the pass itself (`conloca_preview`, protocol 1)
 still opens in this release and stops opening in the next.
@@ -324,15 +325,15 @@ Doctor names each check; the checklist in the workspace editor reports the same 
 
 ## Options
 
-| Name             | Required | Description                                                                                                                                                     |
-| ---------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `endpoint`       | no       | The workspace editor's address, scheme and host only, no trailing slash; its host must start with `app.`. Defaults to `https://app.conloca.com`.                |
-| `puckConfigPath` | no       | Puck config entry to compile. Defaults to the value `conlocaCMS` was given.                                                                                     |
-| `repoUri`        | no       | Advanced `owner/repo` override; normally detected from CI or the Git remote.                                                                                    |
-| `siteId`         | no       | Advanced site-id override for CMS-less builds; sites.json is authoritative.                                                                                     |
-| `siteStyles`     | no       | Site CSS compiled into the canvas stylesheet, as in `conlocaCMS`.                                                                                               |
-| `previewBuild`   | no       | `PreviewBuildOptions` or `false`. Off unless given as an object. See [Draft previews](#draft-previews). Refused under `@astrojs/vercel` and `@astrojs/netlify`. |
-| `saasIssuer`     | no       | Draft previews only. Pins the JWT `iss` every pass must name; unset, passes are checked against the endpoint's keys alone.                                      |
+| Name             | Required | Description                                                                                                                                                                         |
+| ---------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `endpoint`       | no       | The workspace editor's address, scheme and host only, no trailing slash; its host must start with `app.`. Defaults to `https://app.conloca.com`.                                    |
+| `puckConfigPath` | no       | Puck config entry to compile. Defaults to the value `conlocaCMS` was given.                                                                                                         |
+| `repoUri`        | no       | Advanced `owner/repo` override; normally detected from CI or the Git remote.                                                                                                        |
+| `siteId`         | no       | Advanced site-id override for CMS-less builds; sites.json is authoritative.                                                                                                         |
+| `siteStyles`     | no       | Site CSS compiled into the canvas stylesheet, as in `conlocaCMS`.                                                                                                                   |
+| `previewBuild`   | no       | `PreviewBuildOptions` or `false`. Off unless given as an object. See [Draft previews](#draft-previews). `separate: true` is refused under `@astrojs/vercel` and `@astrojs/netlify`. |
+| `saasIssuer`     | no       | Draft previews only. Pins the JWT `iss` every pass must name; unset, passes are checked against the endpoint's keys alone.                                                          |
 
 The `conlocaCMS` options `schemasPath`, `mdxComponentFolders`, `templates`, the `routing` data bindings, `editorStyles`
 and `editorCSS` reach the editor page automatically: the CMS publishes what it resolved, and the editor page renders
@@ -343,19 +344,20 @@ were removed: a config that still names one fails at load. Run `npx @conloca/cli
 
 ## Public render path
 
-Zero runtime overhead in the site's PRODUCTION build — nothing from this package is mounted there. The preview route and
-the preview interceptor exist only inside the generated preview build (below), so production pages render exactly as
-they did before.
+Without `previewBuild`, nothing from this package is mounted in the site's production build. With it on a site that has
+an adapter (d8), the production build adds the preview route under `/_conloca/preview/` and a `pre` middleware that
+returns at once for every path outside that route, so published pages render exactly as they did before. On a static
+site (D3) and with a separate deploy (D4), the preview route and its middleware exist only in the preview build.
 
 ## Draft previews
 
 The editor's Preview button opens the draft on your site. How depends on the site:
 
-| Your site                                                              | `previewBuild`       | Where drafts render                                                                                                                                                     |
-| ---------------------------------------------------------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Static, deployed to Cloudflare Workers                                 | `{}`                 | Next to the site: a dispatcher runs only on `/_conloca/preview/*` and your on-demand routes. Every other page stays a static file, and no visitor to it starts a Worker |
-| Static, on another host, or on Cloudflare without a domain of your own | `{ separate: true }` | A separate preview deploy; its address goes in `sites.json` `previewUrl`                                                                                                |
-| Server-rendered (`@astrojs/cloudflare`, `@astrojs/node`)               | `{}`                 | Your own deploy                                                                                                                                                         |
+| Your site                                                                                      | `previewBuild`       | Where drafts render                                                                                                                                                     |
+| ---------------------------------------------------------------------------------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Static, deployed to Cloudflare Workers                                                         | `{}`                 | Next to the site: a dispatcher runs only on `/_conloca/preview/*` and your on-demand routes. Every other page stays a static file, and no visitor to it starts a Worker |
+| Static, on another host, or on Cloudflare without a domain of your own                         | `{ separate: true }` | A separate preview deploy; its address goes in `sites.json` `previewUrl`                                                                                                |
+| With an adapter: `@astrojs/vercel`, `@astrojs/netlify`, `@astrojs/node`, `@astrojs/cloudflare` | `{}`                 | In the site's own build (d8), under `/_conloca/preview/`                                                                                                                |
 
 ### Next to a static site on Cloudflare Workers
 
@@ -389,7 +391,7 @@ draft images). Every build checks the list, and on the Paid plan the rate limit,
 `wrangler dev --local-protocol https`: Safari refuses the preview's `Secure` cookies on plain-http `localhost`.
 
 A static site can't hold an on-demand route itself: Astro refuses `export const prerender = false` without an adapter,
-and an adapter would make the site preview from its own server deploy instead. Add such a route to the preview build
+and an adapter would make the site render drafts in its own build (d8) instead. Add such a route to the preview build
 only, which runs with `CONLOCA_PREVIEW_BUILD=1`: the dispatcher then serves it next to the static site, and the build
 reports it for `run_worker_first`. Keep its file outside `src/pages`:
 
@@ -433,6 +435,46 @@ should see drafts, load third-party tags that must not see draft content, open s
 (`window.open` would let the opener read a draft), or register a service worker that handles navigations (it would see
 draft pages, and could cache them or answer published ones). Use a separate preview deploy.
 
+### In your site's own build (d8)
+
+A site with one of the four official adapters renders drafts in its own build: the preview route lives next to your
+pages in the same deploy, and a `pre` middleware returns at once for every other path. Add `previewBuild: {}` and run
+`npx @conloca/cli connect`. It finds where the site deploys from `vercel.json`, `netlify.toml`, a wrangler config, the
+adapter and the files that start your server; `--host vercel|netlify|cloudflare|node` names it when nothing does, and
+without a terminal it never guesses. It adds an adapter only on Vercel and Netlify; on Node or Cloudflare it writes the
+options below into the adapter you already have. A static site on your own server uses `separate: true`, and a static
+site on Cloudflare keeps previewing next to itself (D3). It prints the host's deploy step:
+
+- **Vercel:** `vercel()`. With `isr` on, `connect` adds the preview route to `isr.exclude`. In the project firewall:
+  Firewall → Add rule → If Request Path starts with `/_conloca/preview/` → Rate Limit, 60 requests per 10 seconds per IP
+  → Deny. A static site keeps its own 404 page only with a `src/pages/404` page; without one, misses run the preview
+  function.
+- **Netlify:** `netlify()` and `session: false` (`imageCDN` stays as you have it). A rate-limiting rule on
+  `/_conloca/preview/*`, 60 requests per 60 seconds per IP. Every missing URL, images included, runs your site's
+  function.
+- **Node:** `node({ mode: 'standalone' })` and `security.allowedDomains` with your domains from `sites.json`; without
+  them every preview entry fails behind a TLS proxy. Start the server with `node dist/server/entry.mjs`.
+- **Cloudflare:** `cloudflare()`. `connect` adds the routes the build reports to `run_worker_first` in `wrangler.jsonc`
+  and sets `not_found_handling` to `"404-page"`.
+
+On Vercel and Netlify, set `site` in `astro.config`: until it is set, your own (non-CMS) pages under the preview route
+open the published page instead of staying in the preview. `site` also changes canonical, sitemap, RSS and Open Graph
+URLs on your live pages, so set it knowingly.
+
+The build turns preview off with a warning, and still deploys the site, when it finds `previewBuild.adapter` (remove it:
+the adapter in `astro.config` is the one that renders drafts), `separate: true` under Vercel or Netlify, Vercel `isr`
+that does not exclude the preview route, or edge middleware (`middlewareMode: 'edge'`, `edgeMiddleware: true`).
+`config`, `outDir` and `required` have no effect here.
+
+Updating `@conloca/cloud-astro` moves a site that previewed from its own server (D2) or an `@astrojs/cloudflare`
+server-rendered site to d8 on its next build. `npx @conloca/cli upgrade` makes the edits explicit: it removes the
+`previewBuild` options d8 ignores and, for `@astrojs/node`, moves the start command to `node dist/server/entry.mjs`.
+Preview tabs opened before the update stop working; editors reopen Preview.
+
+On a server-rendered d8 site, drafts and published pages run in the same function or server. Read
+`Astro.locals.contentApi` inside each request and never cache it, or anything read from it, at module level: a warm
+instance would otherwise serve a draft on a public page.
+
 ### A separate preview deploy
 
 Set `previewBuild: { separate: true }`. Your build then runs no preview build. Add a second deploy (for example a second
@@ -454,7 +496,7 @@ depends on it runs this package's checks after the CMS ones, offline by default.
 | Check | What it verifies                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | CC1   | `conlocaCloud(...)` is wired next to `conlocaCMS(...)` (an absent `conlocaCMS` is an error); notes that the deployed `conloca.json` publishes the repository's name                                                                                                                                                                                                                                                                      |
-| CC8   | How the preview build serves drafts: next to a static site on Cloudflare Workers (D3), from the site's own server deploy (D2), or a separate deploy (D4)                                                                                                                                                                                                                                                                                 |
+| CC8   | How the preview build serves drafts: in the site's own build through its adapter (d8), next to a static site on Cloudflare Workers (D3), or a separate deploy (D4); `previewBuild.adapter` is named as what to remove                                                                                                                                                                                                                    |
 | CC9   | `sites.json` gives the site named `default` (or the only site) a bare host in `domains[defaultLocale]` and a valid `base`; Astro's `site` and `base`, when the config shows them, agree (warnings)                                                                                                                                                                                                                                       |
 | CC10  | No committed `public/_headers`, `netlify.toml` or `vercel.json` sets `X-Frame-Options` or `frame-ancestors` for the whole site without a `/_conloca/editor/` rule; the error carries the rule to add                                                                                                                                                                                                                                     |
 | CC11  | `--live`: `<host><base>_conloca/editor/conloca.json` is deployed, public, and names this repository and site; warns when it serves another commit than your checkout                                                                                                                                                                                                                                                                     |
@@ -471,6 +513,11 @@ depends on it runs this package's checks after the CMS ones, offline by default.
 | CC22  | D3, Paid plan (or none recorded): `wrangler.jsonc` (and every `env` block in it) has the `conlocaPreviewLimit` rate-limit binding at 60 requests per 10 s. Free plan: none expected, and one that is there is only noted. A rule in the Cloudflare dashboard is optional and not checked                                                                                                                                                 |
 | CC23  | D3: `package.json` records the Cloudflare plan (`conloca.cfPlan`); on Free, a warning: with on-demand routes, that previews and those routes share one daily request quota                                                                                                                                                                                                                                                               |
 | CC24  | `--live`, D4: `previewUrl`'s `conloca.json` answers as D4 and names the site's release                                                                                                                                                                                                                                                                                                                                                   |
+| CC25  | d8: the adapter is one of the four official ones, installed in the release range Conloca tests, on an astro at or above its peer floor (warnings; the floor is an error)                                                                                                                                                                                                                                                                 |
+| CC26  | d8: nothing in `astro.config` turns preview off: Vercel `isr` without the preview route excluded, edge middleware, `previewBuild.adapter`, `separate: true` under Vercel or Netlify (errors); options that have no effect, and options doctor cannot read (warnings)                                                                                                                                                                     |
+| CC27  | d8: the host routes the preview: Vercel `build.format: 'file'`, Vercel or Netlify without `site`, a static Cloudflare site whose `wrangler.jsonc` lacks the routes or `"404-page"` (warnings), and the host's rate-limit rule as a note                                                                                                                                                                                                  |
+| CC28  | d8 on `@astrojs/node`: `security.allowedDomains` names the site's domains                                                                                                                                                                                                                                                                                                                                                                |
+| CC29  | `--live`, D3 and d8: `<host><base>_conloca/preview/__exit` answers 302 twice, labelled with the configured mode, `no-store` and `Vary: Cookie`, and no CDN serves it from cache; a failure names where the host keeps logs                                                                                                                                                                                                               |
 
 `conloca doctor` reads the rate-limit binding and the recorded plan from your project's files; it never contacts
 Cloudflare and needs no token. `conloca doctor --live` sends no credential: it contacts your site's host, its

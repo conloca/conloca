@@ -9,17 +9,20 @@ import { createTwoFilesPatch } from 'diff';
 import { listAstroProjects } from '../lib/astro-projects.js';
 import { fail, withStdoutRedirected } from '../lib/cli-output.js';
 import { callOptions, stringLiteral, stripComments } from '../lib/config-text.js';
-import { ASTRO_CONFIG_FILES, readAstroSite, wireAstroConfig } from '../lib/connect/astro-config.js';
+import { type AdapterName, addAdapterStep, type D8ConfigRefusal, HOST_ADAPTERS } from '../lib/connect/adapter.js';
+import { ASTRO_CONFIG_FILES, addAstroSiteStep, readAstroSite, wireAstroConfig } from '../lib/connect/astro-config.js';
 import { type CfPlan, cfPlanEdit, recordedCfPlan, sharedQuotaRoutes } from '../lib/connect/cf-plan.js';
 import { framingStep } from '../lib/connect/framing.js';
+import { detectHost, type HostAnswer, type PreviewHost } from '../lib/connect/host.js';
 import { leftoversStep } from '../lib/connect/leftovers.js';
 import {
+  type PreviewSetup,
   previewDeployStep,
   previewSetupOf,
   readWranglerFile,
   type WranglerFile,
 } from '../lib/connect/preview-deploy.js';
-import { writeSiteAddress } from '../lib/connect/site-domain.js';
+import { siteUrlOf, writeSiteAddress } from '../lib/connect/site-domain.js';
 import { type FileEdit, jsonLike, type StepResult, type StepState, writeEdits } from '../lib/connect/step.js';
 import { contentRootOf } from '../lib/content-root.js';
 import { isRecord } from '../lib/is-record.js';
@@ -30,9 +33,16 @@ import {
   type PackageManagerCommands,
   packageManagerCommands,
 } from '../lib/package-manager.js';
-import { type CliManifest, conlocaRange, readCliManifest, THIRD_PARTY_VERSIONS } from '../lib/project-template.js';
-import { newSitesConfig } from '../lib/sites-config.js';
-import { compareVersions, conlocaDependencies, versionFloor } from '../lib/versions.js';
+import { importFromProject } from '../lib/project-module.js';
+import {
+  ADAPTER_VERSIONS,
+  type CliManifest,
+  conlocaRange,
+  readCliManifest,
+  THIRD_PARTY_VERSIONS,
+} from '../lib/project-template.js';
+import { newSitesConfig, siteDomainsOf } from '../lib/sites-config.js';
+import { compareVersions, conlocaDependencies, D8_SINCE, installedVersion, versionFloor } from '../lib/versions.js';
 import { DEFAULT_SITE_NAME, setup } from './setup.js';
 
 const execFile = promisify(execFileCallback);
@@ -51,12 +61,16 @@ export interface ConnectOptions {
   cfPlan?: CfPlan;
   /** Chosen by the site owner, never inferred: misses go to the dispatcher (`not_found_handling: "none"`). */
   negotiate404?: boolean;
+  /** Where the site deploys, for runs with no one at a terminal; detected otherwise. */
+  host?: PreviewHost;
 }
 
 export type ConnectStepId =
   | 'project'
   | 'packages'
   | 'config'
+  | 'adapter'
+  | 'site'
   | 'address'
   | 'framing'
   | 'preview'
@@ -214,8 +228,16 @@ export async function pickProject(
   };
 }
 
-/** The package.json additions and the command that makes them; never `--force` or `--legacy-peer-deps`. */
-async function packagesStep(projectDir: string, commands: PackageManagerCommands): Promise<Step> {
+/**
+ * The package.json additions and the command that makes them; never `--force` or `--legacy-peer-deps`. `extra` is
+ * added like the editor page's packages; `reinstall` is declared already and only installed again, at its range.
+ */
+async function packagesStep(
+  projectDir: string,
+  commands: PackageManagerCommands,
+  extra: [string, string][] = [],
+  reinstall: [string, string][] = [],
+): Promise<Step> {
   const path = join(projectDir, 'package.json');
   const text = await readText(path);
   const unreadable: Step = {
@@ -238,9 +260,12 @@ async function packagesStep(projectDir: string, commands: PackageManagerCommands
       return range === undefined ? [] : [[name, range]];
     }),
     ...PEER_PACKAGES.map((name): [string, string] => [name, THIRD_PARTY_VERSIONS[name]]),
+    ...extra,
   ];
   const missing = wanted.filter(([name]) => !(name in dependencies) && !(name in devDependencies));
-  if (missing.length === 0) {
+  const updated = reinstall.filter(([name]) => !missing.some(([other]) => other === name));
+  const installed = [...missing, ...updated];
+  if (installed.length === 0) {
     return { id: 'packages', result: { state: 'done', message: 'every package is in package.json', edits: [] } };
   }
   const entries = Object.entries({ ...dependencies, ...Object.fromEntries(missing) });
@@ -250,10 +275,16 @@ async function packagesStep(projectDir: string, commands: PackageManagerCommands
     id: 'packages',
     result: {
       state: 'changed',
-      message: `added ${missing.map(([name]) => name).join(', ')}`,
-      edits: [{ path, before: text, after: jsonLike(text, { ...manifest, dependencies: added }) }],
+      message: [
+        ...(missing.length > 0 ? [`added ${missing.map(([name]) => name).join(', ')}`] : []),
+        ...updated.map(
+          ([name, range]) => `updates ${name} to ${range}, the release with draft previews in the site build`,
+        ),
+      ].join('; '),
+      edits:
+        missing.length > 0 ? [{ path, before: text, after: jsonLike(text, { ...manifest, dependencies: added }) }] : [],
     },
-    command: `${commands.add} ${missing.map(([name, range]) => `'${name}@${range}'`).join(' ')}`,
+    command: `${commands.add} ${installed.map(([name, range]) => `'${name}@${range}'`).join(' ')}`,
   };
 }
 
@@ -275,6 +306,175 @@ export async function olderPackages(projectDir: string, cli: CliManifest): Promi
     const wanted = range === undefined ? null : versionFloor(range);
     return floor !== null && wanted !== null && compareVersions(floor, wanted) < 0 ? [`${name} ${floor}`] : [];
   });
+}
+
+const HOST_QUESTION = 'Where does this site deploy? [vercel/netlify/cloudflare/node]';
+
+const STATIC_ONLY =
+  'this host runs no functions: use a separate Cloudflare preview deploy (previewBuild: { separate: true }) or go without preview';
+
+const STATIC_NODE =
+  'a static site on your own server has no server to render drafts: use a separate Cloudflare preview deploy (previewBuild: { separate: true }) or add @astrojs/node and start dist/server/entry.mjs, then run connect with --host node';
+
+/** cloud-astro's d8 refusals, as the project's own install exports them. */
+interface D8Refusals {
+  d8ConfigRefusal: D8ConfigRefusal;
+  d8EdgeRefusal: (probed: 'classic' | 'edge' | undefined, text: string, adapterName: string) => string | null;
+}
+
+function hasD8Refusals(value: unknown): value is D8Refusals {
+  return isRecord(value) && typeof value.d8ConfigRefusal === 'function' && typeof value.d8EdgeRefusal === 'function';
+}
+
+/** The host each adapter deploys to, for the options connect writes into an adapter the site has already. */
+const ADAPTER_HOSTS = {
+  '@astrojs/vercel': 'vercel',
+  '@astrojs/netlify': 'netlify',
+  '@astrojs/cloudflare': 'cloudflare',
+  '@astrojs/node': 'node',
+} as const satisfies Record<AdapterName, keyof typeof HOST_ADAPTERS>;
+
+/** The version a package.json dependency range starts from; null when it is not declared or is a tag. */
+function declaredFloor(manifestText: string | null, name: string): string | null {
+  let manifest: unknown;
+  try {
+    manifest = JSON.parse(manifestText ?? '');
+  } catch {
+    return null;
+  }
+  if (!isRecord(manifest)) return null;
+  const spec = [manifest.dependencies, manifest.devDependencies]
+    .map((deps) => (isRecord(deps) ? deps[name] : undefined))
+    .find((value) => typeof value === 'string');
+  return typeof spec === 'string' ? versionFloor(spec) : null;
+}
+
+interface AdapterSetup {
+  /** null when the host keeps the site as it is (Cloudflare: the D3 dispatcher). */
+  step: Step | null;
+  preview: PreviewSetup;
+  /** The adapter package to add, and the cloud-astro release to install for it. */
+  extra: [string, string][];
+  reinstall: [string, string][];
+}
+
+/** A host that cannot render drafts in the site's build: no deploy step, the adapter step says why. */
+function previewOff(result: StepResult): AdapterSetup {
+  return { step: { id: 'adapter', result }, preview: { kind: 'off' }, extra: [], reinstall: [] };
+}
+
+function needsYou(message: string): StepResult {
+  return { state: 'needs-you', message, edits: [] };
+}
+
+/**
+ * Where the site deploys and the adapter that renders its drafts there (d8): an adapter-less site on Vercel or Netlify
+ * gets the host's official adapter; a site with an adapter gets the options d8 needs. Never asks under --yes or
+ * without a terminal, where the host comes from --host or the files, else the step needs you.
+ */
+async function adapterSetup(input: {
+  preview: { kind: 'd3'; prefix: string } | Extract<PreviewSetup, { kind: 'd8' }>;
+  projectDir: string;
+  repoRoot: string;
+  configFile: string;
+  /** astro.config as the config step leaves it. */
+  text: string;
+  sitesText: string;
+  manifestText: string | null;
+  options: ConnectOptions;
+  io: ConnectIo;
+}): Promise<AdapterSetup> {
+  const { preview, projectDir, options, io } = input;
+  const keep = (step: Step | null): AdapterSetup => ({ step, preview, extra: [], reinstall: [] });
+  const installed = (name: string) => installedVersion(name, projectDir, input.repoRoot);
+  const loaded = await importFromProject(projectDir, '@conloca/cloud-astro/node');
+  // As the build checks it when it cannot probe the adapter: config text first, then edge middleware.
+  const configRefusal: D8ConfigRefusal | undefined = hasD8Refusals(loaded)
+    ? (text, name, base) => loaded.d8ConfigRefusal(text, name, base) ?? loaded.d8EdgeRefusal(undefined, text, name)
+    : undefined;
+  const addAdapter = async (host: keyof typeof HOST_ADAPTERS): Promise<StepResult> => {
+    // An adapter the site declares already is not installed by connect, so its astro floor is not connect's to check.
+    const declared = declaredFloor(input.manifestText, HOST_ADAPTERS[host].name) !== null;
+    const astroVersion = declared
+      ? ''
+      : ((await installed('astro')) ?? declaredFloor(input.manifestText, 'astro') ?? '');
+    return addAdapterStep({
+      path: input.configFile,
+      text: input.text,
+      host,
+      siteDomains: siteDomainsOf(input.sitesText),
+      astroVersion,
+      yes: options.yes,
+      ...(configRefusal === undefined ? {} : { configRefusal }),
+    });
+  };
+
+  const interactive = io.isTTY && !options.yes && !options.dryRun;
+  let answer: HostAnswer = await detectHost({
+    projectDir,
+    repoRoot: input.repoRoot,
+    astroText: input.text,
+    ...(options.host === undefined ? {} : { flag: options.host }),
+  });
+
+  if (preview.kind === 'd8') {
+    const host = ADAPTER_HOSTS[preview.adapter];
+    if (!answer.ok && answer.reason === 'conflict') return previewOff(needsYou(answer.message));
+    const matches = answer.ok && (answer.host === host || (host === 'cloudflare' && answer.host === 'cloudflare-d3'));
+    if (answer.ok && !matches) {
+      return previewOff(
+        needsYou(
+          `astro.config uses ${preview.adapter}, but ${answer.evidence.join(', ')} says the site deploys to ${answer.host}: pass --host ${host} if the adapter is right`,
+        ),
+      );
+    }
+    // Never infer Node from the adapter alone: only a start command in the repo or --host node says the server runs it.
+    if (!answer.ok && host === 'node') {
+      return previewOff(
+        needsYou("can't tell that your own server starts dist/server/entry.mjs: pass --host node if it does"),
+      );
+    }
+    const current = await installed('@conloca/cloud-astro');
+    if (current === null || compareVersions(current, D8_SINCE) < 0) {
+      return previewOff(
+        needsYou(
+          `the installed @conloca/cloud-astro (${current ?? 'none'}) renders no drafts in the site's own build: run conloca upgrade, then connect again`,
+        ),
+      );
+    }
+    if (configRefusal === undefined) {
+      return previewOff(
+        needsYou(
+          "couldn't load the preview checks of this project's @conloca/cloud-astro: install its packages, then run connect again",
+        ),
+      );
+    }
+    return keep({ id: 'adapter', result: await addAdapter(host) });
+  }
+
+  if (!answer.ok && answer.reason === 'unknown' && interactive) {
+    const reply = (await io.ask(HOST_QUESTION)).trim().toLowerCase();
+    if (reply === 'vercel' || reply === 'netlify' || reply === 'cloudflare' || reply === 'node') {
+      answer = { ok: true, host: reply, evidence: ['your answer'] };
+    }
+  }
+  if (!answer.ok) return previewOff(needsYou(answer.message));
+  const { host } = answer;
+  if (host === 'cloudflare' || host === 'cloudflare-d3') return keep(null);
+  if (host === 'static-only') return previewOff(needsYou(STATIC_ONLY));
+  if (host === 'node') return previewOff(needsYou(STATIC_NODE));
+  const result = await addAdapter(host);
+  if (result.state !== 'changed') return previewOff(result);
+  const { name } = HOST_ADAPTERS[host];
+  const current = await installed('@conloca/cloud-astro');
+  const range = conlocaRange(await readCliManifest(), '@conloca/cloud-astro');
+  const stale = range !== undefined && (current === null || compareVersions(current, D8_SINCE) < 0);
+  return {
+    step: { id: 'adapter', result },
+    preview: { kind: 'd8', prefix: preview.prefix, adapter: name },
+    extra: [[name, ADAPTER_VERSIONS[name]]],
+    reinstall: stale ? [['@conloca/cloud-astro', range]] : [],
+  };
 }
 
 /** The site id a build writes into conloca.json: the top-level `siteId` of sites.json, else `default`. */
@@ -409,14 +609,6 @@ export async function runConnect(path: string, options: ConnectOptions, io: Conn
     };
   }
 
-  const packages = await packagesStep(projectDir, commands);
-  if (!options.install && packages.command !== undefined) {
-    packages.result = { state: 'skipped', message: `not installed (--no-install): run ${packages.command}`, edits: [] };
-    packages.command = undefined;
-  }
-  // --update refreshes the preview settings only: nothing is installed, and no starter or framing file is written.
-  if (options.update) packages.command = undefined;
-
   const configText = await readFile(picked.configFile, 'utf8');
   const code = stripComments(configText);
   const cmsOptions = callOptions(code, 'conlocaCMS');
@@ -438,7 +630,55 @@ export async function runConnect(path: string, options: ConnectOptions, io: Conn
     'sites.json',
   );
   const astroSite = readAstroSite(configText);
-  const site = options.siteUrl ?? (astroSite === 'computed' ? null : astroSite.site);
+
+  const found = previewSetupOf(
+    callOptions(code, 'conlocaCloud'),
+    callOptions(code, 'defineConfig'),
+    astroSite === 'computed' ? null : astroSite.base,
+    code,
+  );
+  const sitesText = (await readText(sitesPath)) ?? '';
+  const manifestPath = join(projectDir, 'package.json');
+  const manifestText = await readText(manifestPath);
+  // The adapter goes into astro.config as the config step leaves it, and is written after it.
+  const wiredText = config.result.edits.find((edit) => edit.path === picked.configFile)?.after ?? configText;
+  // --update never adds an adapter.
+  const adapterPlan =
+    !options.update && (found.kind === 'd3' || found.kind === 'd8')
+      ? await adapterSetup({
+          preview: found.kind === 'd8' ? found : { kind: 'd3', prefix: found.prefix },
+          projectDir,
+          repoRoot: root,
+          configFile: picked.configFile,
+          text: wiredText,
+          sitesText,
+          manifestText,
+          options,
+          io,
+        })
+      : null;
+  const preview = adapterPlan?.preview ?? found;
+  const refusal = found.kind === 'off' || found.kind === 'd4' ? found.refusal : undefined;
+  const refused = options.update ? undefined : refusal;
+  const adapter: Step | null =
+    adapterPlan?.step ?? (refused === undefined ? null : { id: 'adapter', result: needsYou(refused) });
+  const adapterEdit = adapter?.result.edits.find((edit) => edit.path === picked.configFile);
+  const siteStep: Step | null =
+    preview.kind === 'd8'
+      ? {
+          id: 'site',
+          result: addAstroSiteStep({
+            path: picked.configFile,
+            text: adapterEdit?.after ?? wiredText,
+            sitesText,
+            adapter: preview.adapter,
+            siteUrl: options.siteUrl,
+          }),
+        }
+      : null;
+  // The address the site step proposes from sites.json is the one sites.json already lists.
+  const proposed = siteStep?.result.state === 'differs' ? siteUrlOf(sitesText) : null;
+  const site = options.siteUrl ?? (astroSite === 'computed' ? null : (astroSite.site ?? proposed));
   let address: Step;
   if (site === null) {
     address = {
@@ -459,22 +699,22 @@ export async function runConnect(path: string, options: ConnectOptions, io: Conn
     address = { id: 'address', result };
   }
 
+  const packages = await packagesStep(projectDir, commands, adapterPlan?.extra, adapterPlan?.reinstall);
+  if (!options.install && packages.command !== undefined) {
+    packages.result = { state: 'skipped', message: `not installed (--no-install): run ${packages.command}`, edits: [] };
+    packages.command = undefined;
+  }
+  // --update refreshes the preview settings only: nothing is installed, and no starter or framing file is written.
+  if (options.update) packages.command = undefined;
+
   const framing: Step = { id: 'framing', result: await framingStep(projectDir, undefined) };
   // The framing rules come from the project's own @conloca/cloud-astro, which the package step may be about to add.
   const framingAfterInstall = !options.update && framing.result.state === 'skipped' && packages.command !== undefined;
   const leftovers: Step = { id: 'leftovers', result: await leftoversStep(root) };
   const build: Step = { id: 'build', result: { state: 'skipped', message: '', edits: [] } };
 
-  const preview = previewSetupOf(
-    callOptions(code, 'conlocaCloud'),
-    callOptions(code, 'defineConfig'),
-    astroSite === 'computed' ? null : astroSite.base,
-  );
-  const sitesText = (await readText(sitesPath)) ?? '';
   // Only a D3 site needs the plan, asked once and recorded, never read from Cloudflare. It is settled first, since it
   // decides whether the rate limit is written (Paid only).
-  const manifestPath = join(projectDir, 'package.json');
-  const manifestText = await readText(manifestPath);
   const recorded = recordedCfPlan(manifestText);
   const wranglerRunner = listsWrangler(manifestText) ? commands.exec : 'npx';
   let plan: CfPlan | undefined = preview.kind === 'd3' ? (options.cfPlan ?? recorded) : undefined;
@@ -496,7 +736,7 @@ export async function runConnect(path: string, options: ConnectOptions, io: Conn
   // The config as it was before this run: the summary after the build covers both passes from here.
   const wranglerBefore = await readWranglerFile(projectDir);
   const deploy: Step = { id: 'preview', result: previewStep(wranglerBefore, null) };
-  const withPreview = preview.kind === 'd3' || preview.kind === 'd4';
+  const withPreview = preview.kind !== 'off';
 
   // With no plan known, nothing D3 is written: the plan decides whether the rate limit is. Otherwise the settings are
   // written now, and the routes the build reports are added after it.
@@ -515,7 +755,18 @@ export async function runConnect(path: string, options: ConnectOptions, io: Conn
   }
   const steps = options.update
     ? [project, deploy, build]
-    : [project, packages, config, address, framing, ...(withPreview ? [deploy] : []), build, leftovers];
+    : [
+        project,
+        packages,
+        config,
+        ...(adapter === null ? [] : [adapter]),
+        ...(siteStep === null ? [] : [siteStep]),
+        address,
+        framing,
+        ...(withPreview ? [deploy] : []),
+        build,
+        leftovers,
+      ];
 
   for (const step of steps) {
     for (const edit of step.result.edits) console.log(patchOf(edit, start));
@@ -534,8 +785,23 @@ export async function runConnect(path: string, options: ConnectOptions, io: Conn
     if (starter) await setup(projectDir, DEFAULT_SITE_NAME, { dataSchemas: false });
     // The package manager writes package.json itself; its edit above is only the preview.
     await writeEdits(
-      steps.flatMap((step) => (step === packages ? [] : step.result.edits.filter((edit) => edit !== planEdit))),
+      steps.flatMap((step) =>
+        step === packages || step === adapter ? [] : step.result.edits.filter((edit) => edit !== planEdit),
+      ),
     );
+    // On top of the config step's astro.config, so after it; never an import of a package that did not install.
+    const uninstalled =
+      (adapterPlan?.extra.length ?? 0) > 0 &&
+      (packages.result.state === 'failed' || packages.result.state === 'skipped');
+    if (adapter !== null && uninstalled) {
+      adapter.result = {
+        state: 'needs-you',
+        message: `${adapter.result.message} (not written: the adapter package is not installed)`,
+        edits: [],
+      };
+      // Its replacement is the adapter's astro.config plus site: nothing to offer without the adapter.
+      if (siteStep !== null) siteStep.result = { ...siteStep.result, state: 'needs-you', replacement: [] };
+    } else if (adapter !== null) await writeEdits(adapter.result.edits);
     if (plan !== undefined && planEdit !== null) {
       // The package manager may have rewritten package.json since the diff above: record the plan in what it wrote.
       const fresh = cfPlanEdit(manifestPath, (await readText(manifestPath)) ?? '', plan);
@@ -547,7 +813,7 @@ export async function runConnect(path: string, options: ConnectOptions, io: Conn
         if (step.result.state !== 'differs' || replacement.length === 0) continue;
         for (const edit of replacement) console.log(patchOf(edit, start));
         // oxlint-disable-next-line no-await-in-loop -- one question per kept value, each after its own diff.
-        if (await io.confirm(`Replace your value (${step.result.message})?`)) {
+        if (await io.confirm(step.result.question ?? `Replace your value (${step.result.message})?`)) {
           // oxlint-disable-next-line no-await-in-loop -- written right after its answer.
           await writeEdits(replacement);
           step.result = { state: 'changed', message: `replaced: ${step.result.message}`, edits: replacement };
@@ -571,6 +837,13 @@ export async function runConnect(path: string, options: ConnectOptions, io: Conn
       step.result.message += ` (not written: ${why})`;
     }
   }
+  // site changes the live pages' URLs: written only on the terminal yes above, never under --yes or without a terminal.
+  if (siteStep?.result.state === 'differs' && !(accepted && io.isTTY && !options.yes))
+    siteStep.result.state = 'needs-you';
+  // A host's d8 deploy step only once the adapter it serves through is in astro.config.
+  if ((adapterPlan?.extra.length ?? 0) > 0 && adapter?.result.state === 'needs-you') {
+    deploy.result = { state: 'skipped', message: 'the deploy step follows once the adapter is written', edits: [] };
+  }
 
   const siteId = await siteIdOf(sitesPath);
   // A kept value (`differs`) is still a wired config, so the build proves it too.
@@ -582,9 +855,12 @@ export async function runConnect(path: string, options: ConnectOptions, io: Conn
   else if (blocked !== undefined) build.result.message = `not built: the ${blocked.id} step is not done`;
   else build.result = await buildStep(projectDir, siteId, `${commands.run} build`, io);
 
-  // D3: the build reports the routes the dispatcher must run on, which only a build knows.
   const planEdits = planEdit === null ? [] : [planEdit];
-  if (preview.kind === 'd3' && plan !== undefined && build.result.state === 'done') {
+  // The routes the dispatcher (D3) or the Cloudflare adapter (d8) must run on, which only a build knows.
+  const routed =
+    (preview.kind === 'd3' && plan !== undefined) ||
+    (preview.kind === 'd8' && preview.adapter === '@astrojs/cloudflare');
+  if (routed && build.result.state === 'done') {
     const routes = await readWorkerFirstList(projectDir);
     const shared = plan === 'free' ? sharedQuotaRoutes(routes, preview.prefix) : [];
     if (routes === null) {

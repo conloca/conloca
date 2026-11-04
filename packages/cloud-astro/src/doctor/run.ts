@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { gitOutput, resolveRepositoryUri } from '../git.js';
 import { checkFramingHeaders, checkKeyLeftovers, checkSiteAddress } from './checks-address.js';
+import { runD8Checks } from './checks-d8.js';
 import { runLiveChecks } from './checks-live.js';
 import { checkPreviewBuildAdapter, checkWiring, suppliedEndpoint } from './checks-offline.js';
 import { runPreviewChecks } from './checks-preview.js';
@@ -35,6 +36,7 @@ export async function runDoctor(
     checkPreviewBuildAdapter(scan),
     ...runPreviewChecks(scan, context.projectDir, deps),
     ...runPreviewLimitChecks(scan, context.projectDir, deps),
+    ...runD8Checks(scan, context.projectDir, deps),
     ...(await runLiveChecks({ context, deps, scan, address: site.address, repoUri })),
   ];
   return { contractVersion: 1, checks };

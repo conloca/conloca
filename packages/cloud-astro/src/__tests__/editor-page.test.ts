@@ -14,6 +14,7 @@ import {
   mediaFromBuild,
   routesFromBuild,
   type WrittenConlocaJson,
+  withDeployHost,
 } from '../editor-page/emit.js';
 import { renderEditorPage } from '../editor-page/page.js';
 
@@ -91,6 +92,13 @@ describe('routesFromBuild', () => {
     if (next === undefined) throw new Error('expected a route the size limit left out');
     expect(size(written, [...routes, next.route])).toBeGreaterThan(CONLOCA_JSON_MAX_BYTES);
     expect(left).toBe(400 - routes.length);
+  });
+});
+
+describe('withDeployHost', () => {
+  it('records the host in conloca.json on a host build and writes no key locally', () => {
+    expect(JSON.stringify(withDeployHost(WRITTEN, { NETLIFY: 'true' }))).toContain('"host":"netlify"');
+    expect(withDeployHost(WRITTEN, {})).not.toHaveProperty('host');
   });
 });
 

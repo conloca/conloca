@@ -1,9 +1,12 @@
 import { type ASTNode, generateCode, type ProxifiedModule, parseExpression, parseModule } from 'magicast';
 import { containsOutsideStrings, stripComments } from '../config-text.js';
+import { isRecord } from '../is-record.js';
+import type { AdapterName } from './adapter.js';
+import { siteUrlOf } from './site-domain.js';
 import type { StepResult } from './step.js';
 
-type Node<T extends ASTNode['type']> = Extract<ASTNode, { type: T }>;
-type ObjectNode = Node<'ObjectExpression'>;
+export type Node<T extends ASTNode['type']> = Extract<ASTNode, { type: T }>;
+export type ObjectNode = Node<'ObjectExpression'>;
 type Element = Node<'ArrayExpression'>['elements'][number];
 type ImportLocals = Map<string, string>;
 
@@ -58,7 +61,7 @@ function callNode(code: string): Node<'CallExpression'> {
 }
 
 /** The object of `export default defineConfig({...})` or `export default {...}`; null for anything computed. */
-function configObject(program: Node<'Program'>): ObjectNode | null {
+export function configObject(program: Node<'Program'>): ObjectNode | null {
   const exported = program.body.find((statement) => statement.type === 'ExportDefaultDeclaration')?.declaration;
   const config =
     exported?.type === 'CallExpression' &&
@@ -72,7 +75,7 @@ function configObject(program: Node<'Program'>): ObjectNode | null {
     : null;
 }
 
-function property(object: ObjectNode, name: string): Node<'ObjectProperty'> | undefined {
+export function property(object: ObjectNode, name: string): Node<'ObjectProperty'> | undefined {
   return object.properties.find(
     (p): p is Node<'ObjectProperty'> =>
       p.type === 'ObjectProperty' &&
@@ -82,13 +85,13 @@ function property(object: ObjectNode, name: string): Node<'ObjectProperty'> | un
   );
 }
 
-function propertyName(p: ObjectNode['properties'][number]): string | null {
+export function propertyName(p: ObjectNode['properties'][number]): string | null {
   if (p.type !== 'ObjectProperty' || p.computed) return null;
   return p.key.type === 'Identifier' ? p.key.name : p.key.type === 'StringLiteral' ? p.key.value : null;
 }
 
 /** Every import binding, local name → `<source>#<imported>` (`default` for a default import). */
-function importLocals(program: Node<'Program'>): ImportLocals {
+export function importLocals(program: Node<'Program'>): ImportLocals {
   const locals: ImportLocals = new Map();
   for (const statement of program.body) {
     if (statement.type !== 'ImportDeclaration') continue;
@@ -149,6 +152,66 @@ export function removedKeyOptions(text: string): string[] | null {
   const names = options.properties.map(propertyName);
   if (names.some((name) => name === null)) return null;
   return names.flatMap((name) => (name !== null && REMOVED_OPTIONS.has(name) ? [name] : []));
+}
+
+/**
+ * The config without the named options of conlocaCloud()'s `previewBuild`; null when none is there, 'computed' when
+ * the call, its options or previewBuild are not plain object literals connect can edit.
+ */
+export function withoutPreviewBuildOptions(
+  text: string,
+  names: ReadonlySet<string>,
+): { after: string } | 'computed' | null {
+  let mod: ProxifiedModule;
+  try {
+    mod = parseModule(text);
+  } catch {
+    return 'computed';
+  }
+  const program: ASTNode = mod.$ast;
+  if (program.type !== 'Program') return 'computed';
+  const config = configObject(program);
+  const value = config === null ? undefined : property(config, 'integrations')?.value;
+  const elements = value?.type === 'ArrayExpression' ? value.elements : [];
+  const call = elements[callIndex(elements, localName(importLocals(program), IMPORTS.editorPage))];
+  const [options] = call?.type === 'CallExpression' ? call.arguments : [];
+  const previewBuild = options?.type === 'ObjectExpression' ? property(options, 'previewBuild')?.value : undefined;
+  if (previewBuild?.type !== 'ObjectExpression') return 'computed';
+  const removed = previewBuild.properties.filter((p) => names.has(propertyName(p) ?? ''));
+  if (removed.length === 0) return null;
+  previewBuild.properties = previewBuild.properties.filter((p) => !removed.includes(p));
+  // An adapter call that went with them leaves its import behind: drop it when nothing else names it.
+  const callees = removed.flatMap((p) =>
+    p.type === 'ObjectProperty' && p.value.type === 'CallExpression' && p.value.callee.type === 'Identifier'
+      ? [p.value.callee.name]
+      : [],
+  );
+  const code = program.body.filter((statement) => statement.type !== 'ImportDeclaration');
+  for (const local of callees) {
+    if (!namesIdentifier(code, local)) delete mod.imports[local];
+  }
+  return { after: printModule(mod, text) };
+}
+
+/** Node fields that hold source positions or recast's own bookkeeping, never code. */
+const NOT_CODE = new Set([
+  'loc',
+  'start',
+  'end',
+  'original',
+  'tokens',
+  'comments',
+  'leadingComments',
+  'trailingComments',
+  'extra',
+]);
+
+/** Whether any identifier in the syntax tree `node` is named `name`. */
+function namesIdentifier(node: unknown, name: string): boolean {
+  if (Array.isArray(node)) return node.some((child) => namesIdentifier(child, name));
+  if (!isRecord(node)) return false;
+  if (node.type === 'Identifier' && node.name === name) return true;
+  return Object.entries(node).some(([key, child]) => !NOT_CODE.has(key) && namesIdentifier(child, name));
 }
 
 /** What the site owner pastes when the config is not a plain object connect can edit. */
@@ -419,6 +482,55 @@ export function readAstroSite(text: string): { site: string | null; base: string
   const site = readAstroOption(text, 'site');
   const base = readAstroOption(text, 'base');
   return site === undefined || base === undefined ? 'computed' : { site, base };
+}
+
+/**
+ * On Vercel and Netlify (d8), propose Astro's `site` when astro.config sets none: the preview's site-pages fetch needs
+ * it. Only ever a `differs` replacement, since `site` also changes the live site's canonical, sitemap, RSS and Open
+ * Graph URLs: connect writes it on a terminal yes only.
+ */
+export function addAstroSiteStep(input: {
+  path: string;
+  text: string;
+  sitesText: string;
+  adapter: AdapterName;
+  siteUrl?: string;
+}): StepResult {
+  const { path, text } = input;
+  if (input.adapter !== '@astrojs/vercel' && input.adapter !== '@astrojs/netlify') {
+    return { state: 'skipped', message: `${input.adapter} needs no site for previews`, edits: [] };
+  }
+  const current = readAstroSite(text);
+  if (current === 'computed') return { state: 'skipped', message: 'astro.config computes its site', edits: [] };
+  if (current.site !== null) return { state: 'done', message: `astro.config sets site ${current.site}`, edits: [] };
+  const given = input.siteUrl ?? siteUrlOf(input.sitesText);
+  const parsed = given !== null && URL.canParse(given) ? new URL(given) : null;
+  if (given !== null && parsed?.protocol !== 'https:') {
+    return { state: 'needs-you', message: `Astro's site must be an https URL, got ${given}`, edits: [] };
+  }
+  const url = parsed?.origin ?? null;
+  const shown = url ?? '<your production URL>';
+  const message = `astro.config sets no site, so your own pages leave the preview (302) instead of staying in it; site: '${shown}' fixes that and also changes canonical, sitemap, RSS and Open Graph URLs on your live pages`;
+  const lines = [`site: '${shown}',`];
+  let config: ProxifiedModule | null = null;
+  try {
+    config = url === null ? null : parseModule(text);
+  } catch {
+    config = null;
+  }
+  const program: ASTNode | undefined = config?.$ast;
+  const object = program?.type === 'Program' ? configObject(program) : null;
+  if (config === null || object === null) return { state: 'needs-you', message, lines, edits: [] };
+  // A URL origin holds no quote or backslash, so it needs no escaping in the config's own quote style.
+  object.properties.unshift(...objectProperties(`site: '${url}'`));
+  return {
+    state: 'differs',
+    message,
+    lines,
+    edits: [],
+    replacement: [{ path, before: text, after: printModule(config, text) }],
+    question: `Set site to ${shown} in astro.config? It changes canonical, sitemap, RSS and Open Graph URLs on your live pages.`,
+  };
 }
 
 /** What the site owner pastes when the data schemas cannot be wired for them. */

@@ -10,6 +10,15 @@ import {
 } from './constants.js';
 import type { PreviewBuildOptions } from './types.js';
 
+/** Why `separate: true` cannot work under an adapter that deploys from the project root. Doctor's CC26 reuses it. */
+export function separateRefusal(adapterName: string): string {
+  return (
+    `previewBuild.separate is not supported with ${adapterName}: the separate preview build would write its output ` +
+    `where ${adapterName} deploys the live site. Remove separate: true; with ${adapterName} drafts render in the ` +
+    "site's own build."
+  );
+}
+
 /**
  * How drafts are served, from the options and the project's adapter: off unless `previewBuild` is given as an
  * object; D4 with `separate: true`; D3 for a static site, whose preview server runs next to it on Cloudflare
@@ -31,11 +40,7 @@ export function previewBuildMode(
   }
   if (previewBuild.separate === true) {
     if (adapterName !== undefined && REFUSED_PREVIEW_ADAPTERS.includes(adapterName)) {
-      throw new Error(
-        `${PACKAGE_NAME}: previewBuild.separate is not supported with ${adapterName}: the separate preview build ` +
-          `would write its output where ${adapterName} deploys the live site. Remove separate: true; with ` +
-          `${adapterName} drafts render in the site's own build.`,
-      );
+      throw new Error(`${PACKAGE_NAME}: ${separateRefusal(adapterName)}`);
     }
     return 'd4';
   }
@@ -151,10 +156,7 @@ export function resolveAstroBin(cwd: string = process.cwd()): string {
  * env flag is already set to `'1'`), it returns immediately without spawning,
  * which is the outermost layer of the recursion guard.
  *
- * On a non-zero child exit, behaviour depends on {@link PreviewBuildOptions.required}:
- *   - `true` (default) → rejects with an error naming the exit code.
- *   - `false` → resolves and logs a warning so onboarding setups can continue
- *     when the preview build is not yet wired correctly.
+ * A non-zero child exit rejects with an error naming the exit code; the caller decides whether the site's build fails.
  */
 export async function spawnPreviewBuild(
   opts: PreviewBuildOptions,
@@ -186,8 +188,6 @@ export async function _spawnPreviewBuildWith(
     return;
   }
 
-  const required = opts.required ?? true;
-
   const astroBin = resolveAstroBin();
   const child = spawnFn(astroBin, ['build'], {
     env: buildPreviewChildEnv(process.env, mode, prerendered),
@@ -201,17 +201,7 @@ export async function _spawnPreviewBuildWith(
         return;
       }
       const reason = code === null ? 'signal' : `exit ${code}`;
-      if (required) {
-        reject(new Error(`${PACKAGE_NAME}: preview build failed (${reason})`));
-        return;
-      }
-      // Soft-fail path — opt-in via `previewBuild.required = false`. Use
-      // console.warn rather than the Astro logger because the spawn helper is
-      // pure: the integration's `astro:build:done` may evolve to pass a
-      // logger down, but until it does, warn keeps the signal
-      // visible without leaking a logger dependency into the spawn module.
-      console.warn(`${PACKAGE_NAME}: preview build failed (${reason}); previewBuild.required=false, continuing`);
-      resolve();
+      reject(new Error(`${PACKAGE_NAME}: preview build failed (${reason})`));
     });
   });
 }

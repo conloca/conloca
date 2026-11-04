@@ -19,13 +19,12 @@ import {
   type CloudDoctorContext,
   type DoctorDeps,
   outcomeOf,
+  REQUEST_TIMEOUT_MS,
   skipped,
 } from './types.js';
 
-const LIVE_CHECK_IDS: readonly CheckId[] = ['CC11', 'CC12', 'CC13', 'CC24'];
+const LIVE_CHECK_IDS: readonly CheckId[] = ['CC11', 'CC12', 'CC13', 'CC24', 'CC29'];
 
-/** Every doctor request is bounded: a hanging host must never hang `conloca doctor` (the CLI seam has no timer of its own). */
-const REQUEST_TIMEOUT_MS = 10_000;
 /** The server probe's conloca.json cap; a longer answer reads as `invalid` here as there. */
 const CONLOCA_JSON_CAP_BYTES = 16 * 1024;
 /** CC11 judges everything but the protocol; CC13 holds that against the range the editor publishes. */
@@ -313,6 +312,6 @@ export async function runLiveChecks(input: LiveInput): Promise<CheckOutcome[]> {
     page.outcome,
     frame,
     await checkProtocol(page.info, origin, deps.fetch),
-    ...(await runPreviewLiveChecks({ context, deps, scan, info: page.info })),
+    ...(await runPreviewLiveChecks({ context, deps, scan, info: page.info, address })),
   ];
 }

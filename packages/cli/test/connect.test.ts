@@ -94,6 +94,31 @@ const D3_SITE = {
   'content/sites.json': sitesJson({ domains: { en: 'www.example.com' } }),
   'wrangler.jsonc': D3_WRANGLER,
 };
+/** A static site with previewBuild and no Cloudflare config: where it deploys is the host's to say. */
+const STATIC_PREVIEW = Object.fromEntries(Object.entries(D3_SITE).filter(([path]) => path !== 'wrangler.jsonc'));
+/** A site with @astrojs/node and previewBuild: d8 on the site server. */
+const NODE_SITE = {
+  ...STATIC_PREVIEW,
+  'astro.config.mjs': D3_CONFIG.replace(
+    "import { defineConfig } from 'astro/config';",
+    "import node from '@astrojs/node';\nimport { defineConfig } from 'astro/config';",
+  ).replace(
+    "  site: 'https://www.example.com',\n",
+    "  site: 'https://www.example.com',\n  adapter: node({ mode: 'standalone' }),\n",
+  ),
+};
+const VERCEL_ISR_SITE = {
+  ...STATIC_PREVIEW,
+  'vercel.json': '{}\n',
+  'astro.config.mjs': D3_CONFIG.replace(
+    "import { defineConfig } from 'astro/config';",
+    "import vercel from '@astrojs/vercel';\nimport { defineConfig } from 'astro/config';",
+  ).replace(
+    "  site: 'https://www.example.com',\n",
+    "  site: 'https://www.example.com',\n  adapter: vercel({ isr: true }),\n",
+  ),
+};
+const messageOf = (report: ConnectReport, id: string) => report.steps.find((step) => step.id === id)?.message ?? '';
 const PREFIX_ROUTES = ['/_conloca/preview', '/_conloca/preview/*'];
 const QUESTION = 'Is this account on the Cloudflare Workers Paid or Free plan? [paid/free]';
 const manifestOf = async (dir: string) => JSON.parse(await readFile(join(dir, 'package.json'), 'utf8'));
@@ -181,6 +206,20 @@ function failingBuild(routes: string[]) {
     run: async (cmd, cwd, env) => (cmd.endsWith(' build') ? false : fake.io.run(cmd, cwd, env)),
   };
   return io;
+}
+
+/** A terminal that says yes to everything but the `site` question, which gets `answer`, and `Write these changes?`. */
+function siteIo(answer: boolean, write = true) {
+  const fake = fakeIo(true, [], PREFIX_ROUTES);
+  const io: ConnectIo = {
+    ...fake.io,
+    confirm: async (question) => {
+      fake.questions.push(question);
+      if (question === 'Write these changes?') return write;
+      return question.startsWith('Set site') ? answer : true;
+    },
+  };
+  return { io, questions: fake.questions };
 }
 
 function options(overrides: Partial<ConnectOptions> = {}): ConnectOptions {
@@ -638,6 +677,235 @@ describe('runConnect', () => {
     const report = await runConnect(dir, options(), io);
     expect(report.steps.map((step) => step.id)).not.toContain('preview');
     expect(questions).not.toContain(QUESTION);
+  });
+
+  describe('proposes site on Vercel, asking first', () => {
+    const noSite = {
+      ...STATIC_PREVIEW,
+      'vercel.json': '{}\n',
+      'astro.config.mjs': D3_CONFIG.replace("  site: 'https://www.example.com',\n", ''),
+    };
+    test('a terminal yes writes site, and the address step reads the same host', async () => {
+      const dir = await makeRepo(noSite);
+      const { io, questions } = siteIo(true);
+      const report = await runConnect(dir, options({ yes: false, host: 'vercel' }), io);
+      expect(questions).toContain(
+        'Set site to https://www.example.com in astro.config? It changes canonical, sitemap, RSS and Open Graph URLs on your live pages.',
+      );
+      expect(stateOf(report, 'site')).toBe('changed');
+      expect(stateOf(report, 'address')).toBe('done');
+      const config = await readFile(join(dir, 'astro.config.mjs'), 'utf8');
+      expect(config).toContain("site: 'https://www.example.com'");
+      expect(config).toContain('adapter: vercel()');
+    });
+
+    test('a terminal no leaves astro.config without site', async () => {
+      const dir = await makeRepo(noSite);
+      const report = await runConnect(dir, options({ yes: false, host: 'vercel' }), siteIo(false).io);
+      expect(stateOf(report, 'site')).toBe('differs');
+      expect(await readFile(join(dir, 'astro.config.mjs'), 'utf8')).not.toContain('site:');
+    });
+
+    test('--yes never writes site: needs-you with the line, nothing asked', async () => {
+      const dir = await makeRepo(noSite);
+      const { io, questions } = fakeIo(false, [], PREFIX_ROUTES);
+      const report = await runConnect(dir, options({ host: 'vercel' }), io);
+      expect(questions).toEqual([]);
+      expect(stateOf(report, 'site')).toBe('needs-you');
+      expect(printed.join('\n')).toContain("site: 'https://www.example.com',");
+      expect(await readFile(join(dir, 'astro.config.mjs'), 'utf8')).not.toContain('site:');
+    });
+
+    test('no terminal without --yes never writes site', async () => {
+      const dir = await makeRepo(noSite);
+      const report = await runConnect(dir, options({ yes: false, host: 'vercel' }), fakeIo(false).io);
+      expect(stateOf(report, 'site')).toBe('needs-you');
+      expect(await readFile(join(dir, 'astro.config.mjs'), 'utf8')).toBe(noSite['astro.config.mjs']);
+    });
+
+    for (const [name, overrides, write] of [
+      ['a terminal --dry-run', { dryRun: true }, true],
+      ['an adapter left uninstalled (--no-install)', { install: false }, true],
+      ['a declined write', {}, false],
+    ] as const) {
+      test(`${name} never asks for or writes site`, async () => {
+        const dir = await makeRepo(noSite);
+        const { io, questions } = siteIo(true, write);
+        const report = await runConnect(dir, options({ yes: false, host: 'vercel', ...overrides }), io);
+        expect(questions.filter((question) => question.startsWith('Set site'))).toEqual([]);
+        expect(stateOf(report, 'site')).toBe('needs-you');
+        expect(await readFile(join(dir, 'astro.config.mjs'), 'utf8')).not.toContain('site:');
+      });
+    }
+  });
+
+  test('--yes --host vercel adds @astrojs/vercel to a static site and names the firewall rule', async () => {
+    const dir = await makeRepo({ ...STATIC_PREVIEW, 'vercel.json': '{}\n' });
+    const { io, calls } = fakeIo(false, [], PREFIX_ROUTES);
+    const report = await runConnect(dir, options({ host: 'vercel' }), io);
+    const out = printed.join('\n');
+    expect(out).toContain("+import vercel from '@astrojs/vercel';");
+    expect(out).toMatch(/\+.*adapter: vercel\(\)/);
+    expect(calls[0]?.cmd).toContain("'@astrojs/vercel@11.0.18'");
+    expect(out).toContain(
+      'If Request Path starts with /_conloca/preview/ → Rate Limit, 60 requests per 10 seconds per IP',
+    );
+    expect(stateOf(report, 'adapter')).toBe('changed');
+    expect(await readFile(join(dir, 'astro.config.mjs'), 'utf8')).toContain('adapter: vercel()');
+  });
+
+  test('writes the adapter on top of the config step when both change astro.config', async () => {
+    const unwired = D3_CONFIG.replace("import react from '@astrojs/react';\n", '').replace('react(), ', '');
+    const dir = await makeRepo({ ...STATIC_PREVIEW, 'astro.config.mjs': unwired, 'vercel.json': '{}\n' });
+    const report = await runConnect(dir, options({ host: 'vercel' }), fakeIo(false, [], PREFIX_ROUTES).io);
+    expect(stateOf(report, 'config')).toBe('changed');
+    expect(stateOf(report, 'adapter')).toBe('changed');
+    const config = await readFile(join(dir, 'astro.config.mjs'), 'utf8');
+    expect(config).toContain('react()');
+    expect(config).toContain('adapter: vercel()');
+  });
+
+  test('refuses the corpos shape, node() deployed as static files by wrangler.toml, naming both', async () => {
+    const toml = 'name = "s"\n[assets]\ndirectory = "./dist/"\n';
+    const dir = await makeRepo({ ...NODE_SITE, 'wrangler.toml': toml });
+    const report = await runConnect(dir, options(), fakeIo(false, [], PREFIX_ROUTES).io);
+    expect(stateOf(report, 'adapter')).toBe('needs-you');
+    expect(messageOf(report, 'adapter')).toContain('astro.config names node but wrangler.toml deploys to cloudflare');
+    expect(report.steps.map((step) => step.id)).not.toContain('preview');
+  });
+
+  test('refuses an explicit --host that is not the adapter the site has', async () => {
+    const dir = await makeRepo(NODE_SITE);
+    const report = await runConnect(dir, options({ host: 'vercel' }), fakeIo(false, [], PREFIX_ROUTES).io);
+    expect(stateOf(report, 'adapter')).toBe('needs-you');
+    expect(await readFile(join(dir, 'astro.config.mjs'), 'utf8')).toBe(NODE_SITE['astro.config.mjs']);
+  });
+
+  test('names no start command while the installed cloud-astro predates d8', async () => {
+    const old = '{ "name": "@conloca/cloud-astro", "version": "0.2.5" }\n';
+    const dir = await makeRepo({ ...NODE_SITE, 'node_modules/@conloca/cloud-astro/package.json': old }, []);
+    const report = await runConnect(dir, options({ host: 'node' }), fakeIo(false, [], PREFIX_ROUTES).io);
+    expect(stateOf(report, 'adapter')).toBe('needs-you');
+    expect(messageOf(report, 'adapter')).toContain('conloca upgrade');
+    expect(printed.join('\n')).not.toContain('entry.mjs');
+  });
+
+  test('refuses vercel.json beside netlify.toml under --yes', async () => {
+    const dir = await makeRepo({ ...STATIC_PREVIEW, 'vercel.json': '{}\n', 'netlify.toml': '' });
+    const report = await runConnect(dir, options(), fakeIo(false, [], PREFIX_ROUTES).io);
+    expect(stateOf(report, 'adapter')).toBe('needs-you');
+    expect(messageOf(report, 'adapter')).toContain('vercel.json names vercel but netlify.toml deploys to netlify');
+    expect(await readFile(join(dir, 'astro.config.mjs'), 'utf8')).toBe(D3_CONFIG);
+  });
+
+  test('leaves a D3 dispatcher site with a leftover vercel.json on D3', async () => {
+    const wrangler = '{ "name": "site", "main": ".conloca/dispatcher/index.mjs" }\n';
+    const dir = await makeRepo({ ...D3_SITE, 'wrangler.jsonc': wrangler, 'vercel.json': '{}\n' });
+    const report = await runConnect(dir, options({ cfPlan: 'paid' }), fakeIo(false, [], PREFIX_ROUTES).io);
+    expect(report.steps.map((step) => step.id)).not.toContain('adapter');
+    expect(await readFile(join(dir, 'astro.config.mjs'), 'utf8')).toBe(D3_CONFIG);
+  });
+
+  for (const [name, fixture, host] of [
+    ['node', { ...NODE_SITE, Procfile: 'web: node dist/server/entry.mjs\n' }, undefined],
+    ['netlify', { ...STATIC_PREVIEW, 'netlify.toml': '' }, undefined],
+    ['vercel with isr', VERCEL_ISR_SITE, undefined],
+  ] as const) {
+    test(`changes nothing in astro.config on a second run: ${name}`, async () => {
+      const dir = await makeRepo(fixture);
+      await runConnect(dir, options(host === undefined ? {} : { host }), fakeIo(false, [], PREFIX_ROUTES).io);
+      const first = await readFile(join(dir, 'astro.config.mjs'), 'utf8');
+      const report = await runConnect(dir, options(), fakeIo(false, [], PREFIX_ROUTES).io);
+      expect(stateOf(report, 'adapter')).toBe('done');
+      expect(await readFile(join(dir, 'astro.config.mjs'), 'utf8')).toBe(first);
+    });
+  }
+
+  test('needs --host node for a node() site with no start command in its files', async () => {
+    const dir = await makeRepo(NODE_SITE);
+    const report = await runConnect(dir, options(), fakeIo(false, [], PREFIX_ROUTES).io);
+    expect(stateOf(report, 'adapter')).toBe('needs-you');
+    expect(messageOf(report, 'adapter')).toContain('--host node');
+    expect(printed.join('\n')).not.toContain('start the server with');
+    const given = await runConnect(dir, options({ host: 'node' }), fakeIo(false, [], PREFIX_ROUTES).io);
+    expect(stateOf(given, 'adapter')).not.toBe('needs-you');
+  });
+
+  test('writes no adapter the package manager failed to install', async () => {
+    const dir = await makeRepo({ ...STATIC_PREVIEW, 'vercel.json': '{}\n' });
+    const { io } = fakeIo(false, [], PREFIX_ROUTES);
+    const failing: ConnectIo = {
+      ...io,
+      run: async (cmd, cwd, env) => (cmd.endsWith(' build') ? io.run(cmd, cwd, env) : false),
+    };
+    const report = await runConnect(dir, options({ host: 'vercel' }), failing);
+    expect(stateOf(report, 'adapter')).toBe('needs-you');
+    expect(await readFile(join(dir, 'astro.config.mjs'), 'utf8')).toBe(D3_CONFIG);
+  });
+
+  test('writes the adapter when package.json declares it already', async () => {
+    const declared = packageJson({ ...ALL_PACKAGES, '@astrojs/vercel': '11.0.18' });
+    const dir = await makeRepo({ ...STATIC_PREVIEW, 'package.json': declared, 'vercel.json': '{}\n' });
+    const report = await runConnect(dir, options({ host: 'vercel' }), fakeIo(false, [], PREFIX_ROUTES).io);
+    expect(stateOf(report, 'packages')).toBe('done');
+    expect(stateOf(report, 'adapter')).toBe('changed');
+    expect(await readFile(join(dir, 'astro.config.mjs'), 'utf8')).toContain('adapter: vercel()');
+  });
+
+  test('writes no adapter under --no-install', async () => {
+    const dir = await makeRepo({ ...STATIC_PREVIEW, 'vercel.json': '{}\n' });
+    const report = await runConnect(
+      dir,
+      options({ host: 'vercel', install: false }),
+      fakeIo(false, [], PREFIX_ROUTES).io,
+    );
+    expect(stateOf(report, 'adapter')).toBe('needs-you');
+    expect(await readFile(join(dir, 'astro.config.mjs'), 'utf8')).toBe(D3_CONFIG);
+  });
+
+  test('asks to remove previewBuild.adapter from a separate preview deploy, and still shows its D4 step', async () => {
+    const config = D3_CONFIG.replace('previewBuild: {}', 'previewBuild: { separate: true, adapter: node() }');
+    const dir = await makeRepo({ ...D3_SITE, 'astro.config.mjs': config });
+    const report = await runConnect(dir, options(), fakeIo(false, [], PREFIX_ROUTES).io);
+    expect(stateOf(report, 'adapter')).toBe('needs-you');
+    expect(messageOf(report, 'adapter')).toContain('remove previewBuild.adapter');
+    expect(messageOf(report, 'preview')).toContain('separate preview deploy');
+  });
+
+  test('keeps a D3 site whose previewBuild.config names an adapter on D3', async () => {
+    const config = D3_CONFIG.replace('previewBuild: {}', "previewBuild: { config: { adapter: 'x' } }");
+    const dir = await makeRepo({ ...D3_SITE, 'astro.config.mjs': config });
+    const report = await runConnect(dir, options({ cfPlan: 'paid' }), fakeIo(false, [], PREFIX_ROUTES).io);
+    expect(report.steps.map((step) => step.id)).not.toContain('adapter');
+    expect(await readFile(join(dir, 'wrangler.jsonc'), 'utf8')).toContain('.conloca/dispatcher/index.mjs');
+  });
+
+  test('--update never adds an adapter', async () => {
+    const dir = await makeRepo({ ...STATIC_PREVIEW, 'vercel.json': '{}\n' });
+    const report = await runConnect(
+      dir,
+      options({ update: true, host: 'vercel' }),
+      fakeIo(false, [], PREFIX_ROUTES).io,
+    );
+    expect(report.steps.map((step) => step.id)).not.toContain('adapter');
+    expect(await readFile(join(dir, 'astro.config.mjs'), 'utf8')).toBe(D3_CONFIG);
+  });
+
+  test('asks where the site deploys in a terminal when nothing tells, and adds that host’s adapter', async () => {
+    const dir = await makeRepo(STATIC_PREVIEW);
+    const { io, questions } = fakeIo(true, [true], PREFIX_ROUTES, ['netlify']);
+    const report = await runConnect(dir, options({ yes: false }), io);
+    expect(questions).toContain('Where does this site deploy? [vercel/netlify/cloudflare/node]');
+    expect(stateOf(report, 'adapter')).toBe('changed');
+    expect(await readFile(join(dir, 'astro.config.mjs'), 'utf8')).toContain('session: false');
+  });
+
+  test('--yes with no host evidence refuses naming --host and adds no adapter', async () => {
+    const dir = await makeRepo(STATIC_PREVIEW);
+    const report = await runConnect(dir, options(), fakeIo(false, [], PREFIX_ROUTES).io);
+    expect(stateOf(report, 'adapter')).toBe('needs-you');
+    expect(report.steps.find((step) => step.id === 'adapter')?.message).toContain('--host');
+    expect(await readFile(join(dir, 'astro.config.mjs'), 'utf8')).toBe(D3_CONFIG);
   });
 });
 

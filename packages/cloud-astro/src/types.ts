@@ -4,7 +4,8 @@ import type { AstroIntegration } from 'astro';
  * Draft previews. Off unless given as an object. A static site's preview server is a second build that runs on
  * Cloudflare Workers under `/_conloca/preview/` next to the site (D3; it needs `@astrojs/cloudflare` installed); a site
  * with an adapter renders drafts in its own build (D8); `separate: true` builds a separate preview deploy (D4).
- * `config`, `outDir` and `required` belong to D3 and D4 only (a D8 build warns they have no effect). `separate` is
+ * `config` and `outDir` belong to D3 and D4 only (a D8 build warns they have no effect); `required` is ignored in every
+ * mode, with a warning. `separate` is
  * refused under `@astrojs/vercel` and `@astrojs/netlify`.
  */
 export interface PreviewBuildOptions {
@@ -21,9 +22,10 @@ export interface PreviewBuildOptions {
    */
   outDir?: string;
   /**
-   * Changes nothing in D3 or D4. A failed D3 preview build fails the site's build only when its server also serves
-   * the live site (`run_worker_first` lists routes beyond the preview route, or `not_found_handling` is `"none"`);
-   * otherwise the site ships and its preview route answers "preview unavailable". A D4 build is its deploy's own.
+   * Ignored in every mode (the build warns). A failed D3 preview build fails the site's build only when its server also
+   * serves the live site (`run_worker_first` lists routes beyond the preview route, or `not_found_handling` is
+   * `"none"`); otherwise the site ships and its preview route answers "preview unavailable". A D4 build is its deploy's
+   * own.
    */
   required?: boolean;
   /**
@@ -76,8 +78,8 @@ export interface ConlocaCloudOptions {
    */
   siteStyles?: string | string[];
   /**
-   * Off unless given as an object; the second build that serves draft
-   * previews. Refused under @astrojs/vercel and @astrojs/netlify.
+   * Off unless given as an object: draft previews in the site's own build (d8, with an adapter), next to a static
+   * site (D3) or from a separate deploy (D4). `separate` is refused under @astrojs/vercel and @astrojs/netlify.
    */
   previewBuild?: PreviewBuildOptions | false;
   /**

@@ -1,6 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { SitesConfig } from '@conloca/content-api';
+import { isRecord } from './is-record.js';
 
 /**
  * A new site's one language. Its routing serves a single locale, `en` unless
@@ -60,4 +61,19 @@ export async function ensureSiteInSitesConfig(contentPath: string, siteName: str
   await writeFile(path, `${JSON.stringify(sitesConfig, null, 2)}\n`, 'utf-8');
 
   return { path, existed, added: true };
+}
+
+/** Every domain sites.json names, for Node's `security.allowedDomains`. */
+export function siteDomainsOf(sitesText: string): string[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(sitesText);
+  } catch {
+    return [];
+  }
+  const sites = isRecord(parsed) && isRecord(parsed.sites) ? Object.values(parsed.sites) : [];
+  const domains = sites.flatMap((site) =>
+    isRecord(site) && isRecord(site.domains) ? Object.values(site.domains).filter((d) => typeof d === 'string') : [],
+  );
+  return [...new Set(domains)];
 }

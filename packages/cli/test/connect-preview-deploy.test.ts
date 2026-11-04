@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import { createHash } from 'node:crypto';
 import { parse } from 'jsonc-parser';
 import { callOptions } from '../src/lib/config-text.js';
+import type { AdapterName } from '../src/lib/connect/adapter.js';
 import {
   type PreviewSetup,
   previewDeployStep,
@@ -15,7 +16,7 @@ const D4: PreviewSetup = { kind: 'd4', prefix: '/_conloca/preview' };
 const jsonc = (text: string): WranglerFile => ({ kind: 'jsonc', path: '/site/wrangler.jsonc', text });
 const step = (
   file: WranglerFile,
-  setup = D3,
+  setup: PreviewSetup = D3,
   routes: string[] | null = null,
   previewUrl = false,
   negotiate404 = false,
@@ -72,21 +73,152 @@ const integration = (text: string) => callOptions(`conlocaCloud(${text})`, 'conl
 const astro = (text: string) => callOptions(`defineConfig(${text})`, 'defineConfig');
 
 describe('previewSetupOf', () => {
-  it.each<[string, string, PreviewSetup]>([
-    ['{}', '{}', { kind: 'off' }],
-    ['{ previewBuild: false }', '{}', { kind: 'off' }],
-    ['{ previewBuild: {} }', '{}', { kind: 'd3', prefix: '/_conloca/preview' }],
-    ['{ previewBuild: {} }', "{ adapter: node({ mode: 'standalone' }) }", { kind: 'd2' }],
-    ['{ previewBuild: { adapter: cloudflare() } }', '{}', { kind: 'd2' }],
-    ['{ previewBuild: { separate: true } }', '{}', { kind: 'd4', prefix: '/_conloca/preview' }],
-  ])('conlocaCloud(%s) in defineConfig(%s)', (integrationText, astroText, setup) => {
-    expect(previewSetupOf(integration(integrationText), astro(astroText), '/')).toEqual(setup);
+  const NODE = "import node from '@astrojs/node';";
+  it.each<[string, string, string, PreviewSetup]>([
+    ['{}', '{}', '', { kind: 'off' }],
+    ['{ previewBuild: false }', '{}', '', { kind: 'off' }],
+    ['{ previewBuild: {} }', '{}', '', { kind: 'd3', prefix: '/_conloca/preview' }],
+    [
+      '{ previewBuild: {} }',
+      "{ adapter: node({ mode: 'standalone' }) }",
+      NODE,
+      { kind: 'd8', prefix: '/_conloca/preview', adapter: '@astrojs/node' },
+    ],
+    [
+      '{ previewBuild: {} }',
+      '{ adapter: host() }',
+      "import host from '@astrojs/vercel';",
+      { kind: 'd8', prefix: '/_conloca/preview', adapter: '@astrojs/vercel' },
+    ],
+    // Matched by its import, not its name: a node() from elsewhere is no official adapter.
+    ['{ previewBuild: {} }', '{ adapter: node() }', "import node from 'my-node-adapter';", { kind: 'off' }],
+    [
+      '{ previewBuild: { adapter: cloudflare() } }',
+      '{}',
+      '',
+      {
+        kind: 'off',
+        refusal: "remove previewBuild.adapter: drafts render through the adapter in astro.config's adapter option",
+      },
+    ],
+    ['{ previewBuild: { separate: true } }', '{}', '', { kind: 'd4', prefix: '/_conloca/preview' }],
+    // Only a top-level adapter is D2's; separate: true decides first.
+    ["{ previewBuild: { config: { adapter: 'x' } } }", '{}', '', { kind: 'd3', prefix: '/_conloca/preview' }],
+    [
+      '{ previewBuild: { adapter } }',
+      '{}',
+      '',
+      {
+        kind: 'off',
+        refusal: "remove previewBuild.adapter: drafts render through the adapter in astro.config's adapter option",
+      },
+    ],
+    [
+      '{ previewBuild: { separate: true, adapter } }',
+      '{}',
+      '',
+      {
+        kind: 'd4',
+        prefix: '/_conloca/preview',
+        refusal: "remove previewBuild.adapter: drafts render through the adapter in astro.config's adapter option",
+      },
+    ],
+    [
+      '{ previewBuild: { separate: true, adapter: node() } }',
+      '{}',
+      '',
+      {
+        kind: 'd4',
+        prefix: '/_conloca/preview',
+        refusal: "remove previewBuild.adapter: drafts render through the adapter in astro.config's adapter option",
+      },
+    ],
+    [
+      '{ previewBuild: { separate: true } }',
+      '{ adapter: netlify() }',
+      "import netlify from '@astrojs/netlify';",
+      {
+        kind: 'off',
+        refusal:
+          "previewBuild.separate is not supported with @astrojs/netlify: the separate preview build would write its output where @astrojs/netlify deploys the live site. Remove separate: true; with @astrojs/netlify drafts render in the site's own build.",
+      },
+    ],
+  ])('conlocaCloud(%s) in defineConfig(%s)', (integrationText, astroText, imports, setup) => {
+    expect(previewSetupOf(integration(integrationText), astro(astroText), '/', imports)).toEqual(setup);
   });
 
   it('puts the route under the base', () => {
-    expect(previewSetupOf(integration('{ previewBuild: {} }'), astro('{}'), '/docs/')).toEqual({
+    expect(previewSetupOf(integration('{ previewBuild: {} }'), astro('{}'), '/docs/', '')).toEqual({
       kind: 'd3',
       prefix: '/docs/_conloca/preview',
+    });
+  });
+});
+
+const d8 = (adapter: AdapterName): PreviewSetup => ({ kind: 'd8', prefix: '/_conloca/preview', adapter });
+
+describe('previewDeployStep, d8', () => {
+  it('names the Vercel firewall rule', () => {
+    const result = step({ kind: 'none' }, d8('@astrojs/vercel'));
+    expect(result).toMatchObject({ state: 'needs-you', edits: [] });
+    expect(result.lines).toContain(
+      'Firewall → Add rule → If Request Path starts with /_conloca/preview/ → Rate Limit, 60 requests per 10 seconds per IP → Deny',
+    );
+  });
+
+  it('names the Netlify rate limit and what a miss costs', () => {
+    const lines = step({ kind: 'none' }, d8('@astrojs/netlify')).lines?.join('\n') ?? '';
+    expect(lines).toContain('Rate limiting rule: path /_conloca/preview/*, 60 requests per 60 seconds per IP');
+    expect(lines).toContain("every missing URL on this site, images included, runs your site's function");
+  });
+
+  it('names the Node start command', () => {
+    expect(step({ kind: 'none' }, d8('@astrojs/node')).lines).toContain(
+      'start the server with `node dist/server/entry.mjs`',
+    );
+  });
+
+  it('routes a static site through the Cloudflare adapter in wrangler.jsonc, with no main, no rate limit and no plan', () => {
+    const routes = ['/_conloca/preview', '/_conloca/preview/*', '/_image', '/_server-islands/*'];
+    const result = step(
+      jsonc('{ "name": "site", "main": "./dist/_worker.js/index.js" }'),
+      d8('@astrojs/cloudflare'),
+      routes,
+    );
+    expect(result.state).toBe('changed');
+    const after = parse(result.edits[0]?.after ?? '');
+    expect(after.main).toBe('./dist/_worker.js/index.js');
+    expect(after.assets).toEqual({ run_worker_first: routes, not_found_handling: '404-page' });
+    expect(after.ratelimits).toBeUndefined();
+  });
+
+  it('leaves an SSR site alone: its Cloudflare Worker already gets every miss', () => {
+    const text = '{ "name": "site", "assets": { "not_found_handling": "single-page-application" } }';
+    const routes = ['/_conloca/preview', '/_conloca/preview/*', '/_image', '/_server-islands/*', '/api/*'];
+    expect(step(jsonc(text), d8('@astrojs/cloudflare'), routes)).toMatchObject({ state: 'done', edits: [] });
+  });
+
+  it('keeps a "none" the site has, and writes "none" on --negotiate-404', () => {
+    const routes = ['/_conloca/preview', '/_conloca/preview/*'];
+    const kept = step(jsonc('{ "assets": { "not_found_handling": "none" } }'), d8('@astrojs/cloudflare'), routes);
+    expect(parse(kept.edits[0]?.after ?? '').assets.not_found_handling).toBe('none');
+    const asked = step(jsonc('{}'), d8('@astrojs/cloudflare'), routes, false, true);
+    expect(parse(asked.edits[0]?.after ?? '').assets.not_found_handling).toBe('none');
+  });
+
+  it('refuses past the 100-entry run_worker_first cap', () => {
+    const listed = JSON.stringify(Array.from({ length: 99 }, (_, i) => `/p${i}`));
+    const result = step(jsonc(`{ "assets": { "run_worker_first": ${listed} } }`), d8('@astrojs/cloudflare'), [
+      '/_conloca/preview',
+      '/_conloca/preview/*',
+    ]);
+    expect(result.state).toBe('needs-you');
+  });
+
+  it('needs a build before routing the Cloudflare adapter', () => {
+    expect(step(jsonc('{ "name": "site" }'), d8('@astrojs/cloudflare'))).toMatchObject({
+      state: 'needs-you',
+      edits: [],
     });
   });
 });

@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import { REFUSED_PREVIEW_ADAPTERS } from '../constants.js';
 import type { DoctorDeps } from './types.js';
 
 const ASTRO_CONFIG_NAMES = ['astro.config.mjs', 'astro.config.ts', 'astro.config.js'] as const;
@@ -139,6 +140,8 @@ interface ScannedConfig {
   conlocaCloud: CallArgs;
   conlocaCMS: CallArgs;
   site: SiteSettings;
+  /** The whole config, comments blanked. */
+  text: string;
 }
 
 /** Astro's own settings, read without conlocaCloud's options: their previewBuild.adapter is not the site's. */
@@ -185,7 +188,13 @@ export function scanAstroConfig(projectDir: string, fs: ScanFs): ConfigScan {
   const conlocaCloud = callArgs(text, 'conlocaCloud');
   return {
     kind: 'read',
-    config: { path, conlocaCloud, conlocaCMS: callArgs(text, 'conlocaCMS'), site: siteSettings(text, conlocaCloud) },
+    config: {
+      path,
+      conlocaCloud,
+      conlocaCMS: callArgs(text, 'conlocaCMS'),
+      site: siteSettings(text, conlocaCloud),
+      text,
+    },
   };
 }
 
@@ -203,8 +212,9 @@ export function hasOption(scan: ConfigScan, key: string): boolean {
 
 /**
  * conlocaCloud's previewBuild as the text shows it: 'off' when absent or written as false (the preview build is
- * opt-in), 'adapter' when the options name an adapter (previewBuild.adapter, written out or as shorthand), 'on' for
- * an options object without one, and 'unknown' when computed or when a spread could set it.
+ * opt-in), 'adapter' when previewBuild's own object names an adapter (written out or as shorthand; one nested in
+ * `config` is not previewBuild's), 'on' for an options object without one, and 'unknown' when computed or when a
+ * spread could set it.
  */
 export function previewBuildSetting(scan: ConfigScan): 'off' | 'adapter' | 'on' | 'unknown' {
   if (scan.kind !== 'read' || typeof scan.config.conlocaCloud === 'string') return 'unknown';
@@ -212,20 +222,81 @@ export function previewBuildSetting(scan: ConfigScan): 'off' | 'adapter' | 'on' 
   const value = /\bpreviewBuild\s*:\s*(false\b|\{)?/.exec(text);
   if (value === null) return spread || containsOutsideStrings(text, 'previewBuild') ? 'unknown' : 'off';
   if (value[1] === 'false') return 'off';
-  if (containsOutsideStrings(text, 'adapter')) return 'adapter';
-  return value[1] === '{' ? 'on' : 'unknown';
+  if (value[1] !== '{') return 'unknown';
+  const options = balancedSlice(text, value.index + value[0].length - 1);
+  if (options === null) return 'unknown';
+  return hasTopLevelKey(options, 'adapter') ? 'adapter' : 'on';
+}
+
+/** Whether the object literal `objectText` has `key` at its own top level, written out or as shorthand. */
+function hasTopLevelKey(objectText: string, key: string): boolean {
+  let depth = 0;
+  let i = 0;
+  while (i < objectText.length) {
+    const ch = objectText[i];
+    if (QUOTES.has(ch)) {
+      i = skipString(objectText, i);
+      continue;
+    }
+    if (OPENERS[ch]) depth += 1;
+    else if (CLOSERS.has(ch)) depth -= 1;
+    else if (
+      depth === 1 &&
+      objectText.startsWith(key, i) &&
+      /[{,]\s*$/u.test(objectText.slice(0, i)) &&
+      /^\s*[:,}]/u.test(objectText.slice(i + key.length))
+    ) {
+      return true;
+    }
+    i += 1;
+  }
+  return false;
 }
 
 /**
- * How the preview build serves, as the config text shows it (the rule of `previewBuildMode`): `separate: true` is D4,
- * an adapter named anywhere (the site's or previewBuild's) is D2, a static site is D3; 'unknown' when the text cannot
- * tell.
+ * How the preview build serves, as the config text shows it (the rule of `previewBuildMode`): previewBuild.adapter
+ * turns preview off ('unknown' here, CC26 names it), `separate: true` is D4, the site's own adapter is d8, a static
+ * site is D3; 'unknown' when the text cannot tell.
  */
-export function previewServeSetting(scan: ConfigScan): 'off' | 'd2' | 'd3' | 'd4' | 'unknown' {
+export function previewServeSetting(scan: ConfigScan): 'off' | 'd3' | 'd4' | 'd8' | 'unknown' {
   const setting = previewBuildSetting(scan);
-  if (setting === 'off' || setting === 'unknown') return setting;
+  if (setting === 'off') return 'off';
+  if (setting !== 'on') return 'unknown';
   if (scan.kind !== 'read' || typeof scan.config.conlocaCloud === 'string') return 'unknown';
-  if (/\bseparate\s*:\s*true\b/u.test(scan.config.conlocaCloud.text)) return 'd4';
-  if (setting === 'adapter' || scan.config.site.adapter) return 'd2';
+  // The build refuses separate: true under an adapter that deploys from the project root, so no D4 runs.
+  if (/\bseparate\s*:\s*true\b/u.test(scan.config.conlocaCloud.text)) {
+    return separateRefused(scan) === undefined ? 'd4' : 'unknown';
+  }
+  if (scan.config.site.adapter) return 'd8';
   return scan.config.site.output === 'unknown' ? 'unknown' : 'd3';
+}
+
+/** The site's adapter when previewBuild asks for `separate: true` under one the build refuses it for; else undefined. */
+export function separateRefused(scan: ConfigScan): string | undefined {
+  if (scan.kind !== 'read' || typeof scan.config.conlocaCloud === 'string') return undefined;
+  if (!/\bseparate\s*:\s*true\b/u.test(scan.config.conlocaCloud.text)) return undefined;
+  const adapter = siteAdapter(scan);
+  return adapter && REFUSED_PREVIEW_ADAPTERS.includes(adapter) ? adapter : undefined;
+}
+
+/**
+ * The package of the site's adapter, from `adapter: <name>(...)` and the default import of `<name>`; null when the
+ * text names an adapter it does not show that way (a variable, a named import), undefined when there is none.
+ */
+export function siteAdapter(scan: ReadScan): string | null | undefined {
+  if (!scan.config.site.adapter) return undefined;
+  const { text, conlocaCloud } = scan.config;
+  const own = typeof conlocaCloud === 'string' ? text : text.replace(conlocaCloud.text, '');
+  const call = /\badapter\s*:\s*([$A-Za-z_][$\w]*)\s*\(/u.exec(own)?.[1];
+  if (call === undefined) return null;
+  const from = new RegExp(`\\bimport\\s+${call.replaceAll('$', '\\$')}\\s+from\\s+['"]([^'"]+)['"]`, 'u').exec(text);
+  return from?.[1] ?? null;
+}
+
+/** previewBuild's object literal as written, or undefined when it is absent or not an object. */
+export function previewBuildText(scan: ReadScan): string | undefined {
+  const { conlocaCloud } = scan.config;
+  if (typeof conlocaCloud === 'string') return undefined;
+  const key = /\bpreviewBuild\s*:\s*\{/u.exec(conlocaCloud.text);
+  return key === null ? undefined : (balancedSlice(conlocaCloud.text, key.index + key[0].length - 1) ?? undefined);
 }

@@ -1,5 +1,13 @@
+import { separateRefusal } from '../preview-build.js';
 import type { RepositoryEnvironment } from '../repository.js';
-import { type ConfigScan, hasOption, optionLiteral, previewServeSetting } from './config-scan.js';
+import {
+  type ConfigScan,
+  hasOption,
+  optionLiteral,
+  previewBuildSetting,
+  previewServeSetting,
+  separateRefused,
+} from './config-scan.js';
 import { type CheckOutcome, outcomeOf, skipped } from './types.js';
 
 /** Doctor-only override for an endpoint the config computes (e.g. from an env var). */
@@ -54,11 +62,14 @@ export function checkWiring(scan: ConfigScan, repoUri: string | undefined): Chec
 }
 
 const SERVE_DETAIL = {
-  d2: "the site's own server deploy renders drafts (D2)",
+  d8: "drafts render in the site's own build, through its adapter (d8)",
   d3: 'the preview server runs next to the static site on Cloudflare Workers (D3)',
   d4: "a separate preview deploy (D4): its address goes in sites.json's previewUrl",
   unknown: 'not verified — doctor cannot read previewBuild, output or the adapter from the config text',
 } as const;
+
+/** The build turns preview off for previewBuild.adapter; CC8 and CC26 name it. */
+export const PREVIEW_BUILD_ADAPTER = 'remove previewBuild.adapter; put the adapter in astro.config';
 
 /** CC8 — how the preview build serves drafts, read from the config text. */
 export function checkPreviewBuildAdapter(scan: ConfigScan): CheckOutcome {
@@ -68,11 +79,13 @@ export function checkPreviewBuildAdapter(scan: ConfigScan): CheckOutcome {
   if (scan.config.conlocaCloud === 'absent') return skipped('CC8', INTEGRATION_NOT_CALLED);
   const outcome = outcomeOf('CC8');
   const mode = previewServeSetting(scan);
-  outcome.detail =
-    mode === 'off'
-      ? hasOption(scan, 'previewBuild')
-        ? 'previewBuild: false — no preview build runs'
-        : 'previewBuild is not set — no preview build runs'
-      : SERVE_DETAIL[mode];
+  const refused = separateRefused(scan);
+  if (mode === 'off') {
+    outcome.detail = hasOption(scan, 'previewBuild')
+      ? 'previewBuild: false — no preview build runs'
+      : 'previewBuild is not set — no preview build runs';
+  } else if (previewBuildSetting(scan) === 'adapter') outcome.detail = PREVIEW_BUILD_ADAPTER;
+  else if (refused !== undefined) outcome.detail = separateRefusal(refused);
+  else outcome.detail = SERVE_DETAIL[mode];
   return outcome;
 }

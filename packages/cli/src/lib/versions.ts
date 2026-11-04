@@ -1,4 +1,31 @@
+import { readFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import { isRecord } from './is-record.js';
+
+/** The first `@conloca/cloud-astro` release that renders drafts in the site's own build (d8). */
+export const D8_SINCE = '0.2.6-next.0';
+
+/** The installed version of `name`, looking up from the project to the install folder; null when it is not there. */
+export async function installedVersion(name: string, projectDir: string, installDir: string): Promise<string | null> {
+  for (let dir = projectDir; ; dir = dirname(dir)) {
+    // oxlint-disable-next-line no-await-in-loop -- the nearest node_modules wins, as Node resolves it.
+    const version = await readFile(join(dir, 'node_modules', name, 'package.json'), 'utf8').then(
+      (text) => {
+        let value: unknown;
+        try {
+          value = JSON.parse(text);
+        } catch {
+          return undefined;
+        }
+        if (!isRecord(value)) return undefined;
+        return typeof value.version === 'string' ? value.version : null;
+      },
+      () => undefined,
+    );
+    if (version !== undefined) return version;
+    if (dir === installDir || dir === dirname(dir)) return null;
+  }
+}
 
 const NUMERIC = /^\d+$/;
 

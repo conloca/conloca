@@ -1235,6 +1235,17 @@ describe('conlocaCloud — the editor page', () => {
     expect((await readPage()).info).toHaveProperty('preview', { mode: 'off', protocol: 2 });
   });
 
+  it('warns that previewBuild.required has no effect outside d8 too', async () => {
+    const logger = makeLogger();
+    await buildDoneHook(pageOptions({ previewBuild: { separate: true, required: false } }), { logger })({
+      dir: buildDir.dist,
+      logger: makeLogger(),
+    });
+    expect(logger.messages.filter((m) => m.level === 'warn').map((m) => m.msg)).toContain(
+      'previewBuild.required has no effect: a failed preview build is handled the same either way',
+    );
+  });
+
   it('builds with preview off when a separate preview build is refused under @astrojs/vercel', async () => {
     await buildDoneHook(pageOptions({ previewBuild: { separate: true } }), {
       adapter: { name: '@astrojs/vercel', hooks: {} },

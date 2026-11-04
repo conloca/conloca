@@ -88,3 +88,18 @@ export function writeSiteAddress(input: { path: string; text: string; site: stri
     edits,
   };
 }
+
+/** `https://<domain>` of the default locale of the site `addressSiteName` picks; null when sites.json names none. */
+export function siteUrlOf(sitesText: string): string | null {
+  let config: unknown;
+  try {
+    config = JSON.parse(sitesText);
+  } catch {
+    return null;
+  }
+  if (!isSitesConfig(config)) return null;
+  const name = addressSiteName(config);
+  const entry = name === null ? undefined : config.sites[name];
+  const domain = entry?.domains?.[entry.defaultLocale];
+  return domain === undefined ? null : `https://${domain}`;
+}

@@ -50,6 +50,11 @@ To move a site to a newer Conloca release:
 Never edit `@conloca/*` versions by hand: each package has its own version, and `upgrade` moves them to the versions one
 CLI release pins.
 
+Draft previews: updating `@conloca/cloud-astro` moves a site that previewed from its own server (D2), or an
+`@astrojs/cloudflare` server-rendered site, to drafts rendered in the site's own build (d8) on its next build. `upgrade`
+makes the edits explicit: the start command becomes `node dist/server/entry.mjs` and the `previewBuild` options d8
+ignores go. Preview tabs opened before the update stop working; editors reopen Preview.
+
 ## The files a working site needs
 
 - `astro.config.mjs` — registers `react()` and `conlocaCMS(...)`

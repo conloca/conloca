@@ -15,6 +15,8 @@ import {
   branchDeploysOf,
   CONLOCA_JSON_MAX_BYTES,
   contentPathsOf,
+  type DeployHost,
+  deployHostFromEnv,
   EDITOR_HOST_PROTOCOL,
   EDITOR_PAGE_INFO_FORMATS,
   type EditorMedia,
@@ -160,13 +162,16 @@ export async function emitEditorPage(input: EmitEditorPageInput): Promise<void> 
   }
   const branchDeploys = branchDeploysFromEnv(process.env);
   const preview: PreviewSignal = { mode: input.previewMode, protocol: PREVIEW_PROTOCOL };
-  const written: WrittenConlocaJson = {
-    ...info,
-    preview,
-    ...(branchDeploys === undefined ? {} : { branchDeploys }),
-    ...(contentPaths === undefined ? {} : { contentPaths }),
-    ...(media === undefined ? {} : { media }),
-  };
+  const written = withDeployHost(
+    {
+      ...info,
+      preview,
+      ...(branchDeploys === undefined ? {} : { branchDeploys }),
+      ...(contentPaths === undefined ? {} : { contentPaths }),
+      ...(media === undefined ? {} : { media }),
+    },
+    process.env,
+  );
   const collected = await collectStaticPageRoutes({
     pagesDir: input.pagesDir,
     serverOutput: input.serverOutput,
@@ -236,6 +241,15 @@ export function branchDeploysFromEnv(env: Record<string, string | undefined>): B
   return project === undefined ? undefined : branchDeploysOf({ branchDeploys: { host: 'cloudflare-pages', project } });
 }
 
+/** `written` with the host whose CI runs this build, so a local build writes no `host`. */
+export function withDeployHost(
+  written: WrittenConlocaJson,
+  env: Record<string, string | undefined>,
+): WrittenConlocaJson {
+  const host = deployHostFromEnv(env);
+  return host === undefined ? written : { ...written, host };
+}
+
 /** Each content path under the repository root, written from that root ('' for the root itself); others are dropped. */
 export function contentPathsFromBuild(paths: readonly string[], repoRoot: string | undefined): string[] | undefined {
   if (repoRoot === undefined) return undefined;
@@ -252,6 +266,7 @@ export function contentPathsFromBuild(paths: readonly string[], repoRoot: string
 export interface WrittenConlocaJson extends EditorPageInfo {
   preview: PreviewSignal;
   branchDeploys?: BranchDeploys;
+  host?: DeployHost;
   contentPaths?: string[];
   media?: EditorMedia;
 }

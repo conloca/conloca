@@ -19,6 +19,8 @@ export interface StepResult {
   lines?: string[];
   /** For `differs`: the edits that replace the value the site already has, written only on an explicit terminal answer. */
   replacement?: FileEdit[];
+  /** For `differs`: what the terminal is asked before `replacement` is written, instead of "Replace your value". */
+  question?: string;
 }
 
 /** An array JSON.stringify spread over lines that holds only scalars (JSON strings never hold a raw newline). */

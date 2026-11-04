@@ -207,6 +207,39 @@ describe('runUpgrade', () => {
     expect(await treeHashes(dir)).toEqual(before);
   });
 
+  test('moves a D2 Node site to d8: rewrites its Dockerfile start command and drops the dead previewBuild options', async () => {
+    const config = join(dir, 'astro.config.mjs');
+    const text = (await readFile(config, 'utf8'))
+      .replace(
+        "import { defineConfig } from 'astro/config';",
+        "import { conlocaCloud } from '@conloca/cloud-astro';\nimport { defineConfig } from 'astro/config';",
+      )
+      .replace(
+        '    }),\n  ],\n',
+        "    }),\n    conlocaCloud({ previewBuild: { adapter: node(), outDir: 'x' } }),\n  ],\n",
+      );
+    await writeFile(config, text);
+    await writeFile(
+      join(dir, 'Dockerfile'),
+      'FROM node:22\nCMD ["node", ".conloca/preview-server/server/entry.mjs"]\n',
+    );
+    // allowedDomains comes from sites.json, so the site names its domain there.
+    const sitesPath = join(dir, 'content', 'sites.json');
+    const sites = JSON.parse(await readFile(sitesPath, 'utf8'));
+    for (const site of Object.values<{ domains?: Record<string, string> }>(sites.sites))
+      site.domains = { en: 'www.example.com' };
+    await writeFile(sitesPath, `${JSON.stringify(sites, null, 2)}\n`);
+    // A dry run shows the d8 diff and writes none of it.
+    const before = await treeHashes(dir);
+    await runUpgrade(dir, { ...opts, dryRun: true }, fakeIo('ok').io, CLI_MANIFEST);
+    expect(await treeHashes(dir)).toEqual(before);
+    expect(printed.join('\n')).toContain('+CMD ["node", "dist/server/entry.mjs"]');
+    const report = await runUpgrade(dir, opts, fakeIo('ok').io, CLI_MANIFEST);
+    expect(stepOf(report, 'd8')?.state).toBe('changed');
+    expect(await readFile(join(dir, 'Dockerfile'), 'utf8')).toContain('"dist/server/entry.mjs"');
+    expect(await readFile(config, 'utf8')).not.toContain('outDir');
+  });
+
   test('is safe to run again: no install, nothing changes, doctor still runs', async () => {
     await runUpgrade(dir, opts, fakeIo('ok').io, CLI_MANIFEST);
     const before = await treeHashes(dir);

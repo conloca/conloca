@@ -158,10 +158,15 @@ describe('doctor --live — the deployed editor page', () => {
       'CC21',
       'CC22',
       'CC23',
+      'CC25',
+      'CC26',
+      'CC27',
+      'CC28',
       'CC11',
       'CC12',
       'CC13',
       'CC24',
+      'CC29',
     ]);
   });
 

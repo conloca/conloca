@@ -22,6 +22,17 @@ export const THIRD_PARTY_VERSIONS = {
   ttsc: '0.35.0',
 } as const;
 
+/**
+ * The adapter release `conloca connect` installs for draft previews on each host. Exact, so the astro floor in
+ * ADAPTER_ASTRO_FLOORS is the floor of what gets installed (a caret would take a later release with a higher one).
+ */
+export const ADAPTER_VERSIONS = {
+  '@astrojs/vercel': '11.0.18',
+  '@astrojs/netlify': '8.2.11',
+  '@astrojs/cloudflare': '14.3.2',
+  '@astrojs/node': '11.1.9',
+} as const;
+
 // No @astrojs/check: a created project runs no `astro check`, and its TypeScript <=6 peer would hold the project below
 // the native TypeScript 7 ttsc compiles with, so it would need a second, aliased TypeScript.
 const DEV_ONLY = new Set(['@ttsc/unplugin', 'ttsc']);

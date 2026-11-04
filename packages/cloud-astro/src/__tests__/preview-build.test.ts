@@ -242,29 +242,18 @@ describe('spawnPreviewBuild — exit handling', () => {
   });
   afterEach(restoreFlag);
 
-  it('resolves on exit code 0 regardless of `required`', async () => {
-    const { fn: required } = makeRecordingSpawn(0);
-    const { fn: optional } = makeRecordingSpawn(0);
-    await Promise.resolve(expect(_spawnPreviewBuildWith(required, { required: true }, 'd3')).resolves.toBeUndefined());
-    await Promise.resolve(expect(_spawnPreviewBuildWith(optional, { required: false }, 'd3')).resolves.toBeUndefined());
+  it('resolves on exit code 0', async () => {
+    const { fn } = makeRecordingSpawn(0);
+    await Promise.resolve(expect(_spawnPreviewBuildWith(fn, {}, 'd3')).resolves.toBeUndefined());
   });
 
-  it('rejects on non-zero exit when required (default)', async () => {
+  it('rejects on a non-zero exit, required: false included: the option is ignored', async () => {
     const { fn } = makeRecordingSpawn(2);
-    // Default `required` is true.
     await Promise.resolve(expect(_spawnPreviewBuildWith(fn, {}, 'd3')).rejects.toThrow(/preview build failed.*2/));
-  });
-
-  it('rejects on non-zero exit when required: true explicitly', async () => {
-    const { fn } = makeRecordingSpawn(1);
+    const { fn: optional } = makeRecordingSpawn(7);
     await Promise.resolve(
-      expect(_spawnPreviewBuildWith(fn, { required: true }, 'd3')).rejects.toThrow(/preview build failed.*1/),
+      expect(_spawnPreviewBuildWith(optional, { required: false }, 'd3')).rejects.toThrow(/preview build failed.*7/),
     );
-  });
-
-  it('resolves on non-zero exit when required: false', async () => {
-    const { fn } = makeRecordingSpawn(7);
-    await Promise.resolve(expect(_spawnPreviewBuildWith(fn, { required: false }, 'd3')).resolves.toBeUndefined());
   });
 
   it('rejects on signal-style null exit when required (treated as failure)', async () => {

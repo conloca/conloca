@@ -36,7 +36,7 @@ conloca doctor --live     # sends no credential: only your site's host and the e
 conloca doctor            # offline: wiring, sites.json host, committed framing headers, key leftovers
 ```
 
-This package's checks are `CC1` and `CC8`–`CC24`:
+This package's checks are `CC1` and `CC8`–`CC29`:
 
 - **CC9** — `sites.json`: the site named `default` (or the only one) has a bare host in `domains[defaultLocale]` and a
   valid `base`. The editor opens `https://<host><base>_conloca/editor/`; it refuses IPs, `localhost`, `*.conloca.com`.
@@ -59,6 +59,24 @@ This package's checks are `CC1` and `CC8`–`CC24`:
   `connect --yes --cf-plan paid` (or `free`). On Free with API routes, CC23 warns that previews and those routes share
   one daily request quota; Cloudflare Workers Paid removes the limit.
 - **CC24** (live) — a separate preview deploy's `conloca.json` answers as D4.
+- **CC25–CC28** — draft previews in the site's own build (d8): one of the four official adapters, in the tested release
+  range, on an astro at or above its floor; nothing that turns preview off (`isr` without the preview route excluded,
+  edge middleware, `previewBuild.adapter`, `separate: true` under Vercel or Netlify); the host's routing (Vercel
+  `build.format: 'file'`, `site` on Vercel and Netlify, a static Cloudflare site's `run_worker_first` and `"404-page"`);
+  `security.allowedDomains` on `@astrojs/node`. Fix: `npx @conloca/cli connect` (adds the adapter and its options).
+- **CC29** (live) — `<host><base>_conloca/preview/__exit` answers 302, uncached, as the configured mode. A failure names
+  where the host keeps logs; a 401/403/429 means something in front of the site blocks `/_conloca/preview/*`.
+
+## Draft previews in the site's own build (d8)
+
+- Updating `@conloca/cloud-astro` switches a D2 site (preview from its own server) and an `@astrojs/cloudflare`
+  server-rendered site to d8 on the next build. Run `npx @conloca/cli upgrade` for the edits: the start command moves to
+  `node dist/server/entry.mjs`, and the `previewBuild` options d8 ignores go.
+- Read `Astro.locals.contentApi` inside each request. Never cache it, or anything read from it, at module level: on a
+  server-rendered site drafts and published pages share one warm function.
+- A static Vercel site adds a `src/pages/404` page, or every miss runs the preview function.
+- Vercel and Netlify sites set `site` in `astro.config` so their own pages stay inside the preview. `site` also changes
+  canonical, sitemap, RSS and Open Graph URLs on the live pages: ask the site owner first.
 
 ## Framing: only when the site forbids it
 

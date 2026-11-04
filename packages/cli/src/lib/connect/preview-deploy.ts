@@ -3,8 +3,9 @@ import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { applyEdits, type JSONPath, modify, parse } from 'jsonc-parser';
-import type { CallOptions } from '../config-text.js';
+import { type CallOptions, parseObjectEntries } from '../config-text.js';
 import { isRecord } from '../is-record.js';
+import { type AdapterName, HOST_ADAPTERS } from './adapter.js';
 import type { StepResult } from './step.js';
 
 /** wrangler.jsonc `main`: the dispatcher module `@conloca/cloud-astro` writes on every build. */
@@ -67,17 +68,71 @@ function withoutPreviewLimit(block: unknown): unknown[] | undefined | null {
   return kept.length === 0 ? undefined : kept;
 }
 
-/** How the site's preview build serves, as conlocaCloud's and Astro's options read: only D3 and D4 need a deploy step. */
-export type PreviewSetup = { kind: 'off' } | { kind: 'd2' } | { kind: 'd3' | 'd4'; prefix: string };
+/** How the site's preview build serves, as conlocaCloud's and Astro's options read: d8 renders drafts through the adapter. */
+export type PreviewSetup =
+  | { kind: 'off'; refusal?: string }
+  | { kind: 'd3'; prefix: string }
+  /** `refusal`: previewBuild.adapter beside `separate: true`, which the build refuses. */
+  | { kind: 'd4'; prefix: string; refusal?: string }
+  | { kind: 'd8'; prefix: string; adapter: AdapterName };
 
-export function previewSetupOf(integration: CallOptions, astro: CallOptions, base: string | null): PreviewSetup {
+/** `code` is the comment-stripped astro.config, whose imports say which package the adapter call comes from. */
+export function previewSetupOf(
+  integration: CallOptions,
+  astro: CallOptions,
+  base: string | null,
+  code: string,
+): PreviewSetup {
   if (integration.state !== 'literal') return { kind: 'off' };
   const raw = integration.entries.get('previewBuild');
   if (raw === undefined || raw.trim() === 'false') return { kind: 'off' };
   const prefix = `${(base ?? '/').replace(/\/+$/u, '')}/_conloca/preview`;
-  if (/\bseparate\s*:\s*true\b/u.test(raw)) return { kind: 'd4', prefix };
-  const ownAdapter = astro.state === 'literal' && astro.entries.has('adapter');
-  return /\badapter\b/u.test(raw) || ownAdapter ? { kind: 'd2' } : { kind: 'd3', prefix };
+  const { separate, adapter: misplaced } = previewBuildKeys(raw);
+  // The build refuses previewBuild.adapter: drafts render through the adapter in astro.config.
+  const refusal = "remove previewBuild.adapter: drafts render through the adapter in astro.config's adapter option";
+  const adapter = siteAdapterOf(astro, code);
+  if (separate && (adapter === '@astrojs/vercel' || adapter === '@astrojs/netlify')) {
+    // The build's own refusal (cloud-astro `separateRefusal`), which the CLI cannot import.
+    return {
+      kind: 'off',
+      refusal: `previewBuild.separate is not supported with ${adapter}: the separate preview build would write its output where ${adapter} deploys the live site. Remove separate: true; with ${adapter} drafts render in the site's own build.`,
+    };
+  }
+  if (separate) return misplaced ? { kind: 'd4', prefix, refusal } : { kind: 'd4', prefix };
+  if (misplaced) return { kind: 'off', refusal };
+  if (adapter === undefined) return { kind: 'd3', prefix };
+  // shortcut: a third-party adapter, or one imported other than as a default import, reads as off.
+  return adapter === 'other' ? { kind: 'off' } : { kind: 'd8', prefix, adapter };
+}
+
+/** What previewBuild's own object (not one nested in it, such as `config`) sets. */
+export interface PreviewBuildKeys {
+  /** `separate: true`: a separate preview deploy (D4). */
+  separate: boolean;
+  /** A top-level `adapter`, which the build refuses. */
+  adapter: boolean;
+}
+
+export function previewBuildKeys(raw: string): PreviewBuildKeys {
+  const parsed = parseObjectEntries(raw.trim());
+  if (parsed === null) return { separate: false, adapter: false };
+  const adapter = parsed.entries.has('adapter') || parsed.shorthands.has('adapter');
+  return { separate: parsed.entries.get('separate') === 'true', adapter };
+}
+
+/**
+ * The official adapter astro.config's `adapter:` calls, from the default import of its call; 'other' for any other
+ * adapter, undefined when there is none. `code` is the comment-stripped config.
+ */
+export function siteAdapterOf(astro: CallOptions, code: string): AdapterName | 'other' | undefined {
+  const own = astro.state === 'literal' ? astro.entries.get('adapter') : undefined;
+  if (own === undefined) return undefined;
+  const call = /^\s*([\w$]+)\s*\(/u.exec(own)?.[1];
+  const source =
+    call === undefined
+      ? undefined
+      : new RegExp(`\\bimport\\s+${call.replaceAll('$', '\\$')}\\s+from\\s+['"]([^'"]+)['"]`, 'u').exec(code)?.[1];
+  return Object.values(HOST_ADAPTERS).find((entry) => entry.name === source)?.name ?? 'other';
 }
 
 export type WranglerFile =
@@ -201,18 +256,91 @@ function d4Step(
 }
 
 /**
- * The wrangler.jsonc settings a D3 or D4 preview needs, merged into the site's own: what it sets is added, what the
- * site set is kept, and a setting that conflicts is reported, never overwritten. A TOML config is never edited.
+ * The d8 deploy step: the host's own rate limit on the preview route, set in its dashboard, or for the Cloudflare
+ * adapter the routing the build reports (run_worker_first and not_found_handling "404-page"), with no `main`, rate-limit
+ * binding or plan, since the adapter's Cloudflare Worker serves the route.
  */
-export function previewDeployStep(input: PreviewDeployInput): StepResult {
-  const { file, setup } = input;
-  if (setup.kind !== 'd3' && setup.kind !== 'd4') {
+function d8Step(input: PreviewDeployInput, prefix: string, adapter: AdapterName): StepResult {
+  if (adapter === '@astrojs/vercel') {
+    return needs('Vercel: rate-limit the preview route in the project firewall', [
+      `Firewall → Add rule → If Request Path starts with ${prefix}/ → Rate Limit, ${PREVIEW_LIMIT.simple.limit} requests per ${PREVIEW_LIMIT.simple.period} seconds per IP → Deny`,
+    ]);
+  }
+  if (adapter === '@astrojs/netlify') {
+    return needs('Netlify: rate-limit the preview route', [
+      `Rate limiting rule: path ${prefix}/*, 60 requests per 60 seconds per IP`,
+      "every missing URL on this site, images included, runs your site's function",
+    ]);
+  }
+  if (adapter === '@astrojs/node') {
+    return needs('your own server: drafts render in the site server', [
+      'start the server with `node dist/server/entry.mjs`',
+    ]);
+  }
+  const { file } = input;
+  if (file.kind !== 'jsonc') {
+    return needs(
+      file.kind === 'toml'
+        ? "wrangler.toml can't carry the preview routing: convert it to wrangler.jsonc, then run `conloca connect` again"
+        : 'this project has no wrangler.jsonc for the preview routing',
+    );
+  }
+  const name = basename(file.path);
+  if (input.routes === null) {
+    // Before a build (or with --no-build) the routes are unknown: drafts would 404 until they are written.
+    return needs(`${name}: the preview routing needs the routes a build reports`, ['conloca connect --update --yes']);
+  }
+  // An SSR site (on-demand routes of its own in the build's list) already sends every miss to its Cloudflare Worker; the build
+  // checks the routing only when there are none (`siteRoutesOnDemand.length === 0`).
+  const base = prefix.slice(0, -'/_conloca/preview'.length);
+  const runtime = new Set([...previewOwnEntries(prefix), `${base}/_server-islands/*`]);
+  if (input.routes.some((entry) => !runtime.has(entry))) {
     return {
-      state: 'skipped',
-      message: 'previewBuild serves no static-site preview (D3) or separate deploy (D4)',
+      state: 'done',
+      message: `${name}: the Cloudflare Worker already gets every miss, the preview included`,
       edits: [],
     };
   }
+  const config: unknown = parse(file.text, [], { allowTrailingComma: true });
+  if (!isRecord(config)) return needs(`${name} is not a JSON object`);
+  const assets = isRecord(config.assets) ? config.assets : {};
+  const listed = assets.run_worker_first;
+  if (listed !== undefined && listed !== true && !Array.isArray(listed)) {
+    return needs(`${name} has its own run_worker_first; add ${JSON.stringify(input.routes)} to it`);
+  }
+  const current: unknown[] = Array.isArray(listed) ? listed : [];
+  const missing = listed === true ? [] : input.routes.filter((entry) => !current.includes(entry));
+  if (current.length + missing.length > MAX_WORKER_FIRST) {
+    return needs(
+      `${name}: run_worker_first would have more than ${MAX_WORKER_FIRST} entries, Cloudflare's cap; merge some into wider patterns`,
+    );
+  }
+  let after = file.text;
+  if (missing.length > 0) after = setIn(after, ['assets', 'run_worker_first'], [...current, ...missing]);
+  // As for D3: "none" only on --negotiate-404, and a "none" the site has already stays.
+  const handling = input.negotiate404 || assets.not_found_handling === 'none' ? 'none' : '404-page';
+  if (assets.not_found_handling !== handling) after = setIn(after, ['assets', 'not_found_handling'], handling);
+  if (after === file.text) {
+    return { state: 'done', message: `${name} routes the preview through the Cloudflare adapter`, edits: [] };
+  }
+  return {
+    state: 'changed',
+    message: `${name}: the preview runs on ${prefix}/* through the Cloudflare adapter, misses get ${handling === 'none' ? 'the Cloudflare Worker (not_found_handling "none")' : 'the 404 page'}`,
+    edits: [{ path: file.path, before: file.text, after }],
+  };
+}
+
+/**
+ * The wrangler.jsonc settings a D3 or D4 preview needs, merged into the site's own: what it sets is added, what the
+ * site set is kept, and a setting that conflicts is reported, never overwritten. A TOML config is never edited. d8
+ * gets its host's deploy step.
+ */
+export function previewDeployStep(input: PreviewDeployInput): StepResult {
+  const { file, setup } = input;
+  if (setup.kind === 'off') {
+    return { state: 'skipped', message: 'previewBuild serves no draft preview', edits: [] };
+  }
+  if (setup.kind === 'd8') return d8Step(input, setup.prefix, setup.adapter);
   const pair = [setup.prefix, `${setup.prefix}/*`];
   // A route list from the build starts with the prefix pair: dropped here so each entry is listed once.
   const wanted = [...pair, ...(input.routes ?? []).filter((r) => !r.startsWith(setup.prefix))];
