@@ -10,7 +10,15 @@ import { applyPreviewHeaders } from './headers.js';
 import { renderNoPreviewLanding } from './landing.js';
 import { isNavigation } from './links.js';
 import { handlePreviewRequest, type PreviewMiddlewareOptions } from './middleware.js';
-import { answerExit, finishEntry, holdsPreviewCredential, previewUnavailable, routePrefixed } from './prefix-router.js';
+import {
+  answerExit,
+  finishEntry,
+  holdsPreviewCredential,
+  mediaImageRedirect,
+  previewUnavailable,
+  routePrefixed,
+  serveDraftMedia,
+} from './prefix-router.js';
 import { previewRoutePrefix } from './preview-path.js';
 import type { PreviewMiddlewareContext } from './site-middleware.js';
 
@@ -45,7 +53,7 @@ export function createD8Middleware(baked: BakedPreviewOpts, deps: D8Deps) {
     // `<prefix>/_image` is Astro's image endpoint: the pass cookie's path never covers it, so there is nothing to check.
     // Its answer still carries the preview headers: Cloudflare's passthrough endpoint sets none of its own.
     if (at.kind === 'outside') return next();
-    if (at.kind === 'image') return applyPreviewHeaders(await next());
+    if (at.kind === 'image') return mediaImageRedirect(url, base, 'd8') ?? applyPreviewHeaders(await next());
     if (at.kind === 'exit') {
       let opts: PreviewMiddlewareOptions | null = null;
       try {
@@ -61,6 +69,18 @@ export function createD8Middleware(baked: BakedPreviewOpts, deps: D8Deps) {
       return answerExit(url, at.slug, exit, base, opts?.saasEndpoint ?? '', 'd8').catch(() =>
         applyPreviewHeaders(new Response(null, { status: 302, headers: { location: base } })),
       );
+    }
+
+    if (at.kind === 'media') {
+      try {
+        const opts = resolveFromBaked(baked, deps.env);
+        const fetchFn = deps.fetchFn ?? (await resolveEndpointFetch()) ?? fetch;
+        return await serveDraftMedia(request, at, base, opts.saasEndpoint, fetchFn);
+      } catch (error) {
+        // An `<img>` gets no retry page: a bodiless 404.
+        console.error('@conloca/cloud-astro: the draft media read failed', error);
+        return applyPreviewHeaders(new Response(null, { status: 404 }));
+      }
     }
 
     const { inner, entering } = at;

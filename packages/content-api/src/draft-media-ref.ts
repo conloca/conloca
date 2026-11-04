@@ -4,6 +4,9 @@
  */
 import { IMAGE_EXTENSION_MIME } from './asset-constraints.js';
 
+// The type an image path's extension is served as, for readers that import only this module.
+export { IMAGE_EXTENSION_MIME };
+
 /** The path every draft address starts with. */
 export const DRAFT_MEDIA_REF_BASE = '/api/v1/assets/serve';
 
@@ -27,7 +30,7 @@ export function mediaRefPath(value: string, base: string): string | undefined {
   const dot = filename.lastIndexOf('.');
   if (dot <= 0) return undefined;
   const extension = filename.slice(dot + 1).toLowerCase();
-  if (!Object.prototype.hasOwnProperty.call(IMAGE_EXTENSION_MIME, extension)) return undefined;
+  if (!Object.hasOwn(IMAGE_EXTENSION_MIME, extension)) return undefined;
   return path;
 }
 

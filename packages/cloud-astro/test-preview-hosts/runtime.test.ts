@@ -4,13 +4,16 @@ import type { ContentManifest } from '@conloca/content-api';
 import { previewBranchSlug } from '@conloca/content-api/editor-host';
 import { FileSystemContentAPI } from '@conloca/content-api/node';
 import {
+  BRANCH_MEDIA,
   DRAFT_TEXT,
   draftOf,
   type FakeConloca,
   HEADINGS,
+  mediaSrcs,
   SHARE_ENDED,
   startFakeConloca,
   VERDICT_TABLE,
+  withBranchMedia,
 } from './fake-conloca.js';
 import { type Adapter, buildFixture, type Shape } from './fixtures.js';
 import { type Host, runHost } from './run-host.js';
@@ -169,6 +172,52 @@ const servedImage = (src: string) =>
 const SITE_IMAGE = ADAPTER === 'netlify' ? NETLIFY_CDN : '/_image?';
 
 describe(`${ADAPTER}: the preview round trip`, () => {
+  it('points the branch images of the draft at the media route and serves them to the pass holder only', async () => {
+    const key = 'vx-about en';
+    const plain = fake.drafts.get(key);
+    if (plain === undefined) throw new Error('no draft of vx-about');
+    fake.drafts.set(key, withBranchMedia(plain));
+    try {
+      const pass = await passCookie();
+      const html = await (await navigate('static', `${PREFIX}/${MAIN}/about/`, pass)).text();
+      const route = `${PREFIX}/${MAIN}/__media/`;
+      const srcs = mediaSrcs(html);
+      expect(srcs).toEqual([`${route}${BRANCH_MEDIA.upload}`, `${route}${BRANCH_MEDIA.committed}`]);
+      const image = (src: string, cookie?: string) =>
+        fetch(`${host('static').origin}${src}`, {
+          headers: { 'sec-fetch-dest': 'image', ...(cookie === undefined ? {} : { cookie }) },
+          redirect: 'manual',
+        });
+      for (const answer of await Promise.all(srcs.map((src) => image(src, pass)))) {
+        expect(answer.status).toBe(200);
+        expect(answer.headers.get('content-type')).toBe('image/png');
+        expect(answer.headers.get('x-content-type-options')).toBe('nosniff');
+        expect(answer.headers.get('content-security-policy')).toContain("default-src 'none'; sandbox");
+        expect(answer.headers.get('cache-control')).toBe('private, no-store');
+      }
+      const bodies = await Promise.all(
+        srcs.map(async (src) => (await (await image(src, pass)).arrayBuffer()).byteLength),
+      );
+      expect(bodies.every((bytes) => bytes > 0)).toBe(true);
+      // What a draft's `<Image>` of that image asks for: the image endpoint sends it to the route, which reads it.
+      const viaImage = await Promise.all(
+        srcs.map((src) => image(`${PREFIX}/_image?href=${encodeURIComponent(src)}&w=1&h=1&f=png`, pass)),
+      );
+      expect(viaImage.map((answer) => [answer.status, answer.headers.get('location')])).toEqual(
+        srcs.map((src) => [302, src]),
+      );
+      const followed = await Promise.all(viaImage.map((answer) => image(answer.headers.get('location') ?? '', pass)));
+      expect(followed.map((answer) => answer.headers.get('content-type'))).toEqual(['image/png', 'image/png']);
+      const mediaReads = () => fake.calls.filter((call) => call.startsWith('/preview/media/')).length;
+      const before = mediaReads();
+      const refused = await Promise.all(srcs.map((src) => image(src)));
+      expect(refused.map((answer) => answer.status)).toEqual([404, 404]);
+      expect(mediaReads()).toBe(before);
+    } finally {
+      fake.drafts.set(key, plain);
+    }
+  });
+
   it('opens a draft from a minted code, serves it with the banner, and exits', async () => {
     const jar = cookieJar();
     const code = mint({ pass: await fake.pass() });

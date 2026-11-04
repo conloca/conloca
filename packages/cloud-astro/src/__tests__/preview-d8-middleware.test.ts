@@ -35,6 +35,7 @@ beforeAll(async () => {
 interface HarnessSetup {
   render?: D8RenderModule['render'];
   loadFails?: boolean;
+  mediaThrows?: boolean;
 }
 
 /** `next`, the endpoint and the render module, each counting its calls. */
@@ -46,6 +47,8 @@ function harness(opts: HarnessSetup = {}) {
     async (input: Request | string | URL) => {
       const url = String(input instanceof Request ? input.url : input);
       fetched.push(url);
+      if (opts.mediaThrows && url.includes('/preview/media/')) throw new Error('down');
+      if (url.includes('/preview/media/')) return new Response('img', { headers: { 'content-type': 'image/webp' } });
       return url.endsWith('/preview/exchange') ? Response.json({ pass }) : Response.json(jwks);
     },
     { preconnect: fetch.preconnect },
@@ -202,5 +205,54 @@ describe('createD8Middleware', () => {
     );
     expectPreviewHeaders(answer);
     expect(h.loads()).toBe(0);
+  });
+});
+
+/** An `<img>` request's headers. */
+const image = (cookie?: string) => ({
+  headers: { 'sec-fetch-dest': 'image', ...(cookie === undefined ? {} : { cookie }) },
+});
+
+describe('createD8Middleware — media', () => {
+  const MEDIA = `https://site.test/_conloca/preview/${SLUG}/__media/uploads/a.webp`;
+
+  it('serves an image request under __media from the endpoint, never redirecting or loading the render', async () => {
+    const h = harness();
+    const answer = await h.run(MEDIA, image(`__Secure-conloca_preview_${SLUG}=a.b.c`));
+    expect(answer.status).toBe(200);
+    expect(answer.headers.get('content-type')).toBe('image/webp');
+    expect(h.fetched).toContain('https://d8.cms.test/preview/media/uploads/a.webp');
+    expect(h.loads()).toBe(0);
+    expect(h.nexts()).toBe(0);
+  });
+
+  it('no cookie is a 404 with no endpoint read', async () => {
+    const h = harness();
+    expect((await h.run(MEDIA, image())).status).toBe(404);
+    expect(h.fetched).toEqual([]);
+  });
+
+  it('a failing endpoint is a bodiless 404, never the retry page', async () => {
+    const h = harness({ mediaThrows: true });
+    const answer = await h.run(MEDIA, image(`__Secure-conloca_preview_${SLUG}=a.b.c`));
+    expect(answer.status).toBe(404);
+    expect(answer.body).toBeNull();
+    expectPreviewHeaders(answer);
+  });
+
+  it("sends the image endpoint's branch media href to the media route", async () => {
+    const h = harness();
+    const href = `/_conloca/preview/${SLUG}/__media/uploads/a.webp`;
+    const answer = await h.run(
+      `https://site.test/_conloca/preview/_image?href=${encodeURIComponent(href)}&w=4&h=4`,
+      image(),
+    );
+    expect(answer.status).toBe(302);
+    expect(answer.headers.get('location')).toBe(href);
+    expectPreviewHeaders(answer);
+    expect(h.nexts()).toBe(0);
+    expect(
+      (await h.run('https://site.test/_conloca/preview/_image?href=%2F_astro%2Fdot.png', image())).status,
+    ).not.toBe(302);
   });
 });

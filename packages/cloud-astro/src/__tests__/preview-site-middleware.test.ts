@@ -486,6 +486,18 @@ describe('createPreviewSiteMiddleware — ended share links', () => {
   });
 });
 
+describe('createPreviewSiteMiddleware — D2 media', () => {
+  it('leaves draft refs alone: D2 serves no media route', async () => {
+    const jwt = await mintJwt();
+    const listing = new Response(JSON.stringify([{ id: 'p', meta: { image: '/api/v1/assets/serve/a.png' } }]), {
+      status: 200,
+    });
+    const context = contextFor('https://site.test/blog', `${PREVIEW_COOKIE_NAME}=${jwt}`);
+    await createPreviewSiteMiddleware(opts, seams(makeFetch([changed(), listing]).fn))(context, htmlNext('draft'));
+    expect(JSON.stringify([...(context.locals.contentApi?.listAllContent() ?? [])])).not.toContain('__media');
+  });
+});
+
 const d3 = (): PreviewMiddlewareOptions => ({ ...opts(), mode: 'd3' });
 
 describe('createPreviewSiteMiddleware — D3', () => {
@@ -518,6 +530,34 @@ describe('createPreviewSiteMiddleware — D3', () => {
     ).text();
     expect(html).toContain(`"exitPath":"/_conloca/preview/${slug}/__exit"`);
     expect(html).toContain('"path":"/blog"');
+  });
+
+  it('hands the baked media to the branch reader under the slug route', async () => {
+    const jwt = await mintJwt();
+    const listing = new Response(JSON.stringify([{ id: 'p', meta: { image: '/api/v1/assets/serve/a.png' } }]), {
+      status: 200,
+    });
+    const context = d3Context(`__Secure-conloca_preview_${slug}=${jwt}`, true);
+    const withMedia = {
+      ...seams(makeFetch([changed(), listing]).fn),
+      baked: { media: { refBase: '/assets', deployed: [] } },
+    };
+    await createPreviewSiteMiddleware(d3, withMedia)(context, htmlNext('draft'));
+    expect(JSON.stringify([...(context.locals.contentApi?.listAllContent() ?? [])])).toContain(
+      `/_conloca/preview/${slug}/__media/a.png`,
+    );
+  });
+
+  it('moves draft refs to the slug route when the build baked no media', async () => {
+    const jwt = await mintJwt();
+    const listing = new Response(JSON.stringify([{ id: 'p', meta: { image: '/api/v1/assets/serve/a.png' } }]), {
+      status: 200,
+    });
+    const context = d3Context(`__Secure-conloca_preview_${slug}=${jwt}`, true);
+    await createPreviewSiteMiddleware(d3, seams(makeFetch([changed(), listing]).fn))(context, htmlNext('draft'));
+    expect(JSON.stringify([...(context.locals.contentApi?.listAllContent() ?? [])])).toContain(
+      `/_conloca/preview/${slug}/__media/a.png`,
+    );
   });
 
   it('a slug with an invalid pass gets the landing page', async () => {

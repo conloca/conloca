@@ -8,13 +8,17 @@ import { previewBranchSlug } from '@conloca/content-api/editor-host';
 import { FileSystemContentAPI } from '@conloca/content-api/node';
 import { BUILD_TIMEOUT, createFixtureSite, runAstroBuild } from '../test-editor-build/fixture-site.js';
 import {
+  BRANCH_MEDIA,
   DRAFT_TEXT,
   draftOf,
   type FakeConloca,
   HEADINGS,
+  MEDIA_HERO,
+  mediaSrcs,
   SHARE_ENDED,
   startFakeConloca,
   VERDICT_TABLE,
+  withBranchMedia,
 } from '../test-preview-hosts/fake-conloca.js';
 import { cmsPage } from '../test-preview-hosts/fixtures.js';
 
@@ -50,6 +54,7 @@ beforeAll(async () => {
     extraFiles: {
       'content/default/pages/news.en.vxjson': cmsPage('News'),
       'src/pages/404.astro': '<h1>Not found</h1>\n',
+      'src/components/Hero.tsx': MEDIA_HERO,
       // A prerendered page with an astro:assets image puts a hashed copy in dist/_astro for the endpoint test.
       'src/assets/dot.svg':
         '<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"><rect width="4" height="4"/></svg>\n',
@@ -106,6 +111,52 @@ const navigate = (cookie?: string) => ({
 });
 
 describe('D3 on a local Cloudflare Worker', () => {
+  it('points the branch images of the draft at the media route and serves them to the pass holder only', async () => {
+    const key = 'vx-news en';
+    const plain = fake.drafts.get(key);
+    if (plain === undefined) throw new Error('no draft of vx-news');
+    fake.drafts.set(key, withBranchMedia(plain));
+    try {
+      const pass = `__Secure-conloca_preview_${SLUG}=${await fake.pass()}`;
+      const html = await (await fetch(`${ORIGIN}/_conloca/preview/${SLUG}/news/`, navigate(pass))).text();
+      const route = `/_conloca/preview/${SLUG}/__media/`;
+      const srcs = mediaSrcs(html);
+      expect(srcs).toEqual([`${route}${BRANCH_MEDIA.upload}`, `${route}${BRANCH_MEDIA.committed}`]);
+      const image = (src: string, cookie?: string) =>
+        fetch(`${ORIGIN}${src}`, {
+          headers: { 'sec-fetch-dest': 'image', ...(cookie === undefined ? {} : { cookie }) },
+          redirect: 'manual',
+        });
+      for (const answer of await Promise.all(srcs.map((src) => image(src, pass)))) {
+        expect(answer.status).toBe(200);
+        expect(answer.headers.get('content-type')).toBe('image/png');
+        expect(answer.headers.get('x-content-type-options')).toBe('nosniff');
+        expect(answer.headers.get('content-security-policy')).toContain("default-src 'none'; sandbox");
+        expect(answer.headers.get('cache-control')).toBe('private, no-store');
+      }
+      const bodies = await Promise.all(
+        srcs.map(async (src) => (await (await image(src, pass)).arrayBuffer()).byteLength),
+      );
+      expect(bodies.every((bytes) => bytes > 0)).toBe(true);
+      // What a draft's `<Image>` of that image asks for: the image endpoint sends it to the route, which reads it.
+      const viaImage = await Promise.all(
+        srcs.map((src) => image(`/_image?href=${encodeURIComponent(src)}&w=1&h=1&f=png`, pass)),
+      );
+      expect(viaImage.map((answer) => [answer.status, answer.headers.get('location')])).toEqual(
+        srcs.map((src) => [302, src]),
+      );
+      const followed = await Promise.all(viaImage.map((answer) => image(answer.headers.get('location') ?? '', pass)));
+      expect(followed.map((answer) => answer.headers.get('content-type'))).toEqual(['image/png', 'image/png']);
+      const mediaReads = () => fake.calls.filter((call) => call.startsWith('/preview/media/')).length;
+      const before = mediaReads();
+      const refused = await Promise.all(srcs.map((src) => image(src)));
+      expect(refused.map((answer) => answer.status)).toEqual([404, 404]);
+      expect(mediaReads()).toBe(before);
+    } finally {
+      fake.drafts.set(key, plain);
+    }
+  });
+
   it('serves a published page byte for byte', async () => {
     const answer = await fetch(`${ORIGIN}/about/`);
     expect(await answer.text()).toBe(await readFile(join(site, 'dist/about/index.html'), 'utf8'));

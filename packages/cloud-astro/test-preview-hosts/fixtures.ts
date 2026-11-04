@@ -9,6 +9,7 @@ import {
   type FixtureSiteOptions,
   PNG_1X1,
 } from '../test-editor-build/fixture-site.js';
+import { MEDIA_HERO } from './fake-conloca.js';
 
 export type Adapter = FixtureAdapter;
 
@@ -122,6 +123,7 @@ function shapeOptions(adapter: Adapter, shape: Shape): FixtureSiteOptions {
     'content/default/pages/index.en.vxjson': cmsPage('Home'),
     'content/default/pages/about.en.vxjson': cmsPage('About'),
     'src/layouts/Layout.astro': LAYOUT(shape === 'server-i18n'),
+    'src/components/Hero.tsx': MEDIA_HERO,
     'src/assets/dot.png': PNG_1X1,
     'src/pages/contact.astro': IMAGE_PAGE(true),
     'src/pages/blog/[slug].astro': STATIC_PATHS_PAGE,

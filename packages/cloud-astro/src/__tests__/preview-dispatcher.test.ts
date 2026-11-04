@@ -557,3 +557,88 @@ describe('previewHref', () => {
     expect(previewHref('/docs/_image?href=%2Fa.png&w=400', page, route, '/docs', new Set())).toBeNull();
   });
 });
+
+/** The env with a fake endpoint binding that records each read. */
+function withEndpoint(env: ReturnType<typeof harness>['env'], answer: () => Response, asked: string[]) {
+  return {
+    ...env,
+    CONLOCA_SAAS: {
+      fetch: async (input: Request | string | URL) => {
+        asked.push(input instanceof Request ? input.url : input.toString());
+        return answer();
+      },
+    },
+  };
+}
+describe('createDispatcher — media', () => {
+  const MEDIA = `https://site.test/_conloca/preview/${SLUG}/__media/a.png`;
+  const pass = `__Secure-conloca_preview_${SLUG}=a.b.c`;
+  const image = (cookie?: string) =>
+    new Request(MEDIA, { headers: { 'sec-fetch-dest': 'image', ...(cookie === undefined ? {} : { cookie }) } });
+
+  it('fetches __media from the endpoint, never the assets or the preview server', async () => {
+    const { dispatcher, env, assets, loads, limited } = harness();
+    const asked: string[] = [];
+    const answer = await dispatcher.fetch(
+      image(pass),
+      withEndpoint(env, () => new Response('img', { headers: { 'content-type': 'image/png' } }), asked),
+      {},
+    );
+    expect(answer.status).toBe(200);
+    expect(asked).toEqual(['https://app.example.test/preview/media/a.png']);
+    expect(assets).toHaveLength(0);
+    expect(loads()).toBe(0);
+    expect(limited).toHaveLength(1);
+  });
+
+  it('no cookie is a 404 with no endpoint read', async () => {
+    const { dispatcher, env } = harness();
+    const asked: string[] = [];
+    const answer = await dispatcher.fetch(
+      image(),
+      withEndpoint(env, () => new Response('x'), asked),
+      {},
+    );
+    expect(answer.status).toBe(404);
+    expect(asked).toEqual([]);
+  });
+
+  it('a failing endpoint is a bodiless 404', async () => {
+    const { dispatcher, env } = harness();
+    const failing = {
+      ...env,
+      CONLOCA_SAAS: {
+        fetch: async (): Promise<Response> => {
+          throw new Error('down');
+        },
+      },
+    };
+    const answer = await dispatcher.fetch(image(pass), failing, {});
+    expect(answer.status).toBe(404);
+    expect(answer.body).toBeNull();
+  });
+
+  it('over the limit is a bodiless 429', async () => {
+    const { dispatcher, env } = harness({ allow: 0 });
+    const answer = await dispatcher.fetch(image(pass), env, {});
+    expect(answer.status).toBe(429);
+    expect(answer.body).toBeNull();
+  });
+
+  it("sends the image endpoint's branch media href to the media route", async () => {
+    const { dispatcher, env, assets, loads } = harness();
+    const href = `/_conloca/preview/${SLUG}/__media/a.png`;
+    const answer = await dispatcher.fetch(
+      new Request(`https://site.test/_image?href=${encodeURIComponent(href)}&w=4`, {
+        headers: { 'sec-fetch-dest': 'image' },
+      }),
+      env,
+      {},
+    );
+    expect(answer.status).toBe(302);
+    expect(answer.headers.get('location')).toBe(href);
+    expect(answer.headers.get('cache-control')).toBe('private, no-store');
+    expect(assets).toHaveLength(0);
+    expect(loads()).toBe(0);
+  });
+});

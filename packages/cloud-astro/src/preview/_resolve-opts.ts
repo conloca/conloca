@@ -23,6 +23,8 @@ export interface BakedPreviewOpts {
   buildFormat?: 'directory' | 'file' | 'preserve';
   /** D8: where the render reads the pages the site prerendered itself (`./site-page-sources.ts`). */
   sitePages?: BakedSitePages;
+  /** D3 and D8: the media folder's link base and the images under it the build deployed, relative to it. */
+  media?: { refBase: string; deployed: string[] };
 }
 
 /** Node reads its own disk; Cloudflare its assets; Vercel and Netlify the function's list and, on production, the site. */

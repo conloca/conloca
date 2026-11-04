@@ -3,17 +3,19 @@
  * the values every pass is checked against baked in. Also what every preview build bakes.
  */
 
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { basename, dirname, join, sep } from 'node:path';
+import { basename, dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
+import { mediaRefPath } from '@conloca/content-api';
 import { isRecord } from '@conloca/content-api/component-vocabulary';
 import { DEFAULT_EDITOR_ENDPOINT } from '@conloca/content-api/editor-host';
 import type { AstroConfig, IntegrationResolvedRoute } from 'astro';
 import { PACKAGE_NAME } from './constants.js';
 import { declaredDomains, deployProblems, onDemandPatterns } from './d3-build.js';
+import { mediaFromBuild } from './editor-page/emit.js';
 import { gitOutput, resolveBuildRef } from './git.js';
 import type { BakedPreviewOpts, BakedSitePages } from './preview/_resolve-opts.js';
 import { normalizeTrailingSlash } from './preview/preview-path.js';
@@ -102,6 +104,36 @@ export async function d8Baked(
     buildFormat: input.config.build.format,
     sitePages: bakedSitePages(input.config, input.env),
   };
+}
+
+/**
+ * The media folder's link base, from the source conloca.json's `media` uses, and the images in it this build deploys
+ * (relative to it): a draft link to any other image is a file committed on the branch, served by the media route.
+ * A branch file with a deployed file's name shows the deployed bytes. Symlinked subfolders are not followed. Unbaked
+ * (no git repository, an unreadable folder), draft addresses still move; branch-committed images do not.
+ * Throws when the folder can't be read.
+ */
+export function bakedMedia(
+  channel: { assetsPath?: string; assetRefBase?: string } | undefined,
+  root: URL,
+): BakedPreviewOpts['media'] {
+  const media = mediaFromBuild(channel, gitOutput(['rev-parse', '--show-toplevel'], fileURLToPath(root)));
+  if (media === undefined || channel?.assetsPath === undefined) return undefined;
+  // An empty base is the whole `public/`: the rewrite moves only draft addresses there, so nothing is listed.
+  if (media.refBase === '') return { refBase: '', deployed: [] };
+  const { assetsPath } = channel;
+  const entries = existsSync(assetsPath) ? readdirSync(assetsPath, { recursive: true, withFileTypes: true }) : [];
+  const deployed = entries
+    .filter((entry) => entry.isFile())
+    .map((entry) => relative(assetsPath, join(entry.parentPath, entry.name)).split(sep).join('/'))
+    .filter((file) => mediaRefPath(`${media.refBase}/${file}`, media.refBase) !== undefined);
+  // oxlint-disable-next-line unicorn/no-array-sort -- the target lib predates toSorted; this sorts its own array.
+  return { refBase: media.refBase, deployed: deployed.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)) };
+}
+
+/** Only builds that render drafts from this build's own files bake its media list. */
+export function bakesMedia(mode: string | undefined): boolean {
+  return mode === 'd8' || mode === 'd3';
 }
 
 type SitePagesConfig = Pick<AstroConfig, 'site'> & {

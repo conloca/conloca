@@ -17,7 +17,7 @@ import type {
   UpdateLocaleInput,
   UpdateResult,
 } from '@conloca/content-api';
-import { PreviewContentAPI } from '../preview/content-api.js';
+import { PreviewContentAPI, rewriteDraftMedia } from '../preview/content-api.js';
 
 type FetchInput = Parameters<typeof fetch>[0];
 
@@ -612,5 +612,127 @@ describe('PreviewContentAPI read-only delegations', () => {
     const reader: ContentAPI = new PreviewContentAPI({ saasEndpoint: ENDPOINT, ctx, baselineApi: baseline.api });
     expect(typeof reader.getLocalized).toBe('function');
     expect(typeof reader.getContent).toBe('function');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Draft media — images the branch added point at the preview media route
+// ---------------------------------------------------------------------------
+
+describe('PreviewContentAPI draft media', () => {
+  const ROUTE = '/_conloca/preview/bWFpbg';
+  const media = { route: ROUTE, refBase: '/assets', deployed: new Set(['old.png']) };
+  const DRAFT = '/api/v1/assets/serve/uploads/a.webp';
+  const MOVED = `${ROUTE}/__media/uploads/a.webp`;
+
+  function withImages(title: string): LocalizedEntry {
+    const entry = makeLocalized('page-1', 'en', title);
+    entry.localized.meta = { title, ogImage: DRAFT };
+    entry.localized.content = {
+      puckData: {
+        content: [{ type: 'Hero', props: { image: DRAFT, old: '/assets/old.png', fresh: '/assets/new.png' } }],
+      },
+      mdx: `![a](${DRAFT}) <img src="/assets/doc.pdf" /> [x](/assets/new.png)`,
+    };
+    return entry;
+  }
+
+  it('rewrites the fetched entry: draft refs and undeployed images move, deployed images and non-images stay', async () => {
+    const baseline = makeBaseline();
+    const fetchSpy = makeFetch([new Response(JSON.stringify(withImages('Edited')), { status: 200 })]);
+    const reader = new PreviewContentAPI({
+      saasEndpoint: ENDPOINT,
+      ctx,
+      baselineApi: baseline.api,
+      fetchFn: fetchSpy.fn,
+      media,
+    });
+    const json = JSON.stringify(await reader.getLocalized('page-1', 'en'));
+    expect(json).not.toContain('/api/v1/assets/serve');
+    expect(json.split(MOVED).length - 1).toBe(3);
+    expect(json).toContain('"/assets/old.png"');
+    expect(json.split(`${ROUTE}/__media/new.png`).length - 1).toBe(2);
+    expect(json).toContain('/assets/doc.pdf');
+  });
+
+  it('rewrites embedded payloads', async () => {
+    const reader = new PreviewContentAPI({
+      saasEndpoint: ENDPOINT,
+      ctx,
+      baselineApi: makeBaseline().api,
+      fetchFn: makeFetch([]).fn,
+      embeddedPayloads: new Map([[KEY_PAGE_1_EN, withImages('Embedded')]]),
+      media,
+    });
+    expect(JSON.stringify(await reader.getLocalized('page-1', 'en'))).toContain(MOVED);
+  });
+
+  it('leaves the baseline entry of an unchanged dependency untouched', async () => {
+    const original = withImages('Baseline');
+    const baseline = makeBaseline({ localized: new Map([[KEY_PAGE_1_EN, original]]) });
+    const reader = new PreviewContentAPI({
+      saasEndpoint: ENDPOINT,
+      ctx,
+      baselineApi: baseline.api,
+      fetchFn: makeFetch([new Response(null, { status: 304 })]).fn,
+      media,
+    });
+    expect(await reader.getLocalized('page-1', 'en')).toBe(original);
+  });
+
+  it('rewrites the branch listing, whose meta listing cards read', async () => {
+    const listing = [{ ...makeManifest('page-1', 'en'), meta: { ogImage: DRAFT } }];
+    const reader = new PreviewContentAPI({
+      saasEndpoint: ENDPOINT,
+      ctx,
+      baselineApi: makeBaseline().api,
+      fetchFn: makeFetch([new Response(JSON.stringify(listing), { status: 200 })]).fn,
+      media,
+    });
+    await reader.loadBranchManifests();
+    expect(JSON.stringify([...reader.listAllContent()])).toContain(MOVED);
+  });
+});
+
+describe('rewriteDraftMedia', () => {
+  const ROUTE = '/_conloca/preview/bWFpbg';
+  it('moves a link after a JSON escape, checking the decoded path against the deployed list', () => {
+    const media = { route: ROUTE, refBase: '/assets', deployed: new Set(['my pic.png']) };
+    const json = JSON.stringify({ mdx: '![a](/assets/new.png)\n/assets/x.png\n/assets/my%20pic.png' });
+    const out = rewriteDraftMedia(json, media);
+    expect(out).toContain(`${ROUTE}/__media/new.png`);
+    expect(out).toContain(`\\n${ROUTE}/__media/x.png`);
+    expect(out).toContain('/assets/my%20pic.png');
+    expect(out).not.toContain('/assets/my%20pic.png'.replace('/assets', `${ROUTE}/__media`));
+  });
+
+  it("with an empty link base moves draft links only, never the site's own root images", () => {
+    const media = { route: ROUTE, refBase: '', deployed: new Set<string>() };
+    const out = rewriteDraftMedia(JSON.stringify({ a: '/logo.png', b: '/api/v1/assets/serve/c.png' }), media);
+    expect(JSON.parse(out)).toEqual({ a: '/logo.png', b: `${ROUTE}/__media/c.png` });
+  });
+
+  it('moves draft refs with no baked media list, leaving media-folder links alone', () => {
+    const json = JSON.stringify({ a: '/api/v1/assets/serve/c.png', b: '/assets/new.png' });
+    expect(JSON.parse(rewriteDraftMedia(json, { route: ROUTE }))).toEqual({
+      a: `${ROUTE}/__media/c.png`,
+      b: '/assets/new.png',
+    });
+  });
+
+  it('counts a deployed file by its raw or decoded name', () => {
+    const media = { route: ROUTE, refBase: '/assets', deployed: new Set(['a%2520b.png']) };
+    expect(rewriteDraftMedia('"/assets/a%2520b.png"', media)).toBe('"/assets/a%2520b.png"');
+  });
+
+  it('moves a draft address only where a link starts, never inside another URL', () => {
+    const json = JSON.stringify({
+      a: 'https://cms.example/api/v1/assets/serve/a.png',
+      b: '/api/v1/assets/serve/b.png',
+    });
+    expect(JSON.parse(rewriteDraftMedia(json, { route: ROUTE }))).toEqual({
+      a: 'https://cms.example/api/v1/assets/serve/a.png',
+      b: `${ROUTE}/__media/b.png`,
+    });
   });
 });

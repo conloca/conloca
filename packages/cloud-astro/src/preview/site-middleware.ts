@@ -76,8 +76,8 @@ export interface PreviewRenderSeams {
    * with a plain fetch by hostname.
    */
   fetchFn?: typeof fetch;
-  /** D8: the baked routing values the clean page path and the moved links follow. */
-  baked?: Pick<BakedPreviewOpts, 'trailingSlash' | 'buildFormat' | 'domains'>;
+  /** D3 and D8: the baked routing values the clean page path and the moved links follow, and the deployed media. */
+  baked?: Pick<BakedPreviewOpts, 'trailingSlash' | 'buildFormat' | 'domains' | 'media'>;
   /** D8: pages the site prerendered itself, kept inside the preview. Defaults to none. */
   sitePages?: SitePageSource;
 }
@@ -126,7 +126,8 @@ export function createPreviewSiteMiddleware(resolveOpts: () => PreviewMiddleware
     if (verdict.kind === 'response') return verdict.response;
     if (verdict.kind !== 'preview') return next();
     // A preview verdict under D3 means the slug was named, so the scope always resolves.
-    const exitPath = `${previewScope(opts.mode ?? 'd2', opts.base, slug).route}/__exit`;
+    const route = previewScope(opts.mode ?? 'd2', opts.base, slug).route;
+    const exitPath = `${route}/__exit`;
 
     // D8 serves the draft under the route: `rawPath` (captured before the path changes below) keeps the prefix for
     // Retry, `pagePath` is the page's own.
@@ -252,6 +253,15 @@ export function createPreviewSiteMiddleware(resolveOpts: () => PreviewMiddleware
       baselineApi: await seams.baselineApi(),
       embeddedPayloads: status.kind === 'changed' ? status.embedded : new Map(),
       fetchFn: seams.fetchFn,
+      // Only the slugged modes serve `<route>/__media/`.
+      ...(isSluggedPreviewMode(opts.mode ?? 'd2')
+        ? {
+            media:
+              seams.baked?.media === undefined
+                ? { route }
+                : { route, refBase: seams.baked.media.refBase, deployed: deployedSet(seams.baked.media.deployed) },
+          }
+        : {}),
     });
     // Prime the branch page listing before the renderer enumerates content:
     // `listAllContent` is synchronous, and a page created on the branch is
@@ -268,6 +278,17 @@ export function createPreviewSiteMiddleware(resolveOpts: () => PreviewMiddleware
     }
     return stay(rendered, banner(await rendered.text()));
   };
+}
+
+/** The baked list is one array per process: its Set is built once, not per render. */
+const deployedSets = new WeakMap<readonly string[], ReadonlySet<string>>();
+function deployedSet(deployed: readonly string[]): ReadonlySet<string> {
+  let set = deployedSets.get(deployed);
+  if (set === undefined) {
+    set = new Set(deployed);
+    deployedSets.set(deployed, set);
+  }
+  return set;
 }
 
 /**

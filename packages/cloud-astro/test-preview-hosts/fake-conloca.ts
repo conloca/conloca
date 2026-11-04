@@ -74,6 +74,38 @@ export async function draftOf(contentRoot: string, id: string, locale = 'en'): P
   return { ...entry, localized: { ...entry.localized, etag: `${entry.localized.etag}-draft`, content } };
 }
 
+/** The branch's images: an upload not yet published, and a file committed on the branch that no deploy holds. */
+export const BRANCH_MEDIA = { upload: 'uploads/branch.png', committed: 'new.png' } as const;
+/** How the draft links each: the upload by its draft address, the committed file under the media folder's base. */
+export const BRANCH_MEDIA_LINKS = [`/api/v1/assets/serve/${BRANCH_MEDIA.upload}`, `/assets/${BRANCH_MEDIA.committed}`];
+
+/** `entry` with every Hero also showing the branch's images ({@link MEDIA_HERO}). */
+export function withBranchMedia(entry: LocalizedEntry): LocalizedEntry {
+  const content = structuredClone(entry.localized.content);
+  const puck: unknown = content.puckData;
+  const items = typeof puck === 'object' && puck !== null && 'content' in puck ? puck.content : undefined;
+  if (!Array.isArray(items)) throw new Error(`${entry.id} holds no Puck blocks`);
+  for (const item of items) Object.assign(item.props, { images: BRANCH_MEDIA_LINKS });
+  return { ...entry, localized: { ...entry.localized, content } };
+}
+
+/** A Hero that also renders the `images` a draft gives it, each marked `data-media`. */
+export const MEDIA_HERO = [
+  "import styles from './hero.module.css';",
+  '',
+  'export const Hero = {',
+  '  fields: {},',
+  '  render: ({ text, images }: { text?: string; images?: string[] }) => (',
+  '    <section className={styles.hero}>{text ?? \'Hero\'}{images?.map((src) => <img key={src} src={src} alt="" data-media="" />)}</section>',
+  '  ),',
+  '};',
+  '',
+].join('\n');
+
+/** Every `data-media` image's src in `html`. */
+export const mediaSrcs = (html: string): string[] =>
+  [...html.matchAll(/<img src="([^"]+)" alt="" data-media=""/gu)].map((match) => match[1] ?? '');
+
 export interface PassClaims {
   branch?: string;
   /** A share pass: its link's id (22 characters, as Conloca mints them). */
@@ -198,7 +230,8 @@ export async function startFakeConloca(): Promise<FakeConloca> {
       const branchRead =
         pathname.startsWith('/preview/page-status/') ||
         pathname.startsWith('/preview/content/') ||
-        pathname === '/preview/manifests';
+        pathname === '/preview/manifests' ||
+        pathname.startsWith('/preview/media/');
       if (branchRead && !bearer(request)) return Response.json({ error: 'unauthorized' }, { status: 401 });
       if (pathname.startsWith('/preview/page-status/')) {
         const page = `/${pathname.slice('/preview/page-status/'.length)}`.replace(/(.)\/+$/u, '$1');
@@ -212,6 +245,17 @@ export async function startFakeConloca(): Promise<FakeConloca> {
       }
       if (pathname === '/preview/manifests') {
         return fake.manifests === null ? new Response(null, { status: 404 }) : Response.json(fake.manifests);
+      }
+      if (pathname.startsWith('/preview/media/')) {
+        const path = pathname.slice('/preview/media/'.length);
+        if (path !== BRANCH_MEDIA.upload && path !== BRANCH_MEDIA.committed) return new Response(null, { status: 404 });
+        return new Response(PNG_1X1, {
+          headers: {
+            'content-type': 'image/png',
+            'x-content-type-options': 'nosniff',
+            'content-security-policy': "default-src 'none'; sandbox",
+          },
+        });
       }
       // The allow-listed remote image the fixtures' image endpoint may answer.
       if (pathname === '/image.png') return new Response(PNG_1X1, { headers: { 'content-type': 'image/png' } });

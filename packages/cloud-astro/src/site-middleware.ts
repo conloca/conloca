@@ -29,9 +29,9 @@ import { previewRenderSeams } from './preview-render-seams.js';
 untagWorkerdProcess();
 
 export async function onRequest(context: PreviewMiddlewareContext, next: PreviewMiddlewareNext): Promise<Response> {
-  const handler = createPreviewSiteMiddleware(
-    () => resolveFromBaked(baked, (name) => process.env[name]),
-    await previewRenderSeams(),
-  );
+  const handler = createPreviewSiteMiddleware(() => resolveFromBaked(baked, (name) => process.env[name]), {
+    ...(await previewRenderSeams()),
+    baked,
+  });
   return handler(context, next);
 }

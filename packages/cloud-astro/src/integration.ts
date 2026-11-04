@@ -16,6 +16,8 @@ import {
 } from './d3-build.js';
 import {
   bakedIdentity,
+  bakedMedia,
+  bakesMedia,
   cloudflareD8Problems,
   d8Baked,
   d8ImageEndpoint,
@@ -435,7 +437,7 @@ export function conlocaCloud(options: ConlocaCloudOptions = {}): AstroIntegratio
         const used = projectStatic ? routes.filter((route) => route.pattern !== '/_server-islands/[name]') : routes;
         onDemand = onDemandPatterns(used);
       },
-      'astro:config:done': ({ config }) => {
+      'astro:config:done': ({ config, logger }) => {
         viteConfig = config.vite;
         astroBase = config.base ?? '/';
         srcDir = config.srcDir;
@@ -445,6 +447,18 @@ export function conlocaCloud(options: ConlocaCloudOptions = {}): AstroIntegratio
         buildServer = config.build?.server;
         astroConfig = config;
         inherited = resolveInheritedOptions(options, readEditorDescriptors());
+        // d8 and D3 child builds: the media folder conlocaCMS settled in its config:setup, listed as this build deploys it.
+        if (previewOptsModule !== undefined && bakesMedia(previewOptsModule.mode)) {
+          try {
+            const media = bakedMedia(readEditorDescriptors(), config.root);
+            if (media !== undefined) previewOptsModule = { ...previewOptsModule, media };
+          } catch (error) {
+            // Never fail the site's build over it: draft uploads still show, images committed on the branch don't.
+            logger.warn(
+              `drafts won't show images committed on the branch: can't list the media folder: ${messageOf(error)}`,
+            );
+          }
+        }
         // A missing Cloudflare adapter fails `astro build` here, before the
         // site builds, rather than after it. `astro dev`, `sync` and
         // `preview` never start the preview build, so they are left alone.

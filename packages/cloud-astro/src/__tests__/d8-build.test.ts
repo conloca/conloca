@@ -7,6 +7,8 @@ import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { AstroIntegration, AstroIntegrationLogger } from 'astro';
 import {
+  bakedMedia,
+  bakesMedia,
   cloudflareD8Problems,
   d8Baked,
   hasOnDemandRoutes,
@@ -33,6 +35,7 @@ const ENV_VARS = [
   'GITHUB_HEAD_REF',
   'GITHUB_REF_NAME',
   'GIT_DIR',
+  'CONLOCA_EDITOR_DESCRIPTORS',
 ];
 
 let saved: (readonly [string, string | undefined])[] = [];
@@ -634,5 +637,79 @@ describe('cloudflareD8Problems', () => {
       'wrangler.jsonc run_worker_first lacks /_conloca/preview, /_conloca/preview/*, /_image: drafts get a 404 (preview broken); add them to assets.run_worker_first in wrangler.jsonc',
       'wrangler.jsonc assets.not_found_handling is not "404-page": misses start the Cloudflare Worker; set assets.not_found_handling to "404-page" in wrangler.jsonc',
     ]);
+  });
+});
+
+/** A d8 site whose conlocaCMS published `assetsPath` as its media folder. */
+async function d8WithMedia(assetsPath: string): Promise<void> {
+  await d8Site();
+  process.env.CONLOCA_EDITOR_DESCRIPTORS = JSON.stringify({
+    registry: { contentRoot: content, componentFolders: [], projectRoot: fileURLToPath(root) },
+    assetsPath,
+    assetRefBase: '/assets',
+    puckConfigPath: join(fileURLToPath(root), 'puck.config.ts'),
+  });
+}
+
+async function runDone(): Promise<{ baked: string | undefined; warnings: string[] }> {
+  const { calls, warnings, hooks } = await runSetup();
+  // SAFETY: under d8 the hook reads only config and logger.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- same reason as the SAFETY note.
+  const done = hooks['astro:config:done'] as (args: unknown) => void;
+  done({
+    config: siteConfig(),
+    logger: {
+      info: () => undefined,
+      debug: () => undefined,
+      error: () => undefined,
+      warn: (m: string) => warnings.push(m),
+    },
+  });
+  return { baked: bakedSource(calls.updates[0]), warnings };
+}
+
+describe('bakedMedia', () => {
+  it("lists the media folder's images, relative to it, with the link base", async () => {
+    const dir = fileURLToPath(root);
+    await mkdir(join(dir, 'public', 'assets', 'sub'), { recursive: true });
+    await writeFile(join(dir, 'public', 'assets', 'old.png'), '');
+    await writeFile(join(dir, 'public', 'assets', 'sub', 'b.jpg'), '');
+    await writeFile(join(dir, 'public', 'assets', 'doc.pdf'), '');
+    await mkdir(join(dir, 'public', 'assets', 'dir.png'));
+    const media = bakedMedia(
+      { assetsPath: join(realpathSync(dir), 'public', 'assets'), assetRefBase: '/assets' },
+      root,
+    );
+    expect(media?.refBase).toBe('/assets');
+    expect(media?.deployed).toEqual(['old.png', 'sub/b.jpg']);
+  });
+
+  it('only d8 and D3 builds bake media', () => {
+    expect(['d2', 'd3', 'd4', 'd8'].filter((mode) => bakesMedia(mode))).toEqual(['d3', 'd8']);
+  });
+
+  it('bakes nothing without a media folder', () => {
+    expect(bakedMedia(undefined, root)).toBeUndefined();
+  });
+
+  it('the d8 build bakes the list into the preview options at config:done', async () => {
+    const assets = join(realpathSync(fileURLToPath(root)), 'public', 'assets');
+    await mkdir(join(assets, 'sub'), { recursive: true });
+    await writeFile(join(assets, 'old.png'), '');
+    await writeFile(join(assets, 'sub', 'b.jpg'), '');
+    await d8WithMedia(assets);
+    const { baked } = await runDone();
+    const { media } = JSON.parse(baked?.replace(/^export default /u, '').replace(/;$/u, '') ?? '{}');
+    expect(media.refBase).toBe('/assets');
+    expect(new Set(media.deployed)).toEqual(new Set(['old.png', 'sub/b.jpg']));
+  });
+
+  it('an unreadable media folder warns and bakes no list, never failing the build', async () => {
+    const file = join(realpathSync(fileURLToPath(root)), 'assets.png');
+    await writeFile(file, '');
+    await d8WithMedia(file);
+    const { baked, warnings } = await runDone();
+    expect(baked).not.toContain('"media"');
+    expect(warnings.some((w) => w.includes('media'))).toBe(true);
   });
 });

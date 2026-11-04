@@ -17,9 +17,11 @@ import {
   answerExit,
   finishEntry,
   holdsPreviewCredential,
+  mediaImageRedirect,
   type PreviewExit,
   previewUnavailable,
   routePrefixed,
+  serveDraftMedia,
 } from './prefix-router.js';
 import { normalizeTrailingSlash, PREVIEW_CODE_PARAM, PREVIEW_SLUG_HEADER, previewRoutePrefix } from './preview-path.js';
 
@@ -227,6 +229,11 @@ export function createDispatcher(config: DispatcherConfig, loadServer: (() => Pr
         // preview's to pay for: it counts against the preview route's limit.
         if (url.pathname === `${root}/_image` && !(await withinLimit(request, env)))
           return renderTooManyPreviewRequests();
+        // Under D3 a draft's `<Image>` of branch media points here; only the route can read it.
+        if (url.pathname === `${root}/_image`) {
+          const media = mediaImageRedirect(url, config.base, 'd3');
+          if (media !== null) return media;
+        }
         // The site's own on-demand routes (and, with not_found_handling "none", its misses): unprefixed, no draft
         // context, and no catch: production fails loudly here. A failed preview build ships with a null server only
         // when the site lists nothing beyond the prefix (`finishD3Build`), so this fallback is never a live API route.
@@ -239,7 +246,19 @@ export function createDispatcher(config: DispatcherConfig, loadServer: (() => Pr
         at = { kind: 'slugless', inner: `${root}/_image`, entering: url.searchParams.has(PREVIEW_CODE_PARAM) };
 
       // Every other request under the route counts, `__status` included, before any other work.
-      if (!(await withinLimit(request, env))) return renderTooManyPreviewRequests();
+      if (!(await withinLimit(request, env))) {
+        // An `<img>` gets no HTML page.
+        return at.kind === 'media'
+          ? applyPreviewHeaders(new Response(null, { status: 429 }))
+          : renderTooManyPreviewRequests();
+      }
+      if (at.kind === 'media') {
+        const binding = env.CONLOCA_SAAS;
+        const fetchFn =
+          binding === undefined ? fetch : Object.assign(binding.fetch.bind(binding), { preconnect: fetch.preconnect });
+        // Never throws: a failing endpoint is logged and answered with a bodiless 404.
+        return serveDraftMedia(request, at, config.base, env.CONLOCA_SAAS_ENDPOINT || config.endpoint, fetchFn);
+      }
       const { inner, entering } = at;
       const route = at.kind === 'slugged' ? at.route : prefix;
       const { exit: baked } = config;

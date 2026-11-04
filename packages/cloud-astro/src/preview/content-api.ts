@@ -17,6 +17,7 @@ import type {
   UpdateLocaleInput,
   UpdateResult,
 } from '@conloca/content-api';
+import { DRAFT_MEDIA_REF_BASE, mediaRefPath } from '@conloca/content-api';
 import type { PreviewContext } from './middleware.js';
 
 /**
@@ -58,6 +59,8 @@ export interface PreviewContentAPIOptions {
   baselineApi: ContentAPI;
   embeddedPayloads?: ReadonlyMap<string, LocalizedEntry>;
   fetchFn?: typeof fetch;
+  /** Where the draft's images are served (`<route>/__media/`); with a baked list, the media folder images deployed. */
+  media?: { route: string; refBase?: string; deployed?: ReadonlySet<string> };
 }
 
 /**
@@ -88,6 +91,8 @@ export class PreviewContentAPI implements ContentAPI {
   /** The branch's page set, once {@link loadBranchManifests} has run. */
   private branchManifests?: ContentManifest[];
   private readonly localizedReads = new Map<string, Promise<LocalizedEntry | null>>();
+  /** Embedded entries rewritten once per render, not on every read. */
+  private readonly embeddedRewritten = new Map<string, LocalizedEntry>();
 
   constructor(opts: PreviewContentAPIOptions) {
     this.opts = opts;
@@ -126,8 +131,13 @@ export class PreviewContentAPI implements ContentAPI {
   }
 
   async getLocalized(id: string, locale: string): Promise<LocalizedEntry | null> {
-    const embedded = this.opts.embeddedPayloads?.get(embeddedKey(id, locale));
-    if (embedded) return embedded;
+    const key = embeddedKey(id, locale);
+    const embedded = this.opts.embeddedPayloads?.get(key);
+    if (embedded) {
+      const rewritten = this.embeddedRewritten.get(key) ?? this.withDraftMedia(embedded);
+      this.embeddedRewritten.set(key, rewritten);
+      return rewritten;
+    }
 
     // Request-scoped memoization (the instance lives for one render, so this
     // is not a long-lived cache): the render enumerates the
@@ -135,7 +145,6 @@ export class PreviewContentAPI implements ContentAPI {
     // reads — and every duplicate would be another round trip to the endpoint
     // against the Cloudflare Workers subrequest budget. Failures are evicted so a later read
     // can retry.
-    const key = embeddedKey(id, locale);
     const inFlight = this.localizedReads.get(key);
     if (inFlight) return inFlight;
     const read = this.fetchLocalized(id, locale);
@@ -161,7 +170,15 @@ export class PreviewContentAPI implements ContentAPI {
     if (!isLocalizedEntry(data)) {
       throw new Error(`preview fetch ${id}/${locale}: malformed payload`);
     }
-    return data;
+    return this.withDraftMedia(data);
+  }
+
+  /** Only the endpoint's entries: the baseline's images are the build's own. */
+  private withDraftMedia(entry: LocalizedEntry): LocalizedEntry {
+    if (this.opts.media === undefined) return entry;
+    const rewritten: unknown = JSON.parse(rewriteDraftMedia(JSON.stringify(entry), this.opts.media));
+    // Only strings change, so the shape holds; the check keeps the type honest.
+    return isLocalizedEntry(rewritten) ? rewritten : entry;
   }
 
   async getContentAsBuffer(
@@ -202,7 +219,9 @@ export class PreviewContentAPI implements ContentAPI {
         headers: { authorization: `Bearer ${this.opts.ctx.jwt}` },
       });
       if (!response.ok) return;
-      const data: unknown = await response.json();
+      // Listing cards read the manifests' meta, so their draft images move too.
+      const text = await response.text();
+      const data: unknown = JSON.parse(this.opts.media === undefined ? text : rewriteDraftMedia(text, this.opts.media));
       if (Array.isArray(data)) this.branchManifests = data as ContentManifest[];
     } catch {
       // Network/parse failure — keep the baseline listing.
@@ -271,6 +290,42 @@ const WRITE_REJECTED_MESSAGE = 'preview SSR is read-only; edits must go through 
  */
 export function embeddedKey(id: string, locale: string): string {
   return `${id} ${locale}`;
+}
+
+/**
+ * Point a draft's images at the preview media route: every draft address, and every media-folder image link whose file
+ * the build did not deploy (committed on the branch only).
+ */
+export function rewriteDraftMedia(json: string, media: NonNullable<PreviewContentAPIOptions['media']>): string {
+  const target = `${media.route}/__media/`;
+  // A link starts the value, follows a delimiter or a JSON escape (`\n`): never inside another URL.
+  const start = '(?:(?<=\\\\[nrt])|(?<![\\w./-]))';
+  const drafted = json.replace(new RegExp(`${start}${escapeRegExp(DRAFT_MEDIA_REF_BASE)}/`, 'g'), target);
+  const { refBase, deployed } = media;
+  // Unbaked, or an empty base (the whole site root): only draft links are known to be media.
+  if (refBase === undefined || refBase === '' || deployed === undefined) return drafted;
+  // Media-folder links start the same way, and run to the next delimiter.
+  const links = new RegExp(`${start}${escapeRegExp(refBase)}/[^\\s"'\\\\()<>\\[\\]]+`, 'g');
+  return drafted.replace(links, (link) => {
+    const path = mediaRefPath(link, refBase);
+    if (path === undefined || link.startsWith(target) || deployed.has(path) || deployed.has(decodedPath(path))) {
+      return link;
+    }
+    return `${target}${path}`;
+  });
+}
+
+/** The file name a link names (`my%20pic.png` → `my pic.png`); a malformed escape is taken as written. */
+function decodedPath(path: string): string {
+  try {
+    return decodeURIComponent(path);
+  } catch {
+    return path;
+  }
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
 }
 
 /**

@@ -3,6 +3,7 @@
  * classify a request, answer the exit and send a failed load to the same retry page with these.
  */
 
+import { IMAGE_EXTENSION_MIME, mediaRefPath } from '@conloca/content-api/draft-media-ref';
 import { branchOfPreviewSlug } from '@conloca/content-api/editor-host';
 import { parseCookieValues } from './cookie.js';
 import { applyPreviewHeaders } from './headers.js';
@@ -28,7 +29,9 @@ export type PrefixRoute =
   | { kind: 'exit'; slug: string | undefined }
   /** The first segment is not a branch slug: an entry link without one, or a stray path. */
   | { kind: 'slugless'; inner: string; entering: boolean }
-  | { kind: 'slugged'; slug: string; rest: string[]; inner: string; route: string; page: URL; entering: boolean };
+  | { kind: 'slugged'; slug: string; rest: string[]; inner: string; route: string; page: URL; entering: boolean }
+  /** `<prefix>/<slug>/__media/<path>`: an image of the branch, served from the endpoint; `path` raw, query dropped. */
+  | { kind: 'media'; slug: string; path: string; route: string };
 
 /** Where a request falls under the preview route; `inner` is the page's own path, base included. */
 export function routePrefixed(url: URL, base: string, mode: 'd3' | 'd8'): PrefixRoute {
@@ -42,6 +45,9 @@ export function routePrefixed(url: URL, base: string, mode: 'd3' | 'd8'): Prefix
   if (branchOfPreviewSlug(first) === null)
     return { kind: 'slugless', inner: `${root}/${[first, ...rest].join('/')}`, entering };
   if (rest.length === 1 && rest[0] === '__exit') return { kind: 'exit', slug: first };
+  if (rest.length > 1 && rest[0] === '__media') {
+    return { kind: 'media', slug: first, path: rest.slice(1).join('/'), route: previewScope(mode, base, first).route };
+  }
   const inner = `${root}/${rest.join('/')}`;
   return {
     kind: 'slugged',
@@ -114,4 +120,78 @@ export function finishEntry(
   const moved = location === null ? null : previewHref(location, page, route, root, hosts);
   if (moved !== null) out.headers.set('location', moved);
   return out;
+}
+
+function notFound(): Response {
+  return applyPreviewHeaders(new Response(null, { status: 404 }));
+}
+
+/** A branch SVG opened at this same-origin URL must run no script: no sniffing, a sandboxed resource-free document. */
+const MEDIA_LOCKDOWN = {
+  'x-content-type-options': 'nosniff',
+  'content-security-policy': "default-src 'none'; sandbox",
+};
+
+/** A JWT's shape: three base64url parts. */
+const JWT_SHAPE = /^[\w-]+\.[\w-]+\.[\w-]+$/u;
+
+/**
+ * A branch image, read from the endpoint with the slug's pass. Anything but the image its path names (no pass, a path
+ * that is no image ref, a revoked grant, a page, a failing endpoint) is a bodiless 404: refused bytes never reach the page.
+ */
+export async function serveDraftMedia(
+  request: Request,
+  route: Extract<PrefixRoute, { kind: 'media' }>,
+  base: string,
+  endpoint: string,
+  fetchFn: typeof fetch,
+): Promise<Response> {
+  if (request.method !== 'GET' && request.method !== 'HEAD') return notFound();
+  const path = mediaRefPath(`/m/${route.path}`, '/m');
+  const extension = path?.slice(path.lastIndexOf('.') + 1).toLowerCase() ?? '';
+  const mime = Object.hasOwn(IMAGE_EXTENSION_MIME, extension) ? IMAGE_EXTENSION_MIME[extension] : undefined;
+  // D3 and d8 name the slug's pass alike. A planted `__Secure-` cookie can come first (`cookie.ts`), so two are tried.
+  const passes = parseCookieValues(request.headers.get('cookie'), previewScope('d8', base, route.slug).pass)
+    .filter((value) => JWT_SHAPE.test(value))
+    .slice(0, 2);
+  if (path === undefined || mime === undefined) return notFound();
+  const ifNoneMatch = request.headers.get('if-none-match');
+  for (const pass of passes) {
+    let upstream: Response;
+    try {
+      // oxlint-disable-next-line no-await-in-loop -- the second pass is read only when the first is refused.
+      upstream = await fetchFn(`${endpoint}/preview/media/${path}`, {
+        headers: { authorization: `Bearer ${pass}`, ...(ifNoneMatch === null ? {} : { 'if-none-match': ifNoneMatch }) },
+        redirect: 'manual',
+      });
+    } catch (error) {
+      console.error('@conloca/cloud-astro: the draft media read failed', error);
+      return notFound();
+    }
+    const etag = upstream.headers.get('etag');
+    const headers = new Headers(MEDIA_LOCKDOWN);
+    if (etag !== null) headers.set('etag', etag);
+    if (upstream.status === 304) return applyPreviewHeaders(new Response(null, { status: 304, headers }));
+    const type = upstream.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase();
+    if (upstream.status === 200 && type === mime) {
+      headers.set('content-type', mime);
+      return applyPreviewHeaders(new Response(upstream.body, { status: 200, headers }));
+    }
+    // oxlint-disable-next-line no-await-in-loop -- as above.
+    await upstream.body?.cancel().catch(() => undefined);
+  }
+  return notFound();
+}
+
+/**
+ * Astro's image endpoint never reaches the media route (Cloudflare's passthrough reads a local `href` from the static
+ * assets only), so an `href` under the route's `__media/` is sent there, where the pass is checked.
+ */
+export function mediaImageRedirect(url: URL, base: string, mode: 'd3' | 'd8'): Response | null {
+  const href = url.searchParams.get('href');
+  if (href === null || !href.startsWith('/') || href.startsWith('//')) return null;
+  const target = URL.parse(href, url.origin);
+  if (target === null || target.origin !== url.origin || routePrefixed(target, base, mode).kind !== 'media')
+    return null;
+  return applyPreviewHeaders(new Response(null, { status: 302, headers: { location: target.pathname } }));
 }
