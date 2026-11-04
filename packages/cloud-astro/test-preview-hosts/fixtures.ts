@@ -65,7 +65,7 @@ const STATIC_PATHS_PAGE = [
  * The CMS pages' layout: a local `<Image>` (rendered on demand only in a draft) and what the render saw, in `data-*`
  * attributes no link rewrite touches. Under i18n it adds the language switcher a site derives from `Astro.url`.
  */
-const LAYOUT = (i18n: boolean) =>
+export const LAYOUT = (i18n: boolean) =>
   [
     '---',
     "import { Image } from 'astro:assets';",
@@ -193,20 +193,40 @@ function astroBuild(cwd: string, env: Record<string, string>): Promise<{ status:
 
 /**
  * Writes and builds `<adapter>-<shape>` under `tmp/d8/`, with preview (d8) on or off; `copy` names a second build of
- * the same fixture, `env` the deploy settings it builds with (e.g. `VERCEL_ENV`). Throws when the build fails.
+ * the same fixture, `env` the deploy settings it builds with (e.g. `VERCEL_ENV`), `endpoint` the Conloca it calls,
+ * `files` extra site files and `beforeBuild` what runs in the written site before its build. Throws when the build fails.
  */
 export async function buildFixture(
   adapter: Adapter,
   shape: Shape,
-  { preview, copy = '', env = {} }: { preview: boolean; copy?: string; env?: Record<string, string> },
+  {
+    preview,
+    copy = '',
+    env = {},
+    endpoint,
+    files = {},
+    beforeBuild,
+  }: {
+    preview: boolean;
+    copy?: string;
+    env?: Record<string, string>;
+    endpoint?: string;
+    files?: Record<string, string | Uint8Array>;
+    beforeBuild?: (dir: string) => Promise<void>;
+  },
 ): Promise<BuiltFixture> {
   const name = `d8-${adapter}-${shape}-${preview ? 'preview' : 'plain'}${copy}`;
+  const options = shapeOptions(adapter, shape);
   const dir = await createFixtureSite(name, {
-    ...shapeOptions(adapter, shape),
-    integrationOptions: `{ repoUri: 'acme/fixture'${preview ? ', previewBuild: {}' : ''} }`,
+    ...options,
+    extraFiles: { ...options.extraFiles, ...files },
+    integrationOptions: `{ repoUri: 'acme/fixture'${preview ? ', previewBuild: {}' : ''}${
+      endpoint === undefined ? '' : `, endpoint: ${JSON.stringify(endpoint)}`
+    } }`,
   });
   // The base fixture's own about page: here `/about` is a CMS page.
   await rm(join(dir, 'src/pages/about.astro'));
+  await beforeBuild?.(dir);
   const start = performance.now();
   const { status, log } = await astroBuild(dir, env);
   const ms = Math.round(performance.now() - start);
