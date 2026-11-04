@@ -214,9 +214,13 @@ export function createPreviewSiteMiddleware(resolveOpts: () => PreviewMiddleware
       return stay(new Response(null, { status: 302, headers: { location: status.target } }));
     }
 
-    // A page the site prerendered itself stays in the preview with its published bytes; unreadable, it goes out.
+    // A page the site prerendered itself stays in the preview with its published bytes; unreadable, it goes out. With
+    // draft changes at the path, only a site route's own file stays (production serves it there by route priority); a
+    // page the list only matched to a route may be a CMS page listed by mistake, so its draft renders.
     const sitePages = seams.sitePages ?? NO_SITE_PAGES;
-    if (d8 !== null && (await sitePages.has(path))) {
+    const sitePage =
+      d8 !== null && (status.kind === 'changed' ? await sitePages.exact(path) : await sitePages.has(path));
+    if (d8 !== null && sitePage) {
       const page = await sitePages.read(path);
       const type = page?.headers.get('content-type') ?? '';
       if (page === null || page.status !== 200 || !type.includes('text/html')) {

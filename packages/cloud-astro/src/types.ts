@@ -1,32 +1,29 @@
 import type { AstroIntegration } from 'astro';
 
 /**
- * The second build that serves draft previews. Off unless given as an object. A static site's preview server runs on
- * Cloudflare Workers under `/_conloca/preview/` next to the site (it needs `@astrojs/cloudflare` installed); a site
- * with an adapter serves drafts from its own server deploy; `separate: true` builds a separate preview deploy.
- * Refused under `@astrojs/vercel` and `@astrojs/netlify`.
+ * Draft previews. Off unless given as an object. A static site's preview server is a second build that runs on
+ * Cloudflare Workers under `/_conloca/preview/` next to the site (D3; it needs `@astrojs/cloudflare` installed); a site
+ * with an adapter renders drafts in its own build (D8); `separate: true` builds a separate preview deploy (D4).
+ * `config`, `outDir` and `required` belong to D3 and D4 only (a D8 build warns they have no effect). `separate` is
+ * refused under `@astrojs/vercel` and `@astrojs/netlify`.
  */
 export interface PreviewBuildOptions {
-  /**
-   * Optional alternative Astro adapter to use for the preview build.
-   * Falls back to the project's default adapter when omitted.
-   */
+  /** Refused: drafts render through the adapter in astro.config. Kept in the type so the refusal can name it. */
   adapter?: AstroIntegration;
   /**
-   * Adapter-specific config overrides forwarded to the recursive build.
+   * Adapter-specific config overrides forwarded to the D3 or D4 preview build.
    */
   config?: Record<string, unknown>;
   /**
-   * Output directory for the preview build. Defaults to `.conloca/preview-server`
+   * Output directory for the D3 or D4 preview build. Defaults to `.conloca/preview-server`
    * — outside `dist/`, so the preview server can never ride a wholesale static
    * upload of the site and Astro's dist-clearing cannot wipe it.
    */
   outDir?: string;
   /**
-   * If true, fail the site's build when a D2 preview build fails. Defaults to true; set false while setting up.
-   * A failed D3 preview build fails the site's build only when its server also serves the live site (`run_worker_first`
-   * lists routes beyond the preview route, or `not_found_handling` is `"none"`); otherwise the site ships and its
-   * preview route answers "preview unavailable". This option changes neither.
+   * Changes nothing in D3 or D4. A failed D3 preview build fails the site's build only when its server also serves
+   * the live site (`run_worker_first` lists routes beyond the preview route, or `not_found_handling` is `"none"`);
+   * otherwise the site ships and its preview route answers "preview unavailable". A D4 build is its deploy's own.
    */
   required?: boolean;
   /**

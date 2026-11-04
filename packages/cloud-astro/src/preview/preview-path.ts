@@ -69,7 +69,12 @@ export function previewRoutePrefix(base: string): string {
 /** The `run_worker_first` entries that belong to the preview, not the site: its route, and the image endpoint drafts use. */
 export function previewOwnEntries(base: string): string[] {
   const prefix = previewRoutePrefix(base);
-  return [prefix, `${prefix}/*`, `${base.replace(/\/+$/u, '')}/_image`];
+  return [prefix, `${prefix}/*`, imageEndpointEntry(base)];
+}
+
+/** Astro's image endpoint at the base (`'/docs/'` → `/docs/_image`). */
+export function imageEndpointEntry(base: string): string {
+  return `${base.replace(/\/+$/u, '')}/_image`;
 }
 
 /**

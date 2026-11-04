@@ -21,7 +21,16 @@ export interface BakedPreviewOpts {
   /** D8: Astro's `trailingSlash` and `build.format`, for the links the draft render moves under the route. */
   trailingSlash?: 'always' | 'never' | 'ignore';
   buildFormat?: 'directory' | 'file' | 'preserve';
+  /** D8: where the render reads the pages the site prerendered itself (`./site-page-sources.ts`). */
+  sitePages?: BakedSitePages;
 }
+
+/** Node reads its own disk; Cloudflare its assets; Vercel and Netlify the function's list and, on production, the site. */
+export type BakedSitePages =
+  | { kind: 'disk'; serverEntry: string }
+  | { kind: 'assets' }
+  | { kind: 'function'; serverEntry: string; origin: string | null }
+  | { kind: 'none' };
 
 /** A value only the build can bake; the deployment cannot supply it. */
 function bakedOnly(name: string, bakedValue: string | undefined): string {

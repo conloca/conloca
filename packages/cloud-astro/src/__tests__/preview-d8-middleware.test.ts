@@ -118,10 +118,12 @@ describe('createD8Middleware', () => {
     expect(h.nexts()).toBe(0);
   });
 
-  it('image passes through', async () => {
+  it('image passes through, with the preview headers whatever endpoint answers', async () => {
     const h = harness();
     const answer = await h.run('https://site.test/_conloca/preview/_image?href=/a.png', { headers: held });
     expect(await answer.text()).toBe('published');
+    // Cloudflare's passthrough endpoint sets none of its own.
+    expectPreviewHeaders(answer);
     expect(h.nexts()).toBe(1);
     expect(h.loads()).toBe(0);
   });

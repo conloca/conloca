@@ -5,7 +5,7 @@ import { existsSync, realpathSync } from 'node:fs';
 import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { AstroI18nLocales } from '@conloca/astro-cms/checks';
 import { EDITOR_PAGE_INFO_FORMATS, type EditorHostPageData, isEditorPageInfo } from '@conloca/content-api/editor-host';
 import { buildSandboxSrcdoc } from '@conloca/mdx/sandbox-frame';
@@ -131,6 +131,7 @@ interface ConfigHookArgs {
     srcDir?: URL;
     output?: 'static' | 'server';
     i18n?: AstroI18nLocales;
+    build?: { format?: 'directory' | 'file' | 'preserve'; server?: URL; client?: URL; serverEntry?: string };
   };
   injectRoute?: (route: { pattern: string }) => void;
   updateConfig?: (update: ConfigUpdate) => void;
@@ -166,6 +167,29 @@ function isBuildDoneHook(hook: unknown): hook is BuildDoneHook {
   return typeof hook === 'function';
 }
 
+function isSsrHook(hook: unknown): hook is (args: { middlewareEntryPoint: URL | undefined }) => void {
+  return typeof hook === 'function';
+}
+
+function isRoutesHook(
+  hook: unknown,
+): hook is (args: { routes: ConfigRun['routes']; logger: AstroIntegrationLogger }) => void {
+  return typeof hook === 'function';
+}
+
+/** A Vercel adapter whose astro:config:done resolves `mode`, or throws without one. */
+function vercelAdapter(mode?: 'classic' | 'edge'): AstroIntegration {
+  return {
+    name: '@astrojs/vercel',
+    hooks: {
+      'astro:config:done': ({ setAdapter }) => {
+        if (mode === undefined) throw new Error('the probe failed');
+        setAdapter({ name: '@astrojs/vercel', supportedAstroFeatures: {}, adapterFeatures: { middlewareMode: mode } });
+      },
+    },
+  };
+}
+
 /** A config hook of the integration, called with only the fields it reads. */
 function configHook(hooks: AstroIntegration['hooks'], name: 'astro:config:setup' | 'astro:config:done'): ConfigHook {
   const hook = hooks[name];
@@ -182,6 +206,13 @@ interface ConfigRun {
   srcDir?: URL;
   output?: 'static' | 'server';
   i18n?: AstroI18nLocales;
+  build?: { server: URL };
+  /** The logger config:setup gets, for cases that read its warnings. */
+  logger?: AstroIntegrationLogger;
+  /** Records the name of each registration config:setup makes (injectRoute, addMiddleware, updateConfig). */
+  registered?: string[];
+  /** The routes `astro:routes:resolved` hands over, after the config hooks; omitted, it never fires. */
+  routes?: { pattern: string; isPrerendered: boolean; origin: string; entrypoint: string; type: string }[];
 }
 /**
  * Runs the config hooks the way `astro <command>` does (`astro build` unless
@@ -191,25 +222,44 @@ interface ConfigRun {
 async function runConfigHooks(
   hooks: AstroIntegration['hooks'],
   root: URL,
-  { command = 'build', vite = {}, adapter, base, ...config }: ConfigRun = {},
+  { command = 'build', vite = {}, adapter, base, logger = makeLogger(), registered = [], ...config }: ConfigRun = {},
 ): Promise<void> {
   await configHook(
     hooks,
     'astro:config:setup',
   )({
-    logger: makeLogger(),
+    logger,
     command,
-    config: { root },
-    injectRoute: () => undefined,
-    updateConfig: () => undefined,
-    addMiddleware: () => undefined,
+    // The project's own adapter is in its config before any hook runs.
+    config: {
+      root,
+      srcDir: config.srcDir ?? new URL('src/', root),
+      output: config.output ?? 'static',
+      build: { format: 'directory' },
+      ...(adapter ? { adapter } : {}),
+    },
+    injectRoute: () => registered.push('injectRoute'),
+    updateConfig: () => registered.push('updateConfig'),
+    addMiddleware: () => registered.push('addMiddleware'),
   });
   await configHook(
     hooks,
     'astro:config:done',
   )({
     logger: makeLogger(),
-    config: { vite, ...(adapter ? { adapter } : {}), ...(base === undefined ? {} : { base }), ...config },
+    config: {
+      vite,
+      root,
+      ...(adapter ? { adapter } : {}),
+      ...(base === undefined ? {} : { base }),
+      ...config,
+      // Astro's own build paths; a case may move the server build.
+      build: {
+        server: config.build?.server ?? new URL('server/', root),
+        client: new URL('client/', root),
+        serverEntry: 'entry.mjs',
+      },
+    },
   });
 }
 
@@ -218,12 +268,31 @@ async function runConfigHooks(
  * the project root (the directory holding `dir`) and the site's Vite config,
  * which build:done compiles siteStyles with.
  */
-function buildDoneHook(options: ConlocaCloudOptions, run: ConfigRun = {}): BuildDoneHook {
+function buildDoneHook(options: ConlocaCloudOptions, { routes, ...run }: ConfigRun = {}): BuildDoneHook {
   const { hooks } = conlocaCloud(options);
   return async ({ dir, logger }) => {
     await runConfigHooks(hooks, new URL('./', dir), run);
+    if (routes !== undefined) {
+      const resolved = hooks['astro:routes:resolved'];
+      if (!isRoutesHook(resolved)) throw new Error('the integration has no astro:routes:resolved hook');
+      resolved({ routes, logger: run.logger ?? makeLogger() });
+    }
     await (hooks['astro:build:done'] as BuildDoneHook)({ dir, logger });
   };
+}
+
+/** A resolved route as `astro:routes:resolved` hands it over, as far as the integration reads it. */
+function resolvedRoute(pattern: string, entrypoint: string, origin: string) {
+  return { pattern, entrypoint, origin, isPrerendered: false, type: 'page' };
+}
+
+/** What `astro:routes:resolved` hands a static site under d8, plus the site's own on-demand `extra` patterns. */
+function resolvedRoutes(...extra: { pattern: string; entrypoint: string }[]) {
+  return [
+    resolvedRoute('/_conloca/preview/[...path]', 'x/internal/preview-page-handler.astro', 'external'),
+    resolvedRoute('/404', 'astro-default-404.astro', 'internal'),
+    ...extra.map(({ pattern, entrypoint }) => resolvedRoute(pattern, entrypoint, 'project')),
+  ];
 }
 
 /** Tiny but bundle-able puck config entry for pipeline tests. */
@@ -319,17 +388,18 @@ describe('conlocaCloud — integration shape', () => {
     expect(conlocaCloud(validOptions()).name).toBe(PACKAGE_NAME);
   });
 
-  it('registers exactly the config:setup, config:done, route:setup and build:done hooks', () => {
+  it('registers exactly the config:setup, config:done, route:setup, build:ssr and build:done hooks', () => {
     const integration = conlocaCloud(validOptions());
     // route:setup forces preview-build routes on demand so middleware can run;
     // it no-ops entirely outside the preview build. config:done captures the
     // finalized adapter name for style discovery and the site's Vite config
-    // for compiling siteStyles. No build:ssr hook: the manifest is never
-    // reordered — Astro resolves stylesheets by route name, so the CMS route
-    // must carry a name no other route uses (astro-cms enforces that at
-    // astro:routes:resolved).
+    // for compiling siteStyles. build:ssr only asserts that d8 emitted no edge
+    // middleware; it never reorders the manifest — Astro resolves stylesheets
+    // by route name, so the CMS route must carry a name no other route uses
+    // (astro-cms enforces that at astro:routes:resolved).
     expect(Object.keys(integration.hooks).sort()).toEqual([
       'astro:build:done',
+      'astro:build:ssr',
       'astro:config:done',
       'astro:config:setup',
       'astro:route:setup',
@@ -465,6 +535,14 @@ describe('conlocaCloud — astro:config:setup preview build config', () => {
     process.env.CF_PAGES_BRANCH = 'main';
   });
   afterEach(() => restore());
+  // A static site's preview build resolves @astrojs/cloudflare from the site and writes its wrangler file there.
+  let siteRoot: URL;
+  beforeEach(async () => {
+    const root = await mkdtemp(join(tmpdir(), 'preview-child-'));
+    await symlink(new URL('../../node_modules', import.meta.url).pathname, join(root, 'node_modules'));
+    siteRoot = pathToFileURL(`${root}/`);
+  });
+  afterEach(async () => rm(siteRoot, { recursive: true, force: true }));
 
   const fakeAdapter = { name: 'fake-ssr-adapter', hooks: {} };
   const CMS_PAGES = 'node_modules/@conloca/astro-cms/dist/internal/page-handler.astro';
@@ -491,7 +569,7 @@ describe('conlocaCloud — astro:config:setup preview build config', () => {
       injectRoute: () => undefined,
       updateConfig: (update) => updates.push(update),
       addMiddleware: () => undefined,
-      config: { adapter: opts.configAdapter, root: opts.root ?? new URL('file:///tmp/site/') },
+      config: { adapter: opts.configAdapter, root: opts.root ?? siteRoot },
     });
     return { updates, integration };
   }
@@ -502,7 +580,7 @@ describe('conlocaCloud — astro:config:setup preview build config', () => {
       prerenderedKey('/rss.xml', 'src/pages/rss.xml.js'),
       prerenderedKey('/[...path]', CMS_PAGES),
     ]);
-    const { integration } = await runPreviewConfigSetup({ previewBuild: { adapter: fakeAdapter } });
+    const { integration } = await runPreviewConfigSetup({});
     const page = { component: 'src/pages/blog/[slug].astro', route: '/blog/[slug]', prerender: false };
     await integration.hooks['astro:route:setup']?.({ route: page, logger: makeLogger() });
     expect(page.prerender).toBe(true);
@@ -520,7 +598,7 @@ describe('conlocaCloud — astro:config:setup preview build config', () => {
 
   it("leaves a D3 child's own on-demand routes on demand", async () => {
     d3Child([prerenderedKey('/about', 'src/pages/about.astro')]);
-    const { integration } = await runPreviewConfigSetup({ previewBuild: { adapter: fakeAdapter } });
+    const { integration } = await runPreviewConfigSetup({});
     const api = { component: 'src/api-ping.ts', route: '/api/ping', type: 'endpoint', prerender: false };
     await integration.hooks['astro:route:setup']?.({ route: api, logger: makeLogger() });
     expect(api.prerender).toBe(false);
@@ -528,7 +606,7 @@ describe('conlocaCloud — astro:config:setup preview build config', () => {
 
   it('matches what the site prerendered by pattern and component, so one entrypoint at two patterns stays apart', async () => {
     d3Child([prerenderedKey('/feed.json', 'src/feed.ts')]);
-    const { integration } = await runPreviewConfigSetup({ previewBuild: { adapter: fakeAdapter } });
+    const { integration } = await runPreviewConfigSetup({});
     const published = { component: 'src/feed.ts', route: '/feed.json', type: 'endpoint', prerender: false };
     await integration.hooks['astro:route:setup']?.({ route: published, logger: makeLogger() });
     expect(published.prerender).toBe(true);
@@ -539,7 +617,7 @@ describe('conlocaCloud — astro:config:setup preview build config', () => {
 
   it("keeps a static site's D4 pages prerendered, so getStaticPaths pages keep their props, and its on-demand endpoints on demand", async () => {
     // A separate preview deploy: built with the flag alone, no site build before it.
-    const { integration } = await runPreviewConfigSetup({ previewBuild: { adapter: fakeAdapter } });
+    const { integration } = await runPreviewConfigSetup({});
     const page = { component: 'src/pages/blog/[slug].astro', route: '/blog/[slug]', type: 'page', prerender: false };
     await integration.hooks['astro:route:setup']?.({ route: page, logger: makeLogger() });
     expect(page.prerender).toBe(true);
@@ -558,9 +636,9 @@ describe('conlocaCloud — astro:config:setup preview build config', () => {
     expect(entry.prerender).toBe(false);
   });
 
-  it("keeps a D2 child's injected on-demand route on demand (an /mcp route on a static site)", async () => {
-    process.env.CONLOCA_PREVIEW_MODE = 'd2';
-    const { integration } = await runPreviewConfigSetup({ previewBuild: { adapter: fakeAdapter } });
+  it("keeps a D3 child's own on-demand route on demand (an /mcp route on a static site)", async () => {
+    process.env.CONLOCA_PREVIEW_MODE = 'd3';
+    const { integration } = await runPreviewConfigSetup({});
     const mcp = { component: 'src/server-routes/mcp.ts', type: 'endpoint', prerender: false };
     await integration.hooks['astro:route:setup']?.({ route: mcp, logger: makeLogger() });
     expect(mcp.prerender).toBe(false);
@@ -573,15 +651,15 @@ describe('conlocaCloud — astro:config:setup preview build config', () => {
     expect(page.prerender).toBe(false);
   });
 
-  it('switches the preview build to server output with the previewBuild adapter and a separate outDir', async () => {
-    const { updates } = await runPreviewConfigSetup({ previewBuild: { adapter: fakeAdapter as never } });
+  it("switches a static site's preview build to server output on the Cloudflare adapter and a separate outDir", async () => {
+    const { updates } = await runPreviewConfigSetup({});
     expect(updates).toHaveLength(1);
     expect(updates[0].output).toBe('server');
     // The adapter rides in both as `adapter` (the build gate reads
     // config.adapter) and as an integration (only its own config:done hook
     // calls setAdapter, which the render pipeline requires).
-    expect(updates[0].adapter).toBe(fakeAdapter);
-    expect(updates[0].integrations).toEqual([fakeAdapter]);
+    expect(updates[0].adapter).toHaveProperty('name', '@astrojs/cloudflare');
+    expect(updates[0].integrations).toEqual([updates[0].adapter]);
     // OUTSIDE dist/ on purpose: a wholesale static upload of dist/ must never
     // publish the preview server — and Astro clears dist/ at the start of a
     // build, which would wipe a sibling artifact parked inside it.
@@ -589,7 +667,7 @@ describe('conlocaCloud — astro:config:setup preview build config', () => {
     expect(String(updates[0].outDir)).not.toContain('dist/');
   });
 
-  it('inherits the project adapter when previewBuild.adapter is omitted', async () => {
+  it('inherits the project adapter', async () => {
     const projectAdapter = { name: 'project-ssr-adapter', hooks: {} };
     const { updates } = await runPreviewConfigSetup({ configAdapter: projectAdapter });
     expect(updates).toHaveLength(1);
@@ -599,9 +677,7 @@ describe('conlocaCloud — astro:config:setup preview build config', () => {
   });
 
   it('honors a previewBuild.outDir override', async () => {
-    const { updates } = await runPreviewConfigSetup({
-      previewBuild: { adapter: fakeAdapter as never, outDir: 'dist/custom_preview' },
-    });
+    const { updates } = await runPreviewConfigSetup({ previewBuild: { outDir: 'dist/custom_preview' } });
     expect(String(updates[0].outDir)).toContain('dist/custom_preview');
   });
 
@@ -611,7 +687,7 @@ describe('conlocaCloud — astro:config:setup preview build config', () => {
     // adapter's Rollup pass fails the whole child build on it unless it is
     // externalized. At runtime off Cloudflare Workers the import rejects and
     // the middleware falls back to the global fetch.
-    const { updates } = await runPreviewConfigSetup({ previewBuild: { adapter: fakeAdapter as never } });
+    const { updates } = await runPreviewConfigSetup({ configAdapter: fakeAdapter });
     const external = (updates[0].vite as { build?: { rollupOptions?: { external?: RegExp[] } } }).build?.rollupOptions
       ?.external;
     expect(external?.some((pattern) => pattern instanceof RegExp && pattern.test('cloudflare:workers'))).toBe(true);
@@ -621,8 +697,7 @@ describe('conlocaCloud — astro:config:setup preview build config', () => {
     // Starlight renders Steps/Tabs/FileTree with satteri's htmlToHast, and
     // satteri's Cloudflare Workers binding can be neither installed nor run on workerd —
     // without the alias the child build fails to resolve it.
-    const cloudflareAdapter = { name: '@astrojs/cloudflare', hooks: {} };
-    const { updates } = await runPreviewConfigSetup({ previewBuild: { adapter: cloudflareAdapter as never } });
+    const { updates } = await runPreviewConfigSetup({});
     const alias = (updates[0].vite as { resolve?: { alias?: { find: RegExp; replacement: string }[] } }).resolve?.alias;
     const satteri = alias?.find((entry) => entry.find.test('satteri'));
     // An absolute file path: a bare package name would be resolved from the
@@ -637,7 +712,7 @@ describe('conlocaCloud — astro:config:setup preview build config', () => {
   });
 
   it('keeps the real satteri package on every other adapter', async () => {
-    const { updates } = await runPreviewConfigSetup({ previewBuild: { adapter: fakeAdapter as never } });
+    const { updates } = await runPreviewConfigSetup({ configAdapter: fakeAdapter });
     const alias = (updates[0].vite as { resolve?: { alias?: { find: RegExp }[] } }).resolve?.alias ?? [];
     expect(alias.some((entry) => entry.find.test('satteri'))).toBe(false);
   });
@@ -652,7 +727,8 @@ describe('conlocaCloud — astro:config:setup preview build config', () => {
       vite: { resolve: { alias: { '@tiptap/html': '@tiptap/html/server' } } },
     };
     const { updates } = await runPreviewConfigSetup({
-      previewBuild: { adapter: fakeAdapter as never, config: userConfig as never },
+      configAdapter: fakeAdapter,
+      previewBuild: { config: userConfig },
     });
     expect(updates).toHaveLength(2);
     expect(updates[0]).toEqual(userConfig);
@@ -663,28 +739,24 @@ describe('conlocaCloud — astro:config:setup preview build config', () => {
   });
 
   it('fails with a setup diagnostic when no SSR adapter is available anywhere', async () => {
-    await expect(runPreviewConfigSetup({})).rejects.toThrow(/adapter/i);
+    await expect(runPreviewConfigSetup({ root: new URL('file:///tmp/site/') })).rejects.toThrow(/adapter/i);
   });
 
-  it('fails fast when previewBuild.adapter is set on a project that already has an adapter', async () => {
-    // Astro allows exactly one deployment integration. Adding
-    // previewBuild.adapter next to the project's own would make the child
-    // build die on Astro's adapter-conflict error, which names neither
-    // conlocaCloud nor the option — fail here with the actual cause instead.
-    // The child build inherits the project adapter, so the option is simply
-    // unnecessary on SSR projects.
-    const projectAdapter = { name: 'project-ssr-adapter', hooks: {} };
+  it('refuses previewBuild.adapter in the preview build', async () => {
     await expect(
-      runPreviewConfigSetup({
-        previewBuild: { adapter: fakeAdapter as never },
-        configAdapter: projectAdapter,
-      }),
-    ).rejects.toThrow(/project-ssr-adapter.*previewBuild\.adapter|previewBuild\.adapter.*project-ssr-adapter/s);
+      runPreviewConfigSetup({ previewBuild: { adapter: fakeAdapter }, configAdapter: fakeAdapter }),
+    ).rejects.toThrow('previewBuild.adapter has no effect');
+  });
+
+  it('refuses a separate preview deploy under @astrojs/vercel, opted in or not', async () => {
+    await expect(
+      runPreviewConfigSetup({ previewBuild: {}, configAdapter: { name: '@astrojs/vercel', hooks: {} } }),
+    ).rejects.toThrow('previewBuild.separate is not supported with @astrojs/vercel');
   });
 
   it('does not touch the config outside the recursive preview build', async () => {
     delete process.env[PREVIEW_BUILD_ENV_FLAG];
-    const { updates } = await runPreviewConfigSetup({ previewBuild: { adapter: fakeAdapter as never } });
+    const { updates } = await runPreviewConfigSetup({ previewBuild: {} });
     expect(updates).toEqual([]);
   });
 });
@@ -709,12 +781,14 @@ describe('conlocaCloud — astro:build:done recursion guard', () => {
   it('short-circuits when CONLOCA_PREVIEW_BUILD=1 to prevent recursive-build loops', async () => {
     process.env[PREVIEW_BUILD_ENV_FLAG] = '1';
     process.env.CF_PAGES_BRANCH = 'main';
-    // The parent names the child's mode; with the flag alone the child is a separate preview deploy (D4).
-    process.env.CONLOCA_PREVIEW_MODE = 'd2';
+    // The parent names the child's mode; with the flag alone the child is a separate preview deploy (D4). The
+    // project's own adapter spares the child the Cloudflare one.
+    process.env.CONLOCA_PREVIEW_MODE = 'd3';
     const logger = makeLogger();
-    // The child build of a static site: its config:setup needs the preview adapter.
-    const previewBuild = { adapter: { name: 'fake-ssr-adapter', hooks: {} } };
-    await buildDoneHook(validOptions({ puckConfigPath: buildDir.entry, siteId: 'website', previewBuild }))({
+    const previewBuild = {};
+    await buildDoneHook(validOptions({ puckConfigPath: buildDir.entry, siteId: 'website', previewBuild }), {
+      adapter: { name: 'project-ssr-adapter', hooks: {} },
+    })({
       dir: buildDir.dist,
       logger,
     });
@@ -838,12 +912,14 @@ describe('conlocaCloud — astro:build:done preview-build wiring', () => {
     // object: the outer short-circuit must win and stop spawning.
     process.env[PREVIEW_BUILD_ENV_FLAG] = '1';
     process.env.CF_PAGES_BRANCH = 'main';
-    // The parent names the child's mode; with the flag alone the child is a separate preview deploy (D4).
-    process.env.CONLOCA_PREVIEW_MODE = 'd2';
+    // The parent names the child's mode; with the flag alone the child is a separate preview deploy (D4). The
+    // project's own adapter spares the child the Cloudflare one.
+    process.env.CONLOCA_PREVIEW_MODE = 'd3';
     const logger = makeLogger();
-    // The child build of a static site: its config:setup needs the preview adapter.
-    const previewBuild = { adapter: { name: 'fake-ssr-adapter', hooks: {} } };
-    await buildDoneHook(validOptions({ puckConfigPath: buildDir.entry, siteId: 'website', previewBuild }))({
+    const previewBuild = {};
+    await buildDoneHook(validOptions({ puckConfigPath: buildDir.entry, siteId: 'website', previewBuild }), {
+      adapter: { name: 'project-ssr-adapter', hooks: {} },
+    })({
       dir: buildDir.dist,
       logger,
     });
@@ -876,15 +952,6 @@ describe('conlocaCloud — the preview build is opt-in', () => {
     expect(spawned).toEqual([]);
   });
 
-  it('starts it when previewBuild is an object and an adapter exists', async () => {
-    const previewBuild = { adapter: { name: '@astrojs/cloudflare', hooks: {} } };
-    await buildDoneHook(validOptions({ puckConfigPath: buildDir.entry, siteId: 'default', previewBuild }))({
-      dir: buildDir.dist,
-      logger: makeLogger(),
-    });
-    expect(spawned).toEqual([previewBuild]);
-  });
-
   it('builds a Vercel or Netlify site that does not opt in', async () => {
     for (const [adapter, previewBuild] of [
       ['@astrojs/vercel', undefined],
@@ -901,13 +968,18 @@ describe('conlocaCloud — the preview build is opt-in', () => {
     expect(spawned).toEqual([]);
   });
 
-  it('refuses previewBuild under @astrojs/vercel at config time', async () => {
-    const { hooks } = conlocaCloud(validOptions({ previewBuild: {} }));
-    await Promise.resolve(
-      expect(
-        runConfigHooks(hooks, pathToFileURL(`${buildDir.root}/`), { adapter: { name: '@astrojs/vercel', hooks: {} } }),
-      ).rejects.toThrow('previewBuild is not supported with @astrojs/vercel yet'),
-    );
+  it('turns preview off, with a warning, for a separate preview build under @astrojs/vercel', async () => {
+    const logger = makeLogger();
+    const { hooks } = conlocaCloud(validOptions({ previewBuild: { separate: true } }));
+    await runConfigHooks(hooks, pathToFileURL(`${buildDir.root}/`), {
+      adapter: { name: '@astrojs/vercel', hooks: {} },
+      logger,
+    });
+    expect(logger.messages.filter((m) => m.level === 'warn').map((m) => m.msg)).toEqual([
+      'preview is off for this build: @conloca/cloud-astro: previewBuild.separate is not supported with ' +
+        '@astrojs/vercel: the separate preview build would write its output where @astrojs/vercel deploys the live ' +
+        "site. Remove separate: true; with @astrojs/vercel drafts render in the site's own build.",
+    ]);
     expect(spawned).toEqual([]);
   });
 
@@ -961,6 +1033,16 @@ describe('conlocaCloud — the editor page', () => {
   /** A CMS-less build: no content root, so siteId comes from the option. */
   function pageOptions(overrides: Partial<ConlocaCloudOptions> = {}): ConlocaCloudOptions {
     return validOptions({ puckConfigPath: buildDir.entry, previewBuild: false, siteId: 'default', ...overrides });
+  }
+
+  /** What a d8 site build needs to serve drafts: a branch to bake and astro-cms installed. */
+  async function d8Site(): Promise<void> {
+    process.env.CF_PAGES_BRANCH = 'main';
+    await mkdir(join(buildDir.root, 'node_modules', '@conloca'), { recursive: true });
+    await symlink(
+      fileURLToPath(new URL('../../node_modules/@conloca/astro-cms', import.meta.url)),
+      join(buildDir.root, 'node_modules', '@conloca', 'astro-cms'),
+    );
   }
 
   /** The written index.html, its JSON block and conloca.json. */
@@ -1140,13 +1222,302 @@ describe('conlocaCloud — the editor page', () => {
     expect((await readPage()).info).not.toHaveProperty('branchDeploys');
   });
 
-  it('names the preview mode and protocol in conloca.json: d2 when the preview build runs, off when it does not', async () => {
-    const previewBuild = { adapter: { name: '@astrojs/cloudflare', hooks: {} } };
-    await buildDoneHook(pageOptions({ previewBuild }))({ dir: buildDir.dist, logger: makeLogger() });
-    expect((await readPage()).info).toHaveProperty('preview', { mode: 'd2', protocol: 2 });
+  it('names the preview mode and protocol in conloca.json: d8 under an adapter, with no preview build, off when not opted in', async () => {
+    await d8Site();
+    await buildDoneHook(pageOptions({ previewBuild: {} }), { adapter: { name: '@astrojs/node', hooks: {} } })({
+      dir: buildDir.dist,
+      logger: makeLogger(),
+    });
+    expect((await readPage()).info).toHaveProperty('preview', { mode: 'd8', protocol: 2 });
+    expect(spawned).toEqual([]);
     await rm(join(buildDir.distPath, '_conloca'), { recursive: true });
     await buildDoneHook(pageOptions())({ dir: buildDir.dist, logger: makeLogger() });
     expect((await readPage()).info).toHaveProperty('preview', { mode: 'off', protocol: 2 });
+  });
+
+  it('builds with preview off when a separate preview build is refused under @astrojs/vercel', async () => {
+    await buildDoneHook(pageOptions({ previewBuild: { separate: true } }), {
+      adapter: { name: '@astrojs/vercel', hooks: {} },
+    })({ dir: buildDir.dist, logger: makeLogger() });
+    expect((await readPage()).info).toHaveProperty('preview', { mode: 'off', protocol: 2 });
+    expect(spawned).toEqual([]);
+  });
+
+  it('warns that previewBuild.outDir has no effect under d8', async () => {
+    await d8Site();
+    const logger = makeLogger();
+    await buildDoneHook(pageOptions({ previewBuild: { outDir: 'x' } }), {
+      adapter: { name: '@astrojs/node', hooks: {} },
+      logger,
+    })({ dir: buildDir.dist, logger: makeLogger() });
+    expect(logger.messages.filter((m) => m.level === 'warn').map((m) => m.msg)).toEqual([
+      "previewBuild.outDir has no effect on this site: drafts render in the site's own build",
+    ]);
+  });
+
+  const EDGE =
+    "draft preview does not run in edge middleware (middlewareMode: 'edge' / edgeMiddleware): its middleware does not bundle into the edge function, and the adapter serializes locals to JSON. Remove the option to turn preview on.";
+  const UNREADABLE =
+    "couldn't read middlewareMode from astro.config; write the @astrojs/vercel options literally to turn preview on.";
+  const ISR =
+    '@astrojs/vercel isr caches /_conloca/preview/ by path, ignoring the preview cookie, so drafts could be served to anyone. Add the prefix to isr.exclude in astro.config: isr: { exclude: [/^\\/_conloca\\/preview(\\/.*)?$/] }';
+
+  async function astroConfig(adapterCall: string): Promise<void> {
+    await writeFile(
+      join(buildDir.root, 'astro.config.mjs'),
+      `import vercel from '@astrojs/vercel';\nexport default { adapter: ${adapterCall} };\n`,
+    );
+  }
+
+  /** Runs config:setup and build:done under d8; returns setup's warnings, the registrations and conloca.json's mode. */
+  async function build(adapter: AstroIntegration, buildLogger = makeLogger(), run: ConfigRun = {}) {
+    await d8Site();
+    const logger = makeLogger();
+    const registered: string[] = [];
+    await buildDoneHook(pageOptions({ previewBuild: {} }), { ...run, adapter, logger, registered })({
+      dir: buildDir.dist,
+      logger: buildLogger,
+    });
+    const warnings = logger.messages.filter((m) => m.level === 'warn').map((m) => m.msg);
+    return { warnings, registered, info: (await readPage()).info };
+  }
+
+  it('reads the config under root', async () => {
+    // The build root is a temp directory, never the working directory.
+    expect(buildDir.root).not.toBe(process.cwd());
+    await astroConfig("vercel({ middlewareMode: 'edge' })");
+    const { warnings, registered, info } = await build({ name: '@astrojs/vercel', hooks: {} });
+    expect(warnings).toEqual([`preview is off for this build: ${EDGE}`]);
+    expect(registered).toEqual([]);
+    expect(info).toHaveProperty('preview', { mode: 'off', protocol: 2 });
+  });
+
+  it("fails closed when the mode can't be read", async () => {
+    await astroConfig('vercel(opts)');
+    const { warnings, registered, info } = await build({ name: '@astrojs/vercel', hooks: {} });
+    expect(warnings).toEqual([`preview is off for this build: ${UNREADABLE}`]);
+    expect(registered).toEqual([]);
+    expect(info).toHaveProperty('preview', { mode: 'off', protocol: 2 });
+  });
+
+  it('turns preview off when the probe reads edge', async () => {
+    await astroConfig('vercel()');
+    const { warnings, registered, info } = await build(vercelAdapter('edge'));
+    expect(warnings).toEqual([`preview is off for this build: ${EDGE}`]);
+    expect(registered).toEqual([]);
+    expect(info).toHaveProperty('preview', { mode: 'off', protocol: 2 });
+  });
+
+  it('probe that throws', async () => {
+    await astroConfig('vercel(opts)');
+    const { warnings, registered, info } = await build(vercelAdapter());
+    expect(warnings).toEqual([`preview is off for this build: ${UNREADABLE}`]);
+    expect(registered).toEqual([]);
+    expect(info).toHaveProperty('preview', { mode: 'off', protocol: 2 });
+  });
+
+  it('refuses isr written in astro.config before anything registers', async () => {
+    await astroConfig('vercel({ isr: true })');
+    const { warnings, registered, info } = await build(vercelAdapter('classic'));
+    expect(warnings).toEqual([`preview is off for this build: ${ISR}`]);
+    expect(registered).toEqual([]);
+    expect(info).toHaveProperty('preview', { mode: 'off', protocol: 2 });
+  });
+
+  it.each(['@astrojs/node', '@astrojs/cloudflare'])('%s adapters are never probed', async (name) => {
+    let probed = 0;
+    const adapter: AstroIntegration = { name, hooks: { 'astro:config:done': () => void probed++ } };
+    const { warnings, registered, info } = await build(adapter);
+    expect(probed).toBe(0);
+    expect(warnings).toEqual([]);
+    // The second updateConfig moves the image endpoint: this site renders nothing on demand.
+    expect(registered).toEqual(['injectRoute', 'addMiddleware', 'updateConfig', 'updateConfig']);
+    expect(info).toHaveProperty('preview', { mode: 'd8', protocol: 2 });
+  });
+
+  it('darkens a computed isr config the text could not see, and turns preview off', async () => {
+    process.env.CF_PAGES_COMMIT_SHA = 'c'.repeat(40);
+    await astroConfig('vercel(opts)');
+    const routes = [
+      { handle: 'filesystem' },
+      { src: '^(/_conloca/preview(?:/(.*?))?/?)$', dest: '/_isr?x_astro_path=$1' },
+      { src: '^/about$', dest: '/about.html' },
+    ];
+    await mkdir(join(buildDir.root, '.vercel', 'output'), { recursive: true });
+    await writeFile(join(buildDir.root, '.vercel/output/config.json'), JSON.stringify({ version: 3, routes }));
+    const buildLogger = makeLogger();
+    const { warnings, registered, info } = await build(vercelAdapter('classic'), buildLogger);
+    expect(warnings).toEqual([]);
+    expect(registered).toEqual(['injectRoute', 'addMiddleware', 'updateConfig', 'updateConfig']);
+    expect(buildLogger.messages.filter((m) => m.level === 'warn').map((m) => m.msg)).toEqual([
+      `preview is off for this build: ${ISR}`,
+    ]);
+    expect(info).toHaveProperty('preview', { mode: 'off', protocol: 2 });
+    expect(JSON.parse(await readFile(join(buildDir.root, '.vercel/output/config.json'), 'utf8'))).toEqual({
+      version: 3,
+      routes: [routes[0], { src: '^/_conloca/preview(?:/.*)?$', dest: '/404.html', status: 404 }, ...routes.slice(1)],
+    });
+  });
+
+  it('turns preview off without failing the build when config.json cannot be parsed', async () => {
+    process.env.CF_PAGES_COMMIT_SHA = 'c'.repeat(40);
+    await astroConfig('vercel(opts)');
+    await mkdir(join(buildDir.root, '.vercel', 'output'), { recursive: true });
+    await writeFile(join(buildDir.root, '.vercel/output/config.json'), '{ not json');
+    const buildLogger = makeLogger();
+    const { registered, info } = await build(vercelAdapter('classic'), buildLogger);
+    expect(registered).toEqual(['injectRoute', 'addMiddleware', 'updateConfig', 'updateConfig']);
+    expect(buildLogger.messages.filter((m) => m.level === 'warn').map((m) => m.msg)).toEqual([
+      expect.stringContaining("preview is off for this build: couldn't check .vercel/output/config.json: "),
+    ]);
+    expect(info).toHaveProperty('preview', { mode: 'off', protocol: 2 });
+  });
+
+  /** `.vercel/output/config.json` of a static site under d8: every miss runs the function. */
+  const STATIC_D8_ROUTES = [
+    { handle: 'filesystem' },
+    { src: '^/_conloca/preview(?:/(.*?))?/?$', dest: '_render' },
+    { src: '^/404/?$', dest: '_render' },
+    { src: '^/.*$', dest: '_render' },
+  ];
+
+  async function vercelConfig(routes: unknown[]): Promise<string> {
+    const path = join(buildDir.root, '.vercel/output/config.json');
+    await mkdir(join(buildDir.root, '.vercel', 'output'), { recursive: true });
+    await writeFile(path, JSON.stringify({ version: 3, routes }));
+    // The function bundle's copy of the server entry, which the site-pages list goes beside.
+    const server = join(buildDir.root, '.vercel/output/functions/_render.func/dist/server');
+    await mkdir(server, { recursive: true });
+    await writeFile(join(server, 'entry.mjs'), '');
+    return path;
+  }
+
+  it('sends the misses of a static Vercel site back to the static 404', async () => {
+    process.env.CF_PAGES_COMMIT_SHA = 'c'.repeat(40);
+    await astroConfig('vercel()');
+    const path = await vercelConfig(STATIC_D8_ROUTES);
+    const buildLogger = makeLogger();
+    const { info } = await build(vercelAdapter('classic'), buildLogger, { routes: resolvedRoutes() });
+    expect(buildLogger.messages.filter((m) => m.level === 'warn')).toEqual([]);
+    expect(info).toHaveProperty('preview', { mode: 'd8', protocol: 2 });
+    expect(JSON.parse(await readFile(path, 'utf8'))).toEqual({
+      version: 3,
+      routes: [...STATIC_D8_ROUTES.slice(0, 2), { src: '^/.*$', dest: '/404.html', status: 404 }],
+    });
+  });
+
+  it('warns and leaves a Vercel config it does not know', async () => {
+    process.env.CF_PAGES_COMMIT_SHA = 'c'.repeat(40);
+    await astroConfig('vercel()');
+    const routes = [...STATIC_D8_ROUTES, { src: '^/old$', dest: '/new' }];
+    const path = await vercelConfig(routes);
+    const buildLogger = makeLogger();
+    await build(vercelAdapter('classic'), buildLogger, { routes: resolvedRoutes() });
+    expect(buildLogger.messages.filter((m) => m.level === 'warn').map((m) => m.msg)).toEqual([
+      expect.stringContaining('misses on this site run the preview function: add src/pages/404.astro'),
+    ]);
+    expect(JSON.parse(await readFile(path, 'utf8'))).toEqual({ version: 3, routes });
+  });
+
+  it("leaves an SSR Vercel site's config.json byte-identical, without a warning", async () => {
+    process.env.CF_PAGES_COMMIT_SHA = 'c'.repeat(40);
+    await astroConfig('vercel()');
+    const path = await vercelConfig([...STATIC_D8_ROUTES.slice(0, 2), { src: '^/api/([^/]+?)/?$', dest: '_render' }]);
+    const before = await readFile(path, 'utf8');
+    const buildLogger = makeLogger();
+    // The page that makes the site SSR: the image endpoint stays, so routes:resolved has nothing to warn.
+    await mkdir(join(buildDir.root, 'src/pages/api'), { recursive: true });
+    await writeFile(join(buildDir.root, 'src/pages/api/[id].ts'), 'export const prerender = false;\n');
+    await build(vercelAdapter('classic'), buildLogger, {
+      routes: resolvedRoutes({ pattern: '/api/[id]', entrypoint: 'src/pages/api/[id].ts' }),
+    });
+    expect(buildLogger.messages.filter((m) => m.level === 'warn')).toEqual([]);
+    expect(await readFile(path, 'utf8')).toBe(before);
+  });
+
+  it('leaves config.json alone when the routes were never resolved', async () => {
+    process.env.CF_PAGES_COMMIT_SHA = 'c'.repeat(40);
+    await astroConfig('vercel()');
+    const path = await vercelConfig(STATIC_D8_ROUTES);
+    const before = await readFile(path, 'utf8');
+    await build(vercelAdapter('classic'));
+    expect(await readFile(path, 'utf8')).toBe(before);
+  });
+
+  it('turns preview off with one warning when the setup has no branch to bake, and builds', async () => {
+    await d8Site();
+    delete process.env.CF_PAGES_BRANCH;
+    const logger = makeLogger();
+    const buildLogger = makeLogger();
+    const registered: string[] = [];
+    await buildDoneHook(pageOptions({ previewBuild: {} }), {
+      adapter: { name: '@astrojs/node', hooks: {} },
+      logger,
+      registered,
+    })({ dir: buildDir.dist, logger: buildLogger });
+    expect(logger.messages.filter((m) => m.level === 'warn').map((m) => m.msg)).toEqual([
+      expect.stringContaining('preview is off for this build: @conloca/cloud-astro: could not determine the branch'),
+    ]);
+    expect(buildLogger.messages.filter((m) => m.level === 'warn' && m.msg.startsWith('preview'))).toEqual([]);
+    expect(registered).toEqual([]);
+    expect((await readPage()).info).toHaveProperty('preview', { mode: 'off', protocol: 2 });
+  });
+
+  it('warns and keeps the build and d8 when the site-pages list cannot be written', async () => {
+    process.env.CF_PAGES_COMMIT_SHA = 'c'.repeat(40);
+    await astroConfig('vercel()');
+    const path = await vercelConfig(STATIC_D8_ROUTES);
+    // The function bundle holds no server entry for the list to go beside.
+    await rm(join(buildDir.root, '.vercel/output/functions'), { recursive: true });
+    const buildLogger = makeLogger();
+    const { info } = await build(vercelAdapter('classic'), buildLogger, { routes: resolvedRoutes() });
+    expect(buildLogger.messages.filter((m) => m.level === 'warn').map((m) => m.msg)).toEqual([
+      expect.stringMatching(/^preview: the site-pages list failed: no entry\.mjs in /u),
+    ]);
+    expect(info).toHaveProperty('preview', { mode: 'd8', protocol: 2 });
+    // The steps before it ran: the static 404 narrowing.
+    expect(JSON.parse(await readFile(path, 'utf8')).routes.at(-1)).toEqual({
+      src: '^/.*$',
+      dest: '/404.html',
+      status: 404,
+    });
+  });
+
+  it('writes run_worker_first.json for the Cloudflare adapter and warns what wrangler.json lacks', async () => {
+    process.env.CF_PAGES_COMMIT_SHA = 'c'.repeat(40);
+    const server = join(buildDir.root, 'dist', 'server');
+    await mkdir(server, { recursive: true });
+    await writeFile(
+      join(server, 'wrangler.json'),
+      JSON.stringify({ main: 'entry.mjs', assets: { binding: 'ASSETS' } }),
+    );
+    const buildLogger = makeLogger();
+    const { info } = await build({ name: '@astrojs/cloudflare', hooks: {} }, buildLogger, {
+      build: { server: pathToFileURL(`${server}/`) },
+      routes: resolvedRoutes(),
+    });
+    expect(info).toHaveProperty('preview', { mode: 'd8', protocol: 2 });
+    const written = await readFile(join(buildDir.root, '.conloca/dispatcher/run_worker_first.json'), 'utf8');
+    // The moved image endpoint is under `/_conloca/preview/*`, so `/_image` is not listed.
+    const entries = ['/_conloca/preview', '/_conloca/preview/*', '/_server-islands/*'];
+    expect(JSON.parse(written)).toEqual(entries);
+    expect(buildLogger.messages.filter((m) => m.level === 'warn').map((m) => m.msg)).toEqual([
+      expect.stringContaining(`wrangler.jsonc run_worker_first lacks ${entries.join(', ')}: drafts get a 404`),
+      expect.stringContaining(
+        'wrangler.jsonc assets.not_found_handling is not "404-page": misses start the Cloudflare Worker',
+      ),
+    ]);
+  });
+
+  it('throws the edge text if edge middleware is emitted anyway', async () => {
+    await astroConfig('vercel()');
+    await d8Site();
+    const { hooks } = conlocaCloud(pageOptions({ previewBuild: {} }));
+    await runConfigHooks(hooks, pathToFileURL(`${buildDir.root}/`), { adapter: vercelAdapter('classic') });
+    const ssr = hooks['astro:build:ssr'];
+    if (!isSsrHook(ssr)) throw new Error('the integration has no astro:build:ssr hook');
+    expect(() => ssr({ middlewareEntryPoint: undefined })).not.toThrow();
+    expect(() => ssr({ middlewareEntryPoint: new URL('file:///m.mjs') })).toThrow(EDGE);
   });
 
   it('writes null facts and warns when no GitHub repository resolves', async () => {
@@ -1262,20 +1633,6 @@ describe('conlocaCloud — the editor page', () => {
         'astro:build:done ran before the config hooks recorded the project root and Vite config',
       ),
     );
-  });
-
-  it('mirrors only the editor page into an opted-in preview build', async () => {
-    const previewBuild = { adapter: { name: '@astrojs/node', hooks: {} } };
-    await buildDoneHook(pageOptions({ previewBuild }))({ dir: buildDir.dist, logger: makeLogger() });
-    expect(spawned).toEqual([previewBuild]);
-    const client = join(buildDir.root, '.conloca/preview-server/client');
-    expect(await readdir(join(client, '_conloca'))).toEqual(['editor']);
-    // oxlint-disable-next-line unicorn/no-array-sort -- the target lib predates toSorted; readdir returns fresh arrays.
-    expect((await readdir(join(client, '_conloca', 'editor'), { recursive: true })).sort()).toEqual(
-      // oxlint-disable-next-line unicorn/no-array-sort -- the target lib predates toSorted; readdir returns fresh arrays.
-      (await readdir(editorDir(), { recursive: true })).sort(),
-    );
-    expect(existsSync(join(client, '_headers'))).toBe(false);
   });
 
   it('warns when Astro base and sites.json disagree', async () => {

@@ -6,8 +6,9 @@
  * augmenting an existing module rather than declaring a new ambient one.
  *
  * `virtual:conloca-preview-opts` carries the preview middleware's configuration
- * baked in during the recursive preview build, so a preview deployment needs no
- * runtime env vars. It resolves to `{}` outside that build.
+ * baked in during the preview build (or a d8 site's own build), so a preview
+ * deployment needs no runtime env vars. It resolves to `{}` outside those builds.
+ * Mirrors `BakedPreviewOpts`.
  */
 declare module 'virtual:conloca-preview-opts' {
   const baked: {
@@ -19,6 +20,15 @@ declare module 'virtual:conloca-preview-opts' {
     siteId?: string;
     branch?: string;
     base?: string;
+    mode?: 'd2' | 'd3' | 'd4' | 'd8';
+    domains?: string[];
+    trailingSlash?: 'always' | 'never' | 'ignore';
+    sitePages?:
+      | { kind: 'disk'; serverEntry: string }
+      | { kind: 'assets' }
+      | { kind: 'function'; serverEntry: string; origin: string | null }
+      | { kind: 'none' };
+    buildFormat?: 'directory' | 'file' | 'preserve';
   };
   export default baked;
 }
@@ -42,6 +52,11 @@ declare module 'virtual:conloca-routing-config' {
  */
 declare module 'astro:content' {
   export function getCollection(collection: string): Promise<{ data: Record<string, unknown> }[]>;
+}
+
+/** Astro's assets module, resolvable only inside a site build: the image config the preview image endpoint checks. */
+declare module 'astro:assets' {
+  export const imageConfig: import('astro').AstroConfig['image'];
 }
 
 /**

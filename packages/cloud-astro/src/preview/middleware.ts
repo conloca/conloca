@@ -264,12 +264,13 @@ export async function handlePreviewRequest(request: Request, opts: PreviewMiddle
   if (ctx !== null) return { kind: 'preview', ctx };
 
   // 4. No valid preview context.
-  // Under D3 and D4 a share viewer's expired pass renews through the share link the grant cookie names.
+  // Under D3, D4 and D8 a share viewer's expired pass renews through the share link the grant cookie names.
   const ref =
     scope.grant === null ? undefined : parseCookieValues(cookie, scope.grant).find((v) => GRANT_REF_RE.test(v));
   if (ref !== undefined) {
     const [org, grant] = ref.split('.');
-    const to = encodeURIComponent(stripPreviewPrefix(url.pathname, opts.base));
+    // The page itself: under D8 the request still carries the route and the slug.
+    const to = encodeURIComponent(pageOf(url.pathname, opts));
     return {
       kind: 'response',
       response: new Response(null, {

@@ -58,6 +58,20 @@ export async function writePreviewRoutes(previewOut: string, routes: PreviewRout
   await writeFile(join(previewOut, ROUTES_FILE), `${JSON.stringify(routes, null, 2)}\n`);
 }
 
+/** `.conloca/dispatcher/run_worker_first.json`: the entries `conloca connect` writes into wrangler.jsonc. */
+export async function writeWorkerFirst(root: string, entries: readonly string[]): Promise<void> {
+  const outDir = join(root, '.conloca', 'dispatcher');
+  await mkdir(outDir, { recursive: true });
+  await writeFile(join(outDir, 'run_worker_first.json'), `${JSON.stringify(entries, null, 2)}\n`);
+}
+
+/** Every host sites.json declares: links to them are links to this site. */
+export async function declaredDomains(contentRoot: string | undefined): Promise<string[]> {
+  if (!contentRoot) return [];
+  const { sites } = await readSitesConfig(contentRoot);
+  return [...new Set(Object.values(sites).flatMap((site) => Object.values(site.domains ?? {})))];
+}
+
 function isStrings(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === 'string');
 }
@@ -207,14 +221,6 @@ export function dispatcherModule(serverEntry: string | null): string {
   ].join('\n');
 }
 
-/** Every host sites.json declares: links to them are links to this site. */
-async function declaredDomains(): Promise<string[]> {
-  const contentRoot = process.env.CONLOCA_CONTENT_ROOT;
-  if (!contentRoot) return [];
-  const { sites } = await readSitesConfig(contentRoot);
-  return [...new Set(Object.values(sites).flatMap((site) => Object.values(site.domains ?? {})))];
-}
-
 /** A plain `wrangler deploy` follows `.wrangler/deploy/config.json`; one the preview build left would ship it as the site. */
 async function dropDeployRedirect(root: string, previewOut: string, logger: { info(message: string): void }) {
   const redirect = join(root, '.wrangler', 'deploy', 'config.json');
@@ -262,9 +268,8 @@ export async function finishD3Build(input: FinishD3Input): Promise<void> {
   await dropDeployRedirect(root, previewOut, logger);
 
   const outDir = join(root, '.conloca', 'dispatcher');
-  await mkdir(outDir, { recursive: true });
   const expected = [prefix, `${prefix}/*`, ...(serving && routes !== undefined ? routes.onDemand : [])];
-  await writeFile(join(outDir, 'run_worker_first.json'), `${JSON.stringify(expected, null, 2)}\n`);
+  await writeWorkerFirst(root, expected);
 
   const configPath = wranglerConfigPath(root);
   const config = configPath === undefined ? undefined : parseWranglerConfig(await readFile(configPath, 'utf8'));
@@ -304,7 +309,7 @@ export async function finishD3Build(input: FinishD3Input): Promise<void> {
     base,
     endpoint: input.endpoint,
     prerendered: serving && routes !== undefined ? routes.prerendered : [],
-    domains: await declaredDomains(),
+    domains: await declaredDomains(process.env.CONLOCA_CONTENT_ROOT),
     exit: serving && routes !== undefined ? routes.exit : null,
   };
   await writeFile(join(outDir, 'dispatcher.json'), `${JSON.stringify(dispatcher, null, 2)}\n`);

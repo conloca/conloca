@@ -11,7 +11,7 @@ export const PACKAGE_NAME = '@conloca/cloud-astro';
 export const PREVIEW_BUILD_ENV_FLAG = 'CONLOCA_PREVIEW_BUILD';
 
 /**
- * Environment variable the site's build names the child's mode in (`d2` or `d3`). A build started with
+ * Environment variable the site's build names the child's mode in (`d3`). A build started with
  * {@link PREVIEW_BUILD_ENV_FLAG} alone, as a separate preview deploy runs it, has none: it is D4.
  */
 export const PREVIEW_MODE_ENV = 'CONLOCA_PREVIEW_MODE';
@@ -23,8 +23,8 @@ export const PREVIEW_MODE_ENV = 'CONLOCA_PREVIEW_MODE';
 export const PREVIEW_PRERENDERED_ENV = 'CONLOCA_PREVIEW_PRERENDERED';
 
 /**
- * Adapters the preview build is refused under: they write their deployable
- * output at the project root whatever `outDir` says, so the preview build
- * could replace the live site.
+ * Adapters the separate preview build (D4) is refused under: they write their
+ * deployable output at the project root whatever `outDir` says, so the
+ * preview build could replace the live site.
  */
 export const REFUSED_PREVIEW_ADAPTERS: readonly string[] = ['@astrojs/vercel', '@astrojs/netlify'];

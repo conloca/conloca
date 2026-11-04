@@ -1,19 +1,55 @@
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import type { AstroI18nLocales } from '@conloca/astro-cms/checks';
 import { readEditorDescriptors } from '@conloca/astro-cms/node';
 import { DEFAULT_EDITOR_ENDPOINT, editorUiOrigin } from '@conloca/content-api/editor-host';
-import type { AstroIntegration } from 'astro';
+import type { AstroConfig, AstroIntegration, IntegrationResolvedRoute } from 'astro';
 import type { UserConfig as ViteUserConfig } from 'vite';
 import { PACKAGE_NAME, PREVIEW_BUILD_ENV_FLAG } from './constants.js';
-import { finishD3Build, onDemandPatterns, workerFirstPattern, writePreviewRoutes } from './d3-build.js';
-import { emitEditorPage, emitPreviewServerInfo, mirrorEditorPage } from './editor-page/emit.js';
-import { gitOutput, resolveBuildRef, resolveRepositoryUri } from './git.js';
+import {
+  finishD3Build,
+  onDemandPatterns,
+  workerFirstPattern,
+  writePreviewRoutes,
+  writeWorkerFirst,
+} from './d3-build.js';
+import {
+  bakedIdentity,
+  cloudflareD8Problems,
+  d8Baked,
+  d8ImageEndpoint,
+  hasOnDemandRoutes,
+  knownImageService,
+  narrowVercelCatchAll,
+  previewPageHandlerPath,
+  siteOnDemand,
+  sitePagesOf,
+  writeSitePagesList,
+} from './d8-build.js';
+import {
+  adapterMiddlewareMode,
+  D8_EDGE_REFUSAL,
+  d8ConfigRefusal,
+  d8EdgeRefusal,
+  d8IsrRefusal,
+  darkenIsrPrefix,
+  readAstroConfigText,
+  vercelIsrCatchesPrefix,
+} from './d8-guards.js';
+import { emitEditorPage, emitPreviewServerInfo } from './editor-page/emit.js';
+import { resolveRepositoryUri } from './git.js';
 import { messageOf } from './message-of.js';
 import type { BakedPreviewOpts } from './preview/_resolve-opts.js';
 import { cloudflareAdapter, resolveCloudflareAdapter } from './preview/cloudflare-adapter.js';
 import type { PreviewExit } from './preview/prefix-router.js';
-import { normalizeTrailingSlash, PREVIEW_ROUTE_SEGMENT, type PreviewServeMode } from './preview/preview-path.js';
+import {
+  imageEndpointEntry,
+  normalizeTrailingSlash,
+  PREVIEW_ROUTE_SEGMENT,
+  type PreviewServeMode,
+  previewOwnEntries,
+} from './preview/preview-path.js';
 import {
   prerenderedKey,
   previewBuildMode,
@@ -22,7 +58,6 @@ import {
   spawnPreviewBuild,
 } from './preview-build.js';
 import { type InheritedOptions, resolveInheritedOptions } from './resolve-options.js';
-import { resolveBuildSiteId } from './site-id.js';
 import { scaffoldSkill } from './skill.js';
 import type { ConlocaCloudOptions, PreviewBuildOptions } from './types.js';
 
@@ -41,11 +76,11 @@ export { PACKAGE_NAME, PREVIEW_BUILD_ENV_FLAG };
  *   0. Write the editor page to `dist/_conloca/editor/`: `index.html`, the
  *      site's compiled puck config and styles, the MDX sandbox frame and
  *      `conloca.json`. Every build does this; the page carries no credential.
- *   1. Only when `previewBuild` is given as an object: D2 spawns the recursive preview build and mirrors the editor
- *      page into its client folder; D3 spawns it next to the static site and writes the dispatcher (`d3-build.ts`),
- *      failing the build when a failed preview build would leave the site's own on-demand routes unserved; D4 builds
- *      it in a separate deploy, not here. The preview build mounts `/_conloca/preview/` and bakes in the repository,
- *      site and branch it serves (every pass must match them), Astro's base and the commit it was built from.
+ *   1. Only when `previewBuild` is given as an object: D3 spawns the recursive preview build next to the static site
+ *      and writes the dispatcher (`d3-build.ts`), failing the build when a failed preview build would leave the
+ *      site's own on-demand routes unserved; D4 builds it in a separate deploy, not here; D8 spawns nothing: config:setup
+ *      mounts `/_conloca/preview/` in the site's own build (`d8-build.ts`). Every preview build bakes in the
+ *      repository, site and branch it serves (every pass must match them), Astro's base and the commit it was built from.
  */
 const VIRTUAL_PREVIEW_OPTS = 'virtual:conloca-preview-opts';
 const RESOLVED_PREVIEW_OPTS = `\0${VIRTUAL_PREVIEW_OPTS}`;
@@ -68,12 +103,8 @@ export function conlocaCloud(options: ConlocaCloudOptions = {}): AstroIntegratio
   let astroCommand: string | undefined;
   // The project root, captured in config:setup: astro:build:done only hands
   // over the build's own outDir, but the siteStyles resolve against the root,
-  // and locating the CHILD build's client dir (for the editor page mirror)
-  // needs the root the child resolves against.
+  // and locating the preview build's output needs the root it resolves against.
   let projectRoot: URL | undefined;
-  // Adapter name, finalized only at config:done: the preview build reads it
-  // when previewBuild names no adapter of its own.
-  let adapterName: string | undefined;
   // The site's Vite config, finalized at config:done: the editor page and the
   // siteStyles compile through it, as they do in conlocaCMS's dev editor. It
   // holds the site's and integrations' plugins only; Astro adds its own core
@@ -88,21 +119,44 @@ export function conlocaCloud(options: ConlocaCloudOptions = {}): AstroIntegratio
   // The editor options, settled at config:done: conlocaCMS publishes its
   // channel from its own config:setup, which may run after ours.
   let inherited: InheritedOptions | undefined;
-  // Whether the parent build starts the preview build, read with the adapter
-  // the child will use: previewBuild.adapter, else the project's own.
-  const previewMode = () =>
-    previewBuildMode(options.previewBuild, (options.previewBuild || undefined)?.adapter?.name ?? adapterName);
+  // How the site's build serves drafts, settled once in config:setup: an option that cannot work turns preview off
+  // for this build with a warning rather than failing the deploy.
+  let siteMode: 'off' | 'd3' | 'd4' | 'd8' = 'off';
   // Whether the project has no adapter of its own, read in config:setup before the preview build switches to
   // server output: such a site can use no server islands, so its dispatcher never runs on their route.
   let projectStatic = false;
+  // The site's adapter, read in config:setup: the d8 edge and isr guards depend on it.
+  let adapterName: string | undefined;
   // The routes the preview build renders on demand (astro:routes:resolved), as Astro patterns.
   let onDemand: string[] = [];
   // The site's build: the routes it prerendered (astro:routes:resolved), handed to a D3 child.
   let sitePrerendered: string[] = [];
+  // The site's build: its own on-demand routes (astro:routes:resolved); none means it would be static without preview,
+  // undefined that the hook never ran, so nothing is known.
+  let siteRoutesOnDemand: string[] | undefined;
+  // d8 moved the image endpoint under the preview route (config:setup): only a site with no on-demand page.
+  let imageMoved = false;
+  // Where the adapter writes its server build (config:done): the Cloudflare adapter's wrangler.json is there.
+  let buildServer: URL | undefined;
+  // The site's build: its resolved routes (astro:routes:resolved) and config (config:done), for the d8 site-pages list.
+  let siteRoutes: IntegrationResolvedRoute[] = [];
+  let astroConfig: AstroConfig | undefined;
   // A D3 child: the routes its site's build prerendered, which it keeps prerendered (config:setup).
   let keepPrerendered = new Set<string>();
   // The preview build's mode (config:setup): a D4 child of a static site has no site build to ask.
   let childServeMode: PreviewServeMode = 'd4';
+  // Serves the baked options as `virtual:conloca-preview-opts`, read lazily so the values config:setup bakes are
+  // captured.
+  const previewOptsPlugin = {
+    name: 'conloca-preview-opts',
+    resolveId(id: string) {
+      return id === VIRTUAL_PREVIEW_OPTS ? RESOLVED_PREVIEW_OPTS : undefined;
+    },
+    load(id: string) {
+      if (id !== RESOLVED_PREVIEW_OPTS) return undefined;
+      return `export default ${JSON.stringify(previewOptsModule ?? {})};`;
+    },
+  };
 
   return {
     name: PACKAGE_NAME,
@@ -112,41 +166,87 @@ export function conlocaCloud(options: ConlocaCloudOptions = {}): AstroIntegratio
         projectRoot = config?.root;
         astroCommand = command;
         projectStatic = config?.adapter === undefined;
+        adapterName = config?.adapter?.name;
         // The agent skill: write-if-not-exists, fail-soft, and
         // never from the recursive preview child (it would race the parent).
         if (process.env[PREVIEW_BUILD_ENV_FLAG] !== '1' && config?.root) {
           scaffoldSkill(fileURLToPath(config.root), logger);
         }
         logger.info(`integration registered (endpoint=${options.endpoint ?? DEFAULT_EDITOR_ENDPOINT})`);
+        if (process.env[PREVIEW_BUILD_ENV_FLAG] !== '1') {
+          const previewBuild = options.previewBuild || undefined;
+          let mode: typeof siteMode = 'off';
+          try {
+            mode = previewBuildMode(previewBuild, config?.adapter?.name, previewBuild?.adapter?.name);
+            // §4.6: refused before anything registers, since d8's own middleware is what breaks an edge build.
+            if (mode === 'd8' && command === 'build') {
+              const text = readAstroConfigText(config.root);
+              const name = config.adapter?.name ?? '';
+              let refusal = d8ConfigRefusal(text, name, config.base);
+              // Only these adapters' config:done merely stores state, so only they may be called out of order.
+              if (refusal === null && config.adapter && (name === '@astrojs/vercel' || name === '@astrojs/netlify')) {
+                refusal = d8EdgeRefusal(await adapterMiddlewareMode(config.adapter, config), text, name);
+              }
+              if (refusal !== null) {
+                logger.warn(`preview is off for this build: ${refusal}`);
+                mode = 'off';
+              }
+            }
+            // Only `astro build` serves d8 drafts: dev, sync, check and preview read no git or sites.json for it.
+            if (mode === 'd8' && command === 'build') {
+              for (const name of ['config', 'outDir', 'required'] as const) {
+                if (previewBuild?.[name] !== undefined) {
+                  logger.warn(`previewBuild.${name} has no effect on this site: drafts render in the site's own build`);
+                }
+              }
+              previewOptsModule = await d8Baked({ options, config, repoUri, env: process.env });
+              // The draft preview renders in this build, at the preview route its own copy of the page handler
+              // serves. A site without a recent astro-cms throws here, before anything is injected.
+              const entrypoint = previewPageHandlerPath(config.root);
+              // A hybrid site keeps its `/_image` for drafts too: Astro reads `image.endpoint` once, before routes
+              // exist, and its on-demand pages need the real one. A third-party service may build live `<Image>` URLs
+              // from the route, so only known services move it. Read before registering: nothing below may throw.
+              const moveImage =
+                knownImageService(config.image?.service?.entrypoint) && !(await hasOnDemandRoutes(config));
+              injectRoute({ pattern: `${PREVIEW_ROUTE_SEGMENT}/[...path]`, entrypoint, prerender: false });
+              addMiddleware({ entrypoint: '@conloca/cloud-astro/d8-middleware', order: 'pre' });
+              // The middleware's Cloudflare runtime import, as in the preview build below.
+              updateConfig({
+                vite: { build: { rollupOptions: { external: [/^cloudflare:/] } }, plugins: [previewOptsPlugin] },
+              });
+              // Last, so a refusal or throw above never moves it.
+              if (moveImage) {
+                updateConfig({
+                  image: {
+                    endpoint: {
+                      route: `${PREVIEW_ROUTE_SEGMENT}/_image`,
+                      entrypoint: d8ImageEndpoint(config.adapter?.name ?? ''),
+                    },
+                  },
+                });
+                imageMoved = true;
+              }
+            }
+            siteMode = mode;
+          } catch (error) {
+            // conlocaCMS publishes the content root from its own config:setup, which runs first only when listed first.
+            const hint =
+              mode === 'd8' && !process.env.CONLOCA_CONTENT_ROOT
+                ? '; list conlocaCloud() after conlocaCMS() in astro.config'
+                : '';
+            logger.warn(`preview is off for this build: ${messageOf(error)}${hint}`);
+          }
+        }
 
         // Only the recursive preview build (which sets PREVIEW_BUILD_ENV_FLAG)
         // mounts the SSR catch-all that renders previews; a site's normal
         // build never exposes it. The route is fixed and public: the signed
         // pass, checked against what this build bakes in, is the lock.
         if (process.env[PREVIEW_BUILD_ENV_FLAG] === '1') {
-          if (!repoUri) {
-            throw new Error(
-              `${PACKAGE_NAME}: could not determine repository identity for the preview build ` +
-                '(build in a Git checkout or set repoUri as an advanced override)',
-            );
-          }
-          // The project's own checkout answers git, not the directory the
-          // build was started from.
-          const projectGit = (args: string[]) => gitOutput(args, fileURLToPath(config.root));
-          const buildRef = resolveBuildRef(process.env, projectGit);
-          if (!buildRef.branch) {
-            throw new Error(
-              `${PACKAGE_NAME}: could not determine the branch the preview build serves (set CF_PAGES_BRANCH, ` +
-                'WORKERS_CI_BRANCH, VERCEL_GIT_COMMIT_REF or GITHUB_REF_NAME, or build in a git checkout on a branch)',
-            );
-          }
+          const baked = bakedIdentity({ options, config, repoUri, env: process.env });
           const childMode = previewChildMode(process.env);
           childServeMode = childMode;
           keepPrerendered = previewChildPrerendered(process.env);
-          const siteId = resolveBuildSiteId({
-            contentRoot: process.env.CONLOCA_CONTENT_ROOT,
-            override: options.siteId,
-          });
           injectRoute({
             pattern: `${PREVIEW_ROUTE_SEGMENT}/[...path]`,
             entrypoint: '@conloca/cloud-astro/preview-handler',
@@ -160,39 +260,13 @@ export function conlocaCloud(options: ConlocaCloudOptions = {}): AstroIntegratio
           // published content after one page view. Fail-open — an
           // uncredentialed visitor gets the ordinary page.
           addMiddleware({ entrypoint: '@conloca/cloud-astro/site-middleware', order: 'pre' });
-          // The commit this preview build's checkout holds: a PR build may
-          // check out a merge commit rather than the commit CI hands over.
-          // Page-status compares the branch's latest commit with it, so the
-          // endpoint diffs against the content actually serving, not a newer
-          // commit whose deploy never landed. A checkout commit the
-          // endpoint does not have makes it render from the branch instead.
-          const buildCommit = projectGit(['rev-parse', 'HEAD']) ?? buildRef.gitSha;
-          // Bake the middleware's configuration into the artifact. Every value
-          // is already known here — endpoint and audience are integration
-          // options; repository, site, branch, base and commit are what this
-          // build was made from, and every pass must match the first three —
-          // so a correctly built preview deployment needs NO env vars set on
-          // it. `saasIssuer` stays unbaked unless configured: it is a property
-          // of the endpoint, not of the site.
-          previewOptsModule = {
-            saasEndpoint: options.endpoint ?? DEFAULT_EDITOR_ENDPOINT,
-            // The token's `aud` is the repo URI this build resolved.
-            saasAudience: repoUri,
-            ...(options.saasIssuer ? { saasIssuer: options.saasIssuer } : {}),
-            ...(buildCommit ? { buildCommit } : {}),
-            repo: repoUri,
-            siteId,
-            branch: buildRef.branch,
-            base: config.base ?? '/',
-            mode: childMode,
-          };
-          // The dispatcher's exit route answers with these: the values every pass is checked against, already
-          // narrowed by the two throws above.
+          previewOptsModule = { ...baked, mode: childMode };
+          // The dispatcher's exit route answers with these: the values every pass is checked against.
           childExit = {
-            repo: repoUri,
-            siteId,
-            branch: buildRef.branch,
-            audience: repoUri,
+            repo: baked.repo,
+            siteId: baked.siteId,
+            branch: baked.branch,
+            audience: baked.repo,
             ...(options.saasIssuer ? { issuer: options.saasIssuer } : {}),
           };
           // Preview-build path: the child build must emit an SSR
@@ -201,27 +275,16 @@ export function conlocaCloud(options: ConlocaCloudOptions = {}): AstroIntegratio
           // adapter stays in force when it already has one), and write to a
           // SEPARATE outDir so the child never clobbers the primary dist/.
           const previewBuild = options.previewBuild || {};
+          // The site's build settled its own mode; a build started with the flag alone is a separate preview deploy,
+          // so it is checked as one: refused under an adapter that deploys from the project root, and with
+          // previewBuild.adapter.
+          previewBuildMode(
+            childMode === 'd4' ? { ...previewBuild, separate: true } : previewBuild,
+            config.adapter?.name,
+            previewBuild.adapter?.name,
+          );
           // A site that names no adapter builds its preview server for Cloudflare Workers: next to it (D3) or apart (D4).
-          const adapter =
-            previewBuild.adapter ??
-            config.adapter ??
-            (childMode === 'd2' ? undefined : await cloudflareAdapter(config.root, childMode));
-          // Throws for a refused adapter — the parent already checked, this keeps the child honest.
-          previewBuildMode(previewBuild, adapter?.name);
-          // Astro allows exactly one deployment integration. Adding
-          // previewBuild.adapter next to the project's own would make the
-          // child build die on Astro's adapter-conflict error, which names
-          // neither this integration nor the option — fail here with the
-          // actual cause. The child inherits the project adapter, so the
-          // option is unnecessary on SSR projects.
-          if (previewBuild.adapter && config.adapter) {
-            const projectAdapterName = config.adapter.name;
-            throw new Error(
-              `${PACKAGE_NAME}: previewBuild.adapter conflicts with the project's own adapter ` +
-                `(${projectAdapterName}) — Astro allows only one deployment integration per build. ` +
-                'Remove previewBuild.adapter; the preview build inherits the project adapter.',
-            );
-          }
+          const adapter = config.adapter ?? (await cloudflareAdapter(config.root, childMode));
           // Trailing slash so URL-joining treats it as a directory. Astro
           // derives build.client/build.server from outDir BEFORE hooks run,
           // so overriding outDir alone still writes into the primary dist/ —
@@ -273,19 +336,7 @@ export function conlocaCloud(options: ConlocaCloudOptions = {}): AstroIntegratio
                     },
                   }
                 : {}),
-              plugins: [
-                {
-                  name: 'conloca-preview-opts',
-                  resolveId(id: string) {
-                    return id === VIRTUAL_PREVIEW_OPTS ? RESOLVED_PREVIEW_OPTS : undefined;
-                  },
-                  load(id: string) {
-                    if (id !== RESOLVED_PREVIEW_OPTS) return undefined;
-                    // Read lazily so the values assigned above are captured.
-                    return `export default ${JSON.stringify(previewOptsModule ?? {})};`;
-                  },
-                },
-              ],
+              plugins: [previewOptsPlugin],
             },
             // The adapter must ride in BOTH ways: as `adapter` because the
             // build gate checks `config.adapter` before creating the SSR
@@ -330,7 +381,7 @@ export function conlocaCloud(options: ConlocaCloudOptions = {}): AstroIntegratio
         const pattern = 'route' in route && typeof route.route === 'string' ? route.route : '';
         // A D3 child keeps prerendered what its static site's build prerendered, endpoints included: on demand, a
         // getStaticPaths route would lose its props, and the dispatcher would have to run on it in production. Its
-        // own on-demand routes (and every route of a D2 child) keep their own setting.
+        // own on-demand routes keep their own setting.
         if (!cms && keepPrerendered.has(prerenderedKey(pattern, route.component))) {
           route.prerender = true;
           return;
@@ -363,11 +414,20 @@ export function conlocaCloud(options: ConlocaCloudOptions = {}): AstroIntegratio
         route.prerender = false;
         logger.debug(`preview build: forcing on-demand rendering for ${route.component}`);
       },
-      'astro:routes:resolved': ({ routes }) => {
+      'astro:routes:resolved': ({ routes, logger }) => {
         if (process.env[PREVIEW_BUILD_ENV_FLAG] !== '1') {
           sitePrerendered = routes
             .filter((route) => route.isPrerendered)
             .map((route) => prerenderedKey(route.pattern, route.entrypoint));
+          siteRoutesOnDemand = siteOnDemand(routes, PREVIEW_ROUTE_SEGMENT);
+          siteRoutes = routes;
+          if (imageMoved) {
+            for (const route of siteRoutesOnDemand) {
+              logger.warn(
+                `preview moved the image endpoint, but ${route} renders on demand and was not visible when astro.config was read: its images are served untransformed while preview is on`,
+              );
+            }
+          }
           return;
         }
         // Astro injects the server-islands route whenever an adapter is set, but refuses islands without one: a static
@@ -375,31 +435,35 @@ export function conlocaCloud(options: ConlocaCloudOptions = {}): AstroIntegratio
         const used = projectStatic ? routes.filter((route) => route.pattern !== '/_server-islands/[name]') : routes;
         onDemand = onDemandPatterns(used);
       },
-      'astro:config:done': ({ config, logger }) => {
-        adapterName = config.adapter?.name;
+      'astro:config:done': ({ config }) => {
         viteConfig = config.vite;
         astroBase = config.base ?? '/';
         srcDir = config.srcDir;
         serverOutput = config.output === 'server';
         i18n = config.i18n;
+        // Optional-chained: unit tests drive this hook with a partial config.
+        buildServer = config.build?.server;
+        astroConfig = config;
         inherited = resolveInheritedOptions(options, readEditorDescriptors());
-        // A refused or missing preview adapter fails `astro build` here,
-        // before the site builds, rather than after it. `astro dev`, `sync`
-        // and `preview` never start the preview build, so they are left
-        // alone. The child build checks its own.
+        // A missing Cloudflare adapter fails `astro build` here, before the
+        // site builds, rather than after it. `astro dev`, `sync` and
+        // `preview` never start the preview build, so they are left alone.
         if (astroCommand === 'build' && process.env[PREVIEW_BUILD_ENV_FLAG] !== '1') {
-          const mode = previewMode();
           // D3 builds its preview server with @astrojs/cloudflare: missing, the build fails here, before the site builds.
-          if (mode === 'd3' && projectRoot !== undefined) resolveCloudflareAdapter(fileURLToPath(projectRoot));
-          if (mode === 'd2' && adapterName === undefined) {
-            logger.warn(
-              'previewBuild.adapter on a static site serves drafts from the deployed preview server; remove ' +
-                'previewBuild.adapter to serve them next to the static site on Cloudflare Workers instead',
-            );
-          }
+          if (siteMode === 'd3' && projectRoot !== undefined) resolveCloudflareAdapter(fileURLToPath(projectRoot));
         }
       },
-      'astro:build:done': async ({ dir, logger, pages }) => {
+      // Can't happen: config:setup turns d8 off for edge middleware before registering any; reaching this is a guard bug.
+      'astro:build:ssr': ({ middlewareEntryPoint }) => {
+        if (
+          siteMode === 'd8' &&
+          middlewareEntryPoint !== undefined &&
+          (adapterName === '@astrojs/vercel' || adapterName === '@astrojs/netlify')
+        ) {
+          throw new Error(`${PACKAGE_NAME}: ${D8_EDGE_REFUSAL}`);
+        }
+      },
+      'astro:build:done': async ({ dir, logger, pages, assets }) => {
         if (process.env[PREVIEW_BUILD_ENV_FLAG] === '1') {
           // The recursive preview build sets this flag on the child Astro process. Writing the editor page there
           // again would race the parent, which writes its own; the child reports only what the parent reads.
@@ -435,7 +499,66 @@ export function conlocaCloud(options: ConlocaCloudOptions = {}): AstroIntegratio
           );
         }
 
-        const mode = previewMode();
+        // §4.6 backstop for an isr config the text could not read (computed options): the adapter's build:done ran
+        // first, so its routes are written. The prefix answers a static 404, so no draft is ever cached.
+        const vercelConfig = new URL('.vercel/output/config.json', projectRoot);
+        if (siteMode === 'd8' && adapterName === '@astrojs/vercel') {
+          try {
+            const routes: unknown = existsSync(vercelConfig) ? JSON.parse(readFileSync(vercelConfig, 'utf8')) : null;
+            if (vercelIsrCatchesPrefix(routes, astroBase)) {
+              writeFileSync(vercelConfig, JSON.stringify(darkenIsrPrefix(routes, astroBase), null, 2));
+              logger.warn(`preview is off for this build: ${d8IsrRefusal(astroBase)}`);
+              siteMode = 'off';
+            }
+          } catch (error) {
+            // Decision (f): never fail the site build; with the routes unchecked, no draft may be served.
+            logger.warn(
+              `preview is off for this build: couldn't check .vercel/output/config.json: ${messageOf(error)}`,
+            );
+            siteMode = 'off';
+          }
+        }
+        // After the backstop, so a darkened prefix stays as it is: keep visitors' misses off the preview function.
+        if (siteMode === 'd8' && adapterName === '@astrojs/vercel' && existsSync(vercelConfig)) {
+          try {
+            const config: unknown = JSON.parse(readFileSync(vercelConfig, 'utf8'));
+            const narrowed = narrowVercelCatchAll(config, siteRoutesOnDemand?.length === 0);
+            if (narrowed !== null && 'config' in narrowed) {
+              writeFileSync(vercelConfig, JSON.stringify(narrowed.config, null, 2));
+            } else if (narrowed !== null) {
+              logger.warn(
+                `misses on this site run the preview function: add src/pages/404.astro (.vercel/output/config.json: ${narrowed.leave})`,
+              );
+            }
+          } catch (error) {
+            // Decision (f): drafts still render; only what a miss costs changes.
+            logger.warn(
+              `misses on this site run the preview function: couldn't narrow .vercel/output/config.json: ${messageOf(error)}`,
+            );
+          }
+        }
+        if (siteMode === 'd8' && adapterName === '@astrojs/cloudflare') {
+          try {
+            const expected = [
+              // A moved image endpoint is under `<prefix>/*`; `<base>_image` then serves nothing.
+              ...previewOwnEntries(astroBase).filter((entry) => !imageMoved || entry !== imageEndpointEntry(astroBase)),
+              // With not_found_handling "404-page", a static site's `server:defer` islands would get the 404 page.
+              workerFirstPattern('/_server-islands/[name]', astroBase),
+              ...(siteRoutesOnDemand ?? []).map((pattern) => workerFirstPattern(pattern, astroBase)),
+            ];
+            await writeWorkerFirst(fileURLToPath(projectRoot), expected);
+            // An SSR site's misses reached its Cloudflare Worker before preview, too.
+            if (siteRoutesOnDemand?.length === 0 && buildServer !== undefined) {
+              const wrangler: unknown = JSON.parse(readFileSync(new URL('wrangler.json', buildServer), 'utf8'));
+              for (const problem of cloudflareD8Problems(wrangler, expected)) {
+                logger.warn(`${problem} (\`conloca connect --update --yes\` applies this once the CLI supports d8)`);
+              }
+            }
+          } catch (error) {
+            logger.warn(`preview: couldn't check the Cloudflare routing: ${messageOf(error)}`);
+          }
+        }
+        const mode = siteMode;
         // The editor page: every build writes it.
         await emitEditorPage({
           dir: fileURLToPath(dir),
@@ -452,22 +575,21 @@ export function conlocaCloud(options: ConlocaCloudOptions = {}): AstroIntegratio
           i18n,
           logger,
         });
+        // After the editor page: on Cloudflare the list goes in its folder, which the editor page must create.
+        if (mode === 'd8' && adapterName !== undefined && astroConfig !== undefined) {
+          try {
+            const sitePages = sitePagesOf(pages ?? [], assets ?? new Map(), siteRoutes, dir, astroBase);
+            await writeSitePagesList(adapterName, astroConfig, sitePages);
+          } catch (error) {
+            // Decision (f): drafts still render; the site's own pages just aren't kept inside the preview.
+            logger.warn(`preview: the site-pages list failed: ${messageOf(error)}`);
+          }
+        }
 
         // Strict opt-in: only a previewBuild given as an object starts the second build. D4 builds it elsewhere.
         const previewBuild = options.previewBuild || undefined;
-        if (previewBuild === undefined || mode === 'off' || mode === 'd4') return;
+        if (previewBuild === undefined || mode !== 'd3') return;
         const previewOut = previewOutDir(previewBuild, projectRoot);
-        if (mode === 'd2') {
-          await spawnPreviewBuild(previewBuild, 'd2');
-          // The child build cannot write the editor files itself (it
-          // short-circuits this hook — see the recursion guard above), but in
-          // a deployment that serves the site and the preview from one
-          // Cloudflare Worker its client dir is THE asset set serving the site,
-          // so the editor files must be there too. Mirror them from this build's dist.
-          await mirrorEditorPage(fileURLToPath(dir), fileURLToPath(new URL('client/', previewOut)));
-          logger.info('editor page mirrored into the preview client dir');
-          return;
-        }
         // D3: a failed preview build is isolated unless its server also serves the live site (finishD3Build decides).
         let built = true;
         try {

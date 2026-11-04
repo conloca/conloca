@@ -1171,6 +1171,17 @@ for (const mode of ['d3', 'd8'] as const)
       );
     });
 
+    it('renews to the page itself when the request names the route and the slug', async () => {
+      const v = await handlePreviewRequest(
+        at(`__Secure-conloca_grant_${slug}=YWNtZQ.AAAAAAAAAAAAAAAAAAAAAA`, `/_conloca/preview/${slug}/pricing/`),
+        d3(),
+      );
+      if (v.kind !== 'response') throw new Error('expected the renewal redirect');
+      expect(v.response.headers.get('location')).toBe(
+        `${ENDPOINT}/preview/redeem/YWNtZQ/AAAAAAAAAAAAAAAAAAAAAA?renew=1&to=%2Fpricing%2F`,
+      );
+    });
+
     it('expires both slug cookies on their own path at exit, and names the mode', async () => {
       const v = await handlePreviewRequest(
         makeRequest(

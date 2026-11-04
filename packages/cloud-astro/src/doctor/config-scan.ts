@@ -23,7 +23,7 @@ function skipString(text: string, index: number): number {
 }
 
 /** Blank out comments, keeping strings and offsets intact, so a commented-out option never counts as set. */
-function stripComments(source: string): string {
+export function stripComments(source: string): string {
   const chars = source.split('');
   let i = 0;
   while (i < chars.length) {
@@ -49,7 +49,7 @@ function stripComments(source: string): string {
 }
 
 /** The balanced bracket slice starting at openIndex, or null when it never closes. */
-function balancedSlice(text: string, openIndex: number): string | null {
+export function balancedSlice(text: string, openIndex: number): string | null {
   const closer = OPENERS[text[openIndex]];
   let depth = 0;
   let i = openIndex;
@@ -71,7 +71,7 @@ function balancedSlice(text: string, openIndex: number): string | null {
 }
 
 /** True when `needle` appears in the text outside string literals. */
-function containsOutsideStrings(text: string, needle: string): boolean {
+export function containsOutsideStrings(text: string, needle: string): boolean {
   let i = 0;
   while (i < text.length) {
     if (QUOTES.has(text[i])) {

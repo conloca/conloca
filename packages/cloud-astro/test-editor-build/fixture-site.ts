@@ -23,11 +23,21 @@ export const PNG_1X1: Uint8Array = new Uint8Array(
   ),
 );
 
-export type FixtureAdapter = 'cloudflare';
+export type FixtureAdapter = 'vercel' | 'netlify' | 'node' | 'cloudflare';
 
 export interface FixtureSiteOptions {
-  /** The adapter builds with `output: 'server'`. */
+  /** The adapter; it builds with `output: 'server'` unless `output` says otherwise. */
   adapter?: FixtureAdapter;
+  /** The adapter call's argument, e.g. `{ isr: true }`. */
+  adapterOptions?: string;
+  /** Astro's `output` beside an adapter. */
+  output?: 'static' | 'server';
+  /** Leaves `site` out of the config. */
+  withoutSite?: boolean;
+  /** Lines added to the `defineConfig` object, e.g. `i18n: {...},`. */
+  extraConfig?: string[];
+  /** Extra `conlocaCMS({...})` properties, e.g. `routing: {...}`. */
+  cmsOptions?: string;
   /** Leaves conlocaCloud() out of the config. */
   withoutIntegration?: boolean;
   /** Astro's `base`, as written in the config. */
@@ -46,10 +56,14 @@ export interface FixtureSiteOptions {
   imageService?: 'passthrough';
 }
 
-/** Each adapter's import and the call its config makes. */
+/** Each adapter's import and the argument its call takes by default. */
 const ADAPTERS = {
-  cloudflare: { module: '@astrojs/cloudflare', call: 'cloudflare()' },
-} satisfies Record<FixtureAdapter, { module: string; call: string }>;
+  vercel: { module: '@astrojs/vercel', options: '' },
+  netlify: { module: '@astrojs/netlify', options: '' },
+  node: { module: '@astrojs/node', options: "{ mode: 'standalone' }" },
+  // The Cloudflare prerenderer's inspector takes port 9229 otherwise, so two builds at once (any lanes) fail.
+  cloudflare: { module: '@astrojs/cloudflare', options: '{ inspectorPort: false }' },
+} satisfies Record<FixtureAdapter, { module: string; options: string }>;
 
 /** A font file's bytes: larger than Vite's 4 KiB inline limit, so it stays a file, as a real font does. */
 function fontBytes(label: string): string {
@@ -73,7 +87,8 @@ function baseFiles() {
       '',
       'export const Hero = {',
       '  fields: {},',
-      '  render: () => <section className={styles.hero}>Hero</section>,',
+      // `text` lets a preview test's draft change what the page shows; published fixtures set none.
+      "  render: ({ text }: { text?: string }) => <section className={styles.hero}>{text ?? 'Hero'}</section>,",
       '};',
       '',
     ].join('\n'),
@@ -128,6 +143,7 @@ function astroConfig(options: FixtureSiteOptions): string {
     "contentRoot: './content'",
     "puckConfigPath: './src/puck.config.tsx'",
     "siteStyles: './src/styles/site.css'",
+    ...(options.cmsOptions === undefined ? [] : [options.cmsOptions]),
   ].join(', ');
   return [
     "import react from '@astrojs/react';",
@@ -138,12 +154,18 @@ function astroConfig(options: FixtureSiteOptions): string {
     ...(options.adapter === undefined ? [] : [`import ${options.adapter} from '${ADAPTERS[options.adapter].module}';`]),
     '',
     'export default defineConfig({',
-    "  site: 'https://fixture.example',",
+    ...(options.withoutSite ? [] : ["  site: 'https://fixture.example',"]),
     ...(options.base === undefined ? [] : [`  base: ${JSON.stringify(options.base)},`]),
     ...(options.trailingSlash === undefined ? [] : [`  trailingSlash: ${JSON.stringify(options.trailingSlash)},`]),
     ...(options.redirects === undefined ? [] : [`  redirects: ${JSON.stringify(options.redirects)},`]),
     ...(options.imageService === undefined ? [] : ['  image: { service: passthroughImageService() },']),
-    ...(adapter ? ["  output: 'server',", `  adapter: ${adapter.call},`] : []),
+    ...(adapter
+      ? [
+          `  output: '${options.output ?? 'server'}',`,
+          `  adapter: ${options.adapter}(${options.adapterOptions ?? adapter.options}),`,
+        ]
+      : []),
+    ...(options.extraConfig ?? []).map((line) => `  ${line}`),
     '  integrations: [',
     '    react(),',
     '    sitemap(),',

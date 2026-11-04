@@ -8,36 +8,46 @@ import {
   PREVIEW_PRERENDERED_ENV,
   REFUSED_PREVIEW_ADAPTERS,
 } from './constants.js';
-import type { PreviewServeMode } from './preview/preview-path.js';
 import type { PreviewBuildOptions } from './types.js';
 
 /**
- * How the preview build serves, from the options and the adapter the preview server would build with
- * (`previewBuild.adapter`, else the project's own): off unless `previewBuild` is given as an object; D4 with
- * `separate: true`; D3 for a static site, whose preview server runs next to it on Cloudflare Workers; D2 when an
- * adapter is named, since the site's own server deploy serves the drafts. Throws for a refused adapter, so the build
- * fails before it deploys anything.
+ * How drafts are served, from the options and the project's adapter: off unless `previewBuild` is given as an
+ * object; D4 with `separate: true`; D3 for a static site, whose preview server runs next to it on Cloudflare
+ * Workers; D8 when an adapter is named, since drafts render in the site's own build. Throws for options that cannot
+ * work: `separate` under an adapter that deploys from the project root, and `previewBuild.adapter`
+ * (`previewAdapterName`) at all.
  */
 export function previewBuildMode(
   previewBuild: PreviewBuildOptions | false | undefined,
   adapterName: string | undefined,
-): 'off' | PreviewServeMode {
+  previewAdapterName?: string,
+): 'off' | 'd3' | 'd4' | 'd8' {
   if (!previewBuild) return 'off';
-  if (adapterName !== undefined && REFUSED_PREVIEW_ADAPTERS.includes(adapterName)) {
+  if (previewAdapterName !== undefined) {
     throw new Error(
-      `${PACKAGE_NAME}: previewBuild is not supported with ${adapterName} yet: that adapter writes its deployable ` +
-        'output at the project root, so the preview build could replace the live site. ' +
-        'Remove previewBuild from conlocaCloud(...).',
+      `${PACKAGE_NAME}: previewBuild.adapter has no effect: drafts render in the site's own build, through the ` +
+        'adapter in astro.config. Remove previewBuild.adapter.',
     );
   }
-  if (previewBuild.separate === true) return 'd4';
-  return adapterName === undefined ? 'd3' : 'd2';
+  if (previewBuild.separate === true) {
+    if (adapterName !== undefined && REFUSED_PREVIEW_ADAPTERS.includes(adapterName)) {
+      throw new Error(
+        `${PACKAGE_NAME}: previewBuild.separate is not supported with ${adapterName}: the separate preview build ` +
+          `would write its output where ${adapterName} deploys the live site. Remove separate: true; with ` +
+          `${adapterName} drafts render in the site's own build.`,
+      );
+    }
+    return 'd4';
+  }
+  return adapterName === undefined ? 'd3' : 'd8';
 }
 
-/** The mode a preview build serves in: the site's build names D2 or D3; the flag alone is a separate preview deploy (D4). */
-export function previewChildMode(env: NodeJS.ProcessEnv): Exclude<PreviewServeMode, 'd8'> {
-  const named = env[PREVIEW_MODE_ENV];
-  return named === 'd2' || named === 'd3' ? named : 'd4';
+/**
+ * The mode a preview build serves in: the site's build names D3; anything else is a separate preview deploy (D4),
+ * the flag alone included. A `d2` from an older release's parent is no child mode any more.
+ */
+export function previewChildMode(env: NodeJS.ProcessEnv): 'd3' | 'd4' {
+  return env[PREVIEW_MODE_ENV] === 'd3' ? 'd3' : 'd4';
 }
 
 /**
@@ -90,14 +100,15 @@ export type PreviewBuildSpawn = (
  */
 export function buildPreviewChildEnv(
   parentEnv: NodeJS.ProcessEnv,
-  mode: 'd2' | 'd3' = 'd2',
+  mode: 'd3',
   prerendered: readonly string[] = [],
 ): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...parentEnv, [PREVIEW_BUILD_ENV_FLAG]: '1', [PREVIEW_MODE_ENV]: mode };
-  // Only a D3 child reads it; a stale one from the environment must not reach a D2 child.
-  delete env[PREVIEW_PRERENDERED_ENV];
-  if (mode === 'd3') env[PREVIEW_PRERENDERED_ENV] = JSON.stringify(prerendered);
-  return env;
+  return {
+    ...parentEnv,
+    [PREVIEW_BUILD_ENV_FLAG]: '1',
+    [PREVIEW_MODE_ENV]: mode,
+    [PREVIEW_PRERENDERED_ENV]: JSON.stringify(prerendered),
+  };
 }
 
 /**
@@ -147,7 +158,7 @@ export function resolveAstroBin(cwd: string = process.cwd()): string {
  */
 export async function spawnPreviewBuild(
   opts: PreviewBuildOptions,
-  mode: 'd2' | 'd3' = 'd2',
+  mode: 'd3',
   prerendered: readonly string[] = [],
 ): Promise<void> {
   await _spawnPreviewBuildWith(spawn, opts, mode, prerendered);
@@ -165,7 +176,7 @@ export async function spawnPreviewBuild(
 export async function _spawnPreviewBuildWith(
   spawnFn: PreviewBuildSpawn,
   opts: PreviewBuildOptions,
-  mode: 'd2' | 'd3' = 'd2',
+  mode: 'd3',
   prerendered: readonly string[] = [],
 ): Promise<void> {
   // Recursion guard: bail out before doing any work if we're already inside

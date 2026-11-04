@@ -48,6 +48,11 @@
       "import": "./dist/src/d8-middleware.js",
       "default": "./dist/src/d8-middleware.js"
     },
+    "./preview-image-endpoint": {
+      "types": "./dist/src/preview-image-endpoint.d.ts",
+      "import": "./dist/src/preview-image-endpoint.js",
+      "default": "./dist/src/preview-image-endpoint.js"
+    },
     "./dispatcher": {
       "types": "./dist/src/preview/dispatcher.d.ts",
       "import": "./dist/src/preview/dispatcher.js",
@@ -96,9 +101,13 @@
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
     "@astrojs/cloudflare": "14.3.2",
+    "@astrojs/netlify": "8.2.11",
+    "@astrojs/node": "11.1.9",
     "@astrojs/sitemap": "^3.7.3",
+    "@astrojs/vercel": "11.0.18",
     "@conloca/astro-cms": "workspace:*",
     "astro": "^7.3.1",
+    "sharp": "^0.35.4",
     "typescript": "^6.0.3",
     "vite": "^8.2.2",
     "wrangler": "^4.130.0"
@@ -160,7 +169,11 @@
           "build",
           "test-packed",
           "test-editor-build",
-          "test-preview-build"
+          "test-preview-build",
+          "test-preview-vercel",
+          "test-preview-netlify",
+          "test-preview-node",
+          "test-preview-cloudflare"
         ],
         "inputs": [
           "{projectRoot}/**/*",
@@ -209,6 +222,98 @@
         "options": {
           "command": "bun test --timeout=600000 ./test-preview-build",
           "cwd": "{projectRoot}",
+          "timeoutMs": 900000,
+          "killAfterMs": 10000
+        }
+      },
+      "test-preview-vercel": {
+        "//": "Real d8 builds of every fixture shape with @astrojs/vercel, preview on and off, asserted on the output.",
+        "executor": "@smoothbricks/nx-plugin:bounded-exec",
+        "cache": true,
+        "inputs": [
+          "default",
+          "^production",
+          "{workspaceRoot}/bun.lock"
+        ],
+        "dependsOn": [
+          "build",
+          "^build"
+        ],
+        "options": {
+          "command": "bun test --timeout=600000 ./test-preview-hosts",
+          "cwd": "{projectRoot}",
+          "env": {
+            "CONLOCA_FIXTURE_ADAPTER": "vercel"
+          },
+          "timeoutMs": 900000,
+          "killAfterMs": 10000
+        }
+      },
+      "test-preview-netlify": {
+        "//": "Real d8 builds of every fixture shape with @astrojs/netlify, preview on and off, asserted on the output.",
+        "executor": "@smoothbricks/nx-plugin:bounded-exec",
+        "cache": true,
+        "inputs": [
+          "default",
+          "^production",
+          "{workspaceRoot}/bun.lock"
+        ],
+        "dependsOn": [
+          "build",
+          "^build"
+        ],
+        "options": {
+          "command": "bun test --timeout=600000 ./test-preview-hosts",
+          "cwd": "{projectRoot}",
+          "env": {
+            "CONLOCA_FIXTURE_ADAPTER": "netlify"
+          },
+          "timeoutMs": 900000,
+          "killAfterMs": 10000
+        }
+      },
+      "test-preview-node": {
+        "//": "Real d8 builds of every fixture shape with @astrojs/node, preview on and off, asserted on the output.",
+        "executor": "@smoothbricks/nx-plugin:bounded-exec",
+        "cache": true,
+        "inputs": [
+          "default",
+          "^production",
+          "{workspaceRoot}/bun.lock"
+        ],
+        "dependsOn": [
+          "build",
+          "^build"
+        ],
+        "options": {
+          "command": "bun test --timeout=600000 ./test-preview-hosts",
+          "cwd": "{projectRoot}",
+          "env": {
+            "CONLOCA_FIXTURE_ADAPTER": "node"
+          },
+          "timeoutMs": 900000,
+          "killAfterMs": 10000
+        }
+      },
+      "test-preview-cloudflare": {
+        "//": "Real d8 builds of every fixture shape with @astrojs/cloudflare, preview on and off, asserted on the output.",
+        "executor": "@smoothbricks/nx-plugin:bounded-exec",
+        "cache": true,
+        "inputs": [
+          "default",
+          "^production",
+          "{workspaceRoot}/bun.lock"
+        ],
+        "dependsOn": [
+          "build",
+          "^build"
+        ],
+        "options": {
+          "command": "bun test --timeout=600000 ./test-preview-hosts",
+          "cwd": "{projectRoot}",
+          "env": {
+            "CONLOCA_FIXTURE_ADAPTER": "cloudflare"
+          },
           "timeoutMs": 900000,
           "killAfterMs": 10000
         }

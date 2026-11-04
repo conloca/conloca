@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from 'bun:test';
 import { previewBranchSlug } from '@conloca/content-api/editor-host';
+import { InMemoryContentAPI } from '@conloca/content-api/node';
 import { generateKeyPair, type JWTVerifyGetKey, SignJWT } from 'jose';
 import type { PreviewMiddlewareOptions } from '../preview/middleware.js';
 import { createPreviewSiteMiddleware, type PreviewMiddlewareContext } from '../preview/site-middleware.js';
@@ -53,16 +54,21 @@ async function context(path: string, pass = true, root = ''): Promise<PreviewMid
 
 const PUBLISHED = '<!doctype html><html><head></head><body>PUBLISHED <a href="/blog/one">b</a></body></html>';
 
-/** A fake source listing `/contact` and `/blog/one` (or `pages`); records every call. */
+/** A fake source listing `/contact` and `/blog/one` (or `pages`), `/contact` its own route's file; records every call. */
 function source(
   read: () => Response | null = () => new Response(PUBLISHED, { headers: { 'content-type': 'text/html' } }),
   pages = new Set(['/contact', '/blog/one']),
+  exact = new Set(['/contact']),
 ) {
   const calls: string[] = [];
   const sitePages: SitePageSource = {
     async has(page) {
       calls.push(`has ${page}`);
       return pages.has(page);
+    },
+    async exact(page) {
+      calls.push(`exact ${page}`);
+      return exact.has(page);
     },
     async read(page) {
       calls.push(`read ${page}`);
@@ -96,6 +102,24 @@ function middleware(sitePages: SitePageSource, statuses: Response[], base = '/')
 const neverNext = async (): Promise<Response> => {
   throw new Error('next() must not run for a site page');
 };
+
+/** A handler whose page-status says `changed`; the branch manifests it then loads are unreadable (it falls back). */
+const changedHandler = (sitePages: SitePageSource) =>
+  createPreviewSiteMiddleware(d8('/'), {
+    baselineApi: async () => new InMemoryContentAPI(),
+    site: 'default',
+    locale: 'en',
+    fetchFn: Object.assign(
+      async (url: string | URL | Request) =>
+        (url instanceof Request ? url.url : url.toString()).includes('/preview/page-status/')
+          ? Response.json({})
+          : new Response(null, { status: 500 }),
+      { preconnect: fetch.preconnect },
+    ),
+    baked: { trailingSlash: 'ignore', buildFormat: 'directory', domains: [] },
+    sitePages,
+  });
+const draft = async () => new Response('<html><body>DRAFT</body></html>', { headers: { 'content-type': 'text/html' } });
 
 describe('site-authored pages under d8', () => {
   it.each(['/contact', '/blog/one'])('serves %s from its published bytes with the banner and Exit', async (path) => {
@@ -201,6 +225,22 @@ describe('site-authored pages under d8', () => {
     );
     expect(response.status).toBe(200);
     expect(await response.text()).toContain('PUBLISHED');
+  });
+
+  it('renders the draft of a path the list only matched to a route when page-status is changed', async () => {
+    const { sitePages, calls } = source();
+    const html = await (await changedHandler(sitePages)(await context('/blog/one'), draft, slug)).text();
+    expect(html).toContain('DRAFT');
+    expect(html).not.toContain('PUBLISHED');
+    expect(calls).toEqual(['exact /blog/one']);
+  });
+
+  it("keeps a site route's own page when page-status is changed: production serves it there", async () => {
+    const { sitePages, calls } = source();
+    const html = await (await changedHandler(sitePages)(await context('/contact'), draft, slug)).text();
+    expect(html).toContain('PUBLISHED');
+    expect(html).not.toContain('DRAFT');
+    expect(calls).toEqual(['exact /contact', 'read /contact']);
   });
 
   it('looks the page up and sends it out with the base included', async () => {

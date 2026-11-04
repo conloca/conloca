@@ -43,7 +43,9 @@ export function createD8Middleware(baked: BakedPreviewOpts, deps: D8Deps) {
     const { request, url } = context;
     const at = routePrefixed(url, base, 'd8');
     // `<prefix>/_image` is Astro's image endpoint: the pass cookie's path never covers it, so there is nothing to check.
-    if (at.kind === 'outside' || at.kind === 'image') return next();
+    // Its answer still carries the preview headers: Cloudflare's passthrough endpoint sets none of its own.
+    if (at.kind === 'outside') return next();
+    if (at.kind === 'image') return applyPreviewHeaders(await next());
     if (at.kind === 'exit') {
       let opts: PreviewMiddlewareOptions | null = null;
       try {

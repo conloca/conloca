@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { cp, mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { isAbsolute, join, relative, sep } from 'node:path';
 import {
   type AstroI18nLocales,
@@ -196,12 +196,6 @@ export async function emitEditorPage(input: EmitEditorPageInput): Promise<void> 
   );
   await writeFile(join(folder, 'index.html'), html);
   logger.info(`editor page written: ${base}${EDITOR_DIR}/`);
-}
-
-/** Copies <from>/_conloca/editor into <to>, for a preview child whose client folder serves the site. */
-export async function mirrorEditorPage(fromDir: string, toDir: string): Promise<void> {
-  await mkdir(join(toDir, '_conloca'), { recursive: true });
-  await cp(join(fromDir, EDITOR_DIR), join(toDir, EDITOR_DIR), { recursive: true });
 }
 
 /**

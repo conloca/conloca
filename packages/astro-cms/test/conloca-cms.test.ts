@@ -855,6 +855,18 @@ describe('the asset paths the integration hands to Astro and Vite', () => {
   });
 });
 
+describe('copy-assets', () => {
+  it('ships the preview page handler byte-identical to the page handler', async () => {
+    // A second file, so a site build can inject it at the preview route without Astro merging the two routes.
+    const packageRoot = fileURLToPath(new URL('..', import.meta.url));
+    const run = Bun.spawnSync({ cmd: ['bun', 'run', 'copy-assets.ts'], cwd: packageRoot });
+    expect(run.exitCode).toBe(0);
+    const internal = join(packageRoot, 'dist', 'internal');
+    const handler = await Bun.file(join(internal, 'page-handler.astro')).text();
+    expect(await Bun.file(join(internal, 'preview-page-handler.astro')).text()).toBe(handler);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // astro:routes:resolved — duplicate route names
 // ---------------------------------------------------------------------------

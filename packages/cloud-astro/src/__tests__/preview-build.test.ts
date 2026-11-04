@@ -56,6 +56,14 @@ function restoreFlag(): void {
 // previewBuildMode — the opt-in and the adapters it refuses.
 // ---------------------------------------------------------------------------
 
+function d4Refused(name: string): string {
+  return (
+    `@conloca/cloud-astro: previewBuild.separate is not supported with ${name}: the separate preview build would ` +
+    `write its output where ${name} deploys the live site. Remove separate: true; with ${name} drafts render in ` +
+    "the site's own build."
+  );
+}
+
 describe('previewBuildMode', () => {
   it('is off unless previewBuild is given as an object', () => {
     expect(previewBuildMode(undefined, '@astrojs/cloudflare')).toBe('off');
@@ -65,28 +73,35 @@ describe('previewBuildMode', () => {
     expect(previewBuildMode(false, '@astrojs/netlify')).toBe('off');
   });
 
-  it('serves a static site next to it (D3), a site with an adapter from its own deploy (D2), and a separate deploy on request (D4)', () => {
-    expect(previewBuildMode({}, undefined)).toBe('d3');
-    expect(previewBuildMode({}, '@astrojs/cloudflare')).toBe('d2');
-    expect(previewBuildMode({}, '@astrojs/node')).toBe('d2');
-    expect(previewBuildMode({ separate: true }, undefined)).toBe('d4');
-    expect(previewBuildMode({ separate: true }, '@astrojs/node')).toBe('d4');
-  });
+  const adapters = [
+    undefined,
+    '@astrojs/node',
+    '@astrojs/vercel',
+    '@astrojs/netlify',
+    '@astrojs/cloudflare',
+    '@example/deno',
+  ];
+  const adapterRefused =
+    "@conloca/cloud-astro: previewBuild.adapter has no effect: drafts render in the site's own build, through the " +
+    'adapter in astro.config. Remove previewBuild.adapter.';
 
-  it('refuses the Vercel and Netlify adapters', () => {
-    expect(() => previewBuildMode({}, '@astrojs/vercel')).toThrow(
-      'previewBuild is not supported with @astrojs/vercel yet',
-    );
-    expect(() => previewBuildMode({}, '@astrojs/netlify')).toThrow(
-      'previewBuild is not supported with @astrojs/netlify yet',
-    );
-  });
+  for (const adapter of adapters) {
+    it(`chooses the mode for ${adapter ?? 'no adapter'}`, () => {
+      expect(previewBuildMode({}, adapter)).toBe(adapter === undefined ? 'd3' : 'd8');
+      if (adapter === '@astrojs/vercel' || adapter === '@astrojs/netlify') {
+        expect(() => previewBuildMode({ separate: true }, adapter)).toThrow(d4Refused(adapter));
+      } else {
+        expect(previewBuildMode({ separate: true }, adapter)).toBe('d4');
+      }
+      expect(() => previewBuildMode({}, adapter, '@astrojs/node')).toThrow(adapterRefused);
+    });
+  }
 });
 
 describe('previewChildMode', () => {
-  it('takes D2 or D3 from the parent, and reads a build started with the flag alone as D4', () => {
+  it('takes D3 from the parent, and reads anything else, the retired D2 included, as a separate preview deploy (D4)', () => {
     expect(previewChildMode({ CONLOCA_PREVIEW_MODE: 'd3' })).toBe('d3');
-    expect(previewChildMode({ CONLOCA_PREVIEW_MODE: 'd2' })).toBe('d2');
+    expect(previewChildMode({ CONLOCA_PREVIEW_MODE: 'd2' })).toBe('d4');
     expect(previewChildMode({})).toBe('d4');
     expect(previewChildMode({ CONLOCA_PREVIEW_MODE: 'd4' })).toBe('d4');
   });
@@ -98,8 +113,8 @@ describe('previewChildPrerendered', () => {
     expect([...previewChildPrerendered(env)]).toEqual(['src/pages/rss.xml.js', 'src/pages/blog/[slug].astro']);
   });
 
-  it('reads nothing from a D2 child, or from a value that is not a list of names', () => {
-    expect(previewChildPrerendered(buildPreviewChildEnv({}, 'd2', ['src/pages/a.astro'])).size).toBe(0);
+  it('reads nothing from a D4 child, or from a value that is not a list of names', () => {
+    expect(previewChildPrerendered({ CONLOCA_PREVIEW_PRERENDERED: '["src/pages/a.astro"]' }).size).toBe(0);
     expect(previewChildPrerendered({ CONLOCA_PREVIEW_PRERENDERED: '{"a":1}' }).size).toBe(0);
     expect(previewChildPrerendered({ CONLOCA_PREVIEW_PRERENDERED: 'not json' }).size).toBe(0);
   });
@@ -111,7 +126,7 @@ describe('previewChildPrerendered', () => {
 
 describe('buildPreviewChildEnv', () => {
   it('sets CONLOCA_PREVIEW_BUILD=1 — the recursion guard contract', () => {
-    expect(buildPreviewChildEnv({})[PREVIEW_BUILD_ENV_FLAG]).toBe('1');
+    expect(buildPreviewChildEnv({}, 'd3')[PREVIEW_BUILD_ENV_FLAG]).toBe('1');
   });
 
   it('adds CONLOCA_PREVIEW_BUILD=1 and the mode to the parent environment', () => {
@@ -122,22 +137,17 @@ describe('buildPreviewChildEnv', () => {
       CONLOCA_PREVIEW_MODE: 'd3',
       CONLOCA_PREVIEW_PRERENDERED: '[]',
     });
-    expect(buildPreviewChildEnv({ PATH: '/bin' })).toEqual({
-      PATH: '/bin',
-      CONLOCA_PREVIEW_BUILD: '1',
-      CONLOCA_PREVIEW_MODE: 'd2',
-    });
   });
 
   it('inherits parent env entries (PATH, credentials, host vars)', () => {
     const parent = { PATH: '/usr/bin', CF_PAGES_BRANCH: 'main' };
-    const child = buildPreviewChildEnv(parent);
+    const child = buildPreviewChildEnv(parent, 'd3');
     expect(child.PATH).toBe('/usr/bin');
     expect(child.CF_PAGES_BRANCH).toBe('main');
   });
 
   it('overrides a stale build flag (own injection wins)', () => {
-    expect(buildPreviewChildEnv({ [PREVIEW_BUILD_ENV_FLAG]: 'stale' })[PREVIEW_BUILD_ENV_FLAG]).toBe('1');
+    expect(buildPreviewChildEnv({ [PREVIEW_BUILD_ENV_FLAG]: 'stale' }, 'd3')[PREVIEW_BUILD_ENV_FLAG]).toBe('1');
   });
 });
 
@@ -154,7 +164,7 @@ describe('spawnPreviewBuild — recursion guard', () => {
   it('does not spawn a child when CONLOCA_PREVIEW_BUILD=1 is already set', async () => {
     process.env[PREVIEW_BUILD_ENV_FLAG] = '1';
     const { calls, fn } = makeRecordingSpawn(0);
-    await _spawnPreviewBuildWith(fn, {});
+    await _spawnPreviewBuildWith(fn, {}, 'd3');
     expect(calls).toHaveLength(0);
   });
 
@@ -162,14 +172,14 @@ describe('spawnPreviewBuild — recursion guard', () => {
     // Defensive: any non-"1" value must not block the first level of recursion.
     process.env[PREVIEW_BUILD_ENV_FLAG] = 'true';
     const { calls, fn } = makeRecordingSpawn(0);
-    await _spawnPreviewBuildWith(fn, {});
+    await _spawnPreviewBuildWith(fn, {}, 'd3');
     expect(calls).toHaveLength(1);
   });
 
   it('spawns exactly once for a single primary build (no internal retries)', async () => {
     delete process.env[PREVIEW_BUILD_ENV_FLAG];
     const { calls, fn } = makeRecordingSpawn(0);
-    await _spawnPreviewBuildWith(fn, {});
+    await _spawnPreviewBuildWith(fn, {}, 'd3');
     expect(calls).toHaveLength(1);
   });
 });
@@ -186,7 +196,7 @@ describe('spawnPreviewBuild — child command and environment', () => {
 
   it('invokes the resolved astro binary directly (never npx/bunx/bun x — those auto-fetch)', async () => {
     const { calls, fn } = makeRecordingSpawn(0);
-    await _spawnPreviewBuildWith(fn, {});
+    await _spawnPreviewBuildWith(fn, {}, 'd3');
     // The pattern: resolve the CLI binary out of node_modules/.bin and spawn
     // it directly, instead of relying on a package-runner shim. Asserting the
     // *shape* (endsWith) keeps the test stable across different repo roots.
@@ -200,7 +210,7 @@ describe('spawnPreviewBuild — child command and environment', () => {
 
   it('passes CONLOCA_PREVIEW_BUILD=1 in the child env — the recursion guard contract', async () => {
     const { calls, fn } = makeRecordingSpawn(0);
-    await _spawnPreviewBuildWith(fn, {});
+    await _spawnPreviewBuildWith(fn, {}, 'd3');
     expect(calls[0].options.env[PREVIEW_BUILD_ENV_FLAG]).toBe('1');
   });
 
@@ -208,7 +218,7 @@ describe('spawnPreviewBuild — child command and environment', () => {
     process.env.CONLOCA_TEST_INHERIT = 'inherited-value';
     try {
       const { calls, fn } = makeRecordingSpawn(0);
-      await _spawnPreviewBuildWith(fn, {});
+      await _spawnPreviewBuildWith(fn, {}, 'd3');
       expect(calls[0].options.env.CONLOCA_TEST_INHERIT).toBe('inherited-value');
     } finally {
       delete process.env.CONLOCA_TEST_INHERIT;
@@ -217,7 +227,7 @@ describe('spawnPreviewBuild — child command and environment', () => {
 
   it('uses stdio inherit so child build output streams to the parent build log', async () => {
     const { calls, fn } = makeRecordingSpawn(0);
-    await _spawnPreviewBuildWith(fn, {});
+    await _spawnPreviewBuildWith(fn, {}, 'd3');
     expect(calls[0].options.stdio).toBe('inherit');
   });
 });
@@ -235,33 +245,33 @@ describe('spawnPreviewBuild — exit handling', () => {
   it('resolves on exit code 0 regardless of `required`', async () => {
     const { fn: required } = makeRecordingSpawn(0);
     const { fn: optional } = makeRecordingSpawn(0);
-    await Promise.resolve(expect(_spawnPreviewBuildWith(required, { required: true })).resolves.toBeUndefined());
-    await Promise.resolve(expect(_spawnPreviewBuildWith(optional, { required: false })).resolves.toBeUndefined());
+    await Promise.resolve(expect(_spawnPreviewBuildWith(required, { required: true }, 'd3')).resolves.toBeUndefined());
+    await Promise.resolve(expect(_spawnPreviewBuildWith(optional, { required: false }, 'd3')).resolves.toBeUndefined());
   });
 
   it('rejects on non-zero exit when required (default)', async () => {
     const { fn } = makeRecordingSpawn(2);
     // Default `required` is true.
-    await Promise.resolve(expect(_spawnPreviewBuildWith(fn, {})).rejects.toThrow(/preview build failed.*2/));
+    await Promise.resolve(expect(_spawnPreviewBuildWith(fn, {}, 'd3')).rejects.toThrow(/preview build failed.*2/));
   });
 
   it('rejects on non-zero exit when required: true explicitly', async () => {
     const { fn } = makeRecordingSpawn(1);
     await Promise.resolve(
-      expect(_spawnPreviewBuildWith(fn, { required: true })).rejects.toThrow(/preview build failed.*1/),
+      expect(_spawnPreviewBuildWith(fn, { required: true }, 'd3')).rejects.toThrow(/preview build failed.*1/),
     );
   });
 
   it('resolves on non-zero exit when required: false', async () => {
     const { fn } = makeRecordingSpawn(7);
-    await Promise.resolve(expect(_spawnPreviewBuildWith(fn, { required: false })).resolves.toBeUndefined());
+    await Promise.resolve(expect(_spawnPreviewBuildWith(fn, { required: false }, 'd3')).resolves.toBeUndefined());
   });
 
   it('rejects on signal-style null exit when required (treated as failure)', async () => {
     // Spawned process killed by signal exits with code === null; that must
     // not silently look like success.
     const { fn } = makeRecordingSpawn(null);
-    await Promise.resolve(expect(_spawnPreviewBuildWith(fn, {})).rejects.toThrow(/preview build failed/));
+    await Promise.resolve(expect(_spawnPreviewBuildWith(fn, {}, 'd3')).rejects.toThrow(/preview build failed/));
   });
 });
 
@@ -270,10 +280,10 @@ describe('spawnPreviewBuild — exit handling', () => {
 // ---------------------------------------------------------------------------
 
 describe('spawnPreviewBuild — public entrypoint', () => {
-  it('exists as an async function and accepts (opts)', () => {
+  it('exists as an async function and accepts (opts, mode)', () => {
     expect(typeof spawnPreviewBuild).toBe('function');
-    // Length excludes optional/destructured params; the options are required positional.
-    expect(spawnPreviewBuild.length).toBe(1);
+    // Length excludes optional params: the options and the mode are required positional.
+    expect(spawnPreviewBuild.length).toBe(2);
   });
 
   it('short-circuits via the public entry without ever calling node:child_process when env=1', async () => {
@@ -283,7 +293,7 @@ describe('spawnPreviewBuild — public entrypoint', () => {
       // No spawn-fn injection here: if the recursion guard ever regresses, the
       // public entrypoint would attempt to spawn `bun x astro build` for real
       // and hang the test runner. Reaching `resolves` proves the short-circuit.
-      await Promise.resolve(expect(spawnPreviewBuild({})).resolves.toBeUndefined());
+      await Promise.resolve(expect(spawnPreviewBuild({}, 'd3')).resolves.toBeUndefined());
     } finally {
       if (original === undefined) delete process.env[PREVIEW_BUILD_ENV_FLAG];
       else process.env[PREVIEW_BUILD_ENV_FLAG] = original;
@@ -301,7 +311,7 @@ describe('spawnPreviewBuild — public entrypoint', () => {
 
 describe('spawnPreviewBuild — real-process env propagation (smoke)', () => {
   it('the env constructed by buildPreviewChildEnv reaches a real child process', () => {
-    const env = buildPreviewChildEnv(process.env);
+    const env = buildPreviewChildEnv(process.env, 'd3');
     const result = spawnSync('node', ['-e', 'process.stdout.write(String(process.env.CONLOCA_PREVIEW_BUILD))'], {
       env,
       stdio: ['ignore', 'pipe', 'inherit'],
