@@ -1,6 +1,6 @@
 {
   "name": "@conloca/astro-cms",
-  "version": "0.2.6",
+  "version": "0.2.7-next.0",
   "publishConfig": {
     "access": "public"
   },
