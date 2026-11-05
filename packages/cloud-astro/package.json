@@ -318,6 +318,27 @@
           "killAfterMs": 10000
         }
       },
+      "test-preview-timing": {
+        "//": "The d8 build-time guard (under 3x the no-preview build, every adapter). A wall-clock ratio needs a quiet machine, so it runs with no other task beside it and is not a dependency of `test`: the release lane runs `test` on a shared runner. tooling:test depends on it, so CI runs it whenever this package changes.",
+        "executor": "@smoothbricks/nx-plugin:bounded-exec",
+        "cache": true,
+        "parallelism": false,
+        "inputs": [
+          "default",
+          "^production",
+          "{workspaceRoot}/bun.lock"
+        ],
+        "dependsOn": [
+          "build",
+          "^build"
+        ],
+        "options": {
+          "command": "bun test --timeout=600000 ./test-preview-timing",
+          "cwd": "{projectRoot}",
+          "timeoutMs": 900000,
+          "killAfterMs": 10000
+        }
+      },
       "test-packed": {
         "//": "The packed shape is a function of the built outputs, the manifest and the locked dependency closure; cached on exactly those.",
         "executor": "nx:run-commands",

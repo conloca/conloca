@@ -19,7 +19,8 @@
     "src/test-suite-tracer.ts",
     "test-editor-build/**/*.ts",
     "test-preview-build/**/*.ts",
-    "test-preview-hosts/**/*.ts"
+    "test-preview-hosts/**/*.ts",
+    "test-preview-timing/**/*.ts"
   ],
   "references": [
     {

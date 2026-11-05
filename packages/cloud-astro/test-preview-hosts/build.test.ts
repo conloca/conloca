@@ -292,25 +292,6 @@ describe(`${ADAPTER}: d8 fixture builds`, () => {
     }
   });
 
-  it(
-    'builds a static site in under three times its no-preview build',
-    async () => {
-      // Alone, one after the other: the suite's parallel builds would skew either one. Other lanes still load the
-      // machine, so the builds alternate three times and the fastest of each compares.
-      let plain = Number.POSITIVE_INFINITY;
-      let preview = Number.POSITIVE_INFINITY;
-      for (let sample = 0; sample < 3; sample++) {
-        // oxlint-disable-next-line no-await-in-loop -- the builds must not overlap.
-        plain = Math.min(plain, (await buildFixture(ADAPTER, 'static', { preview: false, copy: '-timed' })).ms);
-        // oxlint-disable-next-line no-await-in-loop -- as above.
-        preview = Math.min(preview, (await buildFixture(ADAPTER, 'static', { preview: true, copy: '-timed' })).ms);
-      }
-      console.info(`${ADAPTER}-static build: ${plain} ms without preview, ${preview} ms with d8`);
-      expect(preview).toBeLessThan(plain * 3);
-    },
-    SUITE_TIMEOUT,
-  );
-
   if (ADAPTER === 'vercel') {
     it('sends misses on a static site to its 404 page, and leaves a server site and a site 404 alone', () => {
       expect(vercelRoutes(fixture('static', true).dir).at(-1)).toEqual({
