@@ -91,11 +91,9 @@ export interface CardProps extends ComponentProps<'div'> {
  *   (same `panel` classes — see `SURFACE_CLASS`)
  * - prevents drift (no more "this screen has px-8 py-10, that one
  *   has px-6 py-8 and nobody noticed")
- * - dodges the CSS cascade-layer fight that bites raw Tailwind
- *   `px-*` / `py-*` classes on consumers outside cms-spa. Card's
- *   classes are compiled into cms-spa's bundle alongside the
- *   Tailwind preflight reset, so they resolve in the same layer
- *   and the reset's `* { padding: 0 }` doesn't win.
+ * - includes its spacing utilities in cms-spa's bundle. They live
+ *   in `cms-admin.utilities`, which must follow preflight's top-level
+ *   `base` layer so the universal padding reset cannot override them.
  *
  * Layout (`flex`, `gap-*`, `max-w-*`, alignment) stays on the
  * caller via `className` — Card owns the surface; the caller owns
