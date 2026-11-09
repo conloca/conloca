@@ -13,6 +13,7 @@ export interface WalkContext {
  * item, `NaN` or an infinity becomes `null`. `undefined` itself stays absent. `null` for anything else that is not JSON
  * (a `Date`, a class instance, a function). Every input crosses into the engine through here.
  */
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- This function is the JSON parsing boundary.
 export function parseJson(value: unknown): { json: Field } | null {
   if (value === undefined) return { json: undefined };
   if (typeof value === 'number') return { json: Number.isFinite(value) ? value : null };

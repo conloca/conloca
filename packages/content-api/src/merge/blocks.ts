@@ -26,7 +26,7 @@ function isBlockListPath(steps: AnchorStep[]): boolean {
 
 /**
  * Whether the list at `steps` merges per `props.id`: a Puck block-list path, and every present side an array of blocks
- * with unique ids. Any other list, or a hand-edited one with a missing or duplicate id, stays one atomic value (D4).
+ * with unique ids. Any other list, or a hand-edited one with a missing or duplicate id, stays one atomic value.
  */
 export function idKeyedListAt(steps: AnchorStep[], fileType: Field, sides: Field[]): boolean {
   if (fileType !== 'puck' || !isBlockListPath(steps)) return false;
@@ -100,7 +100,7 @@ export function mergeIdKeyedList(
   const kept = order.filter((id) => merged.has(id));
   const result = kept.flatMap((id) => merged.get(id) ?? []);
   if (clash) {
-    // F5: full lists, with ours as the merged order, so the anchor reads back what `value` holds.
+    // Full id lists, with ours as the merged order, so the anchor reads back what `value` holds.
     ctx.conflicts.push({
       anchor: formatAnchor([...steps, { order: true }], ctx.fileType),
       base: [...b.keys()],

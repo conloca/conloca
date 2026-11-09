@@ -1,3 +1,5 @@
+import type { FieldConflict } from './merge/types.js';
+
 export interface ContentAPIOptions {
   contentRoot: string;
   canvasDir?: string;
@@ -226,6 +228,8 @@ export interface UpdateResult {
    * refusals of a page's new path, and the `invalid_name` and `name_taken`
    * refusals of a fragment or data entry's new name, mean what they mean for a
    * create; a backend that does not tell them apart reports `write_error`.
+   * `page_too_large`: the page would outgrow what a backend that bounds a page's
+   * stored size can keep; nothing was written.
    */
   reason?:
     | 'not_found'
@@ -235,7 +239,8 @@ export interface UpdateResult {
     | 'pathname_taken'
     | 'pathname_in_redirects'
     | 'invalid_name'
-    | 'name_taken';
+    | 'name_taken'
+    | 'page_too_large';
   error?: Error;
   currentEtag?: string;
   conflictDetails?: {
@@ -244,6 +249,10 @@ export interface UpdateResult {
     currentMeta?: ContentMeta;
     currentContent?: ContentData;
     localContent?: ContentData;
+    /** Each value the write and the page as it is now changed differently: ours is the write's, theirs the page's. */
+    conflicts?: FieldConflict[];
+    /** Display name of the most recent other person who changed this page, when the backend knows it. */
+    changedBy?: string;
   };
 }
 
@@ -251,8 +260,11 @@ export interface MoveResult {
   moved: boolean;
   previousPathname?: string;
   files?: string[];
-  /** `already_exists` also covers a path another page redirects from; `invalid_pathname` is a malformed path. */
-  reason?: 'not_found' | 'already_exists' | 'stale_write' | 'write_error' | 'invalid_pathname';
+  /**
+   * `already_exists` also covers a path another page redirects from; `invalid_pathname` is a malformed path;
+   * `page_too_large` as on {@link UpdateResult}.
+   */
+  reason?: 'not_found' | 'already_exists' | 'stale_write' | 'write_error' | 'invalid_pathname' | 'page_too_large';
   error?: Error;
   etag?: string;
 }
@@ -566,7 +578,9 @@ export interface CreateResult {
     | 'metadata_too_large'
     | 'missing_field'
     | 'unknown_site'
-    | 'no_sites_configured';
+    | 'no_sites_configured'
+    /** As on {@link UpdateResult}. */
+    | 'page_too_large';
   error?: Error;
   existingId?: string;
   /** The input field a caller has to change, when the failure points at one. */

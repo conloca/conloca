@@ -19,7 +19,7 @@ type EditOp =
   | { op: 'add-block'; side: Side; target: string; parent: string; added: JsonObject }
   | { op: 'move'; side: Side; target: string; block: string; to: number };
 
-/** `disjoint`: no `both`, one mover. `clashing`: `both` only on sets (F11). `free`: anything on either side. */
+/** `disjoint`: no `both`, one mover. `clashing`: `both` only on sets. `free`: anything on either side. */
 type Mode = 'disjoint' | 'clashing' | 'free';
 
 interface BlockShape {

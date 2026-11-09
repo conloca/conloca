@@ -2,7 +2,7 @@ import { diffArrays } from 'diff';
 import { blockRefs, bodyAnchor, parseBodyAnchor } from './anchor.js';
 import type { FieldConflict } from './types.js';
 
-/** Diff cost cap per side (D21); past it the body merges as one region. */
+/** Diff cost cap per side; past it the body merges as one region. */
 export const MDX_MAX_EDIT_LENGTH = 1000;
 
 /** One body block: its exact bytes, and the text that decides whether two blocks are the same. */

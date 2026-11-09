@@ -40,10 +40,13 @@ function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
 
-/** A reason a create or an update refuses, other than those each route answers itself. */
+/**
+ * A reason a create or an update refuses, other than those each route answers itself, and `page_too_large`, which
+ * only a backend that bounds a page's stored size gives.
+ */
 type Refusal = Exclude<
   NonNullable<CreateResult['reason'] | UpdateResult['reason']>,
-  'write_error' | 'stale_write' | 'not_found'
+  'write_error' | 'stale_write' | 'not_found' | 'page_too_large'
 >;
 
 /**

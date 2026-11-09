@@ -79,7 +79,7 @@ describe('mergeContent Puck block lists', () => {
     expect(ids(isRecord(first) && isRecord(first.props) ? first.props.items : undefined)).toEqual(['D', 'E']);
   });
 
-  it('merges an id-less array as one value (D4)', () => {
+  it('merges an id-less array as one value', () => {
     const base = [{ label: 'Go' }];
     const ours = [{ label: 'Go' }, { label: 'More' }];
     const theirs = [{ label: 'Start' }];
@@ -127,7 +127,7 @@ describe('mergeContent Puck block lists', () => {
     expect(ids(puckData(r).content)).toEqual(['C', 'A', 'B']);
   });
 
-  it('reports an order clash with full id lists when a side also adds (F5)', () => {
+  it('reports an order clash with full id lists when a side also adds', () => {
     const [a, b, c, d] = ['A', 'B', 'C', 'D'].map((id) => block(id));
     const r = merge(page([a, b, c]), page([c, a, b, d]), page([b, a, c]));
     expect(r.kind === 'conflict' ? r.conflicts : []).toEqual([
