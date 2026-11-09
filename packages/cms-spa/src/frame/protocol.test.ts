@@ -31,6 +31,22 @@ const BASE_INIT: Init = {
   mediaEnabled: false,
 };
 
+describe('the doc channel', () => {
+  test('reads an init with docChannel and still reads one without it', () => {
+    expect(readControlMessage({ ...BASE_INIT, docChannel: true })).toMatchObject({ kind: 'init', docChannel: true });
+    expect(readControlMessage(BASE_INIT)).not.toHaveProperty('docChannel');
+    expect(readControlMessage({ ...BASE_INIT, docChannel: 'yes' })).not.toHaveProperty('docChannel');
+  });
+
+  test('allows the doc methods with their arities', () => {
+    expect(FRAME_HOST_METHODS).toEqual(expect.arrayContaining(['doc.open', 'doc.close', 'doc.flush']));
+    expect(FRAME_METHOD_MAX_ARGS['doc.open']).toBe(1);
+    expect(FRAME_METHOD_MAX_ARGS['doc.close']).toBe(1);
+    expect(FRAME_METHOD_MAX_ARGS['doc.flush']).toBe(0);
+    expect(FRAME_CONTENT_METHODS).not.toContain('doc.open');
+  });
+});
+
 describe('the editor frame contract', () => {
   test('the page speaks a protocol inside the parent range', () => {
     expect(EDITOR_HOST_PROTOCOL).toBe(1);
@@ -49,6 +65,9 @@ describe('the editor frame contract', () => {
       'media.load',
       'preview.open',
       'site.open',
+      'doc.open',
+      'doc.close',
+      'doc.flush',
     ]);
   });
 
@@ -58,7 +77,9 @@ describe('the editor frame contract', () => {
       // listFolder(path = '/') reports 0: a default parameter ends Function.length.
       expect<number>(FRAME_METHOD_MAX_ARGS[method]).toBe(method === 'listFolder' ? 1 : declared);
     }
-    for (const method of FRAME_HOST_METHODS) expect(FRAME_METHOD_MAX_ARGS[method]).toBe(1);
+    for (const method of FRAME_HOST_METHODS) {
+      expect<number>(FRAME_METHOD_MAX_ARGS[method]).toBe(method === 'doc.flush' ? 0 : 1);
+    }
   });
 
   test('a route path is a cms-spa path with an optional query', () => {

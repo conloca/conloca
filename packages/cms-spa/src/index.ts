@@ -29,6 +29,18 @@ export { awaitParentHello } from './frame/parent-hello.js';
 // Export types from hooks (AssetEntry, etc.)
 export type { AssetEntry, AssetUsage, FolderListing, FolderTreeNode } from './hooks/index.js';
 export { buildUploadFormData } from './hooks/useUpload.js';
+// Live editing messages the parent and the editor page exchange
+export {
+  type DocOpenRequest,
+  type DocOpenResult,
+  type LiveHello,
+  type LiveMessage,
+  type LiveStatus,
+  type PresencePeer,
+  readLiveHello,
+  readLiveMessage,
+  readLiveStatus,
+} from './live/messages.js';
 // Shrinks and checks an image before upload; the editor's parent page runs it on every upload it forwards
 export { prepareImageUpload, prepareUploadForm } from './media/prepare-image-upload.js';
 // Export configuration function

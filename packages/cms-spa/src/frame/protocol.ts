@@ -6,6 +6,7 @@
 import type { ContentAPIClient } from '@conloca/content-api-client';
 import { type PageConversionFacts, readPageConversionFacts } from '../convert-pages.js';
 import type { StaleEditorQueries } from '../editor-queries.js';
+import type { DocOpenResult, LiveMessage, LiveStatus, PresencePeer } from '../live/messages.js';
 import type { ThemePreference } from '../theme.js';
 import type { EditorWriteRefusal, PreviewCapability } from '../ui-config.js';
 
@@ -57,6 +58,8 @@ export interface Init {
   mediaEnabled: boolean;
   /** Facts the prompt for converting existing pages needs; absent while the parent does not know them. */
   pageConversion?: PageConversionFacts;
+  /** The parent carries co-edited documents (`doc.*` methods and events); absent, the page keeps the single-editor path. */
+  docChannel?: true;
 }
 
 export interface Ready {
@@ -136,6 +139,14 @@ export interface FrameEventPayloads {
   'theme.changed': { theme: ThemePreference };
   'pageConversion.changed': { pageConversion: PageConversionFacts | null };
   'queries.stale': { queries: StaleEditorQueries };
+  /** An update to an open doc, sent by either side. */
+  'doc.update': { docKey: string; update: Uint8Array };
+  /** The doc was replaced by a new generation; the page drops `docKey` and opens `next`. */
+  'doc.replaced': { docKey: string; next: DocOpenResult };
+  'presence.set': { docKey: string; selection: { blockId: string | null } };
+  'presence.peers': { docKey: string; peers: PresencePeer[] };
+  'live.message': LiveMessage;
+  'live.status': LiveStatus;
 }
 
 /** Content methods the page may call; the parent refuses every other client method. */
@@ -180,6 +191,12 @@ export const FRAME_HOST_METHODS = [
   'media.load',
   'preview.open',
   'site.open',
+  /** Takes a `DocOpenRequest`, answers a `DocOpenResult`. */
+  'doc.open',
+  /** Takes `{ docKey }`. */
+  'doc.close',
+  /** Answers an `EditorFlushResult` once every local update is acknowledged. */
+  'doc.flush',
 ] as const;
 
 /**
@@ -228,6 +245,9 @@ export const FRAME_METHOD_MAX_ARGS = {
   'media.load': 1,
   'preview.open': 1,
   'site.open': 1,
+  'doc.open': 1,
+  'doc.close': 1,
+  'doc.flush': 0,
 } as const satisfies Readonly<Record<FrameMethod, number>>;
 
 const FRAME_PATH_RE = /^\/[A-Za-z0-9/_.:%-]{0,512}(\?[A-Za-z0-9_.:%=&-]{0,512})?$/;
@@ -281,6 +301,7 @@ function readInit(data: unknown): Init | undefined {
   // Unlike `locales`, malformed facts only cost the prompt, not the whole init.
   const pageConversion = 'pageConversion' in data ? readPageConversionFacts(data.pageConversion) : undefined;
   if (pageConversion) init.pageConversion = pageConversion;
+  if ('docChannel' in data && data.docChannel === true) init.docChannel = true;
   if (!('locales' in data) || data.locales === undefined) return init;
   const locales = readLocales(data.locales);
   return locales ? { ...init, locales } : undefined;
