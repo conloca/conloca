@@ -28,16 +28,11 @@ import {
   parseContentPathLayout,
   parseLocaleFilename,
 } from './content-path.js';
-import {
-  applyMetaPatch,
-  localesOf,
-  mapSiteNames,
-  resolvePublishDate,
-  serializeMdxWithFrontmatter,
-} from './content-utils.js';
+import { applyMetaPatch, localesOf, mapSiteNames, resolvePublishDate } from './content-utils.js';
 import { Data } from './data.js';
 import { calculateEtagsFromMdxBuffer, findMdxContentStartPosition, parseDualEtag } from './etag-utils.js';
 import { Fragments } from './fragments.js';
+import { serializeMdxWithFrontmatter } from './mdx-frontmatter.js';
 import { Site } from './site.js';
 import type {
   BatchOperationResult,

@@ -65,6 +65,7 @@ export { Fragments } from './fragments.js';
 export type { GitCommitResult, GitPullResult, GitPushResult, GitStatus } from './git-operations.js';
 // Git LFS rule matching for uploads, shared by the online editor's upload check and its Publish.
 export { type GitAttributesFile, isAutoWrittenLfsAttributes, lfsRuleFor } from './lfs-attributes.js';
+export * from './mdx-frontmatter.js';
 // The page feed a data binding declares, shared by the published page and the editor.
 export { pageReferenceOf, pageTimestampsOf, selectPagesByPrefix } from './page-references.js';
 // Reader backend interface types (browser-safe; type-only re-export).

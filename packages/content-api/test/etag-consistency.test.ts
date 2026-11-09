@@ -2,10 +2,10 @@ import { describe, expect, test } from 'bun:test';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { serializeMdxWithFrontmatter } from '../src/content-utils.js';
 import { calculateEtagsFromMdxBuffer, findMdxContentStartPosition } from '../src/etag-utils.js';
 import { FileSystemContentAPI } from '../src/filesystem-content-api.js';
 import { InMemoryContentAPI } from '../src/in-memory-content-api.js';
+import { serializeMdxWithFrontmatter } from '../src/mdx-frontmatter.js';
 import type { SitesConfig, VXJSONFile } from '../src/types.js';
 import { VXJSON } from '../src/vxjson.js';
 

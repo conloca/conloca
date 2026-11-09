@@ -6,18 +6,19 @@
  * build/lint/test pipelines: mutation testing runs nightly on scoped modules,
  * off the normal development loop.
  *
- * Scope: `src/vxjson.ts` only — the VxJSON/content-write path is the
- * highest-value module to mutate first. content-api/src is ~11k lines; a
+ * Scope: `src/vxjson.ts` and `src/merge/**` — the VxJSON/content-write path
+ * and the merge engine every writer calls. content-api/src is ~11k lines; a
  * full-package run would plausibly exceed the ~20min budget this task set,
- * so the pilot narrows to one meaningful, already-well-tested module rather
+ * so the pilot narrows to a few meaningful, well-tested modules rather
  * than running (and timing out) across the whole package.
  *
  * Test runner: @stryker-mutator/vitest-runner, pointed at a DEDICATED
- * vitest config (vitest.mutation-pilot.config.ts) that runs only the new
- * vxjson.mutation-pilot.vitest.ts spec — NOT the package's real `bun test`
- * suite, which Stryker's vitest-runner cannot execute (bun:test is not
- * Vitest). This keeps the pilot honest: mutants are killed by real
- * assertions against real shipped code, not a thinner reimplementation.
+ * vitest config (vitest.mutation-pilot.config.ts) that runs only
+ * vxjson.mutation-pilot.vitest.ts and the merge engine's `bun:test` files
+ * (test/merge/*.test.ts, with `bun:test` aliased to `vitest`) — not the
+ * whole package suite, and the package's `test` target stays on Bun. This
+ * keeps the pilot honest: mutants are killed by real assertions against
+ * real shipped code, not a thinner reimplementation.
  *
  * @type {import('@stryker-mutator/api/core').PartialStrykerOptions}
  */
@@ -39,7 +40,7 @@ export default {
   vitest: {
     configFile: 'vitest.mutation-pilot.config.ts',
   },
-  mutate: ['src/vxjson.ts'],
+  mutate: ['src/vxjson.ts', 'src/merge/**/*.ts'],
   reporters: ['clear-text', 'progress'],
   coverageAnalysis: 'perTest',
   tempDirName: '.stryker-tmp',

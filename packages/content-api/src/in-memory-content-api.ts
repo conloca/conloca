@@ -13,17 +13,11 @@ import {
   validateAndPrepareMetadata,
   validateCreateContent,
 } from './content-operations.js';
-import {
-  applyMetaPatch,
-  getCurrentISODate,
-  localesOf,
-  mapLocales,
-  mapSiteNames,
-  serializeMdxWithFrontmatter,
-} from './content-utils.js';
+import { applyMetaPatch, getCurrentISODate, localesOf, mapLocales, mapSiteNames } from './content-utils.js';
 import { Data } from './data.js';
 import { calculateEtagsFromMdxBuffer, findMdxContentStartPosition } from './etag-utils.js';
 import { Fragments } from './fragments.js';
+import { serializeMdxWithFrontmatter } from './mdx-frontmatter.js';
 import { Site } from './site.js';
 import type {
   BatchResult,

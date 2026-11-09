@@ -13,6 +13,7 @@
   "module": "./dist/index.js",
   "dependencies": {
     "@hono/node-server": "^2.1.1",
+    "diff": "^9.0.0",
     "fast-glob": "^3.3.3",
     "gray-matter": "^4.0.3",
     "hono": "^4.13.5",
@@ -102,6 +103,11 @@
       "types": "./dist/vxjson-serialize.d.ts",
       "import": "./dist/vxjson-serialize.js",
       "default": "./dist/vxjson-serialize.js"
+    },
+    "./merge": {
+      "types": "./dist/merge/index.d.ts",
+      "import": "./dist/merge/index.js",
+      "default": "./dist/merge/index.js"
     },
     "./reader": {
       "types": "./dist/reader.d.ts",

@@ -2,20 +2,23 @@ import { defineConfig } from 'vitest/config';
 
 /**
  * Vitest config for the Stryker mutation pilot ONLY. Not used by the
- * package's normal `content-api:test` Nx target (that stays `bun test`, per the
- * single-runner policy carve-out for this pre-existing bun:test suite —
- * this file does not add a second permanent runner for the package's real
- * tests, it exists solely because Stryker's official vitest-runner cannot
- * drive `bun:test`).
+ * package's normal `content-api:test` Nx target, which stays `bun test` per
+ * the single-runner policy; this file exists solely because Stryker's
+ * official vitest-runner cannot drive `bun:test`.
+ *
+ * The merge engine's own `bun:test` files run here unchanged: `bun:test` is
+ * aliased to `vitest`, whose `describe`/`it`/`expect` they use the same way.
+ * That lends the mutation lane the real suites without moving them off Bun.
  *
  * Scope matches `stryker.pilot.config.mjs`'s `mutate` list: only
- * `src/vxjson.ts` is mutated, so only its dedicated pilot spec needs to run
+ * `src/vxjson.ts` and `src/merge/**` are mutated, so only their specs run
  * here — not the whole package's test/ directory.
  */
 export default defineConfig({
+  resolve: { alias: { 'bun:test': 'vitest' } },
   test: {
     globals: false,
     environment: 'node',
-    include: ['test/vxjson.mutation-pilot.vitest.ts'],
+    include: ['test/vxjson.mutation-pilot.vitest.ts', 'test/merge/*.test.ts'],
   },
 });

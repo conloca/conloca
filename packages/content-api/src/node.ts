@@ -31,6 +31,7 @@ export { Fragments } from './fragments.js';
 export type { ParseHeaderResult } from './header-parser.js';
 export { parseContentHeader } from './header-parser.js';
 export { InMemoryContentAPI } from './in-memory-content-api.js';
+export * from './mdx-frontmatter.js';
 export { createContentAPIRouter, createContentMiddleware } from './middleware.js';
 export type { BackendReadResult, ContentReaderBackend } from './reader-backend.js';
 export { Site } from './site.js';
