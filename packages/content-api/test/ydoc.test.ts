@@ -112,6 +112,20 @@ const arbPuckData = fc
   });
 
 describe('ydoc shape', () => {
+  const foreignShapes = [YDOC_SHAPE + 1, YDOC_SHAPE - 1, '3', null, Number.NaN, 1.5, true];
+  it.each(foreignShapes)('applyContentDiff refuses a doc whose shape is %s and writes nothing', (shape) => {
+    const doc = hydrateDoc(PAGE_ABC);
+    doc.getMap('_meta').set('shape', shape);
+    let updates = 0;
+    doc.on('update', () => updates++);
+    expect(() => applyContentDiff(doc, withProp(PAGE_ABC, 'a', 'title', 'X'), 'x')).toThrow(/invariant: doc shape/);
+    expect(updates).toBe(0);
+  });
+  it.each(foreignShapes)('serializeDoc refuses a doc whose shape is %s', (shape) => {
+    const doc = hydrateDoc(PAGE_ABC);
+    doc.getMap('_meta').set('shape', shape);
+    expect(() => serializeDoc(doc)).toThrow(/invariant: doc shape/);
+  });
   it('serializeDoc(hydrateDoc(c)) is byte-equal for every fixture and arbitrary puck data', () => {
     fc.assert(
       fc.property(arbPuckData, (puckData) => {

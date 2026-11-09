@@ -226,9 +226,19 @@ function serializeSection(section: string, frontmatter: JsonObject): string {
 /** Labels the source of a content-diff transaction for Yjs observers. */
 export type ContentDiffOrigin = string | null;
 
+/**
+ * Throws unless `doc` is of this code's shape, or of the positional one that carries none: any other (a newer build's,
+ * or a value no build writes) would be misread and rewritten.
+ */
+function assertKnownShape(doc: Y.Doc): void {
+  const shape = doc.getMap<YValue>('_meta').get('shape');
+  if (shape !== undefined && shape !== YDOC_SHAPE) throw new Error(`invariant: doc shape ${JSON.stringify(shape)}`);
+}
+
 /** Applies `next` to `doc` in one transaction, writing only what differs, so an unchanged file emits no update. */
 export function applyContentDiff(doc: Y.Doc, next: ContentData, origin: ContentDiffOrigin): void {
   const kind = kindOf(next);
+  assertKnownShape(doc);
   doc.transact(() => {
     const meta = doc.getMap<YValue>('_meta');
     const current = meta.get('kind');
@@ -381,6 +391,7 @@ function layoutPuck(doc: Y.Doc) {
 /** The inverse of `hydrateDoc`. */
 export function serializeDoc(doc: Y.Doc): ContentData {
   const meta = doc.getMap<YValue>('_meta');
+  assertKnownShape(doc);
   const kind = meta.get('kind');
   const index = new Map<string, { id: string; block: YMap }[]>();
   if (kind === 'puck') return { puckData: layoutPuck(doc).json };
