@@ -484,6 +484,28 @@ describe('ContentAPIClient', () => {
     });
   });
 
+  describe('asset metadata', () => {
+    it('sends the values it loaded with an edit', async () => {
+      fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ filename: 'team.png' }), { status: 200 }));
+
+      await client.updateAssetMetadata('team.png', { alt: 'The team' }, { alt: 'Team', tags: null });
+
+      expect(fetchMock).toHaveBeenCalledWith('/__conloca/api/assets/meta/team.png', {
+        method: 'PATCH',
+        body: JSON.stringify({ alt: 'The team', base: { alt: 'Team', tags: null } }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+
+    it('sends an edit without a base as before', async () => {
+      fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ filename: 'team.png' }), { status: 200 }));
+
+      await client.updateAssetMetadata('team.png', { alt: 'The team' });
+
+      expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ body: JSON.stringify({ alt: 'The team' }) });
+    });
+  });
+
   describe('custom base URL', () => {
     it('should use custom base URL', async () => {
       const customClient = new ContentAPIClient({ baseUrl: '/custom/api' });

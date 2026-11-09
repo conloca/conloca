@@ -1,4 +1,4 @@
-import { formatFileSize } from '@conloca/content-api-client';
+import { APIClientError, ErrorCodes, formatFileSize } from '@conloca/content-api-client';
 import { FolderInput, Loader2, Trash2, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { AssetEntry } from '../../hooks/index.js';
@@ -21,6 +21,19 @@ function formatDate(dateString: string): string {
     day: 'numeric',
   });
 }
+
+/** The asset as it stands when a save was refused because someone else changed the field meanwhile, else null. */
+function changedMeanwhile(error: Error): AssetEntry | null {
+  if (!(error instanceof APIClientError) || error.code !== ErrorCodes.WRITE_ERROR) return null;
+  // The refusal names the clashing `fields` and carries `current`, the asset entry it refused the save against; any
+  // other write error is a failed save.
+  const details: { fields?: string[]; current?: AssetEntry } | undefined = error.details;
+  const current = details?.current;
+  if (!Array.isArray(details?.fields) || typeof current !== 'object' || current === null) return null;
+  return current;
+}
+
+const CHANGED_MEANWHILE = 'Changed by someone else while you were editing. Check the new value and save again.';
 
 interface AssetDetailSidebarProps {
   /**
@@ -48,6 +61,8 @@ export function AssetDetailSidebar({
   const [storedAlt, setStoredAlt] = useState(asset.alt || '');
   const [storedTags, setStoredTags] = useState<string[]>(asset.tags ?? []);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // Whether a save was refused because someone else changed the field meanwhile.
+  const [changedNotice, setChangedNotice] = useState(false);
   const [showMoveDialog, setShowMoveDialog] = useState(false);
   // Whether the pages using this image are known, so a move or delete cannot be confirmed before they are shown.
   const [usageSettled, setUsageSettled] = useState(false);
@@ -105,16 +120,28 @@ export function AssetDetailSidebar({
   // reloads `asset` a moment after each save, so an edit put back within that
   // moment would look unchanged, and a reload can carry someone else's save, so
   // an untouched field would look changed and be written over it. A save that
-  // fails changed nothing, so the next blur sends it again.
+  // fails changed nothing, so the next blur sends it again. Each save sends
+  // what the panel believes is stored, so a server can refuse it when someone
+  // else changed that field meanwhile; the panel then shows their value.
+  const base = { alt: storedAlt || null, tags: storedTags.length > 0 ? storedTags : null };
   const handleAltBlur = () => {
     if (altText === storedAlt) return;
     const previous = storedAlt;
     setStoredAlt(altText);
+    setChangedNotice(false);
     saveAlt.mutate(
       // null clears: undefined is dropped from the JSON body and the stored
       // record would keep the old alt text.
-      { path, updates: { alt: altText || null } },
-      { onError: () => setStoredAlt(previous) },
+      { path, updates: { alt: altText || null }, base },
+      {
+        onError: (error) => {
+          const current = changedMeanwhile(error);
+          if (current === null) return setStoredAlt(previous);
+          setStoredAlt(current.alt || '');
+          setAltText(current.alt || '');
+          setChangedNotice(true);
+        },
+      },
     );
   };
 
@@ -127,9 +154,18 @@ export function AssetDetailSidebar({
     if (JSON.stringify(newTags) === JSON.stringify(storedTags)) return;
     const previous = storedTags;
     setStoredTags(newTags);
+    setChangedNotice(false);
     saveTags.mutate(
-      { path, updates: { tags: newTags.length > 0 ? newTags : null } },
-      { onError: () => setStoredTags(previous) },
+      { path, updates: { tags: newTags.length > 0 ? newTags : null }, base },
+      {
+        onError: (error) => {
+          const current = changedMeanwhile(error);
+          if (current === null) return setStoredTags(previous);
+          setStoredTags(current.tags ?? []);
+          setTagsInput(current.tags?.join(', ') || '');
+          setChangedNotice(true);
+        },
+      },
     );
   };
 
@@ -260,6 +296,11 @@ export function AssetDetailSidebar({
               />
               <p className="mt-1 text-xs text-grey-04 dark:text-grey-07">Separate tags with commas</p>
             </div>
+            {changedNotice && (
+              <p role="alert" className="text-xs text-red-04 dark:text-red-08">
+                {CHANGED_MEANWHILE}
+              </p>
+            )}
           </div>
 
           {/* Usage section */}

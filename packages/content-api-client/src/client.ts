@@ -445,11 +445,19 @@ export class ContentAPIClient {
   }
 
   // Asset metadata operations
-  /** Merge alt text and tags onto the asset at a path from the assets root, as `getAsset` takes it. */
-  async updateAssetMetadata(path: string, updates: AssetMetadataPatch): Promise<AssetEntry> {
+  /**
+   * Merge alt text and tags onto the asset at a path from the assets root, as `getAsset` takes it. `base`, the values
+   * the editor loaded, lets a server refuse a changed field someone else changed meanwhile: a write error whose
+   * details carry the asset as it stands (`current`).
+   */
+  async updateAssetMetadata(
+    path: string,
+    updates: AssetMetadataPatch,
+    base?: { alt: string | null; tags: string[] | null },
+  ): Promise<AssetEntry> {
     return this.fetchAPI<AssetEntry>(`${this.baseUrl}/assets/meta/${this.encodeAssetPath(path)}`, {
       method: 'PATCH',
-      body: JSON.stringify(updates),
+      body: JSON.stringify(base === undefined ? updates : { ...updates, base }),
     });
   }
 

@@ -897,8 +897,15 @@ export function useUpdateAssetMetadata() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ path, updates }: { path: string; updates: AssetMetadataPatch }) =>
-      client.updateAssetMetadata(path, updates),
+    mutationFn: ({
+      path,
+      updates,
+      base,
+    }: {
+      path: string;
+      updates: AssetMetadataPatch;
+      base?: { alt: string | null; tags: string[] | null };
+    }) => client.updateAssetMetadata(path, updates, base),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.assets() });
       queryClient.invalidateQueries({ queryKey: ['asset-folders'] });

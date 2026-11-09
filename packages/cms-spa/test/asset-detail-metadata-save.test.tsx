@@ -22,12 +22,16 @@ const nestedAsset: AssetEntry = { ...rootAsset, folder: '/uploads' };
 
 /** What the fake server stores, keyed by the path that names each asset. */
 let stored = new Map<string, AssetEntry>();
+type MetadataPatch = { alt?: string | null; tags?: string[] | null };
+type MetadataBase = { alt: string | null; tags: string[] | null };
 /** Every metadata request the page put on the wire, in order. */
-let saves: { url: string; patch: Record<string, unknown> }[] = [];
+let saves: { url: string; patch: MetadataPatch; base?: MetadataBase }[] = [];
 let deletes: string[] = [];
 let moves: unknown[] = [];
 /** The next metadata save answers with a server error. */
 let failNextSave = false;
+/** The next metadata save answers with this error body and status instead. */
+let nextSaveError: { body: unknown; status: number } | undefined;
 
 const API = '/__cms/api';
 const pathOf = (asset: AssetEntry) =>
@@ -48,14 +52,33 @@ const recordingFetch = async (input: URL | RequestInfo, init?: RequestInit): Pro
     : undefined;
 
   if (init?.method === 'PATCH' && metaPath !== undefined) {
-    const patch = JSON.parse(String(init.body ?? '{}')) as { alt?: string | null; tags?: string[] | null };
-    saves.push({ url, patch });
+    const body: MetadataPatch & { base?: MetadataBase } = JSON.parse(typeof init.body === 'string' ? init.body : '{}');
+    const { base, ...patch } = body;
+    saves.push({ url, patch, base });
     if (failNextSave) {
       failNextSave = false;
       return json({ error: { code: 'INTERNAL_ERROR', message: 'the store is unavailable' } }, 500);
     }
+    if (nextSaveError !== undefined) {
+      const { body: error, status } = nextSaveError;
+      nextSaveError = undefined;
+      return json(error, status);
+    }
     const current = stored.get(metaPath);
     if (!current) return json({ error: { code: 'NOT_FOUND', message: metaPath } }, 404);
+    // A field changed since the panel loaded it, to something other than what it sends, is refused.
+    const now = { alt: current.alt ?? null, tags: current.tags ?? null };
+    const clash = (['alt', 'tags'] as const).filter(
+      (field) =>
+        base !== undefined &&
+        patch[field] !== undefined &&
+        JSON.stringify(now[field]) !== JSON.stringify(base[field]) &&
+        JSON.stringify(now[field]) !== JSON.stringify(patch[field]),
+    );
+    if (clash.length > 0) {
+      const error = { code: 'WRITE_ERROR', message: 'changed', details: { fields: clash, current } };
+      return json({ error }, 409);
+    }
     // The store's merge: a field the patch leaves out keeps what is stored, null clears it.
     const { alt = current.alt, tags = current.tags } = patch;
     const next: AssetEntry = { ...current, alt: alt ?? undefined, tags: tags ?? undefined };
@@ -130,6 +153,7 @@ beforeEach(() => {
   deletes = [];
   moves = [];
   failNextSave = false;
+  nextSaveError = undefined;
   setContentAPIClient(new ContentAPIClient({ baseUrl: API, fetch: recordingFetch }));
 });
 
@@ -302,6 +326,65 @@ describe('AssetDetailSidebar metadata save', () => {
 
     expect(tagsField).toHaveValue('hero, ban');
     expect(altField).toHaveValue('our team at work');
+  });
+
+  test('a save sends the values the panel loaded', async () => {
+    const { altField } = renderSidebar();
+
+    fireEvent.change(altField, { target: { value: 'our team at work' } });
+    fireEvent.blur(altField);
+
+    await waitFor(() => expect(saves).toHaveLength(1));
+    expect(saves[0]?.base).toEqual({ alt: 'old alt', tags: ['old-tag'] });
+  });
+
+  test('an edit over alt text someone else changed shows their value and asks to save again', async () => {
+    const { altField, tagsField } = renderSidebar();
+    store({ ...rootAsset, alt: 'their alt', tags: ['their-tag'] });
+
+    fireEvent.change(altField, { target: { value: 'my alt' } });
+    fireEvent.blur(altField);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Changed by someone else while you were editing. Check the new value and save again.',
+    );
+    expect(altField).toHaveValue('their alt');
+    // Only the refused field reloads: the other one may hold text still being typed.
+    expect(tagsField).toHaveValue('old-tag');
+    expect(stored.get('hero.png')?.alt).toBe('their alt');
+
+    fireEvent.change(altField, { target: { value: 'my alt' } });
+    fireEvent.blur(altField);
+
+    await waitFor(() => expect(stored.get('hero.png')?.alt).toBe('my alt'));
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  test('an edit to a field nobody else changed lands next to their edit of the other', async () => {
+    const { tagsField } = renderSidebar();
+    store({ ...rootAsset, alt: 'their alt' });
+
+    fireEvent.change(tagsField, { target: { value: 'mine' } });
+    fireEvent.blur(tagsField);
+
+    await waitFor(() => expect(stored.get('hero.png')).toMatchObject({ alt: 'their alt', tags: ['mine'] }));
+  });
+
+  test('a write error that names no clashing fields is not taken for someone else’s change', async () => {
+    const { altField } = renderSidebar();
+    const current = { ...rootAsset, alt: 'their alt' };
+    nextSaveError = {
+      body: { error: { code: 'WRITE_ERROR', message: 'disk full', details: { current } } },
+      status: 500,
+    };
+
+    fireEvent.change(altField, { target: { value: 'my alt' } });
+    fireEvent.blur(altField);
+    await waitFor(() => expect(saves).toHaveLength(1));
+    await settle();
+
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(altField).toHaveValue('my alt');
   });
 });
 

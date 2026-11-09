@@ -221,7 +221,7 @@ export const FRAME_METHOD_MAX_ARGS = {
   importAssetUrl: 3,
   deleteAsset: 1,
   createFolder: 1,
-  updateAssetMetadata: 2,
+  updateAssetMetadata: 3,
   moveAssets: 3,
   'mediaBridge.getAssetScope': 1,
   'mediaBridge.getMediaIssue': 1,
