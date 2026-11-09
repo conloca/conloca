@@ -8,7 +8,7 @@ import '../../main.css';
 import { PageEditor } from './PageEditor.js';
 
 /**
- * How Puck takes page data that changed elsewhere (another editor's edit) while the author is typing: the live-editing
+ * How Puck takes page data that changed elsewhere (another editor's edit) while the author is typing: the co-editing
  * binding applies it with `dispatch({ type: 'setData', recordHistory: false })`. These stories pin that this keeps the
  * focused field mounted with its caret, stays out of Puck's undo history, and that a capture-phase key listener can
  * take Ctrl/Cmd+Z, Shift+Z and Y away from Puck's own undo, in the editor window and on the canvas.

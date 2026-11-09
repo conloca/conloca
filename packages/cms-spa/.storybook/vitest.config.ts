@@ -35,7 +35,7 @@ export default defineConfig({
   // mid-run Vite dep-optimization reload (which drops the module fetch and fails
   // the sanitizer stories on a cold cache — see SanitizeHtml.stories.tsx).
   // Typia's runtime helpers likewise (see typia-fixtures.ts), and Yjs and jsdiff
-  // for the live-editing stories (markdown-binding.ts).
+  // for the co-editing stories (markdown-binding.ts).
   optimizeDeps: { include: ['dompurify', 'yjs', 'diff', ...typiaRuntimeHelpers] },
   test: {
     name: 'storybook',

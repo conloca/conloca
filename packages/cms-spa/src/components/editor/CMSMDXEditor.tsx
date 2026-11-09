@@ -201,7 +201,7 @@ export const CMSMDXEditor = forwardRef<MDXEditorMethods, CMSMDXEditorProps>(({ p
   // re-runs its `update` and the wrapper component refreshes inside the
   // editor. The hostWrapperPlugin's renderers read reactively from their
   // own Cells, so we DON'T need to remount the entire editor for this.
-  // The caller's plugins (live editing) come after the editor's own.
+  // The caller's plugins (co-editing) come after the editor's own.
   const extraPlugins = useMemo<RealmPlugin[]>(
     () => [
       mdxComponentsPlugin(),
