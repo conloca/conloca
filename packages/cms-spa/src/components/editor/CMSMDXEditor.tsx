@@ -37,7 +37,6 @@ export interface CMSMDXEditorProps
   extends Omit<
     BaseMDXEditorProps,
     | 'disableImageSettingsButton'
-    | 'extraPlugins'
     | 'extraToolbarItems'
     | 'imageButtonRef'
     | 'imageDialog'
@@ -202,12 +201,14 @@ export const CMSMDXEditor = forwardRef<MDXEditorMethods, CMSMDXEditorProps>(({ p
   // re-runs its `update` and the wrapper component refreshes inside the
   // editor. The hostWrapperPlugin's renderers read reactively from their
   // own Cells, so we DON'T need to remount the entire editor for this.
+  // The caller's plugins (live editing) come after the editor's own.
   const extraPlugins = useMemo<RealmPlugin[]>(
     () => [
       mdxComponentsPlugin(),
       hostWrapperPlugin({ wrapper: hostWrappers.content, codeBlockWrapper: hostWrappers.codeBlock }),
+      ...(props.extraPlugins ?? []),
     ],
-    [hostWrappers],
+    [hostWrappers, props.extraPlugins],
   );
   const jsxComponentDescriptors = useMemo<JsxComponentDescriptor[]>(
     // Filter to JSX flavors before translating — snippets live in the same

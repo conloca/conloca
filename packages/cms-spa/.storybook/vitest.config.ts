@@ -34,8 +34,9 @@ export default defineConfig({
   // Pre-bundle DOMPurify so its first import inside a story does not trigger a
   // mid-run Vite dep-optimization reload (which drops the module fetch and fails
   // the sanitizer stories on a cold cache — see SanitizeHtml.stories.tsx).
-  // Typia's runtime helpers likewise (see typia-fixtures.ts).
-  optimizeDeps: { include: ['dompurify', ...typiaRuntimeHelpers] },
+  // Typia's runtime helpers likewise (see typia-fixtures.ts), and Yjs and jsdiff
+  // for the live-editing stories (markdown-binding.ts).
+  optimizeDeps: { include: ['dompurify', 'yjs', 'diff', ...typiaRuntimeHelpers] },
   test: {
     name: 'storybook',
     browser: {

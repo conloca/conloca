@@ -125,6 +125,7 @@
     "src",
     "!src/**/*.test.*",
     "!src/**/*.stories.*",
+    "!src/**/__fixtures__/**",
     "styles",
     "!**/*.tsbuildinfo"
   ],
@@ -147,6 +148,7 @@
     "@types/mdast": "^4.0.4",
     "@typia/interface": "^14.0.5",
     "clsx": "^2.1.1",
+    "diff": "^9.0.0",
     "dompurify": "^3.4.17",
     "lexical": "^0.48.0",
     "lucide-react": "^0.564.0",
@@ -155,7 +157,8 @@
     "react-router-dom": "^7.18.3",
     "sonner": "^2.0.8",
     "tailwind-merge": "^3.6.0",
-    "tslib": "^2.8.1"
+    "tslib": "^2.8.1",
+    "yjs": "^13.6.32"
   },
   "peerDependencies": {
     "react": "^19.0.0",

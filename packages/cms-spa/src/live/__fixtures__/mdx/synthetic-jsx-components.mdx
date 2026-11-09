@@ -1,0 +1,38 @@
+---
+title: JSX components
+description: Synthetic fixture with JSX components, props and children
+---
+
+import { Callout, Card, CardGrid, Badge } from '../components';
+
+Intro paragraph with an inline <Badge text="new" variant="tip" /> badge.
+
+<Callout type="note" title="Heads up">
+  A callout with **markdown** children.
+</Callout>
+
+<Callout type="caution">
+
+First paragraph inside the callout.
+
+Second paragraph inside the callout.
+
+</Callout>
+
+<CardGrid>
+  <Card title="One" icon="star">
+    First card body.
+  </Card>
+  <Card title="Two" icon="rocket">
+    Second card body.
+  </Card>
+</CardGrid>
+
+<Card
+  title="Multi-line props"
+  href="/docs/start/"
+  count={3}
+  featured
+/>
+
+Closing paragraph after the components.
