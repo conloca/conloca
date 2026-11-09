@@ -1,4 +1,4 @@
-import { access, mkdir, open, readdir, readFile, rename, rm, stat, unlink, writeFile } from 'node:fs/promises';
+import { access, mkdir, open, readdir, readFile, rename, rm, stat, unlink } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import matter from 'gray-matter';
 import sortKeys from 'sort-keys';
@@ -1021,7 +1021,7 @@ export class FileSystemContentAPI implements ContentAPI {
           // 'valueOf', …) reads the prototype function back and crashes.
           // Same cache-opt-out rule as the matter(..., {}) calls above.
           const updatedContent = matter.stringify(parsed, parsed.data);
-          await writeFile(filePath, updatedContent);
+          await atomicWriteFile(filePath, updatedContent);
           console.log(`Repaired MDX file: ${filePath} (added missing fields)`);
 
           // Calculate ETags for the repaired MDX file
@@ -1074,7 +1074,7 @@ export class FileSystemContentAPI implements ContentAPI {
             content: data.content || {},
           };
           const repairedJson = VXJSON.serialize(vxjsonData);
-          await writeFile(filePath, repairedJson);
+          await atomicWriteFile(filePath, repairedJson);
           console.log(`Repaired VXJSON file: ${filePath} (fixed field order or added missing fields)`);
           // Return the repaired data
 
@@ -1446,7 +1446,7 @@ export class FileSystemContentAPI implements ContentAPI {
 
         // Rewrite file with correct format
         const repairedJson = VXJSON.serialize(repairedData);
-        await writeFile(filePath, repairedJson);
+        await atomicWriteFile(filePath, repairedJson);
 
         // Recalculate ETags from repaired buffer
         const repairedBuffer = Buffer.from(repairedJson, 'utf-8') as Uint8Array;
@@ -1606,7 +1606,8 @@ export class FileSystemContentAPI implements ContentAPI {
           };
 
           const mdxContent = serializeMdxWithFrontmatter(frontmatterData, content.mdx || '');
-          await writeFile(filePath, mdxContent);
+          // oxlint-disable-next-line no-await-in-loop -- locales are written one at a time so a failed write stops the rest.
+          await atomicWriteFile(filePath, mdxContent);
 
           // For MDX, calculate etags from the serialized content
           const mdxBuffer = new TextEncoder().encode(mdxContent);
@@ -1644,7 +1645,8 @@ export class FileSystemContentAPI implements ContentAPI {
           };
 
           const jsonContent = JSON.stringify(sortKeys(dataFileContent, { deep: true }), null, '\t');
-          await writeFile(filePath, jsonContent);
+          // oxlint-disable-next-line no-await-in-loop -- locales are written one at a time so a failed write stops the rest.
+          await atomicWriteFile(filePath, jsonContent);
 
           // For data files, use simple etag (hash entire buffer)
           const jsonBuffer = new TextEncoder().encode(jsonContent);
@@ -1664,7 +1666,8 @@ export class FileSystemContentAPI implements ContentAPI {
           etag = etagResult.contentEtag ? `${etagResult.metaEtag}.${etagResult.contentEtag}` : etagResult.metaEtag;
 
           // Write the file
-          await writeFile(filePath, jsonContent);
+          // oxlint-disable-next-line no-await-in-loop -- locales are written one at a time so a failed write stops the rest.
+          await atomicWriteFile(filePath, jsonContent);
         }
 
         // Build locale manifest using shared function
