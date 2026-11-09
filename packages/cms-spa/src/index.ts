@@ -29,7 +29,7 @@ export { awaitParentHello } from './frame/parent-hello.js';
 // Export types from hooks (AssetEntry, etc.)
 export type { AssetEntry, AssetUsage, FolderListing, FolderTreeNode } from './hooks/index.js';
 export { buildUploadFormData } from './hooks/useUpload.js';
-// Live editing messages the parent and the editor page exchange
+// Messages the parent and the editor page exchange while several people edit a page
 export {
   type DocOpenRequest,
   type DocOpenResult,

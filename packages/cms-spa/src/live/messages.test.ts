@@ -53,10 +53,21 @@ describe('live messages', () => {
   });
 
   it('reads a status with or without a read-only reason', () => {
-    const s = { connection: 'connected', pending: false, persisted: true, readOnly: null };
+    const s = { connection: 'connected', pending: false, persisted: true, readOnly: null, deletedExport: null };
     expect<unknown>(readLiveStatus(s)).toEqual(s);
     const ro = { ...s, connection: 'read-only', readOnly: { status: 413, code: 'update-too-large-unsaved' } };
     expect<unknown>(readLiveStatus(ro)).toEqual(ro);
     expect(readLiveStatus({ ...s, connection: 'gone' })).toBeUndefined();
+  });
+
+  it('reads a status from a sender that predates the deleted-export field as naming no deletion', () => {
+    const { deletedExport: _, ...older } = {
+      connection: 'connected',
+      pending: false,
+      persisted: true,
+      readOnly: null,
+      deletedExport: null,
+    };
+    expect<unknown>(readLiveStatus(older)).toEqual({ ...older, deletedExport: null });
   });
 });

@@ -1,5 +1,5 @@
 /**
- * The live editing messages: what the server tells an open page, and what the parent tells the editor page about
+ * The shared-session messages: what the server tells an open page, and what the parent tells the editor page about
  * its docs over the frame port. Both sides read them with the guards below.
  */
 
@@ -55,6 +55,12 @@ export interface LiveStatus {
     message?: string;
     snapshotId?: string;
   } | null;
+  /**
+   * A page edited here was deleted on the server: its changes can never be sent, so they are kept on this device for
+   * download and do not hold a save back. Named until the download is taken or dismissed. Absent from senders that
+   * predate it, which name none.
+   */
+  deletedExport?: { message: string } | null;
 }
 
 export interface PresencePeer {
@@ -248,13 +254,21 @@ function readReadOnly(value: unknown): LiveStatus['readOnly'] | undefined {
   };
 }
 
+function readDeletedExport(data: unknown): LiveStatus['deletedExport'] | undefined {
+  if (data === null || data === undefined) return null;
+  if (!isFields(data) || typeof data.message !== 'string') return undefined;
+  return { message: data.message };
+}
+
 /** Reads a live status event; `undefined` when `data` is not a well-formed one. */
 export function readLiveStatus(data: unknown): LiveStatus | undefined {
   if (!isFields(data) || !isConnection(data.connection)) return undefined;
   if (typeof data.pending !== 'boolean' || typeof data.persisted !== 'boolean') return undefined;
   const readOnly = readReadOnly(data.readOnly);
   if (readOnly === undefined) return undefined;
-  return { connection: data.connection, pending: data.pending, persisted: data.persisted, readOnly };
+  const deletedExport = readDeletedExport(data.deletedExport);
+  if (deletedExport === undefined) return undefined;
+  return { connection: data.connection, pending: data.pending, persisted: data.persisted, readOnly, deletedExport };
 }
 
 /* oxlint-enable anti-slop/no-unknown-parameters */
