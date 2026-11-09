@@ -1,6 +1,6 @@
 import { diffJson, mergeJson } from './json.js';
 import { diffMdx, mergeMdxFile } from './mdx.js';
-import { alignMovedBlocks, settleMovedBlocks } from './places.js';
+import { alignMovedBlocks, movedBlockAnchors, settleMovedBlocks } from './places.js';
 import { isRecord, parseJson, type WalkContext } from './record.js';
 import type { MergeInput, MergeKind, MergeResult } from './types.js';
 
@@ -44,7 +44,10 @@ export function changedAnchors(input: { kind: MergeKind; base: unknown; next: un
     if (!b || !isRecord(n) || (b.json !== undefined && !isRecord(b.json))) {
       throw new TypeError('changedAnchors: vxjson values must be JSON file objects');
     }
-    diffJson([], b.json, n, { fileType: n.type, clearedRoots: ['meta'] }, anchors);
+    // A block moved to another list is one change at its place, and its fields are compared where it now sits.
+    const [aligned] = alignMovedBlocks(b.json, n, n);
+    diffJson([], aligned, n, { fileType: n.type, clearedRoots: ['meta'] }, anchors);
+    anchors.push(...movedBlockAnchors(b.json, n));
   }
   // oxlint-disable-next-line unicorn/no-array-sort -- the target lib predates toSorted; this sorts a fresh local array.
   return [...new Set(anchors)].sort();

@@ -217,3 +217,62 @@ export function placeTarget(
     },
   };
 }
+
+/** The `[id=X]#place` anchor of each block `next` holds in another list than `base` did. */
+export function movedBlockAnchors(base: Field, next: Field): string[] {
+  const [b, n] = [collectPlaces(base), collectPlaces(next)];
+  return [...b].flatMap(([id, from]) => {
+    const to = n.get(id);
+    const moved = from.length === 1 && to?.length === 1 && listKey(from[0].list) !== listKey(to[0].list);
+    return moved ? [formatPlaceAnchor(id)] : [];
+  });
+}
+
+/**
+ * `after` with each block of `ids` it no longer holds put back as `before` held it, subtree and all, at the place it
+ * had there. A block whose holder is gone too comes back inside its holder; one whose list is gone goes to the end of
+ * the page's `content`. Nothing else in `after` changes.
+ */
+export function putBackBlocks(before: Field, after: JsonObject, ids: readonly string[]): JsonObject {
+  if (after.type !== 'puck') return after;
+  const was = collectPlaces(before);
+  let doc = after;
+  for (const lost of ids) {
+    const present = collectPlaces(doc);
+    if (present.has(lost)) continue;
+    let place = was.get(lost)?.[0];
+    let holder = place && holderOf(place.list);
+    // The outermost holder that is gone as well comes back, with the block inside it.
+    while (place && holder !== undefined && !present.has(holder)) {
+      place = was.get(holder)?.[0];
+      holder = place && holderOf(place.list);
+    }
+    if (place === undefined) continue;
+    const listed = readAt(doc, place.list)?.value;
+    let written: JsonValue | undefined;
+    if (Array.isArray(listed)) {
+      const items = [...listed];
+      const previous = place.after;
+      const at = previous === null ? 0 : items.findIndex((item) => blockId(item) === previous) + 1 || items.length;
+      items.splice(at, 0, place.block);
+      written = writeAt(doc, place.list, items, []);
+    } else {
+      // Its list went with a block that stays deleted: it lands at the end of the page.
+      const root: AnchorStep[] = [...PUCK_DATA, { key: 'content' }];
+      written = writeAt(doc, root, [...asList(readAt(doc, root)?.value), place.block], []);
+    }
+    if (isRecord(written)) doc = written;
+  }
+  return doc;
+}
+
+/** The id of the block whose slot `list` is, or `undefined` for `content` and the zones. */
+function holderOf(list: AnchorStep[]): string | undefined {
+  let holder: string | undefined;
+  for (const step of list) if ('id' in step) holder = step.id;
+  return holder;
+}
+
+function asList(value: Field): JsonValue[] {
+  return Array.isArray(value) ? value : [];
+}

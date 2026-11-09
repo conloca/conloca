@@ -6,6 +6,7 @@ import {
   type MergeKind,
   type MergeResult,
   mergeContent,
+  putBackBlocks,
   valueAtAnchor,
 } from '../../src/merge/index.js';
 import { isRecord } from '../../src/merge/record.js';
@@ -64,6 +65,15 @@ describe('changedAnchors', () => {
     const base = dataFile({ title: 'T' }, {});
     const next = dataFile({ title: 'T', description: null }, { added: 1 });
     expect(changedAnchors({ kind: 'vxjson', base, next })).toEqual(['data.added']);
+  });
+
+  it('lists a block moved into another list once, at its place, with the fields it changed there', () => {
+    const base = page([{ type: 'Section', props: { id: 'S', items: [] } }, block('B', { title: 'b' })]);
+    const next = page([{ type: 'Section', props: { id: 'S', items: [block('B', { title: 'b2' })] } }]);
+    expect(changedAnchors({ kind: 'vxjson', base, next })).toEqual([
+      '[id=B]#place',
+      'content[id=S].props.items[id=B].props.title',
+    ]);
   });
 
   it('lists changed and inserted MDX regions and frontmatter keys', () => {
@@ -304,5 +314,30 @@ describe('every conflict anchor round-trips', () => {
       value: c?.theirs,
     });
     expect(picked.ok && ids(puckContent(picked.doc))).toEqual(['A', 'B', 'C']);
+  });
+});
+
+const section = (id: string, items: JsonValue[]) => ({ type: 'Section', props: { id, items } });
+
+describe('putBackBlocks', () => {
+  it('puts a deleted block back after the block it followed, and keeps every other change', () => {
+    const before = page([block('A'), block('Y', { title: 'y' }), block('Z', { title: 'z' })]);
+    const after = page([block('A'), block('Z', { title: 'z2' })]);
+    expect(puckContent(putBackBlocks(before, after, ['Y']))).toEqual([
+      block('A'),
+      block('Y', { title: 'y' }),
+      block('Z', { title: 'z2' }),
+    ]);
+  });
+
+  it('brings back the holder that went with a block, holding the block, and leaves present blocks alone', () => {
+    const before = page([section('P', [block('Y')]), block('Z')]);
+    const after = page([block('Z')]);
+    expect(puckContent(putBackBlocks(before, after, ['Y', 'Z']))).toEqual([section('P', [block('Y')]), block('Z')]);
+  });
+
+  it('leaves a non-Puck file as it is', () => {
+    const file = dataFile({ title: 'T' }, {});
+    expect(putBackBlocks(file, file, ['Y'])).toBe(file);
   });
 });
