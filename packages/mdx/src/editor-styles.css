@@ -282,3 +282,13 @@
 .conloca-code-block .cm-editor .cm-line {
   background: transparent;
 }
+
+/* An item that only holds a list item's content after its nested list (markdown-fidelity/list-markers.ts).
+   It is part of the item above, so it shows no bullet, number or checkbox of its own. */
+li.conloca-md-continuation {
+  list-style: none;
+}
+li.conloca-md-continuation::before,
+li.conloca-md-continuation::after {
+  display: none;
+}

@@ -19,7 +19,11 @@ export const TO_MARKDOWN_OPTIONS: ToMarkdownOptions = {
   listItemIndent: 'one',
   tightDefinitions: true,
   handlers: {
-    // A body that opens with `---` reads as front matter once it sits in a file; `***` is the same rule.
-    thematicBreak: (node, parent) => (parent?.type === 'root' && parent.children[0] === node ? '***' : '---'),
+    // A body that opens with a `-` rule reads as front matter once it sits in a file; `***` is the same rule.
+    // Otherwise a rule keeps its source text (markdown-fidelity/thematic-break.ts); rules made in the editor get `---`.
+    thematicBreak: (node, parent) => {
+      const source = node.data?.source ?? '---';
+      return parent?.type === 'root' && parent.children[0] === node && source.startsWith('-') ? '***' : source;
+    },
   },
 };

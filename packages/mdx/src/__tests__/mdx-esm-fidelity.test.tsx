@@ -1,10 +1,8 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import type { MDXEditorMethods } from '@mdxeditor/editor';
-import { cleanup, render, waitFor } from '@testing-library/react';
+import { cleanup } from '@testing-library/react';
 import matter from 'gray-matter';
-import { createRef } from 'react';
-import { MDXEditor } from '../index.js';
+import { editorRoundTrip } from './editor-round-trip.js';
 
 /**
  * End-to-end fidelity: an author's `.mdx` file must survive a no-op trip through
@@ -51,18 +49,6 @@ function serverWrite(original: string, editedBody: string): string {
     body = { content: editedBody };
   }
   return matter.stringify(body, frontmatter);
-}
-
-/** Push a markdown body through the editor's parse → serialize round trip. */
-async function editorRoundTrip(body: string): Promise<string> {
-  const ref = createRef<MDXEditorMethods>();
-  const { container } = render(<MDXEditor ref={ref} value={body} onChange={() => {}} />);
-  await waitFor(() => {
-    expect(container.querySelector('[contenteditable]')).toBeTruthy();
-  });
-  const editor = ref.current;
-  if (editor === null) throw new Error('editor ref was never attached');
-  return editor.getMarkdown();
 }
 
 /** Every line that is an ESM statement at the start of a line. */
