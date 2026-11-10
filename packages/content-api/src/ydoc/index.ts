@@ -2,7 +2,8 @@
  * The shared Y.Doc shape of one content file, keyed by block id so a reorder, a move and an edit inside the moved block
  * all survive a concurrent merge.
  *
- * - `_meta`: `kind` (`'mdx' | 'puck' | 'data'`), `shape` (`YDOC_SHAPE`), and for MDX the raw frontmatter `section`.
+ * - `_meta`: `kind` (`'mdx' | 'puck' | 'data'`), `shape` (`YDOC_SHAPE`), and for MDX the raw frontmatter `section`, set
+ *   only for a leading `---` block that is a YAML mapping (any other such block is body text).
  * - mdx: `frontmatter` Y.Map (one plain JSON value per key), `body` Y.Text.
  * - puck: `puck` Y.Map (objects are Y.Maps) and `blocks`, one Y.Map per block keyed by `props.id`, holding the block and
  *   its `place: { list, key }`. A block list in `puck` is the marker `{ __blocks: true }`; its blocks are the ones whose
@@ -204,8 +205,11 @@ function parsedRecord(value: ContentData['puckData']): JsonObject {
 function syncMdx(doc: Y.Doc, mdx: string): void {
   const meta = doc.getMap<YValue>('_meta');
   const frontmatter = doc.getMap<JsonValue>('frontmatter');
-  const parts = splitMdx(mdx);
-  const next = parts.frontmatter ?? {};
+  const split = splitMdx(mdx);
+  // A leading `---` block is front matter only when it is a YAML mapping; anything else (a horizontal rule and the
+  // prose after it, a heading, a list) is body text.
+  const parts = split.frontmatter === null ? { section: '', body: mdx } : split;
+  const next = split.frontmatter ?? {};
   for (const key of frontmatter.keys()) if (!Object.hasOwn(next, key)) frontmatter.delete(key);
   for (const [key, value] of Object.entries(next))
     if (!deepEqual(frontmatter.get(key), value)) frontmatter.set(key, value);

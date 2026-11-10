@@ -27,6 +27,16 @@ describe('TO_MARKDOWN_OPTIONS round-trip', () => {
     expect(out).not.toContain('***');
   });
 
+  // A body that opens with `---` reads as front matter once it sits in a file.
+  test('a thematic break that opens the body is written as `***`, and the rest stay `---`', () => {
+    expect(roundTrip('---\n\nIntro\n\n---\n\nRest\n')).toBe('***\n\nIntro\n\n---\n\nRest\n');
+  });
+
+  test('a body that opens with `***` round-trips byte-identical', () => {
+    const input = '***\n\nIntro\n\n---\n\nRest\n';
+    expect(roundTrip(input)).toBe(input);
+  });
+
   test('bullets stay as `-`, not `*`', () => {
     const out = roundTrip('- one\n- two\n- three\n');
     expect(out).toContain('- one');

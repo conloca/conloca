@@ -18,4 +18,8 @@ export const TO_MARKDOWN_OPTIONS: ToMarkdownOptions = {
   fence: '`',
   listItemIndent: 'one',
   tightDefinitions: true,
+  handlers: {
+    // A body that opens with `---` reads as front matter once it sits in a file; `***` is the same rule.
+    thematicBreak: (node, parent) => (parent?.type === 'root' && parent.children[0] === node ? '***' : '---'),
+  },
 };

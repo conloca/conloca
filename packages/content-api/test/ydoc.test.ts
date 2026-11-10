@@ -237,6 +237,27 @@ describe('ydoc shape', () => {
     expect(d.getMap('frontmatter').get('title')).toBe('Bye');
   });
 
+  it.each([
+    ['prose', '---\n\nIntro\n\n---\n\nRest\n'],
+    ['prose, CRLF', '---\r\n\r\nIntro\r\n\r\n---\r\n\r\nRest\r\n'],
+    ['a heading', '---\n# Part\n---\nRest\n'],
+    ['YAML that is no mapping', '---\n[\n---\nRest\n'],
+  ])('a leading `---` block of %s is body text, not front matter', (_name, mdx) => {
+    const d = hydrateDoc({ mdx });
+    expect(d.getText('body').toJSON()).toBe(mdx);
+    expect(d.getMap('_meta').get('section') ?? '').toBe('');
+    expect(serializeDoc(d)).toEqual({ mdx });
+  });
+
+  it('a body written over a stored non-mapping section takes the whole text', () => {
+    const d = hydrateDoc({ mdx: 'Rest\n' });
+    d.getMap('_meta').set('section', '---\n\nIntro\n\n---\n\n');
+    const mdx = '---\n\nIntro\n\n---\n\nRest!\n';
+    applyContentDiff(d, { mdx }, 'x');
+    expect(d.getText('body').toJSON()).toBe(mdx);
+    expect(serializeDoc(d)).toEqual({ mdx });
+  });
+
   it('applyContentDiff of identical content emits no update', () => {
     for (const c of [PAGE_ABC, MDX_WITH_FRONTMATTER, DATA_ENTRY, PUCK_WITH_ZONES_AND_SLOTS]) {
       const d = hydrateDoc(c);
