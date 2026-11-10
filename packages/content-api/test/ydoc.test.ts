@@ -322,6 +322,26 @@ describe('ydoc shape', () => {
     expect(serializeDoc(a)).toEqual(serializeDoc(b));
   });
 
+  it('ydocAnchor anchors a field of an orphan block (its owner deleted concurrently) at the whole page', () => {
+    const [a, b] = twoReplicas(puck([block('c', { title: 'C' }), grid('p', [])]));
+    applyContentDiff(a, puck([grid('p', [block('c', { title: 'C' })])]), 'a');
+    applyContentDiff(b, puck([block('c', { title: 'C' })]), 'b');
+    exchange(a, b);
+    const props = blockMap(a, 'c')?.get('props');
+    if (!(props instanceof Y.Map)) throw new Error('no props');
+    expect(ydocAnchor(props, 'title')).toBe('');
+  });
+
+  it('ydocAnchor stops on a placement cycle and anchors its fields at the whole page', () => {
+    const [a, b] = twoReplicas(puck([block('h'), grid('p', []), grid('q', [])]));
+    applyContentDiff(a, puck([block('h'), grid('q', [grid('p', [])])]), 'a');
+    applyContentDiff(b, puck([block('h'), grid('p', [grid('q', [])])]), 'b');
+    exchange(a, b);
+    const props = blockMap(a, 'q')?.get('props');
+    if (!(props instanceof Y.Map)) throw new Error('no props');
+    expect(ydocAnchor(props, 'id')).toBe('');
+  });
+
   it('ydocAnchor refuses a non-field target', () => {
     expect(() => ydocAnchor(hydrateDoc(PAGE_ABC).getMap('_meta'), 'kind')).toThrow('invariant');
   });

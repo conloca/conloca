@@ -411,12 +411,15 @@ export function serializeDoc(doc: Y.Doc): ContentData {
 /**
  * The merge-engine field anchor of `key` in `target` (`content[id=X].props.title`, `zones.k[id=X]…`, `root.props.x`,
  * `data.x`, `frontmatter.x`); slot blocks nest by id. Field anchors only: no `#order`, `#place` or body anchors.
+ * A field of a block no list reaches (its list's owner is gone, or owners place each other in a cycle) anchors at the
+ * whole page (`''`): concurrent moves make such blocks, and serializeDoc shows them re-homed.
  */
 export function ydocAnchor<T>(target: Y.AbstractType<T>, key: string): string {
   const doc = target.doc;
   if (!doc) throw new Error('invariant: ydocAnchor needs a type inside a Y.Doc');
   const blocks = doc.getMap<YMap>('blocks');
   const steps: AnchorStep[] = [{ key }];
+  const visited = new Set<string>();
   let node: Y.AbstractType<T> | YMap = target;
   for (;;) {
     // oxlint-disable-next-line eslint/no-underscore-dangle -- Yjs exposes a type's parent only through `_item`.
@@ -429,13 +432,15 @@ export function ydocAnchor<T>(target: Y.AbstractType<T>, key: string): string {
       node = parent;
       continue;
     }
+    if (visited.has(sub)) return '';
+    visited.add(sub);
     steps.unshift({ id: sub });
     const block = blocks.get(sub);
     const [head, ...rest] = listPath(placeOf(block)?.list ?? '');
     steps.unshift(...rest);
     if (head && 'id' in head) {
       const owner = blocks.get(head.id);
-      if (!owner) break;
+      if (!owner) return '';
       node = owner;
       continue;
     }
