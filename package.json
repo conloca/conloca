@@ -145,7 +145,8 @@
   },
   "patchedDependencies": {
     "nx@24.0.3": "patches/nx@24.0.3.patch",
-    "ttsc@0.34.1": "patches/ttsc@0.34.1.patch"
+    "ttsc@0.34.1": "patches/ttsc@0.34.1.patch",
+    "@lexical/list@0.48.0": "patches/@lexical%2Flist@0.48.0.patch"
   },
   "sherif": {
     "ignoreDependency": [

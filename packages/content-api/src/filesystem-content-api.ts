@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { access, mkdir, open, readdir, readFile, rename, rm, stat, unlink } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import matter from 'gray-matter';
@@ -33,6 +34,10 @@ import { Data } from './data.js';
 import { calculateEtagsFromMdxBuffer, findMdxContentStartPosition, parseDualEtag } from './etag-utils.js';
 import { Fragments } from './fragments.js';
 import { serializeMdxWithFrontmatter } from './mdx-frontmatter.js';
+import { valueAtAnchor } from './merge/apply.js';
+import { changedAnchors, mergeContent } from './merge/merge-content.js';
+import type { Field, MergeKind } from './merge/types.js';
+import { mergeInputOf, type VersionLog, versionLog } from './served-versions.js';
 import { Site } from './site.js';
 import type {
   BatchOperationResult,
@@ -50,7 +55,10 @@ import type {
   DeleteLocaleInput,
   DeleteResult,
   FindOptions,
+  GetLocalizedOptions,
   GlobalFilters,
+  JsonObject,
+  JsonValue,
   LocaleFileData,
   LocalePathData,
   LocaleVersion,
@@ -62,6 +70,22 @@ import type {
   VXJSONFile,
 } from './types.js';
 import { atomicWriteFile } from './utils/atomic-write.js';
+import { ClobberStore } from './utils/clobber-store.js';
+import {
+  asideTargets,
+  defaultLockDir,
+  FileLockLostError,
+  type FileLockOptions,
+  guardedRemove,
+  guardedWrite,
+  type HeldLock,
+  readOrNull,
+  recoverAsides,
+  sha1Hex,
+  type WriteTestHooks,
+  withFileLock,
+  withFileLocks,
+} from './utils/file-lock.js';
 import { xxh64 } from './xxhash.js';
 
 interface ReindexResult {
@@ -285,8 +309,79 @@ function warnUnreadableLocales(sitesPath: string, sites: SitesConfig['sites'], g
 
 export type { IndexProblem } from './content-index.js';
 
+/** One locale file as read: its parsed data plus the exact text and bytes. */
+type LocaleRead = LocaleFileData & { text: string; bytes: Uint8Array };
+
+/** What updateLocalized writes over a read: the file text and what the index keeps of it. */
+interface PreparedWrite {
+  text: string;
+  modified: string;
+  newMeta: ContentMeta;
+  newContent: ContentData;
+}
+
+/** One update request, resolved to its entry and target file. */
+interface UpdateRequest {
+  manifest: ContentManifest;
+  localeVersion: LocaleVersion;
+  locale: string;
+  targetFilePath: string;
+  data: UpdateLocaleInput['data'];
+  pathname: string | undefined;
+}
+
+/** Whether `etag` is current for the parts `data` writes: data entries by the whole etag, others per dual part. */
+function etagCovers(
+  kind: ContentManifest['kind'],
+  data: UpdateLocaleInput['data'],
+  etag: string,
+  currentEtag: string,
+): boolean {
+  if (kind === 'data') return etag === currentEtag;
+  const sent = parseDualEtag(etag);
+  const now = parseDualEtag(currentEtag);
+  if (!sent || !now) return false;
+  const scope = analyzeUpdateScope(data);
+  if ((scope & UPDATE_SCOPE.META) !== 0 && sent.meta !== now.meta) return false;
+  return !((scope & UPDATE_SCOPE.CONTENT) !== 0 && sent.content !== now.content);
+}
+
+/** A merged file in its on-disk form: MDX as merged, a data entry as sorted JSON, a page as VXJSON. */
+function mergedFileText(filePath: string, value: JsonValue): string {
+  if (typeof value === 'string') return value;
+  if (!isFileRecord(value)) throw new TypeError('the merge did not produce a file object');
+  if (filePath.endsWith('.json')) return JSON.stringify(sortKeys(value, { deep: true }), null, '\t');
+  if (!isPageFile(value)) throw new TypeError('the merge did not produce a page file');
+  return VXJSON.serialize(value);
+}
+
+function isFileRecord(value: JsonValue | undefined): value is JsonObject {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isPageFile(value: JsonObject): value is JsonObject & VXJSONFile {
+  return typeof value.id === 'string' && typeof value.type === 'string' && isFileRecord(value.meta);
+}
+
+/** How the merge engine reads a content file: MDX as text, everything else as JSON. */
+function mergeKindOf(filePath: string): MergeKind {
+  return filePath.endsWith('.mdx') ? 'mdx' : 'vxjson';
+}
+
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** {@link ContentAPIOptions} plus the lock settings, the version log and the test-only seams of a write. */
+export interface FileSystemContentAPIOptions extends ContentAPIOptions, WriteTestHooks {
+  /** Where the per-file locks and the clobber store live; default `~/.cache/conloca/locks`. */
+  lockDir?: string;
+  /** A lock not refreshed for this long is taken over; default 10 s, at least 2 s. */
+  lockStaleMs?: number;
+  /** Default: the process-wide log; tests give each simulated process its own. */
+  versionLog?: VersionLog;
+  /** Test-only: runs in a read right before it repairs the file. */
+  testBeforeRepair?: () => Promise<void>;
 }
 
 export class FileSystemContentAPI implements ContentAPI {
@@ -312,6 +407,14 @@ export class FileSystemContentAPI implements ContentAPI {
   // locale. Source-of-truth resolution (option > sites.json) happens in
   // the constructor; parsers read this set directly.
   private readonly availableLocales: ReadonlySet<string>;
+
+  // Writes take a per-file lock shared with every process using the same lock dir (the CLI, the dev server).
+  private lockDir = defaultLockDir();
+  private lockStaleMs = 10_000;
+  private writeHooks: WriteTestHooks = {};
+  private testBeforeRepair?: () => Promise<void>;
+  private log: VersionLog = versionLog();
+  private clobbers: ClobberStore;
 
   // Getter for testing purposes
   get normalizedContentRoot(): string {
@@ -411,9 +514,11 @@ export class FileSystemContentAPI implements ContentAPI {
       }
       return new Site(siteName, this, siteIndex);
     });
+
+    this.clobbers = new ClobberStore(this.lockDir, this.absoluteContentRoot);
   }
 
-  static async create(options: ContentAPIOptions): Promise<FileSystemContentAPI> {
+  static async create(options: FileSystemContentAPIOptions): Promise<FileSystemContentAPI> {
     // Keep contentRoot as provided (will be normalized in constructor)
     const contentRoot = options.contentRoot;
 
@@ -468,6 +573,24 @@ export class FileSystemContentAPI implements ContentAPI {
         defaultLocale: options.defaultLocale,
       },
     );
+
+    if (options.lockDir) {
+      api.lockDir = options.lockDir;
+      api.clobbers = new ClobberStore(options.lockDir, api.absoluteContentRoot);
+    }
+    if (options.lockStaleMs) api.lockStaleMs = options.lockStaleMs;
+    if (options.versionLog) api.log = options.versionLog;
+    api.testBeforeRepair = options.testBeforeRepair;
+    const { testBeforeWrite, testBeforeRename, testAfterLink, testBeforeFinalLink, testBeforeFinalRename, testLink } =
+      options;
+    api.writeHooks = {
+      testBeforeWrite,
+      testBeforeRename,
+      testAfterLink,
+      testBeforeFinalLink,
+      testBeforeFinalRename,
+      testLink,
+    };
 
     // Index all content files (only if index is empty).
     //
@@ -585,6 +708,225 @@ export class FileSystemContentAPI implements ContentAPI {
     // TODO: CanvasIndex.clearCache() when implemented
   }
 
+  private lockOptions(): FileLockOptions {
+    return { lockDir: this.lockDir, staleMs: this.lockStaleMs };
+  }
+
+  /** The etag a read serves for these bytes of `filePath`. */
+  private etagOf(filePath: string, bytes: Uint8Array): string {
+    if (filePath.endsWith('.mdx')) {
+      const etags = calculateEtagsFromMdxBuffer(bytes, findMdxContentStartPosition(bytes));
+      return `${etags.metaEtag}.${etags.contentEtag}`;
+    }
+    if (filePath.endsWith('.json')) return VXJSON.calculateSimpleEtag(bytes);
+    const etags = VXJSON.calculateETags(bytes);
+    if (!etags.success) return VXJSON.calculateSimpleEtag(bytes);
+    return etags.contentEtag ? `${etags.metaEtag}.${etags.contentEtag}` : etags.metaEtag;
+  }
+
+  /** Keeps a version a write replaced unread, for its writer's lost-write check and the editor's Restore. */
+  private async recordClobber(
+    id: string,
+    locale: string,
+    filePath: string,
+    bytes: Uint8Array,
+    baseText: string,
+  ): Promise<void> {
+    const etag = this.etagOf(filePath, bytes);
+    this.log.markClobbered(filePath, etag);
+    await this.clobbers.record({ id, locale, filePath, etag, baseText, text: textDecoder.decode(bytes) });
+  }
+
+  /** Settles the asides a crashed writer left beside `target`; the caller holds its lock. */
+  private recoverUnderLock(target: string, id: string, locale: string, names?: string[]): Promise<void> {
+    return recoverAsides(
+      target,
+      (aside, current) => this.recordClobber(id, locale, target, aside, current ? textDecoder.decode(current) : ''),
+      names,
+    );
+  }
+
+  /** The scan's part of crash recovery: settles every leftover aside in the folders of `files` whose lock is free. */
+  private async recoverLeftoverAsides(files: string[]): Promise<void> {
+    const dirs = new Set(files.map((file) => dirname(file)));
+    await Promise.all(
+      Array.from(dirs, async (dir) => {
+        const names = await readdir(dir).catch((): string[] => []);
+        await Promise.all(
+          Array.from(asideTargets(dir, names), (target) =>
+            withFileLock(
+              target,
+              async () => {
+                const owner = await this.ownerOf(target);
+                // An aside of a file the index cannot place stays for a later run rather than be dropped unrecorded.
+                if (owner) await this.recoverUnderLock(target, owner.id, owner.locale, names);
+              },
+              { ...this.lockOptions(), wait: false },
+            ).catch(() => {}),
+          ),
+        );
+      }),
+    );
+  }
+
+  /** The indexed entry and locale whose file is `filePath`, by the id written in it. */
+  private async ownerOf(filePath: string): Promise<{ id: string; locale: string } | null> {
+    try {
+      const text = await readFile(filePath, 'utf8');
+      const fileId: unknown = filePath.endsWith('.mdx') ? matter(text, {}).data.id : JSON.parse(text).id;
+      const manifest = typeof fileId === 'string' ? this.contentIndex.getManifest(fileId) : null;
+      if (!manifest) return null;
+      const localeVersion = Array.from(localesOf(manifest)).find((lv) => this.getFilePath(manifest, lv) === filePath);
+      return localeVersion ? { id: manifest.id, locale: localeVersion.locale } : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** A repair found while reading: written only if the lock is free at once and the file is still as read. */
+  private async writeRepairIfUnchanged(filePath: string, readText: string, repaired: string): Promise<void> {
+    await this.testBeforeRepair?.();
+    await withFileLock(
+      filePath,
+      async (lock) => {
+        if ((await readFile(filePath, 'utf8')) !== readText) return;
+        await lock.assertHeld();
+        await atomicWriteFile(filePath, repaired);
+      },
+      { ...this.lockOptions(), wait: false },
+    ).catch(() => {});
+  }
+
+  /** Renames under both files' locks; false when `to` already exists. */
+  private moveLocked(from: string, to: string): Promise<boolean> {
+    return withFileLocks(
+      [from, to],
+      async (lock) => {
+        if (
+          await access(to).then(
+            () => true,
+            () => false,
+          )
+        )
+          return false;
+        await lock.assertHeld();
+        await rename(from, to);
+        return true;
+      },
+      this.lockOptions(),
+    );
+  }
+
+  /** Writes a new file under its lock; false when a file appeared at that path meanwhile. */
+  private createFile(filePath: string, text: string, id: string, locale: string): Promise<boolean> {
+    return withFileLock(
+      filePath,
+      async (lock) => {
+        const written = await guardedWrite({
+          lock,
+          target: filePath,
+          text,
+          startBytes: null,
+          hooks: this.writeHooks,
+          onClobber: (bytes) => this.recordClobber(id, locale, filePath, bytes, ''),
+        });
+        return written.kind === 'written';
+      },
+      this.lockOptions(),
+    );
+  }
+
+  /** Logs a successful write: its text, and the values it changed, so its writer can later tell it was lost. */
+  private markOwnWrite(
+    filePath: string,
+    base: { etag: string; text: string },
+    writtenText: string,
+    etag: string,
+  ): void {
+    const kind = mergeKindOf(filePath);
+    let values: Record<string, Field> = {};
+    try {
+      const baseDoc = mergeInputOf(kind, base.text);
+      const next = mergeInputOf(kind, writtenText);
+      values = Object.fromEntries(
+        changedAnchors({ kind, base: baseDoc, next }).map((anchor) => {
+          const found = valueAtAnchor({ kind, doc: next, anchor, base: baseDoc });
+          return [anchor, found.found ? found.value : undefined];
+        }),
+      );
+    } catch {
+      // A file the merge engine cannot read is checked by its bytes alone.
+    }
+    this.log.remember(filePath, base.etag, base.text);
+    this.log.remember(filePath, etag, writtenText);
+    this.log.markOwnWrite(filePath, { etag, hash: sha1Hex(writtenText), baseEtag: base.etag, values });
+  }
+
+  /** A locale file's text as a write sends it: metadata plus content, without the server-owned fields. */
+  private writerDataOf(filePath: string, text: string): UpdateLocaleInput['data'] {
+    try {
+      if (filePath.endsWith('.mdx')) {
+        const { data: frontmatter, content: body } = matter(text, {});
+        const { id: _id, created: _c, modified: _m, publishAt: _p, unpublishAt: _u, name: _n, ...meta } = frontmatter;
+        return { meta, content: { mdx: body.replace(/^\n+/, '') } };
+      }
+      const file = JSON.parse(text);
+      return file.type === 'json'
+        ? { meta: file.meta ?? {}, content: { data: file.data ?? {} } }
+        : { meta: file.meta ?? {}, content: file.content ?? {} };
+    } catch {
+      return {};
+    }
+  }
+
+  async getClobbered(
+    id: string,
+    locale: string,
+    etag: string,
+  ): Promise<{ base: UpdateLocaleInput['data']; saved: UpdateLocaleInput['data'] } | null> {
+    const record = await this.clobbers.get(id, locale, etag);
+    if (!record) return null;
+    return {
+      base: this.writerDataOf(record.filePath, record.baseText),
+      saved: this.writerDataOf(record.filePath, record.text),
+    };
+  }
+
+  async dismissClobbered(id: string, locale: string, etag: string): Promise<void> {
+    await this.clobbers.dismiss(id, locale, etag);
+  }
+
+  /**
+   * Whether this process's write `etag` survived: its bytes are on disk, or every value it changed is (a later write
+   * merged it in), and no lock takeover replaced it. Called after the lock is released, as a CLI write's last step.
+   */
+  async verifyOwnWrite(id: string, locale: string, etag: string): Promise<{ survived: boolean }> {
+    const manifest = this.contentIndex.getManifest(id);
+    const localeVersion = manifest?.locales[locale];
+    if (!manifest || !localeVersion) return { survived: false };
+    const filePath = this.getFilePath(manifest, localeVersion);
+    const text = await readFile(filePath, 'utf8').catch(() => null);
+    if (text === null) return { survived: false };
+    const check = this.log.checkOwnWrite(filePath, etag, text, mergeKindOf(filePath));
+    return { survived: !check.lost && !(await this.clobbers.has(id, locale, etag)) };
+  }
+
+  /**
+   * Whether `filePath` holds the version this process last wrote there, or is gone by this process's own delete, so
+   * the watcher can tell the editor's own change from a foreign one. Synchronous, as a file-watcher callback needs.
+   */
+  isOwnWriteFile(filePath: string): boolean {
+    let bytes: Uint8Array;
+    try {
+      bytes = readFileSync(filePath);
+    } catch {
+      return this.log.isOwnDelete(filePath, false);
+    }
+    this.log.isOwnDelete(filePath, true);
+    const own = this.log.ownEtag(filePath);
+    return own !== undefined && this.etagOf(filePath, bytes) === own;
+  }
+
   private async parseFileHeaderWithRepair(
     originalFilePath: string,
     buffer: Uint8Array,
@@ -693,15 +1035,7 @@ export class FileSystemContentAPI implements ContentAPI {
           const newFilePath = join(repairDir, filename);
 
           try {
-            // Check if target file already exists
-            try {
-              await access(newFilePath);
-              console.warn(
-                `Cannot move ${filename} to fragments/${REPAIRED_FRAGMENT_COLLECTION}/: target file already exists`,
-              );
-            } catch {
-              // Target doesn't exist, safe to move
-              await rename(filePath, newFilePath);
+            if (await this.moveLocked(filePath, newFilePath)) {
               console.log(`Repaired: Moved ${filename} to fragments/${REPAIRED_FRAGMENT_COLLECTION}/ collection`);
 
               // The file now uses the repaired collection layout.
@@ -713,6 +1047,10 @@ export class FileSystemContentAPI implements ContentAPI {
               parts = relativePath.split('/');
 
               bytesRead = await readFilePrefix(filePath, buffer);
+            } else {
+              console.warn(
+                `Cannot move ${filename} to fragments/${REPAIRED_FRAGMENT_COLLECTION}/: target file already exists`,
+              );
             }
           } catch (moveError) {
             console.error(`Failed to move ${filename} to fragments/${REPAIRED_FRAGMENT_COLLECTION}/:`, moveError);
@@ -748,17 +1086,8 @@ export class FileSystemContentAPI implements ContentAPI {
           const newFilePath = join(dirname(filePath), newFilename);
           console.log(`Will rename to: ${newFilename} at ${newFilePath}`);
 
-          // Check if target file already exists
           try {
-            await access(newFilePath);
-
-            // Target file exists, skip renaming to avoid conflict
-            console.warn(`Cannot rename ${filename} to ${newFilename}: target file already exists`);
-          } catch {
-            // Target file doesn't exist, safe to rename
-            console.log(`Target file doesn't exist, proceeding with rename`);
-            try {
-              await rename(filePath, newFilePath);
+            if (await this.moveLocked(filePath, newFilePath)) {
               console.log(`Successfully renamed ${filename} to ${newFilename}`);
 
               // Update filePath to the new path for further processing
@@ -769,11 +1098,14 @@ export class FileSystemContentAPI implements ContentAPI {
               parts = relativePath.split('/');
 
               bytesRead = await readFilePrefix(filePath, buffer);
-            } catch (renameError) {
-              console.error(`Failed to rename ${filename}:`, renameError);
-              // Continue processing with original file
-              bytesRead = await readFilePrefix(filePath, buffer);
+            } else {
+              // Target file exists, skip renaming to avoid conflict
+              console.warn(`Cannot rename ${filename} to ${newFilename}: target file already exists`);
             }
+          } catch (renameError) {
+            console.error(`Failed to rename ${filename}:`, renameError);
+            // Continue processing with original file
+            bytesRead = await readFilePrefix(filePath, buffer);
           }
         }
 
@@ -1021,7 +1353,7 @@ export class FileSystemContentAPI implements ContentAPI {
           // 'valueOf', …) reads the prototype function back and crashes.
           // Same cache-opt-out rule as the matter(..., {}) calls above.
           const updatedContent = matter.stringify(parsed, parsed.data);
-          await atomicWriteFile(filePath, updatedContent);
+          await this.writeRepairIfUnchanged(filePath, content, updatedContent);
           console.log(`Repaired MDX file: ${filePath} (added missing fields)`);
 
           // Calculate ETags for the repaired MDX file
@@ -1074,7 +1406,7 @@ export class FileSystemContentAPI implements ContentAPI {
             content: data.content || {},
           };
           const repairedJson = VXJSON.serialize(vxjsonData);
-          await atomicWriteFile(filePath, repairedJson);
+          await this.writeRepairIfUnchanged(filePath, content, repairedJson);
           console.log(`Repaired VXJSON file: ${filePath} (fixed field order or added missing fields)`);
           // Return the repaired data
 
@@ -1310,7 +1642,7 @@ export class FileSystemContentAPI implements ContentAPI {
     };
   }
 
-  async getLocalized(id: string, locale: string): Promise<LocalizedEntry | null> {
+  async getLocalized(id: string, locale: string, options: GetLocalizedOptions = {}): Promise<LocalizedEntry | null> {
     // Get manifest for this ID
     const manifest = this.contentIndex.getManifest(id);
     if (!manifest) {
@@ -1323,7 +1655,7 @@ export class FileSystemContentAPI implements ContentAPI {
         return null;
       }
 
-      return this.getLocalized(id, locale);
+      return this.getLocalized(id, locale, options);
     }
 
     // Check if this locale exists
@@ -1340,7 +1672,7 @@ export class FileSystemContentAPI implements ContentAPI {
     }
 
     // Build LocalizedEntry
-    return {
+    const entry: LocalizedEntry = {
       id: manifest.id,
       site: manifest.site,
       collection: manifest.collection,
@@ -1352,86 +1684,56 @@ export class FileSystemContentAPI implements ContentAPI {
         content: localeData.content,
       },
     };
+    if (options.ownWrite) {
+      const lost = await this.lostOwnWrite(manifest.id, locale, filePath, options.ownWrite, localeData.text);
+      if (lost) {
+        console.warn(`[content-api] the save ${lost.etag} to ${filePath} was overwritten by another writer`);
+        entry.lostWrite = lost;
+        this.log.forgetOwnWrite(filePath, lost.etag);
+      }
+    }
+    if (options.editor) {
+      const clobbered = await this.clobbers.list(manifest.id, locale);
+      if (clobbered.length > 0) entry.clobbered = clobbered;
+    }
+    return entry;
   }
 
-  private async readLocaleFile(filePath: string, locale: string): Promise<LocaleFileData | null> {
+  /**
+   * The armed own write `etag` to `filePath` when it was lost: replaced by `text` that holds neither its bytes nor
+   * its values, or recorded as clobbered by any process sharing the lock dir.
+   */
+  private async lostOwnWrite(
+    id: string,
+    locale: string,
+    filePath: string,
+    etag: string,
+    text: string,
+  ): Promise<{ etag: string; baseEtag: string } | null> {
+    if (this.log.ownEtag(filePath) !== etag) return null;
+    if (await this.clobbers.has(id, locale, etag)) this.log.markClobbered(filePath, etag);
+    const check = this.log.checkOwnWrite(filePath, etag, text, mergeKindOf(filePath));
+    return check.lost ? { etag: check.etag, baseEtag: check.baseEtag } : null;
+  }
+
+  /**
+   * Reads and parses one locale file, with its text and bytes. Under the caller's `lock` a file needing repair is
+   * repaired on disk; without one (a plain read) the repair is written only if the lock is free at once and the file
+   * is still as read, else it is served from memory.
+   */
+  private async readLocaleFile(
+    filePath: string,
+    locale: string,
+    opts: { lock?: HeldLock } = {},
+  ): Promise<(LocaleFileData & { text: string; bytes: Uint8Array }) | null> {
     try {
       const buffer = (await readFile(filePath)) as Uint8Array;
       const content = textDecoder.decode(buffer);
+      let read = this.localeDataOf(filePath, locale, buffer, content);
 
-      if (filePath.endsWith('.mdx')) {
-        const { data: frontmatter, content: rawBody } = matter(content, {});
-        // gray-matter leaves the blank line after the closing `---` on
-        // the body. Strip leading newlines so the round-trip matches the
-        // body the author wrote.
-        const body = rawBody.replace(/^\n+/, '');
-
-        // Calculate etags from the file buffer
-        const contentPos = findMdxContentStartPosition(buffer);
-
-        const etags = calculateEtagsFromMdxBuffer(buffer, contentPos);
-        const etag = `${etags.metaEtag}.${etags.contentEtag}`;
-
-        // Extract special fields from frontmatter, everything else is metadata
-        const { id, created, modified, publishAt, unpublishAt, name, ...metaFields } = frontmatter;
-
-        // Body-only — frontmatter is server-owned and surfaced separately
-        // via `meta` / `created` / `modified`. Returning the full file here
-        // would let the editor round-trip the YAML block as body text, which
-        // duplicates the frontmatter on disk when content is inserted above
-        // it (proven on assets.mdx, 2026-05-11).
-        const result: LocaleFileData = {
-          locale,
-          etag,
-          created: created,
-          modified: modified,
-          meta: metaFields as ContentMeta,
-          content: { mdx: body },
-        };
-
-        // Only add publish dates if they exist
-        if (frontmatter.publishAt !== undefined) {
-          result.publishAt = frontmatter.publishAt;
-        }
-        if (frontmatter.unpublishAt !== undefined) {
-          result.unpublishAt = frontmatter.unpublishAt;
-        }
-
-        return result;
-      }
-
-      // Parse JSON data first to determine type
-      const data = JSON.parse(content);
-
-      // Handle JSON data files (type: 'json') separately - they use simple etag
-      if (data.type === 'json') {
-        const etag = VXJSON.calculateSimpleEtag(buffer);
-
-        const result: LocaleFileData = {
-          locale,
-          etag,
-          created: data.created,
-          modified: data.modified,
-          meta: data.meta || {},
-          content: { data: data.data || {} },
-        };
-
-        // Only add optional fields if they exist
-        if (data.publishAt !== undefined) {
-          result.publishAt = data.publishAt;
-        }
-        if (data.unpublishAt !== undefined) {
-          result.unpublishAt = data.unpublishAt;
-        }
-
-        return result;
-      }
-
-      // For VXJSON (puck pages), calculate ETags with meta/content split
-      const etagResult = VXJSON.calculateETags(buffer);
-
-      if (!etagResult.success) {
+      if (!read) {
         // File needs repair - parse it and rewrite in correct format
+        const data = JSON.parse(content);
         const repairedData: VXJSONFile = {
           id: data.id,
           type: data.type,
@@ -1446,46 +1748,94 @@ export class FileSystemContentAPI implements ContentAPI {
 
         // Rewrite file with correct format
         const repairedJson = VXJSON.serialize(repairedData);
-        await atomicWriteFile(filePath, repairedJson);
+        if (opts.lock) {
+          await opts.lock.assertHeld();
+          await atomicWriteFile(filePath, repairedJson);
+        } else {
+          await this.writeRepairIfUnchanged(filePath, content, repairedJson);
+        }
 
-        // Recalculate ETags from repaired buffer
-        const repairedBuffer = Buffer.from(repairedJson, 'utf-8') as Uint8Array;
-        const repairedEtagResult = VXJSON.calculateETags(repairedBuffer);
-
-        if (!repairedEtagResult.success) {
+        read = this.localeDataOf(filePath, locale, Buffer.from(repairedJson, 'utf-8'), repairedJson);
+        if (!read) {
           throw new Error(`Failed to repair VXJSON file: ${filePath}`);
         }
-
-        const etag = repairedEtagResult.contentEtag
-          ? `${repairedEtagResult.metaEtag}.${repairedEtagResult.contentEtag}`
-          : repairedEtagResult.metaEtag;
-
         console.log(`Repaired VXJSON file: ${filePath}`);
-
-        const result: LocaleFileData = {
-          locale,
-          etag,
-          created: data.created,
-          modified: data.modified,
-          meta: data.meta || {},
-          content: data.content || {},
-        };
-
-        // Only add optional fields if they exist
-        if (data.publishAt !== undefined) {
-          result.publishAt = data.publishAt;
-        }
-        if (data.unpublishAt !== undefined) {
-          result.unpublishAt = data.unpublishAt;
-        }
-        if (data.previousPathnames !== undefined) {
-          result.previousPathnames = data.previousPathnames;
-        }
-
-        return result;
       }
 
-      const etag = etagResult.contentEtag ? `${etagResult.metaEtag}.${etagResult.contentEtag}` : etagResult.metaEtag;
+      // The served version, so a write built on it can later be merged against it.
+      this.log.remember(filePath, read.etag, read.text);
+      return read;
+    } catch (error) {
+      // A write holding the lock must answer write_error, not read a lost lock as a missing file.
+      if (error instanceof FileLockLostError) throw error;
+      return null;
+    }
+  }
+
+  /** Parses one locale file's bytes; null for a page whose `content` is not its last key, which needs a repair. */
+  private localeDataOf(
+    filePath: string,
+    locale: string,
+    buffer: Uint8Array,
+    content: string,
+  ): (LocaleFileData & { text: string; bytes: Uint8Array }) | null {
+    if (filePath.endsWith('.mdx')) {
+      const { data: frontmatter, content: rawBody } = matter(content, {});
+      // gray-matter leaves the blank line after the closing `---` on
+      // the body. Strip leading newlines so the round-trip matches the
+      // body the author wrote.
+      const body = rawBody.replace(/^\n+/, '');
+
+      // Calculate etags from the file buffer
+      const contentPos = findMdxContentStartPosition(buffer);
+
+      const etags = calculateEtagsFromMdxBuffer(buffer, contentPos);
+      const etag = `${etags.metaEtag}.${etags.contentEtag}`;
+
+      // Extract special fields from frontmatter, everything else is metadata
+      const {
+        id: _id,
+        created,
+        modified,
+        publishAt: _publishAt,
+        unpublishAt: _unpublishAt,
+        name: _name,
+        ...metaFields
+      } = frontmatter;
+
+      // Body-only — frontmatter is server-owned and surfaced separately
+      // via `meta` / `created` / `modified`. Returning the full file here
+      // would let the editor round-trip the YAML block as body text, which
+      // duplicates the frontmatter on disk when content is inserted above
+      // it (proven on assets.mdx, 2026-05-11).
+      const result: LocaleFileData = {
+        locale,
+        etag,
+        created: created,
+        modified: modified,
+        // SAFETY: gray-matter yields the frontmatter as a plain object; every key left after the special fields is metadata.
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- same reason as the SAFETY note.
+        meta: metaFields as ContentMeta,
+        content: { mdx: body },
+      };
+
+      // Only add publish dates if they exist
+      if (frontmatter.publishAt !== undefined) {
+        result.publishAt = frontmatter.publishAt;
+      }
+      if (frontmatter.unpublishAt !== undefined) {
+        result.unpublishAt = frontmatter.unpublishAt;
+      }
+
+      return { ...result, text: content, bytes: buffer };
+    }
+
+    // Parse JSON data first to determine type
+    const data = JSON.parse(content);
+
+    // Handle JSON data files (type: 'json') separately - they use simple etag
+    if (data.type === 'json') {
+      const etag = VXJSON.calculateSimpleEtag(buffer);
 
       const result: LocaleFileData = {
         locale,
@@ -1493,7 +1843,7 @@ export class FileSystemContentAPI implements ContentAPI {
         created: data.created,
         modified: data.modified,
         meta: data.meta || {},
-        content: data.content || {},
+        content: { data: data.data || {} },
       };
 
       // Only add optional fields if they exist
@@ -1503,14 +1853,37 @@ export class FileSystemContentAPI implements ContentAPI {
       if (data.unpublishAt !== undefined) {
         result.unpublishAt = data.unpublishAt;
       }
-      if (data.previousPathnames !== undefined) {
-        result.previousPathnames = data.previousPathnames;
-      }
 
-      return result;
-    } catch {
-      return null;
+      return { ...result, text: content, bytes: buffer };
     }
+
+    // For VXJSON (puck pages), calculate ETags with meta/content split
+    const etagResult = VXJSON.calculateETags(buffer);
+    if (!etagResult.success) return null;
+
+    const etag = etagResult.contentEtag ? `${etagResult.metaEtag}.${etagResult.contentEtag}` : etagResult.metaEtag;
+
+    const result: LocaleFileData = {
+      locale,
+      etag,
+      created: data.created,
+      modified: data.modified,
+      meta: data.meta || {},
+      content: data.content || {},
+    };
+
+    // Only add optional fields if they exist
+    if (data.publishAt !== undefined) {
+      result.publishAt = data.publishAt;
+    }
+    if (data.unpublishAt !== undefined) {
+      result.unpublishAt = data.unpublishAt;
+    }
+    if (data.previousPathnames !== undefined) {
+      result.previousPathnames = data.previousPathnames;
+    }
+
+    return { ...result, text: content, bytes: buffer };
   }
 
   async createContent(data: CreateContentInput): Promise<CreateResult> {
@@ -1593,6 +1966,7 @@ export class FileSystemContentAPI implements ContentAPI {
 
         // Write file and calculate etag from the serialized content
         let etag: string;
+        let fileText: string;
 
         if (data.type === 'mdx') {
           // Write MDX with frontmatter - flatten metadata fields
@@ -1606,8 +1980,7 @@ export class FileSystemContentAPI implements ContentAPI {
           };
 
           const mdxContent = serializeMdxWithFrontmatter(frontmatterData, content.mdx || '');
-          // oxlint-disable-next-line no-await-in-loop -- locales are written one at a time so a failed write stops the rest.
-          await atomicWriteFile(filePath, mdxContent);
+          fileText = mdxContent;
 
           // For MDX, calculate etags from the serialized content
           const mdxBuffer = new TextEncoder().encode(mdxContent);
@@ -1645,8 +2018,7 @@ export class FileSystemContentAPI implements ContentAPI {
           };
 
           const jsonContent = JSON.stringify(sortKeys(dataFileContent, { deep: true }), null, '\t');
-          // oxlint-disable-next-line no-await-in-loop -- locales are written one at a time so a failed write stops the rest.
-          await atomicWriteFile(filePath, jsonContent);
+          fileText = jsonContent;
 
           // For data files, use simple etag (hash entire buffer)
           const jsonBuffer = new TextEncoder().encode(jsonContent);
@@ -1665,10 +2037,15 @@ export class FileSystemContentAPI implements ContentAPI {
 
           etag = etagResult.contentEtag ? `${etagResult.metaEtag}.${etagResult.contentEtag}` : etagResult.metaEtag;
 
-          // Write the file
-          // oxlint-disable-next-line no-await-in-loop -- locales are written one at a time so a failed write stops the rest.
-          await atomicWriteFile(filePath, jsonContent);
+          fileText = jsonContent;
         }
+
+        // oxlint-disable-next-line no-await-in-loop -- locales are written one at a time so a failed write stops the rest.
+        if (!(await this.createFile(filePath, fileText, id, locale))) {
+          return { success: false, reason: 'already_exists', error: new Error(`${filePath} already exists`) };
+        }
+        const createdEtag = this.etagOf(filePath, new TextEncoder().encode(fileText));
+        this.markOwnWrite(filePath, { etag: createdEtag, text: fileText }, fileText, createdEtag);
 
         // Build locale manifest using shared function
         const localeVersion = buildLocaleVersion({
@@ -1708,7 +2085,7 @@ export class FileSystemContentAPI implements ContentAPI {
   }
 
   async updateLocalized(input: UpdateLocaleInput): Promise<UpdateResult> {
-    const { id, locale, data, etag } = input;
+    const { id, locale, data } = input;
 
     // Get the manifest
     const manifest = this.contentIndex.getManifest(id);
@@ -1728,96 +2105,7 @@ export class FileSystemContentAPI implements ContentAPI {
       };
     }
 
-    // Get file path and read current content FIRST to get fresh etag
     const filePath = this.getFilePath(manifest, localeVersion);
-    const current = await this.readLocaleFile(filePath, locale);
-    if (!current) {
-      return {
-        success: false,
-        reason: 'not_found',
-      };
-    }
-
-    // Use fresh etag from file, not stale manifest etag
-    const currentEtag = current.etag;
-
-    // Check etag - data files use simple etags, others use dual etags
-    if (manifest.kind === 'data') {
-      // Data files use simple etag (single hash, no dot separator)
-      // Just compare the full etag directly
-      if (etag !== currentEtag) {
-        return {
-          success: false,
-          reason: 'stale_write',
-          currentEtag,
-        };
-      }
-    } else {
-      // Non-data files use dual etags (meta.content format)
-      const etagParts = parseDualEtag(etag);
-      const currentParts = parseDualEtag(currentEtag);
-
-      if (!etagParts || !currentParts) {
-        return {
-          success: false,
-          reason: 'stale_write',
-          currentEtag,
-        };
-      }
-
-      // Check which parts are being updated
-      const updateScope = analyzeUpdateScope(data);
-      const updatingMeta = (updateScope & UPDATE_SCOPE.META) !== 0;
-      const updatingContent = (updateScope & UPDATE_SCOPE.CONTENT) !== 0;
-
-      // Validate etags for parts being updated
-      if (updatingMeta && etagParts.meta !== currentParts.meta) {
-        return {
-          success: false,
-          reason: 'stale_write',
-          currentEtag,
-        };
-      }
-
-      if (updatingContent && etagParts.content !== currentParts.content) {
-        return {
-          success: false,
-          reason: 'stale_write',
-          currentEtag,
-        };
-      }
-    }
-
-    // Update modified timestamp for any change (metadata or content)
-    let modified: string;
-    if (shouldUpdateModifiedTimestamp(data)) {
-      // Use provided modified timestamp or current time
-      modified = data.modified || new Date().toISOString();
-    } else if (data.modified) {
-      // If modified timestamp is explicitly provided, always use it
-      modified = data.modified;
-    } else {
-      // No changes and no explicit timestamp, keep current
-      modified = current.modified;
-    }
-
-    const {
-      sortedMeta: newMeta,
-      valid: metaValid,
-      error: metaError,
-    } = validateAndPrepareMetadata(applyMetaPatch(current.meta, data.meta ?? {}));
-
-    // Validate new metadata
-    if (!newMeta || !metaValid) {
-      return {
-        success: false,
-        reason: 'write_error',
-        error: new Error(metaError),
-      };
-    }
-
-    // Merge updates
-    const newContent = data.content ? { ...current.content, ...data.content } : current.content;
 
     // A page's new path is tidied, and refused when it is malformed or another page has it, as a
     // create's is; the tidied form names the file and keys the page in the site index. An unchanged
@@ -1860,6 +2148,73 @@ export class FileSystemContentAPI implements ContentAPI {
       }
     }
 
+    // The target file path differs when the pathname or name changes
+    let targetFilePath = filePath;
+    if (pathname && localeVersion.pathname && pathname !== localeVersion.pathname && manifest.site) {
+      targetFilePath = this.getFilePath(manifest, { ...localeVersion, pathname });
+    } else if (
+      data.name &&
+      localeVersion.name &&
+      data.name !== localeVersion.name &&
+      (manifest.kind === 'fragment' || manifest.kind === 'data')
+    ) {
+      // A fragment's or data entry's name is part of its file path, so a rename moves the file
+      targetFilePath = this.getFilePath(manifest, { ...localeVersion, name: data.name });
+    }
+
+    try {
+      // From the read to the etag of the written file, so the CLI and the dev server cannot interleave writes.
+      return await withFileLocks(
+        [filePath, targetFilePath],
+        (lock) => this.updateUnderLock({ input, manifest, localeVersion, filePath, targetFilePath, pathname, lock }),
+        this.lockOptions(),
+      );
+    } catch (error) {
+      return { success: false, reason: 'write_error', error: ensureError(error) };
+    }
+  }
+
+  private async updateUnderLock(args: {
+    input: UpdateLocaleInput;
+    manifest: ContentManifest;
+    localeVersion: LocaleVersion;
+    filePath: string;
+    targetFilePath: string;
+    pathname: string | undefined;
+    lock: HeldLock;
+  }): Promise<UpdateResult> {
+    const { input, manifest, localeVersion, filePath, targetFilePath, pathname, lock } = args;
+    const { id, locale, data, etag } = input;
+
+    await this.recoverUnderLock(filePath, id, locale);
+    if (targetFilePath !== filePath) await this.recoverUnderLock(targetFilePath, id, locale);
+
+    // Read current content FIRST to get fresh etag
+    const current = await this.readLocaleFile(filePath, locale, { lock });
+    if (!current) {
+      return {
+        success: false,
+        reason: 'not_found',
+      };
+    }
+
+    // Use fresh etag from file, not stale manifest etag
+    const currentEtag = current.etag;
+
+    // A write built on this process's own last write that was since lost is refused, never merged against it:
+    // the merge would read the lost edits as unchanged and keep the version that replaced them.
+    const lost = await this.lostOwnWrite(id, locale, filePath, etag, current.text);
+    if (lost) {
+      return { success: false, reason: 'stale_write', currentEtag, lostWrite: lost };
+    }
+
+    const request = { manifest, localeVersion, locale, targetFilePath, data, pathname };
+    const prepared = etagCovers(manifest.kind, data, etag, currentEtag)
+      ? this.prepareWrite({ ...request, current })
+      : this.mergeStaleWrite({ ...request, current, filePath, etag });
+    if (!('text' in prepared)) return prepared;
+    const { text: writtenText, modified, newMeta, newContent } = prepared;
+
     // Handle pathname changes - track history only for published content
     const pathnameHistory = buildPathnameHistory(
       localeVersion.pathname,
@@ -1871,200 +2226,39 @@ export class FileSystemContentAPI implements ContentAPI {
       new Date().toISOString(),
     );
 
+    // A name changed only in letter case is the same file on a case-insensitive disk.
+    const moving = targetFilePath !== filePath && !(await isSameFile(filePath, targetFilePath));
+    if (
+      moving &&
+      (await access(targetFilePath).then(
+        () => true,
+        () => false,
+      ))
+    ) {
+      return { success: false, reason: 'write_error', error: new Error(`${targetFilePath} already exists`) };
+    }
+
     try {
-      // Determine the target file path (may be different if pathname or name changed)
-      let targetFilePath = filePath;
-      if (pathname && localeVersion.pathname && pathname !== localeVersion.pathname && manifest.site) {
-        // For pages, calculate new file path based on new pathname
-        const newLocaleVersion: LocaleVersion = {
-          ...localeVersion,
-          pathname,
-        };
-        targetFilePath = this.getFilePath(manifest, newLocaleVersion);
+      if (targetFilePath !== filePath) await mkdir(dirname(targetFilePath), { recursive: true });
 
-        // Ensure target directory exists
-        await mkdir(dirname(targetFilePath), { recursive: true });
-      } else if (
-        data.name &&
-        localeVersion.name &&
-        data.name !== localeVersion.name &&
-        (manifest.kind === 'fragment' || manifest.kind === 'data')
-      ) {
-        // A fragment's or data entry's name is part of its file path, so a rename moves the file
-        const newLocaleVersion: LocaleVersion = {
-          ...localeVersion,
-          name: data.name,
-        };
-        targetFilePath = this.getFilePath(manifest, newLocaleVersion);
-
-        // Ensure target directory exists
-        await mkdir(dirname(targetFilePath), { recursive: true });
+      const written = await guardedWrite({
+        lock,
+        target: targetFilePath,
+        text: writtenText,
+        startBytes: moving ? null : current.bytes,
+        hooks: this.writeHooks,
+        onClobber: (bytes) => this.recordClobber(id, locale, targetFilePath, bytes, current.text),
+      });
+      if (written.kind === 'changed') {
+        // Another writer changed the file since the read: it refetches and merges, as for any stale write.
+        return written.bytes
+          ? { success: false, reason: 'stale_write', currentEtag: this.etagOf(targetFilePath, written.bytes) }
+          : { success: false, reason: 'not_found' };
       }
 
-      // Write updated content
-      if (targetFilePath.endsWith('.mdx')) {
-        // Build frontmatter with special fields and metadata
-        const publishAt = resolvePublishDate(data.publishAt, current.publishAt);
-        const unpublishAt = resolvePublishDate(data.unpublishAt, current.unpublishAt);
-        const frontmatterData = {
-          id: manifest.id,
-          created: current.created,
-          modified,
-          ...(publishAt && { publishAt }),
-          ...(unpublishAt && { unpublishAt }),
-          ...newMeta, // Spread metadata fields directly
-        };
-
-        // Extract just the content part from MDX (remove frontmatter if present)
-        let mdxContentPart = newContent.mdx || '';
-        if (mdxContentPart.startsWith('---')) {
-          // Remove frontmatter if it exists
-          const { content: contentOnly } = matter(mdxContentPart, {});
-          mdxContentPart = contentOnly;
-        }
-
-        // Defensive guard: warn when a frontmatter-shaped block appears
-        // mid-body. The load path strips frontmatter before it reaches the
-        // editor, so this should never occur — if it does, surface it for
-        // investigation instead of silently writing a file with stacked
-        // frontmatter blocks.
-        if (/\n---\r?\n[\s\S]*?\r?\n---(\r?\n|$)/.test(mdxContentPart)) {
-          console.warn(
-            `[content-api] Embedded frontmatter-shaped block detected in body for ${targetFilePath}. ` +
-              'This indicates a load-path regression or client-side leak.',
-          );
-        }
-
-        const mdxContent = serializeMdxWithFrontmatter(frontmatterData, mdxContentPart);
-
-        // Atomic write for MDX files
-        await atomicWriteFile(targetFilePath, mdxContent);
-      } else if (targetFilePath.endsWith('.json')) {
-        // Data files use "data" field instead of "content"
-        const fileContent = JSON.parse(await readFile(filePath, 'utf-8'));
-
-        // Build updated data file structure
-        const updatedFile = {
-          id: fileContent.id,
-          type: 'json' as const,
-          created: fileContent.created,
-          modified,
-          ...(fileContent.publishAt && { publishAt: fileContent.publishAt }),
-          ...(fileContent.unpublishAt && { unpublishAt: fileContent.unpublishAt }),
-          meta: newMeta,
-          data: sortKeys(newContent.data || {}, { deep: true }),
-        };
-
-        // Handle publish date updates
-        if ('publishAt' in data) {
-          if (data.publishAt) {
-            (updatedFile as Record<string, unknown>).publishAt = data.publishAt;
-          } else {
-            delete (updatedFile as Record<string, unknown>).publishAt;
-          }
-        }
-
-        if ('unpublishAt' in data) {
-          if (data.unpublishAt) {
-            (updatedFile as Record<string, unknown>).unpublishAt = data.unpublishAt;
-          } else {
-            delete (updatedFile as Record<string, unknown>).unpublishAt;
-          }
-        }
-
-        // Serialize data file
-        const serializedContent = JSON.stringify(sortKeys(updatedFile, { deep: true }), null, '\t');
-
-        // Atomic write for JSON data files
-        await atomicWriteFile(targetFilePath, serializedContent);
-      } else {
-        // VXJSON for pages (puck)
-        const fileContent = JSON.parse(await readFile(filePath, 'utf-8'));
-
-        // Build updated VXJSONFile structure
-        const updatedFile: VXJSONFile = {
-          id: fileContent.id,
-          type: fileContent.type,
-          created: fileContent.created,
-          modified,
-          publishAt: fileContent.publishAt,
-          unpublishAt: fileContent.unpublishAt,
-          previousPathnames: fileContent.previousPathnames,
-          meta: newMeta,
-          content: sortKeys(newContent, { deep: true }),
-        };
-
-        // Handle pathname changes and track history
-        if (pathname && localeVersion.pathname && pathname !== localeVersion.pathname) {
-          // Only add to history if content is published
-          if (isContentPublished(current)) {
-            if (!updatedFile.previousPathnames) {
-              updatedFile.previousPathnames = {};
-            }
-            updatedFile.previousPathnames[localeVersion.pathname] = modified;
-          }
-        }
-
-        // Handle publish date updates
-        if ('publishAt' in data) {
-          if (data.publishAt) {
-            updatedFile.publishAt = data.publishAt;
-          } else {
-            delete updatedFile.publishAt;
-          }
-        }
-
-        if ('unpublishAt' in data) {
-          if (data.unpublishAt) {
-            updatedFile.unpublishAt = data.unpublishAt;
-          } else {
-            delete updatedFile.unpublishAt;
-          }
-        }
-
-        // Serialize using VXJSON format to ensure content is last
-        const serializedContent = VXJSON.serialize(updatedFile);
-
-        // Atomic write for VXJSON page files
-        await atomicWriteFile(targetFilePath, serializedContent);
-      }
-
-      // Calculate new etag from the written file
-      const writtenBuffer = (await readFile(targetFilePath)) as Uint8Array;
-      let newEtag: string;
-
-      if (targetFilePath.endsWith('.mdx')) {
-        // Find content position in MDX
-        const contentStartMarker = new TextEncoder().encode('---\n\n');
-        let contentPos = -1;
-        for (let i = 0; i <= writtenBuffer.length - contentStartMarker.length; i++) {
-          let match = true;
-          for (let j = 0; j < contentStartMarker.length; j++) {
-            if (writtenBuffer[i + j] !== contentStartMarker[j]) {
-              match = false;
-              break;
-            }
-          }
-          if (match) {
-            contentPos = i + contentStartMarker.length;
-            break;
-          }
-        }
-        const etags = calculateEtagsFromMdxBuffer(writtenBuffer, contentPos);
-        newEtag = `${etags.metaEtag}.${etags.contentEtag}`;
-      } else if (targetFilePath.endsWith('.json')) {
-        // For data files, use simple etag (hash entire buffer)
-        newEtag = VXJSON.calculateSimpleEtag(writtenBuffer);
-      } else {
-        // For VXJSON, calculateEtagsFromVXJSONBuffer finds the content position internally
-        const etagResult = VXJSON.calculateETags(writtenBuffer);
-
-        if (!etagResult.success) {
-          throw new Error(`Invalid VXJSON format when updating content: ${etagResult.error}`);
-        }
-
-        newEtag = etagResult.contentEtag ? `${etagResult.metaEtag}.${etagResult.contentEtag}` : etagResult.metaEtag;
-      }
+      // The etag a read of the written file serves
+      const newEtag = this.etagOf(targetFilePath, new TextEncoder().encode(writtenText));
+      this.markOwnWrite(targetFilePath, current, writtenText, newEtag);
 
       // Build updated locale manifest with current publish data
       const updatedLocaleVersion: LocaleVersion = {
@@ -2119,8 +2313,22 @@ export class FileSystemContentAPI implements ContentAPI {
             // A name changed only in letter case is the same file on a case-insensitive disk: the
             // write went into it, so deleting the old path would delete the entry. Renaming it
             // gives the file its new name's case.
-            if (await isSameFile(filePath, targetFilePath)) await rename(filePath, targetFilePath);
-            else await unlink(filePath);
+            if (await isSameFile(filePath, targetFilePath)) {
+              await rename(filePath, targetFilePath);
+              // The watcher reports the old spelling too; it holds our write, under the name the log does not know.
+              this.markOwnWrite(filePath, current, writtenText, newEtag);
+            } else {
+              // Our own delete, so the watcher and the reload gate do not take the move for a foreign change.
+              this.log.markOwnDelete(filePath);
+              await guardedRemove({
+                lock,
+                target: filePath,
+                startBytes: current.bytes,
+                restore: false,
+                hooks: this.writeHooks,
+                onClobber: (bytes) => this.recordClobber(id, locale, filePath, bytes, current.text),
+              });
+            }
           } catch (error) {
             // Log but don't fail if old file deletion fails
             console.warn(`Failed to delete old file ${filePath}:`, error);
@@ -2158,7 +2366,284 @@ export class FileSystemContentAPI implements ContentAPI {
     }
   }
 
+  /** The file a write of `data` over `current` produces, with what it sets; write_error for invalid metadata. */
+  private prepareWrite(args: UpdateRequest & { current: LocaleRead }): PreparedWrite | UpdateResult {
+    const { current, data } = args;
+
+    // Update modified timestamp for any change (metadata or content)
+    let modified: string;
+    if (shouldUpdateModifiedTimestamp(data)) {
+      // Use provided modified timestamp or current time
+      modified = data.modified || new Date().toISOString();
+    } else if (data.modified) {
+      // If modified timestamp is explicitly provided, always use it
+      modified = data.modified;
+    } else {
+      // No changes and no explicit timestamp, keep current
+      modified = current.modified;
+    }
+
+    const {
+      sortedMeta: newMeta,
+      valid: metaValid,
+      error: metaError,
+    } = validateAndPrepareMetadata(applyMetaPatch(current.meta, data.meta ?? {}));
+
+    // Validate new metadata
+    if (!newMeta || !metaValid) {
+      return {
+        success: false,
+        reason: 'write_error',
+        error: new Error(metaError),
+      };
+    }
+
+    // Merge updates
+    const newContent = data.content ? { ...current.content, ...data.content } : current.content;
+    const text = this.serializeUpdatedFile({ ...args, fileText: current.text, modified, newMeta, newContent });
+    return { text, modified, newMeta, newContent };
+  }
+
+  /** The text of `current` (read as `fileText`) after a write of `data`. */
+  private serializeUpdatedFile(
+    args: UpdateRequest & {
+      current: LocaleFileData;
+      fileText: string;
+      modified: string;
+      newMeta: ContentMeta;
+      newContent: ContentData;
+    },
+  ): string {
+    const {
+      manifest,
+      localeVersion,
+      current,
+      fileText,
+      targetFilePath,
+      data,
+      modified,
+      newMeta,
+      newContent,
+      pathname,
+    } = args;
+    if (targetFilePath.endsWith('.mdx')) {
+      // Build frontmatter with special fields and metadata
+      const publishAt = resolvePublishDate(data.publishAt, current.publishAt);
+      const unpublishAt = resolvePublishDate(data.unpublishAt, current.unpublishAt);
+      const frontmatterData = {
+        id: manifest.id,
+        created: current.created,
+        modified,
+        ...(publishAt && { publishAt }),
+        ...(unpublishAt && { unpublishAt }),
+        ...newMeta, // Spread metadata fields directly
+      };
+
+      // Extract just the content part from MDX (remove frontmatter if present)
+      let mdxContentPart = newContent.mdx || '';
+      if (mdxContentPart.startsWith('---')) {
+        // Remove frontmatter if it exists
+        const { content: contentOnly } = matter(mdxContentPart, {});
+        mdxContentPart = contentOnly;
+      }
+
+      // Defensive guard: warn when a frontmatter-shaped block appears
+      // mid-body. The load path strips frontmatter before it reaches the
+      // editor, so this should never occur — if it does, surface it for
+      // investigation instead of silently writing a file with stacked
+      // frontmatter blocks.
+      if (/\n---\r?\n[\s\S]*?\r?\n---(\r?\n|$)/.test(mdxContentPart)) {
+        console.warn(
+          `[content-api] Embedded frontmatter-shaped block detected in body for ${targetFilePath}. ` +
+            'This indicates a load-path regression or client-side leak.',
+        );
+      }
+
+      return serializeMdxWithFrontmatter(frontmatterData, mdxContentPart);
+    }
+
+    if (targetFilePath.endsWith('.json')) {
+      // Data files use "data" field instead of "content"
+      const fileContent = JSON.parse(fileText);
+
+      // Build updated data file structure; a publish date the update names replaces the file's, an empty one clears it
+      // (JSON.stringify drops the undefined key).
+      const updatedFile = {
+        id: fileContent.id,
+        type: 'json' as const,
+        created: fileContent.created,
+        modified,
+        publishAt: ('publishAt' in data ? data.publishAt : fileContent.publishAt) || undefined,
+        unpublishAt: ('unpublishAt' in data ? data.unpublishAt : fileContent.unpublishAt) || undefined,
+        meta: newMeta,
+        data: sortKeys(newContent.data || {}, { deep: true }),
+      };
+
+      // Serialize data file
+      return JSON.stringify(sortKeys(updatedFile, { deep: true }), null, '\t');
+    }
+
+    // VXJSON for pages (puck)
+    const fileContent = JSON.parse(fileText);
+
+    // Build updated VXJSONFile structure
+    const updatedFile: VXJSONFile = {
+      id: fileContent.id,
+      type: fileContent.type,
+      created: fileContent.created,
+      modified,
+      publishAt: fileContent.publishAt,
+      unpublishAt: fileContent.unpublishAt,
+      previousPathnames: fileContent.previousPathnames,
+      meta: newMeta,
+      content: sortKeys(newContent, { deep: true }),
+    };
+
+    // Handle pathname changes and track history
+    if (pathname && localeVersion.pathname && pathname !== localeVersion.pathname) {
+      // Only add to history if content is published
+      if (isContentPublished(current)) {
+        if (!updatedFile.previousPathnames) {
+          updatedFile.previousPathnames = {};
+        }
+        updatedFile.previousPathnames[localeVersion.pathname] = modified;
+      }
+    }
+
+    // Handle publish date updates
+    if ('publishAt' in data) {
+      if (data.publishAt) {
+        updatedFile.publishAt = data.publishAt;
+      } else {
+        delete updatedFile.publishAt;
+      }
+    }
+
+    if ('unpublishAt' in data) {
+      if (data.unpublishAt) {
+        updatedFile.unpublishAt = data.unpublishAt;
+      } else {
+        delete updatedFile.unpublishAt;
+      }
+    }
+
+    // Serialize using VXJSON format to ensure content is last
+    return VXJSON.serialize(updatedFile);
+  }
+
+  /**
+   * A write against a stale etag, merged field by field with what is on disk now: its base is the version this
+   * process served for that etag. Only a same-field clash is refused, naming each clash; a rename, or a base this
+   * process never served, stays a plain stale_write.
+   */
+  private mergeStaleWrite(
+    args: UpdateRequest & { current: LocaleRead; filePath: string; etag: string },
+  ): PreparedWrite | UpdateResult {
+    const { manifest, localeVersion, locale, current, filePath, targetFilePath, data, etag } = args;
+    const stale: UpdateResult = { success: false, reason: 'stale_write', currentEtag: current.etag };
+    const renames =
+      (data.pathname !== undefined && data.pathname !== localeVersion.pathname) ||
+      (data.name !== undefined && data.name !== localeVersion.name);
+    const baseText = this.log.get(filePath, etag);
+    if (renames || baseText === undefined) return stale;
+
+    const kind = mergeKindOf(filePath);
+    try {
+      const base = this.localeDataOf(filePath, locale, new TextEncoder().encode(baseText), baseText);
+      if (!base) throw new TypeError(`the version logged for ${etag} is not a canonical file`);
+      const ours = this.prepareWrite({ ...args, current: base });
+      if (!('text' in ours)) return ours;
+      const result = mergeContent({
+        kind,
+        base: mergeInputOf(kind, baseText),
+        ours: mergeInputOf(kind, ours.text),
+        theirs: mergeInputOf(kind, current.text),
+      });
+      if (result.kind === 'conflict') {
+        const sent = parseDualEtag(etag);
+        const now = parseDualEtag(current.etag);
+        const whole = manifest.kind === 'data';
+        return {
+          ...stale,
+          conflictDetails: {
+            metaChanged: whole || sent?.meta !== now?.meta,
+            contentChanged: whole || sent?.content !== now?.content,
+            conflicts: result.conflicts,
+          },
+        };
+      }
+
+      const text = mergedFileText(targetFilePath, result.value);
+      const merged = this.localeDataOf(targetFilePath, locale, new TextEncoder().encode(text), text);
+      const checked = merged ? validateAndPrepareMetadata(merged.meta) : null;
+      if (!merged || !checked?.valid || !checked.sortedMeta) {
+        return {
+          success: false,
+          reason: 'write_error',
+          error: new Error(checked?.error ?? 'the merged file is unreadable'),
+        };
+      }
+      return { text, modified: merged.modified, newMeta: checked.sortedMeta, newContent: merged.content };
+    } catch (error) {
+      // A malformed side (TypeError from the merge engine) writes nothing.
+      return { success: false, reason: 'write_error', error: ensureError(error) };
+    }
+  }
+
   async deleteContent(id: string, etag: string): Promise<DeleteResult> {
+    const manifest = this.contentIndex.getManifest(id);
+    const paths = manifest ? Array.from(localesOf(manifest), (lv) => this.getFilePath(manifest, lv)) : [];
+    try {
+      return await withFileLocks(paths, (lock) => this.deleteContentLocked(id, etag, lock), this.lockOptions());
+    } catch (error) {
+      return { success: false, error: ensureError(error) };
+    }
+  }
+
+  /**
+   * A locale file as a read under `lock` serves it; `etag` is null for a file no read can parse, and `bytes` too for
+   * one that cannot be read at all (a directory in its place). Null when absent.
+   */
+  private async lockedFileState(
+    filePath: string,
+    locale: string,
+    lock: HeldLock,
+  ): Promise<{ etag: string | null; bytes: Uint8Array | null; text: string } | null> {
+    const read = await this.readLocaleFile(filePath, locale, { lock });
+    if (read) return { etag: read.etag, bytes: read.bytes, text: read.text };
+    const bytes = await readOrNull(filePath).catch(() => undefined);
+    if (bytes === undefined) return { etag: null, bytes: null, text: '' };
+    return bytes && { etag: null, bytes, text: textDecoder.decode(bytes) };
+  }
+
+  /** Removes a locked locale file only if it still holds `state`'s bytes; false when a change was put back. */
+  private async removeLocaleFile(
+    lock: HeldLock,
+    id: string,
+    locale: string,
+    filePath: string,
+    state: { bytes: Uint8Array | null; text: string } | null,
+  ): Promise<boolean> {
+    this.log.markOwnDelete(filePath);
+    if (!state) return true; // already absent (git checkout, a manual rm): the desired end state
+    if (!state.bytes) {
+      // Nothing readable to compare: removed as before, and a failure (a directory there) fails this locale.
+      await rm(filePath, { force: true });
+      return true;
+    }
+    const { bytes: startBytes } = state;
+    const removed = await guardedRemove({
+      lock,
+      target: filePath,
+      startBytes,
+      restore: true,
+      hooks: this.writeHooks,
+      onClobber: (bytes) => this.recordClobber(id, locale, filePath, bytes, state.text),
+    });
+    return removed.kind === 'removed';
+  }
+
+  private async deleteContentLocked(id: string, etag: string, lock: HeldLock): Promise<DeleteResult> {
     // Get manifest for this ID
     const manifest = this.contentIndex.getManifest(id);
     if (!manifest) {
@@ -2187,15 +2672,35 @@ export class FileSystemContentAPI implements ContentAPI {
       };
     }
 
+    // The index only learns of another process's write when the watcher reindexes: compare with the files themselves,
+    // so a delete never removes a write its caller has not seen.
+    const localeVersions = Array.from(localesOf(manifest));
+    const states = await Promise.all(
+      localeVersions.map((localeVersion) =>
+        this.lockedFileState(this.getFilePath(manifest, localeVersion), localeVersion.locale, lock),
+      ),
+    );
+    const changed = states.find((state, i) => state && state.etag !== null && state.etag !== localeVersions[i].etag);
+    if (changed?.etag) {
+      return {
+        success: false,
+        reason: 'stale_write',
+        currentEtag: changed.etag,
+        error: new Error('A locale file changed on disk since it was read'),
+      };
+    }
+
     // Settled, not all: Promise.all let one rejection abandon the others
     // AFTER they had already unlinked, so the caller was told the delete
     // failed while the content was gone and the index still listed it. A file
     // already absent (git checkout, a manual rm) is the common cause, and for
     // a delete that is the desired end state, not an error.
-    const localeVersions = Array.from(localesOf(manifest));
     const outcomes = await Promise.allSettled(
-      localeVersions.map(async (localeVersion) => {
-        await rm(this.getFilePath(manifest, localeVersion), { force: true });
+      localeVersions.map(async (localeVersion, i) => {
+        const filePath = this.getFilePath(manifest, localeVersion);
+        if (!(await this.removeLocaleFile(lock, id, localeVersion.locale, filePath, states[i]))) {
+          throw new Error(`${filePath} changed while it was being deleted; it was kept`);
+        }
       }),
     );
 
@@ -2221,6 +2726,17 @@ export class FileSystemContentAPI implements ContentAPI {
   }
 
   async deleteLocalized(input: DeleteLocaleInput): Promise<DeleteResult> {
+    const manifest = this.contentIndex.getManifest(input.id);
+    const localeVersion = manifest?.locales[input.locale];
+    const paths = manifest && localeVersion ? [this.getFilePath(manifest, localeVersion)] : [];
+    try {
+      return await withFileLocks(paths, (lock) => this.deleteLocalizedLocked(input, lock), this.lockOptions());
+    } catch (error) {
+      return { success: false, error: ensureError(error) };
+    }
+  }
+
+  private async deleteLocalizedLocked(input: DeleteLocaleInput, lock: HeldLock): Promise<DeleteResult> {
     const { id, locale, etag } = input;
 
     // Get manifest for this ID
@@ -2253,6 +2769,18 @@ export class FileSystemContentAPI implements ContentAPI {
       };
     }
 
+    // The file on disk, not the index, which only learns of another process's write when the watcher reindexes.
+    const filePath = this.getFilePath(manifest, localeVersion);
+    const state = await this.lockedFileState(filePath, locale, lock);
+    if (state && state.etag !== null && state.etag !== etag) {
+      return {
+        success: false,
+        reason: 'stale_write',
+        currentEtag: state.etag,
+        error: new Error('The locale file changed on disk since it was read'),
+      };
+    }
+
     // Don't allow deleting the last locale. Count actual locales, not
     // manifest keys — removeLocale clears a locale by assigning undefined
     // and keeping the key, so after an earlier translation delete the key
@@ -2270,7 +2798,14 @@ export class FileSystemContentAPI implements ContentAPI {
       // manual rm) is the desired end state of a delete, not an error —
       // same stance deleteContent takes. Failing on it left the deleted
       // translation routable and cached while reporting failure.
-      await rm(this.getFilePath(manifest, localeVersion), { force: true });
+      if (!(await this.removeLocaleFile(lock, id, locale, filePath, state))) {
+        return {
+          success: false,
+          reason: 'stale_write',
+          currentEtag: localeVersion.etag,
+          error: new Error('The locale file changed while it was being deleted; it was kept'),
+        };
+      }
 
       // Remove locale from manifest and index. removeLocale clears the
       // manifest field itself, and returns early if it is already cleared —
@@ -2319,6 +2854,7 @@ export class FileSystemContentAPI implements ContentAPI {
    */
   async reindex(paths?: string[], options?: { handleDeletions?: boolean }): Promise<ReindexResult> {
     const filesToProcess = paths || (await this.scanContentFiles());
+    await this.recoverLeftoverAsides(filesToProcess);
     let filesSkipped = 0;
     let filesProcessed = 0;
     let filesDeleted = 0;

@@ -22,7 +22,7 @@ export * from './content-operations.js';
 export type { ContentFileExtension, ContentPathLayout, LocaleFilename } from './content-path.js';
 export * from './content-utils.js';
 export type { ContentWatcherOptions, WebSocketSender } from './content-watcher.js';
-export { createContentAPI, createContentWatchHandlers } from './content-watcher.js';
+export { createContentAPI, createContentWatchHandlers, isWatchedContentFile } from './content-watcher.js';
 // Node.js specific implementations (require fs, xxhash, etc.)
 export { FileSystemContentAPI, readSitesConfig } from './filesystem-content-api.js';
 export type { FileSystemReaderBackendOptions } from './filesystem-reader-backend.js';

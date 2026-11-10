@@ -20,6 +20,9 @@ const REFUSED = [
   'pushChanges',
   'pullChanges',
   'getCurrentUser',
+  // Clobbered saves are recorded by a local dev server only.
+  'getClobbered',
+  'dismissClobbered',
 ];
 const appOnly = (label: string) => label === 'app';
 const BASE_INIT: Init = {
@@ -54,7 +57,7 @@ describe('the editor frame contract', () => {
     expect(EDITOR_HOST_PROTOCOLS).toEqual({ min: 1, max: 1 });
   });
 
-  test('the content methods are every classified method except the six the parent never serves', () => {
+  test('the content methods are every classified method except the eight the parent never serves', () => {
     expect(FRAME_CONTENT_METHODS).toHaveLength(31);
     const served = [...FRAME_CONTENT_METHODS, ...REFUSED];
     expect(served).toHaveLength(Object.keys(CONTENT_METHOD_CLASSIFICATION).length);

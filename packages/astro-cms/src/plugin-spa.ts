@@ -86,10 +86,34 @@ const VIRTUAL_HYDRATION_ENTRY = 'virtual:conloca-hydration-entry';
 const RESOLVED_HYDRATION_REGISTRY = `\0${VIRTUAL_HYDRATION_REGISTRY}`;
 const RESOLVED_HYDRATION_ENTRY = `\0${VIRTUAL_HYDRATION_ENTRY}`;
 
-/** Vite payloads whose browser-side effects would overwrite the editor's own save update. */
-function dropsEditorSaveUpdate(payload: HotPayload): boolean {
-  if (payload.type === 'full-reload') return true;
-  return payload.type === 'custom' && payload.event === 'conloca:content-update';
+/**
+ * Lets through every reload but the ones the editor's own writes cause: a content change is marked own or foreign
+ * when its watcher event fires, and the next `full-reload` consumes the marks. Dropped only when every change since
+ * the last reload was own, so a CLI write, a git checkout or another tab always reloads.
+ * Known limit: Astro may skip the reload of an own write; that mark then drops the next `full-reload`, unless a
+ * foreign change came first.
+ */
+export interface EditorReloadGate {
+  noteContentChange(own: boolean): void;
+  shouldDrop(payload: HotPayload): boolean;
+}
+
+export function createEditorReloadGate(): EditorReloadGate {
+  let ownPending = false;
+  let foreignPending = false;
+  return {
+    noteContentChange(own) {
+      if (own) ownPending = true;
+      else foreignPending = true;
+    },
+    shouldDrop(payload) {
+      if (payload.type !== 'full-reload') return false;
+      const drop = ownPending && !foreignPending;
+      ownPending = false;
+      foreignPending = false;
+      return drop;
+    },
+  };
 }
 
 // Virtual module for CMS SPA source loading (dev only)
@@ -618,6 +642,8 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
   });
 
   let refreshConlocaContent: (() => Promise<void>) | undefined;
+  // The content watcher's API, which the reload gate asks whether a changed file is the editor's own write.
+  let watchedContentApi: { isOwnWriteFile(filePath: string): boolean } | undefined;
 
   return {
     name: '@conloca/astro-cms',
@@ -1292,6 +1318,7 @@ if (import.meta.hot) {
                       defaultLocale: options.locales.defaultLocale,
                     }),
                   });
+                  watchedContentApi = contentApi;
 
                   // Only add explicit watchers if content is outside the Astro project
                   const { resolve } = await import('node:path');
@@ -1381,41 +1408,28 @@ if (import.meta.hot) {
                 },
               },
               {
-                name: 'conloca-suppress-cms-save-reload',
+                name: 'conloca-editor-reload-gate',
                 apply: 'serve' as const,
-                configureServer(server) {
-                  let suppressUntil = 0;
-                  const WINDOW_MS = 2000;
-                  const cmsContentPrefix = `${cmsRoute}/api/content`;
+                async configureServer(server) {
+                  const { isWatchedContentFile } = await loadContentApiNode();
+                  const gate = createEditorReloadGate();
 
-                  server.middlewares.use((req, _res, next) => {
-                    const isWrite =
-                      req.method === 'POST' ||
-                      req.method === 'PUT' ||
-                      req.method === 'PATCH' ||
-                      req.method === 'DELETE';
-                    if (isWrite && req.url?.startsWith(cmsContentPrefix)) {
-                      suppressUntil = Date.now() + WINDOW_MS;
+                  // Marks each content change as the editor's own write or a foreign one when its watcher event
+                  // fires; Astro's reload for it comes later, after its loader re-syncs the data store.
+                  const noteChange = (file: string) => {
+                    if (watchedContentApi && isWatchedContentFile(file, { contentRoot: options.contentRoot })) {
+                      gate.noteContentChange(watchedContentApi.isOwnWriteFile(file));
                     }
-                    next();
-                  });
+                  };
+                  server.watcher.on('change', noteChange);
+                  server.watcher.on('add', noteChange);
+                  server.watcher.on('unlink', noteChange);
 
-                  // During a CMS save window, drop two server→client signals that
-                  // would otherwise stomp on the CMS's own optimistic cache updates:
-                  //
-                  // 1. Vite `full-reload` — emitted by Astro 6.2.1's invalidateDataStore()
-                  //    in dist/content/vite-plugin-content-virtual-mod.js. The call site
-                  //    is in a configureServer watcher callback, outside the
-                  //    handleHotUpdate pipeline, so wrapping hot.send is the only intercept.
-                  //
-                  // 2. `conloca:content-update` custom event — emitted by
-                  //    conloca-content-watcher above. The client listener (template at
-                  //    `contentChangeListener` in this file) reacts by calling
-                  //    queryClient.invalidateQueries() with NO args, refetching every
-                  //    query and visibly blinking lists. CMS mutation hooks already do
-                  //    optimistic setQueryData, so this event is redundant for
-                  //    CMS-originated writes. External edits (outside the save window)
-                  //    still pass through normally.
+                  // Astro's `full-reload` (sent by invalidateDataStore in
+                  // dist/content/vite-plugin-content-virtual-mod.js, outside the
+                  // handleHotUpdate pipeline) would reload the CMS over the editor's
+                  // own save; wrapping hot.send is the only intercept. The content
+                  // watcher already skips its own `conloca:content-update`.
                   const patchedChannels = new WeakSet();
                   const patchSend = (target: NormalizedHotChannel | undefined) => {
                     if (!target || patchedChannels.has(target)) return;
@@ -1431,11 +1445,10 @@ if (import.meta.hot) {
                         origSend(payloadOrEvent, payload);
                         return;
                       }
-                      if (dropsEditorSaveUpdate(payloadOrEvent) && Date.now() < suppressUntil) {
-                        server.config.logger.info(
-                          `[conloca] suppressed ${payloadOrEvent.type} during CMS save window`,
-                          { timestamp: true },
-                        );
+                      if (gate.shouldDrop(payloadOrEvent)) {
+                        server.config.logger.info(`[conloca] suppressed the reload of the editor's own save`, {
+                          timestamp: true,
+                        });
                         return;
                       }
                       origSend(payloadOrEvent);
@@ -1445,9 +1458,8 @@ if (import.meta.hot) {
                     patchedChannels.add(target);
                   };
 
-                  // Astro's content plugin sends `full-reload` via environments.client.hot.
-                  // Conloca's content watcher sends custom events via server.ws (legacy API).
-                  // Patch both; idempotent per-target via __conlocaPatched.
+                  // Astro's content plugin sends `full-reload` via environments.client.hot;
+                  // server.ws is the legacy API. Patch both; idempotent per target.
                   patchSend(server.environments?.client?.hot);
                   patchSend(server.ws);
                 },

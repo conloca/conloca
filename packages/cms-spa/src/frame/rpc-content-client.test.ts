@@ -42,7 +42,7 @@ async function loadedUrl(): Promise<string> {
 describe('the content client inside an editor frame', () => {
   test('every content method becomes one call with the same name and arguments', async () => {
     const methods = Object.keys(CONTENT_METHOD_CLASSIFICATION).filter((method) => method !== 'uploadAsset');
-    expect(methods.length).toBe(36);
+    expect(methods.length).toBe(38);
     for (const method of methods) {
       expect(Object.hasOwn(client, method)).toBe(true);
       const call: unknown = Reflect.get(client, method);
@@ -51,7 +51,7 @@ describe('the content client inside an editor frame', () => {
       expect(await call.call(client, 'a', 2)).toEqual({ answered: method });
       expect(calls.at(-1)).toEqual([method, ['a', 2]]);
     }
-    expect(calls.length).toBe(36);
+    expect(calls.length).toBe(38);
   });
 
   test('it is still a ContentAPIClient, so the write guard wraps it', async () => {

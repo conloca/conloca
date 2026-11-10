@@ -10,6 +10,7 @@ import type {
   DeleteLocaleInput,
   DeleteResult,
   FindOptions,
+  GetLocalizedOptions,
   GlobalFilters,
   LocalizedEntry,
   SitesConfig,
@@ -61,7 +62,17 @@ export interface ContentAPI {
    * @param locale - The locale code
    * @returns The localized content entry, or null if not found
    */
-  getLocalized(id: string, locale: string): Promise<LocalizedEntry | null>;
+  getLocalized(id: string, locale: string, options?: GetLocalizedOptions): Promise<LocalizedEntry | null>;
+
+  /** The base and the replaced version of a clobbered save, parsed as a write sends them; null once dismissed. */
+  getClobbered?(
+    id: string,
+    locale: string,
+    etag: string,
+  ): Promise<{ base: UpdateLocaleInput['data']; saved: UpdateLocaleInput['data'] } | null>;
+  dismissClobbered?(id: string, locale: string, etag: string): Promise<void>;
+  /** Whether this process's write `etag` is still on disk, as written or merged into a later version. */
+  verifyOwnWrite?(id: string, locale: string, etag: string): Promise<{ survived: boolean }>;
   createContent(data: CreateContentInput): Promise<CreateResult>;
   updateLocalized(input: UpdateLocaleInput): Promise<UpdateResult>;
   deleteContent(id: string, etag: string): Promise<DeleteResult>; // Deletes all locales

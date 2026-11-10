@@ -42,7 +42,7 @@ describe('the read-only seam', () => {
     // Guards the loop below: a classification that collected nothing would let
     // every assertion in this case pass without exercising anything. The count
     // is exact so that adding a content-API write forces a look at this file.
-    expect(WRITE_METHODS.length).toBe(15);
+    expect(WRITE_METHODS.length).toBe(16);
 
     const { client, transport } = stubbedClient();
     const guarded = guardContentWrites(client);

@@ -57,6 +57,8 @@ export interface PageUpdateInput {
   /** Replaces the page's Puck payload. */
   puckData?: PuckPayload;
   meta?: PageMetaFlags;
+  /** Test-only: runs after the write returns, before it is checked. */
+  afterWrite?: () => Promise<void>;
 }
 
 export interface PageWriteResult {
@@ -243,5 +245,24 @@ export async function updatePage(input: PageUpdateInput): Promise<PageWriteResul
   // shortcut: an MDX page kept in a separate mdxPages folder is reported at its content-root path; upgrade when the content API reports file paths.
   const ext = manifest.type === 'mdx' ? 'mdx' : 'vxjson';
   const filePath = pageFilePath(contentRoot, site, manifest.collection, localized.pathname, locale, ext);
+  await input.afterWrite?.();
+  await assertWriteSurvived(api, { id: manifest.id, locale, etag: result.etag, filePath });
   return { id: manifest.id, pathname: localized.pathname, filePath };
+}
+
+/**
+ * Fails when this process's write is no longer on disk: another writer replaced it after the lock was released,
+ * and the CLI exits before any later read could tell the user.
+ */
+export async function assertWriteSurvived(
+  api: FileSystemContentAPI,
+  write: { id: string; locale: string; etag: string | undefined; filePath: string },
+): Promise<void> {
+  const { survived } = await api.verifyOwnWrite(write.id, write.locale, write.etag ?? '');
+  if (!survived) {
+    throw new PageWriteError(
+      'write_failed',
+      `your write to ${write.filePath} was overwritten by another writer; re-run the command`,
+    );
+  }
 }

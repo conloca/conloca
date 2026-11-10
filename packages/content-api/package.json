@@ -20,6 +20,7 @@
     "image-size": "^2.0.2",
     "jose": "^6.2.10",
     "nanoid": "^6.0.1",
+    "proper-lockfile": "^4.1.2",
     "sort-keys": "^6.0.1",
     "svgo": "^4.1.0",
     "tslib": "^2.8.1",
@@ -43,6 +44,7 @@
     "@stryker-mutator/core": "^10.0.0",
     "@stryker-mutator/vitest-runner": "^10.0.0",
     "@ttsc/unplugin": "0.34.1",
+    "@types/proper-lockfile": "^4.1.4",
     "fast-check": "^4.9.0",
     "ttsc": "0.34.1",
     "vite": "^8.2.2",
@@ -179,6 +181,20 @@
           "command": "bun test --preload ./test-native-preload.ts --timeout=0",
           "cwd": "{projectRoot}",
           "idleTimeoutMs": 180000,
+          "killAfterMs": 10000
+        }
+      },
+      "test-local-merge-wide": {
+        "executor": "@smoothbricks/nx-plugin:bounded-exec",
+        "cache": true,
+        "inputs": [
+          "default",
+          "^default"
+        ],
+        "options": {
+          "command": "for range in 1-25 26-50 51-75 76-100 101-125 126-150 151-175 176-200; do LOCAL_MERGE_TAKEOVER_SEEDS=200 LOCAL_MERGE_SEEDS=$range bun test --preload ./test-native-preload.ts test/local-merge.test.ts -t 'never loses' || exit 1; done",
+          "cwd": "{projectRoot}",
+          "idleTimeoutMs": 900000,
           "killAfterMs": 10000
         }
       },

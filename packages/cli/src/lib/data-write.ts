@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { FileSystemContentAPI, type JsonObject } from '@conloca/content-api/node';
-import { PageWriteError, siteLocale } from './page-write.js';
+import { assertWriteSurvived, PageWriteError, siteLocale } from './page-write.js';
 
 export interface DataWriteInput {
   contentRoot: string;
@@ -23,6 +23,8 @@ export interface DataUpdateInput {
   title?: string;
   /** Replaces the entry's data. */
   data: JsonObject;
+  /** Test-only: runs after the write returns, before it is checked. */
+  afterWrite?: () => Promise<void>;
 }
 
 export interface DataWriteResult {
@@ -81,5 +83,8 @@ export async function updateDataEntry(input: DataUpdateInput): Promise<DataWrite
       result.error?.message ?? `Update failed (${result.reason ?? 'unknown reason'})`,
     );
   }
-  return { id: manifest.id, filePath: dataFilePath(contentRoot, collection, localized.name, locale) };
+  const filePath = dataFilePath(contentRoot, collection, localized.name, locale);
+  await input.afterWrite?.();
+  await assertWriteSurvived(api, { id: manifest.id, locale, etag: result.etag, filePath });
+  return { id: manifest.id, filePath };
 }

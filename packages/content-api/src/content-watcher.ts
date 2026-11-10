@@ -13,6 +13,8 @@ export interface ContentWatchEvent {
   action: 'update' | 'create' | 'delete';
   inMdxRoot: boolean;
   inContentRoot: boolean;
+  /** The change is this process's own write, already known to the editor that made it. */
+  ownWrite: boolean;
 }
 
 interface ReindexResultLike {
@@ -22,6 +24,20 @@ interface ReindexResultLike {
 
 interface ReindexableContentAPI {
   reindex(paths: string[], options?: { handleDeletions?: boolean }): Promise<ReindexResultLike>;
+  /** Whether the file holds this process's own last write there. */
+  isOwnWriteFile?(filePath: string): boolean;
+}
+
+/**
+ * The files the content scanner indexes: .mdx and .vxjson, and .json only under the content root's data/ directory.
+ * Other .json files under the content root, such as asset metadata records, are not content.
+ */
+export function isWatchedContentFile(file: string, options: { contentRoot: string }): boolean {
+  const normalizedFile = normalize(resolve(file));
+  if (normalizedFile.endsWith('.mdx') || normalizedFile.endsWith('.vxjson')) return true;
+  return (
+    normalizedFile.endsWith('.json') && normalizedFile.startsWith(`${normalize(resolve(options.contentRoot))}/data/`)
+  );
 }
 
 /**
@@ -49,12 +65,7 @@ export function createContentWatchHandlers(
     const normalizedRoot = normalize(resolve(options.contentRoot));
     const normalizedMdxRoot = options.mdxPagesRoot ? normalize(resolve(options.mdxPagesRoot)) : null;
 
-    // Only the files the content scanner indexes: .mdx and .vxjson, and .json
-    // only under the content root's data/ directory. Other .json files under
-    // the content root, such as asset metadata records, are not content.
-    const isContentFile = normalizedFile.endsWith('.mdx') || normalizedFile.endsWith('.vxjson');
-    const isDataFile = normalizedFile.endsWith('.json') && normalizedFile.startsWith(`${normalizedRoot}/data/`);
-    if (!isContentFile && !isDataFile) {
+    if (!isWatchedContentFile(normalizedFile, options)) {
       return;
     }
 
@@ -69,6 +80,9 @@ export function createContentWatchHandlers(
       const matchedRoot = inContentRoot ? normalizedRoot : (normalizedMdxRoot as string);
       const relativePath = normalizedFile.replace(`${matchedRoot}/`, '');
       console.log(`[Content] ${action}: ${relativePath}`);
+      // Judged when the event fires: the editor already holds its own write or delete, so announcing it would refetch
+      // for nothing.
+      const ownWrite = contentApi.isOwnWriteFile?.(normalizedFile) ?? false;
 
       try {
         // Reindex the file
@@ -76,7 +90,7 @@ export function createContentWatchHandlers(
         const result = await contentApi.reindex([normalizedFile], reindexOptions);
 
         // Send updates for each changed locale
-        for (const manifest of result.updated) {
+        for (const manifest of ownWrite ? [] : result.updated) {
           const message = {
             type: 'custom',
             event: 'conloca:content-update',
@@ -89,7 +103,7 @@ export function createContentWatchHandlers(
         }
 
         // Send deletion updates
-        if (action === 'delete' && result.deleted) {
+        if (action === 'delete' && !ownWrite && result.deleted) {
           for (const deletion of result.deleted) {
             ws.send({
               type: 'custom',
@@ -107,7 +121,7 @@ export function createContentWatchHandlers(
       }
 
       try {
-        await onReindexed?.({ file: normalizedFile, action, inMdxRoot, inContentRoot });
+        await onReindexed?.({ file: normalizedFile, action, inMdxRoot, inContentRoot, ownWrite });
       } catch (error) {
         console.error('[Content Watcher] onReindexed callback failed:', error);
       }

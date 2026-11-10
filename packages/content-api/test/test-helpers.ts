@@ -226,6 +226,12 @@ export function assertDefined<T>(value: T | null | undefined, message?: string):
   }
 }
 
+/** `value`, or a thrown error when it is missing: an expression form of {@link assertDefined}. */
+export function must<T>(value: T | null | undefined): T {
+  assertDefined(value);
+  return value;
+}
+
 // Helper to extract ID from create result safely
 export function getCreatedId(result: CreateResult): string {
   if (!isCreateSuccess(result)) {

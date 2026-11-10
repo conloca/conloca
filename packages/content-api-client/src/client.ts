@@ -13,6 +13,7 @@ import type {
   ErrorCode,
   FolderListing,
   FolderTreeNode,
+  GetLocalizedOptions,
   GitCommitResult,
   GitPullResult,
   GitPushResult,
@@ -120,9 +121,13 @@ export class ContentAPIClient {
     }
   }
 
-  async getLocalized(id: string, locale: string): Promise<LocalizedEntry | null> {
+  async getLocalized(id: string, locale: string, options: GetLocalizedOptions = {}): Promise<LocalizedEntry | null> {
     try {
-      const response = await this.fetch(`${this.baseUrl}/content/${id}/${locale}`);
+      const params = new URLSearchParams();
+      if (options.ownWrite) params.set('ownWrite', options.ownWrite);
+      if (options.editor) params.set('editor', '1');
+      const query = params.size > 0 ? `?${params.toString()}` : '';
+      const response = await this.fetch(`${this.baseUrl}/content/${id}/${locale}${query}`);
       if (response.status === 404) {
         return null;
       }
@@ -134,6 +139,27 @@ export class ContentAPIClient {
       console.error('Error fetching localized content:', error);
       throw error;
     }
+  }
+
+  /** The base and the replaced version of a clobbered save, for Restore; null once dismissed. */
+  async getClobbered(
+    id: string,
+    locale: string,
+    etag: string,
+  ): Promise<{ base: UpdateLocaleInput['data']; saved: UpdateLocaleInput['data'] } | null> {
+    const response = await this.fetch(`${this.baseUrl}/content/${id}/${locale}/clobbered/${encodeURIComponent(etag)}`);
+    if (response.status === 404) return null;
+    if (!response.ok) throw new Error(`Failed to fetch clobbered version: ${response.statusText}`);
+    // SAFETY: the server's clobbered route answers 200 only with the stored record's base and saved data.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- same reason as the SAFETY note.
+    return (await response.json()) as { base: UpdateLocaleInput['data']; saved: UpdateLocaleInput['data'] };
+  }
+
+  async dismissClobbered(id: string, locale: string, etag: string): Promise<void> {
+    const response = await this.fetch(`${this.baseUrl}/content/${id}/${locale}/clobbered/${encodeURIComponent(etag)}`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) throw new Error(`Failed to dismiss clobbered version: ${response.statusText}`);
   }
 
   async createContent(data: CreateContentInput): Promise<CreateResult> {

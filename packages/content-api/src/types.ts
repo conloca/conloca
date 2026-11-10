@@ -211,6 +211,16 @@ export interface LocalizedManifest extends ContentIdentity {
 // Single locale with content
 export interface LocalizedEntry extends ContentIdentity {
   localized: LocaleVersion & ContentProp;
+  /** Editor reads only: versions of this locale a write replaced without having read them, until dismissed. */
+  clobbered?: { etag: string; at: string }[];
+  /** Answers `ownWrite`: that own write was replaced by a version that does not hold it. Reported once. */
+  lostWrite?: { etag: string; baseEtag: string };
+}
+
+/** What `getLocalized` adds on request: `editor` lists clobbered versions, `ownWrite` checks that own write. */
+export interface GetLocalizedOptions {
+  editor?: boolean;
+  ownWrite?: string;
 }
 
 // All locales with content
@@ -243,6 +253,8 @@ export interface UpdateResult {
     | 'page_too_large';
   error?: Error;
   currentEtag?: string;
+  /** On a refused write: the writer's own last write `etag` was lost, so its text is not used as a merge base. */
+  lostWrite?: { etag: string; baseEtag: string };
   conflictDetails?: {
     metaChanged: boolean;
     contentChanged: boolean;

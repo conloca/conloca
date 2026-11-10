@@ -213,13 +213,16 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
     }
   });
 
-  // GET /content/:id/:locale - Get specific locale only
+  // GET /content/:id/:locale - Get specific locale only. `?ownWrite=<etag>` asks whether that own write was lost;
+  // `?editor=1` lists the clobbered versions of this locale.
   app.get('/content/:id/:locale', async (c) => {
     const id = c.req.param('id');
     const locale = c.req.param('locale');
+    const ownWrite = c.req.query('ownWrite') || undefined;
+    const editor = c.req.query('editor') === '1';
 
     try {
-      const content = await api.getLocalized(id, locale);
+      const content = await api.getLocalized(id, locale, { ownWrite, editor });
 
       if (!content) {
         return c.json(errorResponse(ErrorCodes.CONTENT_NOT_FOUND, 'Content not found', { id }), 404);
@@ -231,6 +234,33 @@ export function createContentAPIRouter(api: ContentAPI, options?: ContentAPIRout
       return c.json(content);
     } catch (error) {
       return c.json(logAndCreateErrorResponse(error, ErrorCodes.FETCH_ERROR, 'Failed to fetch localized content'), 500);
+    }
+  });
+
+  // GET /content/:id/:locale/clobbered/:etag - The base and the replaced version of a clobbered save
+  app.get('/content/:id/:locale/clobbered/:etag', async (c) => {
+    const id = c.req.param('id');
+    try {
+      const clobbered = await api.getClobbered?.(id, c.req.param('locale'), c.req.param('etag'));
+      if (!clobbered) {
+        return c.json(errorResponse(ErrorCodes.CONTENT_NOT_FOUND, 'Clobbered version not found', { id }), 404);
+      }
+      return c.json(clobbered);
+    } catch (error) {
+      return c.json(logAndCreateErrorResponse(error, ErrorCodes.FETCH_ERROR, 'Failed to fetch clobbered version'), 500);
+    }
+  });
+
+  // DELETE /content/:id/:locale/clobbered/:etag - Dismiss a clobbered save
+  app.delete('/content/:id/:locale/clobbered/:etag', async (c) => {
+    try {
+      await api.dismissClobbered?.(c.req.param('id'), c.req.param('locale'), c.req.param('etag'));
+      return c.body(null, 204);
+    } catch (error) {
+      return c.json(
+        logAndCreateErrorResponse(error, ErrorCodes.WRITE_ERROR, 'Failed to dismiss clobbered version'),
+        500,
+      );
     }
   });
 

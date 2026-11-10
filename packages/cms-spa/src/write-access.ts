@@ -25,6 +25,9 @@ export type ContentMethodAccess = 'read' | 'write';
 const CONTENT_METHOD_ACCESS = {
   getContent: 'read',
   getLocalized: 'read',
+  getClobbered: 'read',
+  // Dismissing deletes the record of a clobbered save.
+  dismissClobbered: 'write',
   createContent: 'write',
   updateLocalized: 'write',
   deleteContent: 'write',

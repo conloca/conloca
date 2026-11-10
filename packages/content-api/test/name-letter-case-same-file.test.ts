@@ -1,15 +1,12 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { statSync } from 'node:fs';
-import { lstat, mkdir, readdir, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises';
+import { link, lstat, mkdir, readdir, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { ContentIndex } from '../src/content-index.js';
 import { FileSystemContentAPI } from '../src/filesystem-content-api.js';
 import type { CreateContentInput } from '../src/types.js';
-import * as atomicWrite from '../src/utils/atomic-write.js';
 import { assertDefined, getCreatedId } from './test-helpers.js';
 import { testTempDir } from './test-temp-dir.js';
-
-const writeAtomically = atomicWrite.atomicWriteFile;
 
 /**
  * A fragment that changes only the capitals of its own name, on a disk that ignores capitals.
@@ -18,17 +15,28 @@ const writeAtomically = atomicWrite.atomicWriteFile;
  * save writes the new name into that file, so removing the old name afterwards would remove the
  * fragment; the save renames it instead, and a failed save keeps it. Linux and case-sensitive disks
  * keep two files, so there each test makes the two names lead to one file from the moment the save
- * writes the new name, as a disk that ignores capitals has it. Without this, CI on Linux passes
- * whether or not the save keeps the file.
+ * links the new name into place, as a disk that ignores capitals has it. Without this, CI on Linux
+ * passes whether or not the save keeps the file.
  */
 describe('a fragment that changes only the capitals of its own name', () => {
   let root: string;
   let contentRoot: string;
   let api: FileSystemContentAPI;
+  /** Runs after each hard link the save makes, with the name it linked. */
+  let afterLink: ((linkedPath: string) => Promise<void>) | undefined;
 
-  const open = () => FileSystemContentAPI.create({ contentRoot, canvasDir: join(root, 'canvas') });
+  const open = () =>
+    FileSystemContentAPI.create({
+      contentRoot,
+      canvasDir: join(root, 'canvas'),
+      testLink: async (existingPath, newPath) => {
+        await link(existingPath, newPath);
+        await afterLink?.(newPath);
+      },
+    });
 
   beforeEach(async () => {
+    afterLink = undefined;
     FileSystemContentAPI.clearCaches();
     root = testTempDir('name-letter-case-same-file');
     contentRoot = join(root, 'content');
@@ -44,7 +52,10 @@ describe('a fragment that changes only the capitals of its own name', () => {
     await rm(root, { recursive: true, force: true });
   });
 
-  /** Creates the fragment 'hero' and returns its id and etag, and the paths of its old and new name. */
+  /**
+   * Creates the fragment 'hero' and returns its id and etag, the paths of its old and new name, and whether this disk
+   * itself ignores capitals.
+   */
   async function createHero() {
     const hero: CreateContentInput = {
       kind: 'fragment',
@@ -57,37 +68,38 @@ describe('a fragment that changes only the capitals of its own name', () => {
     const current = await api.getLocalized(id, 'en');
     assertDefined(current, 'the fragment should be readable');
     const folder = join(contentRoot, 'fragments', 'general');
+    const oldPath = join(folder, 'hero.en.mdx');
+    const newPath = join(folder, 'Hero.en.mdx');
     return {
       id,
       etag: current.localized.etag,
       folder,
-      oldPath: join(folder, 'hero.en.mdx'),
-      newPath: join(folder, 'Hero.en.mdx'),
+      oldPath,
+      newPath,
+      ignoresCapitals: statSync(newPath, { throwIfNoEntry: false })?.ino === statSync(oldPath).ino,
     };
   }
 
   test('keeps its file, under the new name, on a disk that ignores capitals', async () => {
-    const { id, etag, folder, oldPath, newPath } = await createHero();
+    const { id, etag, folder, oldPath, newPath, ignoresCapitals } = await createHero();
 
-    const write = spyOn(atomicWrite, 'atomicWriteFile').mockImplementation(async (filePath, content) => {
-      await writeAtomically(filePath, content);
-      if (filePath !== newPath || statSync(oldPath).ino === statSync(newPath).ino) return;
+    let joined = false;
+    afterLink = async (linkedPath) => {
+      if (linkedPath !== newPath) return;
+      joined = true;
       // A disk that keeps capitals apart: the written file stays under the old name, and the new name leads to it.
       await rename(newPath, oldPath);
       await symlink(oldPath, newPath);
+    };
+    const result = await api.updateLocalized({
+      id,
+      locale: 'en',
+      data: { name: 'Hero' },
+      etag,
     });
-    try {
-      const result = await api.updateLocalized({
-        id,
-        locale: 'en',
-        data: { name: 'Hero' },
-        etag,
-      });
-      expect(result.success).toBe(true);
-      expect(write).toHaveBeenCalledWith(newPath, expect.any(String));
-    } finally {
-      write.mockRestore();
-    }
+    expect(result.success).toBe(true);
+    // The two names became one file: by the disk itself, or by the simulation once the save wrote the new name.
+    expect(joined).toBe(!ignoresCapitals);
 
     FileSystemContentAPI.clearCaches();
     const reread = await (await open()).getLocalized(id, 'en');
@@ -100,24 +112,24 @@ describe('a fragment that changes only the capitals of its own name', () => {
 
   test('keeps its file when the save fails after writing, on a disk that ignores capitals', async () => {
     // The failed save's undo step deleted the file it had written, which is the fragment's only file.
-    const { id, etag, oldPath, newPath } = await createHero();
+    const { id, etag, oldPath, newPath, ignoresCapitals } = await createHero();
 
-    const write = spyOn(atomicWrite, 'atomicWriteFile').mockImplementation(async (filePath, content) => {
-      await writeAtomically(filePath, content);
-      if (filePath !== newPath || statSync(oldPath).ino === statSync(newPath).ino) return;
+    let joined = false;
+    afterLink = async (linkedPath) => {
+      if (linkedPath !== newPath) return;
+      joined = true;
       // A disk that keeps capitals apart: the written file is the only one, and the old name leads to it.
       await rm(oldPath);
       await symlink(newPath, oldPath);
-    });
+    };
     const indexing = spyOn(ContentIndex.prototype, 'addContent').mockImplementationOnce(() => {
       throw new Error('index failure');
     });
     try {
       const result = await api.updateLocalized({ id, locale: 'en', data: { name: 'Hero' }, etag });
       expect(result).toMatchObject({ success: false, reason: 'write_error' });
-      expect(write).toHaveBeenCalledWith(newPath, expect.any(String));
+      expect(joined).toBe(!ignoresCapitals);
     } finally {
-      write.mockRestore();
       indexing.mockRestore();
     }
 
