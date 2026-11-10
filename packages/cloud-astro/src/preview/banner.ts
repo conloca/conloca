@@ -1,4 +1,11 @@
 import type { PreviewContext } from './middleware.js';
+import type { UnreadyPage } from './unready-pages.js';
+
+/** The banner's second line: the pages a push would leave out, and what clears each. */
+function unreadyLine(held: readonly UnreadyPage[]): string {
+  const pages = held.map((p) => `${p.title} (${p.reason === 'lfs' ? 'ask your developer' : 'a clash to resolve'})`);
+  return `Not ready to push: ${pages.join(', ')}`;
+}
 
 /**
  * Returns the body of the script tag that renders the floating preview
@@ -21,6 +28,7 @@ export function getBannerScriptText(
   exitPath?: string,
   shareUrl?: string,
   pagePath?: string,
+  held: readonly UnreadyPage[] = [],
 ): string {
   // Serialize then patch the `<` character that JSON.stringify does NOT
   // escape. Browsers terminate inline scripts on `</script>` regardless of
@@ -31,14 +39,17 @@ export function getBannerScriptText(
   // Only the branch name and public addresses reach the page, never the pass:
   // every script on the page, third-party tags included, could read it. A
   // share viewer gets who shared the draft and when the link expires instead
-  // of the editor links. `undefined` values drop out of the JSON.
+  // of the editor links. `undefined` values drop out of the JSON. Both see the
+  // pages a push would hold back, by title only.
+  const unreadyText = held.length > 0 ? unreadyLine(held) : undefined;
   const embedded =
     ctx.grant === undefined
-      ? { branch: ctx.branch, endpoint, exitPath, shareUrl, path: pagePath }
+      ? { branch: ctx.branch, endpoint, exitPath, shareUrl, path: pagePath, held: unreadyText }
       : {
           branch: ctx.branch,
           exitPath,
           path: pagePath,
+          held: unreadyText,
           viewer: { sharedBy: ctx.grant.sharedBy, expiresAt: ctx.grant.expiresAt },
         };
   const ctxJson = JSON.stringify(embedded).replace(/</g, '\\u003c');
@@ -50,7 +61,7 @@ export function getBannerScriptText(
     'var __conlocaRender = function () {',
     "  var host = document.createElement('div');",
     "  host.id = 'conloca-preview-banner';",
-    "  host.style.cssText = 'position:fixed;bottom:16px;right:16px;z-index:2147483647;font-family:system-ui,sans-serif;background:#111;color:#fff;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.35);padding:8px 12px;font-size:13px;display:flex;gap:12px;align-items:center;';",
+    "  host.style.cssText = 'position:fixed;bottom:16px;right:16px;z-index:2147483647;font-family:system-ui,sans-serif;background:#111;color:#fff;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.35);padding:8px 12px;font-size:13px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;';",
     "  var label = document.createElement('span');",
     '  if (__conlocaPreview.viewer) {',
     '    var days = Math.max(1, Math.ceil((__conlocaPreview.viewer.expiresAt * 1000 - Date.now()) / 86400000));',
@@ -72,6 +83,7 @@ export function getBannerScriptText(
     "  var collapse = document.createElement('button'); collapse.type = 'button'; collapse.textContent = __conlocaIsCollapsed() ? '+' : '-'; collapse.style.cssText = 'background:transparent;color:#fff;border:none;cursor:pointer;font-size:16px;line-height:1;'; host.appendChild(collapse);",
     "  collapse.addEventListener('click', function () { var c = !__conlocaIsCollapsed(); __conlocaSetCollapsed(c); host.style.display = c ? 'none' : ''; });",
     "  if (__conlocaIsCollapsed()) host.style.display = 'none';",
+    "  if (__conlocaPreview.held) { var held = document.createElement('div'); held.style.flexBasis = '100%'; held.textContent = __conlocaPreview.held; host.appendChild(held); }",
     '  document.body.appendChild(host);',
     '};',
     "if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', __conlocaRender); } else { __conlocaRender(); }",
@@ -102,8 +114,9 @@ export function injectPreviewBanner(
   exitPath?: string,
   shareUrl?: string,
   pagePath?: string,
+  held: readonly UnreadyPage[] = [],
 ): string {
-  const script = `<script>${getBannerScriptText(ctx, endpoint, exitPath, shareUrl, pagePath)}</script>`;
+  const script = `<script>${getBannerScriptText(ctx, endpoint, exitPath, shareUrl, pagePath, held)}</script>`;
   let replaced = false;
   const page = html.replace(SITE_ROBOTS_META_RE, () => {
     const first = !replaced;

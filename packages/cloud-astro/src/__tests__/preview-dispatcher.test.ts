@@ -335,6 +335,29 @@ describe('createDispatcher — under the preview route', () => {
     expect(html).not.toContain('"endpoint"');
   });
 
+  it("lists a prerendered page's unready pages in its banner, titled from the branch listing", async () => {
+    const { dispatcher, env } = harness();
+    const publishedKeys = env.CONLOCA_SAAS.fetch;
+    const pages = { pages: [{ site: 'default', id: 'pricing', locale: 'en', reason: 'conflict' }] };
+    const listing = [{ id: 'pricing', locales: { en: { pathname: '/pricing', meta: { title: 'Pricing' } } } }];
+    const endpoint = {
+      fetch: async (input: Request | string | URL) => {
+        const url = input instanceof Request ? input.url : input.toString();
+        if (url.endsWith('/preview/unready-pages')) return Response.json(pages);
+        if (url.endsWith('/preview/manifests')) return Response.json(listing);
+        return publishedKeys();
+      },
+    };
+    const html = await (
+      await dispatcher.fetch(
+        navigate(`https://site.test/_conloca/preview/${SLUG}/about/`, valid),
+        { ...env, CONLOCA_SAAS: endpoint },
+        {},
+      )
+    ).text();
+    expect(html).toContain('Not ready to push: Pricing (a clash to resolve)');
+  });
+
   it('answers a prerendered page whose pass fails with the landing page, as the preview server answers any other', async () => {
     const { dispatcher, env, assets, loads } = harness();
     const answer = await dispatcher.fetch(navigate(`https://site.test/_conloca/preview/${SLUG}/about/`, held), env, {});

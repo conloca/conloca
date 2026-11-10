@@ -24,6 +24,7 @@ import {
   serveDraftMedia,
 } from './prefix-router.js';
 import { normalizeTrailingSlash, PREVIEW_CODE_PARAM, PREVIEW_SLUG_HEADER, previewRoutePrefix } from './preview-path.js';
+import { loadUnreadyPages, type UnreadyPage } from './unready-pages.js';
 
 /** What the build writes next to the dispatcher (`.conloca/dispatcher/dispatcher.json`). */
 export interface DispatcherConfig {
@@ -191,6 +192,7 @@ export function createDispatcher(config: DispatcherConfig, loadServer: (() => Pr
     page: URL,
     route: string,
     published: Pick<PreviewContext, 'branch' | 'grant'> | null,
+    held: readonly UnreadyPage[] = [],
   ): Promise<Response> {
     const out = finishEntry(answer, page, route, root, hosts);
     if (!(out.headers.get('content-type') ?? '').includes('text/html')) return out;
@@ -206,6 +208,7 @@ export function createDispatcher(config: DispatcherConfig, loadServer: (() => Pr
       `${route}/__exit`,
       undefined,
       page.pathname,
+      held,
     );
     return rewriter.transform(new Response(html, out));
   }
@@ -298,13 +301,15 @@ export function createDispatcher(config: DispatcherConfig, loadServer: (() => Pr
       if (prerendered.has(normalizeTrailingSlash(inner))) {
         // The preview server never sees a prerendered page, so its pass is checked here, as the server checks every
         // other: one that fails gets the landing page (or the share link's renewal), never the banner.
-        const verdict = await handlePreviewRequest(
-          new Request(page.href, { headers }),
-          passOptions(config, baked, env, slug),
-        );
+        const options = passOptions(config, baked, env, slug);
+        const verdict = await handlePreviewRequest(new Request(page.href, { headers }), options);
         if (verdict.kind !== 'preview')
           return finishEntry(verdict.kind === 'response' ? verdict.response : landing(), page, route, root, hosts);
-        return finish(await env.ASSETS.fetch(new Request(page.href, { headers })), page, route, verdict.ctx);
+        const [asset, held] = await Promise.all([
+          env.ASSETS.fetch(new Request(page.href, { headers })),
+          loadUnreadyPages(options.fetchFn ?? fetch.bind(globalThis), options.saasEndpoint, verdict.ctx.jwt),
+        ]);
+        return finish(asset, page, route, verdict.ctx, held);
       }
       return finish(await guarded(page, slug), page, route, null);
     },

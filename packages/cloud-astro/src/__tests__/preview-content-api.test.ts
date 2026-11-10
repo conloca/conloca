@@ -17,6 +17,7 @@ import type {
   UpdateLocaleInput,
   UpdateResult,
 } from '@conloca/content-api';
+import { injectPreviewBanner } from '../preview/banner.js';
 import { PreviewContentAPI, rewriteDraftMedia } from '../preview/content-api.js';
 
 type FetchInput = Parameters<typeof fetch>[0];
@@ -149,13 +150,21 @@ function makeLocalized(id: string, locale: string, title: string): LocalizedEntr
   };
 }
 
-function makeFetch(responses: Response[]): {
+function makeFetch(
+  responses: Response[],
+  held: Response | Error = new Response('', { status: 404 }),
+): {
   fn: typeof fetch;
   calls: { input: FetchInput; init?: RequestInit }[];
 } {
   const calls: { input: FetchInput; init?: RequestInit }[] = [];
   const queue = [...responses];
+  // SAFETY: the stub answers every call these tests make; no test reads fetch's static members.
   const fn = ((input: FetchInput, init?: RequestInit) => {
+    // The unready-pages read rides beside every listing load, off the queue the other reads share.
+    const url = input instanceof Request ? input.url : input.toString();
+    if (url.endsWith('/preview/unready-pages'))
+      return held instanceof Error ? Promise.reject(held) : Promise.resolve(held);
     calls.push({ input, init });
     const next = queue.shift();
     if (!next) {
@@ -448,6 +457,55 @@ function manifestsResponse(manifests: ContentManifest[]): Response {
     headers: { 'content-type': 'application/json' },
   });
 }
+
+describe('PreviewContentAPI.unreadyPages', () => {
+  it('titles unready pages from the branch listing', async () => {
+    const held = {
+      pages: [
+        { site: 'default', id: 'pricing', locale: 'en', reason: 'conflict' },
+        { site: 'default', id: 'gone', locale: 'en', reason: 'lfs' },
+        { site: 'default', id: 'junk', locale: 'en', reason: 'other' },
+      ],
+    };
+    const fetchSpy = makeFetch([manifestsResponse([manifestOf('pricing')])], Response.json(held));
+    const reader = new PreviewContentAPI({
+      saasEndpoint: ENDPOINT,
+      ctx,
+      baselineApi: makeBaseline().api,
+      fetchFn: fetchSpy.fn,
+    });
+
+    await reader.loadBranchManifests();
+
+    expect(reader.unreadyPages()).toEqual([
+      { title: 'pricing', path: '/pricing', reason: 'conflict' },
+      { title: 'gone', reason: 'lfs' },
+    ]);
+  });
+
+  const listed = { pages: [{ site: 'default', id: 'pricing', locale: 'en', reason: 'conflict' }] };
+  it.each<[string, Response | Error]>([
+    ['answers 500, even with a listing', Response.json(listed, { status: 500 })],
+    ['rejects', new TypeError('network down')],
+  ])('renders without unready pages when the fetch %s', async (_, held) => {
+    const fetchSpy = makeFetch([manifestsResponse([manifestOf('pricing')])], held);
+    const reader = new PreviewContentAPI({
+      saasEndpoint: ENDPOINT,
+      ctx,
+      baselineApi: makeBaseline().api,
+      fetchFn: fetchSpy.fn,
+    });
+
+    await reader.loadBranchManifests();
+
+    expect(reader.unreadyPages()).toEqual([]);
+    expect([...reader.listAllContent()].map((m) => m.id)).toEqual(['pricing']);
+    const page = '<html><body></body></html>';
+    const out = injectPreviewBanner(page, ctx, ENDPOINT, undefined, undefined, '/', reader.unreadyPages());
+    expect(out).toContain('<script>');
+    expect(out).not.toContain('Not ready to push');
+  });
+});
 
 /** A baseline whose listing is the last build: `existing` and `deleted-on-branch`. */
 function baselineWithListing(ids: string[]): ContentAPI {

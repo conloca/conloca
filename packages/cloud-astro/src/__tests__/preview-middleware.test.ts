@@ -1,7 +1,8 @@
 import { beforeAll, describe, expect, it } from 'bun:test';
+import { runInNewContext } from 'node:vm';
 import { previewBranchSlug } from '@conloca/content-api/editor-host';
 import { generateKeyPair, type JWTPayload, type JWTVerifyGetKey, SignJWT } from 'jose';
-import { getBannerScriptText } from '../preview/banner.js';
+import { getBannerScriptText, injectPreviewBanner } from '../preview/banner.js';
 import { previewLabel } from '../preview/label.js';
 import {
   handlePreviewRequest,
@@ -492,7 +493,6 @@ describe('handlePreviewRequest — no preview context', () => {
 
 describe('injectPreviewBanner', () => {
   it('injects the banner script exactly once before the closing </body>', async () => {
-    const { injectPreviewBanner } = await import('../preview/banner.js');
     const html = '<html><body><h1>Hi</h1></body></html>';
     const out = injectPreviewBanner(html, { branch: 'main' });
     // The </body> is preserved, the script lands inside <body>.
@@ -506,7 +506,6 @@ describe('injectPreviewBanner', () => {
   });
 
   it('renders the branch name from the preview context into the banner script', async () => {
-    const { injectPreviewBanner } = await import('../preview/banner.js');
     const html = '<html><body></body></html>';
     const out = injectPreviewBanner(html, { branch: 'feature/payments' });
     expect(out).toContain('feature/payments');
@@ -516,7 +515,6 @@ describe('injectPreviewBanner', () => {
     // Defensive: a branch name with `"` or `</script>` must not let an
     // attacker break out of the injected script literal. The banner script
     // serializes the ctx as JSON, which encodes both.
-    const { injectPreviewBanner } = await import('../preview/banner.js');
     const malicious = '</script><script>alert(1)</script>';
     const html = '<html><body></body></html>';
     const out = injectPreviewBanner(html, { branch: malicious });
@@ -537,7 +535,6 @@ describe('injectPreviewBanner', () => {
   });
 
   it('injects a noindex meta tag so the rendered preview cannot be indexed', async () => {
-    const { injectPreviewBanner } = await import('../preview/banner.js');
     const html = '<html><head></head><body></body></html>';
     const out = injectPreviewBanner(html, { branch: 'main' });
     expect(out).toContain('name="robots"');
@@ -545,7 +542,6 @@ describe('injectPreviewBanner', () => {
   });
 
   it("replaces the site's own robots meta instead of sitting next to it", async () => {
-    const { injectPreviewBanner } = await import('../preview/banner.js');
     const html =
       '<html><head><meta name="robots" content="index, follow"><META content=all NAME=robots />' +
       '<meta name="robots-extra" content="keep"></head><body></body></html>';
@@ -558,7 +554,6 @@ describe('injectPreviewBanner', () => {
   });
 
   it('keeps the pass out of the page: only the branch, the endpoint and the exit route are embedded', async () => {
-    const { injectPreviewBanner } = await import('../preview/banner.js');
     // The whole context, pass included, as the site middleware hands it over.
     const ctx: PreviewContext = {
       branch: 'feature/x',
@@ -580,7 +575,6 @@ describe('injectPreviewBanner', () => {
   });
 
   it('links Share to the editor for this page on an editor pass', async () => {
-    const { injectPreviewBanner } = await import('../preview/banner.js');
     const ctx: PreviewContext = {
       branch: 'main',
       org: 'acme',
@@ -603,7 +597,6 @@ describe('injectPreviewBanner', () => {
   });
 
   it('shows a share viewer the draft, who shared it and the expiry, with no Edit or Share', async () => {
-    const { injectPreviewBanner } = await import('../preview/banner.js');
     const expiresAt = Math.floor(Date.now() / 1000) + 3600;
     const ctx: PreviewContext = {
       branch: 'spring-sale',
@@ -897,7 +890,6 @@ describe('no-preview landing links', () => {
 
 describe('preview banner links', () => {
   it('wires Exit Preview to the exit route and Edit to the editor deep-link', async () => {
-    const { injectPreviewBanner } = await import('../preview/banner.js');
     const html = '<html><body><p>x</p></body></html>';
     const ctx = { branch: 'main', org: 'acme', repo: 'site', jwt: 'tok' };
 
@@ -1243,3 +1235,74 @@ it('names d2 on a D2 exit', async () => {
   if (v.kind !== 'response') throw new Error('expected the exit redirect');
   expect(v.response.headers.get('conloca-preview-mode')).toBe('d2');
 });
+
+describe('unready pages in the preview banner', () => {
+  const html = '<html><body></body></html>';
+
+  it('lists unready pages in the banner', () => {
+    const out = injectPreviewBanner(html, { branch: 'main' }, ENDPOINT, '/_conloca/preview/__exit', undefined, '/', [
+      { title: 'Pricing', path: '/pricing', reason: 'conflict' },
+      { title: '</script><b>x', reason: 'conflict' },
+    ]);
+    expect(out).toContain('Not ready to push: Pricing (a clash to resolve)');
+    expect(out.match(/<\/script>/g)?.length).toBe(1);
+  });
+
+  it('names the developer for LFS-unready pages', () => {
+    const out = injectPreviewBanner(html, { branch: 'main' }, ENDPOINT, undefined, undefined, '/', [
+      { title: 'About', path: '/about', reason: 'lfs' },
+    ]);
+    expect(out).toContain('Not ready to push: About (ask your developer)');
+  });
+
+  it('shows nothing extra without unready pages', () => {
+    const out = injectPreviewBanner(html, { branch: 'main' }, ENDPOINT, undefined, undefined, '/', []);
+    expect(out).not.toContain('Not ready to push');
+    expect(out).not.toContain('"held"');
+  });
+
+  it('renders the line as the banner row, as text', () => {
+    const script = getBannerScriptText({ branch: 'main' }, ENDPOINT, undefined, undefined, '/', [
+      { title: '<b>About</b>', reason: 'lfs' },
+    ]);
+    const body = fakeElement();
+    runInNewContext(script, { document: { readyState: 'complete', createElement: fakeElement, body } });
+    const texts = body.children[0]?.children.map((child) => child.textContent);
+    expect(texts).toContain('Not ready to push: <b>About</b> (ask your developer)');
+  });
+
+  it("a share viewer's banner lists unready pages too, and still reads Draft:", () => {
+    const ctx: PreviewContext = {
+      branch: 'spring-sale',
+      org: 'acme',
+      repo: 'acme/site',
+      jwt: 'tok',
+      grant: { id: 'AAAAAAAAAAAAAAAAAAAAAA', expiresAt: Math.floor(Date.now() / 1000) + 3600, sharedBy: 'Ana' },
+    };
+    const out = injectPreviewBanner(html, ctx, ENDPOINT, '/_conloca/preview/__exit', undefined, '/', [
+      { title: 'Pricing', path: '/pricing', reason: 'conflict' },
+    ]);
+    expect(out).toContain('Not ready to push: Pricing (a clash to resolve)');
+    expect(out).toContain("label.textContent = 'Draft: '");
+    expect(out).not.toContain('tok');
+  });
+});
+
+type FakeElement = {
+  style: Record<string, string>;
+  textContent: string;
+  children: FakeElement[];
+  appendChild: (child: FakeElement) => number;
+  addEventListener: () => void;
+};
+/** Just enough of a DOM element for the banner script to build itself into. */
+function fakeElement(): FakeElement {
+  const children: FakeElement[] = [];
+  return {
+    style: {},
+    textContent: '',
+    children,
+    appendChild: (child: FakeElement) => children.push(child),
+    addEventListener: () => {},
+  };
+}

@@ -19,6 +19,7 @@ import type {
 } from '@conloca/content-api';
 import { DRAFT_MEDIA_REF_BASE, mediaRefPath } from '@conloca/content-api';
 import type { PreviewContext } from './middleware.js';
+import { fetchUnreadyKeys, titleUnreadyPages, type UnreadyKey, type UnreadyPage } from './unready-pages.js';
 
 /**
  * `Data` is not re-exported from `@conloca/content-api`'s package index; we
@@ -90,6 +91,8 @@ export class PreviewContentAPI implements ContentAPI {
   private readonly fetchImpl: typeof fetch;
   /** The branch's page set, once {@link loadBranchManifests} has run. */
   private branchManifests?: ContentManifest[];
+  /** The pages a push would hold back, once {@link loadBranchManifests} has run. */
+  private held: UnreadyKey[] = [];
   private readonly localizedReads = new Map<string, Promise<LocalizedEntry | null>>();
   /** Embedded entries rewritten once per render, not on every read. */
   private readonly embeddedRewritten = new Map<string, LocalizedEntry>();
@@ -197,7 +200,8 @@ export class PreviewContentAPI implements ContentAPI {
   }
 
   /**
-   * Prefetch the branch's own manifest listing.
+   * Prefetch the branch's own manifest listing, and beside it the pages a push
+   * would hold back (see {@link unreadyPages}).
    *
    * The baseline is a snapshot of the last PRODUCTION build, so it cannot know
    * about a page created on the branch and still contains pages the branch
@@ -211,6 +215,19 @@ export class PreviewContentAPI implements ContentAPI {
    * something, an exception renders nothing.
    */
   async loadBranchManifests(): Promise<void> {
+    const [, held] = await Promise.all([
+      this.loadManifests(),
+      fetchUnreadyKeys(this.fetchImpl, this.opts.saasEndpoint, this.opts.ctx.jwt),
+    ]);
+    this.held = held;
+  }
+
+  /** The pages a push would hold back, titled from the branch listing; `[]` when the fetch failed. */
+  unreadyPages(): UnreadyPage[] {
+    return titleUnreadyPages(this.held, this.branchManifests ?? []);
+  }
+
+  private async loadManifests(): Promise<void> {
     try {
       // /preview/manifests admits the preview scope; the editor listing at
       // /api/v1/content/manifests filters a preview JWT to `*`-prefixed ids

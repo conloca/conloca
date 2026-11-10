@@ -78,9 +78,20 @@ function source(
   return { sitePages, calls };
 }
 
-function middleware(sitePages: SitePageSource, statuses: Response[], base = '/') {
+/** `listing` answers the banner's unready-pages and manifests reads; every other call takes the next of `statuses`. */
+function middleware(
+  sitePages: SitePageSource,
+  statuses: Response[],
+  base = '/',
+  listing: { '/preview/unready-pages'?: object; '/preview/manifests'?: object[] } = {},
+) {
   const fetchFn = Object.assign(
-    async () => {
+    async (url: string | URL | Request) => {
+      const href = url instanceof Request ? url.url : url.toString();
+      for (const [suffix, body] of Object.entries(listing)) if (href.endsWith(suffix)) return Response.json(body);
+      if (href.includes('/preview/unready-pages') || href.includes('/preview/manifests')) {
+        return new Response(null, { status: 404 });
+      }
       const status = statuses.shift();
       if (status === undefined) throw new Error('unexpected endpoint call');
       return status;
@@ -103,17 +114,22 @@ const neverNext = async (): Promise<Response> => {
   throw new Error('next() must not run for a site page');
 };
 
-/** A handler whose page-status says `changed`; the branch manifests it then loads are unreadable (it falls back). */
-const changedHandler = (sitePages: SitePageSource) =>
+/**
+ * A handler whose page-status says `changed`; `unready` answers the unready-pages read, and every other read is
+ * unreadable (the branch manifests fall back).
+ */
+const changedHandler = (sitePages: SitePageSource, unready?: { pages: object[] }) =>
   createPreviewSiteMiddleware(d8('/'), {
     baselineApi: async () => new InMemoryContentAPI(),
     site: 'default',
     locale: 'en',
     fetchFn: Object.assign(
-      async (url: string | URL | Request) =>
-        (url instanceof Request ? url.url : url.toString()).includes('/preview/page-status/')
-          ? Response.json({})
-          : new Response(null, { status: 500 }),
+      async (url: string | URL | Request) => {
+        const href = url instanceof Request ? url.url : url.toString();
+        if (href.includes('/preview/page-status/')) return Response.json({});
+        if (unready !== undefined && href.endsWith('/preview/unready-pages')) return Response.json(unready);
+        return new Response(null, { status: 500 });
+      },
       { preconnect: fetch.preconnect },
     ),
     baked: { trailingSlash: 'ignore', buildFormat: 'directory', domains: [] },
@@ -137,6 +153,17 @@ describe('site-authored pages under d8', () => {
     expect(response.headers.get('cache-control')).toBe('private, no-store');
     expect(response.headers.get('x-robots-tag')).toBe('noindex');
     expect(calls).toEqual([`has ${path}`, `read ${path}`]);
+  });
+
+  it('names the pages not ready to push in the banner of a site page', async () => {
+    const { sitePages } = source();
+    const response = await middleware(sitePages, [new Response(null, { status: 304 })], '/', {
+      '/preview/unready-pages': { pages: [{ site: 'default', id: 'pricing', locale: 'en', reason: 'conflict' }] },
+      '/preview/manifests': [{ id: 'pricing', locales: { en: { name: 'Pricing', pathname: '/pricing' } } }],
+    })(await context('/contact'), neverNext, slug);
+    const html = await response.text();
+    expect(html).toContain('PUBLISHED');
+    expect(html).toContain('Not ready to push: Pricing (a clash to resolve)');
   });
 
   it('answers an ended share link with its page, never reading the site page', async () => {
@@ -233,6 +260,14 @@ describe('site-authored pages under d8', () => {
     expect(html).toContain('DRAFT');
     expect(html).not.toContain('PUBLISHED');
     expect(calls).toEqual(['exact /blog/one']);
+  });
+
+  it('names the pages not ready to push in the banner of a draft render', async () => {
+    const { sitePages } = source();
+    const unready = { pages: [{ site: 'default', id: 'about', locale: 'en', reason: 'lfs' }] };
+    const html = await (await changedHandler(sitePages, unready)(await context('/blog/one'), draft, slug)).text();
+    expect(html).toContain('DRAFT');
+    expect(html).toContain('Not ready to push: about (ask your developer)');
   });
 
   it("keeps a site route's own page when page-status is changed: production serves it there", async () => {

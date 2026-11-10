@@ -46,6 +46,7 @@ import {
   stripPreviewPrefix,
 } from './preview-path.js';
 import { NO_SITE_PAGES, type SitePageSource } from './site-pages.js';
+import { loadUnreadyPages, type UnreadyPage } from './unready-pages.js';
 
 /** The subset of Astro's middleware context this middleware touches. */
 export interface PreviewMiddlewareContext {
@@ -198,7 +199,7 @@ export function createPreviewSiteMiddleware(resolveOpts: () => PreviewMiddleware
     }
 
     // The banner the draft and a site-authored page both carry.
-    const banner = (html: string): string => {
+    const banner = (html: string, held: readonly UnreadyPage[] = []): string => {
       let shareUrl: string | undefined;
       if (verdict.ctx.editorUrl !== undefined) {
         const url = new URL(verdict.ctx.editorUrl);
@@ -206,7 +207,7 @@ export function createPreviewSiteMiddleware(resolveOpts: () => PreviewMiddleware
         shareUrl = url.toString();
       }
       // The page's own path: under D3 and D8 the address bar holds the route, which Edit and Exit must not carry.
-      return injectPreviewBanner(html, verdict.ctx, opts.saasEndpoint, exitPath, shareUrl, pagePath);
+      return injectPreviewBanner(html, verdict.ctx, opts.saasEndpoint, exitPath, shareUrl, pagePath, held);
     };
 
     if (status.kind === 'redirect') {
@@ -230,7 +231,11 @@ export function createPreviewSiteMiddleware(resolveOpts: () => PreviewMiddleware
         );
       }
       // Only the type carries over: production's encoding, length, cookies and validators don't fit the rewritten bytes.
-      return stay(new Response(null, { headers: { 'content-type': type } }), banner(await page.text()));
+      const [html, held] = await Promise.all([
+        page.text(),
+        loadUnreadyPages(seams.fetchFn ?? fetch.bind(globalThis), opts.saasEndpoint, verdict.ctx.jwt),
+      ]);
+      return stay(new Response(null, { headers: { 'content-type': type } }), banner(html, held));
     }
 
     if (status.kind === 'unchanged') {
@@ -276,7 +281,7 @@ export function createPreviewSiteMiddleware(resolveOpts: () => PreviewMiddleware
       // through with the preview headers only.
       return stay(rendered);
     }
-    return stay(rendered, banner(await rendered.text()));
+    return stay(rendered, banner(await rendered.text(), previewApi.unreadyPages()));
   };
 }
 
