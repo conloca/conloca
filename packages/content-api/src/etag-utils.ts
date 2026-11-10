@@ -46,6 +46,13 @@ export function calculateContentEtagFromBuffer(buffer: Uint8Array, start = 0, en
 
 const dashCode = '-'.charCodeAt(0); // 45
 const newlineCode = '\n'.charCodeAt(0); // 10
+const returnCode = '\r'.charCodeAt(0); // 13
+
+/** The length of the line end at `i`: 1 for `\n`, 2 for `\r\n`, 0 for none. */
+function lineEndAt(buffer: Uint8Array, i: number): number {
+  if (buffer[i] === newlineCode) return 1;
+  return buffer[i] === returnCode && buffer[i + 1] === newlineCode ? 2 : 0;
+}
 
 /**
  * Find the content start position in MDX buffer (after second ---)
@@ -56,24 +63,17 @@ export function findMdxContentStartPosition(buffer: Uint8Array): number {
   let dashCount = 0;
   let i = 0;
 
-  // Look for the second occurrence of "---\n"
+  // Look for the second occurrence of "---\n" (or "---\r\n")
   while (i < buffer.length - 4) {
-    if (
-      buffer[i] === dashCode &&
-      buffer[i + 1] === dashCode &&
-      buffer[i + 2] === dashCode &&
-      buffer[i + 3] === newlineCode
-    ) {
+    const end =
+      buffer[i] === dashCode && buffer[i + 1] === dashCode && buffer[i + 2] === dashCode ? lineEndAt(buffer, i + 3) : 0;
+    if (end > 0) {
       dashCount++;
+      i += 3 + end; // Skip past "---" and its line end
       if (dashCount === 2) {
-        // Found second ---, now look for the following newline to get content start
-        i += 4; // Skip past "---\n"
-        if (i < buffer.length && buffer[i] === newlineCode) {
-          return i + 1; // Return position after the empty line
-        }
-        return i; // Return position right after "---\n"
+        // Found second ---: the content starts after one blank line, if there is one
+        return i + lineEndAt(buffer, i);
       }
-      i += 4; // Skip this "---\n" and continue looking
     } else {
       // Use indexOf to skip ahead faster instead of incrementing by 1
       const nextDashPos = buffer.indexOf(dashCode, i + 1);

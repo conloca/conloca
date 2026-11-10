@@ -19,6 +19,7 @@
     "hono": "^4.13.5",
     "image-size": "^2.0.2",
     "jose": "^6.2.10",
+    "js-yaml": "^3.15.2",
     "nanoid": "^6.0.1",
     "proper-lockfile": "^4.1.2",
     "sort-keys": "^6.0.1",
@@ -44,6 +45,7 @@
     "@stryker-mutator/core": "^10.0.0",
     "@stryker-mutator/vitest-runner": "^10.0.0",
     "@ttsc/unplugin": "0.34.1",
+    "@types/js-yaml": "^3.12.10",
     "@types/proper-lockfile": "^4.1.4",
     "fast-check": "^4.9.0",
     "ttsc": "0.34.1",
@@ -101,6 +103,11 @@
       "types": "./dist/content-file-id.d.ts",
       "import": "./dist/content-file-id.js",
       "default": "./dist/content-file-id.js"
+    },
+    "./front-matter": {
+      "types": "./dist/front-matter.d.ts",
+      "import": "./dist/front-matter.js",
+      "default": "./dist/front-matter.js"
     },
     "./vxjson-serialize": {
       "types": "./dist/vxjson-serialize.d.ts",

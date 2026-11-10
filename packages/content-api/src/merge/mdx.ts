@@ -1,6 +1,7 @@
-import { isScalar, parseDocument, parse as parseYaml, visit } from 'yaml';
+import { isScalar, parseDocument, parse as parseYaml, visit, type visitor } from 'yaml';
 import { ISO_TIMESTAMP_RE } from '../mdx-frontmatter.js';
 import type { JsonObject } from '../types.js';
+import { type EntryLines, entryLines } from '../yaml-lines.js';
 import { blockRefs, bodyAnchor } from './anchor.js';
 import { diffBodyBlocks, joinTokens, mergeBodyBlocks, regionText, type Token, tokenizeBody } from './body.js';
 import { diffJson, mergeJson } from './json.js';
@@ -41,28 +42,124 @@ export function splitMdx(text: string): MdxParts {
   return { section: text.slice(0, end), frontmatter: record, parsed: record !== null, body: text.slice(end) };
 }
 
+/** Where a front matter section's YAML text sits in it: after the opening `---` line, up to the closing one. */
+function yamlRange(section: string) {
+  const start = OPENING.exec(section)?.[0].length ?? 0;
+  return { start, end: start + (CLOSING.exec(section.slice(start))?.index ?? 0) };
+}
+
+/**
+ * A front matter section's YAML text with LF ends, where it sits in the section, each top-level key's lines in it, the
+ * text between each key and the entry before it (blank lines, comments set apart), and the text after the last key.
+ */
+interface SectionEntries {
+  yaml: string;
+  crlf: boolean;
+  start: number;
+  end: number;
+  lines: Map<string, EntryLines>;
+  gaps: Map<string, string>;
+  tail: string;
+}
+
+/** The entries of a section's YAML; null when it is no block mapping. */
+function sectionEntries(section: string): SectionEntries | null {
+  const { start, end } = yamlRange(section);
+  const raw = section.slice(start, end);
+  const yaml = raw.replaceAll('\r\n', '\n');
+  if (yaml.includes('\r')) return null;
+  const lines = entryLines(yaml);
+  if (lines === null) return null;
+  const gaps = new Map<string, string>();
+  let at = 0;
+  for (const [key, entry] of lines) {
+    gaps.set(key, yaml.slice(at, entry.start));
+    at = entry.end;
+  }
+  return { yaml, crlf: raw.includes('\r\n'), start, end, lines, gaps, tail: yaml.slice(at) };
+}
+
+/** `key`'s lines in a section: the comment lines above it, then the key's own lines; undefined when it has no `key`. */
+function entryParts(entries: SectionEntries, key: string) {
+  const at = entries.lines.get(key);
+  if (at === undefined) return undefined;
+  const above = entries.yaml.slice(at.start, at.keyStart);
+  const body = entries.yaml.slice(at.keyStart, at.end);
+  return { above, body, text: above + body, comment: at.comment };
+}
+
+/**
+ * `section` (the merged front matter) with what upstream wrote around the values the merge keeps:
+ * - theirs' lines for a key whose merged value is theirs, when ours left the key's lines as base wrote them or neither
+ *   base nor ours has the key;
+ * - for any other key upstream holds, theirs' comment lines above it and its comment after a one-line value, where ours
+ *   left those as base had them;
+ * - theirs' blank and comment lines between keys and after the last key, where ours left those as base had them.
+ * So a comment or a restyle upstream made is not lost. The section keeps its own line ends.
+ */
+function withTheirLines(section: string, merged: JsonObject, sides: { b: MdxParts; o: MdxParts; t: MdxParts }): string {
+  const [mine, base, ours, theirs] = [section, sides.b.section, sides.o.section, sides.t.section].map(sectionEntries);
+  const upstream = sides.t.frontmatter;
+  if (!mine || !base || !ours || !theirs || upstream === null) return section;
+  let yaml = '';
+  for (const [key, entry] of mine.lines) {
+    const gap = mine.gaps.get(key) ?? '';
+    const theirsGap = theirs.gaps.get(key);
+    const sameStart = theirsGap !== undefined && gap.startsWith('\n') === theirsGap.startsWith('\n');
+    yaml += sameStart && gap === base.gaps.get(key) ? theirsGap : gap;
+    const own = entryParts(mine, key);
+    const was = entryParts(base, key);
+    const upstreamEntry = entryParts(theirs, key);
+    const oursEntry = entryParts(ours, key);
+    if (own === undefined || upstreamEntry === undefined || !Object.hasOwn(upstream, key)) {
+      yaml += mine.yaml.slice(entry.start, entry.end);
+      continue;
+    }
+    const untouched =
+      was === undefined ? oursEntry === undefined : own.text === was.text && own.text === oursEntry?.text;
+    if (untouched && deepEqual(upstream[key], merged[key])) {
+      yaml += upstreamEntry.text;
+      continue;
+    }
+    yaml += was !== undefined && own.above === was.above ? upstreamEntry.above : own.above;
+    const takeComment =
+      was !== undefined &&
+      own.comment === was.comment &&
+      upstreamEntry.comment !== was.comment &&
+      !own.body.includes('\n');
+    yaml += takeComment ? own.body.slice(0, own.body.length - own.comment.length) + upstreamEntry.comment : own.body;
+  }
+  yaml += mine.tail === base.tail ? theirs.tail : mine.tail;
+  return section.slice(0, mine.start) + (mine.crlf ? yaml.replaceAll('\n', '\r\n') : yaml) + section.slice(mine.end);
+}
+
 /** `section` with only the changed keys rewritten, so key order, quoting and comments survive. */
 export function rewriteSection(section: string, merged: JsonObject): string {
-  const start = OPENING.exec(section)?.[0].length ?? 0;
-  const closing = CLOSING.exec(section.slice(start));
-  const end = start + (closing?.index ?? 0);
+  const { start, end } = yamlRange(section);
   const yamlText = section.slice(start, end);
   const doc = parseDocument(yamlText, { logLevel: 'error' });
   const current = doc.toJS();
   for (const key of Object.keys(isRecord(current) ? current : {})) if (!Object.hasOwn(merged, key)) doc.delete(key);
+  // Same timestamp quoting as the writer, so a reader never turns a written timestamp into a Date; a value the merge
+  // leaves alone keeps the quoting it was written with.
+  const quoteTimestamps: visitor = {
+    Scalar(_key, node) {
+      if (typeof node.value === 'string' && ISO_TIMESTAMP_RE.test(node.value)) node.type = 'QUOTE_SINGLE';
+    },
+  };
   for (const [key, value] of Object.entries(merged)) {
     if (isRecord(current) && Object.hasOwn(current, key) && deepEqual(current[key], value)) continue;
     const node = doc.get(key, true);
     // Keep the scalar's quote style (e.g. single-quoted timestamps).
-    if (isScalar(node) && (value === null || typeof value !== 'object')) node.value = value;
-    else doc.set(key, doc.createNode(value));
+    if (isScalar(node) && (value === null || typeof value !== 'object')) {
+      node.value = value;
+      visit(node, quoteTimestamps);
+    } else {
+      const created = doc.createNode(value);
+      visit(created, quoteTimestamps);
+      doc.set(key, created);
+    }
   }
-  // Same timestamp quoting as the writer, so a reader never turns a timestamp into a Date.
-  visit(doc, {
-    Scalar(_key, node) {
-      if (typeof node.value === 'string' && ISO_TIMESTAMP_RE.test(node.value)) node.type = 'QUOTE_SINGLE';
-    },
-  });
   // No re-wrapping and no re-indenting of untouched values; the YAML lines keep the section's line endings.
   const yaml = doc.toString({ lineWidth: 0, indentSeq: !/^-( |$)/m.test(yamlText) });
   return (
@@ -89,6 +186,7 @@ export function mergeMdxFile(base: string, ours: string, theirs: string): MergeR
     if (source) section = source.section;
     else if (isRecord(merged) && template) section = rewriteSection(template.section, merged);
     else section = '';
+    if (isRecord(merged) && section !== '') section = withTheirLines(section, merged, { b, o, t });
   } else if (o.section === t.section || t.section === b.section) section = o.section;
   else if (o.section === b.section) section = t.section;
   else {

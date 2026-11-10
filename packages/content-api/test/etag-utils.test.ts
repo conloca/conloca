@@ -3,6 +3,7 @@ import {
   calculateContentEtagFromBuffer,
   calculateEtagsFromMdxBuffer,
   calculateMetaEtagFromBuffer,
+  findMdxContentStartPosition,
   parseDualEtag,
 } from '../src/etag-utils.js';
 import { VXJSON } from '../src/vxjson.js';
@@ -373,6 +374,17 @@ description: No closing --- found
       expect(result.contentEtag).toBeDefined();
       // When no content marker found, whole buffer is metadata
       expect(result.metaEtag.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('findMdxContentStartPosition', () => {
+    it.each([
+      ['LF', '\n'],
+      ['CRLF', '\r\n'],
+    ])('starts the body after the %s front matter and its blank line', (_name, eol) => {
+      const head = ['---', 'title: T', '---', '', ''].join(eol);
+      const bytes = new TextEncoder().encode(`${head}Body${eol}`);
+      expect(findMdxContentStartPosition(bytes)).toBe(head.length);
     });
   });
 });

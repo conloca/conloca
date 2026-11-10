@@ -183,6 +183,8 @@ function PageMetadataForm({ formRef, page, descriptor, onSave, onSaved }: PageMe
       pathname: (coreValues.pathname as string) || '',
       publishDate: mode === 'none' ? page.publishDate : fromDatetimeLocalValue(coreValues.publishAt),
       unpublishDate: mode === 'none' ? page.unpublishDate : fromDatetimeLocalValue(coreValues.unpublishAt),
+      publishAtText: page.publishAtText,
+      unpublishAtText: page.unpublishAtText,
       robots: mode === 'full' ? (coreValues.robots as string) || undefined : page.robots,
       canonical: mode === 'full' ? (coreValues.canonical as string) || undefined : page.canonical,
       customMeta: materializedCustom,

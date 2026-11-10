@@ -181,6 +181,47 @@ describe('mergeContent kind mdx', () => {
       value: "---\ntitle: T2\nmodified: '2026-01-02T00:00:00.000Z'\n---\n\nA",
     });
   });
+  it('keeps the quoting of dates and date-times the merge leaves alone', () => {
+    const dates = "date: 2024-01-01\nquoted: '2024-01-01'\nat: 2024-01-01T10:00:00Z\n";
+    expect(
+      mdx(
+        `---\ntitle: T\n${dates}---\n\nA`,
+        `---\ntitle: T2\n${dates}---\n\nA`,
+        `---\ntitle: T\n${dates}x: 1\n---\n\nA`,
+      ),
+    ).toEqual({ kind: 'merged', value: `---\ntitle: T2\n${dates}x: 1\n---\n\nA` });
+  });
+  it.each([
+    ['ours changed another key', 'title: T2', 'x: 1\n'],
+    ['only ours changed the front matter', 'title: T2', ''],
+  ])('keeps the lines upstream commented on a key whose value it left alone (%s)', (_name, oursTitle, theirsAdds) => {
+    const base = '---\ntitle: T\ndate: 2024-01-01\nd: x\n---\n\nA';
+    const theirs = `---\ntitle: T\n# upstream note\ndate: 2024-01-01 # inline\nd: x\n${theirsAdds}---\n\nA`;
+    expect(mdx(base, base.replace('title: T', oursTitle), theirs)).toEqual({
+      kind: 'merged',
+      value: theirs.replace('title: T', oursTitle),
+    });
+  });
+  describe('upstream comments the merge keeps where it can place them', () => {
+    const base = '---\ntitle: T\ndate: 2024-01-01\nd: x\n---\n\nA';
+    const ours = base.replace('title: T', 'title: T2');
+    it.each([
+      ['a comment set apart by a blank line', 'date: 2024-01-01\n', 'date: 2024-01-01\n\n# loose note\n\n'],
+      ['a comment after the last key', 'd: x\n', 'd: x\n# the end\n'],
+      ['comments on a key whose value ours changed', 'title: T\n', '# about the title\ntitle: T # inline\n'],
+      ['a key upstream added, with its comment', 'd: x\n', 'd: x\n# added upstream\nadded: 1\n'],
+    ])('%s', (_name, from, to) => {
+      const theirs = base.replace(from, to);
+      expect(mdx(base, ours, theirs)).toEqual({ kind: 'merged', value: theirs.replace('title: T', 'title: T2') });
+    });
+    it('in a CRLF file, with its line ends', () => {
+      const theirs = base.replace('date: 2024-01-01\n', '# upstream note\ndate: 2024-01-01 # inline\n');
+      const [b, o, t, merged] = [base, ours, theirs, theirs.replace('title: T', 'title: T2')].map((text) =>
+        text.replaceAll('\n', '\r\n'),
+      );
+      expect(mdx(b ?? '', o ?? '', t ?? '')).toEqual({ kind: 'merged', value: merged });
+    });
+  });
   it('leaves untouched frontmatter values byte for byte when rewriting', () => {
     const long = 'word '.repeat(30).trim();
     const fmText = (title: string, extra: string) =>

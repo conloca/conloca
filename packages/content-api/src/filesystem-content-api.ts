@@ -33,6 +33,15 @@ import { applyMetaPatch, localesOf, mapSiteNames, resolvePublishDate } from './c
 import { Data } from './data.js';
 import { calculateEtagsFromMdxBuffer, findMdxContentStartPosition, parseDualEtag } from './etag-utils.js';
 import { Fragments } from './fragments.js';
+import {
+  bodyGap,
+  crlfLines,
+  FRONT_MATTER,
+  frontMatterOver,
+  frontMatterText,
+  keepFrontMatterLines,
+  withFrontMatterEnds,
+} from './front-matter.js';
 import { serializeMdxWithFrontmatter } from './mdx-frontmatter.js';
 import { valueAtAnchor } from './merge/apply.js';
 import { changedAnchors, mergeContent } from './merge/merge-content.js';
@@ -142,11 +151,8 @@ function parse4KBMDX(
 } {
   // Only convert to string what we need
   const partialContent = textDecoder.decode(buffer.subarray(0, bytesRead));
-  // Empty options opt out of gray-matter's module-level memo cache — a plain
-  // object keyed by the raw input, so inputs naming an Object.prototype member
-  // ('valueOf', 'toString', …) return the inherited member instead of a parse.
-  // Same at every matter() call below.
-  const { data: frontmatter } = matter(partialContent, {});
+  // FRONT_MATTER keeps dates as written and opts out of gray-matter's memo cache. Same at every matter() call below.
+  const { data: frontmatter } = matter(partialContent, FRONT_MATTER);
 
   // Find where content starts (after second ---)
   const delimiter = new TextEncoder().encode('---');
@@ -773,7 +779,7 @@ export class FileSystemContentAPI implements ContentAPI {
   private async ownerOf(filePath: string): Promise<{ id: string; locale: string } | null> {
     try {
       const text = await readFile(filePath, 'utf8');
-      const fileId: unknown = filePath.endsWith('.mdx') ? matter(text, {}).data.id : JSON.parse(text).id;
+      const fileId: unknown = filePath.endsWith('.mdx') ? matter(text, FRONT_MATTER).data.id : JSON.parse(text).id;
       const manifest = typeof fileId === 'string' ? this.contentIndex.getManifest(fileId) : null;
       if (!manifest) return null;
       const localeVersion = Array.from(localesOf(manifest)).find((lv) => this.getFilePath(manifest, lv) === filePath);
@@ -866,7 +872,7 @@ export class FileSystemContentAPI implements ContentAPI {
   private writerDataOf(filePath: string, text: string): UpdateLocaleInput['data'] {
     try {
       if (filePath.endsWith('.mdx')) {
-        const { data: frontmatter, content: body } = matter(text, {});
+        const { data: frontmatter, content: body } = matter(text, FRONT_MATTER);
         const { id: _id, created: _c, modified: _m, publishAt: _p, unpublishAt: _u, name: _n, ...meta } = frontmatter;
         return { meta, content: { mdx: body.replace(/^\n+/, '') } };
       }
@@ -1253,7 +1259,7 @@ export class FileSystemContentAPI implements ContentAPI {
         // We have the full content
         if (filePath.endsWith('.mdx')) {
           const fullContent = textDecoder.decode(buffer.subarray(0, bytesRead));
-          const { content: mdx } = matter(fullContent, {});
+          const { content: mdx } = matter(fullContent, FRONT_MATTER);
           content = { mdx };
         } else if (filePath.endsWith('.json')) {
           // Data collection JSON file
@@ -1329,7 +1335,7 @@ export class FileSystemContentAPI implements ContentAPI {
       if (manifest.type === 'mdx') {
         // Read the full MDX file
         const content = await readFile(filePath, 'utf-8');
-        const parsed = matter(content, {});
+        const parsed = matter(content, FRONT_MATTER);
 
         // Check for missing fields
         if (!parsed.data.id) {
@@ -1351,14 +1357,19 @@ export class FileSystemContentAPI implements ContentAPI {
           // through gray-matter's memo cache, which is a plain object — a
           // body equal to an Object.prototype member name ('toString',
           // 'valueOf', …) reads the prototype function back and crashes.
-          // Same cache-opt-out rule as the matter(..., {}) calls above.
-          const updatedContent = matter.stringify(parsed, parsed.data);
+          // The file's own front matter lines and line ends stay as written; only the added keys are new.
+          const fileYaml = frontMatterText(content);
+          const updatedContent = withFrontMatterEnds(
+            fileYaml,
+            matter.stringify(parsed, parsed.data, frontMatterOver(fileYaml)),
+          );
           await this.writeRepairIfUnchanged(filePath, content, updatedContent);
           console.log(`Repaired MDX file: ${filePath} (added missing fields)`);
 
           // Calculate ETags for the repaired MDX file
           const repairedBuffer = Buffer.from(updatedContent, 'utf-8') as Uint8Array;
-          const contentStartPos = updatedContent.indexOf('\n---\n') + 5; // Position after frontmatter
+          const closing = /\r?\n---\r?\n/.exec(updatedContent);
+          const contentStartPos = closing === null ? 4 : closing.index + closing[0].length; // Position after frontmatter
           const etags = calculateEtagsFromMdxBuffer(repairedBuffer, contentStartPos);
           const etag = `${etags.metaEtag}.${etags.contentEtag}`;
 
@@ -1780,11 +1791,11 @@ export class FileSystemContentAPI implements ContentAPI {
     content: string,
   ): (LocaleFileData & { text: string; bytes: Uint8Array }) | null {
     if (filePath.endsWith('.mdx')) {
-      const { data: frontmatter, content: rawBody } = matter(content, {});
+      const { data: frontmatter, content: rawBody } = matter(content, FRONT_MATTER);
       // gray-matter leaves the blank line after the closing `---` on
       // the body. Strip leading newlines so the round-trip matches the
       // body the author wrote.
-      const body = rawBody.replace(/^\n+/, '');
+      const body = rawBody.replace(/^(?:\r?\n)+/, '');
 
       // Calculate etags from the file buffer
       const contentPos = findMdxContentStartPosition(buffer);
@@ -2443,9 +2454,14 @@ export class FileSystemContentAPI implements ContentAPI {
       let mdxContentPart = newContent.mdx || '';
       if (mdxContentPart.startsWith('---')) {
         // Remove frontmatter if it exists
-        const { content: contentOnly } = matter(mdxContentPart, {});
+        const { content: contentOnly } = matter(mdxContentPart, FRONT_MATTER);
         mdxContentPart = contentOnly;
       }
+      // The editor sends the body with LF breaks and without its last line end; give back the file's own: CRLF breaks
+      // in a CRLF file, the last line end, or none if it had none.
+      const fileEnd = /\r?\n$/.exec(fileText)?.[0];
+      if (fileEnd && mdxContentPart !== '' && !mdxContentPart.endsWith('\n')) mdxContentPart += fileEnd;
+      if (frontMatterText(fileText).includes('\r\n')) mdxContentPart = crlfLines(mdxContentPart);
 
       // Defensive guard: warn when a frontmatter-shaped block appears
       // mid-body. The load path strips frontmatter before it reaches the
@@ -2459,7 +2475,16 @@ export class FileSystemContentAPI implements ContentAPI {
         );
       }
 
-      return serializeMdxWithFrontmatter(frontmatterData, mdxContentPart);
+      // Lay the new front matter on the file's own so unchanged lines, line ends and the body gap stay byte-identical.
+      const written = serializeMdxWithFrontmatter(frontmatterData, mdxContentPart);
+      const writtenYaml = frontMatterText(written);
+      const fileYaml = frontMatterText(fileText);
+      const after = written.slice(`---\n${writtenYaml}`.length);
+      const eol = fileYaml.includes('\r\n') ? '\r\n' : '\n';
+      const gap = fileYaml === '' ? eol : bodyGap(fileText);
+      return after.startsWith('---\n\n')
+        ? `---${eol}${keepFrontMatterLines(fileYaml, writtenYaml)}---${eol}${gap}${after.slice('---\n\n'.length)}`
+        : written;
     }
 
     if (targetFilePath.endsWith('.json')) {
@@ -3115,23 +3140,7 @@ export class FileSystemContentAPI implements ContentAPI {
     // Calculate ETag based on file type
     let etag: string;
     if (contentType === 'text/mdx') {
-      // Find content start position for MDX
-      const contentStartMarker = new TextEncoder().encode('---\n\n');
-      let contentPos = -1;
-      for (let i = 0; i <= buffer.length - contentStartMarker.length; i++) {
-        let match = true;
-        for (let j = 0; j < contentStartMarker.length; j++) {
-          if (buffer[i + j] !== contentStartMarker[j]) {
-            match = false;
-            break;
-          }
-        }
-        if (match) {
-          contentPos = i + contentStartMarker.length;
-          break;
-        }
-      }
-      const etags = calculateEtagsFromMdxBuffer(buffer, contentPos);
+      const etags = calculateEtagsFromMdxBuffer(buffer, findMdxContentStartPosition(buffer));
       etag = `${etags.metaEtag}.${etags.contentEtag}`;
     } else {
       // Calculate ETags for JSON

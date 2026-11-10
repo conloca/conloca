@@ -68,7 +68,7 @@ export function serializeMdxWithFrontmatter(
   // caller-side leading `\n` (gray-matter leaves one in the content slice when
   // it strips frontmatter) would compound into multiple blank lines and drift
   // the diff on every save.
-  const body = mdxContent.replace(/^\n+/, '');
+  const body = mdxContent.replace(/^(?:\r?\n)+/, '');
 
   return `---\n${doc.toString()}---\n\n${body}`;
 }

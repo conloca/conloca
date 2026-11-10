@@ -8,12 +8,13 @@
  * bytes refuses. This module imports only the frontmatter parser.
  */
 import matter from 'gray-matter';
+import { FRONT_MATTER } from './front-matter.js';
 
 const textDecoder = new TextDecoder();
 
 /**
  * The id `parseContentHeader` would index the file under, read the same way:
- * YAML frontmatter through gray-matter (fresh options, so no memo cache) for
+ * YAML frontmatter through gray-matter (FRONT_MATTER options, so no memo cache) for
  * `.mdx`, the top-level `id` of the JSON document for `.json` and `.vxjson`
  * (canonicalizing a complete VXJSON file keeps that field as it is). Null for
  * a non-content file, an unparseable one, or one that declares no id.
@@ -22,7 +23,7 @@ export function contentFileId(path: string, bytes: Uint8Array): string | null {
   const text = textDecoder.decode(bytes);
   let id: unknown;
   try {
-    if (path.endsWith('.mdx')) id = matter(text, {}).data.id;
+    if (path.endsWith('.mdx')) id = matter(text, FRONT_MATTER).data.id;
     else if (path.endsWith('.json') || path.endsWith('.vxjson')) id = (JSON.parse(text) as { id?: unknown } | null)?.id;
   } catch {
     return null;

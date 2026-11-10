@@ -72,6 +72,11 @@ describe('serializeMdxWithFrontmatter', () => {
     expect(out).not.toContain("title: 'Welcome Hero'");
   });
 
+  test('drops LF and CRLF blank lines before the body, so a save adds none', () => {
+    const out = serializeMdxWithFrontmatter({ title: 'T' }, '\r\n\n\r\nLine one\r\n');
+    expect(out).toBe('---\ntitle: T\n---\n\nLine one\r\n');
+  });
+
   test('canonical fixture round-trips without diff', () => {
     const original = [
       '---',

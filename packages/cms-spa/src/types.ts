@@ -39,6 +39,9 @@ export interface PageMetadata {
   pathname: string;
   publishDate: Date | null;
   unpublishDate: Date | null;
+  /** The `publishAt` / `unpublishAt` text the page was read with, sent back unchanged while its date is not changed. */
+  publishAtText?: string;
+  unpublishAtText?: string;
   robots?: string;
   canonical?: string;
   customMeta?: Record<string, unknown>;

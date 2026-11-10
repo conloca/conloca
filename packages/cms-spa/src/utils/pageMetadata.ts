@@ -112,6 +112,8 @@ export function extractPageMetadata(
     pathname: localized.pathname || '/',
     publishDate: localized.publishAt ? new Date(localized.publishAt) : null,
     unpublishDate: localized.unpublishAt ? new Date(localized.unpublishAt) : null,
+    publishAtText: localized.publishAt,
+    unpublishAtText: localized.unpublishAt,
     robots: metaString(localized.meta.robots),
     canonical: metaString(localized.meta.canonical),
     customMeta,
@@ -161,9 +163,21 @@ export function buildMetadataUpdate(metadata: PageMetadata): MetadataUpdatePaylo
       ...custom,
     } as ContentMetaPatch,
     pathname: metadata.pathname,
-    publishAt: metadata.publishDate?.toISOString() || null,
-    unpublishAt: metadata.unpublishDate?.toISOString() || null,
+    publishAt: scheduleText(metadata.publishDate, metadata.publishAtText),
+    unpublishAt: scheduleText(metadata.unpublishDate, metadata.unpublishAtText),
   };
+}
+
+/**
+ * The schedule text a save sends: the text the page was read with while `date` still falls in its minute (the form edits
+ * whole minutes), so an untouched `publishAt: 2024-01-01` is written back as it was; else the new instant.
+ */
+function scheduleText(date: Date | null, stored: string | undefined): string | null {
+  if (!date) return null;
+  const sameMinute =
+    stored !== undefined && Math.floor(Date.parse(stored) / 60_000) === Math.floor(date.getTime() / 60_000);
+  if (sameMinute) return stored;
+  return date.toISOString();
 }
 
 /**

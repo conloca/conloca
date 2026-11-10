@@ -1,6 +1,7 @@
 import matter from 'gray-matter';
 import { parseContentPathLayout } from './content-path.js';
 import { calculateEtagsFromMdxBuffer, findMdxContentStartPosition } from './etag-utils.js';
+import { FRONT_MATTER } from './front-matter.js';
 import type { ContentData, ContentManifest, ContentMeta, LocaleVersion, VXJSONFile } from './types.js';
 import { VXJSON } from './vxjson.js';
 
@@ -44,15 +45,13 @@ interface ParsedHeaderMetadata {
 
 function parseHeaderMetadataMdx(bytes: Uint8Array): ParsedHeaderMetadata | null {
   const partial = textDecoder.decode(bytes);
-  // Empty options opt out of gray-matter's module-level memo cache — a plain
-  // object keyed by the raw input, so inputs naming an Object.prototype member
-  // ('valueOf', 'toString', …) return the inherited member instead of a parse.
+  // FRONT_MATTER keeps dates as written and opts out of gray-matter's memo cache.
   // Errors as data, like the JSON/VXJSON siblings: a leading delimiter with
   // unparseable YAML ('---\n[') makes js-yaml throw, and that used to escape
   // straight through parseContentHeader instead of its malformed-mdx result.
   let frontmatter: ReturnType<typeof matter>['data'];
   try {
-    ({ data: frontmatter } = matter(partial, {}));
+    ({ data: frontmatter } = matter(partial, FRONT_MATTER));
   } catch {
     return null;
   }
@@ -138,8 +137,8 @@ function deriveType(path: string, parsed: ParsedHeaderMetadata): 'puck' | 'mdx' 
 function parseFullContent(path: string, bytes: Uint8Array): ContentData | null {
   try {
     if (path.endsWith('.mdx')) {
-      // Empty options: see parseHeaderMetadataMdx on the memo-cache hazard.
-      const { content } = matter(textDecoder.decode(bytes), {});
+      // FRONT_MATTER: see parseHeaderMetadataMdx.
+      const { content } = matter(textDecoder.decode(bytes), FRONT_MATTER);
       return { mdx: content };
     }
     const data = JSON.parse(textDecoder.decode(bytes));

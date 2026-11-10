@@ -1,3 +1,4 @@
+import { FRONT_MATTER } from '@conloca/content-api/front-matter';
 import { compile as mdxCompile } from '@mdx-js/mdx';
 import matter from 'gray-matter';
 import remarkFrontmatter from 'remark-frontmatter';
@@ -10,11 +11,9 @@ import { remarkRestrictExpressions } from './restrict-expressions.js';
 
 export async function compileMDX(content: string): Promise<MDXCompileResult> {
   try {
-    // Empty options opt out of gray-matter's module-level memo cache — a plain
-    // object keyed by the raw input, so inputs naming an Object.prototype
-    // member ('valueOf', 'toString', …) return the inherited member instead of
-    // a parse.
-    const { data: metadata } = matter(content, {});
+    // FRONT_MATTER keeps dates as the text the author wrote, like the compiled module's `frontmatter` export, and opts
+    // out of gray-matter's memo cache.
+    const { data: metadata } = matter(content, FRONT_MATTER);
 
     // The editing surfaces read their outline off this compile rather than off
     // the rendered frame, which they cannot see into: the fragment body renders
