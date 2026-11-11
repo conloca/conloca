@@ -151,13 +151,22 @@ describe('pageCollection', () => {
 });
 describe('setPageConversion', () => {
   it('installs or clears the facts and tells the editor', () => {
-    let fired = 0;
-    window.addEventListener(EDITOR_CONFIG_CHANGED_EVENT, () => fired++);
     configureUI({});
-    setPageConversion(FACTS);
-    expect(getUIConfig().pageConversion).toEqual(FACTS);
-    setPageConversion(null);
-    expect(getUIConfig().pageConversion).toBeUndefined();
-    expect(fired).toBe(2);
+    let fired = 0;
+    const countChanges = () => {
+      fired++;
+    };
+    window.addEventListener(EDITOR_CONFIG_CHANGED_EVENT, countChanges);
+    try {
+      setPageConversion(FACTS);
+      expect(getUIConfig().pageConversion).toEqual(FACTS);
+      expect(fired).toBe(1);
+      setPageConversion(null);
+      expect(getUIConfig().pageConversion).toBeUndefined();
+      expect(fired).toBe(2);
+    } finally {
+      window.removeEventListener(EDITOR_CONFIG_CHANGED_EVENT, countChanges);
+      configureUI({});
+    }
   });
 });

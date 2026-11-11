@@ -466,6 +466,25 @@ describe('CMS Integration Tests', () => {
       }
     });
 
+    test('the page editor header exposes a pending preview and suppresses a duplicate request', async () => {
+      const { promise: pending, resolve: finish } = Promise.withResolvers<OpenPreviewResult>();
+      const openPreview = mock(() => pending);
+      configureUI({ apiBaseUrl: '/__cms/api', previewTab: 'parent', openPreview });
+      const id = await createPuckPage('/pending-preview', 'Pending preview');
+      renderAppWithDataRouter([`/pages/${id}`], undefined, false);
+      const button = await screen.findByTestId('preview-button');
+      try {
+        fireEvent.click(button);
+        await waitFor(() => expect(button.getAttribute('aria-busy')).toBe('true'));
+        fireEvent.click(button);
+        expect(openPreview).toHaveBeenCalledTimes(1);
+      } finally {
+        finish({ ok: true, url: 'https://preview.test/pending-preview' });
+      }
+      await waitFor(() => expect(button.getAttribute('aria-busy')).toBe('false'));
+      expect(openPreview).toHaveBeenCalledTimes(1);
+    });
+
     test('closes the blank tab and reports the existing error when openPreview fails', async () => {
       let rejectPreview!: (error: unknown) => void;
       const previewPromise = new Promise<OpenPreviewResult>((_resolve, reject) => {
@@ -518,7 +537,12 @@ describe('CMS Integration Tests', () => {
       const message = 'example.com does not serve draft preview, so a preview link would open a 404 there.';
       configureUI({
         apiBaseUrl: '/__cms/api',
-        openPreview: async () => ({ ok: false as const, reason: 'not-deployed' as const, message }),
+        openPreview: async (): Promise<OpenPreviewResult> => ({
+          ok: false,
+          reason: 'not-deployed',
+          message,
+          previewCapability: 'unavailable',
+        }),
       });
       const previewTab = { location: { href: 'about:blank' }, close: mock(() => {}), opener: window };
       const mockOpen = mock(() => previewTab);
@@ -561,7 +585,12 @@ describe('CMS Integration Tests', () => {
     test('does not flash a blank tab on a second click once the site is known to have no preview', async () => {
       configureUI({
         apiBaseUrl: '/__cms/api',
-        openPreview: async () => ({ ok: false as const, reason: 'not-deployed' as const, message: 'no preview here' }),
+        openPreview: async (): Promise<OpenPreviewResult> => ({
+          ok: false,
+          reason: 'not-deployed',
+          message: 'no preview here',
+          previewCapability: 'unavailable',
+        }),
       });
       const previewTab = { location: { href: 'about:blank' }, close: mock(() => {}), opener: window };
       const mockOpen = mock(() => previewTab);
@@ -690,7 +719,12 @@ describe('CMS Integration Tests', () => {
       configureUI({
         apiBaseUrl: '/__cms/api',
         previewTab: 'parent',
-        openPreview: async () => ({ ok: false as const, reason: 'not-deployed' as const, message }),
+        openPreview: async (): Promise<OpenPreviewResult> => ({
+          ok: false,
+          reason: 'not-deployed',
+          message,
+          previewCapability: 'unavailable',
+        }),
       });
       const mockOpen = spyOn(window, 'open').mockImplementation(() => null);
 

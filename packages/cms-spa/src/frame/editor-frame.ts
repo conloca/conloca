@@ -46,10 +46,18 @@ export interface EditorFrame {
 
 function isPreviewOpenResult(value: unknown): value is PreviewOpenResult {
   if (typeof value !== 'object' || value === null || !('ok' in value)) return false;
-  if (value.ok === true) return true;
+  const capability = 'previewCapability' in value ? value.previewCapability : undefined;
+  if (value.ok === true) {
+    return capability === undefined || capability === 'available' || capability === 'unknown';
+  }
   if (value.ok !== false || !('reason' in value)) return false;
   if (value.reason === 'popup-blocked') return true;
-  return value.reason === 'not-deployed' && 'message' in value && typeof value.message === 'string';
+  if (!('message' in value) || typeof value.message !== 'string') return false;
+  if (value.reason === 'not-allowed') return capability === undefined || capability === 'unknown';
+  return (
+    value.reason === 'not-deployed' &&
+    (capability === undefined || capability === 'unavailable' || capability === 'unknown')
+  );
 }
 
 function isAssetScope(value: unknown): value is AssetScope | null {
@@ -159,6 +167,61 @@ async function checkedCall<T>(
   return answer;
 }
 
+/** Untrusted fields understood by config events; each handler validates its field before applying it. */
+interface FrameConfigFields {
+  readOnly?: unknown;
+  pageConversion?: unknown;
+  previewCapability?: unknown;
+  theme?: unknown;
+}
+
+/** Keeps the mount configuration and the running editor on the same preview observation. */
+function applyPreviewCapability(payload: FrameConfigFields, config: Partial<UIConfig> | undefined): void {
+  if (!('previewCapability' in payload) || !isPreviewCapability(payload.previewCapability)) return;
+  // Site installation can still be pending; its eventual configureUI must use this same observation.
+  if (config) config.previewCapability = payload.previewCapability;
+  setPreviewCapability(payload.previewCapability);
+}
+
+/** Configuration events may arrive while the site module is still installing. */
+function applyReadOnly(payload: FrameConfigFields, config: Partial<UIConfig> | undefined): void {
+  if (!('readOnly' in payload) || !(payload.readOnly === null || isWriteRefusal(payload.readOnly))) return;
+  if (config) config.readOnly = payload.readOnly ?? undefined;
+  setEditorReadOnly(payload.readOnly);
+}
+
+function applyPageConversion(payload: FrameConfigFields, config: Partial<UIConfig> | undefined): void {
+  if (!('pageConversion' in payload)) return;
+  const facts = readPageConversionFacts(payload.pageConversion);
+  if (config) config.pageConversion = facts;
+  setPageConversion(facts ?? null);
+}
+
+function applyFrameConfig(name: string, payload: FrameConfigFields, config: Partial<UIConfig> | undefined): void {
+  switch (name) {
+    case 'readOnly.changed':
+      applyReadOnly(payload, config);
+      break;
+    case 'pageConversion.changed':
+      applyPageConversion(payload, config);
+      break;
+    case 'previewCapability.changed':
+      applyPreviewCapability(payload, config);
+      break;
+    case 'theme.changed':
+      if ('theme' in payload && isThemePreference(payload.theme)) {
+        localStorage.setItem(THEME_STORAGE_KEY, payload.theme);
+        window.dispatchEvent(new Event(THEME_CHANGED_EVENT));
+      }
+      break;
+    case 'queries.stale':
+      if ('queries' in payload && (payload.queries === 'content' || payload.queries === 'media')) {
+        invalidateEditorQueries(payload.queries);
+      }
+      break;
+  }
+}
+
 /**
  * A draft-tools write. The parent refuses with an `RpcError` before sending anything (read-only, rate limit), so that
  * is `refused`; any other failure, a closed channel included, leaves the outcome `unknown`.
@@ -198,12 +261,12 @@ export function connectEditorFrame(port: FramePort): Promise<EditorFrame> {
   const routeListeners = new Set<(path: string) => void>();
   // Executor form: the package's production lib predates Promise.withResolvers.
   return new Promise((resolve) => {
-    let connected = false;
+    let frame: EditorFrame | undefined;
     const channel = openFrameChannel(port, {
       control(message) {
-        if (message.kind !== 'init' || connected) return;
-        connected = true;
-        resolve(start(channel, message, routeListeners));
+        if (message.kind !== 'init' || frame) return;
+        frame = start(channel, message, routeListeners);
+        resolve(frame);
       },
       async call(method) {
         if (method === EDITOR_FLUSH_METHOD) return flushOpenEditor();
@@ -214,29 +277,8 @@ export function connectEditorFrame(port: FramePort): Promise<EditorFrame> {
         if (name === 'route.navigate' && 'path' in payload) {
           const { path } = payload;
           if (typeof path === 'string' && isFramePath(path)) for (const listener of routeListeners) listener(path);
-        } else if (
-          name === 'readOnly.changed' &&
-          'readOnly' in payload &&
-          (payload.readOnly === null || isWriteRefusal(payload.readOnly))
-        ) {
-          setEditorReadOnly(payload.readOnly);
-        } else if (name === 'pageConversion.changed' && 'pageConversion' in payload) {
-          setPageConversion(readPageConversionFacts(payload.pageConversion) ?? null);
-        } else if (
-          name === 'previewCapability.changed' &&
-          'previewCapability' in payload &&
-          isPreviewCapability(payload.previewCapability)
-        ) {
-          setPreviewCapability(payload.previewCapability);
-        } else if (name === 'theme.changed' && 'theme' in payload && isThemePreference(payload.theme)) {
-          localStorage.setItem(THEME_STORAGE_KEY, payload.theme);
-          window.dispatchEvent(new Event(THEME_CHANGED_EVENT));
-        } else if (
-          name === 'queries.stale' &&
-          'queries' in payload &&
-          (payload.queries === 'content' || payload.queries === 'media')
-        ) {
-          invalidateEditorQueries(payload.queries);
+        } else {
+          applyFrameConfig(name, payload, frame?.config);
         }
       },
     });

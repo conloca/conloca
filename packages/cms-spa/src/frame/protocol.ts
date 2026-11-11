@@ -118,8 +118,21 @@ export interface MediaLoadInput {
 
 /** The answer to `preview.open`. */
 export type PreviewOpenResult =
-  | { ok: true }
-  | { ok: false; reason: 'not-deployed'; message: string }
+  | { ok: true; previewCapability?: Exclude<PreviewCapability, 'unavailable'> }
+  | {
+      ok: false;
+      reason: 'not-deployed';
+      message: string;
+      /** Omitted or undefined is unknown; only unavailable establishes a definitive refusal. */
+      previewCapability?: Exclude<PreviewCapability, 'available'>;
+    }
+  | {
+      ok: false;
+      reason: 'not-allowed';
+      message: string;
+      /** A session restriction cannot establish whether the site serves preview. */
+      previewCapability?: 'unknown';
+    }
   | { ok: false; reason: 'popup-blocked' };
 
 /** The answer to `site.open`; a refused path rejects with `RpcError` `bad_arguments`. */
@@ -316,6 +329,27 @@ function readInit(data: unknown): Init | undefined {
     theme: data.theme,
     mediaEnabled: data.mediaEnabled,
   };
+  return readInitOptions(data, init);
+}
+
+/** Untrusted control-message fields consumed by the optional settings and handshake parsers. */
+interface ControlMessageFields {
+  kind?: unknown;
+  initialPath?: unknown;
+  readOnly?: unknown;
+  previewCapability?: unknown;
+  theme?: unknown;
+  mediaEnabled?: unknown;
+  locales?: unknown;
+  pageConversion?: unknown;
+  protocol?: unknown;
+  repo?: unknown;
+  siteId?: unknown;
+  code?: unknown;
+  page?: unknown;
+}
+
+function readInitOptions(data: ControlMessageFields, init: Init): Init | undefined {
   // Unlike `locales`, malformed facts only cost the prompt, not the whole init.
   const pageConversion = 'pageConversion' in data ? readPageConversionFacts(data.pageConversion) : undefined;
   if (pageConversion) init.pageConversion = pageConversion;
@@ -335,19 +369,25 @@ export function readControlMessage(data: unknown): ControlMessage | undefined {
     case 'init':
       return readInit(data);
     case 'accepted':
-      if (!('protocol' in data) || typeof data.protocol !== 'number') return undefined;
-      if (!('repo' in data) || !(data.repo === null || typeof data.repo === 'string')) return undefined;
-      if (!('siteId' in data) || typeof data.siteId !== 'string') return undefined;
-      return { kind: 'accepted', protocol: data.protocol, repo: data.repo, siteId: data.siteId };
-    case 'nack': {
-      if (!('code' in data) || (data.code !== 'origin-rejected' && data.code !== 'unsupported-protocol'))
-        return undefined;
-      const nack: Nack = { kind: 'nack', code: data.code };
-      return 'page' in data && typeof data.page === 'number' ? { ...nack, page: data.page } : nack;
-    }
+      return readAccepted(data);
+    case 'nack':
+      return readNack(data);
     default:
       return undefined;
   }
+}
+
+function readAccepted(data: ControlMessageFields): Accepted | undefined {
+  if (!('protocol' in data) || typeof data.protocol !== 'number') return undefined;
+  if (!('repo' in data) || !(data.repo === null || typeof data.repo === 'string')) return undefined;
+  if (!('siteId' in data) || typeof data.siteId !== 'string') return undefined;
+  return { kind: 'accepted', protocol: data.protocol, repo: data.repo, siteId: data.siteId };
+}
+
+function readNack(data: ControlMessageFields): Nack | undefined {
+  if (!('code' in data) || (data.code !== 'origin-rejected' && data.code !== 'unsupported-protocol')) return undefined;
+  const nack: Nack = { kind: 'nack', code: data.code };
+  return 'page' in data && typeof data.page === 'number' ? { ...nack, page: data.page } : nack;
 }
 
 /* oxlint-enable anti-slop/no-unknown-parameters */

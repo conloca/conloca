@@ -4,17 +4,15 @@ import { Monitor, Smartphone, Tablet } from 'lucide-react';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { notifyEditorDirtyChanged, registerEditorFlushHandler } from '../../editor-flush.js';
 import { useCanvasSaveShortcut } from '../../frame/save-shortcut.js';
-import { useSiteBaseUrl } from '../../hooks/index.js';
 import { useCanvasTheme } from '../../hooks/useCanvasTheme.js';
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard.js';
 import { wrapSiteCSS } from '../../site-css-layer.js';
 import { useSiteStyles } from '../../site-styles.js';
 import type { SaveState } from '../../types.js';
-import { getUIConfig, setPreviewCapability } from '../../ui-config.js';
+import { getUIConfig } from '../../ui-config.js';
 import { ConflictDialog } from '../dialogs/ConflictDialog.js';
 import { UnsavedChangesDialog } from '../dialogs/UnsavedChangesDialog.js';
 import { ImageFieldRender } from '../fields/ImageField.js';
-import { toast } from '../toast.js';
 import { DrawerItemOverride, PUCK_ROOT_DROP_ZONE } from './DrawerItemOverride.js';
 import { withDraftMediaRendering } from './draft-media-config.js';
 import { PageEditorHeaderActions } from './PageEditorHeaderActions.js';
@@ -24,7 +22,7 @@ import {
   PageSettingTargetsProvider,
   usePageSettingTargets,
 } from './page-setting-targets.js';
-import { PREVIEW_UNAVAILABLE_DETAIL, PREVIEW_UNAVAILABLE_TITLE } from './preview-availability.js';
+import { usePagePreview } from './usePagePreview.js';
 
 interface PageEditorProps {
   entry: LocalizedEntry; // The full localized entry
@@ -262,17 +260,6 @@ function IframeWithInsertMarker({ children, document: iframeDoc }: { children: R
   return <IframeBridge document={iframeDoc}>{children}</IframeBridge>;
 }
 
-/**
- * A genuine preview failure, which is a DIFFERENT situation and must not read as though the site is misconfigured.
- * Not latched: a transient fault must not disable a working button.
- */
-function reportPreviewFailure(error: unknown) {
-  toast.error('Could not open preview', {
-    description: 'Something went wrong creating the preview link. Please try again.',
-  });
-  console.error('[PageEditor] openPreview failed:', error);
-}
-
 export function PageEditor({
   entry,
   config,
@@ -399,84 +386,11 @@ export function PageEditor({
   // across the editor surface.
   const blocker = useUnsavedChangesGuard(isDirty);
 
-  const { buildUrl } = useSiteBaseUrl();
-
-  // Why the site cannot show a preview, or null when it can (or
-  // when nobody has established otherwise). Seeded from `previewCapability`,
-  // and then LEARNED from `openPreview`: its answer is the authority, so a
-  // definitive "not deployed" disables the
-  // control for the rest of the session instead of making the user rediscover
-  // it one click at a time.
-  const [previewBlockedReason, setPreviewBlockedReason] = useState<string | null>(() =>
-    getUIConfig().previewCapability === 'unavailable' ? PREVIEW_UNAVAILABLE_DETAIL : null,
-  );
-
-  const handlePreview = useCallback(() => {
-    const pathname = entry.localized.pathname || '/';
-    const { openPreview, openSiteUrl, previewTab: previewTabOwner } = getUIConfig();
-    if (openPreview) {
-      // Already known to be impossible: explain it without flashing a blank
-      // tab open and shut, which reads as a bug even when it is correct.
-      if (previewBlockedReason !== null) {
-        toast.error(PREVIEW_UNAVAILABLE_TITLE, { description: previewBlockedReason, duration: 10_000 });
-        return;
-      }
-      // The site does not serve draft preview, so no URL exists that could
-      // work. Say so where the user is looking instead of navigating a tab to
-      // a 404 on their own domain, and remember it so the control goes
-      // disabled rather than staying a trap.
-      const markPreviewUnavailable = (message: string) => {
-        const detail = message !== '' ? message : PREVIEW_UNAVAILABLE_DETAIL;
-        setPreviewBlockedReason(detail);
-        setPreviewCapability('unavailable');
-        toast.error(PREVIEW_UNAVAILABLE_TITLE, { description: detail, duration: 10_000 });
-      };
-      // The parent frame opens the tab during the click itself; a blocked
-      // popup is the parent's to explain, so the editor shows nothing for it.
-      if (previewTabOwner === 'parent') {
-        void openPreview({ path: pathname })
-          .then((result) => {
-            if (!result.ok && result.reason === 'not-deployed') markPreviewUnavailable(result.message);
-          })
-          .catch(reportPreviewFailure);
-        return;
-      }
-      // Popup blockers only allow window creation during the click itself.
-      // `openPreview` answers asynchronously, so reserve a blank tab now and
-      // navigate it once the preview URL arrives.
-      const previewTab = window.open('', '_blank');
-      if (!previewTab) {
-        console.error('[PageEditor] openPreview failed:', new Error('Preview popup was blocked.'));
-        return;
-      }
-      previewTab.opener = null;
-      void openPreview({ path: pathname })
-        .then((result) => {
-          if (result.ok) {
-            if ('url' in result) previewTab.location.href = result.url;
-            else previewTab.close();
-            return;
-          }
-          previewTab.close();
-          // `popup-blocked` cannot happen here, the editor holds the tab.
-          if (result.reason === 'not-deployed') markPreviewUnavailable(result.message);
-        })
-        .catch((error: unknown) => {
-          previewTab.close();
-          reportPreviewFailure(error);
-        });
-      return;
-    }
-    if (openSiteUrl) {
-      void openSiteUrl({ path: pathname }).catch((error: unknown) =>
-        console.error('[PageEditor] openSiteUrl failed:', error),
-      );
-      return;
-    }
-    const previewUrl = buildUrl(pathname);
-    const cacheBustedUrl = `${previewUrl}${previewUrl.includes('?') ? '&' : '?'}_t=${Date.now()}`;
-    window.open(cacheBustedUrl, '_blank');
-  }, [entry.localized.pathname, buildUrl, previewBlockedReason]);
+  const {
+    blockedReason: previewBlockedReason,
+    pending: previewPending,
+    open: handlePreview,
+  } = usePagePreview(entry.localized.pathname);
 
   // Store headerActions props in a ref so the overrides object can remain referentially stable.
   // Puck's internals use the overrides reference as a useMemo dependency for field component selection.
@@ -494,6 +408,7 @@ export function PageEditor({
     onOpenMetadata,
     onBack,
     previewBlockedReason,
+    previewPending,
   });
   headerActionsPropsRef.current = {
     onPublish,
@@ -507,6 +422,7 @@ export function PageEditor({
     onOpenMetadata,
     onBack,
     previewBlockedReason,
+    previewPending,
   };
 
   // Memoize overrides with NO dependencies so the reference never changes.
@@ -532,6 +448,7 @@ export function PageEditor({
             onOpenMetadata={() => p.onOpenMetadata()}
             onBack={p.onBack}
             previewDisabledReason={p.previewBlockedReason ?? undefined}
+            previewPending={p.previewPending}
           />
         );
       },

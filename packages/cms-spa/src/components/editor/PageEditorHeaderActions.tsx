@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, Eye, Moon, Save, Settings, Sun, X } from 'lucide-react';
+import { AlertTriangle, Check, Eye, Loader2, Moon, Save, Settings, Sun, X } from 'lucide-react';
 import { useCanvasTheme } from '../../hooks/useCanvasTheme.js';
 import type { SaveState } from '../../types.js';
 import { getUIConfig } from '../../ui-config.js';
@@ -30,6 +30,8 @@ interface PageEditorHeaderActionsProps {
    * says why beats a hidden one, and both beat a link that 404s.
    */
   previewDisabledReason?: string;
+  /** A preview request is in flight: the control shows it is working and the editor ignores further clicks. */
+  previewPending?: boolean;
   currentLocale: string;
   availableLocales: string[];
   onLocaleChange?: (locale: string) => void;
@@ -40,10 +42,47 @@ interface PageEditorHeaderActionsProps {
   onBack: () => void;
 }
 
+/** PageEditor keeps preview clicks actionable so an unavailable preview can explain how to recover. */
+function PagePreviewButton({
+  onPreview,
+  previewDisabledReason,
+  previewPending,
+}: Pick<PageEditorHeaderActionsProps, 'onPreview' | 'previewDisabledReason' | 'previewPending'>) {
+  return (
+    <button
+      type="button"
+      onClick={onPreview}
+      // NOT the `disabled` attribute: that suppresses onClick, so the
+      // handler's explanation would never fire, and browsers do not show
+      // a `title` on a disabled control — leaving a greyed button with no
+      // reason anywhere. `aria-disabled` keeps the semantics for screen
+      // readers while the click still surfaces WHY.
+      aria-disabled={previewDisabledReason !== undefined}
+      title={previewDisabledReason}
+      aria-label={previewDisabledReason === undefined ? 'Preview' : `Preview unavailable. ${previewDisabledReason}`}
+      // A request in flight keeps the label and the click (the editor ignores it): the person sees that
+      // the click registered instead of wondering whether to press again.
+      aria-busy={previewPending}
+      className={cn(
+        'px-4 py-2 rounded-md text-sm transition-all duration-150 flex items-center gap-1',
+        previewDisabledReason === undefined
+          ? 'text-foreground hover:bg-hover cursor-pointer'
+          : 'text-muted cursor-not-allowed opacity-60',
+        previewPending && 'cursor-progress',
+      )}
+      data-testid="preview-button"
+    >
+      {previewPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}
+      Preview
+    </button>
+  );
+}
+
 export function PageEditorHeaderActions({
   onPublish,
   onPreview,
   previewDisabledReason,
+  previewPending = false,
   currentLocale,
   availableLocales,
   onLocaleChange,
@@ -68,28 +107,11 @@ export function PageEditorHeaderActions({
             Publish
           </button>
         )}
-        <button
-          type="button"
-          onClick={onPreview}
-          // NOT the `disabled` attribute: that suppresses onClick, so the
-          // handler's explanation would never fire, and browsers do not show
-          // a `title` on a disabled control — leaving a greyed button with no
-          // reason anywhere. `aria-disabled` keeps the semantics for screen
-          // readers while the click still surfaces WHY.
-          aria-disabled={previewDisabledReason !== undefined}
-          title={previewDisabledReason}
-          aria-label={previewDisabledReason === undefined ? 'Preview' : `Preview unavailable. ${previewDisabledReason}`}
-          className={cn(
-            'px-4 py-2 rounded-md text-sm transition-all duration-150 flex items-center gap-1',
-            previewDisabledReason === undefined
-              ? 'text-foreground hover:bg-hover cursor-pointer'
-              : 'text-muted cursor-not-allowed opacity-60',
-          )}
-          data-testid="preview-button"
-        >
-          <Eye className="h-3.5 w-3.5" />
-          Preview
-        </button>
+        <PagePreviewButton
+          onPreview={onPreview}
+          previewDisabledReason={previewDisabledReason}
+          previewPending={previewPending}
+        />
         <CanvasThemeToggle />
       </div>
 

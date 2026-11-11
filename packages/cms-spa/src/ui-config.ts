@@ -22,14 +22,29 @@ export interface TemplateConfig {
  */
 export type PreviewCapability = 'available' | 'unavailable' | 'unknown';
 
-/** Outcome of `openPreview`: a draft-preview URL, or why the site has none. */
+/** A preview URL or a request refusal. Only explicit capability values establish a site verdict. */
 export type OpenPreviewResult =
-  | { ok: true; url: string }
-  /**
-   * The site does not serve draft preview, so no URL exists that could work.
-   * `message` is written for the person editing the page, not for a log.
-   */
-  | { ok: false; reason: 'not-deployed'; message: string };
+  | {
+      ok: true;
+      url: string;
+      /** Missing or undefined means unknown, including legacy custom adapters. */
+      previewCapability?: Exclude<PreviewCapability, 'unavailable'>;
+    }
+  | {
+      ok: false;
+      reason: 'not-deployed';
+      /** A request explanation for the caller, including inconclusive address or probe failures. */
+      message: string;
+      /** Only unavailable is definitive; omitted, undefined and unknown preserve the previous verdict. */
+      previewCapability?: Exclude<PreviewCapability, 'available'>;
+    }
+  | {
+      ok: false;
+      reason: 'not-allowed';
+      /** The request is restricted in this session; retrying cannot establish a different site verdict. */
+      message: string;
+      previewCapability?: 'unknown';
+    };
 
 /**
  * Why the editor refuses to write, in the words of the person editing.
@@ -157,10 +172,9 @@ export interface UIConfig {
    * When set, the editor Preview button calls this instead of bare `buildUrl`
    * (live site). The standalone astro-cms editor leaves it unset.
    *
-   * Returns a RESULT rather than throwing for `not-deployed`, because a site
-   * that does not serve draft preview is an ordinary, expected answer — a fact
-   * about that site — not a failure of the call. The two must
-   * stay distinguishable: one is the site's setup, the other is a fault.
+   * Returns a result for an explained request refusal, including pending address confirmation.
+   * Only explicit previewCapability establishes a site verdict; legacy missing proof is unknown.
+   * Unexpected transport or protocol failures still throw.
    */
   openPreview?: (input: { path: string }) => Promise<OpenPreviewResult | PreviewOpenResult>;
   /**
@@ -266,7 +280,7 @@ declare global {
 
 let config: UIConfig = { ...defaultConfig };
 
-/** Fired on window when a parent frame changes `readOnly` or `pageConversion` after `configureUI`. */
+/** Fired on window when configuration is installed or a live editor setting changes. */
 export const EDITOR_CONFIG_CHANGED_EVENT = 'conloca:editor-config-changed';
 
 export function configureUI(options: Partial<UIConfig>) {
@@ -285,6 +299,7 @@ export function configureUI(options: Partial<UIConfig>) {
   // Make it available globally for the runtime
   if (typeof window !== 'undefined') {
     window.__UI_CONFIG__ = config;
+    window.dispatchEvent(new Event(EDITOR_CONFIG_CHANGED_EVENT));
   }
 }
 
@@ -350,6 +365,7 @@ export function setPreviewCapability(previewCapability: PreviewCapability) {
   // The runtime mirror `getUIConfig` reads from.
   const runtimeConfig = window.__UI_CONFIG__;
   if (runtimeConfig) runtimeConfig.previewCapability = previewCapability;
+  window.dispatchEvent(new Event(EDITOR_CONFIG_CHANGED_EVENT));
 }
 
 /**

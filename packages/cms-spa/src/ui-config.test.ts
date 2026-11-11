@@ -1,5 +1,24 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { configureUI, getUIConfig, setDataBindings, setTemplates } from './ui-config.js';
+import { configureUI, EDITOR_CONFIG_CHANGED_EVENT, getUIConfig, setDataBindings, setTemplates } from './ui-config.js';
+
+describe('configureUI', () => {
+  it('notifies the editor once after installing the configuration', () => {
+    configureUI({});
+    const siteBaseUrl = 'https://example.test/';
+    const observedSiteBaseUrls: (string | undefined)[] = [];
+    const recordSiteBaseUrl = () => {
+      observedSiteBaseUrls.push(getUIConfig().siteBaseUrl);
+    };
+    window.addEventListener(EDITOR_CONFIG_CHANGED_EVENT, recordSiteBaseUrl);
+    try {
+      configureUI({ siteBaseUrl });
+      expect(observedSiteBaseUrls).toEqual([siteBaseUrl]);
+    } finally {
+      window.removeEventListener(EDITOR_CONFIG_CHANGED_EVENT, recordSiteBaseUrl);
+      configureUI({});
+    }
+  });
+});
 
 /**
  * The `assetsBasePath` field is how a host points the media surfaces at its

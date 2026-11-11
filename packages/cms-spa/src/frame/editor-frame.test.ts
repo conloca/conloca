@@ -250,6 +250,30 @@ describe('connecting the editor to its parent frame', () => {
     expect(getUIConfig().pageConversion).toBeUndefined();
   });
 
+  test.each([false, true])('pending installation keeps the latest write refusal: cleared=%s', async (cleared) => {
+    const { config } = await connected({ ...INIT, readOnly: { reason: 'Original restriction' } });
+    outer.emit('readOnly.changed', { readOnly: cleared ? null : { reason: 'Access was revoked' } });
+    await delivered();
+
+    // start-editor-page installs this snapshot after the asynchronous site load.
+    configureUI(config);
+    expect(config.readOnly).toEqual(cleared ? undefined : { reason: 'Access was revoked' });
+    expect(getUIConfig().readOnly).toEqual(cleared ? undefined : { reason: 'Access was revoked' });
+  });
+
+  test.each([false, true])('pending installation keeps the latest conversion facts: cleared=%s', async (cleared) => {
+    const { config } = await connected({ ...INIT, pageConversion: { cliVersion: '0.2.4', site: 'old' } });
+    outer.emit('pageConversion.changed', {
+      pageConversion: cleared ? null : { cliVersion: '0.2.5', site: 'default', routes: ['/', '/pricing', '/x"; rm'] },
+    });
+    await delivered();
+
+    configureUI(config);
+    const expected = cleared ? undefined : { cliVersion: '0.2.5', site: 'default', routes: ['/', '/pricing'] };
+    expect(config.pageConversion).toEqual(expected);
+    expect(getUIConfig().pageConversion).toEqual(expected);
+  });
+
   test("the parent's Save marks the page's own cached content or media stale", async () => {
     await connected();
     const client = new QueryClient();
@@ -305,6 +329,65 @@ describe('connecting the editor to its parent frame', () => {
       ['mediaBridge.getMediaIssue', [{ filename: 'hero.png' }]],
     ]);
   });
+
+  test.each([null, {}, 'unavailable', 'unexpected', 7])(
+    'rejects malformed successful preview capability %j at the port boundary',
+    async (previewCapability) => {
+      const { config } = await connected();
+      answers.set('preview.open', { ok: true, previewCapability });
+      await expect(config.openPreview?.({ path: '/about' })).rejects.toThrow('unexpected value');
+    },
+  );
+
+  test.each([
+    {},
+    { previewCapability: undefined },
+    { previewCapability: 'available' },
+    { previewCapability: 'unknown' },
+  ])('accepts the optional successful preview proof %j at the port boundary', async (proof) => {
+    const { config } = await connected();
+    answers.set('preview.open', { ok: true, ...proof });
+    expect(await config.openPreview?.({ path: '/about' })).toEqual({ ok: true, ...proof });
+  });
+
+  test.each([null, 'available', 7])(
+    'rejects malformed refusal capability %j at the port boundary',
+    async (previewCapability) => {
+      const { config } = await connected();
+      answers.set('preview.open', { ok: false, reason: 'not-deployed', message: 'No preview.', previewCapability });
+      await expect(config.openPreview?.({ path: '/about' })).rejects.toThrow('unexpected value');
+    },
+  );
+
+  test.each([{}, { previewCapability: undefined }, { previewCapability: 'unknown' }])(
+    'accepts a session restriction without site authority %j at the port boundary',
+    async (proof) => {
+      const { config } = await connected();
+      const answer: PreviewOpenResult = {
+        ok: false,
+        reason: 'not-allowed',
+        message: 'Preview is not available in a support session.',
+        ...proof,
+      };
+      answers.set('preview.open', answer);
+      expect(await config.openPreview?.({ path: '/about' })).toEqual(answer);
+      expect(config.previewCapability).toBe('available');
+    },
+  );
+
+  test.each(['available', 'unavailable', null, 7])(
+    'rejects session restriction site authority %j at the port boundary',
+    async (previewCapability) => {
+      const { config } = await connected();
+      answers.set('preview.open', {
+        ok: false,
+        reason: 'not-allowed',
+        message: 'Preview is not available in a support session.',
+        previewCapability,
+      });
+      await expect(config.openPreview?.({ path: '/about' })).rejects.toThrow('unexpected value');
+    },
+  );
 
   test('an answer that is not what the call promises is refused', async () => {
     const { config } = await connected();
