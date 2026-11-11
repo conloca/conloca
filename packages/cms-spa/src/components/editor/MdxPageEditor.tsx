@@ -1,5 +1,6 @@
 import {
   getContentAPIClient,
+  StaleWriteError,
   type UpdateResult,
   useLocalizedContent,
   useSitesConfig,
@@ -59,8 +60,8 @@ export function MdxPageEditor() {
   // has been written into state — MDXEditorLib only consumes its `markdown`
   // prop on first mount, so a placeholder empty value would never update.
   const [isContentLoaded, setIsContentLoaded] = useState(false);
-  // Mirror of the saved-on-disk content; used as the dirty-check anchor and
-  // to seed the conflict dialog's force-save payload.
+  // Mirror of the saved-on-disk content, used only as the dirty-check anchor.
+  // Force Save persists the current editor content.
   const savedContentRef = useRef<string>('');
 
   const [saveState, setSaveState] = useState<SaveState>('idle');
@@ -167,6 +168,11 @@ export function MdxPageEditor() {
 
       throw new Error(`Save failed: ${result.reason}`);
     } catch (err) {
+      if (err instanceof StaleWriteError) {
+        setConflict({ success: false, reason: 'stale_write', currentEtag: err.currentEtag });
+        setSaveState('conflict');
+        return 'conflict';
+      }
       console.error('Failed to save mdx page:', err);
       showError('Failed to save page', err);
       setSaveState('error');
