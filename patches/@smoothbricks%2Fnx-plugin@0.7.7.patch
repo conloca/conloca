@@ -1,0 +1,45 @@
+diff --git a/dist/managed-files/publish-workflow.js b/dist/managed-files/publish-workflow.js
+index 42dfce12b6596c37fcc8e11a641fe4c5be085619..f4a84a0839cd59b697341f6388eda68959c0c767 100644
+--- a/dist/managed-files/publish-workflow.js
++++ b/dist/managed-files/publish-workflow.js
+@@ -328,7 +328,7 @@ on:
+         default: false${deployInput}
+ 
+ permissions:
+-  contents: write
++${options.deploy === true ? '  actions: read\n  statuses: write\n' : ''}  contents: write
+   id-token: write
+ 
+ concurrency:
+@@ -538,11 +538,10 @@ function tagReleaseStepLines(name) {
+ }
+ function deployProductionStep(step, options) {
+     const conditionLines = step.condition === 'deploy-production-standalone'
+-        ? ["        if: ${{ inputs.deploy_stage == 'production' && inputs.dry_run != 'true' }}"]
++        ? ["        if: ${{ inputs.deploy_stage == 'production' && !inputs.dry_run }}"]
+         : [
+             '        if:',
+-            "          ${{ steps.version.outputs.mode != 'none' && inputs.deploy_stage == 'production' && inputs.dry_run !=",
+-            "          'true' }}",
++            "          ${{ steps.version.outputs.mode != 'none' && inputs.deploy_stage == 'production' && !inputs.dry_run }}",
+         ];
+     return [
+         `      - name: ${step.name}`,
+@@ -716,7 +715,7 @@ ${renderMacosPlatformSteps(options)}
+ ${publishJobRunsOnLine(options)}
+     timeout-minutes: 45
+     permissions:
+-      contents: write
++${options.deploy === true ? '      actions: read\n      statuses: write\n' : ''}      contents: write
+       id-token: write
+     env:
+       LMAO_GIT_REVISION: ${githubExpression('github.sha')}
+@@ -897,7 +896,7 @@ function renderFinalLinuxPublishSteps(options) {
+         ]
+         : []), ...macosPlatformArtifactNames(options).map((name) => `          "${githubExpression('runner.temp')}/publish-artifacts/${name}/current"`), `          --bump "${githubExpression('inputs.bump')}" --dry-run "${githubExpression('inputs.dry_run')}"`);
+     if (options.deploy === true) {
+-        lines.push('', `      # Step ${stepNumber++}`, '      - name: 🚀 Deploy production', '        if:', "          ${{ needs.linux-release-candidate.outputs.mode != 'none' && inputs.deploy_stage == 'production' &&", "          inputs.dry_run != 'true' }}", ...deployStepSecretEnvLines(options), '        run: smoo github-ci nx-deploy --stage production --mode run-many --verify --name "Deploy Production"');
++        lines.push('', `      # Step ${stepNumber++}`, '      - name: 🚀 Deploy production', '        if:', "          ${{ needs.linux-release-candidate.outputs.mode != 'none' && inputs.deploy_stage == 'production' &&", "          !inputs.dry_run }}", ...deployStepSecretEnvLines(options), '        run: smoo github-ci nx-deploy --stage production --mode run-many --verify --name "Deploy Production"');
+     }
+     lines.push('', '      # --- Cleanup ------------------------------------------------------------', '', `      # Step ${stepNumber}`, '      - name: 🧹 Cleanup and cache Nix/devenv', '        if: always()', '        uses: ./.github/actions/save-nix-devenv', '        with:', `          devenv-cache-hit: ${githubExpression('steps.setup.outputs.devenv-cache-hit')}`);
+     return lines.join('\n').trimEnd();
