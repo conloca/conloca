@@ -38,6 +38,7 @@
     },
     {
       "path": "../mdx/tsconfig.lib.json"
-    }
+    },
+    { "path": "../content-api/tsconfig.lib.json" }
   ]
 }

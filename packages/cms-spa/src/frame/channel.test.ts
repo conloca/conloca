@@ -99,24 +99,23 @@ describe('a frame channel between two ports', () => {
     expect(malformed).not.toHaveBeenCalled();
   });
 
-  test('close drops pending calls and stops delivery', async () => {
+  test('close rejects pending calls and stops delivery', async () => {
     const [a, b] = fakePortPair();
     const event = mock((_name: string, _payload: unknown) => {});
     const page = openFrameChannel(a, { event });
     let answer: ((value: unknown) => void) | undefined;
     const parent = openFrameChannel(b, { call: () => new Promise((resolve) => (answer = resolve)) });
 
-    let settled = false;
-    page.call('getContent').then(
-      () => (settled = true),
-      () => (settled = true),
+    const outcome = page.call('getContent').then(
+      () => 'resolved',
+      (error: Error) => error.message,
     );
     await settle();
     page.close();
     answer?.('late');
     parent.emit('editor.dirty', { dirty: true });
     await settle();
-    expect(settled).toBe(false);
+    expect(await outcome).toBe('channel closed');
     expect(event).not.toHaveBeenCalled();
     expect(a.closed).toBe(true);
   });

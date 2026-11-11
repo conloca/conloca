@@ -207,6 +207,7 @@
       "name": "@conloca/cms-spa",
       "version": "0.2.7-next.0",
       "dependencies": {
+        "@conloca/content-api": "workspace:*",
         "@conloca/content-api-client": "workspace:*",
         "@conloca/mdx": "workspace:*",
         "@lexical/react": "^0.48.0",

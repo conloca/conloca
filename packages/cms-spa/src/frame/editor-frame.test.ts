@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, type Mock, spyOn, test } from 'bun:test';
 import { QueryClient } from '@tanstack/react-query';
 import { type FakePort, fakePortPair } from '../../test/fake-ports.js';
+import type { PageConflict } from '../draft-tools.js';
 import { notifyEditorDirtyChanged, registerEditorFlushHandler } from '../editor-flush.js';
 import type { MediaIssue } from '../media/types.js';
 import { THEME_CHANGED_EVENT, THEME_STORAGE_KEY } from '../theme.js';
@@ -18,6 +19,7 @@ const INIT: Init = {
   theme: 'dark',
   mediaEnabled: true,
 };
+const PAGE_REF = { site: 'default', id: 'p', locale: 'en' };
 
 let page: FakePort;
 let outer: FrameChannel;
@@ -25,7 +27,16 @@ let events: [string, unknown][];
 let controls: ControlMessage[];
 let calls: [string, unknown[]][];
 /** What the parent answers in these tests. */
-type Answer = Blob | PreviewOpenResult | SiteOpenResult | MediaIssue | 'branch' | { size: number };
+type Answer =
+  | Blob
+  | PreviewOpenResult
+  | SiteOpenResult
+  | MediaIssue
+  | 'branch'
+  | { size: number }
+  | object[]
+  | object
+  | Error;
 let answers: Map<string, Answer>;
 let addWindowListener: Mock<typeof window.addEventListener>;
 
@@ -44,7 +55,9 @@ beforeEach(() => {
     control: (message) => controls.push(message),
     call: async (method, args) => {
       calls.push([method, args]);
-      return answers.get(method);
+      const answer = answers.get(method);
+      if (answer instanceof Error) throw answer;
+      return answer;
     },
   });
   // The frame listens on `window` for the page's lifetime; tests take those listeners away again.
@@ -303,5 +316,72 @@ describe('connecting the editor to its parent frame', () => {
     await Promise.resolve(expect(config.loadMedia?.({ route: 'serve', path: 'hero.png' })).rejects.toThrow());
     await Promise.resolve(expect(config.openPreview?.({ path: '/about' })).rejects.toThrow());
     await Promise.resolve(expect(config.mediaBridge?.getMediaIssue({ filename: 'hero.png' })).rejects.toThrow());
+  });
+
+  test('with draft tools, each tool is a call to the parent with the one argument it took', async () => {
+    const { config } = await connected({ ...INIT, draftTools: true });
+    const conflict: PageConflict = {
+      anchor: 'title',
+      base: 'Sale',
+      ours: 'Spring sale',
+      theirs: undefined,
+      valueId: 'v1',
+      source: 'github',
+      authorLabel: 'Ben',
+      createdAt: 1,
+    };
+    const version = { snapshotId: 's1', reason: 'discard', authors: ['Ann'], at: 1, expiresAt: 2, restorable: true };
+    answers = new Map<string, Answer>([
+      ['conflicts.list', [conflict]],
+      ['conflicts.resolve', { ok: false, reason: 'changed' }],
+      ['pages.discard', { ok: true }],
+      ['snapshots.list', [version]],
+      ['snapshots.restore', { ok: true, kept: ['title'] }],
+    ]);
+    const resolve = {
+      ...PAGE_REF,
+      anchor: 'title',
+      valueId: 'v1',
+      expectedCurrent: 'Spring sale',
+      choice: 'mine' as const,
+    };
+
+    expect(await config.draftTools?.listConflicts(PAGE_REF)).toEqual([conflict]);
+    expect(await config.draftTools?.resolveConflict(resolve)).toEqual({ ok: false, reason: 'changed' });
+    expect(await config.draftTools?.discardPage(PAGE_REF)).toEqual({ ok: true });
+    expect(await config.draftTools?.listVersions(PAGE_REF)).toEqual([version]);
+    expect(await config.draftTools?.restoreVersion({ snapshotId: 's1' })).toEqual({ ok: true, kept: ['title'] });
+    expect(calls).toEqual([
+      ['conflicts.list', [PAGE_REF]],
+      ['conflicts.resolve', [resolve]],
+      ['pages.discard', [PAGE_REF]],
+      ['snapshots.list', [PAGE_REF]],
+      ['snapshots.restore', [{ snapshotId: 's1' }]],
+    ]);
+  });
+
+  test('without draft tools in init there are none', async () => {
+    const { config } = await connected();
+    expect(config.draftTools).toBeUndefined();
+  });
+
+  test('a draft-tools write the parent refused is refused, a lost or malformed answer unknown; a bad list rejects', async () => {
+    const { config } = await connected({ ...INIT, draftTools: true });
+    answers = new Map<string, Answer>([
+      ['conflicts.list', [{ anchor: 'title' }]],
+      ['pages.discard', { ok: false, reason: 'gone-fishing' }],
+      ['snapshots.restore', new Error('channel closed')],
+      ['conflicts.resolve', new RpcError('Editing is paused', 'method_not_allowed')],
+    ]);
+
+    await Promise.resolve(expect(config.draftTools?.listConflicts(PAGE_REF)).rejects.toThrow());
+    expect(await config.draftTools?.discardPage(PAGE_REF)).toEqual({ ok: false, reason: 'unknown' });
+    expect(await config.draftTools?.restoreVersion({ snapshotId: 's1' })).toEqual({ ok: false, reason: 'unknown' });
+    const resolve = { ...PAGE_REF, anchor: 'title', valueId: 'v1', expectedCurrent: 'x', choice: 'mine' as const };
+    expect(await config.draftTools?.resolveConflict(resolve)).toEqual({
+      ok: false,
+      reason: 'refused',
+      message: 'Editing is paused',
+    });
   });
 });

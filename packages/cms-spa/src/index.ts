@@ -2,6 +2,14 @@
 export type { QueryClientConfig } from '@tanstack/react-query';
 // Export the mount component for embedding cms-spa inside another React app
 export { CmsSpaApp } from './CmsSpaApp.js';
+// The field conflict picker and list, labelled from the site's Puck config
+export { type ConflictLabel, resolveConflictLabel } from './components/conflicts/conflict-label.js';
+export { FieldConflictList, type FieldConflictListProps } from './components/conflicts/FieldConflictList.js';
+export {
+  type ConflictChoice,
+  FieldConflictPicker,
+  type FieldConflictPickerProps,
+} from './components/conflicts/FieldConflictPicker.js';
 // The host fragment block's props; @conloca/astro-cms re-exports this for host sites.
 export type { ContentFragmentSectionProps } from './components/editor/PageEditorWrapper.js';
 export { FolderTreeSidebar } from './components/media/FolderTreeSidebar.js';
@@ -12,6 +20,17 @@ export { UploadModal } from './components/media/UploadModal.js';
 export { MDXContent } from './components/puck/index.js';
 // Export data schemas functions
 export { type DataSchemas, setDataSchemas } from './data-schemas.js';
+// Draft tools a host may serve the editor: conflicts, discard, earlier versions
+export type {
+  DiscardOutcome,
+  DraftToolsHost,
+  EarlierVersion,
+  PageConflict,
+  PageRef,
+  ResolveConflictInput,
+  ResolveConflictOutcome,
+  RestoreVersionOutcome,
+} from './draft-tools.js';
 // Export editor flush bridge (host Save flushes open editor first)
 export {
   EDITOR_DIRTY_CHANGED_EVENT,

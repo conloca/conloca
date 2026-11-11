@@ -114,7 +114,8 @@ function isMergeSource(value: unknown): value is 'github' | 'agent' | 'review' {
 function isConnection(value: unknown): value is LiveStatus['connection'] {
   return CONNECTIONS.has(value);
 }
-function isJsonValue(value: unknown): value is JsonValue {
+/** Whether `value` is JSON all the way down (finite numbers, plain objects); a value read off a port can be anything. */
+export function isJsonValue(value: unknown): value is JsonValue {
   if (value === null || typeof value === 'string' || typeof value === 'boolean') return true;
   if (typeof value === 'number') return Number.isFinite(value);
   if (Array.isArray(value)) return value.every(isJsonValue);

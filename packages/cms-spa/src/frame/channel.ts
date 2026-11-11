@@ -158,7 +158,7 @@ export interface FrameChannel {
   call(method: string, args?: unknown[]): Promise<unknown>;
   emit(name: string, payload?: unknown): void;
   post(message: ControlMessage): void;
-  /** Stops listening and closes the port; calls still waiting for a result never settle. */
+  /** Stops listening and closes the port; every call still waiting for a result rejects with `Error('channel closed')`. */
   close(): void;
 }
 
@@ -252,7 +252,9 @@ export function openFrameChannel(port: FramePort, handlers: FrameChannelHandlers
     close() {
       port.removeEventListener('message', listener);
       port.close();
+      const waiting = [...pending.values()];
       pending.clear();
+      for (const entry of waiting) entry.reject(new Error('channel closed'));
     },
   };
 }

@@ -2,6 +2,7 @@
 import type { ContentAPIClient, EditorDataBindings } from '@conloca/content-api-client';
 import type { QueryClientConfig } from '@tanstack/react-query';
 import type { PageConversionFacts } from './convert-pages.js';
+import type { DraftToolsHost } from './draft-tools.js';
 import type { MediaLoadInput, PreviewOpenResult } from './frame/protocol.js';
 import type { MediaBridge } from './media/types.js';
 
@@ -223,6 +224,8 @@ export interface UIConfig {
    * integration; absent means the editor does not offer page conversion.
    */
   pageConversion?: PageConversionFacts;
+  /** Set by a host that serves draft tools (conflicts, discard, earlier versions); absent, the editor offers none. */
+  draftTools?: DraftToolsHost;
 }
 
 /** How the editor routes when a parent frame owns the address bar. */

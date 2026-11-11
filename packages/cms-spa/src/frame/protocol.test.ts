@@ -50,6 +50,27 @@ describe('the doc channel', () => {
   });
 });
 
+describe('the draft tools', () => {
+  test('reads an init with draftTools and still reads one without it', () => {
+    expect(readControlMessage({ ...BASE_INIT, draftTools: true })).toMatchObject({ kind: 'init', draftTools: true });
+    expect(readControlMessage(BASE_INIT)).not.toHaveProperty('draftTools');
+    expect(readControlMessage({ ...BASE_INIT, draftTools: 'yes' })).not.toHaveProperty('draftTools');
+  });
+
+  test('allows the five draft-tools methods with one argument each, never as content methods', () => {
+    for (const method of [
+      'conflicts.list',
+      'conflicts.resolve',
+      'pages.discard',
+      'snapshots.list',
+      'snapshots.restore',
+    ] as const) {
+      expect(FRAME_METHOD_MAX_ARGS[method]).toBe(1);
+    }
+    expect(FRAME_CONTENT_METHODS).not.toContain('pages.discard');
+  });
+});
+
 describe('the editor frame contract', () => {
   test('the page speaks a protocol inside the parent range', () => {
     expect(EDITOR_HOST_PROTOCOL).toBe(1);
@@ -71,6 +92,11 @@ describe('the editor frame contract', () => {
       'doc.open',
       'doc.close',
       'doc.flush',
+      'conflicts.list',
+      'conflicts.resolve',
+      'pages.discard',
+      'snapshots.list',
+      'snapshots.restore',
     ]);
   });
 

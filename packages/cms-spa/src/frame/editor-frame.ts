@@ -1,4 +1,14 @@
 import { readPageConversionFacts } from '../convert-pages.js';
+import type {
+  DiscardOutcome,
+  DraftToolsHost,
+  EarlierVersion,
+  PageConflict,
+  PageRef,
+  ResolveConflictInput,
+  ResolveConflictOutcome,
+  RestoreVersionOutcome,
+} from '../draft-tools.js';
 import { EDITOR_DIRTY_CHANGED_EVENT, flushOpenEditor, isOpenEditorDirty } from '../editor-flush.js';
 import { invalidateEditorQueries } from '../editor-queries.js';
 import type { AssetScope, MediaIssue } from '../media/types.js';
@@ -11,6 +21,7 @@ import {
   type FrameMethod,
   type Init,
   isFramePath,
+  isJsonValue,
   isPreviewCapability,
   isThemePreference,
   isWriteRefusal,
@@ -63,6 +74,79 @@ function isBlob(value: unknown): value is Blob {
   return value instanceof Blob;
 }
 
+/* oxlint-disable anti-slop/no-unknown-parameters -- the guards below read the parent's answers, untyped off the port. */
+
+function isSide(held: unknown): boolean {
+  return held === undefined || isJsonValue(held);
+}
+
+function isPageConflict(value: unknown): value is PageConflict {
+  if (typeof value !== 'object' || value === null) return false;
+  if (!('anchor' in value) || typeof value.anchor !== 'string') return false;
+  if (!('valueId' in value) || typeof value.valueId !== 'string') return false;
+  if (!('source' in value) || (value.source !== 'github' && value.source !== 'review')) return false;
+  if (!('authorLabel' in value) || typeof value.authorLabel !== 'string') return false;
+  if (!('createdAt' in value) || typeof value.createdAt !== 'number') return false;
+  const sides = ['base' in value ? value.base : undefined, 'ours' in value ? value.ours : undefined];
+  return [...sides, 'theirs' in value ? value.theirs : undefined].every(isSide);
+}
+
+function isEarlierVersion(value: unknown): value is EarlierVersion {
+  if (typeof value !== 'object' || value === null) return false;
+  if (!('snapshotId' in value) || typeof value.snapshotId !== 'string') return false;
+  if (!('reason' in value) || typeof value.reason !== 'string') return false;
+  if (!('authors' in value) || !isStrings(value.authors)) return false;
+  if (!('at' in value) || typeof value.at !== 'number') return false;
+  if (!('expiresAt' in value) || typeof value.expiresAt !== 'number') return false;
+  return 'restorable' in value && typeof value.restorable === 'boolean';
+}
+
+function isStrings(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string');
+}
+
+function listOf<T>(isItem: (value: unknown) => value is T) {
+  return (value: unknown): value is T[] => Array.isArray(value) && value.every(isItem);
+}
+
+/** `{ ok: true }`, or a refusal `{ ok: false, reason, message? }` whose reason is one of `reasons`. */
+function isOutcome(value: unknown, reasons: readonly string[]): boolean {
+  if (typeof value !== 'object' || value === null || !('ok' in value)) return false;
+  if (value.ok === true) return true;
+  if (value.ok !== false) return false;
+  if (!('reason' in value) || typeof value.reason !== 'string' || !reasons.includes(value.reason)) return false;
+  return !('message' in value) || value.message === undefined || typeof value.message === 'string';
+}
+
+const RESOLVE_REFUSALS = ['changed', 'not-found', 'anchor-gone', 'page-too-large', 'bad-value', 'refused', 'unknown'];
+const DISCARD_REFUSALS = ['kept', 'changed', 'committed', 'not-found', 'refused', 'unknown'];
+const RESTORE_REFUSALS = [
+  'changed',
+  'expired',
+  'not-found',
+  'not-a-page',
+  'page-too-large',
+  'path-taken',
+  'refused',
+  'unknown',
+];
+
+function isResolveOutcome(value: unknown): value is ResolveConflictOutcome {
+  return isOutcome(value, RESOLVE_REFUSALS);
+}
+
+function isDiscardOutcome(value: unknown): value is DiscardOutcome {
+  return isOutcome(value, DISCARD_REFUSALS);
+}
+
+function isRestoreOutcome(value: unknown): value is RestoreVersionOutcome {
+  if (!isOutcome(value, RESTORE_REFUSALS) || typeof value !== 'object' || value === null) return false;
+  // An `ok: true` answer must name the anchors where newer work stayed.
+  return !('ok' in value) || value.ok !== true || ('kept' in value && isStrings(value.kept));
+}
+
+/* oxlint-enable anti-slop/no-unknown-parameters */
+
 /** Calls the parent and rejects an answer that is not the shape the method promises. */
 async function checkedCall<T>(
   channel: FrameChannel,
@@ -73,6 +157,35 @@ async function checkedCall<T>(
   const answer = await channel.call(method, [input]);
   if (!isAnswer(answer)) throw new Error(`${method} answered with an unexpected value`);
   return answer;
+}
+
+/**
+ * A draft-tools write. The parent refuses with an `RpcError` before sending anything (read-only, rate limit), so that
+ * is `refused`; any other failure, a closed channel included, leaves the outcome `unknown`.
+ */
+async function draftWrite<T>(
+  channel: FrameChannel,
+  method: FrameMethod,
+  input: ResolveConflictInput | PageRef | { snapshotId: string },
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- the answer arrives off the port untyped; isAnswer parses it.
+  isAnswer: (value: unknown) => value is T,
+): Promise<T | { ok: false; reason: 'refused' | 'unknown'; message?: string }> {
+  try {
+    return await checkedCall(channel, method, input, isAnswer);
+  } catch (error) {
+    if (error instanceof RpcError) return { ok: false, reason: 'refused', message: error.message };
+    return { ok: false, reason: 'unknown' };
+  }
+}
+
+function draftTools(channel: FrameChannel): DraftToolsHost {
+  return {
+    listConflicts: (page) => checkedCall(channel, 'conflicts.list', page, listOf(isPageConflict)),
+    resolveConflict: (input) => draftWrite(channel, 'conflicts.resolve', input, isResolveOutcome),
+    discardPage: (page) => draftWrite(channel, 'pages.discard', page, isDiscardOutcome),
+    listVersions: (page) => checkedCall(channel, 'snapshots.list', page, listOf(isEarlierVersion)),
+    restoreVersion: (input) => draftWrite(channel, 'snapshots.restore', input, isRestoreOutcome),
+  };
 }
 
 /**
@@ -180,6 +293,7 @@ function start(channel: FrameChannel, init: Init, routeListeners: Set<(path: str
           loadMedia: (input) => checkedCall(channel, 'media.load', input, isBlob),
         }
       : {}),
+    ...(init.draftTools ? { draftTools: draftTools(channel) } : {}),
   };
 
   return {

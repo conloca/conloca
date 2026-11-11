@@ -135,6 +135,7 @@
     "test": "nx run cms-spa:test --outputStyle=stream"
   },
   "dependencies": {
+    "@conloca/content-api": "workspace:*",
     "@conloca/content-api-client": "workspace:*",
     "@conloca/mdx": "workspace:*",
     "@lexical/react": "^0.48.0",

@@ -17,6 +17,7 @@ export {
   type EditorHostPageData,
 } from '@conloca/content-api-client';
 export type { PageConversionFacts } from '../convert-pages.js';
+export { isJsonValue } from '../live/messages.js';
 export { CONTENT_METHOD_CLASSIFICATION } from '../write-access.js';
 
 export interface ProtocolRange {
@@ -60,6 +61,8 @@ export interface Init {
   pageConversion?: PageConversionFacts;
   /** The parent carries co-edited documents (`doc.*` methods and events); absent, the page keeps the single-editor path. */
   docChannel?: true;
+  /** The parent serves the draft tools (`conflicts.*`, `pages.discard`, `snapshots.*`); absent, the page has none. */
+  draftTools?: boolean;
 }
 
 export interface Ready {
@@ -197,6 +200,16 @@ export const FRAME_HOST_METHODS = [
   'doc.close',
   /** Answers an `EditorFlushResult` once every local update is acknowledged. */
   'doc.flush',
+  /** Takes a `PageRef`, answers `PageConflict[]`. */
+  'conflicts.list',
+  /** Takes a `ResolveConflictInput`, answers a `ResolveConflictOutcome`. */
+  'conflicts.resolve',
+  /** Takes a `PageRef`, answers a `DiscardOutcome`; the parent confirms discarding other people's work itself. */
+  'pages.discard',
+  /** Takes a `PageRef`, answers `EarlierVersion[]`. */
+  'snapshots.list',
+  /** Takes `{ snapshotId }`, answers a `RestoreVersionOutcome`. */
+  'snapshots.restore',
 ] as const;
 
 /**
@@ -248,6 +261,11 @@ export const FRAME_METHOD_MAX_ARGS = {
   'doc.open': 1,
   'doc.close': 1,
   'doc.flush': 0,
+  'conflicts.list': 1,
+  'conflicts.resolve': 1,
+  'pages.discard': 1,
+  'snapshots.list': 1,
+  'snapshots.restore': 1,
 } as const satisfies Readonly<Record<FrameMethod, number>>;
 
 const FRAME_PATH_RE = /^\/[A-Za-z0-9/_.:%-]{0,512}(\?[A-Za-z0-9_.:%=&-]{0,512})?$/;
@@ -302,6 +320,7 @@ function readInit(data: unknown): Init | undefined {
   const pageConversion = 'pageConversion' in data ? readPageConversionFacts(data.pageConversion) : undefined;
   if (pageConversion) init.pageConversion = pageConversion;
   if ('docChannel' in data && data.docChannel === true) init.docChannel = true;
+  if ('draftTools' in data && data.draftTools === true) init.draftTools = true;
   if (!('locales' in data) || data.locales === undefined) return init;
   const locales = readLocales(data.locales);
   return locales ? { ...init, locales } : undefined;
