@@ -421,6 +421,46 @@ body {
   color: var(--puck-color-grey-01) !important;
 }
 
+/* Anchor both sidebar controls to the full-width header, so changing either
+ * sidebar never moves its button. The left rail stays visible above Blocks;
+ * the right control occupies the panel header or floats over the canvas. */
+@media (min-width: 638px) {
+  [class*="PuckLayout-header"] {
+    overflow: visible !important;
+  }
+
+  [class*="PuckHeader-leftSideBarToggle"],
+  [class*="PuckHeader-rightSideBarToggle"] {
+    position: absolute;
+    top: calc(100% + var(--puck-space-2));
+    z-index: 10;
+  }
+
+  [class*="PuckHeader-leftSideBarToggle"] {
+    left: calc((var(--puck-pluginbar-width) - 32px) / 2);
+  }
+
+  [class*="PuckHeader-rightSideBarToggle"] {
+    right: var(--puck-space-4);
+    background: var(--puck-sidebar-right-color-bg, var(--puck-color-surface));
+    border-radius: var(--puck-radius-m);
+  }
+
+  [class*="PuckHeader-leftSideBarToggle"] button,
+  [class*="PuckHeader-rightSideBarToggle"] button {
+    width: 32px;
+    height: 32px;
+  }
+
+  [class*="PuckLayout-nav"] [class*="Nav-list"] {
+    padding-top: 56px;
+  }
+
+  [class*="Sidebar--right"] [class*="SidebarSection-title"] {
+    padding-right: 64px;
+  }
+}
+
 /* Menu button */
 [class*="PuckHeader-menuButton"] button {
   padding: 0.375rem !important;
