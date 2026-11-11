@@ -1,4 +1,5 @@
 import type { ContentAPI } from './content-api.interface.js';
+import { localeEtags, matchesContentEtag } from './content-etag.js';
 import { filterContentWithIndexes } from './content-filters.js';
 import { ContentIndex } from './content-index.js';
 import {
@@ -487,20 +488,12 @@ export class InMemoryContentAPI implements ContentAPI {
       };
     }
 
-    // Verify etag
-    let hasMatchingEtag = false;
-    for (const localeVersion of localesOf(manifest)) {
-      if (localeVersion.etag === etag) {
-        hasMatchingEtag = true;
-        break;
-      }
-    }
-
-    if (!hasMatchingEtag && etag) {
+    const checked = matchesContentEtag(etag, localeEtags(manifest));
+    if (!checked.matches && etag) {
       return {
         success: false,
         reason: 'stale_write',
-        currentEtag: Array.from(localesOf(manifest))[0]?.etag || '',
+        currentEtag: checked.currentEtag,
         error: new Error('ETag mismatch'),
       };
     }

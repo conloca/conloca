@@ -15,7 +15,7 @@ import {
 import type { ComponentConfig, Config, Data, PuckComponent } from '@puckeditor/core';
 import { resolveAllData } from '@puckeditor/core';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { mergeDefaultProps } from '../../merge-default-props.js';
 import type { PageMetadata } from '../../types.js';
 import { getUIConfig } from '../../ui-config.js';
@@ -238,11 +238,47 @@ function PageLoadFailure({ message }: { message?: string }) {
 
 export function PageEditorWrapper({ puckConfig }: PageEditorWrapperProps) {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   // Use the kind-level hook so dispatch works regardless of which locales
   // exist for the page (a previous `useLocalizedContent(id, 'en')` would
   // stall on the loading branch for any page that exists only in non-en
   // locales — the headline use case for `mdxPagesDefaultLocale`).
-  const { data: content, isLoading, error } = useContent(id || '');
+  const { data: content, isLoading, isFetching, error, refetch } = useContent(id || '');
+  const requestedLocale = searchParams.get('locale');
+  const editorKey = `${id}:${requestedLocale ?? ''}`;
+  const [readyRoute, setReadyRoute] = useState<{ key: string; locale: string } | null>(null);
+  const readyRouteKey = readyRoute?.key;
+  const localeRefresh = useRef<{ key: string; request: ReturnType<typeof refetch> } | null>(null);
+  const [settledLocaleRefresh, setSettledLocaleRefresh] = useState<ReturnType<typeof refetch> | null>(null);
+
+  useEffect(() => {
+    if (readyRouteKey === editorKey || isLoading || !content || error) return undefined;
+    const requestedLocaleMissing =
+      requestedLocale &&
+      (!Object.prototype.hasOwnProperty.call(content.locales, requestedLocale) || !content.locales[requestedLocale]);
+    const refresh = localeRefresh.current;
+    const refreshSettled = refresh?.key === editorKey && settledLocaleRefresh === refresh.request;
+    if (!requestedLocaleMissing || (refreshSettled && !isFetching)) {
+      localeRefresh.current = null;
+      setReadyRoute({ key: editorKey, locale: initialPageLocale(content.locales, requestedLocale) });
+      return undefined;
+    }
+
+    // The cached manifest can still be fresh while the page list already knows a newer locale.
+    if (localeRefresh.current?.key !== editorKey) {
+      localeRefresh.current = { key: editorKey, request: refetch({ cancelRefetch: false }) };
+    }
+    const request = localeRefresh.current.request;
+    let active = true;
+    // A canceled request can settle while its replacement still fetches, or after the observer changes page.
+    // Use settlement only as a signal; the current query supplies the locale once fetching has finished.
+    void request.then(() => {
+      if (active) setSettledLocaleRefresh(request);
+    });
+    return () => {
+      active = false;
+    };
+  }, [content, editorKey, error, isFetching, isLoading, readyRouteKey, refetch, requestedLocale, settledLocaleRefresh]);
 
   // Failure first: a failed load never produces content, so checking
   // the loading state first would spin forever with no error and no
@@ -251,25 +287,24 @@ export function PageEditorWrapper({ puckConfig }: PageEditorWrapperProps) {
     return <PageLoadFailure message={error?.message} />;
   }
 
-  if (isLoading || !content) {
+  if (isLoading || !content || readyRoute?.key !== editorKey) {
     return <div className="flex items-center justify-center h-full">Loading...</div>;
   }
 
   if (content.type === 'mdx') {
-    return <MdxPageEditor />;
+    return <MdxPageEditor key={editorKey} initialLocale={readyRoute.locale} />;
   }
 
-  // Keyed by page: the route element survives navigation between pages, and
-  // the locale state must restart from the newly opened page's locales.
-  return <PuckPageEditorInner key={id} puckConfig={puckConfig} initialLocale={initialPageLocale(content.locales)} />;
+  return <PuckPageEditorInner key={editorKey} puckConfig={puckConfig} initialLocale={readyRoute.locale} />;
 }
 
 /**
- * The locale the editor opens a page in: English when the page has it, as
- * before, otherwise a locale the page actually has — opening on a locale with
- * no variant fails the load with no way to reach the switcher.
+ * Open the requested locale when the page has it, otherwise English or its first
+ * available locale. A locale with no variant fails the load before the switcher.
  */
-function initialPageLocale(locales: Record<string, unknown>): string {
+function initialPageLocale(locales: ContentManifest['locales'], requestedLocale: string | null): string {
+  if (requestedLocale && Object.prototype.hasOwnProperty.call(locales, requestedLocale) && locales[requestedLocale])
+    return requestedLocale;
   if (locales.en) return 'en';
   return Object.keys(locales).find((locale) => locales[locale]) ?? 'en';
 }

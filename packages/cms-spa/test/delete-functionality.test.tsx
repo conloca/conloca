@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
+import { localesOf } from '@conloca/content-api-client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor, waitForElementToBeRemoved } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -271,7 +272,7 @@ describe('Delete Functionality', () => {
   });
 
   describe('PageList Delete', () => {
-    it('should show delete button in actions column', async () => {
+    it('offers whole-page and locale deletion in the actions menu', async () => {
       // Create test pages
       await testApi.createContent({
         type: 'puck',
@@ -304,9 +305,9 @@ describe('Delete Functionality', () => {
       // Wait for page to load
       await screen.findByText('Homepage');
 
-      // Should show delete buttons in the actions column
-      const deleteButtons = screen.getAllByRole('button', { name: /delete/i });
-      expect(deleteButtons.length).toBeGreaterThan(0);
+      fireEvent.keyDown(screen.getByRole('button', { name: /more actions/i }), { key: 'ArrowDown' });
+      const actions = await screen.findAllByRole('menuitem');
+      expect(actions.map((action) => action.textContent)).toEqual(['Delete', 'Delete en version', 'Delete nl version']);
     });
 
     it('should allow deletion of entire page when only one locale exists', async () => {
@@ -338,19 +339,12 @@ describe('Delete Functionality', () => {
 
       await screen.findByText('Single Locale Page');
 
-      // The delete button should be enabled and show appropriate title - using test ID
-      // In "all" view, the test ID includes the locale
-      const deleteButton = screen.getByTestId(`delete-${pageId}.en`);
-      expect(deleteButton).toBeDefined();
-      expect(deleteButton.hasAttribute('disabled')).toBe(false);
-      expect(deleteButton.getAttribute('title')).toBe('Delete entire page');
-
-      // Click delete button
-      fireEvent.click(deleteButton);
+      fireEvent.keyDown(screen.getByTestId(`page-actions-${pageId}`), { key: 'ArrowDown' });
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }));
 
       // Should show confirmation dialog for deleting the entire page
       await waitFor(() => {
-        expect(screen.getByText(/are you sure you want to delete this page/i)).toBeDefined();
+        expect(screen.getByText(/are you sure you want to delete this entire page/i)).toBeDefined();
       });
 
       // Confirm deletion
@@ -364,6 +358,75 @@ describe('Delete Functionality', () => {
       const allContent = Array.from(testApi.listAllContent());
       expect(allContent).toHaveLength(0);
     });
+
+    it.each(['changed', 'added'] as const)(
+      'refuses whole-page deletion when another locale is %s while confirmation is open',
+      async (change) => {
+        setupTestAPI('/__conloca/api', {
+          sites: { default: { locales: ['en', 'nl', 'fr'], defaultLocale: 'en' } },
+          globalLocales: ['en', 'nl', 'fr'],
+        });
+        const created = await testApi.createContent({
+          type: 'puck',
+          kind: 'page',
+          site: 'default',
+          collection: 'pages',
+          locales: {
+            en: {
+              meta: { title: 'Contended page' },
+              pathname: '/contended',
+              content: { puckData: { root: {}, content: [], zones: {} } },
+            },
+            nl: {
+              meta: { title: 'Nederlandse pagina' },
+              pathname: '/contended',
+              content: { puckData: { root: {}, content: [], zones: {} } },
+            },
+          },
+        });
+        const pageId = created.id;
+        if (!pageId) throw new Error('Content fixture creation failed');
+        render(
+          <MemoryRouter>
+            <QueryClientProvider client={queryClient}>
+              <PageList />
+            </QueryClientProvider>
+          </MemoryRouter>,
+        );
+        await screen.findByTestId(`page-title-${pageId}`);
+        fireEvent.keyDown(screen.getByTestId(`page-actions-${pageId}`), { key: 'ArrowDown' });
+        fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }));
+
+        const current = await testApi.getContent(pageId);
+        const dutch = current?.locales.nl;
+        if (!current || !dutch) throw new Error('Dutch fixture is missing');
+        if (change === 'changed') {
+          const updated = await testApi.updateLocalized({
+            id: pageId,
+            locale: 'nl',
+            etag: dutch.etag,
+            data: { meta: { title: 'A concurrent edit' } },
+          });
+          expect(updated.success).toBe(true);
+        } else {
+          testApi.setContent({
+            ...current,
+            locales: { ...current.locales, fr: { ...dutch, locale: 'fr', etag: 'added.fr.1' } },
+          });
+        }
+
+        fireEvent.click(screen.getByRole('button', { name: 'Confirm Delete' }));
+        await screen.findByText('Failed to delete page. Please try again.');
+        const remaining = await testApi.getContent(pageId);
+        expect(remaining).not.toBeNull();
+        expect(remaining ? new Set(Array.from(localesOf(remaining), (version) => version.locale)) : null).toEqual(
+          new Set(change === 'changed' ? ['en', 'nl'] : ['en', 'fr', 'nl']),
+        );
+        expect(remaining?.locales.nl?.meta.title).toBe(
+          change === 'changed' ? 'A concurrent edit' : 'Nederlandse pagina',
+        );
+      },
+    );
 
     it('should allow deletion of specific locale when multiple exist', async () => {
       // Create a page with multiple locales
@@ -402,22 +465,23 @@ describe('Delete Functionality', () => {
         expect(hasTitle).toBe(true);
       });
 
-      // There should be two delete buttons (one for each locale)
-      const deleteButtons = screen.getAllByRole('button', { name: /delete/i });
-      expect(deleteButtons).toHaveLength(2);
-
-      // Click the first delete button (for one of the locales)
-      fireEvent.click(deleteButtons[0]);
+      fireEvent.keyDown(screen.getByRole('button', { name: /more actions/i }), { key: 'ArrowDown' });
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete en version' }));
 
       // Confirm deletion
       const confirmButton = await screen.findByRole('button', { name: /confirm delete/i });
       fireEvent.click(confirmButton);
 
-      // Wait for one of the locales to be removed
       await waitFor(() => {
-        const remainingDeleteButtons = screen.getAllByRole('button', { name: /delete/i });
-        expect(remainingDeleteButtons).toHaveLength(1);
+        const remainingPage = Array.from(testApi.listAllContent())[0];
+        expect(remainingPage ? Array.from(localesOf(remainingPage), (version) => version.locale) : []).toEqual(['nl']);
+        expect(screen.queryByTestId('delete-confirm-message')).toBeNull();
       });
+      fireEvent.keyDown(screen.getByRole('button', { name: /more actions/i }), { key: 'ArrowDown' });
+      expect((await screen.findAllByRole('menuitem')).map((action) => action.textContent)).toEqual([
+        'Delete',
+        'Delete nl version',
+      ]);
 
       // Page should still exist with one locale
       const titles = ['Multi-locale Page', 'Meertalige Pagina'];

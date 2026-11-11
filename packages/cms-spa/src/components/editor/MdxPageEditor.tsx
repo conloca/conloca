@@ -37,13 +37,13 @@ type PersistStatus = 'saved' | 'conflict' | 'error';
  * lives in FragmentEditor.tsx — same shape, different back target and
  * filePath label.
  */
-export function MdxPageEditor() {
+export function MdxPageEditor({ initialLocale = 'en' }: { initialLocale?: string } = {}) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const updateContent = useUpdateLocalized();
   const { resolvedTheme } = useTheme();
 
-  const [currentLocale, setCurrentLocale] = useState<string>('en');
+  const [currentLocale, setCurrentLocale] = useState<string>(initialLocale);
   const [currentEtag, setCurrentEtag] = useState<string>('');
   const [pendingLocaleSwitch, setPendingLocaleSwitch] = useState<string | null>(null);
   const [showLocaleUnsavedDialog, setShowLocaleUnsavedDialog] = useState(false);

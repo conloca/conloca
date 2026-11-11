@@ -907,13 +907,12 @@ describe('CMS Integration Tests', () => {
         const visibleLocales = screen.getAllByTestId('locale-indicator');
         expect(visibleLocales).toHaveLength(2); // Both en and nl for the multi-locale page only
 
-        // When filtered by nl, only the nl edit button should be visible
-        const editButtons = screen.queryAllByTestId(/edit-.*/);
-        expect(editButtons).toHaveLength(1); // Only one edit button
-        expect(screen.getByTestId(`edit-${multiLocalePage.id}.nl`)).toBeInTheDocument();
+        // Each visible page keeps one Edit split button with all its available locales.
+        expect(screen.getByTestId(`edit-${multiLocalePage.id}`)).toBeInTheDocument();
+        expect(screen.getByTestId(`edit-locales-${multiLocalePage.id}`)).toBeInTheDocument();
 
-        // English-only page should not be in the DOM at all
-        expect(screen.queryByTestId(`edit-${englishOnlyPage.id}.en`)).not.toBeInTheDocument();
+        // English-only page should not be in the DOM at all.
+        expect(screen.queryByTestId(`edit-${englishOnlyPage.id}`)).not.toBeInTheDocument();
       });
 
       // Test passes - locale filtering works correctly

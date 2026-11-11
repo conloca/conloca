@@ -4,6 +4,7 @@ import { dirname, join, resolve } from 'node:path';
 import matter from 'gray-matter';
 import sortKeys from 'sort-keys';
 import type { ContentAPI } from './content-api.interface.js';
+import { localeEtags, matchesContentEtag } from './content-etag.js';
 import { filterContentWithIndexes } from './content-filters.js';
 import { ContentIndex, duplicateIdMessage, type IndexProblem, unknownSiteMessage } from './content-index.js';
 import {
@@ -2679,27 +2680,20 @@ export class FileSystemContentAPI implements ContentAPI {
       };
     }
 
-    // For deleteContent, we require the etag to match ANY locale (indicating user has current data)
-    // But this is still a design flaw - we should probably require all etags or a master etag
-    let matchingLocale: LocaleVersion | undefined;
-    for (const localeVersion of localesOf(manifest)) {
-      if (localeVersion.etag === etag) {
-        matchingLocale = localeVersion;
-        break;
-      }
-    }
-    if (!matchingLocale) {
+    // Capture the complete set under the locks; never enumerate new locales after the precondition check.
+    const localeVersions = Array.from(localesOf(manifest));
+    const checked = matchesContentEtag(etag, localeEtags(manifest));
+    if (!checked.matches) {
       return {
         success: false,
         reason: 'stale_write',
-        currentEtag: Array.from(localesOf(manifest))[0]?.etag || '',
-        error: new Error('Invalid etag - must match at least one locale'),
+        currentEtag: checked.currentEtag,
+        error: new Error('Content locale versions changed'),
       };
     }
 
     // The index only learns of another process's write when the watcher reindexes: compare with the files themselves,
     // so a delete never removes a write its caller has not seen.
-    const localeVersions = Array.from(localesOf(manifest));
     const states = await Promise.all(
       localeVersions.map((localeVersion) =>
         this.lockedFileState(this.getFilePath(manifest, localeVersion), localeVersion.locale, lock),
@@ -2713,6 +2707,12 @@ export class FileSystemContentAPI implements ContentAPI {
         currentEtag: changed.etag,
         error: new Error('A locale file changed on disk since it was read'),
       };
+    }
+
+    // A watcher may have indexed an added locale while the file reads waited. Refuse before removing any file.
+    const afterRead = matchesContentEtag(etag, localeEtags(this.contentIndex.getManifest(id)));
+    if (!afterRead.matches) {
+      return { success: false, reason: 'stale_write', currentEtag: afterRead.currentEtag };
     }
 
     // Settled, not all: Promise.all let one rejection abandon the others
@@ -2729,25 +2729,16 @@ export class FileSystemContentAPI implements ContentAPI {
       }),
     );
 
-    const failures = outcomes.filter((outcome) => outcome.status === 'rejected');
-    if (failures.length === 0) {
-      this.contentIndex.removeEntry(id);
-      return { success: true };
-    }
-
-    // Some files are gone and some are not. Drop exactly what was removed so
-    // the index still describes what is on disk; the survivors stay indexed
-    // rather than becoming unreachable orphans.
+    // Reflect exactly the files removed, whether all succeeded or only some. Failed locales and new outside imports
+    // stay indexed rather than becoming unreachable orphans.
     for (const [position, outcome] of outcomes.entries()) {
       if (outcome.status === 'fulfilled') {
         this.contentIndex.removeLocale(id, localeVersions[position].locale);
       }
     }
 
-    return {
-      success: false,
-      error: ensureError(failures[0].reason),
-    };
+    const failure = outcomes.find((outcome) => outcome.status === 'rejected');
+    return failure ? { success: false, error: ensureError(failure.reason) } : { success: true };
   }
 
   async deleteLocalized(input: DeleteLocaleInput): Promise<DeleteResult> {

@@ -1,5 +1,17 @@
-import { localesOf, pageStatusOf, useDeleteContent, useSitePages } from '@conloca/content-api-client';
-import { AlertCircle, Clock, Edit, FileCode, FileText, Loader2, Plus, Search, Trash2 } from 'lucide-react';
+import { contentEtag, localesOf, pageStatusOf, useDeleteContent, useSitePages } from '@conloca/content-api-client';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import cn from 'clsx';
+import {
+  AlertCircle,
+  ChevronDown,
+  Clock,
+  FileCode,
+  FileText,
+  Loader2,
+  MoreHorizontal,
+  Plus,
+  Search,
+} from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useErrorModal, usePageConversion, useSiteBaseUrl } from '../../hooks/index.js';
@@ -12,7 +24,6 @@ import { DeleteConfirmDialog } from '../dialogs/DeleteConfirmDialog.js';
 import { ErrorModal } from '../dialogs/ErrorModal.js';
 import { MakePagesEditableDialog } from '../dialogs/MakePagesEditableDialog.js';
 import { Button } from '../ui/index.js';
-import { Tooltip } from '../ui/Tooltip.js';
 import { NoPagesYet } from './NoPagesYet.js';
 
 interface PageListProps {
@@ -32,10 +43,9 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
     isOpen: boolean;
     pageId: string;
     pageTitle: string;
-    locale: string;
+    locale?: string;
     etag: string;
-    hasMultipleLocales: boolean;
-  }>({ isOpen: false, pageId: '', pageTitle: '', locale: '', etag: '', hasMultipleLocales: false });
+  }>({ isOpen: false, pageId: '', pageTitle: '', etag: '' });
 
   const { showError, showStaleWriteError, errorModalProps } = useErrorModal();
   const { buildUrl } = useSiteBaseUrl();
@@ -206,25 +216,31 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
     setShowCreateDialog(true);
   };
 
-  const handleEditPage = (pageId: string) => {
-    // Navigate with the actual content ID
-    navigate(`/pages/${pageId}`);
+  const handleEditPage = (pageId: string, locale: string) => {
+    void navigate(`/pages/${pageId}?locale=${encodeURIComponent(locale)}`);
   };
 
-  const handleDeletePage = (pageId: string, locale: string) => {
+  const handleDeletePage = (pageId: string, locale?: string) => {
     const page = pages.find((p) => p.id === pageId) as Page & { etags: Record<string, string> };
     if (!page) return;
 
-    const etag = page.etags?.[locale] || '';
-    const hasMultipleLocales = page.locales.length > 1;
+    // Deleting the last locale must use the whole-page endpoint.
+    const localeToDelete = page.locales.length > 1 ? locale : undefined;
+    // Empty strings are valid deferred etags.
+    if (!localeToDelete && page.locales.some((pageLocale) => typeof page.etags[pageLocale] !== 'string')) {
+      showError('Reload this page before deleting it so all language versions can be checked.', undefined, [
+        { label: 'Reload', onClick: () => window.location.reload(), variant: 'primary' },
+      ]);
+      return;
+    }
+    const etag = localeToDelete ? page.etags[localeToDelete] || '' : contentEtag(page.etags);
 
     setDeleteDialog({
       isOpen: true,
       pageId,
       pageTitle: page.title,
-      locale,
+      locale: localeToDelete,
       etag,
-      hasMultipleLocales,
     });
   };
 
@@ -232,7 +248,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
     if (!deleteDialog.pageId) return;
 
     try {
-      const result = await (deleteDialog.hasMultipleLocales
+      const result = await (deleteDialog.locale
         ? deleteContent.mutateAsync({
             // Delete only the requested locale.
             id: deleteDialog.pageId,
@@ -240,18 +256,18 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
             etag: deleteDialog.etag,
           })
         : deleteContent.mutateAsync({
-            // Delete the entire page when this is its last locale.
+            // Omitting the locale deletes the entire page.
             id: deleteDialog.pageId,
             etag: deleteDialog.etag,
           }));
 
       if (result.success) {
-        setDeleteDialog({ isOpen: false, pageId: '', pageTitle: '', locale: '', etag: '', hasMultipleLocales: false });
+        setDeleteDialog({ isOpen: false, pageId: '', pageTitle: '', etag: '' });
       } else {
         // Handle delete failure
         const errorMessage = contentFailureMessage(result, 'Failed to delete page');
         console.error('Delete failed:', errorMessage);
-        setDeleteDialog({ isOpen: false, pageId: '', pageTitle: '', locale: '', etag: '', hasMultipleLocales: false });
+        setDeleteDialog({ isOpen: false, pageId: '', pageTitle: '', etag: '' });
         if (isStaleWrite(result)) {
           showStaleWriteError(result.error);
         } else {
@@ -260,7 +276,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
       }
     } catch (error) {
       console.error('Failed to delete page:', error);
-      setDeleteDialog({ isOpen: false, pageId: '', pageTitle: '', locale: '', etag: '', hasMultipleLocales: false });
+      setDeleteDialog({ isOpen: false, pageId: '', pageTitle: '', etag: '' });
       showError('Failed to delete page. Please try again.', error);
     }
   };
@@ -378,7 +394,9 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
                     Locales
                   </th>
                 )}
-                <th className="text-left p-4 font-medium text-grey-01 dark:text-grey-12 w-24 md:w-auto">Actions</th>
+                <th scope="col" className={cn('p-4 w-40 md:w-auto')}>
+                  <span className={cn('sr-only')}>Actions</span>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -467,80 +485,93 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
                       </div>
                     </td>
                   )}
-                  <td className="p-4">
-                    <div className="flex gap-2 items-center">
-                      {page.locales.map((locale) =>
-                        selectedLocale === 'all' || selectedLocale === locale ? (
-                          <button
-                            type="button"
-                            key={locale}
-                            onClick={() => handleEditPage(page.id)}
-                            className="p-1 hover:bg-hover rounded-md transition-colors"
-                            title={`Edit ${locale} version`}
-                            data-testid={`edit-${page.id}.${locale}`}
-                          >
-                            <Edit className="h-4 w-4 text-grey-04 dark:text-grey-07" />
-                          </button>
-                        ) : null,
-                      )}
-                      {selectedLocale !== 'all' ? (
-                        page.locales.length === 1 ? (
-                          <Tooltip content="This will delete the entire page">
-                            <button
-                              type="button"
-                              onClick={() => handleDeletePage(page.id, selectedLocale)}
-                              className="p-1 hover:bg-hover rounded-md transition-colors"
-                              title="Delete entire page"
-                              aria-label="Delete"
-                              data-testid={`delete-${page.id}`}
+                  <td className={cn('p-4 text-right')}>
+                    <div className={cn('flex items-center justify-end gap-1 whitespace-nowrap')}>
+                      <div className={cn('inline-flex')}>
+                        {/* The primary action always opens the first version; other locales stay in the menu. */}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEditPage(page.id, page.locales[0])}
+                          className={cn('rounded-r-none')}
+                          data-testid={`edit-${page.id}`}
+                        >
+                          Edit
+                        </Button>
+                        <DropdownMenu.Root>
+                          <DropdownMenu.Trigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className={cn('rounded-l-none border-l-0 px-2')}
+                              aria-label={`Choose locale for ${page.title}`}
+                              data-testid={`edit-locales-${page.id}`}
                             >
-                              <Trash2 className="h-4 w-4 text-red-04 dark:text-red-08" />
-                            </button>
-                          </Tooltip>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleDeletePage(page.id, selectedLocale)}
-                            className="p-1 hover:bg-hover rounded-md transition-colors"
-                            title="Delete page"
-                            aria-label="Delete"
-                            data-testid={`delete-${page.id}.${selectedLocale}`}
+                              <ChevronDown className={cn('h-4 w-4')} aria-hidden />
+                            </Button>
+                          </DropdownMenu.Trigger>
+                          <DropdownMenu.Portal>
+                            <DropdownMenu.Content
+                              align="end"
+                              sideOffset={4}
+                              className={cn(
+                                'z-50 min-w-40 max-h-72 overflow-auto rounded-md border border-line bg-panel py-1 text-sm text-foreground shadow-md',
+                              )}
+                            >
+                              {page.locales.map((locale) => (
+                                <DropdownMenu.Item
+                                  key={locale}
+                                  onSelect={() => handleEditPage(page.id, locale)}
+                                  className={cn(
+                                    'cursor-default px-3 py-1.5 outline-none data-[highlighted]:bg-selected',
+                                  )}
+                                >
+                                  {locale}
+                                </DropdownMenu.Item>
+                              ))}
+                            </DropdownMenu.Content>
+                          </DropdownMenu.Portal>
+                        </DropdownMenu.Root>
+                      </div>
+                      <DropdownMenu.Root>
+                        <DropdownMenu.Trigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className={cn('px-2')}
+                            aria-label={`More actions for ${page.title}`}
+                            data-testid={`page-actions-${page.id}`}
                           >
-                            <Trash2 className="h-4 w-4 text-red-04 dark:text-red-08" />
-                          </button>
-                        )
-                      ) : (
-                        // For 'all' view, show delete buttons for each locale
-                        page.locales.map((locale) =>
-                          page.locales.length === 1 ? (
-                            <Tooltip key={`delete-${locale}`} content="This will delete the entire page">
-                              <button
-                                type="button"
-                                onClick={() => handleDeletePage(page.id, locale)}
-                                className="p-1 hover:bg-hover rounded-md transition-colors"
-                                title="Delete entire page"
-                                aria-label="Delete"
-                                data-testid={`delete-${page.id}.${locale}`}
+                            <MoreHorizontal className={cn('h-4 w-4')} aria-hidden />
+                          </Button>
+                        </DropdownMenu.Trigger>
+                        <DropdownMenu.Portal>
+                          <DropdownMenu.Content
+                            align="end"
+                            sideOffset={4}
+                            className={cn(
+                              'z-50 min-w-40 max-h-72 overflow-auto rounded-md border border-line bg-panel py-1 text-sm text-foreground shadow-md',
+                            )}
+                          >
+                            <DropdownMenu.Item
+                              onSelect={() => handleDeletePage(page.id)}
+                              className={cn('cursor-default px-3 py-1.5 outline-none data-[highlighted]:bg-selected')}
+                            >
+                              Delete
+                            </DropdownMenu.Item>
+                            <DropdownMenu.Separator className={cn('my-1 h-px bg-hover')} />
+                            {page.locales.map((locale) => (
+                              <DropdownMenu.Item
+                                key={locale}
+                                onSelect={() => handleDeletePage(page.id, locale)}
+                                className={cn('cursor-default px-3 py-1.5 outline-none data-[highlighted]:bg-selected')}
                               >
-                                <Trash2 className="h-4 w-4 text-red-04 dark:text-red-08" />
-                              </button>
-                            </Tooltip>
-                          ) : (
-                            <Tooltip key={`delete-${locale}`} content={`Delete only the ${locale} version`}>
-                              <button
-                                type="button"
-                                onClick={() => handleDeletePage(page.id, locale)}
-                                className="p-1 hover:bg-hover rounded-md transition-colors"
-                                title={`Delete ${locale} version`}
-                                aria-label="Delete"
-                                data-testid={`delete-${page.id}.${locale}`}
-                              >
-                                <Trash2 className="h-4 w-4 text-red-04 dark:text-red-08" />
-                              </button>
-                            </Tooltip>
-                          ),
-                        )
-                      )}
+                                Delete {locale} version
+                              </DropdownMenu.Item>
+                            ))}
+                          </DropdownMenu.Content>
+                        </DropdownMenu.Portal>
+                      </DropdownMenu.Root>
                     </div>
                   </td>
                 </tr>
@@ -561,14 +592,12 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
       <DeleteConfirmDialog
         isOpen={deleteDialog.isOpen}
         onConfirm={handleConfirmDelete}
-        onCancel={() =>
-          setDeleteDialog({ isOpen: false, pageId: '', pageTitle: '', locale: '', etag: '', hasMultipleLocales: false })
-        }
+        onCancel={() => setDeleteDialog({ isOpen: false, pageId: '', pageTitle: '', etag: '' })}
         title="Delete Page"
         message={
-          deleteDialog.hasMultipleLocales
+          deleteDialog.locale
             ? `Are you sure you want to delete the ${deleteDialog.locale} version of this page?`
-            : 'Are you sure you want to delete this page?'
+            : 'Are you sure you want to delete this entire page?'
         }
         itemName={deleteDialog.pageTitle}
         isDeleting={deleteContent.isPending}

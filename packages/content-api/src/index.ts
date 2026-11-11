@@ -51,6 +51,7 @@ export { type AssetUsageSource, findAssetUsage } from './asset-usage.js';
 // Browser-safe exports
 export * from './component-registry.types.js';
 export type { ContentAPI } from './content-api.interface.js';
+export { contentEtag, localeEtags, matchesContentEtag } from './content-etag.js';
 export * from './content-operations.js';
 // Pathname validation is pure string logic used by browser clients before issuing writes.
 export type { PathnameValidationReason, PathnameValidationResult } from './content-utils.js';

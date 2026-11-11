@@ -75,7 +75,8 @@ export interface ContentAPI {
   verifyOwnWrite?(id: string, locale: string, etag: string): Promise<{ survived: boolean }>;
   createContent(data: CreateContentInput): Promise<CreateResult>;
   updateLocalized(input: UpdateLocaleInput): Promise<UpdateResult>;
-  deleteContent(id: string, etag: string): Promise<DeleteResult>; // Deletes all locales
+  /** Deletes all locales. A `contentEtag` token requires the complete observed locale set to still match. */
+  deleteContent(id: string, etag: string): Promise<DeleteResult>;
   deleteLocalized(input: DeleteLocaleInput): Promise<DeleteResult>; // Deletes single locale
 
   // Site, fragments, and data access (getters without arguments)

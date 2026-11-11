@@ -26,7 +26,12 @@ export function useUnsavedChangesGuard(isDirty: boolean): Blocker {
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [isDirty]);
 
+  // A locale change opens another editor even when the page path stays the same.
   return useBlocker(
-    ({ currentLocation, nextLocation }) => isDirty && currentLocation.pathname !== nextLocation.pathname,
+    ({ currentLocation, nextLocation }) =>
+      isDirty &&
+      (currentLocation.pathname !== nextLocation.pathname ||
+        (new URLSearchParams(currentLocation.search).get('locale') ?? '') !==
+          (new URLSearchParams(nextLocation.search).get('locale') ?? '')),
   );
 }

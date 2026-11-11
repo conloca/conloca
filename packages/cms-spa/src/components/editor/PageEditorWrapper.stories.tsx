@@ -1,5 +1,6 @@
 import {
   ContentAPIClient,
+  type ContentEntry,
   getContentAPIClient,
   type LocalizedEntry,
   setContentAPIClient,
@@ -11,6 +12,7 @@ import { useState } from 'react';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { expect, userEvent, waitFor, within } from 'storybook/test';
 import '../../main.css';
+import { getUIConfig } from '../../ui-config.js';
 import { PageEditorWrapper } from './PageEditorWrapper.js';
 
 /**
@@ -64,7 +66,7 @@ class HeldSaveContentAPI extends ContentAPIClient {
     this.gate.resolve();
   }
 
-  override async getContent(id: string) {
+  override async getContent(id: string): Promise<ContentEntry | null> {
     const { localized, ...identity } = this.page;
     return id === identity.id ? { ...identity, locales: { [localized.locale]: localized } } : null;
   }
@@ -110,19 +112,85 @@ class OtherWriterContentAPI extends HeldSaveContentAPI {
   }
 }
 
+/** A page with both English and French versions, so an explicit locale must override the default. */
+class TranslatedContentAPI extends HeldSaveContentAPI {
+  frenchPage: LocalizedEntry;
+
+  constructor(type: 'puck' | 'mdx') {
+    super();
+    this.page = {
+      ...PAGE,
+      type,
+      localized: { ...PAGE.localized, content: type === 'mdx' ? { mdx: '# Hello' } : PAGE.localized.content },
+    };
+    this.frenchPage = {
+      ...this.page,
+      localized: {
+        ...PAGE.localized,
+        locale: 'fr',
+        pathname: '/fr/page',
+        meta: { title: 'French page' },
+        content:
+          type === 'mdx'
+            ? { mdx: '# Bonjour' }
+            : { puckData: { content: [], root: { props: { title: 'French page' } } } },
+      },
+    };
+  }
+
+  override async getContent(id: string): Promise<ContentEntry | null> {
+    const entry = await super.getContent(id);
+    return entry ? { ...entry, locales: { ...entry.locales, fr: this.frenchPage.localized } } : null;
+  }
+
+  override async getLocalized(id: string, locale: string) {
+    return id === this.page.id && locale === 'fr' ? this.frenchPage : super.getLocalized(id, locale);
+  }
+
+  override async getSitesConfig() {
+    return { sites: { default: { locales: ['en', 'fr'], defaultLocale: 'en' } }, globalLocales: ['en', 'fr'] };
+  }
+}
+
+/** Holds the manifest refresh while an older cached manifest is available. */
+class HeldManifestContentAPI extends TranslatedContentAPI {
+  manifestReads = 0;
+  private readonly manifestGate = Promise.withResolvers<void>();
+
+  releaseManifest(): void {
+    this.manifestGate.resolve();
+  }
+
+  override async getContent(id: string): Promise<ContentEntry | null> {
+    this.manifestReads += 1;
+    await this.manifestGate.promise;
+    return super.getContent(id);
+  }
+}
+
 /** The content API of the story on screen, installed by its `beforeEach`. */
 let api = new HeldSaveContentAPI();
 
-function SavingPageEditor() {
+function createPageEditorRouter(locale?: string) {
+  return createMemoryRouter([{ path: '/pages/:id', element: <PageEditorWrapper puckConfig={CONFIG} /> }], {
+    initialEntries: [`/pages/${PAGE.id}${locale ? `?locale=${encodeURIComponent(locale)}` : ''}`],
+  });
+}
+
+function SavingPageEditor({
+  locale,
+  client,
+  router: providedRouter,
+}: {
+  locale?: string;
+  client?: QueryClient;
+  router?: ReturnType<typeof createMemoryRouter>;
+} = {}) {
   const [queryClient] = useState(
-    () => new QueryClient({ defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } } }),
+    () => client ?? new QueryClient({ defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } } }),
   );
   // The unsaved-changes guard needs a data router.
-  const [router] = useState(() =>
-    createMemoryRouter([{ path: '/pages/:id', element: <PageEditorWrapper puckConfig={CONFIG} /> }], {
-      initialEntries: [`/pages/${PAGE.id}`],
-    }),
-  );
+  const [router] = useState(() => providedRouter ?? createPageEditorRouter(locale));
   return (
     <QueryClientProvider client={queryClient}>
       <div style={{ height: '800px' }}>
@@ -199,5 +267,316 @@ export const AnotherSaveBeforeTheReadBackReloadsTheEditor: Story = {
     await afterTheSaveLands();
 
     await expect(canvas.getByRole('textbox', { name: 'title' })).toHaveValue('Their title');
+  },
+};
+
+/** Opening a translated Puck page honors the locale selected on the page list. */
+export const OpensTheSelectedPuckLocale: Story = {
+  beforeEach: () => {
+    const previous = getContentAPIClient();
+    api = new TranslatedContentAPI('puck');
+    setContentAPIClient(api);
+    return () => setContentAPIClient(previous);
+  },
+  render: () => <SavingPageEditor locale="fr" />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const title = await canvas.findByRole('textbox', { name: 'title' }, { timeout: 10_000 });
+    await expect(title).toHaveValue('French page');
+  },
+};
+
+/** The selected locale can be newer than the editor's cached manifest. */
+let staleManifestApi: HeldManifestContentAPI;
+let staleManifestClient: QueryClient;
+export const OpensTheSelectedLocaleAfterManifestRefresh: Story = {
+  beforeEach: () => {
+    const previous = getContentAPIClient();
+    staleManifestApi = new HeldManifestContentAPI('puck');
+    // Match production: the cached manifest is only one minute old, within its five-minute freshness window.
+    staleManifestClient = new QueryClient(getUIConfig().queryClientOptions);
+    const { localized, ...identity } = PAGE;
+    staleManifestClient.setQueryData(
+      ['content', PAGE.id],
+      { ...identity, locales: { en: localized } },
+      { updatedAt: Date.now() - 60_000 },
+    );
+    setContentAPIClient(staleManifestApi);
+    return () => {
+      staleManifestApi.releaseManifest();
+      staleManifestClient.clear();
+      setContentAPIClient(previous);
+    };
+  },
+  render: () => <SavingPageEditor locale="fr" client={staleManifestClient} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await waitFor(() => expect(staleManifestApi.manifestReads).toBe(1));
+    await expect(canvas.getByText('Loading...')).toBeVisible();
+    await expect(canvas.queryByRole('textbox', { name: 'title' })).not.toBeInTheDocument();
+
+    staleManifestApi.releaseManifest();
+    const title = await canvas.findByRole('textbox', { name: 'title' }, { timeout: 10_000 });
+    await expect(title).toHaveValue('French page');
+    await expect(staleManifestApi.manifestReads).toBe(1);
+  },
+};
+
+/** MDX pages open the selected locale through the same page route. */
+export const OpensTheSelectedMdxLocale: Story = {
+  beforeEach: () => {
+    const previous = getContentAPIClient();
+    api = new TranslatedContentAPI('mdx');
+    setContentAPIClient(api);
+    return () => setContentAPIClient(previous);
+  },
+  render: () => <SavingPageEditor locale="fr" />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByRole('heading', { name: 'Edit: /fr/page' })).toBeVisible();
+    await expect(await canvas.findByRole('heading', { name: 'Bonjour' })).toBeVisible();
+  },
+};
+
+/** A locale added in the background must not replace the open editor or its unsaved text. */
+let localeUpdateClient: QueryClient;
+export const AddingEnglishKeepsTheCurrentEdit: Story = {
+  beforeEach: () => {
+    const previous = getContentAPIClient();
+    const translatedApi = new TranslatedContentAPI('puck');
+    translatedApi.page = translatedApi.frenchPage;
+    api = translatedApi;
+    localeUpdateClient = new QueryClient({
+      defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
+    });
+    setContentAPIClient(api);
+    return () => {
+      localeUpdateClient.clear();
+      setContentAPIClient(previous);
+    };
+  },
+  render: () => <SavingPageEditor client={localeUpdateClient} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const title = await canvas.findByRole('textbox', { name: 'title' }, { timeout: 10_000 });
+    await expect(title).toHaveValue('French page');
+    await userEvent.clear(title);
+    await userEvent.type(title, 'My unsaved French title');
+
+    // The route still has no locale query. A background update now adds the preferred default.
+    api.page = PAGE;
+    await localeUpdateClient.refetchQueries({ type: 'active' });
+    await afterTheSaveLands();
+
+    await expect(title.isConnected).toBe(true);
+    await expect(canvas.getByRole('textbox', { name: 'title' })).toHaveValue('My unsaved French title');
+    await expect(canvas.getByRole('button', { name: 'Save' })).toBeEnabled();
+  },
+};
+
+/** Changing locale opens another editor, so dirty navigation needs the same decision as leaving the page. */
+let localeNavigationRouter: ReturnType<typeof createMemoryRouter>;
+export const ChangingLocaleProtectsUnsavedEdits: Story = {
+  beforeEach: () => {
+    const previous = getContentAPIClient();
+    api = new TranslatedContentAPI('puck');
+    setContentAPIClient(api);
+    localeNavigationRouter = createPageEditorRouter('en');
+    return () => {
+      localeNavigationRouter.dispose();
+      setContentAPIClient(previous);
+    };
+  },
+  render: () => <SavingPageEditor router={localeNavigationRouter} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByRole('textbox', { name: 'title' }, { timeout: 10_000 })).toHaveValue('Page');
+
+    // A clean editor can change locale without a confirmation.
+    await localeNavigationRouter.navigate('/pages/vx-page?locale=fr');
+    await waitFor(() => expect(canvas.getByRole('textbox', { name: 'title' })).toHaveValue('French page'));
+    await expect(canvas.queryByRole('heading', { name: 'Unsaved Changes' })).not.toBeInTheDocument();
+    await localeNavigationRouter.navigate('/pages/vx-page?locale=en');
+    await waitFor(() => expect(canvas.getByRole('textbox', { name: 'title' })).toHaveValue('Page'));
+
+    const title = canvas.getByRole('textbox', { name: 'title' });
+    await userEvent.clear(title);
+    await userEvent.type(title, 'My unsaved English title');
+    await expect(canvas.getByRole('button', { name: 'Save' })).toBeEnabled();
+
+    // Other query parameters keep the same editor and do not ask to discard its draft.
+    await localeNavigationRouter.navigate('/pages/vx-page?locale=en&panel=settings');
+    await expect(localeNavigationRouter.state.location.search).toBe('?locale=en&panel=settings');
+    await expect(canvas.queryByRole('heading', { name: 'Unsaved Changes' })).not.toBeInTheDocument();
+    await expect(title.isConnected).toBe(true);
+    await expect(title).toHaveValue('My unsaved English title');
+
+    await localeNavigationRouter.navigate('/pages/vx-page?locale=fr');
+    await expect(await canvas.findByRole('heading', { name: 'Unsaved Changes' })).toBeVisible();
+    await expect(localeNavigationRouter.state.location.search).toBe('?locale=en&panel=settings');
+    await userEvent.click(canvas.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(canvas.queryByRole('heading', { name: 'Unsaved Changes' })).not.toBeInTheDocument());
+    await expect(title.isConnected).toBe(true);
+    await expect(title).toHaveValue('My unsaved English title');
+    await expect(localeNavigationRouter.state.location.search).toBe('?locale=en&panel=settings');
+
+    await localeNavigationRouter.navigate('/pages/vx-page?locale=fr');
+    await expect(await canvas.findByRole('heading', { name: 'Unsaved Changes' })).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: 'Discard Changes' }));
+    await waitFor(() => expect(canvas.getByRole('textbox', { name: 'title' })).toHaveValue('French page'));
+    await expect(localeNavigationRouter.state.location.search).toBe('?locale=fr');
+    await expect(title.isConnected).toBe(false);
+  },
+};
+
+/** Individual manifest requests can fail, disappear, or be replaced while the route waits. */
+class ControlledManifestContentAPI extends TranslatedContentAPI {
+  readonly manifestIds: string[] = [];
+  private readonly pending: ReturnType<typeof Promise.withResolvers<ContentEntry | null>>[] = [];
+
+  get manifestReads(): number {
+    return this.manifestIds.length;
+  }
+
+  override async getContent(id: string): Promise<ContentEntry | null> {
+    this.manifestIds.push(id);
+    const request = Promise.withResolvers<ContentEntry | null>();
+    this.pending.push(request);
+    return request.promise;
+  }
+
+  releaseManifest(read: number, result: 'english' | 'translated' | 'missing' = 'english'): void {
+    const manifest = englishManifest();
+    if (result === 'translated') manifest.locales.fr = this.frenchPage.localized;
+    this.pending[read - 1]?.resolve(result === 'missing' ? null : manifest);
+  }
+
+  failManifest(read: number): void {
+    this.pending[read - 1]?.reject(new Error('Manifest refresh failed'));
+  }
+
+  releasePending(): void {
+    for (const request of this.pending) request.resolve(null);
+  }
+}
+
+function englishManifest(): ContentEntry {
+  const { localized, ...identity } = PAGE;
+  return { ...identity, locales: { en: localized } };
+}
+
+let manifestRecoveryApi: ControlledManifestContentAPI;
+let manifestRecoveryClient: QueryClient;
+let manifestRecoveryRouter: ReturnType<typeof createMemoryRouter>;
+
+function prepareManifestRecovery(cacheAge = 60_000) {
+  const previous = getContentAPIClient();
+  manifestRecoveryApi = new ControlledManifestContentAPI('puck');
+  manifestRecoveryClient = new QueryClient(getUIConfig().queryClientOptions);
+  manifestRecoveryClient.setQueryData(['content', PAGE.id], englishManifest(), { updatedAt: Date.now() - cacheAge });
+  manifestRecoveryRouter = createPageEditorRouter('fr');
+  setContentAPIClient(manifestRecoveryApi);
+  return () => {
+    manifestRecoveryApi.releasePending();
+    manifestRecoveryRouter.dispose();
+    manifestRecoveryClient.clear();
+    setContentAPIClient(previous);
+  };
+}
+
+function RecoveringManifestEditor() {
+  return <SavingPageEditor client={manifestRecoveryClient} router={manifestRecoveryRouter} />;
+}
+
+/** An unchanged response still completes initialization and uses the available locale exactly once. */
+export const FallsBackAfterAnUnchangedManifestRefresh: Story = {
+  beforeEach: () => prepareManifestRecovery(),
+  render: () => <RecoveringManifestEditor />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await waitFor(() => expect(manifestRecoveryApi.manifestReads).toBe(1));
+    await expect(canvas.getByText('Loading...')).toBeVisible();
+    manifestRecoveryApi.releaseManifest(1);
+    await expect(await canvas.findByRole('textbox', { name: 'title' }, { timeout: 3_000 })).toHaveValue('Page');
+    await expect(manifestRecoveryApi.manifestReads).toBe(1);
+  },
+};
+
+/** A later successful refresh can recover even when the requested locale remains absent. */
+export const RecoversAfterAManifestRefreshFailure: Story = {
+  beforeEach: () => prepareManifestRecovery(),
+  render: () => <RecoveringManifestEditor />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await waitFor(() => expect(manifestRecoveryApi.manifestReads).toBe(1));
+    manifestRecoveryApi.failManifest(1);
+    await waitFor(() => expect(manifestRecoveryApi.manifestReads).toBe(2), { timeout: 5_000 });
+    manifestRecoveryApi.failManifest(2);
+    await expect(await canvas.findByText('Failed to load page: Manifest refresh failed')).toBeVisible();
+
+    void manifestRecoveryClient.invalidateQueries({ queryKey: ['content', PAGE.id] });
+    await waitFor(() => expect(manifestRecoveryApi.manifestReads).toBe(3));
+    manifestRecoveryApi.releaseManifest(3);
+    await expect(await canvas.findByRole('textbox', { name: 'title' }, { timeout: 3_000 })).toHaveValue('Page');
+    await expect(manifestRecoveryApi.manifestReads).toBe(3);
+  },
+};
+
+/** A manifest that temporarily returned null can recover without reusing that old result. */
+export const RecoversWhenAMissingPageReappears: Story = {
+  beforeEach: () => prepareManifestRecovery(),
+  render: () => <RecoveringManifestEditor />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await waitFor(() => expect(manifestRecoveryApi.manifestReads).toBe(1));
+    manifestRecoveryApi.releaseManifest(1, 'missing');
+    await expect(await canvas.findByText('Failed to load page: Not found')).toBeVisible();
+
+    void manifestRecoveryClient.invalidateQueries({ queryKey: ['content', PAGE.id] });
+    await waitFor(() => expect(manifestRecoveryApi.manifestReads).toBe(2));
+    manifestRecoveryApi.releaseManifest(2);
+    await expect(await canvas.findByRole('textbox', { name: 'title' }, { timeout: 3_000 })).toHaveValue('Page');
+    await expect(manifestRecoveryApi.manifestReads).toBe(2);
+  },
+};
+
+/** An invalidation can cancel a joined fetch; the route must wait for its replacement's current manifest. */
+export const WaitsForAReplacementManifestRefresh: Story = {
+  beforeEach: () => prepareManifestRecovery(6 * 60_000),
+  render: () => <RecoveringManifestEditor />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await waitFor(() => expect(manifestRecoveryApi.manifestReads).toBe(1));
+    void manifestRecoveryClient.invalidateQueries({ queryKey: ['content', PAGE.id] });
+    await waitFor(() => expect(manifestRecoveryApi.manifestReads).toBe(2));
+    // Let a canceled promise settle while the replacement request remains held.
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    await expect(canvas.getByText('Loading...')).toBeVisible();
+    await expect(canvas.queryByRole('textbox', { name: 'title' })).not.toBeInTheDocument();
+
+    manifestRecoveryApi.releaseManifest(2, 'translated');
+    await expect(await canvas.findByRole('textbox', { name: 'title' }, { timeout: 3_000 })).toHaveValue('French page');
+    await expect(manifestRecoveryApi.manifestReads).toBe(2);
+  },
+};
+
+/** A refetch promise can settle while its observer is on another page; returning uses this page's live query. */
+export const ReturningToAPageUsesItsCurrentManifest: Story = {
+  beforeEach: () => prepareManifestRecovery(),
+  render: () => <RecoveringManifestEditor />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await waitFor(() => expect(manifestRecoveryApi.manifestReads).toBe(1));
+    await manifestRecoveryRouter.navigate('/pages/vx-other?locale=fr');
+    await waitFor(() => expect(manifestRecoveryApi.manifestReads).toBe(2));
+    manifestRecoveryApi.releaseManifest(1);
+    await waitFor(() =>
+      expect(manifestRecoveryClient.isFetching({ queryKey: ['content', PAGE.id], exact: true })).toBe(0),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await manifestRecoveryRouter.navigate(`/pages/${PAGE.id}?locale=fr`);
+
+    await expect(await canvas.findByRole('textbox', { name: 'title' }, { timeout: 3_000 })).toHaveValue('Page');
+    await expect(manifestRecoveryApi.manifestIds).toEqual([PAGE.id, 'vx-other']);
   },
 };

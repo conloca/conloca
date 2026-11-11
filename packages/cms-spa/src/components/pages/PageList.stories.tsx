@@ -2,13 +2,15 @@ import {
   ContentAPIClient,
   type ContentListResult,
   type ContentManifest,
+  contentEtag,
   ErrorCodes,
+  localesOf,
   setContentAPIClient,
 } from '@conloca/content-api-client';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { expect, userEvent, waitFor, within } from 'storybook/test';
 import '../../main.css';
 import { ThemeProvider } from '../../hooks/useTheme.js';
@@ -78,6 +80,43 @@ function json(body: unknown, status: number): Response {
  */
 function contentApiFetch(pages: PagesResponse, onDelete: DeleteResponse): typeof fetch {
   let items = pages.kind === 'pages' ? pages.items : [];
+  const remove = (url: URL, init?: RequestInit): Response => {
+    const id = url.pathname.slice('/__conloca/api/content/'.length);
+    const target = items.find((item) => item.id === id);
+    const etag = new Headers(init?.headers).get('If-Match');
+    const locale = url.searchParams.get('locale');
+    if (!target) return json({ success: false, error: 'Content not found' }, 404);
+    const expectedEtag = locale
+      ? target.locales[locale]?.etag
+      : contentEtag(Object.fromEntries(Array.from(localesOf(target), (version) => [version.locale, version.etag])));
+    if (onDelete === 'deleted' && etag === expectedEtag) {
+      items = locale
+        ? items.map((item) =>
+            item.id === id
+              ? {
+                  ...item,
+                  locales: Object.fromEntries(Object.entries(item.locales).filter(([key]) => key !== locale)),
+                }
+              : item,
+          )
+        : items.filter((item) => item.id !== id);
+      return json({ success: true }, 200);
+    }
+    return json(
+      {
+        success: false,
+        reason: 'stale_write',
+        currentEtag: 'vx-pricing.2',
+        message: 'Content has been modified',
+        error: {
+          code: ErrorCodes.STALE_WRITE,
+          message: 'Content has been modified since you last loaded it',
+          details: { currentEtag: 'vx-pricing.2' },
+        },
+      },
+      412,
+    );
+  };
   const respond = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const url = new URL(String(input), window.location.origin);
     const method = init?.method ?? 'GET';
@@ -98,35 +137,21 @@ function contentApiFetch(pages: PagesResponse, onDelete: DeleteResponse): typeof
       const body: ContentListResult = { items, total: items.length };
       return json(body, 200);
     }
-    if (method === 'DELETE' && url.pathname.startsWith('/__conloca/api/content/')) {
-      const id = url.pathname.slice('/__conloca/api/content/'.length);
-      const target = items.find((item) => item.id === id);
-      const etag = new Headers(init?.headers).get('If-Match');
-      if (!target || etag !== target.locales.en?.etag) return json({ success: false, error: 'Content not found' }, 404);
-      if (onDelete === 'deleted') {
-        items = items.filter((item) => item.id !== id);
-        return json({ success: true }, 200);
-      }
-      return json(
-        {
-          success: false,
-          reason: 'stale_write',
-          currentEtag: 'vx-pricing.2',
-          message: 'Content has been modified',
-          error: {
-            code: ErrorCodes.STALE_WRITE,
-            message: 'Content has been modified since you last loaded it',
-            details: { currentEtag: 'vx-pricing.2' },
-          },
-        },
-        412,
-      );
-    }
+    if (method === 'DELETE' && url.pathname.startsWith('/__conloca/api/content/')) return remove(url, init);
     return json({ success: false, error: 'Not found' }, 404);
   };
   // Bun's `typeof fetch` carries `preconnect`; the client never calls it, but
   // the shape has to be honest rather than asserted past.
   return Object.assign(respond, { preconnect: fetch.preconnect });
+}
+
+function CurrentLocation() {
+  const location = useLocation();
+  return (
+    <output hidden data-testid="page-route">
+      {location.pathname + location.search}
+    </output>
+  );
 }
 
 function PageListStory({ pages, onDelete = 'deleted' }: { pages: PagesResponse; onDelete?: DeleteResponse }) {
@@ -139,6 +164,7 @@ function PageListStory({ pages, onDelete = 'deleted' }: { pages: PagesResponse; 
       <ThemeProvider>
         <MemoryRouter initialEntries={['/pages']}>
           <PageList />
+          <CurrentLocation />
         </MemoryRouter>
       </ThemeProvider>
     </QueryClientProvider>
@@ -262,8 +288,9 @@ export const DeleteAsksFirst: Story = {
   render: () => <PageListStory pages={{ kind: 'pages', items: PAGES }} />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(await canvas.findByTestId('delete-vx-pricing.en'));
+    await userEvent.click(await canvas.findByTestId('page-actions-vx-pricing'));
     const body = within(document.body);
+    await userEvent.click(await body.findByRole('menuitem', { name: 'Delete' }));
     await expect(await body.findByTestId('delete-item-name')).toHaveTextContent('Pricing');
     await userEvent.click(body.getByRole('button', { name: 'Confirm Delete' }));
     await waitFor(() => expect(body.queryByTestId('delete-confirm-message')).toBeNull());
@@ -279,12 +306,71 @@ export const DeleteRefusedAsStale: Story = {
   render: () => <PageListStory pages={{ kind: 'pages', items: PAGES }} onDelete="stale" />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(await canvas.findByTestId('delete-vx-pricing.en'));
+    await userEvent.click(await canvas.findByTestId('page-actions-vx-pricing'));
     const body = within(document.body);
+    await userEvent.click(await body.findByRole('menuitem', { name: 'Delete' }));
     await userEvent.click(await body.findByRole('button', { name: 'Confirm Delete' }));
     await expect(await body.findByText('Failed to delete page. Please try again.')).toBeVisible();
     await userEvent.click(body.getByRole('button', { name: 'Close error dialog' }));
     await waitFor(() => expect(body.queryByText('Failed to delete page. Please try again.')).toBeNull());
     await expect(canvas.getByTestId('page-title-vx-pricing')).toBeVisible();
   },
+};
+
+const MULTILINGUAL_PAGES = structuredClone(PAGES);
+for (const entry of MULTILINGUAL_PAGES) {
+  const english = entry.locales.en;
+  if (!english) throw new Error('English fixture is missing');
+  entry.locales.rs = { ...english, locale: 'rs', pathname: `/rs${english.pathname}`, etag: `${entry.id}.rs.1` };
+  entry.locales.ru = { ...english, locale: 'ru', pathname: `/ru${english.pathname}`, etag: `${entry.id}.ru.1` };
+}
+
+/** The split Edit control chooses the first locale by default and offers every available language. */
+export const LocaleActions: Story = {
+  render: () => <PageListStory pages={{ kind: 'pages', items: MULTILINGUAL_PAGES }} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByTestId('edit-vx-home'));
+    await expect(canvas.getByTestId('page-route')).toHaveTextContent('/pages/vx-home?locale=en');
+    await userEvent.click(canvas.getByTestId('edit-locales-vx-home'));
+    const body = within(document.body);
+    await expect((await body.findAllByRole('menuitem')).map((item) => item.textContent)).toEqual(['en', 'rs', 'ru']);
+    await userEvent.click(body.getByRole('menuitem', { name: 'rs' }));
+    await expect(canvas.getByTestId('page-route')).toHaveTextContent('/pages/vx-home?locale=rs');
+  },
+};
+
+/** Locale deletion preserves the page and its remaining versions. */
+export const DeleteLocaleKeepsOtherVersions: Story = {
+  render: () => <PageListStory pages={{ kind: 'pages', items: MULTILINGUAL_PAGES }} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByTestId('page-actions-vx-home'));
+    const body = within(document.body);
+    await expect((await body.findAllByRole('menuitem')).map((item) => item.textContent)).toEqual([
+      'Delete',
+      'Delete en version',
+      'Delete rs version',
+      'Delete ru version',
+    ]);
+    await userEvent.click(body.getByRole('menuitem', { name: 'Delete rs version' }));
+    await expect(body.getByTestId('delete-confirm-message')).toHaveTextContent('rs version');
+    await userEvent.click(body.getByRole('button', { name: 'Confirm Delete' }));
+    await waitFor(() => expect(body.queryByTestId('delete-confirm-message')).toBeNull());
+    const row = canvas.getByTestId('page-title-vx-home').closest('tr');
+    if (!row) throw new Error('Home has no row');
+    await waitFor(() =>
+      expect(
+        within(row)
+          .getAllByTestId('locale-indicator')
+          .map((item) => item.textContent),
+      ).toEqual(['en', 'ru']),
+    );
+  },
+};
+
+/** The leading Delete action removes all language versions after confirmation. */
+export const DeleteAllLocales: Story = {
+  ...DeleteAsksFirst,
+  render: () => <PageListStory pages={{ kind: 'pages', items: MULTILINGUAL_PAGES }} />,
 };
