@@ -34,7 +34,7 @@ export type LiveMessage = PageRef &
     | { type: 'conloca:refused'; status: RefusalStatus; code?: RefusalCode; message?: string; snapshotId?: string }
   );
 
-/** The first message of a live connection; not the frame handshake's `HELLO_TYPE`. */
+/** The first message of a co-editing connection; not the frame handshake's `HELLO_TYPE`. */
 export type LiveHello = PageRef & {
   type: 'conloca:live-hello';
   /** The generation the server bound this connection to. */
@@ -228,7 +228,7 @@ export function readLiveMessage(data: unknown): LiveMessage | undefined {
   }
 }
 
-/** Reads a live connection's hello; `undefined` when `data` is not a well-formed one. */
+/** Reads a co-editing connection's hello; `undefined` when `data` is not a well-formed one. */
 export function readLiveHello(data: unknown): LiveHello | undefined {
   if (!isFields(data) || data.type !== 'conloca:live-hello') return undefined;
   const page = readPageRef(data);
