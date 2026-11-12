@@ -126,14 +126,14 @@ function isOutcome(value: unknown, reasons: readonly string[]): boolean {
   return !('message' in value) || value.message === undefined || typeof value.message === 'string';
 }
 
-const RESOLVE_REFUSALS = ['changed', 'not-found', 'anchor-gone', 'page-too-large', 'bad-value', 'refused', 'unknown'];
+const RESOLVE_REFUSALS = ['changed', 'not-found', 'anchor-gone', 'too-large', 'bad-value', 'refused', 'unknown'];
 const DISCARD_REFUSALS = ['kept', 'changed', 'committed', 'not-found', 'refused', 'unknown'];
 const RESTORE_REFUSALS = [
   'changed',
   'expired',
   'not-found',
   'not-a-page',
-  'page-too-large',
+  'too-large',
   'path-taken',
   'refused',
   'unknown',

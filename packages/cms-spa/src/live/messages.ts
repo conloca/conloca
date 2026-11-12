@@ -8,7 +8,7 @@ export type JsonValue = string | number | boolean | null | JsonValue[] | { [key:
 type PageRef = { site: string; id: string; locale: string };
 
 type RefusalStatus = 400 | 401 | 402 | 403 | 404 | 413;
-type RefusalCode = 'editor-auth-required' | 'update-too-large' | 'page-too-large' | 'invalid-update';
+type RefusalCode = 'editor-auth-required' | 'update-too-large' | 'too-large' | 'invalid-update';
 
 export type LiveMessage = PageRef &
   (
@@ -93,12 +93,7 @@ function isFields(value: unknown): value is Fields {
 }
 
 const REFUSAL_STATUSES = new Set<unknown>([400, 401, 402, 403, 404, 413]);
-const REFUSAL_CODES = new Set<unknown>([
-  'editor-auth-required',
-  'update-too-large',
-  'page-too-large',
-  'invalid-update',
-]);
+const REFUSAL_CODES = new Set<unknown>(['editor-auth-required', 'update-too-large', 'too-large', 'invalid-update']);
 const MERGE_SOURCES = new Set<unknown>(['github', 'agent', 'review']);
 const CONNECTIONS = new Set<unknown>(['connected', 'syncing', 'offline', 'read-only']);
 

@@ -20,8 +20,8 @@ describe('live messages', () => {
     expect(readLiveMessage({ ...m, snapshotId: 7 })).toBeUndefined();
   });
 
-  it('reads a page-too-large refusal and rejects unknown types and statuses', () => {
-    const r = { type: 'conloca:refused', ...PAGE, status: 413, code: 'page-too-large' };
+  it('reads a too-large refusal and rejects unknown types and statuses', () => {
+    const r = { type: 'conloca:refused', ...PAGE, status: 413, code: 'too-large' };
     expect<unknown>(readLiveMessage(r)).toEqual(r);
     expect(readLiveMessage({ type: 'conloca:other', ...PAGE })).toBeUndefined();
     expect(readLiveMessage({ ...r, status: 500 })).toBeUndefined();

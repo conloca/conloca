@@ -39,7 +39,7 @@ export type ResolveConflictOutcome =
   | { ok: true }
   | {
       ok: false;
-      reason: 'changed' | 'not-found' | 'anchor-gone' | 'page-too-large' | 'bad-value' | 'refused' | 'unknown';
+      reason: 'changed' | 'not-found' | 'anchor-gone' | 'too-large' | 'bad-value' | 'refused' | 'unknown';
       message?: string;
     };
 
@@ -47,15 +47,7 @@ export type RestoreVersionOutcome =
   | { ok: true; kept: string[] }
   | {
       ok: false;
-      reason:
-        | 'changed'
-        | 'expired'
-        | 'not-found'
-        | 'not-a-page'
-        | 'page-too-large'
-        | 'path-taken'
-        | 'refused'
-        | 'unknown';
+      reason: 'changed' | 'expired' | 'not-found' | 'not-a-page' | 'too-large' | 'path-taken' | 'refused' | 'unknown';
       message?: string;
     };
 
