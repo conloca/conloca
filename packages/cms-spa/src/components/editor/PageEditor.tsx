@@ -13,6 +13,7 @@ import { getUIConfig } from '../../ui-config.js';
 import { ConflictDialog } from '../dialogs/ConflictDialog.js';
 import { UnsavedChangesDialog } from '../dialogs/UnsavedChangesDialog.js';
 import { ImageFieldRender } from '../fields/ImageField.js';
+import { toast } from '../toast.js';
 import { DrawerItemOverride, PUCK_ROOT_DROP_ZONE } from './DrawerItemOverride.js';
 import { withDraftMediaRendering } from './draft-media-config.js';
 import { PageEditorHeaderActions } from './PageEditorHeaderActions.js';
@@ -37,6 +38,12 @@ interface PageEditorProps {
   onReload?: () => void;
   onPublish?: () => void;
 }
+
+/** What the editor says when a save is refused for the page's size or the server's memory; the edits stay unsaved. */
+const SAVE_REFUSAL_MESSAGES = new Map<string, string>([
+  ['page_too_large', 'This page is too large to save. Remove some content, then save again.'],
+  ['busy', 'Too many large pages are open on this branch. Try again in a moment.'],
+]);
 
 const viewports = [
   { width: 375, height: 'auto' as const, label: 'Mobile', icon: <Smartphone size={16} /> },
@@ -333,6 +340,9 @@ export function PageEditor({
             setConflict(result);
             return 'conflict';
           }
+          const refusal = result.reason === undefined ? undefined : SAVE_REFUSAL_MESSAGES.get(result.reason);
+          // Refused for the page's size or the server's memory: the edits stay unsaved here, to fix or send again.
+          if (refusal !== undefined) toast.error(refusal);
           setSaveState('error');
           return 'error';
         } catch (error: unknown) {

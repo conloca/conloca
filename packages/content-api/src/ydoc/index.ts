@@ -28,7 +28,8 @@ interface YMap extends Y.Map<YValue> {}
 
 const PLACE = 'place';
 const BLOCKS_FLAG = '__blocks';
-const RICH_TEXT_FLAG = '__rt';
+/** Marks a rich-text value, which a doc keeps as one plain value. */
+export const RICH_TEXT_FLAG = '__rt';
 const BLOCK_LIST: JsonObject = { [BLOCKS_FLAG]: true };
 const PUCK_PREFIX: AnchorStep[] = [{ key: 'content' }, { key: 'puckData' }];
 const ALPHABET = '0123456789abcdefghijklmnopqrstuvwxyz';
@@ -73,6 +74,14 @@ function keyBetween(low: string, high: string | undefined): string {
     out += ALPHABET[lo] ?? '';
     if (lo < hi) bounded = false;
   }
+}
+
+/** `n` ascending keys strictly between `low` and `high`, bisected so they grow with log n, not n. */
+function keysBetween(low: string, high: string | undefined, n: number): string[] {
+  if (n === 0) return [];
+  const mid = keyBetween(low, high);
+  const left = Math.floor(n / 2);
+  return [...keysBetween(low, mid, left), mid, ...keysBetween(mid, high, n - 1 - left)];
 }
 
 function placeOf(block: YMap | undefined): { list: string; key: string } | undefined {
@@ -162,15 +171,20 @@ function syncList(list: string, items: JsonValue[], sync: Sync): void {
     if (isRecord(item)) syncObject(block, item, { block: id }, sync, PLACE);
   });
   let low = '';
-  ids.forEach((id, index) => {
+  for (let index = 0; index < ids.length; ) {
     if (kept.has(index)) {
       low = keys[index] ?? low;
-      return;
+      index++;
+      continue;
     }
-    const nextKept = keys.find((_key, later) => later > index && kept.has(later));
-    low = keyBetween(low, nextKept);
-    sync.blocks.get(id)?.set(PLACE, { list, key: low });
-  });
+    let end = index;
+    while (end < ids.length && !kept.has(end)) end++;
+    // The run of moved or new blocks is keyed at once, so a long list never steps its keys one digit at a time.
+    const run = keysBetween(low, keys[end], end - index);
+    for (const [i, key] of run.entries()) sync.blocks.get(ids[index + i] ?? '')?.set(PLACE, { list, key });
+    low = run.at(-1) ?? low;
+    index = end;
+  }
 }
 
 function syncText(text: Y.Text, next: string): void {

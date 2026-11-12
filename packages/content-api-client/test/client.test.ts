@@ -2,6 +2,16 @@ import { beforeEach, describe, expect, it, mock } from 'bun:test';
 import type { ContentEntry, CreateContentInput, CreateResult, UpdateLocaleInput } from '@conloca/content-api';
 import { ContentAPIClient, StaleWriteError } from '../src/client.js';
 
+/** A refusal as the backend answers one, its `details` naming the limit it hit. */
+function refusal(status: number, details: { limit: string } | undefined, headers: Record<string, string> = {}) {
+  return new Response(JSON.stringify({ error: { code: 'REFUSED', message: 'refused', details } }), {
+    status,
+    headers: { 'Content-Type': 'application/json', ...headers },
+  });
+}
+
+const SAVE: UpdateLocaleInput = { id: 'test-id', locale: 'en', data: {}, etag: 'e' };
+
 describe('ContentAPIClient', () => {
   let client: ContentAPIClient;
   let fetchMock: ReturnType<typeof mock>;
@@ -189,6 +199,44 @@ describe('ContentAPIClient', () => {
           etag: 'staleMetaHash.staleContentHash',
         }),
       ).rejects.toThrow(StaleWriteError);
+    });
+
+    it('updateLocalized maps a 413 whose limit is the page to a page_too_large failure', async () => {
+      fetchMock.mockResolvedValueOnce(refusal(413, { limit: 'page' }));
+      expect(await client.updateLocalized(SAVE)).toEqual({
+        success: false,
+        reason: 'page_too_large',
+        error: new Error('refused'),
+      });
+    });
+
+    it('updateLocalized throws a 413 whose limit is one change, as any other refusal', async () => {
+      fetchMock.mockResolvedValueOnce(refusal(413, { limit: 'change' }));
+      await expect(client.updateLocalized(SAVE)).rejects.toThrow('refused');
+    });
+
+    it('updateLocalized maps a 503 with Retry-After to a busy failure, and throws one without it', async () => {
+      fetchMock.mockResolvedValueOnce(refusal(503, undefined, { 'Retry-After': '5' }));
+      expect(await client.updateLocalized(SAVE)).toEqual({
+        success: false,
+        reason: 'busy',
+        error: new Error('refused'),
+      });
+      fetchMock.mockResolvedValueOnce(refusal(503, undefined));
+      await expect(client.updateLocalized(SAVE)).rejects.toThrow('refused');
+    });
+
+    it('createContent and movePage map the same refusals to their failures', async () => {
+      fetchMock.mockResolvedValueOnce(refusal(413, { limit: 'page' }));
+      expect(
+        await client.createContent({ kind: 'page', site: 's', collection: 'pages', type: 'puck', locales: {} }),
+      ).toEqual({ success: false, reason: 'page_too_large', error: new Error('refused') });
+      fetchMock.mockResolvedValueOnce(refusal(503, undefined, { 'Retry-After': '5' }));
+      expect(await client.movePage('s', 'p1', '/new', 'en', 'e')).toEqual({
+        moved: false,
+        reason: 'busy',
+        error: new Error('refused'),
+      });
     });
   });
 

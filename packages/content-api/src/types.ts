@@ -239,7 +239,9 @@ export interface UpdateResult {
    * refusals of a fragment or data entry's new name, mean what they mean for a
    * create; a backend that does not tell them apart reports `write_error`.
    * `page_too_large`: the page would outgrow what a backend that bounds a page's
-   * stored size can keep; nothing was written.
+   * stored size can keep; nothing was written. `busy`: a backend that
+   * bounds the memory its open pages take has no room to load this one now;
+   * nothing was written, and the same write may be sent again later.
    */
   reason?:
     | 'not_found'
@@ -250,7 +252,8 @@ export interface UpdateResult {
     | 'pathname_in_redirects'
     | 'invalid_name'
     | 'name_taken'
-    | 'page_too_large';
+    | 'page_too_large'
+    | 'busy';
   error?: Error;
   currentEtag?: string;
   /** On a refused write: the writer's own last write `etag` was lost, so its text is not used as a merge base. */
@@ -274,9 +277,16 @@ export interface MoveResult {
   files?: string[];
   /**
    * `already_exists` also covers a path another page redirects from; `invalid_pathname` is a malformed path;
-   * `page_too_large` as on {@link UpdateResult}.
+   * `page_too_large` and `busy` as on {@link UpdateResult}.
    */
-  reason?: 'not_found' | 'already_exists' | 'stale_write' | 'write_error' | 'invalid_pathname' | 'page_too_large';
+  reason?:
+    | 'not_found'
+    | 'already_exists'
+    | 'stale_write'
+    | 'write_error'
+    | 'invalid_pathname'
+    | 'page_too_large'
+    | 'busy';
   error?: Error;
   etag?: string;
 }
@@ -592,7 +602,8 @@ export interface CreateResult {
     | 'unknown_site'
     | 'no_sites_configured'
     /** As on {@link UpdateResult}. */
-    | 'page_too_large';
+    | 'page_too_large'
+    | 'busy';
   error?: Error;
   existingId?: string;
   /** The input field a caller has to change, when the failure points at one. */

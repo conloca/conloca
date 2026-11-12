@@ -28,6 +28,11 @@ describe('live messages', () => {
     expect(readLiveMessage({ ...r, code: 'nope' })).toBeUndefined();
   });
 
+  it('reads a busy refusal', () => {
+    const r = { type: 'conloca:refused', ...PAGE, status: 503, code: 'busy' };
+    expect<unknown>(readLiveMessage(r)).toEqual(r);
+  });
+
   it('reads merged, conflict and discarded messages and drops unknown fields', () => {
     const merged = { type: 'conloca:merged', ...PAGE, source: 'github', commit: 'abc', byName: 'Bot' };
     expect<unknown>(readLiveMessage({ ...merged, extra: 1 })).toEqual(merged);
@@ -50,6 +55,13 @@ describe('live messages', () => {
     expect<unknown>(readLiveHello({ ...h, access: 'read' })).toEqual({ ...h, access: 'read' });
     expect(readLiveHello(h)).toBeUndefined();
     expect(readLiveHello({ ...h, access: 'write', user: { id: 'u1' } })).toBeUndefined();
+  });
+
+  it("reads the server's update cap from a hello, and drops one that is not a positive integer", () => {
+    const h = { type: 'conloca:live-hello', ...PAGE, generation: 2, user: { id: 'u1', name: 'A' }, access: 'write' };
+    expect<unknown>(readLiveHello({ ...h, updateMaxBytes: 262_144 })).toEqual({ ...h, updateMaxBytes: 262_144 });
+    for (const bad of [0, -1, 1.5, '262144', null])
+      expect<unknown>(readLiveHello({ ...h, updateMaxBytes: bad })).toEqual(h);
   });
 
   it('reads a status with or without a read-only reason', () => {

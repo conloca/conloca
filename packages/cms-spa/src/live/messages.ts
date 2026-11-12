@@ -7,8 +7,9 @@ export type JsonValue = string | number | boolean | null | JsonValue[] | { [key:
 
 type PageRef = { site: string; id: string; locale: string };
 
-type RefusalStatus = 400 | 401 | 402 | 403 | 404 | 413;
-type RefusalCode = 'editor-auth-required' | 'update-too-large' | 'too-large' | 'invalid-update';
+type RefusalStatus = 400 | 401 | 402 | 403 | 404 | 413 | 503;
+/** `too-large`: the page is over the server's size limit; `busy`: the server has no room to load it now. */
+type RefusalCode = 'editor-auth-required' | 'update-too-large' | 'too-large' | 'busy' | 'invalid-update';
 
 export type LiveMessage = PageRef &
   (
@@ -41,6 +42,8 @@ export type LiveHello = PageRef & {
   generation: number;
   user: { id: string; name: string };
   access: 'write' | 'read';
+  /** The largest update the server takes on this connection; absent from an older server (the client's default). */
+  updateMaxBytes?: number;
 };
 
 export interface LiveStatus {
@@ -92,8 +95,14 @@ function isFields(value: unknown): value is Fields {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-const REFUSAL_STATUSES = new Set<unknown>([400, 401, 402, 403, 404, 413]);
-const REFUSAL_CODES = new Set<unknown>(['editor-auth-required', 'update-too-large', 'too-large', 'invalid-update']);
+const REFUSAL_STATUSES = new Set<unknown>([400, 401, 402, 403, 404, 413, 503]);
+const REFUSAL_CODES = new Set<unknown>([
+  'editor-auth-required',
+  'update-too-large',
+  'too-large',
+  'busy',
+  'invalid-update',
+]);
 const MERGE_SOURCES = new Set<unknown>(['github', 'agent', 'review']);
 const CONNECTIONS = new Set<unknown>(['connected', 'syncing', 'offline', 'read-only']);
 
@@ -231,7 +240,15 @@ export function readLiveHello(data: unknown): LiveHello | undefined {
   const user = readUser(data.user);
   if (!page || !user || !isGeneration(data.generation)) return undefined;
   if (data.access !== 'write' && data.access !== 'read') return undefined;
-  return { ...page, type: 'conloca:live-hello', generation: data.generation, user, access: data.access };
+  const hello: LiveHello = {
+    ...page,
+    type: 'conloca:live-hello',
+    generation: data.generation,
+    user,
+    access: data.access,
+  };
+  const cap = data.updateMaxBytes;
+  return typeof cap === 'number' && Number.isSafeInteger(cap) && cap > 0 ? { ...hello, updateMaxBytes: cap } : hello;
 }
 
 function readReadOnly(value: unknown): LiveStatus['readOnly'] | undefined {

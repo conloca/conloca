@@ -111,6 +111,14 @@ const arbPuckData = fc
     return { root: { props: rootProps }, content, zones: { 'main:z': blocks.slice(hi) } };
   });
 
+/** The place key of block `id` in `doc`. */
+function keyOf(doc: Y.Doc, id: string): string {
+  const place = doc.getMap<Y.Map<unknown>>('blocks').get(id)?.get('place');
+  if (typeof place !== 'object' || place === null || !('key' in place) || typeof place.key !== 'string')
+    throw new Error(`no place for ${id}`);
+  return place.key;
+}
+
 describe('ydoc shape', () => {
   const foreignShapes = [YDOC_SHAPE + 1, YDOC_SHAPE - 1, '3', null, Number.NaN, 1.5, true];
   it.each(foreignShapes)('applyContentDiff refuses a doc whose shape is %s and writes nothing', (shape) => {
@@ -344,5 +352,43 @@ describe('ydoc shape', () => {
 
   it('ydocAnchor refuses a non-field target', () => {
     expect(() => ydocAnchor(hydrateDoc(PAGE_ABC).getMap('_meta'), 'kind')).toThrow('invariant');
+  });
+});
+
+describe('place keys', () => {
+  it('a hydrated run of n blocks gets strictly ascending keys, in order, growing with log n', () => {
+    fc.assert(
+      fc.property(fc.integer({ min: 1, max: 3000 }), (n) => {
+        const doc = hydrateDoc(puck(Array.from({ length: n }, (_, i) => block(`b${i}`))));
+        const blocks = doc.getMap<Y.Map<unknown>>('blocks');
+        const keys = Array.from({ length: n }, (_, i) => {
+          const place = blocks.get(`b${i}`)?.get('place');
+          if (typeof place !== 'object' || place === null || !('key' in place) || typeof place.key !== 'string')
+            throw new Error(`no place for b${i}`);
+          return place.key;
+        });
+        for (let i = 1; i < n; i++) expect(keys[i - 1] < keys[i]).toBe(true);
+        expect(Math.max(...keys.map((key) => key.length))).toBeLessThanOrEqual(2 + Math.ceil(Math.log2(n + 1)));
+        expect(serializeDoc(doc).puckData).toMatchObject({
+          content: Array.from({ length: n }, (_, i) => block(`b${i}`)),
+        });
+      }),
+      { numRuns: 30 },
+    );
+  });
+
+  it('n blocks inserted between two neighbours get unique, ascending keys strictly between theirs', () => {
+    fc.assert(
+      fc.property(fc.integer({ min: 1, max: 2000 }), (n) => {
+        const doc = hydrateDoc(PAGE_ABC);
+        const [a, b, c] = ['a', 'b', 'c'].map((id) => block(id, { title: id.toUpperCase() }));
+        const inserted = Array.from({ length: n }, (_, i) => `x${i}`);
+        applyContentDiff(doc, puck([a, ...inserted.map((id) => block(id)), b, c]), 'x');
+        const keys = [keyOf(doc, 'a'), ...inserted.map((id) => keyOf(doc, id)), keyOf(doc, 'b')];
+        for (let i = 1; i < keys.length; i++) expect(keys[i - 1] < keys[i]).toBe(true);
+        expect(new Set(keys).size).toBe(keys.length);
+      }),
+      { numRuns: 30 },
+    );
   });
 });

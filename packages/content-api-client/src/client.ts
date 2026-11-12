@@ -33,6 +33,24 @@ export interface ContentAPIClientOptions {
   fetch?: typeof fetch;
 }
 
+/**
+ * A write refused by a backend that bounds a page's size (413 naming the page as the limit) or its memory (503 with
+ * Retry-After), as the write's failure reason; nothing was written, so the editor keeps the edits.
+ */
+function writeRefusal(
+  response: Response,
+  body: Partial<APIError> | null,
+): { reason: 'page_too_large' | 'busy'; error: Error } | undefined {
+  const error = body?.error;
+  const message = typeof error?.message === 'string' ? error.message : response.statusText;
+  if (response.status === 413 && error?.details?.limit === 'page') {
+    return { reason: 'page_too_large', error: new Error(message) };
+  }
+  if (response.status === 503 && response.headers.has('Retry-After'))
+    return { reason: 'busy', error: new Error(message) };
+  return undefined;
+}
+
 export class ContentAPIClient {
   private baseUrl: string;
   private fetch: typeof fetch;
@@ -57,7 +75,11 @@ export class ContentAPIClient {
       .join('/');
   }
 
-  private async fetchAPI<T>(url: string, options?: RequestInit): Promise<T> {
+  private async fetchAPI<T>(
+    url: string,
+    options?: RequestInit,
+    refused?: (response: Response, body: Partial<APIError> | null) => T | undefined,
+  ): Promise<T> {
     const response = await this.fetch(url, {
       ...options,
       headers: {
@@ -74,6 +96,9 @@ export class ContentAPIClient {
         // If JSON parsing fails, throw generic error
         throw new Error(`API error: ${response.status} ${response.statusText}`);
       }
+
+      const answer = refused?.(response, errorData);
+      if (answer !== undefined) return answer;
 
       // Check if it's an APIError format
       if (errorData?.error?.code) {
@@ -163,19 +188,27 @@ export class ContentAPIClient {
   }
 
   async createContent(data: CreateContentInput): Promise<CreateResult> {
-    return this.fetchAPI<CreateResult>(`${this.baseUrl}/content`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+    return this.fetchAPI<CreateResult>(
+      `${this.baseUrl}/content`,
+      { method: 'POST', body: JSON.stringify(data) },
+      (response, body) => {
+        const refused = writeRefusal(response, body);
+        return refused && { success: false, ...refused };
+      },
+    );
   }
 
   async updateLocalized(input: UpdateLocaleInput): Promise<UpdateResult> {
     const { id, locale, data, etag } = input;
     const params = new URLSearchParams({ locale, etag });
-    return this.fetchAPI<UpdateResult>(`${this.baseUrl}/content/${id}?${params}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
+    return this.fetchAPI<UpdateResult>(
+      `${this.baseUrl}/content/${id}?${params.toString()}`,
+      { method: 'PUT', body: JSON.stringify(data) },
+      (response, body) => {
+        const refused = writeRefusal(response, body);
+        return refused && { success: false, ...refused };
+      },
+    );
   }
 
   async deleteContent(id: string, etag: string): Promise<DeleteResult> {
@@ -238,10 +271,14 @@ export class ContentAPIClient {
   }
 
   async movePage(site: string, id: string, pathname: string, locale: string, etag: string): Promise<MoveResult> {
-    return this.fetchAPI<MoveResult>(`${this.baseUrl}/${site}/move`, {
-      method: 'POST',
-      body: JSON.stringify({ id, pathname, locale, etag }),
-    });
+    return this.fetchAPI<MoveResult>(
+      `${this.baseUrl}/${site}/move`,
+      { method: 'POST', body: JSON.stringify({ id, pathname, locale, etag }) },
+      (response, body) => {
+        const refused = writeRefusal(response, body);
+        return refused && { moved: false, ...refused };
+      },
+    );
   }
 
   // Fragment operations

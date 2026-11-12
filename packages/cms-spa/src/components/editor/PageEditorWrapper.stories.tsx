@@ -13,6 +13,7 @@ import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { expect, userEvent, waitFor, within } from 'storybook/test';
 import '../../main.css';
 import { getUIConfig } from '../../ui-config.js';
+import { Toaster } from '../toast.js';
 import { PageEditorWrapper } from './PageEditorWrapper.js';
 
 /**
@@ -84,7 +85,7 @@ class HeldSaveContentAPI extends ContentAPIClient {
     return { sites: { default: { locales: ['en'], defaultLocale: 'en' } }, globalLocales: ['en'] };
   }
 
-  override async updateLocalized({ data }: UpdateInput) {
+  override async updateLocalized({ data }: UpdateInput): ReturnType<ContentAPIClient['updateLocalized']> {
     this.saves += 1;
     await this.gate.promise;
     const etag = `v${this.saves + 1}`;
@@ -109,6 +110,18 @@ class OtherWriterContentAPI extends HeldSaveContentAPI {
       },
     };
     return result;
+  }
+}
+
+/** Refuses every save as the backend does when the page is too large to keep, or it has no room to load it now. */
+class RefusingContentAPI extends HeldSaveContentAPI {
+  constructor(private reason: 'page_too_large' | 'busy') {
+    super();
+  }
+
+  override async updateLocalized() {
+    this.saves += 1;
+    return { success: false, reason: this.reason, error: new Error(this.reason) };
   }
 }
 
@@ -195,6 +208,7 @@ function SavingPageEditor({
     <QueryClientProvider client={queryClient}>
       <div style={{ height: '800px' }}>
         <RouterProvider router={router} />
+        <Toaster />
       </div>
     </QueryClientProvider>
   );
@@ -270,6 +284,43 @@ export const AnotherSaveBeforeTheReadBackReloadsTheEditor: Story = {
   },
 };
 
+/** A refused save tells the editor why, keeps the edits unsaved, and never opens the conflict dialog. */
+function refusedSave(reason: 'page_too_large' | 'busy', message: string): Story {
+  return {
+    beforeEach: () => {
+      const previous = getContentAPIClient();
+      api = new RefusingContentAPI(reason);
+      setContentAPIClient(api);
+      return () => setContentAPIClient(previous);
+    },
+    render: () => <SavingPageEditor />,
+    play: async ({ canvasElement }) => {
+      const canvas = within(canvasElement);
+      const title = await canvas.findByRole('textbox', { name: 'title' }, { timeout: 10_000 });
+      await userEvent.clear(title);
+      await userEvent.type(title, 'Kept title');
+      await userEvent.click(canvas.getByRole('button', { name: 'Save' }));
+      await waitFor(() => expect(api.saves).toBe(1));
+
+      // The toast fades in once mounted.
+      await waitFor(() => expect(canvas.getByText(message)).toBeVisible(), { timeout: 5000 });
+      await expect(canvas.getByRole('textbox', { name: 'title' })).toHaveValue('Kept title');
+      // The save button shows the error state and stays enabled, so the kept edits can be saved again.
+      await expect(canvas.getByRole('button', { name: 'Error' })).toBeEnabled();
+      await expect(canvas.queryByRole('dialog')).toBeNull();
+    },
+  };
+}
+
+export const PageTooLargeKeepsTheEdits: Story = refusedSave(
+  'page_too_large',
+  'This page is too large to save. Remove some content, then save again.',
+);
+
+export const BusyKeepsTheEdits: Story = refusedSave(
+  'busy',
+  'Too many large pages are open on this branch. Try again in a moment.',
+);
 /** Opening a translated Puck page honors the locale selected on the page list. */
 export const OpensTheSelectedPuckLocale: Story = {
   beforeEach: () => {

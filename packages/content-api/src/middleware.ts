@@ -41,12 +41,12 @@ function errorMessage(error: unknown, fallback: string): string {
 }
 
 /**
- * A reason a create or an update refuses, other than those each route answers itself, and `page_too_large`, which
- * only a backend that bounds a page's stored size gives.
+ * A reason a create or an update refuses, other than those each route answers itself, and `page_too_large` and
+ * `busy`, which only a backend that bounds a page's size or memory gives.
  */
 type Refusal = Exclude<
   NonNullable<CreateResult['reason'] | UpdateResult['reason']>,
-  'write_error' | 'stale_write' | 'not_found' | 'page_too_large'
+  'write_error' | 'stale_write' | 'not_found' | 'page_too_large' | 'busy'
 >;
 
 /**
