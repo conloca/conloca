@@ -218,8 +218,8 @@ describe('Page List', () => {
     const { findByText } = renderWithProviders(<PageList />, {}, false);
 
     const row = (await findByText('Retired')).closest('tr');
-    expect(row).toHaveTextContent('draft');
-    expect(row).not.toHaveTextContent('published');
+    expect(row).toHaveTextContent('Draft');
+    expect(row).not.toHaveTextContent(/published|pushed to github/i);
   });
 });
 

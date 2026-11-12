@@ -2,9 +2,11 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { cleanup, render, screen } from '@testing-library/react';
 import { AssetScopePill } from '../src/media/AssetScopePill.js';
+import { configureUI } from '../src/ui-config.js';
 
 afterEach(() => {
   cleanup();
+  configureUI({});
 });
 
 describe('AssetScopePill', () => {
@@ -26,6 +28,13 @@ describe('AssetScopePill', () => {
     render(<AssetScopePill scope="published" />);
     const pill = screen.getByRole('status', { name: /asset scope: published/i });
     expect(pill.textContent).toBe('Published');
+  });
+
+  test('uses the host pageStatusLabels override for the published label', () => {
+    configureUI({ pageStatusLabels: { published: 'Pushed to Github' } });
+    render(<AssetScopePill scope="published" />);
+    const pill = screen.getByRole('status', { name: /asset scope: pushed to github/i });
+    expect(pill.textContent).toBe('Pushed to Github');
   });
 
   test('paints branch in amber (work-in-flight vocabulary)', () => {

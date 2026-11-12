@@ -1,3 +1,4 @@
+import { pageStatusLabel } from '../ui-config.js';
 import { cn } from '../utils/cn.js';
 import type { AssetScope } from './types.js';
 
@@ -32,7 +33,7 @@ export function AssetScopePill({ scope, size = 'sm', className }: AssetScopePill
   if (!scope) return null;
 
   const isBranch = scope === 'branch';
-  const label = isBranch ? 'Branch only' : 'Published';
+  const label = isBranch ? 'Branch only' : pageStatusLabel('published', 'Published');
   const sizeClasses = size === 'sm' ? 'text-[10px] px-1.5 py-0.5 leading-tight' : 'text-xs px-2 py-0.5';
 
   const variantClasses = isBranch

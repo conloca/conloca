@@ -5,7 +5,7 @@ import { UnsavedChangesDialog } from './UnsavedChangesDialog.js';
 
 /**
  * The prompt an editor raises when the author leaves with unsaved edits. The
- * boundary is its three callbacks; what "save" and "discard" do belongs to
+ * boundary covers its exit variant, pending controls, and three callbacks; what "save" and "discard" do belongs to
  * the editor that wires them.
  *
  * Recorded, not invented: this prompt is a styled overlay, not a dialog — it
@@ -47,6 +47,48 @@ export const StayOnThePage: Story = {
     await userEvent.click(canvas.getByRole('button', { name: 'Cancel' }));
     await userEvent.click(canvas.getByRole('button', { name: 'Close dialog' }));
     await expect(args.onCancel).toHaveBeenCalledTimes(2);
+    await expect(args.onSave).not.toHaveBeenCalled();
+    await expect(args.onDiscard).not.toHaveBeenCalled();
+  },
+};
+
+export const BackNavigation: Story = {
+  args: { backNavigation: true },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('heading', { name: 'Discard changes?' })).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'Continue editing' })).toBeEnabled();
+    await expect(canvas.getByRole('button', { name: 'Discard changes' })).toBeEnabled();
+    await userEvent.click(canvas.getByRole('button', { name: 'Save and go back' }));
+    await expect(args.onSave).toHaveBeenCalledTimes(1);
+  },
+};
+
+export const PendingSave: Story = {
+  args: { pending: true },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('button', { name: 'Save & Continue' })).toBeDisabled();
+    const discard = canvas.getByRole('button', { name: 'Discard Changes' });
+    await expect(discard).toBeDisabled();
+    await userEvent.click(discard);
+    await userEvent.click(canvas.getByRole('button', { name: 'Cancel' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Close dialog' }));
+    await expect(args.onCancel).toHaveBeenCalledTimes(2);
+    await expect(args.onSave).not.toHaveBeenCalled();
+    await expect(args.onDiscard).not.toHaveBeenCalled();
+  },
+};
+
+export const PendingBackNavigation: Story = {
+  args: { pending: true, backNavigation: true },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('heading', { name: 'Discard changes?' })).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'Save and go back' })).toBeDisabled();
+    await expect(canvas.getByRole('button', { name: 'Discard changes' })).toBeDisabled();
+    await userEvent.click(canvas.getByRole('button', { name: 'Continue editing' }));
+    await expect(args.onCancel).toHaveBeenCalledTimes(1);
     await expect(args.onSave).not.toHaveBeenCalled();
     await expect(args.onDiscard).not.toHaveBeenCalled();
   },

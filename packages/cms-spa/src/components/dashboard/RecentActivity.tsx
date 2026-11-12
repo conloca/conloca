@@ -2,6 +2,7 @@ import { localesOf, type PageStatus, pageStatusOf, useSitePages } from '@conloca
 import { AlertCircle, Clock, FileText, Loader2 } from 'lucide-react';
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { pageStatusLabel } from '../../ui-config.js';
 import { cn } from '../../utils/cn.js';
 import { relativeTime } from '../../utils/format-date.js';
 
@@ -89,9 +90,9 @@ export function RecentActivity() {
           <span
             aria-hidden="true"
             className={cn('h-2 w-2 rounded-full flex-shrink-0', statusDot[page.status])}
-            title={page.status}
+            title={pageStatusLabel(page.status)}
           />
-          <span className="sr-only">Status: {page.status}</span>
+          <span className="sr-only">Status: {pageStatusLabel(page.status)}</span>
           <FileText className="h-4 w-4 text-grey-06 dark:text-grey-05 flex-shrink-0" />
           <div className="flex-1 min-w-0">
             <span className="block text-[15px] font-medium text-grey-01 dark:text-grey-12 truncate group-hover:text-azure-04 dark:group-hover:text-azure-06 transition-colors">
