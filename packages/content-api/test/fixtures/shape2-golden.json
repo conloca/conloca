@@ -1,0 +1,101 @@
+{
+  "puck": {
+    "content": {
+      "puckData": {
+        "root": {
+          "props": {
+            "title": "Shape two",
+            "links": [
+              {
+                "label": "Home",
+                "href": "/"
+              },
+              {
+                "label": "Blog",
+                "href": "/blog"
+              }
+            ],
+            "tags": ["news", "tech"]
+          }
+        },
+        "content": [
+          {
+            "type": "Hero",
+            "props": {
+              "id": "hero",
+              "title": "Hero",
+              "buttons": [
+                {
+                  "label": "Go",
+                  "href": "/go"
+                },
+                {
+                  "label": "More",
+                  "href": "/more"
+                }
+              ]
+            }
+          },
+          {
+            "type": "Grid",
+            "props": {
+              "id": "grid",
+              "items": [
+                {
+                  "type": "Card",
+                  "props": {
+                    "id": "card",
+                    "title": "Card",
+                    "tags": ["a", "b"]
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "zones": {}
+      }
+    },
+    "snapshot": "AR35nYm9DwAoAQVfbWV0YQRraW5kAXcEcHVjaygBBV9tZXRhBXNoYXBlAX0CJwEEcHVjawRyb290AScA+Z2JvQ8CBXByb3BzASgA+Z2JvQ8DBXRpdGxlAXcJU2hhcGUgdHdvKAD5nYm9DwMFbGlua3MBdQJ2AgVsYWJlbHcESG9tZQRocmVmdwEvdgIFbGFiZWx3BEJsb2cEaHJlZncFL2Jsb2coAPmdib0PAwR0YWdzAXUCdwRuZXdzdwR0ZWNoKAEEcHVjawdjb250ZW50AXYBCF9fYmxvY2tzeCcBBmJsb2NrcwRoZXJvASgA+Z2JvQ8IBHR5cGUBdwRIZXJvJwD5nYm9DwgFcHJvcHMBKAD5nYm9DwoCaWQBdwRoZXJvKAD5nYm9DwoFdGl0bGUBdwRIZXJvKAD5nYm9DwoHYnV0dG9ucwF1AnYCBWxhYmVsdwJHbwRocmVmdwMvZ292AgVsYWJlbHcETW9yZQRocmVmdwUvbW9yZScBBmJsb2NrcwRncmlkASgA+Z2JvQ8OBHR5cGUBdwRHcmlkJwD5nYm9Dw4FcHJvcHMBKAD5nYm9DxACaWQBdwRncmlkKAD5nYm9DxAFaXRlbXMBdgEIX19ibG9ja3N4JwEGYmxvY2tzBGNhcmQBKAD5nYm9DxMEdHlwZQF3BENhcmQnAPmdib0PEwVwcm9wcwEoAPmdib0PFQJpZAF3BGNhcmQoAPmdib0PFQV0aXRsZQF3BENhcmQoAPmdib0PFQR0YWdzAXUCdwFhdwFiKAD5nYm9DxMFcGxhY2UBdgIEbGlzdHcVW2lkPWdyaWRdLnByb3BzLml0ZW1zA2tleXcBaSgA+Z2JvQ8IBXBsYWNlAXYCBGxpc3R3B2NvbnRlbnQDa2V5dwE5KAD5nYm9Dw4FcGxhY2UBdgIEbGlzdHcHY29udGVudANrZXl3AWknAQRwdWNrBXpvbmVzAQA="
+  },
+  "data": {
+    "content": {
+      "data": {
+        "name": "Shape two",
+        "tags": ["x", "y", "z"],
+        "rows": [
+          {
+            "t": "A",
+            "links": [
+              {
+                "l": "1"
+              },
+              {
+                "l": "2"
+              }
+            ]
+          },
+          {
+            "t": "B",
+            "labels": ["p", "q"]
+          }
+        ],
+        "grid": [[1, 2], ["a"]],
+        "nested": {
+          "deep": [
+            {
+              "n": 1
+            }
+          ]
+        }
+      }
+    },
+    "snapshot": "AQi6woqSCwAoAQVfbWV0YQRraW5kAXcEZGF0YSgBBV9tZXRhBXNoYXBlAX0CKAEEZGF0YQRuYW1lAXcJU2hhcGUgdHdvKAEEZGF0YQR0YWdzAXUDdwF4dwF5dwF6KAEEZGF0YQRyb3dzAXUCdgIBdHcBQQVsaW5rc3UCdgEBbHcBMXYBAWx3ATJ2AgF0dwFCBmxhYmVsc3UCdwFwdwFxKAEEZGF0YQRncmlkAXUCdQJ9AX0CdQF3AWEnAQRkYXRhBm5lc3RlZAEoALrCipILBgRkZWVwAXUBdgEBbn0BAA=="
+  },
+  "mdx": {
+    "content": {
+      "mdx": "Body of a shape-two page\n\nSecond paragraph.\n"
+    },
+    "snapshot": "AQSegYaPCgAoAQVfbWV0YQRraW5kAXcDbWR4KAEFX21ldGEFc2hhcGUBfQIoAQVfbWV0YQdzZWN0aW9uAXcABAEEYm9keSxCb2R5IG9mIGEgc2hhcGUtdHdvIHBhZ2UKClNlY29uZCBwYXJhZ3JhcGguCgA="
+  }
+}

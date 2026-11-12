@@ -1,3 +1,4 @@
+// Site-address naming and base validation.
 import { describe, expect, it } from 'bun:test';
 import { addressSiteName, isValidSiteBase } from '../src/address-site.js';
 import type { SitesConfig } from '../src/types.js';

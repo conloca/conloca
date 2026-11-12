@@ -1,0 +1,114 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "name": "puck",
+      "content": {
+        "puckData": {
+          "root": {
+            "props": {
+              "title": "Golden",
+              "links": [
+                {
+                  "label": "Home",
+                  "href": "/"
+                },
+                {
+                  "label": "About",
+                  "href": "/about"
+                }
+              ]
+            }
+          },
+          "content": [
+            {
+              "type": "Hero",
+              "props": {
+                "id": "hero-1",
+                "title": "Hi",
+                "body": {
+                  "__rt": true,
+                  "value": "<p>Rich <b>text</b></p>"
+                },
+                "buttons": [
+                  {
+                    "label": "Go",
+                    "links": [
+                      {
+                        "href": "/a"
+                      }
+                    ]
+                  }
+                ],
+                "tags": ["a", "b", "c"],
+                "grid": [[1, 2], ["x", "y"]]
+              }
+            },
+            {
+              "type": "Grid",
+              "props": {
+                "id": "grid-1",
+                "items": [
+                  {
+                    "type": "Card",
+                    "props": {
+                      "id": "card-1",
+                      "title": "Card"
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "zones": {
+            "grid-1:zone": [
+              {
+                "type": "Card",
+                "props": {
+                  "id": "z-1",
+                  "tags": ["t"]
+                }
+              }
+            ]
+          }
+        }
+      },
+      "state": "AUqQztKPBQAoAQVfbWV0YQRraW5kAXcEcHVjaygBBV9tZXRhBXNoYXBlAX0DJwEEcHVjawRyb290AScAkM7SjwUCBXByb3BzASgAkM7SjwUDBXRpdGxlAXcGR29sZGVuKACQztKPBQMFbGlua3MBdgEHX19pdGVtc3goAQVsaXN0cw0ybzZlMTl5dGR0Z3R1AXcfWyJwIiwiIiwicm9vdCIsInByb3BzIiwibGlua3MiXScBBWl0ZW1zEzBldG92cDEzbXJvMTRiZWl4ZzABKACQztKPBQcBcAF1AncNMm82ZTE5eXRkdGd0dXcBOScAkM7SjwUHAXYBKACQztKPBQkFbGFiZWwBdwRIb21lKACQztKPBQkEaHJlZgF3AS8nAQVpdGVtcxM0YXFoenRxY2RxbmlhcWk5a25nASgAkM7SjwUMAXABdQJ3DTJvNmUxOXl0ZHRndHV3AWknAJDO0o8FDAF2ASgAkM7SjwUOBWxhYmVsAXcFQWJvdXQoAJDO0o8FDgRocmVmAXcGL2Fib3V0KAEEcHVjawdjb250ZW50AXYBCF9fYmxvY2tzeCcBBmJsb2NrcwZoZXJvLTEBKACQztKPBRIEdHlwZQF3BEhlcm8nAJDO0o8FEgVwcm9wcwEoAJDO0o8FFAJpZAF3Bmhlcm8tMSgAkM7SjwUUBXRpdGxlAXcCSGkoAJDO0o8FFARib2R5AXYCBF9fcnR4BXZhbHVldxc8cD5SaWNoIDxiPnRleHQ8L2I+PC9wPigAkM7SjwUUB2J1dHRvbnMBdgEHX19pdGVtc3goAQVsaXN0cw0ycnB6a2VoNDZmajFqAXcgWyJiIiwiaGVyby0xIiwicHJvcHMiLCJidXR0b25zIl0nAQVpdGVtcxMyMHB2NmR0b3hncDhscjJnOWE2ASgAkM7SjwUaAXABdQJ3DTJycHprZWg0NmZqMWp3AWknAJDO0o8FGgF2ASgAkM7SjwUcBWxhYmVsAXcCR28oAJDO0o8FHAVsaW5rcwF2AQdfX2l0ZW1zeCgBBWxpc3RzDTBqaXh2Yjdkejd6YWwBdyNbImkiLCIyMHB2NmR0b3hncDhscjJnOWE2IiwibGlua3MiXScBBWl0ZW1zEzNhODN1OHhldGJ4MjZhaHl0djIBKACQztKPBSABcAF1AncNMGppeHZiN2R6N3phbHcBaScAkM7SjwUgAXYBKACQztKPBSIEaHJlZgF3Ai9hKACQztKPBRQEdGFncwF2AQdfX2l0ZW1zeCgBBWxpc3RzDTNld2VqYnZqdWZoNjABdx1bImIiLCJoZXJvLTEiLCJwcm9wcyIsInRhZ3MiXQgBD2E6M2V3ZWpidmp1Zmg2MAN3AWF3AWJ3AWMoAJDO0o8FFARncmlkAXYBB19faXRlbXN4KAEFbGlzdHMNM3A1eWt4ajR3MzcxZwF3HVsiYiIsImhlcm8tMSIsInByb3BzIiwiZ3JpZCJdJwEFaXRlbXMTNTYwaTB0NXloNXlqamQxcndjNQEoAJDO0o8FKwFwAXUCdw0zcDV5a3hqNHczNzFndwE5KACQztKPBSsBdgF2AQdfX2l0ZW1zeCgBBWxpc3RzDTAwczUydnR4YnR1dTcBdxtbImkiLCI1NjBpMHQ1eWg1eWpqZDFyd2M1Il0IAQ9hOjAwczUydnR4YnR1dTcCfQF9AicBBWl0ZW1zEzBmdXV1OXF4eTJoYXlqaW1kdjcBKACQztKPBTEBcAF1AncNM3A1eWt4ajR3MzcxZ3cBaSgAkM7SjwUxAXYBdgEHX19pdGVtc3goAQVsaXN0cw0ycHh2MDB0ZTZubDRiAXcbWyJpIiwiMGZ1dXU5cXh5MmhheWppbWR2NyJdCAEPYToycHh2MDB0ZTZubDRiAncBeHcBeScBBmJsb2NrcwZncmlkLTEBKACQztKPBTcEdHlwZQF3BEdyaWQnAJDO0o8FNwVwcm9wcwEoAJDO0o8FOQJpZAF3BmdyaWQtMSgAkM7SjwU5BWl0ZW1zAXYBCF9fYmxvY2tzeCcBBmJsb2NrcwZjYXJkLTEBKACQztKPBTwEdHlwZQF3BENhcmQnAJDO0o8FPAVwcm9wcwEoAJDO0o8FPgJpZAF3BmNhcmQtMSgAkM7SjwU+BXRpdGxlAXcEQ2FyZCgAkM7SjwU8BXBsYWNlAXYCBGxpc3R3F1tpZD1ncmlkLTFdLnByb3BzLml0ZW1zA2tleXcBaSgAkM7SjwUSBXBsYWNlAXYCBGxpc3R3B2NvbnRlbnQDa2V5dwE5KACQztKPBTcFcGxhY2UBdgIEbGlzdHcHY29udGVudANrZXl3AWknAQRwdWNrBXpvbmVzASgAkM7SjwVEC2dyaWQtMTp6b25lAXYBCF9fYmxvY2tzeCcBBmJsb2NrcwN6LTEBKACQztKPBUYEdHlwZQF3BENhcmQnAJDO0o8FRgVwcm9wcwEoAJDO0o8FSAJpZAF3A3otMSgAkM7SjwVIBHRhZ3MBdgEHX19pdGVtc3goAQVsaXN0cw0wODBqMnA2djhibXI4AXcaWyJiIiwiei0xIiwicHJvcHMiLCJ0YWdzIl0IAQ9hOjA4MGoycDZ2OGJtcjgBdwF0KACQztKPBUYFcGxhY2UBdgIEbGlzdHcRem9uZXMuZ3JpZC0xOnpvbmUDa2V5dwFpAA=="
+    },
+    {
+      "name": "data",
+      "content": {
+        "data": {
+          "name": "Entry",
+          "tags": ["one", "two"],
+          "rows": [
+            {
+              "t": "A",
+              "links": [
+                {
+                  "l": "1"
+                }
+              ]
+            },
+            {
+              "t": "B"
+            }
+          ],
+          "nested": {
+            "deep": {
+              "list": [true, null, 3]
+            }
+          }
+        }
+      },
+      "state": "ARvh5LScCgAoAQVfbWV0YQRraW5kAXcEZGF0YSgBBV9tZXRhBXNoYXBlAX0DKAEEZGF0YQRuYW1lAXcFRW50cnkoAQRkYXRhBHRhZ3MBdgEHX19pdGVtc3goAQVsaXN0cw0yOGdiMWY3OW9rZHVnAXcPWyJkIiwiIiwidGFncyJdCAEPYToyOGdiMWY3OW9rZHVnAncDb25ldwN0d28oAQRkYXRhBHJvd3MBdgEHX19pdGVtc3goAQVsaXN0cw0xOTNid3JyZHQxNnptAXcPWyJkIiwiIiwicm93cyJdJwEFaXRlbXMTNmplcXc5YWExOWNuN3F6bWxsZgEoAOHktJwKCQFwAXUCdw0xOTNid3JyZHQxNnptdwE5JwDh5LScCgkBdgEoAOHktJwKCwF0AXcBQSgA4eS0nAoLBWxpbmtzAXYBB19faXRlbXN4KAEFbGlzdHMNMXc4dW94aHUxcW55YQF3I1siaSIsIjZqZXF3OWFhMTljbjdxem1sbGYiLCJsaW5rcyJdJwEFaXRlbXMTMHN6OGYyZGlsa2xjajdqdm13bwEoAOHktJwKDwFwAXUCdw0xdzh1b3hodTFxbnlhdwFpJwDh5LScCg8BdgEoAOHktJwKEQFsAXcBMScBBWl0ZW1zEzIyZDhoOXRjdnZxampyMm9xYjIBKADh5LScChMBcAF1AncNMTkzYndycmR0MTZ6bXcBaScA4eS0nAoTAXYBKADh5LScChUBdAF3AUInAQRkYXRhBm5lc3RlZAEnAOHktJwKFwRkZWVwASgA4eS0nAoYBGxpc3QBdgEHX19pdGVtc3goAQVsaXN0cw0zM3RoOHZiM2oxZ3ZpAXcfWyJkIiwiIiwibmVzdGVkIiwiZGVlcCIsImxpc3QiXQgBD2E6MzN0aDh2YjNqMWd2aQN4fn0DAA=="
+    },
+    {
+      "name": "mdx",
+      "content": {
+        "mdx": "---\ntitle: Golden\ntags: [a, b]\n---\n\n# Heading\n\nFirst paragraph with some words.\n\nSecond paragraph, longer, so the body has more than one line.\n"
+      },
+      "state": "AQb9uZ39CAAoAQVfbWV0YQRraW5kAXcDbWR4KAEFX21ldGEFc2hhcGUBfQMoAQtmcm9udG1hdHRlcgV0aXRsZQF3BkdvbGRlbigBC2Zyb250bWF0dGVyBHRhZ3MBdQJ3AWF3AWIoAQVfbWV0YQdzZWN0aW9uAXckLS0tCnRpdGxlOiBHb2xkZW4KdGFnczogW2EsIGJdCi0tLQoKBAEEYm9keWsjIEhlYWRpbmcKCkZpcnN0IHBhcmFncmFwaCB3aXRoIHNvbWUgd29yZHMuCgpTZWNvbmQgcGFyYWdyYXBoLCBsb25nZXIsIHNvIHRoZSBib2R5IGhhcyBtb3JlIHRoYW4gb25lIGxpbmUuCgA="
+    }
+  ]
+}

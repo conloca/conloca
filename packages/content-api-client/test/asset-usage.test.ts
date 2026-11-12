@@ -1,3 +1,4 @@
+// Asset usage lookups through the client.
 import { describe, expect, test } from 'bun:test';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
