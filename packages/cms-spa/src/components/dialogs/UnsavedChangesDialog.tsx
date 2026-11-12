@@ -2,21 +2,12 @@ import { AlertTriangle, X } from 'lucide-react';
 import { Button, IconButton } from '../ui/index.js';
 
 interface UnsavedChangesDialogProps {
-  pending?: boolean;
-  /** Returning to the fragment origin uses the dedicated back-navigation copy. */
-  backNavigation?: boolean;
   onSave: () => void;
   onDiscard: () => void;
   onCancel: () => void;
 }
 
-export function UnsavedChangesDialog({
-  onSave,
-  onDiscard,
-  onCancel,
-  pending = false,
-  backNavigation = false,
-}: UnsavedChangesDialogProps) {
+export function UnsavedChangesDialog({ onSave, onDiscard, onCancel }: UnsavedChangesDialogProps) {
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
       <div className="bg-overlay rounded-lg shadow-xl w-full max-w-md mx-4">
@@ -24,34 +15,26 @@ export function UnsavedChangesDialog({
         <div className="flex items-center justify-between p-4 border-b border-line">
           <div className="flex items-center gap-3">
             <AlertTriangle className="h-5 w-5 text-yellow-05 dark:text-yellow-08" />
-            <h2 className="text-lg font-semibold text-foreground">
-              {backNavigation ? 'Discard changes?' : 'Unsaved Changes'}
-            </h2>
+            <h2 className="text-lg font-semibold text-foreground">Unsaved Changes</h2>
           </div>
           <IconButton icon={X} ariaLabel="Close dialog" onClick={onCancel} variant="ghost" />
         </div>
 
         {/* Content */}
         <div className="p-4">
-          <p className="text-foreground">
-            {pending
-              ? 'Saving your changes. Please wait.'
-              : backNavigation
-                ? "By going back without saving, changes you've made will be discarded. Are you sure you don't want to save changes?"
-                : 'You have unsaved changes. What would you like to do?'}
-          </p>
+          <p className="text-foreground">You have unsaved changes. What would you like to do?</p>
         </div>
 
         {/* Actions */}
         <div className="flex justify-end gap-2 p-4 border-t border-line">
           <Button variant="outline" size="sm" onClick={onCancel}>
-            {backNavigation ? 'Continue editing' : 'Cancel'}
+            Cancel
           </Button>
-          <Button variant="destructive" size="sm" disabled={pending} onClick={onDiscard}>
-            {backNavigation ? 'Discard changes' : 'Discard Changes'}
+          <Button variant="destructive" size="sm" onClick={onDiscard}>
+            Discard Changes
           </Button>
-          <Button variant="primary" size="sm" disabled={pending} onClick={onSave}>
-            {backNavigation ? 'Save and go back' : 'Save & Continue'}
+          <Button variant="primary" size="sm" onClick={onSave}>
+            Save & Continue
           </Button>
         </div>
       </div>

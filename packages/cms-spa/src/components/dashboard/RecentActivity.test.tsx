@@ -10,7 +10,6 @@ import {
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { configureUI } from '../../ui-config.js';
 import { RecentActivity } from './RecentActivity.js';
 
 const LONG_AGO = '2026-01-10T09:00:00.000Z';
@@ -56,7 +55,6 @@ afterEach(() => {
   cleanup();
   globalThis.fetch = previousFetch;
   setContentAPIClient(previousClient);
-  configureUI({ hosted: undefined, readOnly: undefined });
 });
 
 /** The status the dot of the activity row titled `title` announces. */
@@ -66,35 +64,16 @@ async function dotStatusOf(title: string): Promise<string> {
   return within(row).getByText(/^Status:/).textContent ?? '';
 }
 
-function renderRecentActivity() {
-  render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <MemoryRouter>
-        <RecentActivity />
-      </MemoryRouter>
-    </QueryClientProvider>,
-  );
-}
-
 describe('Dashboard recent activity status', () => {
   test('a page that was never published is marked draft, like the Pages list', async () => {
-    renderRecentActivity();
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <MemoryRouter>
+          <RecentActivity />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
     expect(await dotStatusOf('Fresh page')).toBe('Status: draft');
     expect(await dotStatusOf('Live page')).toBe('Status: published');
-  });
-
-  test('uses configured status text for the dot and announcement, then clears it on reconfiguration', async () => {
-    configureUI({ hosted: true, pageStatusLabels: { published: 'Pushed to Github' } });
-    renderRecentActivity();
-    expect(await dotStatusOf('Live page')).toBe('Status: Pushed to Github');
-    expect(screen.getByTitle('Pushed to Github')).toBeTruthy();
-    expect(await dotStatusOf('Fresh page')).toBe('Status: draft');
-    cleanup();
-
-    configureUI({});
-    renderRecentActivity();
-    expect(await dotStatusOf('Live page')).toBe('Status: published');
-    expect(screen.getByTitle('published')).toBeTruthy();
-    expect(screen.queryByTitle('Pushed to Github')).toBeNull();
   });
 });

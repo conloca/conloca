@@ -345,7 +345,7 @@ describe('MDXEditField', () => {
 });
 
 describe('FragmentEditor — from-page mode', () => {
-  test('renders shared-content banner with Back and Save edits when ?from=page', async () => {
+  test('renders shared-content banner and Done button when ?from=page', async () => {
     // Seed a fragment so FragmentEditor's load gate passes
     const created = await testApi.createContent({
       kind: 'fragment',
@@ -390,9 +390,8 @@ describe('FragmentEditor — from-page mode', () => {
       expect(screen.getByTestId('shared-fragment-banner')).toBeInTheDocument();
     });
 
-    expect(screen.getByRole('button', { name: 'Back to page' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save edits' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^(Done|Cancel)$/ })).toBeNull();
+    // Done button visible when from=page
+    expect(screen.getByTestId('fragment-editor-done')).toBeInTheDocument();
   });
 
   test('back-arrow targets /pages/:pageId when from=page', async () => {
@@ -468,7 +467,7 @@ describe('FragmentEditor — identity and locale state', () => {
     expect(editor.value).not.toContain('Fragment A');
 
     fireEvent.change(editor, { target: { value: '# Fragment B\n\nroute edit' } });
-    const save = screen.getByRole('button', { name: 'Save edits' });
+    const save = screen.getByRole('button', { name: /^save$/i });
     await waitFor(() => expect(save).not.toBeDisabled());
     fireEvent.click(save);
 
@@ -529,7 +528,7 @@ describe('FragmentEditor — identity and locale state', () => {
     const { queryClient } = renderFragmentEditor(`/fragments/${fragment.id!}`);
     const editor = (await screen.findByDisplayValue('# Stable Fragment')) as HTMLTextAreaElement;
     fireEvent.change(editor, { target: { value: '# Stable Fragment\n\nunsaved typing' } });
-    const save = screen.getByRole('button', { name: 'Save edits' });
+    const save = screen.getByRole('button', { name: /^save$/i });
     await waitFor(() => expect(save).not.toBeDisabled());
 
     act(() => {

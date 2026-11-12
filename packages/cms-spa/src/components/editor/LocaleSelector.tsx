@@ -4,7 +4,6 @@ import { cn } from '../../utils/cn.js';
 
 interface LocaleSelectorProps {
   currentLocale: string;
-  disabled?: boolean;
   availableLocales: string[];
   missingLocales?: string[];
   onChange: (locale: string) => void;
@@ -12,7 +11,6 @@ interface LocaleSelectorProps {
 
 export function LocaleSelector({
   currentLocale,
-  disabled = false,
   availableLocales,
   missingLocales = [],
   onChange,
@@ -20,10 +18,10 @@ export function LocaleSelector({
   if (availableLocales.length <= 1) return null;
 
   return (
-    <Select.Root disabled={disabled} value={currentLocale} onValueChange={onChange}>
+    <Select.Root value={currentLocale} onValueChange={onChange}>
       <Select.Trigger
         aria-label="Locale"
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded text-sm border border-line text-foreground enabled:hover:bg-hover transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded text-sm border border-line text-foreground hover:bg-hover transition-colors cursor-pointer"
       >
         <Select.Value />
         <Select.Icon>

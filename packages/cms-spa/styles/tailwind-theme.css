@@ -106,17 +106,6 @@
 @utility border-line {
   border-color: var(--color-line);
 }
-/* The dropdown chevron of `Select`. Here, in the public theme, so consumers of `@conloca/cms-spa/ui` get
- * it too. A background image cannot use `currentColor`, so each theme has its own stroke (grey-04 on
- * light, grey-08 on dark). A utility, not an arbitrary class: the data URI has spaces,
- * which would split a class attribute into tokens. Not named bg-*: tailwind-merge would read that as a
- * background colour and drop `bg-panel` or the position next to it. */
-@utility select-chevron {
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' fill='none' viewBox='0 0 20 20'><path stroke='%235a5a5a' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m5 7.5 5 5 5-5'/></svg>");
-}
-@utility select-chevron-dark {
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' fill='none' viewBox='0 0 20 20'><path stroke='%23c3c3c3' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m5 7.5 5 5 5-5'/></svg>");
-}
 
 /* Dark mode: selector strategy for manual toggle + system preference.
  * Uses :is() (not :where()) so dark variants beat any host site's

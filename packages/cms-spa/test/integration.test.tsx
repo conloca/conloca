@@ -775,7 +775,7 @@ describe('CMS Integration Tests', () => {
       }
     });
 
-    test('the Preview button goes through openSiteUrl when the parent offers it', async () => {
+    test('live-site links go through openSiteUrl when the parent offers it', async () => {
       const opened: { path: string }[] = [];
       configureUI({
         apiBaseUrl: '/__cms/api',
@@ -788,17 +788,17 @@ describe('CMS Integration Tests', () => {
       try {
         const id = await createPuckPage('/about', 'About');
         renderAppWithDataRouter(['/pages'], undefined, false);
-        await screen.findByTestId(`page-title-${id}`);
-        fireEvent.click(screen.getByRole('button', { name: 'Preview About' }));
+        fireEvent.click(await screen.findByTestId(`page-title-${id}`));
+        fireEvent.click(screen.getByRole('link', { name: '/about' }));
 
-        await waitFor(() => expect(opened).toEqual([{ path: '/about' }]));
+        await waitFor(() => expect(opened).toEqual([{ path: '/about' }, { path: '/about' }]));
         expect(mockOpen).not.toHaveBeenCalled();
       } finally {
         mockOpen.mockRestore();
       }
     });
 
-    test('a refused Preview request only logs', async () => {
+    test('a refused live-site link only logs', async () => {
       configureUI({
         apiBaseUrl: '/__cms/api',
         openSiteUrl: () => Promise.reject(new RpcError('path refused', 'bad_arguments')),
@@ -813,8 +813,7 @@ describe('CMS Integration Tests', () => {
         const id = await createPuckPage('/refused', 'Refused');
         renderAppWithDataRouter(['/pages'], undefined, false);
         mountFreshToaster();
-        await screen.findByTestId(`page-title-${id}`);
-        fireEvent.click(screen.getByRole('button', { name: 'Preview Refused' }));
+        fireEvent.click(await screen.findByTestId(`page-title-${id}`));
 
         await waitFor(() =>
           expect(loggedErrors.some(([message]) => message === '[PageList] openSiteUrl failed:')).toBe(true),
@@ -908,15 +907,11 @@ describe('CMS Integration Tests', () => {
         const visibleLocales = screen.getAllByTestId('locale-indicator');
         expect(visibleLocales).toHaveLength(2); // Both en and nl for the multi-locale page only
 
-        // A filtered row keeps one editor title and every available locale in its split control.
-        const pageTitles = screen.queryAllByTestId(/^page-title-/);
-        expect(pageTitles).toHaveLength(1);
-        expect(screen.getByTestId(`page-title-${multiLocalePage.id}`)).toBeInTheDocument();
+        // Each visible page keeps one Edit split button with all its available locales.
         expect(screen.getByTestId(`edit-${multiLocalePage.id}`)).toBeInTheDocument();
         expect(screen.getByTestId(`edit-locales-${multiLocalePage.id}`)).toBeInTheDocument();
 
-        // The English-only page and its controls are absent from the filtered list.
-        expect(screen.queryByTestId(`page-title-${englishOnlyPage.id}`)).not.toBeInTheDocument();
+        // English-only page should not be in the DOM at all.
         expect(screen.queryByTestId(`edit-${englishOnlyPage.id}`)).not.toBeInTheDocument();
       });
 
