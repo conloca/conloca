@@ -1,5 +1,5 @@
 /* oxlint-disable no-underscore-dangle -- __UI_CONFIG__ is the existing browser-global compatibility contract read by embedded hosts. */
-import type { ContentAPIClient, EditorDataBindings } from '@conloca/content-api-client';
+import type { ContentAPIClient, EditorDataBindings, PageStatus } from '@conloca/content-api-client';
 import type { QueryClientConfig } from '@tanstack/react-query';
 import type { PageConversionFacts } from './convert-pages.js';
 import type { DraftToolsHost } from './draft-tools.js';
@@ -88,6 +88,8 @@ export interface UIConfig {
   schemasPath?: string;
   /** Page creation templates */
   templates?: Record<string, TemplateConfig>;
+  /** Optional display labels for page statuses; domain values and filtering stay unchanged. */
+  pageStatusLabels?: Partial<Record<PageStatus, string>>;
   /**
    * True when at least one site in `sites.json` declares an `mdxPages`
    * path. Drives whether the create-page dialog exposes the "Document
@@ -398,6 +400,10 @@ export function setDataBindings(dataBindings?: EditorDataBindings) {
   if (typeof window === 'undefined') return;
   const runtimeConfig = window.__UI_CONFIG__;
   if (runtimeConfig) runtimeConfig.dataBindings = dataBindings;
+}
+
+export function pageStatusLabel(status: PageStatus, fallback: string = status): string {
+  return getUIConfig().pageStatusLabels?.[status] ?? fallback;
 }
 
 export function getUIConfig(): UIConfig {

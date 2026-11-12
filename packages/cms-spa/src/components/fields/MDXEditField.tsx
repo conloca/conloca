@@ -14,14 +14,14 @@ interface MDXEditFieldProps {
  * than opening a modal. The page-route editor brings unsaved-changes guarding,
  * conflict recovery, locale switching, and Cmd+S — none of which the modal
  * had. The `?from=page` flag asks FragmentEditor to surface a shared-content
- * warning banner and offer a "Done" button that returns to this page.
+ * warning banner and offer a back arrow that returns to this page.
  */
 export function MDXEditField({ entry }: MDXEditFieldProps) {
   const navigate = useNavigate();
   // `:id` exists because MDXEditField is only rendered inside the Puck page
   // editor, which mounts at `/pages/:id`. If we ever surface this field
   // elsewhere the navigation will silently lose the return path, so the
-  // button still works (lands on /fragments/:id with no Done shortcut).
+  // button still works (lands on /fragments/:id with Back returning to the fragments list).
   const { id: pageId } = useParams<{ id: string }>();
 
   const handleOpenEditor = () => {
