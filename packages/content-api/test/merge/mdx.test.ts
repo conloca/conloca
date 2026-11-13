@@ -222,6 +222,67 @@ describe('mergeContent kind mdx', () => {
       expect(mdx(b ?? '', o ?? '', t ?? '')).toEqual({ kind: 'merged', value: merged });
     });
   });
+  describe('reports a clash where an upstream comment cannot be kept', () => {
+    const base = '---\ntitle: T # inline\ndate: 2024-01-01\ntags:\n  - a\n---\n\nA';
+    it.each([
+      [
+        'ours deleted the key it sits above',
+        'date: 2024-01-01\n',
+        '',
+        'date: 2024-01-01\n',
+        '# when\ndate: 2024-01-01\n',
+      ],
+      [
+        'ours deleted the key it sits after',
+        'date: 2024-01-01\n',
+        '',
+        'date: 2024-01-01\n',
+        'date: 2024-01-01 # when\n',
+      ],
+      [
+        'ours changed the same comment',
+        'title: T # inline',
+        'title: T # mine',
+        'title: T # inline',
+        'title: T # theirs',
+      ],
+      ['ours changed the comment lines above', 'title: T', '# mine\ntitle: T', 'title: T', '# theirs\ntitle: T'],
+      ['ours changed a multi-line value', '  - a\n', '  - b\n', '  - a\n', '  # theirs\n  - a\n'],
+      ['ours changed the comment after the last key', '  - a\n', '  - a\n# mine\n', '  - a\n', '  - a\n# theirs\n'],
+    ])('%s', (_name, from, mine, upstreamFrom, upstreamTo) => {
+      const ours = base.replace(from, mine);
+      const theirs = base.replace(upstreamFrom, upstreamTo);
+      const r = mdx(base, ours, theirs);
+      // Ours wins: the merged text is ours, the clash only says so.
+      expect(r.value).toBe(ours);
+      expect(r.kind === 'conflict' && r.conflicts).toEqual([
+        {
+          anchor: 'frontmatter',
+          base: splitMdx(base).section,
+          ours: splitMdx(ours).section,
+          theirs: splitMdx(theirs).section,
+        },
+      ]);
+    });
+    it('but not where both sides made the same comment change', () => {
+      const both = base.replace('title: T # inline', '# note\ntitle: T # same');
+      expect(mdx(base, both.replace('  - a', '  - b'), both)).toEqual({
+        kind: 'merged',
+        value: both.replace('  - a', '  - b'),
+      });
+    });
+    it.each([
+      ['ours deleted a commented key upstream left alone', '# about d\nd: x\n', ''],
+      ['ours changed a comment upstream left alone', 'title: T # c\n', 'title: T2 # mine\n'],
+    ])('nor where %s', (_name, from, mine) => {
+      const start = '---\ntitle: T # c\n# about d\nd: x\ne: 1\n---\n\nA';
+      const ours = start.replace(from, mine);
+      expect(mdx(start, ours, start.replace('e: 1', 'e: 2'))).toEqual({
+        kind: 'merged',
+        value: ours.replace('e: 1', 'e: 2'),
+      });
+    });
+  });
   it('leaves untouched frontmatter values byte for byte when rewriting', () => {
     const long = 'word '.repeat(30).trim();
     const fmText = (title: string, extra: string) =>

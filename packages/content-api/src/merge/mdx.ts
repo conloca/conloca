@@ -1,4 +1,4 @@
-import { isScalar, parseDocument, parse as parseYaml, visit, type visitor } from 'yaml';
+import { isScalar, Lexer, parseDocument, parse as parseYaml, visit, type visitor } from 'yaml';
 import { ISO_TIMESTAMP_RE } from '../mdx-frontmatter.js';
 import type { JsonObject } from '../types.js';
 import { type EntryLines, entryLines } from '../yaml-lines.js';
@@ -133,6 +133,34 @@ function withTheirLines(section: string, merged: JsonObject, sides: { b: MdxPart
   return section.slice(0, mine.start) + (mine.crlf ? yaml.replaceAll('\n', '\r\n') : yaml) + section.slice(mine.end);
 }
 
+/** The comments in a YAML text as the YAML lexer reads them, so a `#` in a quoted value or a block scalar is none. */
+function comments(yaml: string): string {
+  return [...new Lexer().lex(yaml)].filter((token) => token.startsWith('#')).join('\n');
+}
+
+/** The comments on `key` in a section: between it and the entry before, and in its own lines; '' without the key. */
+function keyComments(entries: SectionEntries, key: string): string {
+  const at = entries.lines.get(key);
+  return at === undefined ? '' : comments((entries.gaps.get(key) ?? '') + entries.yaml.slice(at.start, at.end));
+}
+
+/**
+ * Whether `section` (the merged front matter) lost a comment upstream changed against `base`: on a key ours deleted,
+ * where ours changed the same comment, or inside a multi-line value ours rewrote. Ours wins there, so the merge says so.
+ * It also fires where the merge repeats the trailing comment (upstream added a key after it): the merged tail then
+ * differs from upstream's, though nothing is lost.
+ */
+function losesUpstreamComment(section: string, base: string, theirs: string): boolean {
+  const [mine, was, upstream] = [section, base, theirs].map(sectionEntries);
+  if (!mine || !was || !upstream) return false;
+  // Each place's comments upstream, in base and in the merge; one is lost where upstream changed it and the merge lacks it.
+  const places = [
+    [upstream.tail, was.tail, mine.tail].map(comments),
+    ...[...upstream.lines.keys()].map((key) => [upstream, was, mine].map((side) => keyComments(side, key))),
+  ];
+  return places.some(([changed, before, kept]) => changed !== before && changed !== kept);
+}
+
 /** `section` with only the changed keys rewritten, so key order, quoting and comments survive. */
 export function rewriteSection(section: string, merged: JsonObject): string {
   const { start, end } = yamlRange(section);
@@ -186,7 +214,12 @@ export function mergeMdxFile(base: string, ours: string, theirs: string): MergeR
     if (source) section = source.section;
     else if (isRecord(merged) && template) section = rewriteSection(template.section, merged);
     else section = '';
-    if (isRecord(merged) && section !== '') section = withTheirLines(section, merged, { b, o, t });
+    if (isRecord(merged) && section !== '') {
+      section = withTheirLines(section, merged, { b, o, t });
+      if (losesUpstreamComment(section, b.section, t.section)) {
+        conflicts.push({ anchor: 'frontmatter', base: b.section, ours: o.section, theirs: t.section });
+      }
+    }
   } else if (o.section === t.section || t.section === b.section) section = o.section;
   else if (o.section === b.section) section = t.section;
   else {
