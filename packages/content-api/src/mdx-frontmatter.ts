@@ -45,13 +45,13 @@ export function serializeMdxWithFrontmatter(
   frontmatterData: Record<string, FrontmatterValue>,
   mdxContent: string,
 ): string {
-  const ordered: Record<string, FrontmatterValue | undefined> = {};
+  const ordered: Record<string, FrontmatterValue | undefined> = Object.create(null);
   for (const key of FRONTMATTER_KEY_ORDER) {
-    if (key in frontmatterData) ordered[key] = normalize(frontmatterData[key]);
+    if (Object.hasOwn(frontmatterData, key)) ordered[key] = normalize(frontmatterData[key]);
   }
   // oxlint-disable-next-line unicorn/no-array-sort -- the target lib predates toSorted; this sorts a fresh local array.
   for (const key of Object.keys(frontmatterData).sort()) {
-    if (!(key in ordered)) ordered[key] = normalize(frontmatterData[key]);
+    if (!Object.hasOwn(ordered, key)) ordered[key] = normalize(frontmatterData[key]);
   }
 
   const doc = new Document(ordered);
