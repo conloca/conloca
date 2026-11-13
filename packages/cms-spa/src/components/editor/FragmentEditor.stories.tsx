@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { expect, userEvent, waitFor, within } from 'storybook/test';
 import '../../main.css';
+import { CmsSpaApp } from '../../CmsSpaApp.js';
 import { EDITOR_DIRTY_CHANGED_EVENT, flushOpenEditor, isOpenEditorDirty } from '../../editor-flush.js';
 import { ThemeProvider } from '../../hooks/useTheme.js';
 import { configureUI, getUIConfig } from '../../ui-config.js';
@@ -967,3 +968,78 @@ export const ExplicitSaveBeforeLocaleSuccess: Story = explicitSaveRace('success'
 export const ExplicitSaveErrorBeforeLocale: Story = explicitSaveRace('error', true);
 /** Uses the production BaseMDXEditor document shortcut, which CMSMDXEditor forwards through unchanged. */
 export const StandaloneKeyboardSaveBeforeLocale: Story = explicitSaveRace('error', false, true);
+
+function ReopeningFragmentHost({ wholeApp = false }: { wholeApp?: boolean }) {
+  const [generation, setGeneration] = useState(0);
+  return (
+    <>
+      <button type="button" onClick={() => setGeneration((value) => value + 1)}>
+        Reopen fragment
+      </button>
+      {wholeApp ? <CmsSpaApp key={generation} /> : <FragmentEditorRoute key={generation} entry={FROM_PAGE} keyboard />}
+    </>
+  );
+}
+
+/** A fresh QueryClient and the actual MDX surface must read the write that finishes after the previous editor unmounted. */
+export const ReopenAfterPendingSave: Story = {
+  beforeEach: () => installStoryApi(new DelayedContentAPI(), { hosted: false }),
+  render: () => <ReopeningFragmentHost />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    if (!(api instanceof DelayedContentAPI)) throw new Error('Missing delayed write fixture.');
+    const delayed = api;
+    const editable = () => {
+      const surface = canvasElement.querySelector<HTMLElement>('[contenteditable="true"]');
+      if (!surface) throw new Error('Waiting for the MDX surface.');
+      return surface;
+    };
+    try {
+      const original = await waitFor(editable);
+      await userEvent.clear(original);
+      await userEvent.type(original, 'Saved before reopening');
+      await userEvent.click(canvas.getByRole('button', { name: 'Save edits' }));
+      await waitFor(() => expect(delayed.requests).toHaveLength(1));
+      await userEvent.click(canvas.getByRole('button', { name: 'Reopen fragment' }));
+      await expect(canvas.getByText('Finishing previous save…')).toBeVisible();
+      await expect(canvasElement.querySelector('[contenteditable="true"]')).toBeNull();
+      await expect(canvas.getByRole('button', { name: 'Back to page' })).toBeEnabled();
+      await expect(await flushOpenEditor()).toEqual({ ok: false, message: 'Fragment changes are still loading.' });
+      delayed.finish();
+      const reopened = await waitFor(editable);
+      await expect(reopened).not.toBe(original);
+      await expect(reopened).toHaveTextContent('Saved before reopening');
+      const stored = await delayed.getLocalized(FRAGMENT.id, 'en');
+      await expect(stored?.localized.content).toEqual({ mdx: delayed.saves[0] });
+      await userEvent.type(reopened, ' and edited again');
+      await userEvent.click(canvas.getByRole('button', { name: 'Save edits' }));
+      await waitFor(() => expect(delayed.requests).toHaveLength(2));
+      await expect(delayed.requests[1]?.etag).toBe(stored?.localized.etag);
+      delayed.finish();
+      await waitFor(() => expect(canvas.getByRole('button', { name: 'Saved' })).toBeDisabled());
+      await expect(editable()).toHaveTextContent('and edited again');
+      await expect((await delayed.getLocalized(FRAGMENT.id, 'en'))?.localized.content).toEqual({
+        mdx: delayed.saves[1],
+      });
+      await expect(canvas.queryByTestId('dest-page')).toBeNull();
+    } finally {
+      while (delayed.release) delayed.finish();
+    }
+  },
+};
+
+/** The actual app entry rebuilds its query client and access wrapper when its host changes the mount key. */
+export const ReopenWholeCmsAppDuringSave: Story = {
+  ...ReopenAfterPendingSave,
+  beforeEach: () => {
+    const restore = installStoryApi(new DelayedContentAPI(), { hosted: false });
+    configureUI({
+      ...getUIConfig(),
+      contentClient: api,
+      locales: { list: ['en'], defaultLocale: 'en' },
+      memoryRouter: { initialPath: FROM_PAGE, onNavigate() {}, subscribe: () => () => {} },
+    });
+    return restore;
+  },
+  render: () => <ReopeningFragmentHost wholeApp />,
+};

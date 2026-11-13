@@ -3,18 +3,29 @@
  * Exercises the routed fragment editor with the real RouterProvider and flush registration.
  * Suspended transitions retain the committed surface; delayed API replies must retain their owner.
  */
-import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
-import { getContentAPIClient } from '@conloca/content-api-client';
+import { afterEach, beforeEach, describe, expect, jest, spyOn, test } from 'bun:test';
+import { ContentAPIClient, getContentAPIClient } from '@conloca/content-api-client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { StrictMode, Suspense, startTransition, useContext, useLayoutEffect } from 'react';
+import {
+  type ReactElement,
+  StrictMode,
+  Suspense,
+  startTransition,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useState,
+} from 'react';
 import { createMemoryRouter, RouterProvider, UNSAFE_DataRouterStateContext, useParams } from 'react-router-dom';
+import { CmsSpaApp } from '../src/CmsSpaApp.js';
 import type { CMSMDXEditorProps } from '../src/components/editor/CMSMDXEditor.js';
 import { FragmentEditor } from '../src/components/editor/FragmentEditor.js';
 import { fragmentStatusText } from '../src/components/editor/FragmentEditorHeaderActions.js';
+import { pendingFragmentSave, trackFragmentSave } from '../src/components/editor/fragment-save-lifetime.js';
 import { EDITOR_DIRTY_CHANGED_EVENT, flushOpenEditor, isOpenEditorDirty } from '../src/editor-flush.js';
 import { ThemeProvider } from '../src/hooks/useTheme.js';
-import { configureUI } from '../src/ui-config.js';
+import { configureUI, setEditorReadOnly } from '../src/ui-config.js';
 import { setupTestAPI, testApi } from './test-utils.js';
 
 function fragmentTextarea(): HTMLTextAreaElement {
@@ -38,6 +49,30 @@ function TextareaSurface({ value, onChange }: CMSMDXEditorProps) {
   return (
     <textarea aria-label="Fragment markdown" value={value} onChange={(event) => onChange(event.currentTarget.value)} />
   );
+}
+
+function MountSeededSurface({ value, onChange }: CMSMDXEditorProps) {
+  const [markdown, setMarkdown] = useState(value);
+  return (
+    <textarea
+      aria-label="Fragment markdown"
+      value={markdown}
+      onChange={(event) => {
+        setMarkdown(event.currentTarget.value);
+        onChange(event.currentTarget.value);
+      }}
+    />
+  );
+}
+
+interface MountedTestView {
+  container: HTMLElement;
+  unmount(): void;
+  rerender(element: ReactElement): void;
+}
+
+interface FragmentTestHostActions {
+  reopen?: () => void;
 }
 
 interface SuspendedRoute {
@@ -105,8 +140,8 @@ async function openFragment(
     ],
     { basename, initialEntries: [`${basename === '/' ? '' : basename}/fragments/${id}${search}`] },
   );
-  const editor = (
-    <QueryClientProvider client={queryClient}>
+  const editor = (client = queryClient) => (
+    <QueryClientProvider client={client}>
       <ThemeProvider>
         <StrictMode>
           <Suspense fallback={<p>Suspended route</p>}>
@@ -116,15 +151,15 @@ async function openFragment(
       </ThemeProvider>
     </QueryClientProvider>
   );
-  let view = render(editor);
+  let view = render(editor());
   const surface = await screen.findByLabelText('Fragment markdown');
   return {
     id,
     surface,
     router,
     unmount: () => view.unmount(),
-    remount: () => {
-      view = render(editor);
+    remount: (client = queryClient) => {
+      view = render(editor(client));
     },
   };
 }
@@ -351,7 +386,7 @@ test('an interrupted fragment render cannot invalidate the committed fragment sa
 });
 
 test('unmount invalidates a late host save even when the original fragment is reopened', async () => {
-  const { surface, router, id, unmount, remount } = await openFragment();
+  const { surface, router, id, unmount, remount } = await openFragment('', undefined, MountSeededSurface);
   const { deferred, save } = deferSave();
   try {
     fireEvent.change(surface, { target: { value: '# Footer pending' } });
@@ -361,18 +396,700 @@ test('unmount invalidates a late host save even when the original fragment is re
     // Replacing an embedding host unmounts independently of the editor's navigation guard.
     await act(async () => unmount());
     await act(async () => remount());
-    expect(await screen.findByLabelText('Fragment markdown')).not.toBe(surface);
+    expect(screen.queryByLabelText('Fragment markdown')).toBeNull();
+    expect(screen.getByText('Finishing previous save…')).toBeTruthy();
+    expect(await flushOpenEditor()).toEqual({ ok: false, message: 'Fragment changes are still loading.' });
     expect(router.state.location.pathname).toBe(`/fragments/${id}`);
     await act(async () => {
       deferred.resolve();
       await pending;
     });
     expect(await pending).toEqual({ ok: false, message: 'Could not save editor changes.' });
+    await waitFor(() => expect(fragmentTextarea().value).toBe('# Footer pending'));
+    expect((await testApi.getLocalized(id, 'en'))?.localized.content).toEqual({ mdx: '# Footer pending' });
     expect(screen.getByTestId('fragment-editor-status').textContent).toBe('No unsaved changes.');
     expect(screen.getByRole('button', { name: 'Save edits' }).hasAttribute('disabled')).toBe(true);
+    const reopenedEtag = (await testApi.getLocalized(id, 'en'))?.localized.etag;
+    if (reopenedEtag === undefined) throw new Error('The saved fragment must exist before the next write.');
+    fireEvent.change(fragmentTextarea(), { target: { value: '# Reopened edit' } });
+    await act(async () => {
+      expect(await flushOpenEditor()).toEqual({ ok: true });
+    });
+    expect(fragmentTextarea().value).toBe('# Reopened edit');
+    expect(save.mock.calls[1]?.[0].etag).toBe(reopenedEtag);
+    expect((await testApi.getLocalized(id, 'en'))?.localized.content).toEqual({ mdx: '# Reopened edit' });
+    expect(screen.queryByRole('heading', { name: 'Content Modified' })).toBeNull();
   } finally {
     deferred.resolve();
     save.mockRestore();
+  }
+});
+
+test('a default-priority remount waits for an old flush write queued before passive cleanup', async () => {
+  const { id, unmount } = await openFragment('', undefined, MountSeededSurface);
+  await act(async () => unmount());
+  const first = Promise.withResolvers<void>();
+  const second = Promise.withResolvers<void>();
+  const client = getContentAPIClient();
+  const originalWrite = client.updateLocalized.bind(client);
+  let view: MountedTestView | undefined;
+  const sentFrom: (string | null | undefined)[] = [];
+  const writes = spyOn(client, 'updateLocalized').mockImplementation(async (input) => {
+    const index = sentFrom.length;
+    sentFrom.push(view?.container.querySelector('[data-generation]')?.getAttribute('data-generation'));
+    if (index === 0) await first.promise;
+    if (index === 1) await second.promise;
+    return originalWrite(input);
+  });
+  const sessions = [0, 1].map(() => ({
+    client: new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Number.POSITIVE_INFINITY, gcTime: 0 } },
+    }),
+    router: createMemoryRouter(
+      [{ path: '/fragments/:id', element: <FragmentEditor EditorComponent={MountSeededSurface} /> }],
+      { initialEntries: [`/fragments/${id}`] },
+    ),
+  }));
+  const hostActions: FragmentTestHostActions = {};
+  let released = false;
+  function ReleaseFirstReply() {
+    // Schedule a real async reply after the replacement rendered its initial pending-write snapshot.
+    if (!released) {
+      released = true;
+      queueMicrotask(() => first.resolve());
+    }
+    return null;
+  }
+  function Host() {
+    const [generation, setGeneration] = useState(0);
+    hostActions.reopen = () => setGeneration(1);
+    const session = sessions[generation];
+    if (!session) throw new Error('Missing host generation.');
+    return (
+      <div data-generation={generation}>
+        <QueryClientProvider key={generation} client={session.client}>
+          <ThemeProvider>
+            <RouterProvider router={session.router} />
+          </ThemeProvider>
+        </QueryClientProvider>
+        {generation === 1 && <ReleaseFirstReply />}
+      </div>
+    );
+  }
+  let flushing: ReturnType<typeof flushOpenEditor> | undefined;
+  try {
+    view = render(<Host />);
+    const surface = await screen.findByLabelText('Fragment markdown');
+    fireEvent.change(surface, { target: { value: '# First write' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save edits' }));
+    await waitFor(() => expect(writes.mock.calls).toHaveLength(1));
+    fireEvent.change(surface, { target: { value: '# Queued second write' } });
+    flushing = flushOpenEditor();
+    // A host's async update uses React's default priority; act would flush passive cleanup before the reply.
+    if (!hostActions.reopen) throw new Error('Host is not mounted.');
+    hostActions.reopen();
+    await waitFor(() => expect(sentFrom).toEqual(['0', '1']));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(screen.getByText('Finishing previous save…')).toBeTruthy();
+    const editorShownDuringSecondWrite = screen.queryByLabelText('Fragment markdown');
+    await act(async () => {
+      second.resolve();
+      await flushing;
+    });
+    expect(await flushing).toEqual({ ok: false, message: 'Could not save editor changes.' });
+    const stored = await testApi.getLocalized(id, 'en');
+    if (!stored) throw new Error('Missing stored fragment after the queued save.');
+    expect(stored.localized.content).toEqual({ mdx: '# Queued second write' });
+    expect(editorShownDuringSecondWrite).toBeNull();
+    await waitFor(() => expect(fragmentTextarea().value).toBe('# Queued second write'));
+    fireEvent.change(fragmentTextarea(), { target: { value: '# New editor save' } });
+    await act(async () => expect(await flushOpenEditor()).toEqual({ ok: true }));
+    expect(writes.mock.calls[2]?.[0].etag).toBe(stored.localized.etag);
+    expect((await testApi.getLocalized(id, 'en'))?.localized.content).toEqual({ mdx: '# New editor save' });
+  } finally {
+    first.resolve();
+    second.resolve();
+    await flushing;
+    view?.unmount();
+    sessions.forEach((session) => {
+      session.client.clear();
+    });
+    writes.mockRestore();
+  }
+});
+
+test('a remount waits for the first old-editor write started after its idle arrival render', async () => {
+  const { id, unmount } = await openFragment('', undefined, MountSeededSurface);
+  await act(async () => unmount());
+  const reply = Promise.withResolvers<void>();
+  const client = getContentAPIClient();
+  const originalWrite = client.updateLocalized.bind(client);
+  let view: MountedTestView | undefined;
+  let flushing: ReturnType<typeof flushOpenEditor> | undefined;
+  let handoffResult: Awaited<ReturnType<typeof flushOpenEditor>> | undefined;
+  let pendingAtRender: Promise<void> | null | undefined;
+  const sentFrom: (string | null | undefined)[] = [];
+  const writes = spyOn(client, 'updateLocalized').mockImplementation(async (input) => {
+    const index = sentFrom.length;
+    sentFrom.push(view?.container.querySelector('[data-generation]')?.getAttribute('data-generation'));
+    if (index === 0) await reply.promise;
+    return originalWrite(input);
+  });
+  const sessions = [0, 1].map(() => ({
+    client: new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Number.POSITIVE_INFINITY, gcTime: 0 } },
+    }),
+    router: createMemoryRouter(
+      [{ path: '/fragments/:id', element: <FragmentEditor EditorComponent={MountSeededSurface} /> }],
+      { initialEntries: [`/fragments/${id}`] },
+    ),
+  }));
+  const hostActions: FragmentTestHostActions = {};
+  let scheduled = false;
+  function StartHostFlush() {
+    if (!scheduled) {
+      scheduled = true;
+      pendingAtRender = pendingFragmentSave(client, id, 'en');
+      // The external host request arrives after this render commits, before old passive cleanup.
+      queueMicrotask(() => {
+        flushing = flushOpenEditor();
+      });
+    }
+    return null;
+  }
+  function Host() {
+    const [generation, setGeneration] = useState(0);
+    useEffect(() => {
+      if (generation === 1) {
+        // Parent passive effects run after the new editor registers, before its queued waiting-state render.
+        void flushOpenEditor().then((result) => {
+          handoffResult = result;
+        });
+      }
+    }, [generation]);
+    hostActions.reopen = () => setGeneration(1);
+    const session = sessions[generation];
+    if (!session) throw new Error('Missing host generation.');
+    return (
+      <div data-generation={generation}>
+        <QueryClientProvider key={generation} client={session.client}>
+          <ThemeProvider>
+            <RouterProvider router={session.router} />
+          </ThemeProvider>
+        </QueryClientProvider>
+        {generation === 1 && <StartHostFlush />}
+      </div>
+    );
+  }
+  try {
+    view = render(<Host />);
+    const surface = await screen.findByLabelText('Fragment markdown');
+    fireEvent.change(surface, { target: { value: '# Saved after idle arrival' } });
+    expect(pendingFragmentSave(client, id, 'en')).toBeNull();
+    if (!hostActions.reopen) throw new Error('Host is not mounted.');
+    hostActions.reopen();
+    await waitFor(() => expect(sentFrom).toEqual(['1']));
+    expect(pendingAtRender).toBeNull();
+    await waitFor(() => expect(handoffResult).toBeDefined());
+    expect(pendingFragmentSave(client, id, 'en')).not.toBeNull();
+    expect(handoffResult).toEqual({ ok: false, message: 'Fragment changes are still loading.' });
+    await waitFor(() => expect(screen.queryByText('Loading fragment…')).toBeNull());
+    const waitingMessage = screen.queryByText('Finishing previous save…');
+    const editorShownDuringWrite = screen.queryByLabelText('Fragment markdown');
+    await act(async () => {
+      reply.resolve();
+      await flushing;
+    });
+    expect(await flushing).toEqual({ ok: false, message: 'Could not save editor changes.' });
+    const stored = await testApi.getLocalized(id, 'en');
+    if (!stored) throw new Error('Missing stored fragment after the first host save.');
+    expect(stored.localized.content).toEqual({ mdx: '# Saved after idle arrival' });
+    await waitFor(() => expect(fragmentTextarea().value).toBe('# Saved after idle arrival'));
+    expect(waitingMessage).toBeTruthy();
+    expect(editorShownDuringWrite).toBeNull();
+    fireEvent.change(fragmentTextarea(), { target: { value: '# New editor after idle arrival' } });
+    await act(async () => expect(await flushOpenEditor()).toEqual({ ok: true }));
+    expect(writes.mock.calls[1]?.[0].etag).toBe(stored.localized.etag);
+    expect((await testApi.getLocalized(id, 'en'))?.localized.content).toEqual({
+      mdx: '# New editor after idle arrival',
+    });
+  } finally {
+    reply.resolve();
+    await flushing;
+    view?.unmount();
+    sessions.forEach((session) => {
+      session.client.clear();
+    });
+    writes.mockRestore();
+  }
+});
+
+test('the root development fallback retains a pending client across a CmsSpaApp parent rerender', async () => {
+  const previousUrl = window.location.href;
+  const reply = Promise.withResolvers<void>();
+  let view: MountedTestView | undefined;
+  try {
+    window.location.href = 'http://localhost/';
+    expect(window.location.pathname).toBe('/');
+    Reflect.deleteProperty(window, '__UI_CONFIG__');
+    view = render(<CmsSpaApp />);
+    const client = getContentAPIClient();
+    void trackFragmentSave(client, 'pending-footer', 'en', reply.promise);
+    expect(pendingFragmentSave(client, 'pending-footer', 'en')).not.toBeNull();
+    view.rerender(<CmsSpaApp />);
+    expect(pendingFragmentSave(getContentAPIClient(), 'pending-footer', 'en')).not.toBeNull();
+    setEditorReadOnly({ reason: 'Development workspace is read-only.' });
+    await expect(getContentAPIClient().deleteContent('pending-footer', 'etag')).rejects.toThrow(
+      'Development workspace is read-only.',
+    );
+    setEditorReadOnly(null);
+    configureUI({});
+    Reflect.deleteProperty(window, '__UI_CONFIG__');
+    view.rerender(<CmsSpaApp />);
+    expect(pendingFragmentSave(getContentAPIClient(), 'pending-footer', 'en')).toBeNull();
+  } finally {
+    reply.resolve();
+    await reply.promise;
+    view?.unmount();
+    setEditorReadOnly(null);
+    window.location.href = previousUrl;
+  }
+});
+
+for (const suppliedClient of [false, true]) {
+  test(`real CmsSpaApp remount reads after an earlier write with a ${suppliedClient ? 'host-supplied' : 'default'} client`, async () => {
+    const { id, unmount } = await openFragment();
+    await act(async () => unmount());
+    const originalClient = new ContentAPIClient({ baseUrl: '/__cms/api' });
+    configureUI({
+      apiBaseUrl: '/__cms/api',
+      ...(suppliedClient ? { contentClient: originalClient } : {}),
+      locales: { list: ['en'], defaultLocale: 'en' },
+      memoryRouter: { initialPath: `/fragments/${id}`, onNavigate() {}, subscribe: () => () => {} },
+    });
+    const reply = Promise.withResolvers<void>();
+    const writes = spyOn(ContentAPIClient.prototype, 'updateLocalized');
+    const originalWrite = writes.getMockImplementation();
+    if (!originalWrite) throw new Error('Missing original fragment writer.');
+    writes.mockImplementation(async function (this: ContentAPIClient, input) {
+      await reply.promise;
+      return originalWrite.call(this, input);
+    });
+    let view = render(<CmsSpaApp />);
+    let pending: Promise<unknown> | undefined;
+    const renderedMdx = () => {
+      const editable = view.container.querySelector('[contenteditable="true"]');
+      if (!editable) throw new Error('Waiting for the actual MDX surface.');
+      return editable.textContent;
+    };
+    try {
+      await waitFor(() => expect(renderedMdx()).toBe('Footer'));
+      const client = getContentAPIClient();
+      const stored = await client.getLocalized(id, 'en');
+      if (!stored) throw new Error('Missing footer fixture.');
+      pending = trackFragmentSave(
+        client,
+        id,
+        'en',
+        client.updateLocalized({
+          id,
+          locale: 'en',
+          data: { content: { mdx: '# Footer saved by previous mount' } },
+          etag: stored.localized.etag,
+        }),
+      );
+      await waitFor(() => expect(writes.mock.calls).toHaveLength(1));
+      await act(async () => view.unmount());
+      await act(async () => {
+        view = render(<CmsSpaApp />);
+      });
+      expect(await screen.findByText('Finishing previous save…')).toBeTruthy();
+      expect(view.container.querySelector('[contenteditable="true"]')).toBeNull();
+      await act(async () => {
+        reply.resolve();
+        await pending;
+      });
+      expect((await testApi.getLocalized(id, 'en'))?.localized.content).toEqual({
+        mdx: '# Footer saved by previous mount',
+      });
+      await waitFor(() => expect(renderedMdx()).toBe('Footer saved by previous mount'));
+    } finally {
+      reply.resolve();
+      await pending;
+      view.unmount();
+      writes.mockRestore();
+    }
+  });
+}
+
+test('a fresh CmsSpaApp configuration isolates the same API URL and fragment from an earlier workspace write', async () => {
+  const { id, unmount } = await openFragment();
+  await act(async () => unmount());
+  const previousStore = testApi;
+  const entry = await previousStore.getContent(id);
+  if (!entry?.locales.en) throw new Error('Missing earlier workspace fragment.');
+  const configuration = () => ({
+    apiBaseUrl: '/__cms/api',
+    locales: { list: ['en'], defaultLocale: 'en' },
+    memoryRouter: { initialPath: `/fragments/${id}`, onNavigate() {}, subscribe: () => () => {} },
+  });
+  configureUI(configuration());
+  const reply = Promise.withResolvers<void>();
+  const writes = spyOn(ContentAPIClient.prototype, 'updateLocalized');
+  const originalWrite = writes.getMockImplementation();
+  if (!originalWrite) throw new Error('Missing original fragment writer.');
+  writes.mockImplementation(async function (this: ContentAPIClient, input) {
+    await reply.promise;
+    return originalWrite.call(this, input);
+  });
+  let view = render(<CmsSpaApp />);
+  let pending: Promise<unknown> | undefined;
+  const renderedMdx = () => view.container.querySelector('[contenteditable="true"]')?.textContent;
+  try {
+    await waitFor(() => expect(renderedMdx()).toBe('Footer'));
+    const client = getContentAPIClient();
+    pending = trackFragmentSave(
+      client,
+      id,
+      'en',
+      client.updateLocalized({
+        id,
+        locale: 'en',
+        data: { content: { mdx: '# Earlier workspace completed' } },
+        etag: entry.locales.en.etag,
+      }),
+    );
+    await waitFor(() => expect(writes.mock.calls).toHaveLength(1));
+    await act(async () => view.unmount());
+    setupTestAPI('/__cms/api', {
+      sites: { default: { locales: ['en'], defaultLocale: 'en' } },
+      globalLocales: ['en'],
+    });
+    testApi.setContent({
+      ...entry,
+      locales: { en: { ...entry.locales.en, etag: 'new-workspace-etag', content: { mdx: '# New workspace' } } },
+    });
+    configureUI(configuration());
+    await act(async () => {
+      view = render(<CmsSpaApp />);
+    });
+    await waitFor(() => expect(renderedMdx()).toBe('New workspace'));
+    expect(screen.queryByText('Finishing previous save…')).toBeNull();
+    await act(async () => {
+      reply.resolve();
+      await pending;
+    });
+    expect(renderedMdx()).toBe('New workspace');
+    expect((await testApi.getLocalized(id, 'en'))?.localized.content).toEqual({ mdx: '# New workspace' });
+    expect((await previousStore.getLocalized(id, 'en'))?.localized.content).toEqual({
+      mdx: '# Earlier workspace completed',
+    });
+  } finally {
+    reply.resolve();
+    await pending;
+    view.unmount();
+    writes.mockRestore();
+    previousStore.clear();
+  }
+});
+
+for (const failure of ['missing', 'error'] as const) {
+  test(`an unloaded fragment does not block a host flush before or after a ${failure} read`, async () => {
+    const { unmount, remount } = await openFragment();
+    await act(async () => unmount());
+    const reply = Promise.withResolvers<void>();
+    const client = getContentAPIClient();
+    const reads = spyOn(client, 'getLocalized').mockImplementation(async () => {
+      await reply.promise;
+      if (failure === 'error') throw new Error('Fragment is unavailable.');
+      return null;
+    });
+    const writes = spyOn(client, 'updateLocalized');
+    try {
+      await act(async () => remount(new QueryClient({ defaultOptions: { queries: { retry: false } } })));
+      await screen.findByText('Loading fragment…');
+      expect(await flushOpenEditor()).toEqual({ ok: true });
+      await act(async () => reply.resolve());
+      await screen.findByText(/Failed to load fragment:/);
+      expect(await flushOpenEditor()).toEqual({ ok: true });
+      expect(writes.mock.calls).toHaveLength(0);
+      fireEvent.click(screen.getByRole('button', { name: 'Back to Fragments' }));
+      expect(await screen.findByTestId('dest-fragments')).toBeTruthy();
+    } finally {
+      reply.resolve();
+      reads.mockRestore();
+      writes.mockRestore();
+    }
+  });
+}
+
+for (const editDuringWait of [false, true]) {
+  test(`a locale switch waits for an earlier editor save${editDuringWait ? ' and typing revokes the destination' : ''}`, async () => {
+    configureUI({ locales: { list: ['en', 'nl'], defaultLocale: 'en' } });
+    const { id, unmount, remount } = await openFragment('', undefined, MountSeededSurface);
+    await selectDutch();
+    await waitFor(() => expect(fragmentTextarea().value).toBe('# Voettekst'));
+    const { deferred, save } = deferSave();
+    try {
+      fireEvent.change(fragmentTextarea(), {
+        target: { value: '# Voettekst pending' },
+      });
+      const { pending } = await act(async () => ({
+        pending: flushOpenEditor(),
+      }));
+      await waitFor(() => expect(save.mock.calls).toHaveLength(1));
+      await act(async () => unmount());
+      await act(async () => remount());
+      await waitFor(() => expect(fragmentTextarea().value).toBe('# Footer'));
+      await selectDutch();
+      if (editDuringWait) {
+        fireEvent.change(fragmentTextarea(), {
+          target: { value: '# English typed while waiting' },
+        });
+      }
+      await act(async () => {
+        deferred.resolve();
+        await pending;
+      });
+      expect(await pending).toEqual({
+        ok: false,
+        message: 'Could not save editor changes.',
+      });
+      const expectedText = editDuringWait ? '# English typed while waiting' : '# Voettekst pending';
+      const expectedLocale = editDuringWait ? 'en' : 'nl';
+      await waitFor(() => expect(fragmentTextarea().value).toBe(expectedText));
+      expect(screen.getByRole('combobox', { name: 'Locale' }).textContent).toBe(expectedLocale);
+      expect((await testApi.getLocalized(id, 'nl'))?.localized.content).toEqual({ mdx: '# Voettekst pending' });
+      const currentEtag = (await testApi.getLocalized(id, expectedLocale))?.localized.etag;
+      if (currentEtag === undefined) throw new Error('The reopened locale must exist before its next write.');
+      fireEvent.change(fragmentTextarea(), {
+        target: { value: `${expectedText} and saved again` },
+      });
+      await act(async () => expect(await flushOpenEditor()).toEqual({ ok: true }));
+      expect(save.mock.calls[1]?.[0].locale).toBe(expectedLocale);
+      expect(save.mock.calls[1]?.[0].etag).toBe(currentEtag);
+      expect((await testApi.getLocalized(id, expectedLocale))?.localized.content).toEqual({
+        mdx: `${expectedText} and saved again`,
+      });
+      expect(screen.queryByRole('heading', { name: 'Content Modified' })).toBeNull();
+    } finally {
+      deferred.resolve();
+      save.mockRestore();
+    }
+  });
+}
+
+for (const stalledStage of ['write', 'read'] as const) {
+  test(`a stalled earlier ${stalledStage} becomes recoverable without exposing stale content`, async () => {
+    const { surface, unmount, remount } = await openFragment('', undefined, MountSeededSurface);
+    const client = getContentAPIClient();
+    const reply = Promise.withResolvers<void>();
+    const originalWrite = client.updateLocalized.bind(client);
+    const originalRead = client.getLocalized.bind(client);
+    let reads = 0;
+    const write = spyOn(client, 'updateLocalized').mockImplementation(async (input) => {
+      if (stalledStage === 'write') await reply.promise;
+      return originalWrite(input);
+    });
+    const read = spyOn(client, 'getLocalized').mockImplementation(async (...input) => {
+      reads += 1;
+      if (stalledStage === 'read' && reads === 1) await reply.promise;
+      return originalRead(...input);
+    });
+    let pending: Promise<unknown> | undefined;
+    try {
+      fireEvent.change(surface, { target: { value: '# Earlier write finally stored' } });
+      await act(async () => {
+        pending = flushOpenEditor();
+      });
+      await waitFor(() => expect(write.mock.calls).toHaveLength(1));
+      if (stalledStage === 'read') await waitFor(() => expect(reads).toBe(1));
+      await act(async () => unmount());
+      jest.useFakeTimers();
+      await act(async () => remount(new QueryClient({ defaultOptions: { queries: { retry: false } } })));
+      expect(screen.getByText('Finishing previous save…')).toBeTruthy();
+      await act(async () => jest.advanceTimersByTime(30_001));
+      expect(screen.getByRole('alert').textContent).toContain('The previous save has not finished');
+      expect(screen.queryByLabelText('Fragment markdown')).toBeNull();
+      expect(reads).toBe(stalledStage === 'read' ? 1 : 0);
+      expect(await flushOpenEditor()).toEqual({ ok: false, message: 'Fragment changes are still loading.' });
+      expect(screen.getByRole('button', { name: 'Back to fragments' })).toBeTruthy();
+      await act(async () => {
+        reply.resolve();
+        await pending;
+      });
+      expect(screen.queryByLabelText('Fragment markdown')).toBeNull();
+      expect(screen.getByRole('alert')).toBeTruthy();
+      await act(async () => jest.advanceTimersByTime(0));
+      jest.useRealTimers();
+      fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+      await waitFor(() => expect(fragmentTextarea().value).toBe('# Earlier write finally stored'));
+      expect(reads).toBe(2);
+      expect(write.mock.calls).toHaveLength(1);
+    } finally {
+      jest.useRealTimers();
+      reply.resolve();
+      await pending;
+      write.mockRestore();
+      read.mockRestore();
+    }
+  });
+}
+
+test('a stalled destination save retains the current locale and exposes its failure', async () => {
+  configureUI({ locales: { list: ['en', 'nl'], defaultLocale: 'en' } });
+  const { unmount, remount } = await openFragment('', undefined, MountSeededSurface);
+  await selectDutch();
+  await waitFor(() => expect(fragmentTextarea().value).toBe('# Voettekst'));
+  const { deferred, save } = deferSave();
+  let pending: Promise<unknown> | undefined;
+  try {
+    fireEvent.change(fragmentTextarea(), { target: { value: '# Delayed Dutch write' } });
+    await act(async () => {
+      pending = flushOpenEditor();
+    });
+    await waitFor(() => expect(save.mock.calls).toHaveLength(1));
+    await act(async () => unmount());
+    await act(async () => remount());
+    await waitFor(() => expect(fragmentTextarea().value).toBe('# Footer'));
+    jest.useFakeTimers();
+    await selectDutch();
+    await act(async () => jest.advanceTimersByTime(30_001));
+    expect(screen.getByRole('heading', { name: 'Locale Switch Failed' })).toBeTruthy();
+    expect(fragmentTextarea().value).toBe('# Footer');
+    expect(screen.getByRole('combobox', { name: 'Locale' }).textContent).toBe('en');
+    jest.useRealTimers();
+    await act(async () => {
+      deferred.resolve();
+      await pending;
+    });
+    expect(fragmentTextarea().value).toBe('# Footer');
+    expect(screen.getByRole('combobox', { name: 'Locale' }).textContent).toBe('en');
+  } finally {
+    jest.useRealTimers();
+    deferred.resolve();
+    await pending;
+    save.mockRestore();
+  }
+});
+
+test('a cached locale handoff keeps its chrome and keyboard focus', async () => {
+  configureUI({ locales: { list: ['en', 'nl'], defaultLocale: 'en' } });
+  const { unmount, remount } = await openFragment('', undefined, MountSeededSurface);
+  await act(async () => unmount());
+  await act(async () =>
+    remount(
+      new QueryClient({
+        defaultOptions: {
+          queries: { retry: false, gcTime: Number.POSITIVE_INFINITY, staleTime: Number.POSITIVE_INFINITY },
+        },
+      }),
+    ),
+  );
+  await screen.findByLabelText('Fragment markdown');
+  await selectDutch();
+  await waitFor(() => expect(fragmentTextarea().value).toBe('# Voettekst'));
+  const selector = screen.getByRole('combobox', { name: 'Locale' });
+  selector.focus();
+  fireEvent.keyDown(selector, { key: 'ArrowDown' });
+  fireEvent.click(await screen.findByTestId('locale-option-en'));
+  await waitFor(() => expect(fragmentTextarea().value).toBe('# Footer'));
+  expect(screen.getByRole('combobox', { name: 'Locale' })).toBe(selector);
+  expect(document.activeElement).toBe(selector);
+});
+
+test('a rejected earlier save releases a reopened editor with the actual stored text', async () => {
+  const { surface, id, unmount, remount } = await openFragment('', undefined, MountSeededSurface);
+  const reply = Promise.withResolvers<void>();
+  const save = spyOn(getContentAPIClient(), 'updateLocalized').mockImplementationOnce(async () => {
+    await reply.promise;
+    throw new Error('The write was refused.');
+  });
+  try {
+    fireEvent.change(surface, { target: { value: '# Rejected draft' } });
+    const { pending } = await act(async () => ({ pending: flushOpenEditor() }));
+    await waitFor(() => expect(save.mock.calls).toHaveLength(1));
+    await act(async () => unmount());
+    await act(async () => remount(new QueryClient({ defaultOptions: { queries: { retry: false } } })));
+    expect(screen.queryByLabelText('Fragment markdown')).toBeNull();
+    await act(async () => {
+      reply.resolve();
+      await pending;
+    });
+    expect(await pending).toEqual({ ok: false, message: 'Could not save editor changes.' });
+    await waitFor(() => expect(fragmentTextarea().value).toBe('# Footer'));
+    expect((await testApi.getLocalized(id, 'en'))?.localized.content).toEqual({ mdx: '# Footer' });
+    fireEvent.change(fragmentTextarea(), { target: { value: '# Recovered edit' } });
+    await act(async () => expect(await flushOpenEditor()).toEqual({ ok: true }));
+    expect(fragmentTextarea().value).toBe('# Recovered edit');
+    expect((await testApi.getLocalized(id, 'en'))?.localized.content).toEqual({ mdx: '# Recovered edit' });
+  } finally {
+    reply.resolve();
+    save.mockRestore();
+  }
+});
+
+test('a reopened fragment can go Back while its earlier save is still pending', async () => {
+  const { surface, id, unmount, remount } = await openFragment();
+  const { deferred, save } = deferSave();
+  try {
+    fireEvent.change(surface, { target: { value: '# Earlier requested save' } });
+    const { pending } = await act(async () => ({ pending: flushOpenEditor() }));
+    await waitFor(() => expect(save.mock.calls).toHaveLength(1));
+    await act(async () => unmount());
+    await act(async () => remount());
+    expect(screen.getByText('Finishing previous save…')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Back to fragments' }));
+    expect(await screen.findByTestId('dest-fragments')).toBeTruthy();
+    expect((await testApi.getLocalized(id, 'en'))?.localized.content).toEqual({ mdx: '# Footer' });
+    await act(async () => {
+      deferred.resolve();
+      await pending;
+    });
+    expect(await pending).toEqual({ ok: false, message: 'Could not save editor changes.' });
+    expect(screen.getByTestId('dest-fragments')).toBeTruthy();
+    expect(save.mock.calls).toHaveLength(1);
+    expect((await testApi.getLocalized(id, 'en'))?.localized.content).toEqual({ mdx: '# Earlier requested save' });
+  } finally {
+    deferred.resolve();
+    save.mockRestore();
+  }
+});
+
+test('an old client save cannot block or overwrite a different client with the same fragment id and locale', async () => {
+  const { surface, id, unmount, remount } = await openFragment('', undefined, MountSeededSurface);
+  const oldStore = testApi;
+  const entry = await oldStore.getContent(id);
+  if (!entry?.locales.en) throw new Error('Missing fragment fixture.');
+  const { deferred, save } = deferSave();
+  try {
+    fireEvent.change(surface, { target: { value: '# Earlier client save' } });
+    const { pending } = await act(async () => ({ pending: flushOpenEditor() }));
+    await waitFor(() => expect(save.mock.calls).toHaveLength(1));
+    await act(async () => unmount());
+    setupTestAPI('/other-content-api');
+    configureUI({ locales: { list: ['en'], defaultLocale: 'en' } });
+    testApi.setContent({
+      ...entry,
+      locales: { en: { ...entry.locales.en, etag: 'other-client-etag', content: { mdx: '# Other client' } } },
+    });
+    await act(async () => remount(new QueryClient({ defaultOptions: { queries: { retry: false } } })));
+    await waitFor(() => expect(fragmentTextarea().value).toBe('# Other client'));
+    fireEvent.change(fragmentTextarea(), { target: { value: '# New client draft' } });
+    await act(async () => {
+      deferred.resolve();
+      await pending;
+    });
+    expect(await pending).toEqual({ ok: false, message: 'Could not save editor changes.' });
+    expect(fragmentTextarea().value).toBe('# New client draft');
+    expect((await testApi.getLocalized(id, 'en'))?.localized.content).toEqual({ mdx: '# Other client' });
+    await act(async () => expect(await flushOpenEditor()).toEqual({ ok: true }));
+    expect((await testApi.getLocalized(id, 'en'))?.localized.content).toEqual({ mdx: '# New client draft' });
+    expect((await oldStore.getLocalized(id, 'en'))?.localized.content).toEqual({ mdx: '# Earlier client save' });
+  } finally {
+    deferred.resolve();
+    save.mockRestore();
+    oldStore.clear();
   }
 });
 

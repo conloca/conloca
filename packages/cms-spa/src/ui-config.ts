@@ -281,6 +281,7 @@ declare global {
 }
 
 let config: UIConfig = { ...defaultConfig };
+const developmentConfigs = new WeakMap<UIConfig, UIConfig>();
 
 /** Fired on window when configuration is installed or a live editor setting changes. */
 export const EDITOR_CONFIG_CHANGED_EVENT = 'conloca:editor-config-changed';
@@ -420,12 +421,15 @@ export function getUIConfig(): UIConfig {
   // because it is the one field here that is NOT a property of this page's
   // workspace: dropping it would re-grant writes to a refused account.
   if (window.location.pathname === '/') {
-    return {
+    // Keep this derived config's client lifetime stable across parent renders, and isolate every reinstall.
+    const developmentConfig = developmentConfigs.get(config) ?? {
       ...defaultConfig,
       basename: undefined,
       enableDevtools: true,
-      readOnly: config.readOnly,
     };
+    developmentConfig.readOnly = config.readOnly;
+    developmentConfigs.set(config, developmentConfig);
+    return developmentConfig;
   }
 
   return config;

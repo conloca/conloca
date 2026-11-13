@@ -2,10 +2,10 @@ import {
   getContentAPIClient,
   StaleWriteError,
   type UpdateResult,
-  useLocalizedContent,
   useSitesConfig,
   useUpdateLocalized,
 } from '@conloca/content-api-client';
+import cn from 'clsx';
 import { AlertTriangle } from 'lucide-react';
 import { type ElementType, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { parsePath, useHref, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -22,6 +22,12 @@ import { UnsavedChangesDialog } from '../dialogs/UnsavedChangesDialog.js';
 import { CMSMDXEditor, type CMSMDXEditorProps } from './CMSMDXEditor.js';
 import { EditorChromeToggles } from './EditorChromeToggles.js';
 import { FRAGMENT_STATUS_ID, FragmentEditorHeaderActions, fragmentStatusText } from './FragmentEditorHeaderActions.js';
+import {
+  pendingFragmentSave,
+  trackFragmentSave,
+  useFragmentContent,
+  waitForFragmentSave,
+} from './fragment-save-lifetime.js';
 import { LocaleSelector } from './LocaleSelector.js';
 import { MDXLivePreview } from './MDXLivePreview.js';
 
@@ -42,6 +48,7 @@ export function FragmentEditor({ EditorComponent = CMSMDXEditor }: FragmentEdito
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const contentClient = getContentAPIClient();
   const updateContent = useUpdateLocalized();
   const { resolvedTheme } = useTheme();
 
@@ -78,7 +85,15 @@ export function FragmentEditor({ EditorComponent = CMSMDXEditor }: FragmentEdito
 
   const { defaultLocale, availableLocales } = useFragmentLocales();
 
-  const { data: loadedContent, isLoading, error } = useLocalizedContent(id || '', currentLocale);
+  const {
+    data: loadedContent,
+    isLoading,
+    error,
+    waitingForSave,
+    waitError,
+    retrySaveWait,
+    markLocaleLoaded,
+  } = useFragmentContent(id || '', currentLocale);
   const saveIdentityRef = useFragmentSaveIdentity(id, currentLocale);
   const fragmentIdentityRef = useRef(id);
   const routeIdentityChanged = fragmentIdentityRef.current !== id;
@@ -165,12 +180,17 @@ export function FragmentEditor({ EditorComponent = CMSMDXEditor }: FragmentEdito
     setSaveState('saving');
 
     try {
-      const result = await updateContent.mutateAsync({
+      const result = await trackFragmentSave(
+        contentClient,
         id,
-        locale: currentLocale,
-        data: { content: { mdx: newContent } },
-        etag: forceEtag ?? currentEtagRef.current,
-      });
+        currentLocale,
+        updateContent.mutateAsync({
+          id,
+          locale: currentLocale,
+          data: { content: { mdx: newContent } },
+          etag: forceEtag ?? currentEtagRef.current,
+        }),
+      );
 
       // A reply for another fragment or locale must not rebaseline this editor.
       if (saveIdentityRef.current !== saveIdentity) return 'error';
@@ -222,14 +242,20 @@ export function FragmentEditor({ EditorComponent = CMSMDXEditor }: FragmentEdito
   };
 
   const discardedBufferRef = useRef<{ identity: typeof saveIdentityRef.current; content: string } | null>(null);
-  const flushRef = useRef({ content, isDirty, persist });
+  const flushRef = useRef({ content, isDirty, persist, waitingForSave, contentClient });
   useLayoutEffect(() => {
     // The host must read the committed buffer and request, never an abandoned route render.
     const discarded = discardedBufferRef.current;
     const bufferDiscarded = discarded?.identity === saveIdentityRef.current && discarded.content === content;
     const hostDirty = isDirty && !routeIdentityChanged && !bufferDiscarded;
     const dirtyChanged = flushRef.current.isDirty !== hostDirty;
-    flushRef.current = { content, isDirty: hostDirty, persist };
+    flushRef.current = {
+      content,
+      isDirty: hostDirty,
+      persist,
+      waitingForSave,
+      contentClient,
+    };
     if (dirtyChanged) notifyEditorDirtyChanged();
   });
 
@@ -238,6 +264,13 @@ export function FragmentEditor({ EditorComponent = CMSMDXEditor }: FragmentEdito
       async () => {
         const identity = saveIdentityRef.current;
         let committed = flushRef.current;
+        // A previous editor's write can be discovered before its queued waiting-state render commits.
+        const previousEditorSave =
+          pendingSaveRef.current?.identity !== identity &&
+          pendingFragmentSave(committed.contentClient, identity.id || '', identity.locale);
+        if (committed.waitingForSave || previousEditorSave) {
+          return { ok: false, message: 'Fragment changes are still loading.' };
+        }
         while (committed.isDirty || pendingSaveRef.current?.identity === identity) {
           // oxlint-disable-next-line no-await-in-loop -- Each write needs the ETag returned by the previous save.
           const status = await committed.persist(committed.content);
@@ -309,11 +342,13 @@ export function FragmentEditor({ EditorComponent = CMSMDXEditor }: FragmentEdito
     const identity = saveIdentityRef.current;
     const intent: FragmentExitIntent = { kind: 'locale', locale: newLocale };
     exitIntentRef.current = intent;
+    const ownsIntent = () => exitIntentRef.current === intent && saveIdentityRef.current === identity;
 
     try {
-      const client = getContentAPIClient();
-      const newLocaleContent = await client.getLocalized(id, newLocale);
-      if (exitIntentRef.current !== intent || saveIdentityRef.current !== identity) return;
+      await waitForFragmentSave(pendingFragmentSave(contentClient, id, newLocale));
+      if (!ownsIntent()) return;
+      const newLocaleContent = await contentClient.getLocalized(id, newLocale);
+      if (!ownsIntent()) return;
       if (newLocaleContent && (newLocaleContent.id !== id || newLocaleContent.localized.locale !== newLocale)) {
         throw new Error('The locale reply does not match the requested fragment and locale.');
       }
@@ -333,10 +368,11 @@ export function FragmentEditor({ EditorComponent = CMSMDXEditor }: FragmentEdito
 
       setSavedSinceOpen(false);
       setSaveState('idle');
+      markLocaleLoaded(newLocale);
       setCurrentLocale(newLocale);
       setPendingLocaleSwitch(null);
     } catch (err) {
-      if (exitIntentRef.current !== intent || saveIdentityRef.current !== identity) return;
+      if (!ownsIntent()) return;
       revokeLocaleIntent();
       setErrorOperation('locale');
       showError(localeSwitchErrorMessage(flushRef.current.isDirty), err);
@@ -423,12 +459,13 @@ export function FragmentEditor({ EditorComponent = CMSMDXEditor }: FragmentEdito
   // with a placeholder empty string and update it later.
   if (routeIdentityChanged || !currentLocale || isLoading || !isContentLoaded) {
     return (
-      <div className="flex items-center justify-center h-full bg-page">
-        <div className="flex items-center gap-3 text-muted">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-azure-04" />
-          <span>Loading fragment…</span>
-        </div>
-      </div>
+      <FragmentLoading
+        waitingForSave={waitingForSave}
+        waitError={waitError}
+        onRetry={retrySaveWait}
+        backLabel={backLabel}
+        onBack={handleBack}
+      />
     );
   }
 
@@ -697,7 +734,56 @@ function useFragmentExit({
   };
 }
 
-type FragmentLoad = ReturnType<typeof useLocalizedContent>;
+function FragmentLoading({
+  waitingForSave,
+  waitError,
+  onRetry,
+  backLabel,
+  onBack,
+}: {
+  waitingForSave: boolean;
+  waitError: string | undefined;
+  onRetry: () => void;
+  backLabel: string;
+  onBack: () => void;
+}) {
+  return (
+    <div className={cn('flex flex-col items-center justify-center h-full bg-page gap-4')}>
+      {waitError ? (
+        <>
+          <p className={cn('px-4 text-center text-muted')} role="alert">
+            {waitError}
+          </p>
+          <button
+            type="button"
+            onClick={onRetry}
+            className={cn('px-4 py-2 bg-azure-04 text-white rounded-md hover:bg-azure-03 transition-colors')}
+          >
+            Retry
+          </button>
+        </>
+      ) : (
+        <div className={cn('flex items-center gap-3 text-muted')} role="status">
+          <div className={cn('animate-spin rounded-full h-6 w-6 border-b-2 border-azure-04')} />
+          <span>{waitingForSave ? 'Finishing previous save…' : 'Loading fragment…'}</span>
+        </div>
+      )}
+      {waitingForSave && (
+        <button
+          type="button"
+          onClick={onBack}
+          className={cn(
+            'px-4 py-2 text-muted rounded-md hover:bg-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 transition-colors',
+          )}
+        >
+          {backLabel}
+        </button>
+      )}
+    </div>
+  );
+}
+
+type FragmentLoad = ReturnType<typeof useFragmentContent>;
 
 function fragmentLoadFailed({
   routeIdentityChanged,

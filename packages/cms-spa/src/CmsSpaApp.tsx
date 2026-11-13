@@ -6,22 +6,33 @@ import App from './App.js';
 import { clearMediaCache } from './frame/media-cache.js';
 import { CanvasThemeProvider } from './hooks/useCanvasTheme.js';
 import { ThemeProvider } from './hooks/useTheme.js';
-import { getUIConfig } from './ui-config.js';
+import { getUIConfig, type UIConfig } from './ui-config.js';
 import { guardContentWrites } from './write-access.js';
+
+const defaultClients = new WeakMap<UIConfig, { baseUrl: string | undefined; client: ContentAPIClient }>();
+
+/** A same-workspace host remount replaces the query cache, but must retain the owner of outstanding writes. */
+function contentClientFor(config: UIConfig): ContentAPIClient {
+  if (config.contentClient) return config.contentClient;
+  const existing = defaultClients.get(config);
+  if (existing && existing.baseUrl === config.apiBaseUrl) return existing.client;
+  const client = new ContentAPIClient({ baseUrl: config.apiBaseUrl });
+  defaultClients.set(config, { baseUrl: config.apiBaseUrl, client });
+  return client;
+}
 
 /**
  * The full cms-spa editor as a React component.
  *
  * Reads the current `UIConfig` via `getUIConfig` — callers MUST call
- * `configureUI` before rendering this component. The `QueryClient`
- * and `ContentAPIClient` singletons are built via `useMemo`, so
- * consumers that force a fresh mount via React `key` (e.g. on
- * switching to another site) get clean cache state for the new site,
- * while single-mount consumers (e.g. astro-cms's `/__cms` route)
- * keep the same instances for the lifetime of the page.
+ * `configureUI` before rendering this component. Each mount owns its query
+ * cache. Default content clients belong to the exact installed config, so a
+ * same-workspace remount can await earlier writes while a new configuration
+ * gets a separate client. A supplied content client keeps its own identity.
  */
 export function CmsSpaApp() {
   const config = getUIConfig();
+  const contentClient = contentClientFor(config);
 
   const queryClient = useMemo(() => new QueryClient(config.queryClientOptions), [config.queryClientOptions]);
 
@@ -49,10 +60,8 @@ export function CmsSpaApp() {
   // is gated whether or not its author knew the seam existed. Reads are
   // untouched — a read-only editor still renders all of its content.
   useMemo(() => {
-    setContentAPIClient(
-      guardContentWrites(config.contentClient ?? new ContentAPIClient({ baseUrl: config.apiBaseUrl })),
-    );
-  }, [config.apiBaseUrl, config.contentClient]);
+    setContentAPIClient(guardContentWrites(contentClient));
+  }, [contentClient]);
 
   return (
     <QueryClientProvider client={queryClient}>

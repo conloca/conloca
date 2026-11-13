@@ -89,6 +89,12 @@ export class ContentWriteRefusedError extends Error {
 }
 
 const WRITABLE: EditorWriteAccess = Object.freeze({ writable: true });
+const writeOwners = new WeakMap<ContentAPIClient, ContentAPIClient>();
+
+/** Access wrappers preserve the backend client's request lifetime without merging unrelated clients. */
+export function contentWriteOwner(client: ContentAPIClient): ContentAPIClient {
+  return writeOwners.get(client) ?? client;
+}
 
 /**
  * What the editor may do to content right now.
@@ -146,5 +152,6 @@ export function guardContentWrites(client: ContentAPIClient): ContentAPIClient {
       configurable: false,
     });
   }
+  writeOwners.set(guarded, contentWriteOwner(client));
   return guarded;
 }
