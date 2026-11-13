@@ -154,11 +154,11 @@ export async function withFileLock<T>(
   const ownsLock = async () =>
     (await stat(lockPath)).mtime.getTime() === captured.mtime.getTime() &&
     (await readFile(ownerPath, 'utf8')) === token;
-  /** Ours on disk, looking once more where the library's refresh has touched the lock but not yet stored its mtime. */
+  /** Ours on disk, looking once more after a refresh that has touched the lock but not yet stored its mtime settles. */
   const stillOwned = async () => {
     try {
       if (await ownsLock()) return true;
-      await sleep(5);
+      await refreshSettled(captured, staleMs);
       return getLocks()[key] === captured && (await ownsLock());
     } catch {
       return false;
@@ -193,6 +193,17 @@ export async function withFileLock<T>(
 async function waitOutStaleLock(lockPath: string, staleMs: number, heartbeatMs: number): Promise<void> {
   const seen = await stat(lockPath).catch(() => null);
   if (seen && Date.now() - seen.mtimeMs >= staleMs) await sleep(heartbeatMs);
+}
+
+/**
+ * Waits while `record`'s refresh is in flight: its timer has fired and not yet rescheduled. The refresh's utimes can
+ * be on disk well before its callback stores the new mtime, so an ownership check in between would read our own lock
+ * as someone else's and leave it held, refreshed forever. Bounded by `staleMs`: past it the lock counts as lost anyway.
+ */
+async function refreshSettled(record: LockRecord, staleMs: number): Promise<void> {
+  const deadline = Date.now() + staleMs;
+  // oxlint-disable-next-line no-await-in-loop -- polls the library's own record; it signals nothing when it settles.
+  while (!record.released && record.updateTimeout === null && Date.now() < deadline) await sleep(1);
 }
 
 /**

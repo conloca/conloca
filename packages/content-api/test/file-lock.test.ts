@@ -2,6 +2,7 @@
 // timers cannot reach; the short sleeps only give a waiter time to start waiting.
 import { afterEach, beforeEach, describe, expect, it, setSystemTime } from 'bun:test';
 import { link, mkdir, open, readdir, readFile, rename, rm, utimes, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { basename, dirname, join, resolve } from 'node:path';
 import * as lockfile from 'proper-lockfile';
 import { getLocks } from 'proper-lockfile/lib/lockfile.js';
@@ -23,6 +24,9 @@ let id: string;
 let etag: string;
 let pagePath: string;
 const held: Array<() => Promise<void>> = [];
+
+/** graceful-fs's callback `utimes`, the one proper-lockfile refreshes a lock with. */
+type Utimes = (path: string, atime: Date, mtime: Date, callback: (error: Error | null) => void) => void;
 
 function pageText(meta: Record<string, string>): string {
   const file: VXJSONFile = {
@@ -141,6 +145,33 @@ describe('withFileLock', () => {
     expect(lockPathFor(join(dir, 'x', '..', 'example', 'pages', 'new.en.vxjson'), lockDir)).toBe(
       lockPathFor(join(dir, 'example', 'pages', 'new.en.vxjson'), lockDir),
     );
+  });
+
+  it('releases its lock when a refresh is on disk but not yet recorded during the release check', async () => {
+    // proper-lockfile refreshes the lock through graceful-fs. The refresh's utimes can be on disk before its callback
+    // records the new mtime, and on a busy machine that callback can trail by more than a few milliseconds.
+    const gracefulFs: { utimes: Utimes } = createRequire(import.meta.resolve('proper-lockfile'))('graceful-fs');
+    const realUtimes = gracefulFs.utimes;
+    const { promise: refreshOnDisk, resolve: refreshLanded } = Promise.withResolvers<void>();
+    try {
+      await withFileLock(
+        pagePath,
+        async () => {
+          gracefulFs.utimes = (path, atime, mtime, callback) =>
+            realUtimes(path, atime, mtime, (error) => {
+              refreshLanded();
+              // Real time: the delay has to outlast the release check's own real wait, which no fake clock drives.
+              setTimeout(() => callback(error), 50);
+            });
+          await refreshOnDisk; // the next refresh, one heartbeat in: its callback still 50 ms away
+        },
+        { lockDir, staleMs: 2_000 },
+      );
+    } finally {
+      gracefulFs.utimes = realUtimes;
+    }
+    // A lock left held keeps being refreshed, and every later writer times out on it.
+    await withFileLock(pagePath, async () => {}, { lockDir, staleMs: 2_000, timeoutMs: 1_000 });
   });
 });
 
