@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, setSystemTime, test } from 'bun:test';
 import yaml from 'yaml';
 import type { ContentAPI } from '../src/content-api.interface.js';
 import type { ContentMeta, CreateContentInput, LocaleUpdateData } from '../src/types.js';
@@ -1385,6 +1385,36 @@ And some more text with [a link](https://example.com).`;
         const updated = await contentApi.getLocalized(id, 'en');
         expect(updated).toBeDefined();
         expect(updated!.localized.modified).toBe(customModified);
+      });
+
+      test('a save that changes nothing keeps the etag and the modified date', async () => {
+        const createResult = await contentApi.createContent({
+          kind: 'page',
+          site: 'shop',
+          collection: 'pages',
+          type: 'mdx',
+          locales: { en: { pathname: '/test-no-op-save', meta: { title: 'Same' }, content: { mdx: 'Same text.' } } },
+        });
+        const id = getCreatedId(createResult);
+        const read = await contentApi.getLocalized(id, 'en');
+        assertDefined(read);
+        const original = read.localized;
+
+        // A minute later, so a stamped modified would differ from the created one.
+        setSystemTime(new Date(Date.now() + 60_000));
+        const updateResult = await contentApi
+          .updateLocalized({
+            id,
+            locale: 'en',
+            data: { meta: { title: 'Same' }, content: { mdx: 'Same text.' } },
+            etag: original.etag,
+          })
+          .finally(() => setSystemTime());
+
+        expect(updateResult.success).toBe(true);
+        const after = await contentApi.getLocalized(id, 'en');
+        expect(after?.localized.etag).toBe(original.etag);
+        expect(after?.localized.modified).toBe(original.modified);
       });
 
       test('should affect ETag calculation when modified timestamp changes', async () => {

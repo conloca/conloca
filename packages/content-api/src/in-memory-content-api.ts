@@ -401,6 +401,14 @@ export class InMemoryContentAPI implements ContentAPI {
 
     // Prepare updated content
     const updatedContent = data.content ? { ...currentContent, ...data.content } : currentContent;
+    // A save that leaves the entry as it was is no edit, as on the filesystem: nothing changes, so modified keeps its date.
+    if (
+      !data.modified &&
+      JSON.stringify([{ ...updatedLocaleVersion, modified: localeVersion.modified }, updatedContent]) ===
+        JSON.stringify([localeVersion, currentContent])
+    ) {
+      return { success: true, etag: localeVersion.etag, modified: new Date(localeVersion.modified) };
+    }
 
     // Calculate new dual ETag by creating a buffer from the in-memory data
     // Structure it like the filesystem JSON files

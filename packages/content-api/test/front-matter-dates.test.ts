@@ -34,7 +34,7 @@ describe('front matter dates in files', () => {
     expect(repaired).toMatch(new RegExp(`^${block}id: \\S+\\nmodified: '\\d{4}-\\d{2}-\\d{2}T[\\d:.]+Z'\\n$`));
   });
 
-  test('a save keeps every date and date-time, quoted or not, as written, and only modified changes', async () => {
+  test('a save keeps every date and date-time, quoted or not, as written: only the edit and modified change', async () => {
     const block = [
       'id: fragment-notes',
       'created: 2024-01-01',
@@ -55,13 +55,13 @@ describe('front matter dates in files', () => {
     const saved = await api.updateLocalized({
       id: 'fragment-notes',
       locale: 'en',
-      data: { content: { mdx: '# One\n' } },
+      data: { content: { mdx: '# One\n' }, meta: { title: 'Renamed' } },
       etag: current?.localized.etag ?? '',
     });
     expect(saved.success).toBe(true);
     const written = frontMatterText(await readFile(filePath, 'utf-8'));
     const modified = /\nmodified: '(\d{4}-\d{2}-\d{2}T[\d:.]+Z)'\n/.exec(written)?.[1];
-    expect(written).toBe(block.replace('modified: 2024-01-01', `modified: '${modified}'`));
+    expect(written).toBe(block.replace('modified: 2024-01-01', `modified: '${modified}'`).replace('Notes', 'Renamed'));
   });
 
   test('a save of a CRLF file keeps its comments, quoting and CRLF ends, and only modified changes', async () => {
@@ -105,40 +105,32 @@ describe('front matter dates in files', () => {
     ['CRLF', '\r\n', '\r\n'],
     ['LF without a final line end', '\n', ''],
     ['CRLF without a final line end', '\r\n', ''],
-  ])(
-    'a read of a multi-line %s body and its no-op save keep the file byte-equal but modified',
-    async (_n, eol, end) => {
-      const block = [
-        'id: fragment-notes',
-        'title: Notes',
-        'created: 2026-01-05',
-        "modified: '2026-11-10T13:07:19.432Z'",
-      ];
-      const lines = ['---', ...block, '---', '', '# One', '', 'Two'];
-      const seed = `${lines.join(eol)}${end}`;
-      await writeFile(filePath, seed);
-      const api = await FileSystemContentAPI.create({ contentRoot: tempDir });
-      const current = await api.getLocalized('fragment-notes', 'en');
-      const body = `# One${eol}${eol}Two`;
-      expect(current?.localized.content).toEqual({ mdx: `${body}${end}` });
-      // The editor sends the body back without its final line end.
-      const saved = await api.updateLocalized({
-        id: 'fragment-notes',
-        locale: 'en',
-        data: { content: { mdx: body } },
-        etag: current?.localized.etag ?? '',
-      });
-      expect(saved.success).toBe(true);
-      const file = await readFile(filePath, 'utf-8');
-      const modified = /\nmodified: '(\d{4}-\d{2}-\d{2}T[\d:.]+Z)'\r?\n/.exec(file)?.[1];
-      expect(file).toBe(seed.replace('2026-11-10T13:07:19.432Z', modified ?? ''));
-    },
-  );
+  ])('a read of a multi-line %s body and a save of it keep the body byte-equal', async (_n, eol, end) => {
+    const block = ['id: fragment-notes', 'title: Notes', 'created: 2026-01-05', "modified: '2026-11-10T13:07:19.432Z'"];
+    const lines = ['---', ...block, '---', '', '# One', '', 'Two'];
+    const seed = `${lines.join(eol)}${end}`;
+    await writeFile(filePath, seed);
+    const api = await FileSystemContentAPI.create({ contentRoot: tempDir });
+    const current = await api.getLocalized('fragment-notes', 'en');
+    const body = `# One${eol}${eol}Two`;
+    expect(current?.localized.content).toEqual({ mdx: `${body}${end}` });
+    // The editor sends the body back without its final line end.
+    const saved = await api.updateLocalized({
+      id: 'fragment-notes',
+      locale: 'en',
+      data: { content: { mdx: body }, meta: { title: 'Renamed' } },
+      etag: current?.localized.etag ?? '',
+    });
+    expect(saved.success).toBe(true);
+    const file = await readFile(filePath, 'utf-8');
+    const modified = /\nmodified: '(\d{4}-\d{2}-\d{2}T[\d:.]+Z)'\r?\n/.exec(file)?.[1];
+    expect(file).toBe(seed.replace('2026-11-10T13:07:19.432Z', modified ?? '').replace('Notes', 'Renamed'));
+  });
 
   test.each([
-    ['a no-op save', 'Second'],
+    ['the body as read', 'Second'],
     ['an edit', 'Edited second'],
-  ])('%s of a CRLF multi-paragraph body sent with LF breaks writes CRLF throughout', async (_n, second) => {
+  ])('a save of %s of a CRLF multi-paragraph body sent with LF breaks writes CRLF throughout', async (_n, second) => {
     const block = ['id: fragment-notes', 'title: Notes', 'created: 2026-01-05', "modified: '2026-11-10T13:07:19.432Z'"];
     const lines = ['---', ...block, '---', ''];
     await writeFile(filePath, [...lines, ...paragraphs('Second')].join('\r\n'));
@@ -147,14 +139,14 @@ describe('front matter dates in files', () => {
     const saved = await api.updateLocalized({
       id: 'fragment-notes',
       locale: 'en',
-      data: { content: { mdx: paragraphs(second).join('\n').trimEnd() } },
+      data: { content: { mdx: paragraphs(second).join('\n').trimEnd() }, meta: { title: 'Renamed' } },
       etag: current?.localized.etag ?? '',
     });
     expect(saved.success).toBe(true);
     const file = await readFile(filePath, 'utf-8');
     const modified = /\nmodified: '(\d{4}-\d{2}-\d{2}T[\d:.]+Z)'\r\n/.exec(file)?.[1] ?? '';
     const expected = [...lines, ...paragraphs(second)].join('\r\n');
-    expect(file).toBe(expected.replace('2026-11-10T13:07:19.432Z', modified));
+    expect(file).toBe(expected.replace('2026-11-10T13:07:19.432Z', modified).replace('Notes', 'Renamed'));
   });
 
   test.each([
@@ -162,7 +154,7 @@ describe('front matter dates in files', () => {
     ['one blank line', '\n', '\n'],
     ['two blank lines', '\n\n', '\n'],
     ['one blank line, CRLF', '\n', '\r\n'],
-  ])('a no-op save keeps %s between the front matter and the body', async (_name, gap, eol) => {
+  ])('a save keeps %s between the front matter and the body', async (_name, gap, eol) => {
     const text = 'A page whose front matter keeps its dates unquoted.\n';
     const block = [
       '# a comment line',
@@ -179,14 +171,29 @@ describe('front matter dates in files', () => {
     const saved = await api.updateLocalized({
       id: 'fragment-notes',
       locale: 'en',
-      data: { content: { mdx: text.replaceAll('\n', eol) } },
+      data: { content: { mdx: text.replaceAll('\n', eol) }, meta: { title: 'Renamed' } },
       etag: current?.localized.etag ?? '',
     });
     expect(saved.success).toBe(true);
     const file = await readFile(filePath, 'utf-8');
     const modified = /\nmodified: '(\d{4}-\d{2}-\d{2}T[\d:.]+Z)'\r?\n/.exec(file)?.[1];
-    const expected = `---\n${block.replace(/^modified: .*$/m, `modified: '${modified}'`)}---\n${gap}${text}`;
+    const stamped = block.replace(/^modified: .*$/m, `modified: '${modified}'`).replace('Dates check', 'Renamed');
+    const expected = `---\n${stamped}---\n${gap}${text}`;
     expect(file).toBe(expected.replaceAll('\n', eol));
+  });
+
+  test.each([
+    ['the body as the editor sends it', { content: { mdx: 'A page.' } }],
+    ['the page settings as they were', { meta: { title: 'Notes' } }],
+  ])('a save with no edits leaves the file as it was: %s', async (_name, data) => {
+    const file =
+      "---\nid: fragment-notes\ncreated: 2026-01-05\ntitle: Notes\nmodified: '2026-11-10T13:07:19.432Z'\n---\n\nA page.\n";
+    await writeFile(filePath, file);
+    const api = await FileSystemContentAPI.create({ contentRoot: tempDir });
+    const current = await api.getLocalized('fragment-notes', 'en');
+    const etag = current?.localized.etag ?? '';
+    expect((await api.updateLocalized({ id: 'fragment-notes', locale: 'en', data, etag })).success).toBe(true);
+    expect(await readFile(filePath, 'utf-8')).toBe(file);
   });
 
   // A file read gets the created it lacks (the repair above), so a save writes that date, never an empty one.
@@ -200,13 +207,13 @@ describe('front matter dates in files', () => {
     const saved = await api.updateLocalized({
       id: 'fragment-notes',
       locale: 'en',
-      data: { content: { mdx: 'A page.\n' } },
+      data: { content: { mdx: 'An edited page.\n' } },
       etag: current?.localized.etag ?? '',
     });
     expect(saved.success).toBe(true);
     const file = await readFile(filePath, 'utf-8');
     expect(file).toContain(`\ncreated: '${created}'\n`);
     expect(file).not.toContain("created: ''");
-    expect(file.endsWith('---\n\nA page.\n')).toBe(true);
+    expect(file.endsWith('---\n\nAn edited page.\n')).toBe(true);
   });
 });

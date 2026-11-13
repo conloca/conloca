@@ -2226,6 +2226,16 @@ export class FileSystemContentAPI implements ContentAPI {
       : this.mergeStaleWrite({ ...request, current, filePath, etag });
     if (!('text' in prepared)) return prepared;
     const { text: writtenText, modified, newMeta, newContent } = prepared;
+    // A save that leaves the file as it was is no edit: nothing is written, so modified keeps its date.
+    const unstamped = { ...request, current, fileText: current.text, modified: current.modified };
+    if (
+      targetFilePath === filePath &&
+      !data.modified &&
+      this.serializeUpdatedFile({ ...unstamped, newMeta, newContent }) ===
+        this.serializeUpdatedFile({ ...unstamped, data: {}, newMeta: current.meta, newContent: current.content })
+    ) {
+      return { success: true, etag: currentEtag, modified: new Date() };
+    }
 
     // Handle pathname changes - track history only for published content
     const pathnameHistory = buildPathnameHistory(
