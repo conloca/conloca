@@ -16,6 +16,9 @@ import type { ComponentConfig, Config, Data, PuckComponent } from '@puckeditor/c
 import { resolveAllData } from '@puckeditor/core';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useDocChannel } from '../../live/doc-channel.js';
+import { readPuckData } from '../../live/puck-binding.js';
+import { useLiveDoc } from '../../live/use-live.js';
 import { mergeDefaultProps } from '../../merge-default-props.js';
 import type { PageMetadata } from '../../types.js';
 import { getUIConfig } from '../../ui-config.js';
@@ -362,7 +365,12 @@ function PuckPageEditorInner({ puckConfig, initialLocale }: PageEditorWrapperPro
     if (!puckConfig || !fragmentsData?.items) return puckConfig;
     return enhancePuckConfigWithFragments(puckConfig, fragmentsData.items, currentLocale);
   }, [puckConfig, fragmentsData, currentLocale]);
-  const puckData = content?.localized?.content?.puckData;
+  // Live: the blocks come from the page's replica, read once per replica; Puck is then kept in step by the binding.
+  const channel = useDocChannel();
+  const liveDoc = useLiveDoc(channel && id ? { kind: 'puck', id, locale: currentLocale } : null);
+  const live = liveDoc.state === 'ready' ? liveDoc.live : undefined;
+  const livePuckData = useMemo(() => (live ? readPuckData(live.doc) : undefined), [live]);
+  const puckData = channel ? livePuckData : content?.localized?.content?.puckData;
 
   // Resolving again replaces the editor, unsaved block edits included, so it
   // runs when the blocks change other than by the editor's own save, or the
@@ -441,6 +449,9 @@ function PuckPageEditorInner({ puckConfig, initialLocale }: PageEditorWrapperPro
   if (error || (!isLoadingContent && !content?.localized)) {
     return <PageLoadFailure message={error?.message} />;
   }
+  if (liveDoc.state === 'failed') {
+    return <PageLoadFailure message={liveDoc.message} />;
+  }
 
   // Blocks resolved without the data their route binds would show a page
   // that differs from the published one without saying so.
@@ -472,6 +483,9 @@ function PuckPageEditorInner({ puckConfig, initialLocale }: PageEditorWrapperPro
   return (
     <>
       <PageEditor
+        // A handover to a new replica remounts Puck on its content.
+        key={live?.docKey}
+        live={live}
         entry={entryWithResolvedData}
         config={enhancedConfig}
         // The data context for Puck's internal resolveData (field changes, etc.)

@@ -1,4 +1,5 @@
 // Re-export useful types from dependencies
+export type { Data as PuckData } from '@puckeditor/core';
 export type { QueryClientConfig } from '@tanstack/react-query';
 // Export the mount component for embedding cms-spa inside another React app
 export { CmsSpaApp } from './CmsSpaApp.js';
@@ -48,18 +49,64 @@ export { awaitParentHello } from './frame/parent-hello.js';
 // Export types from hooks (AssetEntry, etc.)
 export type { AssetEntry, AssetUsage, FolderListing, FolderTreeNode } from './hooks/index.js';
 export { buildUploadFormData } from './hooks/useUpload.js';
+export {
+  createDataBinding,
+  type DataBinding,
+  dropHeldDataValues,
+  hasHeldDataValues,
+  readDataValues,
+  useLiveDataValues,
+  writeDataValues,
+} from './live/data-binding.js';
+// The editor page's side of the co-edited docs, its hooks and per-user undo
+export {
+  createDocChannel,
+  type DocChannel,
+  EDIT_ORIGIN,
+  type FrameDocChannel,
+  type FrameLiveDoc,
+  LOCAL_ORIGIN,
+  RELAY_ORIGIN,
+  useDocChannel,
+} from './live/doc-channel.js';
 // Messages the parent and the editor page exchange while several people edit a page
 export {
   type DocOpenRequest,
   type DocOpenResult,
   type LiveHello,
   type LiveMessage,
+  type LiveNotice,
   type LiveStatus,
   type PresencePeer,
   readLiveHello,
   readLiveMessage,
   readLiveStatus,
 } from './live/messages.js';
+export {
+  createPuckBinding,
+  type PuckBinding,
+  PuckLiveBridge,
+  readPuckData,
+  usePeerOutlines,
+  writePuckChange,
+} from './live/puck-binding.js';
+export { createLocalUndo, interceptUndoKeys } from './live/undo.js';
+export {
+  anyHeld,
+  applyDocEdits,
+  type DocEditResult,
+  flushLive,
+  followHandovers,
+  heldContent,
+  type LiveBinding,
+  type LiveDocState,
+  useDocEdit,
+  useDocEdits,
+  useLiveDoc,
+  useLiveMessage,
+  useLiveStatus,
+  usePresencePeers,
+} from './live/use-live.js';
 // Shrinks and checks an image before upload; the editor's parent page runs it on every upload it forwards
 export { prepareImageUpload, prepareUploadForm } from './media/prepare-image-upload.js';
 // Export configuration function

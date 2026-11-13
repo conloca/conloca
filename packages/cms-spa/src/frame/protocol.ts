@@ -163,6 +163,8 @@ export interface FrameEventPayloads {
   'presence.peers': { docKey: string; peers: PresencePeer[] };
   'live.message': LiveMessage;
   'live.status': LiveStatus;
+  /** The page holds work the parent lacks for `docKey` (a refused or failed write, invalid values), shown with `message`. */
+  'doc.held': { docKey: string; held: boolean; message: string | null };
 }
 
 /** Content methods the page may call; the parent refuses every other client method. */

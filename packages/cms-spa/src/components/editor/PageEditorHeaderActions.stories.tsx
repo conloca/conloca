@@ -98,6 +98,16 @@ export const NothingToSave: Story = {
   },
 };
 
+/** A live page saves as it is edited: no Save button, the rest stays. */
+export const Live: Story = {
+  args: { saveState: undefined, isDirty: undefined, onSave: undefined },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.queryByRole('button', { name: 'Save' })).toBeNull();
+    await expect(canvas.getByRole('button', { name: 'Page settings' })).toBeVisible();
+  },
+};
+
 /** Just saved and clean again: the button says Saved and stays disabled. */
 export const JustSaved: Story = {
   args: { isDirty: false, saveState: 'saved' },

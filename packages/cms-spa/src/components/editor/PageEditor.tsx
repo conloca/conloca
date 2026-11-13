@@ -1,11 +1,24 @@
 import type { DataContext, LocalizedEntry, UpdateResult } from '@conloca/content-api-client';
-import { type Config, createUsePuck } from '@puckeditor/core';
+import { type Config, createUsePuck, type Permissions } from '@puckeditor/core';
 import { Monitor, Smartphone, Tablet } from 'lucide-react';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { notifyEditorDirtyChanged, registerEditorFlushHandler } from '../../editor-flush.js';
 import { useCanvasSaveShortcut } from '../../frame/save-shortcut.js';
 import { useCanvasTheme } from '../../hooks/useCanvasTheme.js';
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard.js';
+import type { FrameLiveDoc } from '../../live/doc-channel.js';
+import {
+  createPuckBinding,
+  PeerOutline,
+  type PuckBinding,
+  PuckBindingProvider,
+  PuckHeldNotice,
+  PuckLiveBridge,
+  trackFieldResolves,
+  useCanvasUndoKeys,
+} from '../../live/puck-binding.js';
+import { useLiveStatus } from '../../live/use-live.js';
+import { mergeDefaultProps } from '../../merge-default-props.js';
 import { wrapSiteCSS } from '../../site-css-layer.js';
 import { useSiteStyles } from '../../site-styles.js';
 import type { SaveState } from '../../types.js';
@@ -16,7 +29,7 @@ import { ImageFieldRender } from '../fields/ImageField.js';
 import { toast } from '../toast.js';
 import { DrawerItemOverride, PUCK_ROOT_DROP_ZONE } from './DrawerItemOverride.js';
 import { withDraftMediaRendering } from './draft-media-config.js';
-import { PageEditorHeaderActions } from './PageEditorHeaderActions.js';
+import { LIVE_PAGE_SETTINGS_HINT, PageEditorHeaderActions } from './PageEditorHeaderActions.js';
 import { PuckWithUntouchedMetadata } from './PuckWithUntouchedMetadata.js';
 import {
   FieldsWithPageSettingsHint,
@@ -37,6 +50,8 @@ interface PageEditorProps {
   onLocaleChange?: (locale: string) => void;
   onReload?: () => void;
   onPublish?: () => void;
+  /** The page's live replica: edits go into it as they happen, and there is no Save. */
+  live?: FrameLiveDoc;
 }
 
 /** What the editor says when a save is refused for the page's size or the server's memory; the edits stay unsaved. */
@@ -97,6 +112,22 @@ const fieldTypeOverrides = {
 const drawerItemOverride = ({ children, name }: { children: React.ReactNode; name: string }) => (
   <DrawerItemOverride name={name}>{children}</DrawerItemOverride>
 );
+
+/** Inside <Puck>, beside its UI: the live binding's bridge (inert without a binding). */
+const livePuck = ({ children }: { children: React.ReactNode }) => (
+  <>
+    <PuckLiveBridge />
+    {children}
+  </>
+);
+
+/** A held replica takes no more edits: Puck shows it read-only. */
+const NO_EDITS: Partial<Permissions> = { drag: false, duplicate: false, delete: false, edit: false, insert: false };
+
+/** A canvas click on a page setting while live: Page settings are off, and this says why. */
+const openNoPageSettings = () => {
+  toast.error(LIVE_PAGE_SETTINGS_HINT);
+};
 
 /** On the canvas's scaled-down view (about half size) this still reads at a normal text size. */
 const EMPTY_PAGE_HINT_FONT_SIZE = '24px';
@@ -257,6 +288,7 @@ export function IframeBridge({ children, document: iframeDoc }: { children: Reac
  */
 function IframeWithInsertMarker({ children, document: iframeDoc }: { children: React.ReactNode; document?: Document }) {
   const canTakeAnInsert = usePageCanTakeAnInsert();
+  useCanvasUndoKeys(iframeDoc);
   React.useEffect(() => {
     const html = iframeDoc?.documentElement;
     if (!html) return undefined;
@@ -278,12 +310,34 @@ export function PageEditor({
   onLocaleChange,
   onReload,
   onPublish,
+  live,
 }: PageEditorProps) {
-  const renderConfig = useMemo(() => withDraftMediaRendering(config), [config]);
+  const bindingRef = useRef<PuckBinding | null>(null);
+  // Live, each field change's resolveData tells the binding which props the user changed (see trackFieldResolves).
+  const renderConfig = useMemo(
+    () => trackFieldResolves(withDraftMediaRendering(config), () => bindingRef.current),
+    [config],
+  );
   const [data, setData] = useState(entry.localized.content.puckData);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [isDirty, setIsDirty] = useState(false);
   const [conflict, setConflict] = useState<UpdateResult | null>(null);
+  const configRef = useRef(config);
+  configRef.current = config;
+  // Live: the binding takes Puck's changes. A remount on the same replica gets a new one, shown what Puck is shown. A
+  // re-seed hands Puck the load's shape: the doc's blocks with default props merged in, as the wrapper loads them.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a binding per replica; `data` is read once, as Puck reads it.
+  const binding = useMemo(
+    () => (live ? createPuckBinding(live, data, (next) => mergeDefaultProps(next, configRef.current)) : null),
+    [live],
+  );
+  bindingRef.current = binding;
+  // The binding's undo lets go of the replica's doc once this editor unmounts.
+  React.useEffect(() => binding?.retain(), [binding]);
+  // Re-renders on a refusal (the status says so) and on a write that threw (the binding holds without one).
+  useLiveStatus();
+  const [, setWriteFailed] = useState(false);
+  const held = binding?.live.held ?? false;
 
   // Use ref for data in handleSave to keep handleSave referentially stable.
   // Without this, handleSave would depend on `data` (which changes every keystroke),
@@ -364,6 +418,8 @@ export function PageEditor({
   // Host Save calls flushOpenEditor → this handler. Keep stable via refs so
   // re-registering does not thrash on every keystroke dirty flip.
   React.useEffect(() => {
+    // Live: the parent saves the doc; there is nothing for a host Save to flush here.
+    if (binding) return undefined;
     return registerEditorFlushHandler(
       async () => {
         const activeSave = activeSaveRef.current;
@@ -376,18 +432,26 @@ export function PageEditor({
       },
       { isDirty: () => isDirtyRef.current },
     );
-  }, [handleSave]);
+  }, [handleSave, binding]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: The dependency change is the event; handlers read current state through refs.
   React.useEffect(() => {
     notifyEditorDirtyChanged();
   }, [isDirty]);
 
-  const handleDataChange = useCallback((newData: any) => {
-    setData(newData);
-    setIsDirty(true);
-    setSaveState('idle');
-  }, []);
+  const handleDataChange = useCallback(
+    (newData: any) => {
+      if (binding) {
+        binding.change(newData);
+        if (binding.live.held) setWriteFailed(true);
+        return;
+      }
+      setData(newData);
+      setIsDirty(true);
+      setSaveState('idle');
+    },
+    [binding],
+  );
 
   // Block in-app navigations (sidebar click, "Open fragment editor" from
   // MDXEditField, programmatic navigate) and warn on browser-level
@@ -418,6 +482,7 @@ export function PageEditor({
     onOpenMetadata,
     onBack,
     previewBlockedReason,
+    live: binding !== null,
     previewPending,
   });
   headerActionsPropsRef.current = {
@@ -432,6 +497,7 @@ export function PageEditor({
     onOpenMetadata,
     onBack,
     previewBlockedReason,
+    live: binding !== null,
     previewPending,
   };
 
@@ -451,11 +517,11 @@ export function PageEditor({
             currentLocale={p.locale}
             availableLocales={p.availableLocales}
             onLocaleChange={p.onLocaleChange}
-            saveState={p.saveState}
-            isDirty={p.isDirty}
-            onSave={() => p.handleSave()}
+            // Live: edits are saved as they happen, so there is no Save button.
+            {...(p.live ? {} : { saveState: p.saveState, isDirty: p.isDirty, onSave: () => p.handleSave() })}
             // Called with no field: the button's click event would otherwise arrive as one.
             onOpenMetadata={() => p.onOpenMetadata()}
+            pageSettingsDisabledReason={p.live ? LIVE_PAGE_SETTINGS_HINT : undefined}
             onBack={p.onBack}
             previewDisabledReason={p.previewBlockedReason ?? undefined}
             previewPending={p.previewPending}
@@ -465,6 +531,8 @@ export function PageEditor({
       drawerItem: drawerItemOverride,
       fields: FieldsWithPageSettingsHint,
       iframe: IframeWithInsertMarker,
+      puck: livePuck,
+      componentOverlay: PeerOutline,
     }),
     [],
   );
@@ -488,20 +556,25 @@ export function PageEditor({
 
   return (
     <div className="h-full min-h-0 overflow-y-auto flex flex-col bg-grey-11 dark:bg-grey-03">
+      {binding && <PuckHeldNotice binding={binding} />}
       {/* Keep a usable canvas on very short screens; this region scrolls instead of crushing Puck's iframe. */}
       <div className="flex-1 min-h-[400px] overflow-hidden">
-        <PageSettingTargetsProvider onOpen={onOpenMetadata}>
-          {/* Not <Puck> itself: on the canvas Puck rewrites the page data it hands blocks; see PuckWithUntouchedMetadata.tsx. */}
-          <PuckWithUntouchedMetadata
-            config={renderConfig}
-            data={data}
-            metadata={metadata}
-            onChange={handleDataChange}
-            headerTitle={entry.localized.meta.title || 'Untitled Page'}
-            viewports={viewports}
-            overrides={overrides}
-            iframe={CANVAS_IFRAME}
-          />
+        {/* Live: a page setting a block shows on the canvas says why it does not open, as the header control does. */}
+        <PageSettingTargetsProvider onOpen={binding ? openNoPageSettings : onOpenMetadata}>
+          <PuckBindingProvider binding={binding}>
+            {/* Not <Puck> itself: on the canvas Puck rewrites the page data it hands blocks; see PuckWithUntouchedMetadata.tsx. */}
+            <PuckWithUntouchedMetadata
+              config={renderConfig}
+              data={binding?.shadow ?? data}
+              metadata={metadata}
+              onChange={handleDataChange}
+              headerTitle={entry.localized.meta.title || 'Untitled Page'}
+              viewports={viewports}
+              overrides={overrides}
+              iframe={CANVAS_IFRAME}
+              permissions={held ? NO_EDITS : undefined}
+            />
+          </PuckBindingProvider>
         </PageSettingTargetsProvider>
       </div>
 

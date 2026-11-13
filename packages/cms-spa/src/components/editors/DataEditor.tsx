@@ -7,6 +7,9 @@ import {
 import { AlertCircle, Code2, Loader2, Save } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { type HostSchema, isHostSchema } from '../../host-schema.js';
+import { dropHeldDataValues, heldDataKeys, useLiveDataValues } from '../../live/data-binding.js';
+import { type FrameLiveDoc, useDocChannel } from '../../live/doc-channel.js';
+import { useLiveDoc } from '../../live/use-live.js';
 import { contentFailureMessage } from '../../utils/content-failure.js';
 import { validateEntryData } from '../../utils/data-entry-validation.js';
 import { UnsavedChangesDialog } from '../dialogs/UnsavedChangesDialog.js';
@@ -59,6 +62,11 @@ export function DataEditor({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const isNew = id === '';
+  // Bound to the entry's shared doc, each valid change is written as it is typed; a new entry has no doc until created.
+  const channel = useDocChannel();
+  const bound = channel !== null && !isNew;
+  const liveDoc = useLiveDoc(bound ? { kind: 'data', id, locale: currentLocale } : null);
+  const [dropSwitch, setDropSwitch] = useState<{ locale: string; keys: string[] } | null>(null);
 
   // Initialize form values and etag when entry loads
   useEffect(() => {
@@ -223,6 +231,75 @@ export function DataEditor({
     );
   }
 
+  if (bound) {
+    // The doc is already synced, so a locale switch saves nothing first; it only asks before dropping held values.
+    const switchLiveLocale = (locale: string) => {
+      if (locale === currentLocale) return;
+      const keys = heldDataKeys(`${id}:${currentLocale}`);
+      if (keys.length > 0) setDropSwitch({ locale, keys });
+      else setCurrentLocale(locale);
+    };
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-3 pb-4 border-b border-grey-09 dark:border-grey-03">
+          <span className="text-sm text-grey-04 dark:text-grey-07">Locale:</span>
+          <LocaleSelector
+            currentLocale={currentLocale}
+            availableLocales={existingLocales}
+            onChange={switchLiveLocale}
+          />
+        </div>
+        {liveDoc.state === 'ready' ? (
+          <LiveDataForm
+            key={liveDoc.live.docKey}
+            live={liveDoc.live}
+            schema={schema}
+            entry={`${id}:${currentLocale}`}
+          />
+        ) : liveDoc.state === 'failed' ? (
+          <p className="text-red-04 dark:text-red-08">{liveDoc.message}</p>
+        ) : (
+          <Loader2 className="h-6 w-6 animate-spin text-azure-04 dark:text-azure-08" />
+        )}
+        {onCancel && (
+          <div className="flex justify-end pt-4 border-t border-grey-09 dark:border-grey-03">
+            <button
+              type="button"
+              onClick={onCancel}
+              className="px-4 py-2 border border-grey-09 dark:border-grey-03 rounded-md hover:bg-grey-11 dark:hover:bg-grey-03 transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        )}
+        {dropSwitch && (
+          <div role="alertdialog" aria-label="Values not saved" className="p-3 border border-yellow-08 rounded-md">
+            <p className="text-sm">
+              These values are not valid, so they were never saved, and switching locale drops them:{' '}
+              {dropSwitch.keys.join(', ')}
+            </p>
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={() => setDropSwitch(null)} className="px-3 py-1 border rounded-md">
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  dropHeldDataValues(`${id}:${currentLocale}`);
+                  setDropSwitch(null);
+                  setCurrentLocale(dropSwitch.locale);
+                }}
+                className="px-3 py-1 bg-red-04 text-white rounded-md"
+              >
+                Drop them and switch
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   // Schema exists - render form
   return (
     <>
@@ -297,6 +374,27 @@ export function DataEditor({
           onDiscard={handleUnsavedDialogDiscard}
           onCancel={handleUnsavedDialogCancel}
         />
+      )}
+    </>
+  );
+}
+
+/** The form over the entry's replica: what it shows is the doc's data, with the values the schema rejected held. */
+function LiveDataForm({ live, schema, entry }: { live: FrameLiveDoc; schema: HostSchema; entry: string }) {
+  const { values, change, errors } = useLiveDataValues(
+    live,
+    (next) => (isHostSchema(schema) ? validateEntryData(schema, next) : null),
+    entry,
+  );
+  const messages = [...new Set(Object.values(errors))];
+  return (
+    <>
+      <SchemaForm schema={schema} values={values} onChange={change} />
+      {messages.length > 0 && (
+        <div className="flex items-center gap-2 p-3 bg-red-11 dark:bg-red-02 border border-red-08 dark:border-red-03 rounded-md text-red-04 dark:text-red-08 text-sm">
+          <AlertCircle className="h-4 w-4 flex-shrink-0" />
+          <span>Not saved until fixed. {messages.join(' ')}</span>
+        </div>
       )}
     </>
   );

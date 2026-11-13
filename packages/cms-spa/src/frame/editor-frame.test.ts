@@ -3,6 +3,7 @@ import { QueryClient } from '@tanstack/react-query';
 import { type FakePort, fakePortPair } from '../../test/fake-ports.js';
 import type { PageConflict } from '../draft-tools.js';
 import { notifyEditorDirtyChanged, registerEditorFlushHandler } from '../editor-flush.js';
+import type { LiveStatus } from '../live/messages.js';
 import type { MediaIssue } from '../media/types.js';
 import { THEME_CHANGED_EVENT, THEME_STORAGE_KEY } from '../theme.js';
 import { configureUI, getUIConfig } from '../ui-config.js';
@@ -209,6 +210,31 @@ describe('connecting the editor to its parent frame', () => {
 
     expect(events).toEqual([['route.changed', { path: '/media?x=1', replace: false }]]);
     expect(navigated).toEqual(['/pages']);
+  });
+
+  test('an init with docs routes live events to the doc channel and every other event on as before', async () => {
+    const { config } = await connected({ ...INIT, docChannel: true });
+    const navigated: string[] = [];
+    config.memoryRouter?.subscribe((path) => navigated.push(path));
+    const status: LiveStatus = {
+      connection: 'connected',
+      pending: true,
+      persisted: true,
+      readOnly: null,
+      deletedExport: null,
+    };
+
+    outer.emit('live.status', status);
+    outer.emit('route.navigate', { path: '/pages' });
+    await delivered();
+
+    expect(config.docChannel?.status()).toEqual(status);
+    expect(navigated).toEqual(['/pages']);
+  });
+
+  test('an init without docs offers no doc channel', async () => {
+    const { config } = await connected();
+    expect(config.docChannel).toBeUndefined();
   });
 
   test('read-only, preview capability and theme follow the parent', async () => {

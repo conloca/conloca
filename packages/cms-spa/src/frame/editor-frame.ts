@@ -11,6 +11,7 @@ import type {
 } from '../draft-tools.js';
 import { EDITOR_DIRTY_CHANGED_EVENT, flushOpenEditor, isOpenEditorDirty } from '../editor-flush.js';
 import { invalidateEditorQueries } from '../editor-queries.js';
+import { createDocChannel, type FrameDocChannel } from '../live/doc-channel.js';
 import type { AssetScope, MediaIssue } from '../media/types.js';
 import { THEME_CHANGED_EVENT, THEME_STORAGE_KEY } from '../theme.js';
 import { setEditorReadOnly, setPageConversion, setPreviewCapability, type UIConfig } from '../ui-config.js';
@@ -262,10 +263,13 @@ export function connectEditorFrame(port: FramePort): Promise<EditorFrame> {
   // Executor form: the package's production lib predates Promise.withResolvers.
   return new Promise((resolve) => {
     let frame: EditorFrame | undefined;
+    // Built with the parent's first init when it carries docs; until then doc events have no taker, as on an old page.
+    let docChannel: FrameDocChannel | null = null;
     const channel = openFrameChannel(port, {
       control(message) {
         if (message.kind !== 'init' || frame) return;
-        frame = start(channel, message, routeListeners);
+        docChannel = message.docChannel ? createDocChannel(channel) : null;
+        frame = start(channel, message, routeListeners, docChannel);
         resolve(frame);
       },
       async call(method) {
@@ -273,6 +277,7 @@ export function connectEditorFrame(port: FramePort): Promise<EditorFrame> {
         throw new RpcError(`Method not allowed: ${method}`, 'method_not_allowed');
       },
       event(name, payload) {
+        if (docChannel?.receive(name, payload)) return;
         if (typeof payload !== 'object' || payload === null) return;
         if (name === 'route.navigate' && 'path' in payload) {
           const { path } = payload;
@@ -285,7 +290,12 @@ export function connectEditorFrame(port: FramePort): Promise<EditorFrame> {
   });
 }
 
-function start(channel: FrameChannel, init: Init, routeListeners: Set<(path: string) => void>): EditorFrame {
+function start(
+  channel: FrameChannel,
+  init: Init,
+  routeListeners: Set<(path: string) => void>,
+  docChannel: FrameDocChannel | null,
+): EditorFrame {
   const emit = <K extends keyof FrameEventPayloads>(name: K, payload: FrameEventPayloads[K]) =>
     channel.emit(name, payload);
 
@@ -335,6 +345,7 @@ function start(channel: FrameChannel, init: Init, routeListeners: Set<(path: str
           loadMedia: (input) => checkedCall(channel, 'media.load', input, isBlob),
         }
       : {}),
+    ...(docChannel ? { docChannel } : {}),
     ...(init.draftTools ? { draftTools: draftTools(channel) } : {}),
   };
 

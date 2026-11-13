@@ -824,7 +824,7 @@ function serializeSection(section: string, frontmatter: JsonObject): string {
 }
 
 /** Labels the source of a content-diff transaction for Yjs observers. */
-export type ContentDiffOrigin = string | null;
+export type ContentDiffOrigin = string | symbol | null;
 
 /** Throws unless `doc` is new or of this code's shape: only the server's load turns an older doc into a new one. */
 function assertWritableShape(doc: Y.Doc): void {
@@ -1500,7 +1500,7 @@ export function applyItemChanges(
     if (planned && known)
       for (const name of doc.share.keys())
         if (name.startsWith('a:') && !known.has(name) && !planned.has(name))
-          console.error(`applyItemChanges: origin ${origin} created ${name}, which beforeWrite was not given`);
+          console.error(`applyItemChanges: origin ${String(origin)} created ${name}, which beforeWrite was not given`);
   }, origin);
   const result = readItemIds(doc);
   // The view's ids: what it showed for lists it did not change, what this write placed for those it did.

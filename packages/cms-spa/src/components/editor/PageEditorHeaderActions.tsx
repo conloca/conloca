@@ -21,6 +21,9 @@ function CanvasThemeToggle() {
   );
 }
 
+/** Why Page settings are off on a live page: they save by a separate write the shared page does not merge yet. */
+export const LIVE_PAGE_SETTINGS_HINT = 'Page settings are not available yet while changes save as you type.';
+
 interface PageEditorHeaderActionsProps {
   onPublish?: () => void;
   onPreview: () => void;
@@ -35,10 +38,13 @@ interface PageEditorHeaderActionsProps {
   currentLocale: string;
   availableLocales: string[];
   onLocaleChange?: (locale: string) => void;
-  saveState: SaveState;
-  isDirty: boolean;
-  onSave: () => void;
+  /** Without `onSave` there is no Save button: a live page is saved as it is edited. */
+  saveState?: SaveState;
+  isDirty?: boolean;
+  onSave?: () => void;
   onOpenMetadata: () => void;
+  /** When set, Page settings are unavailable: the control stays, marked so, with this reason, and opens nothing. */
+  pageSettingsDisabledReason?: string;
   onBack: () => void;
 }
 
@@ -90,9 +96,10 @@ export function PageEditorHeaderActions({
   isDirty,
   onSave,
   onOpenMetadata,
+  pageSettingsDisabledReason,
   onBack,
 }: PageEditorHeaderActionsProps) {
-  const hideSave = getUIConfig().hideEditorSave === true;
+  const hideSave = getUIConfig().hideEditorSave === true || onSave === undefined;
   return (
     <div className="flex items-center gap-2">
       {/* Primary Actions Group */}
@@ -174,7 +181,20 @@ export function PageEditorHeaderActions({
 
       {/* Settings & Exit Group */}
       <div className="flex items-center gap-1">
-        <IconButton icon={Settings} onClick={onOpenMetadata} ariaLabel="Page settings" />
+        {pageSettingsDisabledReason === undefined ? (
+          <IconButton icon={Settings} onClick={onOpenMetadata} ariaLabel="Page settings" />
+        ) : (
+          <button
+            type="button"
+            // Not `disabled`: a disabled button shows no title, so the reason would show nowhere.
+            aria-disabled="true"
+            title={pageSettingsDisabledReason}
+            aria-label={`Page settings unavailable. ${pageSettingsDisabledReason}`}
+            className="p-2 rounded-md text-muted cursor-not-allowed opacity-60"
+          >
+            <Settings className="h-4 w-4" />
+          </button>
+        )}
         <IconButton icon={X} onClick={onBack} ariaLabel="Exit editor" />
       </div>
     </div>

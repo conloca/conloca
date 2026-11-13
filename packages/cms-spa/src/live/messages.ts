@@ -11,6 +11,19 @@ type RefusalStatus = 400 | 401 | 402 | 403 | 404 | 413 | 503;
 /** `too-large`: the page is over the server's size limit; `busy`: the server has no room to load it now. */
 type RefusalCode = 'editor-auth-required' | 'update-too-large' | 'too-large' | 'busy' | 'invalid-update';
 
+/**
+ * `both-kept`: both values are in the list; `change-stands`: told to the one who removed it; `rehomed`: written into a
+ * list another writer turned into items, so it moved to the end; `unknown`: only the list is known.
+ */
+type ChangedTogetherOutcome = 'both-kept' | 'change-stands' | 'rehomed' | 'unknown';
+
+const CHANGED_TOGETHER_OUTCOMES: readonly ChangedTogetherOutcome[] = [
+  'both-kept',
+  'change-stands',
+  'rehomed',
+  'unknown',
+];
+
 export type LiveMessage = PageRef &
   (
     | { type: 'conloca:merged'; source: 'github' | 'agent' | 'review'; commit?: string; byName: string }
@@ -31,6 +44,18 @@ export type LiveMessage = PageRef &
         byName?: string;
         byUserId?: string;
         staleSnapshotId?: string;
+        /** The state vector (base64) of the page kept from before the bump: owed work posts its diff against it. */
+        sv?: string;
+      }
+    | {
+        /** Two writers changed one entry of a primitive list at once; every change stayed in the list. */
+        type: 'conloca:changed-together';
+        anchor: string;
+        outcome: ChangedTogetherOutcome;
+        /** The entry's value, its first 200 characters. */
+        value?: string;
+        byUserId?: string;
+        byName?: string;
       }
     | { type: 'conloca:refused'; status: RefusalStatus; code?: RefusalCode; message?: string; snapshotId?: string }
   );
@@ -64,6 +89,17 @@ export interface LiveStatus {
    * predate it, which name none.
    */
   deletedExport?: { message: string } | null;
+  /**
+   * Something the editor page should tell the user beside the page's own state, which `connection` and `readOnly` keep
+   * naming: work the frame holds that it could not report (`unreported`), or held work a frame reload dropped
+   * (`lost-on-reload`). Absent from parents that predate it.
+   */
+  notice?: LiveNotice | null;
+}
+
+export interface LiveNotice {
+  kind: 'unreported' | 'lost-on-reload';
+  message: string;
 }
 
 export interface PresencePeer {
@@ -184,7 +220,14 @@ function readDiscarded(page: PageRef, data: Fields): LiveMessage | undefined {
   const byName = optionalString(data, 'byName');
   const byUserId = optionalString(data, 'byUserId');
   const staleSnapshotId = optionalString(data, 'staleSnapshotId');
-  if (!isGeneration(generation) || byName === false || byUserId === false || staleSnapshotId === false) {
+  const sv = optionalString(data, 'sv');
+  if (
+    !isGeneration(generation) ||
+    byName === false ||
+    byUserId === false ||
+    staleSnapshotId === false ||
+    sv === false
+  ) {
     return undefined;
   }
   return {
@@ -194,6 +237,26 @@ function readDiscarded(page: PageRef, data: Fields): LiveMessage | undefined {
     ...(byName === undefined ? {} : { byName }),
     ...(byUserId === undefined ? {} : { byUserId }),
     ...(staleSnapshotId === undefined ? {} : { staleSnapshotId }),
+    ...(sv === undefined ? {} : { sv }),
+  };
+}
+
+function readChangedTogether(page: PageRef, data: Fields): LiveMessage | undefined {
+  const { anchor, outcome } = data;
+  const value = optionalString(data, 'value');
+  const byUserId = optionalString(data, 'byUserId');
+  const byName = optionalString(data, 'byName');
+  if (typeof anchor !== 'string' || value === false || byUserId === false || byName === false) return undefined;
+  const known = CHANGED_TOGETHER_OUTCOMES.find((candidate) => candidate === outcome);
+  if (known === undefined) return undefined;
+  return {
+    ...page,
+    type: 'conloca:changed-together',
+    anchor,
+    outcome: known,
+    ...(value === undefined ? {} : { value }),
+    ...(byUserId === undefined ? {} : { byUserId }),
+    ...(byName === undefined ? {} : { byName }),
   };
 }
 
@@ -226,6 +289,8 @@ export function readLiveMessage(data: unknown): LiveMessage | undefined {
       return readOverwritten(page, data);
     case 'conloca:discarded':
       return readDiscarded(page, data);
+    case 'conloca:changed-together':
+      return readChangedTogether(page, data);
     case 'conloca:refused':
       return readRefused(page, data);
     default:
@@ -267,13 +332,20 @@ function readReadOnly(value: unknown): LiveStatus['readOnly'] | undefined {
   };
 }
 
+function readNotice(value: unknown): LiveNotice | null | undefined {
+  if (value === null) return null;
+  if (!isFields(value) || typeof value.message !== 'string') return undefined;
+  const { kind, message } = value;
+  return kind === 'unreported' || kind === 'lost-on-reload' ? { kind, message } : undefined;
+}
+
 function readDeletedExport(data: unknown): LiveStatus['deletedExport'] | undefined {
   if (data === null || data === undefined) return null;
   if (!isFields(data) || typeof data.message !== 'string') return undefined;
   return { message: data.message };
 }
 
-/** Reads a live status event; `undefined` when `data` is not a well-formed one. */
+/** Reads a live status event; `undefined` when `data` is not a well-formed one. An unreadable notice is left out. */
 export function readLiveStatus(data: unknown): LiveStatus | undefined {
   if (!isFields(data) || !isConnection(data.connection)) return undefined;
   if (typeof data.pending !== 'boolean' || typeof data.persisted !== 'boolean') return undefined;
@@ -281,7 +353,15 @@ export function readLiveStatus(data: unknown): LiveStatus | undefined {
   if (readOnly === undefined) return undefined;
   const deletedExport = readDeletedExport(data.deletedExport);
   if (deletedExport === undefined) return undefined;
-  return { connection: data.connection, pending: data.pending, persisted: data.persisted, readOnly, deletedExport };
+  const notice = readNotice(data.notice);
+  return {
+    connection: data.connection,
+    pending: data.pending,
+    persisted: data.persisted,
+    readOnly,
+    deletedExport,
+    ...(notice === undefined ? {} : { notice }),
+  };
 }
 
 /* oxlint-enable anti-slop/no-unknown-parameters */

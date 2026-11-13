@@ -62,6 +62,30 @@ describe('live messages', () => {
     expect(readLiveMessage({ ...discarded, site: undefined })).toBeUndefined();
   });
 
+  it("reads a discarded message's kept state vector, and drops one with a bad sv", () => {
+    const discarded = { type: 'conloca:discarded', generation: 4, ...PAGE, sv: 'AQID' };
+    expect<unknown>(readLiveMessage(discarded)).toEqual(discarded);
+    expect(readLiveMessage({ ...discarded, sv: 3 })).toBeUndefined();
+  });
+
+  it('reads a changed-together notice with or without its value and writer', () => {
+    const m = {
+      type: 'conloca:changed-together',
+      ...PAGE,
+      anchor: 'data.tags',
+      outcome: 'both-kept',
+      value: 'red',
+      byUserId: 'u2',
+      byName: 'Maria',
+    };
+    expect<unknown>(readLiveMessage(m)).toEqual(m);
+    const bare = { type: 'conloca:changed-together', ...PAGE, anchor: 'data.tags', outcome: 'unknown' };
+    expect<unknown>(readLiveMessage(bare)).toEqual(bare);
+    expect(readLiveMessage({ ...m, outcome: 'lost' })).toBeUndefined();
+    expect(readLiveMessage({ ...m, anchor: 1 })).toBeUndefined();
+    expect(readLiveMessage({ ...m, byName: 2 })).toBeUndefined();
+  });
+
   it('reads a hello only with a generation and an access mode', () => {
     const h = { type: 'conloca:live-hello', ...PAGE, generation: 2, user: { id: 'u1', name: 'A' } };
     expect<unknown>(readLiveHello({ ...h, access: 'read' })).toEqual({ ...h, access: 'read' });
@@ -82,6 +106,15 @@ describe('live messages', () => {
     const ro = { ...s, connection: 'read-only', readOnly: { status: 413, code: 'update-too-large-unsaved' } };
     expect<unknown>(readLiveStatus(ro)).toEqual(ro);
     expect(readLiveStatus({ ...s, connection: 'gone' })).toBeUndefined();
+  });
+
+  it('reads a status notice when the parent sends one, and a status without one as before', () => {
+    const s = { connection: 'connected', pending: false, persisted: true, readOnly: null, deletedExport: null };
+    const noticed = { ...s, notice: { kind: 'lost-on-reload', message: 'Changes were lost.' } };
+    expect<unknown>(readLiveStatus(noticed)).toEqual(noticed);
+    expect<unknown>(readLiveStatus({ ...s, notice: null })).toEqual({ ...s, notice: null });
+    // A notice this frame cannot read is left out; the rest of the status still counts.
+    expect<unknown>(readLiveStatus({ ...s, notice: { kind: 'newer', message: 1 } })).toEqual(s);
   });
 
   it('reads a status from a sender that predates the deleted-export field as naming no deletion', () => {
