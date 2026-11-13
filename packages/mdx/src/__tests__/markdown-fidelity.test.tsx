@@ -2,7 +2,7 @@ import { afterEach, describe, expect, spyOn, test } from 'bun:test';
 import { ListItemNode } from '@lexical/list';
 import { type MDXEditorMethods, type RealmPlugin, realmPlugin, rootEditor$ } from '@mdxeditor/editor';
 import { cleanup, render, waitFor } from '@testing-library/react';
-import { $copyNode, $createTextNode, $nodesOfType, type LexicalEditor } from 'lexical';
+import { $copyNode, $createTextNode, $getRoot, $isTextNode, $nodesOfType, type LexicalEditor } from 'lexical';
 import { createRef } from 'react';
 import { MDXEditor } from '../index.js';
 import { LinkDefinitionNode } from '../markdown-fidelity/LinkDefinitionNode.js';
@@ -12,8 +12,12 @@ afterEach(() => {
   cleanup();
 });
 
-/** Opens `markdown`, applies `edit` as one Lexical update, and returns the saved markdown. */
-async function markdownAfterEdit(markdown: string, edit: () => void): Promise<string | undefined> {
+/** Opens `markdown`, applies `edit` as one Lexical update, and returns the saved markdown. `onChange` sees each change. */
+async function markdownAfterEdit(
+  markdown: string,
+  edit: () => void,
+  onChange: (value: string, initialMarkdownNormalize?: boolean) => void = () => {},
+): Promise<string | undefined> {
   const editors: (LexicalEditor | null)[] = [];
   const captureEditor: RealmPlugin = realmPlugin({
     postInit(realm) {
@@ -21,7 +25,7 @@ async function markdownAfterEdit(markdown: string, edit: () => void): Promise<st
     },
   })();
   const ref = createRef<MDXEditorMethods>();
-  render(<MDXEditor ref={ref} value={markdown} onChange={() => {}} extraPlugins={[captureEditor]} />);
+  render(<MDXEditor ref={ref} value={markdown} onChange={onChange} extraPlugins={[captureEditor]} />);
   await waitFor(() => expect(editors).toHaveLength(1));
   editors[0]?.update(edit, { discrete: true });
   return ref.current?.getMarkdown();
@@ -249,5 +253,38 @@ describe('editing after a paragraph that follows a nested list', () => {
     const css = await Bun.file(new URL('../editor-styles.css', import.meta.url)).text();
     expect(css).toContain('li.conloca-md-continuation {\n  list-style: none;');
     expect(css).toContain('li.conloca-md-continuation::before,\nli.conloca-md-continuation::after {\n  display: none;');
+  });
+});
+
+describe('the end of the body', () => {
+  test.each([
+    ['a trailing blank line', 'First.\n\nSecond.\n\n'],
+    ['a final newline', 'First.\n\nSecond.\n'],
+    ['no final newline', 'First.\n\nSecond.'],
+    ['an import above it and a trailing blank line', "import { X } from './x.js'\n\nFirst.\n\n"],
+  ])('opening and exporting a body with %s keeps its bytes', async (_name, input) => {
+    expect(await editorRoundTrip(input)).toBe(input);
+  });
+  test('a save after typing elsewhere keeps the trailing blank line', async () => {
+    const saves: string[] = [];
+    const output = await markdownAfterEdit(
+      'First.\n\nSecond.\n\n',
+      () => {
+        const first = $getRoot().getFirstDescendant();
+        if (!$isTextNode(first)) throw new Error('the body does not open with text');
+        first.setTextContent(`x${first.getTextContent()}`);
+      },
+      (value, initialMarkdownNormalize) => {
+        if (!initialMarkdownNormalize) saves.push(value);
+      },
+    );
+    expect(saves).toEqual(['xFirst.\n\nSecond.\n\n']);
+    expect(output).toBe('xFirst.\n\nSecond.\n\n');
+  });
+  test('a body emptied in the editor exports nothing', async () => {
+    const output = await markdownAfterEdit('First.\n\n', () => {
+      $getRoot().clear();
+    });
+    expect(output).toBe('');
   });
 });

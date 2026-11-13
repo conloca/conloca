@@ -205,6 +205,17 @@ if (typeof window !== 'undefined') {
   }
 }
 
+/**
+ * The document as it leaves the editor. The library trims the markdown it exports, so the seeded body's trailing
+ * whitespace (a closing blank line, the last line end) goes back on, unless the document was emptied; then the author's
+ * import/export block is put back in front.
+ */
+function exportMarkdown(preserved: PreservedEsm | null, markdown: string): string {
+  if (preserved === null) return markdown;
+  const end = markdown === '' ? '' : preserved.body.slice(preserved.body.trimEnd().length);
+  return joinEsm(preserved, markdown + end);
+}
+
 export const BaseMDXEditor = React.forwardRef<MDXEditorMethods, BaseMDXEditorProps>(
   (
     {
@@ -245,14 +256,13 @@ export const BaseMDXEditor = React.forwardRef<MDXEditorMethods, BaseMDXEditorPro
 
     const innerRef = useRef<MDXEditorMethods>(null);
 
-    // Everything leaving the editor gets the author's import/export block put
-    // back verbatim. `onChange` is the save path; the imperative handle is
-    // intercepted too so `getMarkdown()` never reports a document that is
-    // missing statements the file on disk has.
+    // Everything leaving the editor goes through `exportMarkdown`. `onChange`
+    // is the save path; the imperative handle is intercepted too so
+    // `getMarkdown()` never reports a document that differs from the file on
+    // disk where nobody edited it.
     const handleChange = useCallback(
       (markdown: string, initialMarkdownNormalize?: boolean) => {
-        const preserved = seededRef.current;
-        onChange(preserved === null ? markdown : joinEsm(preserved, markdown), initialMarkdownNormalize);
+        onChange(exportMarkdown(seededRef.current, markdown), initialMarkdownNormalize);
       },
       [onChange],
     );
@@ -260,11 +270,7 @@ export const BaseMDXEditor = React.forwardRef<MDXEditorMethods, BaseMDXEditorPro
     useImperativeHandle(
       ref,
       () => ({
-        getMarkdown: () => {
-          const markdown = innerRef.current?.getMarkdown() ?? '';
-          const preserved = seededRef.current;
-          return preserved === null ? markdown : joinEsm(preserved, markdown);
-        },
+        getMarkdown: () => exportMarkdown(seededRef.current, innerRef.current?.getMarkdown() ?? ''),
         // Replaces the whole document, so its ESM becomes the preserved block.
         setMarkdown: (markdown: string) => {
           const split = splitEsm(markdown);

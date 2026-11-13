@@ -87,8 +87,9 @@ describe('Puck stale writes through the astro-cms content router', () => {
 });
 
 const LOADED_MDX = 'The loaded MDX page.\n';
-const DRAFT_MDX = 'My unsaved MDX draft.';
-const NEXT_DRAFT_MDX = 'A further unsaved MDX edit.';
+// The editor keeps the loaded page's final newline on everything it saves.
+const DRAFT_MDX = 'My unsaved MDX draft.\n';
+const NEXT_DRAFT_MDX = 'A further unsaved MDX edit.\n';
 
 async function openMdxPage() {
   const created = await testApi.createContent({

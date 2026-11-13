@@ -329,10 +329,12 @@ export const UndoRevertsOnlyLocalTyping: Story = {
 
     await userEvent.keyboard(`{${MOD}>}z{/${MOD}}`);
     await waitFor(() => expect(live.text.toJSON()).toBe('Remote First para.\n\nSecond para.\n'));
-    await waitFor(() => expect(live.editorRef.current?.getMarkdown()).toBe('Remote First para.\n\nSecond para.'));
+    await waitFor(() => expect(live.editorRef.current?.getMarkdown()).toBe('Remote First para.\n\nSecond para.\n'));
 
     await userEvent.keyboard(`{${MOD}>}{Shift>}z{/Shift}{/${MOD}}`);
     await waitFor(() => expect(live.text.toJSON()).toBe('Remote First para.\n\nSecond para. local\n'));
-    await waitFor(() => expect(live.editorRef.current?.getMarkdown()).toBe('Remote First para.\n\nSecond para. local'));
+    await waitFor(() =>
+      expect(live.editorRef.current?.getMarkdown()).toBe('Remote First para.\n\nSecond para. local\n'),
+    );
   },
 };
