@@ -89,6 +89,14 @@ export function formatPlaceAnchor(id: string): string {
   return `[id=${quote(id)}${PLACE_SUFFIX}`;
 }
 
+/**
+ * The anchor of "an item of this list came back": `<list anchor>#item`. A value anchor never ends in `#item`, and a
+ * block's place is `[id=X]#place`.
+ */
+export function formatItemBackAnchor(listAnchor: string): string {
+  return `${listAnchor}#item`;
+}
+
 /** The block id of a `formatPlaceAnchor` anchor, or `null` for any other anchor. */
 export function parsePlaceAnchor(anchor: string): string | null {
   if (!anchor.startsWith('[id=') || !anchor.endsWith(PLACE_SUFFIX)) return null;

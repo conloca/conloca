@@ -13,6 +13,7 @@ import {
   hydrateDoc,
   REMOVED_ITEM_LABEL,
   readItemIds,
+  readUnits,
   rehomeFlippedEntries,
   restoreBlocks,
   serializeDoc,
@@ -1021,6 +1022,21 @@ describe('item lists', () => {
       ]);
     });
 
+    it('restoreBlocks never doubles a primitive entry its array still holds', () => {
+      const [a, b] = twoReplicas(puck([block('a', { title: 'A' }), block('b', { title: 'B', tags: ['s', 't'] })]));
+      const [unit] = readUnits(a, 'blocks', ['b']);
+      if (!unit) throw new Error('no unit');
+      // A removes the block while B, unaware, adds a tag: the merged array keeps every entry B's tag left live.
+      applyContentDiff(a, puck([block('a', { title: 'A' })]), 'a');
+      liveWrite(b, puck([block('a', { title: 'A' }), block('b', { title: 'B', tags: ['s', 't', 'u'] })]), 'b');
+      exchange(a, b);
+      restoreBlocks(a, [block('b', { title: 'B', tags: ['s', 't'] })], 'server', unit);
+      const restored = blocksOf(serializeDoc(a)).find((x) => idOf(x) === 'b');
+      const tags = listOf(rec(rec(restored).props).tags);
+      expect(tags).toHaveLength(3);
+      expect(new Set(tags)).toEqual(new Set(['s', 't', 'u']));
+    });
+
     it('ydocListAnchor names the outermost list holding a list ref', () => {
       const d = hydrateDoc(withRows([{ t: 'A', tags: ['1'] }]));
       const lists = d.getMap<string>('lists');
@@ -1029,6 +1045,21 @@ describe('item lists', () => {
       const [itemId] = readItemIds(d)[ROWS] ?? [];
       expect(ydocListAnchor(d, refOfName(name('i', itemId ?? '', 'tags')))).toBe('data.rows');
       expect(ydocListAnchor(d, 'nope')).toBeUndefined();
+    });
+
+    it('a list nested in an object inside an item is named by the outermost list, as its items are', () => {
+      const d = hydrateDoc(withRows([{ t: 'A', sub: { rows: [{ n: 'x' }] } }]));
+      const [outer] = readItemIds(d)[ROWS] ?? [];
+      const inner = name('i', outer ?? '', 'sub', 'rows');
+      const ref = [...d.getMap<string>('lists').entries()].find(([, v]) => v === inner)?.[0] ?? '';
+      expect(ydocListAnchor(d, ref)).toBe('data.rows');
+      const [innerId] = readItemIds(d)[inner] ?? [];
+      const value = d
+        .getMap<Y.Map<unknown>>('items')
+        .get(innerId ?? '')
+        ?.get('v');
+      if (!(value instanceof Y.Map)) throw new Error('no inner item');
+      expect(ydocAnchor(value, 'n')).toBe('data.rows');
     });
 
     it('undo of a flip restores the primitive list', () => {

@@ -77,6 +77,14 @@ interface Sync {
   out?: ItemIds;
   /** When set, the ids of the new items of this write by slot (see `mintAt`), drawn up front by `planChanges`. */
   plan?: Map<string, string>;
+  /** When set, item lists are written back as a removal took them: their items under the ids and keys they had. */
+  restore?: { ids: ItemIds; keys: Record<string, string> };
+  /**
+   * When set, called with each block or item the write is about to delete. An item's nested items go with it unreported
+   * (they are in its value and its `ids`); each removed block is reported, a slot's child too, though its parent's value
+   * holds it.
+   */
+  onRemove?: (unit: RemovedUnit) => void;
 }
 
 const isBlockList = (value: YValue | undefined) =>
@@ -115,6 +123,8 @@ const listName = (scope: Scope, key?: string) =>
 
 /** The owner and path a list name holds. */
 function parseListName(name: string): { kind: OwnerKind; owner: string; path: string[] } | undefined {
+  // A list name is JSON written by listName; an unknown ref's name is ''.
+  if (!name.startsWith('[')) return undefined;
   const steps: unknown = JSON.parse(name);
   if (!Array.isArray(steps) || !steps.every((step) => typeof step === 'string')) return undefined;
   const [kind, owner, ...path] = steps;
@@ -444,9 +454,21 @@ function dropList(sync: Sync, value: YValue | undefined, name: string): void {
   if (!isItemList(value)) return;
   const ref = refOf(sync.lists, name, false);
   if (ref === undefined) return;
-  for (const { id } of sync.reader.itemsOf(ref)) deleteItem(sync, id);
+  removeItems(
+    sync,
+    sync.reader.itemsOf(ref).map(({ id }) => id),
+  );
   const array = sync.reader.array(ref);
   if (array) deleteEntries(array);
+}
+
+/** Deletes items `ids` (and what is nested in them), telling `onRemove` of each first, before any is deleted. */
+function removeItems(sync: Sync, ids: string[]): void {
+  const { onRemove } = sync;
+  if (onRemove) {
+    for (const unit of ids.map((id) => itemUnit(sync.reader, id))) if (unit) onRemove(unit);
+  }
+  for (const id of ids) deleteItem(sync, id);
 }
 
 /** Writes only what differs between `target` and `next`; `keep` names a key `next` never carries. */
@@ -585,6 +607,10 @@ function flipEntries(
 
 /** Syncs the item list `name` to `values`, aligned against what it holds (rules 1–4). */
 function syncItems(name: string, values: JsonValue[], sync: Sync, at: (string | number)[], fresh: boolean): void {
+  if (sync.restore) {
+    restoreList(name, values, sync, at, sync.restore);
+    return;
+  }
   const ref = refOf(sync.lists, name, true) ?? '';
   let current = sync.reader.itemsOf(ref);
   const array = sync.reader.array(ref);
@@ -601,7 +627,10 @@ function syncItems(name: string, values: JsonValue[], sync: Sync, at: (string | 
   const from = current.map(({ id, item }) => sync.reader.itemValue(id, item));
   const { order } = alignItems(from, values);
   const used = new Set(order);
-  for (const [i, { id }] of current.entries()) if (!used.has(i)) deleteItem(sync, id);
+  removeItems(
+    sync,
+    current.flatMap(({ id }, i) => (used.has(i) ? [] : [id])),
+  );
   const slots: Slot[] = order.map((i) => (i === undefined ? {} : { id: current[i]?.id, key: current[i]?.key }));
   const placed = placeItems(slots, minter(sync, at, name), tieAt(sync, name));
   for (const [j, value] of values.entries()) {
@@ -617,6 +646,54 @@ function syncItems(name: string, values: JsonValue[], sync: Sync, at: (string | 
     if (!deepEqual(from[i ?? 0], value)) writeItemValue(existing.item, existing.id, value, sync, [...at, j]);
   }
   if (sync.out) sync.out[name] = placed.map(({ id }) => id);
+}
+
+/**
+ * Writes the list `name` back as a removal took it: each item under the id and key it had (a fresh one for an id now
+ * taken, or no longer known), and a primitive list's values before the entries written into its array since.
+ */
+function restoreList(
+  name: string,
+  values: JsonValue[],
+  sync: Sync,
+  at: (string | number)[],
+  restore: NonNullable<Sync['restore']>,
+): void {
+  const ref = internList(sync, name, true);
+  const old = restore.ids[name] ?? [];
+  if (values.every(isPrimitive) && !old.some((id) => restore.keys[id] !== undefined)) {
+    // An entry its array still holds (never deleted with its owner) stays; each other value goes back after the last
+    // kept entry before it.
+    const array = sync.doc.getArray<JsonValue>(`a:${ref}`);
+    const live = new Map(entriesOf(array).map(({ id }, i) => [id, i]));
+    let spot = 0;
+    let inserted = 0;
+    for (const [j, value] of values.entries()) {
+      const i = live.get(old[j] ?? '');
+      if (i !== undefined) spot = i + inserted + 1;
+      else {
+        array.insert(spot++, [value]);
+        inserted++;
+      }
+    }
+    return;
+  }
+  let last = '';
+  for (const [j, value] of values.entries()) {
+    const id = old[j];
+    const kept = id === undefined ? undefined : restore.keys[id];
+    // Never removed with its owner (an orphan left by the removal of the owner): it is in the list again as it is.
+    if (id !== undefined && kept !== undefined && sync.items.has(id)) {
+      last = kept;
+      continue;
+    }
+    const key = kept ?? keyBetween(last, undefined);
+    createItem(sync, id !== undefined && kept !== undefined ? id : freshId(sync, randomId), ref, key, value, [
+      ...at,
+      j,
+    ]);
+    last = key;
+  }
 }
 
 /** The items of `ref` as the doc holds them now (after a flip added some). */
@@ -791,8 +868,23 @@ function newSync(
   };
 }
 
+/** What a content diff tells its caller as it writes. */
+export interface ContentDiffHooks {
+  /**
+   * Called with each block or item the write is about to delete, before any is deleted. An item's nested items go with
+   * it unreported (they are in its value and its `ids`); each removed block is reported, a slot's child too, though its
+   * parent's value holds it.
+   */
+  onRemove?(unit: RemovedUnit): void;
+}
+
 /** Applies `next` to `doc` in one transaction, writing only what differs, so an unchanged file emits no update. */
-export function applyContentDiff(doc: Y.Doc, next: ContentData, origin: ContentDiffOrigin): void {
+export function applyContentDiff(
+  doc: Y.Doc,
+  next: ContentData,
+  origin: ContentDiffOrigin,
+  hooks: ContentDiffHooks = {},
+): void {
   const kind = kindOf(next);
   assertWritableShape(doc);
   doc.transact(() => {
@@ -805,6 +897,7 @@ export function applyContentDiff(doc: Y.Doc, next: ContentData, origin: ContentD
     }
     if (kind === 'mdx') return syncMdx(doc, next.mdx ?? '');
     const sync = newSync(doc, current === undefined);
+    if (hooks.onRemove) sync.onRemove = (unit) => hooks.onRemove?.(unit);
     const { blocks } = sync;
     if (kind === 'data') return syncObject(doc.getMap<YValue>('data'), parsedRecord(next.data), dataScope, sync);
     const rehomed = current === 'puck' ? layoutPuck(doc).rehomed : [];
@@ -833,18 +926,29 @@ export function applyContentDiff(doc: Y.Doc, next: ContentData, origin: ContentD
         }
       }
     }
-    for (const id of blocks.keys()) if (!sync.seen.has(id) && !kept.has(id)) blocks.delete(id);
+    const gone = [...blocks.keys()].filter((id) => !sync.seen.has(id) && !kept.has(id));
+    if (hooks.onRemove) {
+      for (const unit of gone.map((id) => blockUnit(sync.reader, id))) if (unit) hooks.onRemove(unit);
+    }
+    for (const id of gone) blocks.delete(id);
   }, origin);
 }
 
 /**
  * Puts each of `blocks` (block JSON with its id) back into `doc` at the end of the root content, writing its map and
  * place directly, in one transaction: a block brought back after it was deleted. Valid in this shape and shape 2.
+ * With `restore` (what {@link readBlock} read of them), the items of their lists come back under the ids they had.
  */
-export function restoreBlocks(doc: Y.Doc, blocks: JsonObject[], origin: ContentDiffOrigin): void {
+export function restoreBlocks(
+  doc: Y.Doc,
+  blocks: JsonObject[],
+  origin: ContentDiffOrigin,
+  restore?: Pick<RemovedUnit, 'ids' | 'keys'>,
+): void {
   assertKnownShape(doc);
   doc.transact(() => {
     const sync = newSync(doc, false);
+    if (restore) sync.restore = { ids: restore.ids, keys: restore.keys };
     let last = [...sync.blocks.values()].reduce((max, b) => {
       const place = placeOf(b);
       return place?.list === 'content' && place.key > max ? place.key : max;
@@ -1569,18 +1673,12 @@ function outermostList<T>(
     const name = doc.getMap<string>('lists').get(ref);
     const parsed = name === undefined ? undefined : parseListName(name);
     if (!name || !parsed) return found;
-    const owner = ownerMap(doc, { mode: 'plain', owner: [parsed.kind, parsed.owner], path: [], at: [] }, false);
-    if (!owner) return found;
-    const path = [...parsed.path];
-    const last = path.pop() ?? 'v';
-    let holder: YMap | undefined = owner;
-    for (const step of path) {
-      const child: YValue | undefined = holder?.get(step);
-      holder = child instanceof Y.Map ? child : undefined;
-    }
-    if (!holder) return found;
-    found = { holder, key: last, name };
+    const list = listHolder(doc, parsed);
+    if (!list) return found;
+    found = { ...list, name };
     if (parsed.kind !== 'i') return found;
+    const owner = items.get(parsed.owner);
+    if (!owner) return found;
     node = owner;
   }
 }
@@ -1621,6 +1719,8 @@ function fieldAnchor<T>(target: Y.AbstractType<T>, key: string): string {
   }
   const root = [...doc.share].find(([, type]) => Object.is(type, node))?.[0];
   if (root === 'puck') return formatAnchor([...PUCK_PREFIX, ...steps], 'puck');
+  // A field of an item no live list reaches (an orphan, hidden until the server settles it) anchors at the whole page.
+  if (root === 'items') return '';
   if (root !== 'data' && root !== 'frontmatter') throw new Error('invariant: ydocAnchor target is not a content field');
   return formatAnchor([{ key: root }, ...steps], root);
 }
@@ -1644,10 +1744,8 @@ export function ydocListAnchor(doc: Y.Doc, ref: string): string | undefined {
   const name = doc.getMap<string>('lists').get(ref);
   const parsed = name === undefined ? undefined : parseListName(name);
   if (!parsed) return undefined;
-  const path = [...parsed.path];
-  const key = path.pop() ?? 'v';
-  const holder = ownerMap(doc, { mode: 'plain', owner: [parsed.kind, parsed.owner], path, at: [] }, false);
-  return holder ? ydocAnchor(holder, key) : undefined;
+  const list = listHolder(doc, parsed);
+  return list ? ydocAnchor(list.holder, list.key) : undefined;
 }
 
 /** A primitive a writer put into a list's array that another writer had flipped to items. */
@@ -1859,10 +1957,8 @@ function removedAnchor(
   if (unit.root === 'blocks') return formatPlaceAnchor(unit.id);
   const parsed = parseListName(listOfId.get(unit.id) ?? '[]');
   if (!parsed) return REMOVED_ITEM_LABEL;
-  const path = [...parsed.path];
-  const key = path.pop() ?? 'v';
-  const holder = ownerMap(local, { mode: 'plain', owner: [parsed.kind, parsed.owner], path, at: [] }, false);
-  if (holder) return ydocAnchor(holder, key);
+  const list = listHolder(local, parsed);
+  if (list) return ydocAnchor(list.holder, list.key);
   if (parsed.kind === 'b') return formatPlaceAnchor(parsed.owner);
   return parsed.kind === 'i' ? removedAnchor(local, { root: 'items', id: parsed.owner }, listOfId) : REMOVED_ITEM_LABEL;
 }
@@ -1873,4 +1969,477 @@ function writtenValue(struct: Y.Item): JsonValue {
   if (content instanceof Y.ContentAny) return content.getContent()[0] ?? null;
   if (content instanceof Y.ContentString) return content.str;
   return null;
+}
+
+/**
+ * One Yjs item of a removed unit: `[client, clock, length, holder, path, current]`. `holder` is `''` for a block's own
+ * map and an item's id for that item's map (the unit's own, or one nested in it); `path` is the keys from that map to
+ * the value; `current` tells the key's value from one it replaced before the removal (a late write names the value it
+ * replaces by its item, which may be an older one).
+ */
+export type UnitPlace = [number, number, number, string, string[], boolean];
+
+/** A block or an item as the doc held it just before a removal: what puts it back, and what finds a late write into it. */
+export interface RemovedUnit {
+  root: 'blocks' | 'items';
+  id: string;
+  /** Its list: a block's `place.list`, an item's list name. */
+  list: string;
+  key: string;
+  /** The field anchor of its outermost id-less list (`''` when that list is gone); a block's `[id=X]#place`. */
+  anchor: string;
+  value: JsonValue;
+  /** The ids of the item lists inside it, as {@link readItemIds} gives them, and the key of each item among them. */
+  ids: ItemIds;
+  keys: Record<string, string>;
+  places: UnitPlace[];
+}
+
+const placeEntry = (item: Y.Item, holder: string, path: string[], current: boolean): UnitPlace => [
+  item.id.client,
+  item.id.clock,
+  item.length,
+  holder,
+  path,
+  current,
+];
+
+/** Records every item under `map` (at `path` from `holder`'s map): each key's value and the values it replaced. */
+function recordPlaces(map: YMap, holder: string, path: string[], places: UnitPlace[]): void {
+  // oxlint-disable-next-line eslint/no-underscore-dangle -- Yjs exposes a map key's current item only through `_map`.
+  for (const [key, item] of map._map) {
+    const at = [...path, key];
+    places.push(placeEntry(item, holder, at, true));
+    // A key's earlier values sit to the left of its value, in order.
+    for (let older = item.left; older !== null; older = older.left) places.push(placeEntry(older, holder, at, false));
+    if (item.content instanceof Y.ContentType && item.content.type instanceof Y.Map)
+      recordPlaces(item.content.type, holder, at, places);
+  }
+}
+
+/** The unit `map` holds, read through `reader` (whose `ids` collected the ids of the lists inside it). */
+function unitOf(
+  reader: Reader,
+  unit: Pick<RemovedUnit, 'root' | 'id' | 'list' | 'key' | 'anchor' | 'value'>,
+  map: YMap,
+): RemovedUnit {
+  const ids = reader.ids ?? {};
+  const keys: Record<string, string> = {};
+  const places: UnitPlace[] = [];
+  const own = unit.root === 'blocks' ? '' : unit.id;
+  // oxlint-disable-next-line eslint/no-underscore-dangle -- Yjs exposes a type's own item only through `_item`.
+  if (map._item) places.push(placeEntry(map._item, own, [], true));
+  recordPlaces(map, own, [], places);
+  for (const nested of Object.values(ids).flat()) {
+    const item = reader.items.get(nested);
+    const place = itemPlace(item);
+    if (!item || !place) continue;
+    keys[nested] = place.key;
+    // oxlint-disable-next-line eslint/no-underscore-dangle -- as above.
+    if (item._item) places.push(placeEntry(item._item, nested, [], true));
+    recordPlaces(item, nested, [], places);
+  }
+  return { ...unit, ids, keys, places };
+}
+
+/** Item `id` as a unit, read through `reader`; `null` when the doc does not hold it. */
+function itemUnit(reader: Reader, id: string): RemovedUnit | null {
+  const item = reader.items.get(id);
+  const place = itemPlace(item);
+  if (!item || !place) return null;
+  const outer = reader.ids;
+  reader.ids = {};
+  try {
+    const value = reader.itemValue(id, item);
+    const list = reader.lists.get(place.ref) ?? '';
+    const anchor = ydocListAnchor(reader.doc, place.ref) ?? '';
+    return unitOf(reader, { root: 'items', id, list, key: place.key, anchor, value }, item);
+  } finally {
+    reader.ids = outer;
+  }
+}
+
+/** Block `id` as a unit, read through `reader`, its slots and item lists included; `null` when the doc does not hold it. */
+function blockUnit(reader: Reader, id: string): RemovedUnit | null {
+  const blocks = reader.doc.getMap<YMap>('blocks');
+  const block = blocks.get(id);
+  const place = placeOf(block);
+  if (!block || !place) return null;
+  if (reader.blockIndex.size === 0) reader.blockIndex = listIndex(blocks);
+  const outer = reader.ids;
+  reader.ids = {};
+  reader.emitted = new Set();
+  try {
+    const value = reader.toJson(block, blockScope(id, []));
+    const anchor = formatPlaceAnchor(id);
+    return unitOf(reader, { root: 'blocks', id, list: place.list, key: place.key, anchor, value }, block);
+  } finally {
+    reader.ids = outer;
+  }
+}
+
+/** The blocks or items `ids` as the doc holds them: list, place, JSON, nested item ids, Yjs items; a missing id is left out. */
+export function readUnits(doc: Y.Doc, root: 'blocks' | 'items', ids: readonly string[]): RemovedUnit[] {
+  const reader = new Reader(doc);
+  return ids.flatMap((id) => (root === 'blocks' ? blockUnit(reader, id) : itemUnit(reader, id)) ?? []);
+}
+
+/** The owner kind and id of a list name, and the keys from the map of the owner to the list. */
+export const itemListOwner = parseListName;
+
+/** Whether the list `name` is live: its owner exists and holds the item-list marker at its path. */
+export function isListLive(doc: Y.Doc, name: string): boolean {
+  const parsed = parseListName(name);
+  if (!parsed) return false;
+  const list = listHolder(doc, parsed);
+  return isItemList(list?.holder.get(list.key));
+}
+
+/** The map holding the list `parsed` names and its key there; an item's list path runs from its value (`v`). */
+function listHolder(
+  doc: Y.Doc,
+  parsed: { kind: OwnerKind; owner: string; path: string[] },
+): { holder: YMap; key: string } | undefined {
+  const path = parsed.kind === 'i' && parsed.path.length > 0 ? ['v', ...parsed.path] : [...parsed.path];
+  const key = path.pop() ?? 'v';
+  const holder = ownerMap(doc, { mode: 'plain', owner: [parsed.kind, parsed.owner], path, at: [] }, false);
+  return holder ? { holder, key } : undefined;
+}
+
+/** A removed item to put back: what {@link readUnits} read of it, at the place it should take. */
+export type ItemUnit = Pick<RemovedUnit, 'id' | 'list' | 'key' | 'value' | 'ids' | 'keys'>;
+
+/**
+ * Puts `units` back into the doc under their ids, each at its `key` in its list, the items nested in them under their
+ * ids too, in one transaction; a unit's list may be one an earlier unit brings back (named in its `ids`). Writes nothing
+ * and answers `false` when a unit's list is not live then, or a unit's id or a nested one is held by a live item.
+ */
+export function restoreItems(doc: Y.Doc, units: ItemUnit[], origin: ContentDiffOrigin): boolean {
+  assertWritableShape(doc);
+  const items = doc.getMap<YMap>('items');
+  if (units.some((unit) => [unit.id, ...Object.values(unit.ids).flat()].some((id) => items.has(id)))) return false;
+  const coming = new Set<string>();
+  for (const unit of units) {
+    if (!(isListLive(doc, unit.list) || coming.has(unit.list))) return false;
+    for (const list of Object.keys(unit.ids)) coming.add(list);
+  }
+  doc.transact(() => {
+    const sync = newSync(doc, false);
+    for (const unit of units) {
+      sync.restore = { ids: unit.ids, keys: unit.keys };
+      createItem(sync, unit.id, internList(sync, unit.list, true), unit.key, unit.value, []);
+    }
+  }, origin);
+  return true;
+}
+
+/** A late write into a removed copy of an item: a value at `path` of its value (`[]` is the value), or its place. */
+export interface ItemWrite {
+  path: string[];
+  /** `undefined` deletes the key. */
+  value: JsonValue | undefined;
+  /** The `[ref, key]` the write moved it to. */
+  place?: [string, string];
+}
+
+/** A value of a live item that a write replaced: where it sat, what it was, and the replica that wrote it. */
+export interface ReplacedItemValue {
+  path: string[];
+  value: JsonValue;
+  client: number;
+}
+
+/**
+ * Lays `writes`, made against a removed copy of item `id`, onto the live item holding `id` (Undo brought it back under
+ * that id), in one transaction. Answers each value of the live item a write replaced with a different one, a non-map
+ * value a write's path ran through included; `hooks.onRemove` hears of each item a replaced item list held.
+ */
+export function layOntoItem(
+  doc: Y.Doc,
+  id: string,
+  writes: ItemWrite[],
+  origin: ContentDiffOrigin,
+  hooks: ContentDiffHooks = {},
+): ReplacedItemValue[] {
+  assertWritableShape(doc);
+  const replaced: ReplacedItemValue[] = [];
+  doc.transact(() => {
+    const sync = newSync(doc, false);
+    if (hooks.onRemove) sync.onRemove = (unit) => hooks.onRemove?.(unit);
+    const item = sync.items.get(id);
+    if (!item) return;
+    for (const write of writes) {
+      if (write.place) {
+        item.set('p', write.place);
+        continue;
+      }
+      let holder: YMap = item;
+      let key = 'v';
+      let scope = itemScope(id, []);
+      for (const [depth, step] of write.path.entries()) {
+        const child = holder.get(key);
+        let map: YMap;
+        if (child instanceof Y.Map) map = child;
+        else {
+          if (child !== undefined) {
+            const reader = new Reader(doc);
+            const value = holder === item ? reader.itemValue(id, item) : reader.toJson(holder, scope)[key];
+            // oxlint-disable-next-line eslint/no-underscore-dangle -- Yjs exposes a map key's current item only through `_map`.
+            const by = holder._map.get(key)?.id.client;
+            if (value !== undefined && by !== undefined)
+              replaced.push({ path: write.path.slice(0, depth), value, client: by });
+          }
+          dropList(sync, child, holder === item ? listName(scope) : listName(scope, key));
+          map = new Y.Map();
+          holder.set(key, map);
+        }
+        if (holder !== item) scope = childScope(scope, key);
+        holder = map;
+        key = step;
+      }
+      const reader = new Reader(doc);
+      const before = holder === item ? reader.itemValue(id, item) : reader.toJson(holder, scope)[key];
+      // oxlint-disable-next-line eslint/no-underscore-dangle -- Yjs exposes a map key's current item only through `_map`.
+      const client = holder._map.get(key)?.id.client;
+      if (write.value === undefined) {
+        dropList(sync, holder.get(key), holder === item ? listName(scope) : listName(scope, key));
+        holder.delete(key);
+      } else if (holder === item) writeItemValue(item, id, write.value, sync, []);
+      else syncKey(holder, key, write.value, scope, sync);
+      if (before !== undefined && client !== undefined && !deepEqual(before, write.value))
+        replaced.push({ path: write.path, value: before, client });
+    }
+  }, origin);
+  return replaced;
+}
+
+/**
+ * The merge-engine field holding the value at `path` of block or item `id` (see {@link ydocField}): a block's path runs
+ * from the block (`props.title`), an item's from its value (`[]` is the value); a step into an item list is the item's
+ * position in it (`props.buttons.2.label`). `undefined` when the doc does not hold that place.
+ */
+export function unitField(
+  doc: Y.Doc,
+  root: 'blocks' | 'items',
+  id: string,
+  path: readonly string[],
+  value: JsonValue | undefined,
+): YdocField | undefined {
+  const reader = new Reader(doc);
+  const steps = [...path];
+  let map: YMap | undefined;
+  let scope: Scope;
+  if (root === 'blocks') {
+    map = doc.getMap<YMap>('blocks').get(id);
+    scope = blockScope(id, []);
+  } else {
+    const item = reader.items.get(id);
+    if (steps.length === 0) return item && ydocField(item, 'v', value);
+    const inner = item?.get('v');
+    map = inner instanceof Y.Map ? inner : undefined;
+    scope = itemScope(id, []);
+  }
+  while (map && steps.length > 1) {
+    const step = steps.shift() ?? '';
+    const child: YValue | undefined = map.get(step);
+    if (child instanceof Y.Map) {
+      scope = childScope(scope, step);
+      map = child;
+      continue;
+    }
+    if (!isItemList(child)) return undefined;
+    const ref = refOf(reader.lists, listName(scope, step), false);
+    const entry = ref === undefined ? undefined : reader.itemsOf(ref)[Number(steps.shift())];
+    if (!entry) return undefined;
+    if (steps.length === 0) return ydocField(entry.item, 'v', value);
+    const inner = entry.item.get('v');
+    map = inner instanceof Y.Map ? inner : undefined;
+    scope = itemScope(entry.id, []);
+  }
+  const [last] = steps;
+  return map && last !== undefined ? ydocField(map, last, value) : undefined;
+}
+
+/** An item or a primitive entry hidden because its list is not live: its owner is gone, its ref unknown or flipped. */
+export interface Orphan {
+  ref: string;
+  /** Its list's name, when the ref is known. */
+  list: string | undefined;
+  /** The item id, or the entry's Yjs id (`<client>.<clock>`). */
+  id: string;
+  entry: boolean;
+  value: JsonValue;
+  /** The client id of every replica that wrote it or anything in it. */
+  clients: number[];
+}
+
+/**
+ * The orphans an update made: `late`, the items and entries it inserted or moved into a list that was already dead (or
+ * whose ref is unknown); `made`, those in a list live before it and dead after, because it removed or flipped the
+ * list's owner.
+ */
+export interface Orphans {
+  late: Orphan[];
+  made: Orphan[];
+}
+
+/** The refs of the live lists. */
+function liveRefs(doc: Y.Doc): Set<string> {
+  const out = new Set<string>();
+  for (const [ref, name] of doc.getMap<string>('lists').entries()) if (isListLive(doc, name)) out.add(ref);
+  return out;
+}
+
+/** Whether `ds` deletes what can kill a list: an item or block, a list marker, or a map (with the lists in it). */
+function deletesStructure(doc: Y.Doc, ds: ReturnType<typeof Y.decodeUpdate>['ds']): boolean {
+  const roots = new Set<unknown>([doc.getMap('items'), doc.getMap('blocks')]);
+  for (const [client, deletes] of ds.clients) {
+    const structs = doc.store.clients.get(client);
+    if (!structs) continue;
+    const known = Y.getState(doc.store, client);
+    for (const { clock, len } of deletes) {
+      if (clock >= known) continue;
+      for (let i = Y.findIndexSS(structs, clock); i < structs.length; i++) {
+        const struct = structs[i];
+        if (!struct || struct.id.clock >= clock + len) break;
+        if (!(struct instanceof Y.Item) || struct.deleted) continue;
+        const { content } = struct;
+        if (roots.has(struct.parent) || content instanceof Y.ContentType) return true;
+        if (content instanceof Y.ContentAny && content.getContent().some((v: JsonValue) => isItemList(v))) return true;
+      }
+    }
+  }
+  return false;
+}
+
+/** Whether `struct`, as `doc` holds it now, places an item or an entry: an item set, its place written, an entry put. */
+function placesUnit(doc: Y.Doc, struct: Y.Item, items: Y.Map<YMap>): boolean {
+  let held: Y.Item | Y.GC;
+  try {
+    held = Y.getItem(doc.store, struct.id);
+  } catch {
+    return false;
+  }
+  if (!(held instanceof Y.Item) || !(held.parent instanceof Y.AbstractType)) return false;
+  const parent = held.parent;
+  if (parent === items) return true;
+  // oxlint-disable-next-line eslint/no-underscore-dangle -- Yjs exposes a type's own item only through `_item`.
+  const owner = parent._item;
+  if (owner === null) return parent instanceof Y.Array;
+  return held.parentSub === 'p' && owner.parent === items;
+}
+
+/**
+ * Reads what {@link Orphans} needs before `update` is applied to `doc` (only for one that deletes an item, a block, a
+ * list marker or a map); the function it returns reads the orphans after.
+ */
+export function orphansMadeBy(doc: Y.Doc, update: Uint8Array): () => Orphans {
+  const { structs, ds } = Y.decodeUpdate(update);
+  const before = deletesStructure(doc, ds) ? liveRefs(doc) : undefined;
+  const known = Y.decodeStateVector(Y.encodeStateVector(doc));
+  return () => {
+    const items = doc.getMap<YMap>('items');
+    if (before === undefined && !structs.some((s) => s instanceof Y.Item && placesUnit(doc, s, items)))
+      return { late: [], made: [] };
+    return findOrphans(doc, before, (id) => id.clock >= (known.get(id.client) ?? 0));
+  };
+}
+
+/** The orphans `change` (a write that saw the whole doc) made: those of every list it killed. */
+export function madeOrphans(doc: Y.Doc, change: () => void): Orphan[] {
+  const before = liveRefs(doc);
+  change();
+  return findOrphans(doc, before, () => false).made;
+}
+
+/**
+ * The orphans `doc` holds: `made` when their list was live `before`, `late` when it was not and `written` placed them.
+ */
+function findOrphans(doc: Y.Doc, before: Set<string> | undefined, written: (id: Y.ID) => boolean): Orphans {
+  const items = doc.getMap<YMap>('items');
+  const after = liveRefs(doc);
+  const out: Orphans = { late: [], made: [] };
+  const file = (orphan: Orphan, placed: boolean) => {
+    if (before?.has(orphan.ref)) out.made.push(orphan);
+    else if (placed) out.late.push(orphan);
+  };
+  const reader = new Reader(doc);
+  // oxlint-disable-next-line eslint/no-underscore-dangle -- `_map` holds each key's current item, its id included.
+  for (const [id, held] of items._map) {
+    const map = held.deleted ? undefined : items.get(id);
+    const place = itemPlace(map);
+    if (!map || !place || after.has(place.ref)) continue;
+    const unit = itemUnit(reader, id);
+    if (!unit) continue;
+    const clients = [...new Set(unit.places.flatMap(([client, , , , , current]) => (current ? [client] : [])))];
+    // oxlint-disable-next-line eslint/no-underscore-dangle -- as above.
+    const p = map._map.get('p');
+    const orphan = { ref: place.ref, list: reader.lists.get(place.ref), id, entry: false, value: unit.value, clients };
+    file(orphan, written(held.id) || (p !== undefined && written(p.id)));
+  }
+  for (const name of doc.share.keys()) {
+    if (!name.startsWith('a:') || after.has(name.slice(2))) continue;
+    const ref = name.slice(2);
+    // oxlint-disable-next-line eslint/no-underscore-dangle -- the entry ids live only on the array's item chain.
+    for (let item = doc.getArray<JsonValue>(name)._start; item !== null; item = item.right) {
+      if (item.deleted || !item.countable) continue;
+      const values: JsonValue[] = item.content.getContent();
+      for (const [k, value] of values.entries()) {
+        const id = Y.createID(item.id.client, item.id.clock + k);
+        const orphan = { ref, list: reader.lists.get(ref), id: `${id.client}.${id.clock}`, entry: true, value };
+        file({ ...orphan, clients: [id.client] }, written(id));
+      }
+    }
+  }
+  return out;
+}
+
+/** Deletes `orphans` (items with all that is nested in them, and entries) in one transaction under `origin`. */
+export function deleteOrphans(doc: Y.Doc, orphans: Orphan[], origin: ContentDiffOrigin): void {
+  if (orphans.length === 0) return;
+  doc.transact(() => {
+    const sync = newSync(doc, false);
+    const entries = new Map<string, Set<string>>();
+    for (const orphan of orphans) {
+      if (!orphan.entry) deleteItem(sync, orphan.id);
+      else entries.set(orphan.ref, (entries.get(orphan.ref) ?? new Set()).add(orphan.id));
+    }
+    for (const [ref, ids] of entries) {
+      const array = sync.reader.array(ref);
+      if (array) deleteEntries(array, ids);
+    }
+  }, origin);
+}
+
+/** The refs of `lists` whose list is dead and whose owner (a block or an item) is not `kept` for a later revival. */
+export function prunableRefs(doc: Y.Doc, kept: (owner: string) => boolean): string[] {
+  return [...doc.getMap<string>('lists').entries()].flatMap(([ref, name]) => {
+    if (isListLive(doc, name)) return [];
+    const owner = parseListName(name);
+    return owner && (owner.kind === 'b' || owner.kind === 'i') && kept(owner.owner) ? [] : [ref];
+  });
+}
+
+/**
+ * The name of a live list whose ref, by the probe that interns it, is `ref` (a ref a prune dropped while an item still
+ * named it); `undefined` when none is.
+ */
+export function liveListNameOf(doc: Y.Doc, ref: string): string | undefined {
+  const lists = doc.getMap<string>('lists');
+  const names: string[] = [];
+  const walk = (map: YMap, scope: Scope) => {
+    for (const [key, value] of map.entries()) {
+      if (isItemList(value)) names.push(listName(scope, key));
+      else if (value instanceof Y.Map) walk(value, childScope(scope, key));
+    }
+  };
+  walk(doc.getMap<YValue>('puck'), puckScope);
+  walk(doc.getMap<YValue>('data'), dataScope);
+  for (const [id, block] of doc.getMap<YMap>('blocks').entries()) walk(block, blockScope(id, []));
+  for (const [id, item] of doc.getMap<YMap>('items').entries()) {
+    const value = item.get('v');
+    if (isItemList(value)) names.push(listName(itemScope(id, [])));
+    else if (value instanceof Y.Map) walk(value, itemScope(id, []));
+  }
+  return names.find((name) => refOf(lists, name, true) === ref);
 }

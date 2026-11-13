@@ -20,6 +20,18 @@ describe('live messages', () => {
     expect(readLiveMessage({ ...m, snapshotId: 7 })).toBeUndefined();
   });
 
+  it('reads an overwritten message from an unknown remover, whose user id is empty', () => {
+    const m = {
+      type: 'conloca:overwritten',
+      ...PAGE,
+      anchor: '',
+      value: 'Old',
+      byUserId: '',
+      byName: 'Another editor',
+    };
+    expect<unknown>(readLiveMessage(m)).toEqual(m);
+  });
+
   it('reads a too-large refusal and rejects unknown types and statuses', () => {
     const r = { type: 'conloca:refused', ...PAGE, status: 413, code: 'too-large' };
     expect<unknown>(readLiveMessage(r)).toEqual(r);

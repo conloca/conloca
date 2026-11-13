@@ -1,6 +1,7 @@
 export {
   decodeConflictValue,
   encodeConflictValue,
+  formatItemBackAnchor,
   formatPlaceAnchor,
   parseAnchor,
   parsePlaceAnchor,
