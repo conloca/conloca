@@ -1,8 +1,10 @@
+import { createHash } from 'node:crypto';
 import matter from 'gray-matter';
-import { parseContentPathLayout } from './content-path.js';
+import { type ContentPathLayout, parseContentPathLayout } from './content-path.js';
 import { calculateEtagsFromMdxBuffer, findMdxContentStartPosition } from './etag-utils.js';
 import { FRONT_MATTER } from './front-matter.js';
 import type { ContentData, ContentManifest, ContentMeta, LocaleVersion, VXJSONFile } from './types.js';
+import { toUrlSafeBase64 } from './url-safe-base64.js';
 import { VXJSON } from './vxjson.js';
 
 const textDecoder = new TextDecoder();
@@ -24,6 +26,8 @@ export type ParseHeaderResult =
       localeVersion: LocaleVersion;
       content?: ContentData;
       repaired: boolean;
+      /** The file declares no id, so `manifest.id` comes from its path. */
+      idFromPath: boolean;
     }
   | {
       ok: false;
@@ -132,6 +136,20 @@ function deriveType(path: string, parsed: ParsedHeaderMetadata): 'puck' | 'mdx' 
   if (path.endsWith('.mdx')) return 'mdx';
   if (path.endsWith('.json')) return 'json';
   return 'puck';
+}
+
+/**
+ * The id of a file that declares none, from where it sits: its kind, site, collection and pathname or name, the same
+ * for every locale. Every read gives the same id, and only a save writes it into the file, so a move or rename made in
+ * the editor keeps it. A file moved outside the editor before any save gets the id of its new place: to the index the
+ * old page went and a new one came, as for any file that changes its declared id. A header cut off inside its front
+ * matter gets none: its `id` may follow the cut.
+ * An id-less file later added at a place a saved page has left derives that page's id: the index keeps the page that
+ * names it and reports the newcomer as a duplicate id until it is given an `id` of its own.
+ */
+function idFromPlace(layout: ContentPathLayout): string {
+  const place = [layout.kind, layout.site ?? '', layout.collection, layout.pathname ?? layout.name ?? ''].join('\0');
+  return `vx-${toUrlSafeBase64(createHash('sha256').update(place).digest()).slice(0, 8)}`;
 }
 
 function parseFullContent(path: string, bytes: Uint8Array): ContentData | null {
@@ -250,8 +268,15 @@ export function parseContentHeader(input: {
     sourcePath: path,
   };
 
+  // An MDX header cut off inside its front matter may hold the id past the cut, so it gets none from its path. The
+  // decoder drops a leading BOM, so six bytes hold the opening `---` either way.
+  const frontMatterCut =
+    !complete && parsedMeta.contentStartPos === -1 && textDecoder.decode(bytes.subarray(0, 6)).startsWith('---');
+  // shortcut: path ids only for MDX pages (#563); fragments and data keep id '' until #634 gives every reader the
+  // same id, else a saved reference could name an id the built site can't resolve.
+  const idFromPath = layout.kind === 'page' && path.endsWith('.mdx') && !parsedMeta.id && !frontMatterCut;
   const manifest: ContentManifest = {
-    id: parsedMeta.id || '',
+    id: parsedMeta.id || (idFromPath ? idFromPlace(layout) : ''),
     type,
     kind: layout.kind,
     site: layout.site,
@@ -267,5 +292,5 @@ export function parseContentHeader(input: {
     if (etag) localeVersion.etag = etag;
   }
 
-  return { ok: true, manifest, locale: layout.locale, localeVersion, content, repaired };
+  return { ok: true, manifest, locale: layout.locale, localeVersion, content, repaired, idFromPath };
 }

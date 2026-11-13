@@ -23,6 +23,16 @@ if (!globalWithCache.__CONLOCA_CONTENT_INDEX_CACHE__) {
   globalWithCache.__CONLOCA_CONTENT_INDEX_CACHE__ = globalCache;
 }
 
+/** One read file offered to addAllClaimed. */
+export interface ClaimEntry {
+  path: string;
+  manifest: ContentManifest;
+  localeVersion: LocaleVersion;
+  content?: ContentData;
+  /** The file declares no id, so `manifest.id` comes from its path. */
+  idFromPath: boolean;
+}
+
 /** A file the indexer could not read, and therefore had to leave out of the index. */
 export interface IndexProblem {
   path: string;
@@ -136,15 +146,9 @@ export class ContentIndex {
   ): Promise<{ indexed: number; skipped: number }> {
     this.clear();
 
-    let indexed = 0;
     let skipped = 0;
     const onError = opts?.onError;
-
-    // Which file claimed each id+locale. Without this a duplicated file
-    // merges into the first one's locale slot and a page silently stops
-    // existing — for every pathname lookup, every build and every editor
-    // list — while still being counted as indexed.
-    const claimedBy = new Map<string, string>();
+    const entries: ClaimEntry[] = [];
 
     for await (const result of backend.listContentPaths({
       ...(opts?.glob ? { glob: opts.glob } : {}),
@@ -178,29 +182,49 @@ export class ContentIndex {
         continue;
       }
 
-      const claim = `${parsed.manifest.id}::${parsed.localeVersion.locale}`;
+      entries.push({ path: result.path, ...parsed });
+    }
+
+    const claimed = this.addAllClaimed(entries, onError);
+    return { indexed: claimed.indexed, skipped: skipped + claimed.skipped };
+  }
+
+  /**
+   * Add entries listed in order, each id+locale going to one file. Without the
+   * claim a duplicated file merges into the first one's locale slot and a page
+   * silently stops existing — for every pathname lookup, every build and every
+   * editor list — while still being counted as indexed. A file that declares an
+   * id claims it before one that only gets it from its path, whichever is listed
+   * first; a losing file is reported as duplicate-id.
+   */
+  addAllClaimed(
+    entries: readonly ClaimEntry[],
+    onError?: (path: string, reason: string, message: string) => void,
+  ): { indexed: number; skipped: number } {
+    let indexed = 0;
+    let skipped = 0;
+    const claimedBy = new Map<string, string>();
+    const addClaimed = ({ path, manifest, localeVersion, content }: ClaimEntry): void => {
+      const claim = `${manifest.id}::${localeVersion.locale}`;
       const claimant = claimedBy.get(claim);
-      if (claimant !== undefined && claimant !== result.path) {
+      if (claimant !== undefined && claimant !== path) {
         skipped++;
-        onError?.(
-          result.path,
-          'duplicate-id',
-          duplicateIdMessage(parsed.manifest.id, parsed.localeVersion.locale, claimant),
-        );
-        continue;
+        onError?.(path, 'duplicate-id', duplicateIdMessage(manifest.id, localeVersion.locale, claimant));
+        return;
       }
-      claimedBy.set(claim, result.path);
+      claimedBy.set(claim, path);
 
       try {
-        this.addContent(parsed.manifest, parsed.localeVersion, parsed.content);
+        this.addContent(manifest, localeVersion, content);
         indexed++;
       } catch (error) {
         skipped++;
         const message = error instanceof Error ? error.message : String(error);
-        onError?.(result.path, 'index-error', message);
+        onError?.(path, 'index-error', message);
       }
-    }
-
+    };
+    for (const entry of entries) if (!entry.idFromPath) addClaimed(entry);
+    for (const entry of entries) if (entry.idFromPath) addClaimed(entry);
     return { indexed, skipped };
   }
 

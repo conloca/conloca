@@ -5,6 +5,14 @@ import { VXJSON } from '../src/vxjson.js';
 
 const enc = new TextEncoder();
 
+/** The id a complete file at `path` holding `text` is indexed under. */
+function idOfFile(path: string, text: string): string {
+  const bytes = enc.encode(text);
+  const result = parseContentHeader({ path, header: bytes, size: bytes.byteLength, complete: true });
+  if (!result.ok) throw new Error(`not parsed: ${path}`);
+  return result.manifest.id;
+}
+
 function makeVxjsonBytes(file: Record<string, unknown>): Uint8Array {
   return enc.encode(JSON.stringify(file));
 }
@@ -211,6 +219,83 @@ describe('parseContentHeader — pure parser', () => {
     if (!result.ok) throw new Error('unreachable');
     expect(result.manifest.kind).toBe('page');
     expect(result.localeVersion.pathname).toBe('/blog/post');
+  });
+
+  it('a file that declares no id gets one from where it sits: the same on every read and for every locale', () => {
+    const bytes = enc.encode(['---', 'title: Guide', '---', '', 'Body.'].join('\n'));
+    const idOf = (path: string) => {
+      const result = parseContentHeader({ path, header: bytes, size: bytes.byteLength, complete: true });
+      if (!result.ok) throw new Error(`not parsed: ${path}`);
+      return result.manifest.id;
+    };
+    const id = idOf('main/pages/docs/guide.en.mdx');
+    expect(id).toMatch(/^vx-[\w-]{8}$/);
+    expect(idOf('main/pages/docs/guide.en.mdx')).toBe(id);
+    expect(idOf('main/pages/docs/guide.fr.mdx')).toBe(id);
+    expect(idOf('main/pages/docs/other.en.mdx')).not.toBe(id);
+  });
+
+  it('only an MDX page gets an id from its path: id-less fragments, data and VXJSON pages keep none (#634)', () => {
+    expect(idOfFile('fragments/blocks/hero.en.mdx', '---\ntitle: Hero\n---\n\nBody.')).toBe('');
+    expect(idOfFile('fragments/blocks/hero.en.vxjson', '{"type":"puck","meta":{"title":"Hero"},"content":{}}')).toBe(
+      '',
+    );
+    expect(idOfFile('data/menus/main.en.json', '{"title":"Main","items":[]}')).toBe('');
+    expect(idOfFile('main/pages/docs/guide.en.vxjson', '{"type":"puck","meta":{"title":"Guide"},"content":{}}')).toBe(
+      '',
+    );
+    expect(idOfFile('main/pages/docs/guide.en.mdx', '---\ntitle: Guide\n---\n\nBody.')).toMatch(/^vx-[\w-]{8}$/);
+  });
+
+  it('a header cut off inside the front matter gets no id from its path: the id may follow the cut', () => {
+    const file = enc.encode(
+      ['---', `description: ${'x'.repeat(5000)}`, 'id: vx-declared', '---', '', 'Body.'].join('\n'),
+    );
+    const path = 'main/pages/docs/guide.en.mdx';
+    const cut = parseContentHeader({ path, header: file.subarray(0, 4096), size: file.byteLength, complete: false });
+    if (!cut.ok) throw new Error('not parsed');
+    expect(cut.manifest.id).toBe('');
+
+    const whole = parseContentHeader({ path, header: file, size: file.byteLength, complete: true });
+    if (!whole.ok) throw new Error('not parsed');
+    expect(whole.manifest.id).toBe('vx-declared');
+
+    // A large file whose front matter closes inside the header, or that has none, still gets one.
+    for (const text of [`---\ntitle: Guide\n---\n\n${'y'.repeat(5000)}\n`, `# Guide\n\n${'y'.repeat(5000)}\n`]) {
+      const bytes = enc.encode(text);
+      const parsed = parseContentHeader({
+        path,
+        header: bytes.subarray(0, 4096),
+        size: bytes.byteLength,
+        complete: false,
+      });
+      if (!parsed.ok) throw new Error('not parsed');
+      expect(parsed.manifest.id).toMatch(/^vx-[\w-]{8}$/);
+    }
+  });
+
+  it('a header cut off inside front matter that follows a BOM gets no id from its path either', () => {
+    const file = enc.encode(
+      ['\uFEFF---', `description: ${'x'.repeat(5000)}`, 'id: vx-declared', '---', '', 'Body.'].join('\n'),
+    );
+    const cut = parseContentHeader({
+      path: 'main/pages/docs/guide.en.mdx',
+      header: file.subarray(0, 4096),
+      size: file.byteLength,
+      complete: false,
+    });
+    expect(cut.ok ? cut.manifest.id : '').toBe('');
+  });
+
+  it('a VXJSON header cut off before an id that follows a large meta gets no id from its path', () => {
+    const file = enc.encode(`{"type":"puck","meta":{"title":"${'x'.repeat(5000)}"},"id":"vx-declared","content":{}}`);
+    const cut = parseContentHeader({
+      path: 'main/pages/docs/guide.en.vxjson',
+      header: file.subarray(0, 4096),
+      size: file.byteLength,
+      complete: false,
+    });
+    expect(cut.ok ? cut.manifest.id : '').toBe('');
   });
 
   it('path outside known layout → ok:false, unsupported-locale-path', () => {

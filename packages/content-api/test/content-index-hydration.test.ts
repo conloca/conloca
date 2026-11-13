@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { ContentIndex } from '../src/content-index.js';
+import { parseContentHeader } from '../src/header-parser.js';
 import type { BackendReadResult, ContentReaderBackend } from '../src/reader-backend.js';
 import type { SitesConfig } from '../src/types.js';
 import { VXJSON } from '../src/vxjson.js';
@@ -155,6 +156,35 @@ describe('ContentIndex.indexAll', () => {
     expect(summary.skipped).toBe(1);
     // The first file keeps the id; the copy is not silently merged over it.
     expect(idx.getManifest('p-about')?.locales.en?.meta.title).toBe('About');
+  });
+
+  it('keeps a file that declares an id over one that only gets that id from its path, whichever is listed first', async () => {
+    // A page saved in the editor names the id its first place gave it; an id-less file added at that place later
+    // derives the same id. The page that names it must keep it, or its edits would open the newcomer.
+    const idLess = enc.encode('---\ntitle: Newcomer\n---\n\nBody.\n');
+    const parsed = parseContentHeader({
+      path: 'shop/pages/a.en.mdx',
+      header: idLess,
+      size: idLess.byteLength,
+      complete: true,
+    });
+    if (!parsed.ok) throw new Error('not parsed');
+    const id = parsed.manifest.id;
+    const errors: { path: string; reason: string; message: string }[] = [];
+    const idx = ContentIndex.createUncached(sitesConfig);
+    const backend = fakeBackend([
+      { path: 'shop/pages/a.en.mdx', bytes: idLess },
+      { path: 'shop/pages/b.en.mdx', bytes: enc.encode(`---\ntitle: Saved\nid: ${id}\n---\n\nBody.\n`) },
+    ]);
+
+    const summary = await idx.indexAll(backend, {
+      onError: (path, reason, message) => errors.push({ path, reason, message }),
+    });
+
+    expect(idx.getManifest(id)?.locales.en?.pathname).toBe('/b');
+    expect(errors.map(({ path, reason }) => [path, reason])).toEqual([['shop/pages/a.en.mdx', 'duplicate-id']]);
+    expect(errors[0]?.message).toContain('shop/pages/b.en.mdx');
+    expect(summary).toEqual({ indexed: 1, skipped: 1 });
   });
 
   it('routes parse failures through onError without aborting the loop', async () => {
