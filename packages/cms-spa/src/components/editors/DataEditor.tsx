@@ -12,6 +12,7 @@ import { type FrameLiveDoc, useDocChannel } from '../../live/doc-channel.js';
 import { useLiveDoc } from '../../live/use-live.js';
 import { contentFailureMessage } from '../../utils/content-failure.js';
 import { validateEntryData } from '../../utils/data-entry-validation.js';
+import { DraftNoticeStrip } from '../conflicts/EditorNoticeStrip.js';
 import { UnsavedChangesDialog } from '../dialogs/UnsavedChangesDialog.js';
 import { LocaleSelector } from '../editor/LocaleSelector.js';
 import { SchemaForm } from '../forms/SchemaForm.js';
@@ -241,6 +242,11 @@ export function DataEditor({
     };
     return (
       <div className="space-y-6">
+        <DraftNoticeStrip
+          id={id}
+          locale={currentLocale}
+          docKey={liveDoc.state === 'ready' ? liveDoc.live.docKey : undefined}
+        />
         <div className="flex items-center gap-3 pb-4 border-b border-grey-09 dark:border-grey-03">
           <span className="text-sm text-grey-04 dark:text-grey-07">Locale:</span>
           <LocaleSelector
@@ -304,6 +310,7 @@ export function DataEditor({
   return (
     <>
       <div className="space-y-6">
+        {!isNew && <DraftNoticeStrip id={id} locale={currentLocale} />}
         {/* Locale selector header - only show existing locales; a new entry has one, the one it is created in */}
         {!isNew && (
           <div className="flex items-center gap-3 pb-4 border-b border-grey-09 dark:border-grey-03">

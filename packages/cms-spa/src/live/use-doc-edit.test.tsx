@@ -43,6 +43,21 @@ afterEach(() => {
 });
 
 describe('useDocEdit', () => {
+  it('refuses a write whose expected value no longer matches, and writes when it does', async () => {
+    const { live } = await openWith(PAGE, 'puck');
+    let edit: ReturnType<typeof useDocEdit> | undefined;
+    function Probe() {
+      edit = useDocEdit(live.docKey);
+      return null;
+    }
+    render(<Probe />);
+    const anchor = 'content[id=hero-1].props.title';
+    expect(edit?.(anchor, 'Mine', { value: 'Older' })).toMatchObject({ ok: false, reason: 'changed' });
+    expect(serializeDoc(live.doc).puckData.content[0].props.title).toBe('Theirs');
+    expect(edit?.(anchor, 'Mine', { value: 'Theirs' })).toEqual({ ok: true });
+    expect(serializeDoc(live.doc).puckData.content[0].props.title).toBe('Mine');
+  });
+
   it('restores an overwritten Puck prop as a local, undoable edit', async () => {
     const { fake, live } = await openWith(PAGE, 'puck');
     const undo = createLocalUndo([live.doc.getMap('puck'), live.doc.getMap('blocks')]);

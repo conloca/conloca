@@ -1,6 +1,7 @@
 import { type Overrides, registerOverlayPortal, useGetPuck } from '@puckeditor/core';
 import { createContext, type ReactNode, useContext, useEffect, useRef, useState } from 'react';
 import { PAGE_SETTING_ATTRIBUTE } from '../../page-setting-attributes.js';
+import { PageConflictFields } from '../conflicts/PuckConflicts.js';
 
 /**
  * The parts of blocks that show one of the page's settings (marked with
@@ -143,6 +144,7 @@ export const FieldsWithPageSettingsHint: Overrides['fields'] = ({ children, item
 
   return (
     <>
+      <PageConflictFields blockId={blockId} />
       {shows && (
         <p className="px-4 pt-4 text-xs text-grey-04 dark:text-grey-07">
           Parts of this block come from Page settings. Click one on the page to edit it.

@@ -19,6 +19,8 @@ export interface FieldConflictPickerProps {
   age?: string;
   /** A choice is being sent: every button is disabled until it settles. */
   pending?: boolean;
+  /** The field's block was removed: only `Keep mine` can settle it. */
+  mineOnly?: boolean;
   onPick: (choice: ConflictChoice) => void;
 }
 
@@ -61,6 +63,7 @@ export function FieldConflictPicker({
   theirsBy,
   age,
   pending = false,
+  mineOnly = false,
   onPick,
 }: FieldConflictPickerProps) {
   const [draft, setDraft] = useState<string | null>(null);
@@ -109,11 +112,17 @@ export function FieldConflictPicker({
               <Button size="sm" variant="outline" disabled={pending} onClick={() => onPick('mine')}>
                 Keep mine
               </Button>
-              <Button size="sm" variant="outline" disabled={pending} onClick={() => onPick('theirs')}>
+              <Button size="sm" variant="outline" disabled={pending || mineOnly} onClick={() => onPick('theirs')}>
                 {theirsBy === undefined ? 'Use theirs' : `Use ${theirsBy}'s`}
               </Button>
               {typeof theirs === 'string' ? (
-                <Button ref={editButton} size="sm" variant="ghost" disabled={pending} onClick={() => setDraft(theirs)}>
+                <Button
+                  ref={editButton}
+                  size="sm"
+                  variant="ghost"
+                  disabled={pending || mineOnly}
+                  onClick={() => setDraft(theirs)}
+                >
                   Edit
                 </Button>
               ) : null}

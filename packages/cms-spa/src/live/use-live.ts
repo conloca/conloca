@@ -1,7 +1,7 @@
 /** React hooks over the editor's doc channel, and the one-edit write the notices and pickers use. */
 
 import type { ContentData } from '@conloca/content-api';
-import { applyAnchorValue, valueAtAnchor } from '@conloca/content-api/merge';
+import { applyAnchorValue, deepEqual, valueAtAnchor } from '@conloca/content-api/merge';
 import { applyContentDiff, serializeDoc } from '@conloca/content-api/ydoc';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { type EditorFlushResult, flushOpenEditor } from '../editor-flush.js';
@@ -165,11 +165,16 @@ export function heldContent(docKey: string): ContentData | null {
   return getUIConfig().docChannel?.heldContent(docKey) ?? null;
 }
 
-export type DocEditResult = { ok: true } | { ok: false; reason: 'not-found' | 'not-open' | 'error'; message: string };
+export type DocEditResult =
+  | { ok: true }
+  | { ok: false; reason: 'not-found' | 'not-open' | 'error' | 'changed'; message: string };
 export type DocEditValue = JsonValue | null | undefined;
-export type DocEdits = (edits: { anchor: string; value: DocEditValue }[]) => DocEditResult;
+/** `expected`, when given, is the value the anchor must still hold; anything else refuses the write as `changed`. */
+export type DocEdit = { anchor: string; value: DocEditValue; expected?: DocEditValue };
+export type DocEdits = (edits: DocEdit[]) => DocEditResult;
 
 const NOT_FOUND = 'This block was deleted, so the value could not be restored.';
+const CHANGED = 'Changed again since. Check the field.';
 
 /** The parsed file the anchor helpers read, from a serialized doc. */
 function wrap(content: ContentData): { kind: 'mdx' | 'vxjson'; doc: JsonValue } | null {
@@ -194,10 +199,7 @@ function unwrap(kind: 'mdx' | 'vxjson', doc: JsonValue): ContentData | null {
  * Writes each edit at its content anchor over the serialized doc, then applies the result in one transaction: all or
  * nothing. Never throws.
  */
-export function applyDocEdits(
-  live: FrameLiveDoc | undefined,
-  edits: { anchor: string; value: DocEditValue }[],
-): DocEditResult {
+export function applyDocEdits(live: FrameLiveDoc | undefined, edits: DocEdit[]): DocEditResult {
   if (!live) return { ok: false, reason: 'not-open', message: 'This page is not open for editing.' };
   if (live.held)
     return { ok: false, reason: 'error', message: getUIConfig().docChannel?.held() ?? 'This page is held.' };
@@ -205,10 +207,14 @@ export function applyDocEdits(
     const base = wrap(serializeDoc(live.doc));
     if (!base) return { ok: false, reason: 'error', message: 'This page could not be read.' };
     let current = base.doc;
-    for (const { anchor, value } of edits) {
+    for (const edit of edits) {
+      const { anchor, value } = edit;
       const input = { kind: base.kind, doc: current, anchor, base: base.doc };
       const found = valueAtAnchor(input);
-      const written = applyAnchorValue({ ...input, expected: found.found ? found.value : undefined, value });
+      const now = found.found ? found.value : undefined;
+      if ('expected' in edit && !deepEqual(now, edit.expected))
+        return { ok: false, reason: 'changed', message: CHANGED };
+      const written = applyAnchorValue({ ...input, expected: now, value });
       if (!written.ok) return { ok: false, reason: 'not-found', message: NOT_FOUND };
       current = written.doc;
     }
@@ -223,9 +229,32 @@ export function applyDocEdits(
 }
 
 /** One value at an anchor (Restore yours, picker choices); `undefined` removes the key. */
-export function useDocEdit(docKey: string): (anchor: string, value: DocEditValue) => DocEditResult {
+export function useDocEdit(
+  docKey: string,
+): (anchor: string, value: DocEditValue, expected?: { value: DocEditValue }) => DocEditResult {
   const channel = useDocChannel();
-  return useCallback((anchor, value) => applyDocEdits(channel?.live(docKey), [{ anchor, value }]), [channel, docKey]);
+  return useCallback(
+    (anchor, value, expected) =>
+      applyDocEdits(channel?.live(docKey), [
+        expected ? { anchor, value, expected: expected.value } : { anchor, value },
+      ]),
+    [channel, docKey],
+  );
+}
+
+/** Reads the value at an anchor in the open doc now; `undefined` when it is absent or the doc is not open. */
+export function useDocRead(docKey: string): (anchor: string) => DocEditValue {
+  const channel = useDocChannel();
+  return useCallback(
+    (anchor) => {
+      const live = channel?.live(docKey);
+      const base = live ? wrap(serializeDoc(live.doc)) : null;
+      if (!base) return undefined;
+      const found = valueAtAnchor({ kind: base.kind, doc: base.doc, anchor, base: base.doc });
+      return found.found ? found.value : undefined;
+    },
+    [channel, docKey],
+  );
 }
 
 /** Several values in one transaction (MDX page settings): all keys or none. */

@@ -245,6 +245,8 @@ export interface UIConfig {
   docChannel?: DocChannel;
   /** Set by a host that serves draft tools (conflicts, discard, earlier versions); absent, the editor offers none. */
   draftTools?: DraftToolsHost;
+  /** The site the editor's pages belong to, which the draft tools' page refs name; without it they offer nothing. */
+  siteId?: string;
 }
 
 /** How the editor routes when a parent frame owns the address bar. */
@@ -290,6 +292,8 @@ const developmentConfigs = new WeakMap<UIConfig, UIConfig>();
 export const EDITOR_CONFIG_CHANGED_EVENT = 'conloca:editor-config-changed';
 
 export function configureUI(options: Partial<UIConfig>) {
+  if (options.draftTools && !options.siteId)
+    throw new Error('configureUI: draftTools needs siteId, the site its pages are in.');
   // `readOnly` survives a reinstall unless the caller states a new answer.
   //
   // Every other field here describes ONE workspace, and a host app runs

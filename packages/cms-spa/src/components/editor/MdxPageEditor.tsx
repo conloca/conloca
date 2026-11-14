@@ -23,6 +23,7 @@ import { useDocEdits, useLiveDoc, usePresencePeers } from '../../live/use-live.j
 import type { PageMetadata } from '../../types.js';
 import { getUIConfig } from '../../ui-config.js';
 import { buildMetadataUpdate, extractPageMetadata, pageSettingsSaveError } from '../../utils/pageMetadata.js';
+import { DraftNoticeStrip } from '../conflicts/EditorNoticeStrip.js';
 import { ConflictDialog } from '../dialogs/ConflictDialog.js';
 import { ErrorModal } from '../dialogs/ErrorModal.js';
 import { PageMetadataDialog } from '../dialogs/PageMetadataDialog.js';
@@ -238,6 +239,7 @@ function LiveMdxPageEditor({ initialLocale }: { initialLocale: string }) {
           </button>
         </div>
       </header>
+      <DraftNoticeStrip id={id} locale={currentLocale} docKey={live.docKey} />
       <div className="flex-1 overflow-hidden flex flex-row min-h-0">
         <div
           className={cn('flex-1 min-w-0 overflow-hidden conloca-mdx-editor-surround', {
@@ -671,6 +673,7 @@ function SavedMdxPageEditor({ initialLocale }: { initialLocale: string }) {
           )}
         </div>
       </header>
+      <DraftNoticeStrip id={id} locale={currentLocale} />
       {/* `min-h-0` is required on flex children that themselves overflow —
           without it the editor pane can't shrink past its content height
           and the page-level scrollbar takes over instead of the editor's. */}

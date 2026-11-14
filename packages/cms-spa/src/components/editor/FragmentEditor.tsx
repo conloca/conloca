@@ -16,6 +16,7 @@ import { useTheme } from '../../hooks/useTheme.js';
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard.js';
 import type { SaveState } from '../../types.js';
 import { getUIConfig } from '../../ui-config.js';
+import { DraftNoticeStrip } from '../conflicts/EditorNoticeStrip.js';
 import { ConflictDialog } from '../dialogs/ConflictDialog.js';
 import { ErrorModal } from '../dialogs/ErrorModal.js';
 import { UnsavedChangesDialog } from '../dialogs/UnsavedChangesDialog.js';
@@ -509,6 +510,7 @@ export function FragmentEditor({ EditorComponent = CMSMDXEditor }: FragmentEdito
           />
         </div>
       </header>
+      <DraftNoticeStrip id={id} locale={currentLocale} />
       <SharedFragmentBanner fromPage={fromPage} />
       <FragmentEditorSurface
         EditorComponent={EditorComponent}

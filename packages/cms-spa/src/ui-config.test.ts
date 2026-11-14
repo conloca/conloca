@@ -1,7 +1,20 @@
 import { afterEach, describe, expect, it } from 'bun:test';
+import type { DraftToolsHost } from './draft-tools.js';
 import { configureUI, EDITOR_CONFIG_CHANGED_EVENT, getUIConfig, setDataBindings, setTemplates } from './ui-config.js';
 
 describe('configureUI', () => {
+  it('refuses draft tools without the site their page refs name', () => {
+    const draftTools: DraftToolsHost = {
+      listConflicts: async () => [],
+      resolveConflict: async () => ({ ok: true }),
+      discardPage: async () => ({ ok: true }),
+      listVersions: async () => [],
+      restoreVersion: async () => ({ ok: true, kept: [] }),
+    };
+    expect(() => configureUI({ draftTools })).toThrow('draftTools needs siteId');
+    expect(getUIConfig().draftTools).toBeUndefined();
+  });
+
   it('notifies the editor once after installing the configuration', () => {
     configureUI({});
     const siteBaseUrl = 'https://example.test/';

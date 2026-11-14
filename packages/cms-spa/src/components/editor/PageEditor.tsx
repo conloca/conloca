@@ -23,6 +23,8 @@ import { wrapSiteCSS } from '../../site-css-layer.js';
 import { useSiteStyles } from '../../site-styles.js';
 import type { SaveState } from '../../types.js';
 import { getUIConfig } from '../../ui-config.js';
+import { DraftPageContext, PuckNoticeStrip } from '../conflicts/PuckConflicts.js';
+import { draftToolsPage } from '../conflicts/use-page-conflicts.js';
 import { ConflictDialog } from '../dialogs/ConflictDialog.js';
 import { UnsavedChangesDialog } from '../dialogs/UnsavedChangesDialog.js';
 import { ImageFieldRender } from '../fields/ImageField.js';
@@ -113,13 +115,23 @@ const drawerItemOverride = ({ children, name }: { children: React.ReactNode; nam
   <DrawerItemOverride name={name}>{children}</DrawerItemOverride>
 );
 
-/** Inside <Puck>, beside its UI: the live binding's bridge (inert without a binding). */
-const livePuck = ({ children }: { children: React.ReactNode }) => (
-  <>
-    <PuckLiveBridge />
-    {children}
-  </>
-);
+/**
+ * Inside <Puck>, beside its UI: the live binding's bridge (inert without a binding), and, with draft tools, the notices
+ * above it. Without draft tools the layout stays exactly as it was.
+ */
+const livePuck = ({ children }: { children: React.ReactNode }) =>
+  getUIConfig().draftTools ? (
+    <div className="flex h-full flex-col">
+      <PuckLiveBridge />
+      <PuckNoticeStrip />
+      <div className="min-h-0 flex-1">{children}</div>
+    </div>
+  ) : (
+    <>
+      <PuckLiveBridge />
+      {children}
+    </>
+  );
 
 /** A held replica takes no more edits: Puck shows it read-only. */
 const NO_EDITS: Partial<Permissions> = { drag: false, duplicate: false, delete: false, edit: false, insert: false };
@@ -313,6 +325,10 @@ export function PageEditor({
   live,
 }: PageEditorProps) {
   const bindingRef = useRef<PuckBinding | null>(null);
+  const draftPage = useMemo(() => {
+    const page = draftToolsPage(entry.id, entry.localized.locale);
+    return page ? { page, ...(live ? { docKey: live.docKey } : {}) } : null;
+  }, [entry.id, entry.localized.locale, live]);
   // Live, each field change's resolveData tells the binding which props the user changed (see trackFieldResolves).
   const renderConfig = useMemo(
     () => trackFieldResolves(withDraftMediaRendering(config), () => bindingRef.current),
@@ -560,22 +576,24 @@ export function PageEditor({
       {/* Keep a usable canvas on very short screens; this region scrolls instead of crushing Puck's iframe. */}
       <div className="flex-1 min-h-[400px] overflow-hidden">
         {/* Live: a page setting a block shows on the canvas says why it does not open, as the header control does. */}
-        <PageSettingTargetsProvider onOpen={binding ? openNoPageSettings : onOpenMetadata}>
-          <PuckBindingProvider binding={binding}>
-            {/* Not <Puck> itself: on the canvas Puck rewrites the page data it hands blocks; see PuckWithUntouchedMetadata.tsx. */}
-            <PuckWithUntouchedMetadata
-              config={renderConfig}
-              data={binding?.shadow ?? data}
-              metadata={metadata}
-              onChange={handleDataChange}
-              headerTitle={entry.localized.meta.title || 'Untitled Page'}
-              viewports={viewports}
-              overrides={overrides}
-              iframe={CANVAS_IFRAME}
-              permissions={held ? NO_EDITS : undefined}
-            />
-          </PuckBindingProvider>
-        </PageSettingTargetsProvider>
+        <DraftPageContext.Provider value={draftPage}>
+          <PageSettingTargetsProvider onOpen={binding ? openNoPageSettings : onOpenMetadata}>
+            <PuckBindingProvider binding={binding}>
+              {/* Not <Puck> itself: on the canvas Puck rewrites the page data it hands blocks; see PuckWithUntouchedMetadata.tsx. */}
+              <PuckWithUntouchedMetadata
+                config={renderConfig}
+                data={binding?.shadow ?? data}
+                metadata={metadata}
+                onChange={handleDataChange}
+                headerTitle={entry.localized.meta.title || 'Untitled Page'}
+                viewports={viewports}
+                overrides={overrides}
+                iframe={CANVAS_IFRAME}
+                permissions={held ? NO_EDITS : undefined}
+              />
+            </PuckBindingProvider>
+          </PageSettingTargetsProvider>
+        </DraftPageContext.Provider>
       </div>
 
       {/* In-app navigation guard. beforeunload handles reload / tab close
