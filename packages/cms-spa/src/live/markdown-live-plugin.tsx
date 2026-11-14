@@ -37,6 +37,7 @@ import {
   syncEditorReplica,
   writeEditorEdit,
 } from './markdown-binding.js';
+import { createLocalUndo, type UndoScope } from './undo.js';
 
 export const HTML_COMMENT_NOTICE = 'This page has an HTML comment. Replace it with {/* */} to edit it live.';
 
@@ -96,11 +97,12 @@ function $selectedBlock(): number | null {
  * The editor side of an MDX body in a shared doc. Per mount it keeps `shadow` (the markdown the editor last showed) and
  * a replica of the doc as the editor last showed it. A local change is diffed into the replica and sent as one update,
  * so Yjs merges it with remote changes the editor has not shown; a remote change is shown on the next frame with
- * `setMarkdown`, keeping the caret's place in the text. Undo and redo run `undo`, so they revert only this user's edits.
+ * `setMarkdown`, keeping the caret's place in the text. Undo and redo run its own undo manager over `undoScope`, so they revert only this user's edits.
  */
 export function markdownLivePlugin(input: {
   text: Y.Text;
-  undo: Y.UndoManager;
+  /** What this user's undo tracks; its manager lives as long as the editor's root, so a remount leaks none. */
+  undoScope: UndoScope;
   onSelectionBlock(block: number | null): void;
   /** The editor's content root, whose children are its top-level blocks; null once it goes. */
   onRootElement?(root: HTMLElement | null): void;
@@ -110,7 +112,7 @@ export function markdownLivePlugin(input: {
    */
   held?: { notice: () => string | null; content(): string; subscribe: (onChange: () => void) => () => void };
 }): RealmPlugin {
-  const { text, undo, held } = input;
+  const { text, held } = input;
   const notice$ = Cell<string | null>(null);
 
   function LiveNotice() {
@@ -205,6 +207,7 @@ export function markdownLivePlugin(input: {
           frame = requestAnimationFrame(() => showRemote(editor));
         };
         text.observe(observer);
+        const undo = createLocalUndo(input.undoScope);
         // Read-only writes nothing, undo included; the editor's own history never runs either way.
         const unlessLocked = (step: () => void) => () => {
           if (realm.getValue(notice$) === null) step();
@@ -232,6 +235,7 @@ export function markdownLivePlugin(input: {
           cancelAnimationFrame(frame);
           frame = 0;
           stopUndo();
+          undo.destroy();
           stopHeld?.();
           stopRedo();
           stopSelection();

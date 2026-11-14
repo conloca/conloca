@@ -91,14 +91,14 @@ export interface LiveStatus {
   deletedExport?: { message: string } | null;
   /**
    * Something the editor page should tell the user beside the page's own state, which `connection` and `readOnly` keep
-   * naming: work the frame holds that it could not report (`unreported`), or held work a frame reload dropped
-   * (`lost-on-reload`). Absent from parents that predate it.
+   * naming: work the frame holds that it could not report (`unreported`), work it holds with its copy-out notice
+   * (`held`), or held work a frame reload dropped (`lost-on-reload`). Absent from parents that predate it.
    */
   notice?: LiveNotice | null;
 }
 
 export interface LiveNotice {
-  kind: 'unreported' | 'lost-on-reload';
+  kind: 'unreported' | 'held' | 'lost-on-reload';
   message: string;
 }
 
@@ -336,7 +336,7 @@ function readNotice(value: unknown): LiveNotice | null | undefined {
   if (value === null) return null;
   if (!isFields(value) || typeof value.message !== 'string') return undefined;
   const { kind, message } = value;
-  return kind === 'unreported' || kind === 'lost-on-reload' ? { kind, message } : undefined;
+  return kind === 'unreported' || kind === 'held' || kind === 'lost-on-reload' ? { kind, message } : undefined;
 }
 
 function readDeletedExport(data: unknown): LiveStatus['deletedExport'] | undefined {

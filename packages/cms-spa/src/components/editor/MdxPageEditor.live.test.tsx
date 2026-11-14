@@ -2,7 +2,16 @@
 import { afterEach, beforeEach, describe, expect, it, spyOn } from 'bun:test';
 import { serializeDoc } from '@conloca/content-api/ydoc';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  waitForElementToBeRemoved,
+  within,
+} from '@testing-library/react';
 import {
   $getRoot,
   $getSelection,
@@ -283,7 +292,8 @@ describe('MdxPageEditor bound to a shared doc', () => {
     fireEvent.change(publishAt, { target: { value: '' } });
     const updates = fake.updates().length;
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    // Not waitFor + expect(...).toBeNull(): each failed expect formats the open dialog, whose graph reaches the whole editor (seconds).
+    await waitForElementToBeRemoved(dialog);
     const frontmatter = fake.parent(docKey).getMap('frontmatter');
     expect(frontmatter.get('title')).toBe('New');
     expect(frontmatter.has('publishAt')).toBe(false);
@@ -301,7 +311,7 @@ describe('MdxPageEditor bound to a shared doc', () => {
     const dialog = await screen.findByRole('dialog');
     fireEvent.change(within(dialog).getAllByRole('textbox')[0], { target: { value: 'New' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitForElementToBeRemoved(dialog);
     expect(parent.getMap('frontmatter').get('title')).toBe('New');
     expect(metaWrites).toEqual([]);
     expect(serializeDoc(parent).mdx).toBe('---\ntitle: New\n---\nHello\n');

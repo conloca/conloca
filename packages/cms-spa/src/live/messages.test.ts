@@ -112,6 +112,8 @@ describe('live messages', () => {
     const s = { connection: 'connected', pending: false, persisted: true, readOnly: null, deletedExport: null };
     const noticed = { ...s, notice: { kind: 'lost-on-reload', message: 'Changes were lost.' } };
     expect<unknown>(readLiveStatus(noticed)).toEqual(noticed);
+    const held = { ...s, notice: { kind: 'held', message: 'Copy your changes out.' } };
+    expect<unknown>(readLiveStatus(held)).toEqual(held);
     expect<unknown>(readLiveStatus({ ...s, notice: null })).toEqual({ ...s, notice: null });
     // A notice this frame cannot read is left out; the rest of the status still counts.
     expect<unknown>(readLiveStatus({ ...s, notice: { kind: 'newer', message: 1 } })).toEqual(s);

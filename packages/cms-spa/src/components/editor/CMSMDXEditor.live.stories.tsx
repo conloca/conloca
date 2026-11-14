@@ -34,7 +34,6 @@ import {
   writeEditorEdit,
 } from '../../live/markdown-binding.js';
 import { markdownLivePlugin } from '../../live/markdown-live-plugin.js';
-import { createLocalUndo } from '../../live/undo.js';
 import { CMSMDXEditor } from './CMSMDXEditor.js';
 
 /**
@@ -827,7 +826,6 @@ export const BindingSameWordsMispairReplica: Story = {
 interface Peer {
   doc: Y.Doc;
   text: Y.Text;
-  undo: Y.UndoManager;
   editor?: LexicalEditor;
 }
 
@@ -837,7 +835,7 @@ const peers: Peer[] = [];
 function PeerEditor({ peer, initial }: { peer: Peer; initial: string }) {
   const plugins = useMemo<RealmPlugin[]>(
     () => [
-      markdownLivePlugin({ text: peer.text, undo: peer.undo, onSelectionBlock: () => {} }),
+      markdownLivePlugin({ text: peer.text, undoScope: [peer.text], onSelectionBlock: () => {} }),
       realmPlugin({
         init(realm) {
           realm.pub(createRootEditorSubscription$, (editor) => {
@@ -870,7 +868,7 @@ function TwoEditors({ initial }: { initial: string }) {
     });
     return docs.map((doc): Peer => {
       const text = doc.getText('body');
-      return { doc, text, undo: createLocalUndo([text]) };
+      return { doc, text };
     });
   });
   peers.splice(0, peers.length, ...pair);
@@ -977,7 +975,7 @@ function SoloEditor({ initial }: { initial: string }) {
   solo = s;
   const plugins = useMemo<RealmPlugin[]>(
     () => [
-      markdownLivePlugin({ text: s.text, undo: createLocalUndo([s.text]), onSelectionBlock: () => {} }),
+      markdownLivePlugin({ text: s.text, undoScope: [s.text], onSelectionBlock: () => {} }),
       realmPlugin({
         init(realm) {
           realm.pub(createRootEditorSubscription$, (editor) => {

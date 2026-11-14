@@ -19,7 +19,6 @@ import { useDocChannel } from '../../live/doc-channel.js';
 import { markdownLivePlugin } from '../../live/markdown-live-plugin.js';
 import type { JsonValue } from '../../live/messages.js';
 import { pageSettingEdits } from '../../live/page-settings.js';
-import { createLocalUndo } from '../../live/undo.js';
 import { useDocEdits, useLiveDoc, usePresencePeers } from '../../live/use-live.js';
 import type { PageMetadata } from '../../types.js';
 import { getUIConfig } from '../../ui-config.js';
@@ -114,13 +113,12 @@ function LiveMdxPageEditor({ initialLocale }: { initialLocale: string }) {
   const publishedPathname = loadedContent?.localized?.pathname;
   const pagePathname = publishedPathname || id || 'page';
 
-  // The undo manager goes with the replica's doc (Yjs destroys it then), so a remount needs no cleanup.
   const bound = useMemo(() => {
     if (!live) return null;
     const text = live.doc.getText('body');
     const plugin = markdownLivePlugin({
       text,
-      undo: createLocalUndo([text, live.doc.getMap('frontmatter')]),
+      undoScope: [text, live.doc.getMap('frontmatter')],
       onSelectionBlock: (block) => channel?.setSelection(live.docKey, block === null ? null : `block:${block}`),
       onRootElement: setEditorRoot,
       held: channel
