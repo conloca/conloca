@@ -421,7 +421,7 @@ class Reader {
   }
 }
 
-/** The live entries of a primitive list's array with their Yjs ids (`<client>.<clock>`). */
+/** The live entries of the array of a list of primitives, with their Yjs ids (`<client>.<clock>`). */
 function entriesOf(array: Y.Array<JsonValue>): { id: string; value: JsonValue }[] {
   const out: { id: string; value: JsonValue }[] = [];
   // oxlint-disable-next-line eslint/no-underscore-dangle -- the entry ids live only on the array's item chain.
@@ -591,7 +591,7 @@ function flipPlan(sync: Sync, name: string, ref: string, after: string) {
   }));
 }
 
-/** Moves a primitive list's array entries into `items`, after `after`; returns entry id → new item id. */
+/** Moves the array entries of a list of primitives into `items`, after `after`; returns entry id → new item id. */
 function flipEntries(
   sync: Sync,
   name: string,
@@ -650,7 +650,7 @@ function syncItems(name: string, values: JsonValue[], sync: Sync, at: (string | 
 
 /**
  * Writes the list `name` back as a removal took it: each item under the id and key it had (a fresh one for an id now
- * taken, or no longer known), and a primitive list's values before the entries written into its array since.
+ * taken, or no longer known), and, for a list of primitives, its values before the entries its array got since.
  */
 function restoreList(
   name: string,
@@ -701,7 +701,7 @@ function itemsByRef(sync: Sync, ref: string): { id: string; key: string; item: Y
   return new Reader(sync.doc).itemsOf(ref);
 }
 
-/** Syncs a primitive list's array to `values`: aligned by value, then deletes and inserts by index. */
+/** Syncs the array of a list of primitives to `values`: aligned by value, then deletes and inserts by index. */
 function syncPrimitives(array: Y.Array<JsonValue>, values: JsonValue[], sync: Sync, name: string): void {
   const entries = entriesOf(array);
   const { order } = alignItems(
@@ -1096,7 +1096,7 @@ export function serializeDoc(doc: Y.Doc): ContentData {
 
 /**
  * List name → the ids of its items in list order, for every live list in the doc: item ids for an item map, and
- * `<client>.<clock>` Yjs item ids for the entries of a primitive list.
+ * `<client>.<clock>` Yjs item ids for the entries of a list of primitives.
  */
 export type ItemIds = Record<string, string[]>;
 
@@ -1390,9 +1390,9 @@ function writeMapDiff(sync: Sync, ids: ItemIds, map: YMap, shown: JsonObject, ne
 }
 
 /**
- * Writes a primitive list's change by the entry ids the view showed: an edit or a move deletes the shown entry and
- * inserts the value after the entry before its place in `next`; an entry the doc lost is not deleted again, and comes
- * back only when this write changed or moved it.
+ * Writes a change to a list of primitives by the entry ids the view showed: an edit or a move deletes the shown entry
+ * and inserts the value after the entry before its place in `next`; an entry the doc lost is not deleted again, and
+ * comes back only when this write changed or moved it.
  */
 function writePrimitiveChange(
   sync: Sync,

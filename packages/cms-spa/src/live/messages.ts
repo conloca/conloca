@@ -48,7 +48,7 @@ export type LiveMessage = PageRef &
         sv?: string;
       }
     | {
-        /** Two writers changed one entry of a primitive list at once; every change stayed in the list. */
+        /** Two writers changed one entry of a list of primitives at once; every change stayed in the list. */
         type: 'conloca:changed-together';
         anchor: string;
         outcome: ChangedTogetherOutcome;

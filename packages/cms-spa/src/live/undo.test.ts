@@ -27,7 +27,7 @@ describe('local undo', () => {
     expect(a.getMap('m').toJSON()).toEqual({ subtitle: 'Theirs' });
   });
 
-  it("undoes a local edit in a primitive list a teammate's transaction created after mount", () => {
+  it("undoes a local edit in a list of primitives a teammate's transaction created after mount", () => {
     const doc = hydrateDoc({ data: { title: 'T' } });
     const { undo } = createListUndo(doc, ['data']);
     const teammate = hydrateDoc({ data: { title: 'T' } });

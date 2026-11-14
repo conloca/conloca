@@ -849,7 +849,7 @@ describe('item lists', () => {
     expect(n).toBe(0);
   });
 
-  describe('primitive lists', () => {
+  describe('lists of primitives', () => {
     it('a list of primitives hydrates into its a:<ref> array as one insert, and serializes byte-equal', () => {
       const d = hydrateDoc(ROWS_DATA);
       expect(arrayNames(d)).toHaveLength(1);
@@ -870,7 +870,7 @@ describe('item lists', () => {
       }
     });
 
-    it("two replicas creating the same primitive list keep both sides' entries", () => {
+    it("two replicas creating the same list of primitives keep both sides' entries", () => {
       const [a, b] = twoReplicas(data({ title: 'T' }));
       applyContentDiff(a, data({ title: 'T', tags: ['a'] }), 'a');
       applyContentDiff(b, data({ title: 'T', tags: ['b'] }), 'b');
@@ -927,7 +927,7 @@ describe('item lists', () => {
       }
     });
 
-    it('putting an object into a primitive list flips it to an item map in one transaction, keeping order', () => {
+    it('putting an object into a list of primitives flips it to an item map in one transaction, keeping order', () => {
       const d = hydrateDoc(ROWS_DATA);
       let transactions = 0;
       d.on('afterTransaction', () => transactions++);
@@ -1062,7 +1062,7 @@ describe('item lists', () => {
       expect(ydocAnchor(value, 'n')).toBe('data.rows');
     });
 
-    it('undo of a flip restores the primitive list', () => {
+    it('undo of a flip restores the list of primitives', () => {
       const d = hydrateDoc(ROWS_DATA);
       const undo = undoFor(d, 'me');
       liveWrite(d, withRows(FIRST_ROWS, ['x', 'y', { o: 1 }, 'z']), 'me');
@@ -1071,7 +1071,7 @@ describe('item lists', () => {
       expect(readItemIds(d)[TAGS]?.every((id) => id.includes('.'))).toBe(true);
     });
 
-    it('undo of removing an item restores its nested primitive list', () => {
+    it('undo of removing an item restores its nested list of primitives', () => {
       const base = withRows([{ t: 'A', tags: ['1', '2', '3'] }, { t: 'B' }]);
       const d = hydrateDoc(base);
       const undo = undoFor(d, 'me');
@@ -1212,7 +1212,7 @@ describe('item lists', () => {
       expect(names).toEqual(expect.arrayContaining(created));
     });
 
-    it('removing a key that holds a nested primitive list deletes its entries', () => {
+    it('removing a key that holds a nested list of primitives deletes its entries', () => {
       const d = hydrateDoc(withRows([{ t: 'A', tags: ['1', '2'] }]));
       liveWrite(d, withRows([{ t: 'A' }]), 'me');
       expect(dataOf(d).rows).toEqual([{ t: 'A' }]);
@@ -1228,7 +1228,7 @@ describe('item lists', () => {
       expect(() => applyItemChanges(d, serializeDoc(d), short, next, 'me')).toThrow('invariant');
     });
 
-    it("applyContentDiff aligns a primitive list by value and keeps every unchanged entry's Yjs id", () => {
+    it("applyContentDiff aligns a list of primitives by value and keeps every unchanged entry's Yjs id", () => {
       const d = hydrateDoc(ROWS_DATA);
       const [x, , z] = readItemIds(d)[TAGS] ?? [];
       applyContentDiff(d, withRows(FIRST_ROWS, ['x', 'Y', 'z']), 'x');

@@ -13,7 +13,7 @@ export function createLocalUndo(scope: UndoScope): Y.UndoManager {
   return new Y.UndoManager(scope, { trackedOrigins: new Set([LOCAL_ORIGIN, EDIT_ORIGIN]), captureTimeout: CAPTURE_MS });
 }
 
-/** This user's undo over a page's maps (`roots`), its list items and its primitive lists' arrays. */
+/** This user's undo over a page's maps (`roots`), its list items and the arrays of its lists of primitives. */
 export interface ListUndo {
   undo: Y.UndoManager;
   /** Adds the `a:` arrays a local write is about to create, before it writes (`applyItemChanges`'s `beforeWrite`). */
@@ -26,10 +26,10 @@ export interface ListUndo {
 }
 
 /**
- * Local undo over the maps `roots`, `items` and every primitive list's `a:` root array: those present now, those a local
- * write names through `track`, and those a remote transaction created (added once it ends). Without them, an item or
- * primitive edit is not undoable, and Undo of a flip or a removal empties a primitive list. `lists` is never in scope:
- * only the server prunes it.
+ * Local undo over the maps `roots`, `items` and the `a:` root array of every list of primitives: those present now,
+ * those a local write names through `track`, and those a remote transaction created (added once it ends). Without them,
+ * an item or primitive edit is not undoable, and Undo of a flip or a removal empties a list of primitives. `lists` is
+ * never in scope: only the server prunes it.
  */
 export function createListUndo(doc: Y.Doc, roots: string[]): ListUndo {
   const arrays = () => [...doc.share.keys()].filter((name) => name.startsWith('a:'));

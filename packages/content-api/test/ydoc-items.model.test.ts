@@ -28,7 +28,7 @@ interface Replica {
   ids: ItemIds;
   undo: Y.UndoManager;
   origin: string;
-  /** Per undo stack item, what its undo must bring back: a flipped list, or the primitive lists of a removed item. */
+  /** Per undo stack item, what its undo must bring back: a flipped list, or a removed item's lists of primitives. */
   undoChecks: (UndoCheck | null)[];
   /** The last step an exchange or an undo changed this replica's doc outside its shown/ids pair. */
   touchedAt: number;
@@ -791,7 +791,10 @@ function run(world: World, command: Command) {
   for (const doc of [world.server, ...world.replicas.map((r) => r.doc)]) checkSerialized(doc);
 }
 
-/** What undoing the local `op` (from `json` to `next`) must bring back: a flipped list, or a removed item's primitive lists. */
+/**
+ * What undoing the local `op` (from `json` to `next`) must bring back: a flipped list, or a removed item's lists of
+ * primitives.
+ */
 function undoCheck(world: World, json: JsonValue, next: JsonValue, op: Op): UndoCheck | null {
   if (op.kind === 'flipList') {
     const lists = listPaths(json);
