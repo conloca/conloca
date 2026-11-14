@@ -69,6 +69,17 @@ export {
   RELAY_ORIGIN,
   useDocChannel,
 } from './live/doc-channel.js';
+export {
+  applyMarkdownEdit,
+  type Caret,
+  caretAfterRemoteEdit,
+  createEditorReplica,
+  type EditorReplica,
+  markdownBlockRanges,
+  syncEditorReplica,
+  writeEditorEdit,
+} from './live/markdown-binding.js';
+export { markdownLivePlugin } from './live/markdown-live-plugin.js';
 // Messages the parent and the editor page exchange while several people edit a page
 export {
   type DocOpenRequest,

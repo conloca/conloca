@@ -1137,3 +1137,20 @@ body.mdxeditor-focus-mode .mdxeditor-root-contenteditable {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* A block a teammate has selected in a live MDX page: the editor outlines it; this shows their name on it. */
+.conloca-prose--editor > [data-peer-name] {
+  position: relative;
+}
+
+.conloca-prose--editor > [data-peer-name]::after {
+  content: attr(data-peer-name);
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 0 4px;
+  font-size: 11px;
+  color: white;
+  background: var(--color-azure-04, #2563eb);
+  pointer-events: none;
+}

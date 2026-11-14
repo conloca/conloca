@@ -1,13 +1,14 @@
 export {
   decodeConflictValue,
   encodeConflictValue,
+  formatAnchor,
   formatItemBackAnchor,
   formatPlaceAnchor,
   parseAnchor,
   parsePlaceAnchor,
 } from './anchor.js';
 export { applyAnchorValue, valueAtAnchor } from './apply.js';
-export { MDX_MAX_EDIT_LENGTH } from './body.js';
+export { MDX_MAX_EDIT_LENGTH, tokenizeBody } from './body.js';
 export { changedAnchors, mergeContent } from './merge-content.js';
 export { putBackBlocks } from './places.js';
 export { mergeSequences } from './sequences.js';

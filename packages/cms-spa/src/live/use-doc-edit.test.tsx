@@ -85,6 +85,19 @@ describe('useDocEdit', () => {
     expect(serializeDoc(live.doc).mdx).toBe('---\ntitle: New\n---\n\n# Body\n');
   });
 
+  // The server refuses a client's `_meta` write; the section of a page without front matter is derived from the map.
+  it('restores a setting of an MDX page without front matter without writing _meta', async () => {
+    const { fake, live } = await openWith({ mdx: 'Hello\n' }, 'mdx');
+    const metaWrites: string[][] = [];
+    fake
+      .parent(live.docKey)
+      .getMap('_meta')
+      .observe((event) => metaWrites.push([...event.keysChanged]));
+    expect(mountEdit(live.docKey)('frontmatter.title', 'New')).toEqual({ ok: true });
+    expect(metaWrites).toEqual([]);
+    expect(serializeDoc(fake.parent(live.docKey)).mdx).toBe('---\ntitle: New\n---\nHello\n');
+  });
+
   it('reports a deleted block instead of doing nothing', async () => {
     const { fake, live } = await openWith(PAGE, 'puck');
     const before = fake.updates().length;

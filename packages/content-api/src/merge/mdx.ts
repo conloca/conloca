@@ -133,6 +133,9 @@ function withTheirLines(section: string, merged: JsonObject, sides: { b: MdxPart
   return section.slice(0, mine.start) + (mine.crlf ? yaml.replaceAll('\n', '\r\n') : yaml) + section.slice(mine.end);
 }
 
+/** The section a page without front matter gets when a key is added: the doc and anchor writes must agree on it. */
+export const EMPTY_SECTION = '---\n---\n';
+
 /** The comments in a YAML text as the YAML lexer reads them, so a `#` in a quoted value or a block scalar is none. */
 function comments(yaml: string): string {
   return [...new Lexer().lex(yaml)].filter((token) => token.startsWith('#')).join('\n');

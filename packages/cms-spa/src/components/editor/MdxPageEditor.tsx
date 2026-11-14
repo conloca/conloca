@@ -6,6 +6,7 @@ import {
   useSitesConfig,
   useUpdateLocalized,
 } from '@conloca/content-api-client';
+import cn from 'clsx';
 import { ExternalLink, Settings } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -14,6 +15,12 @@ import { useSiteBaseUrl } from '../../hooks/index.js';
 import { useErrorModal } from '../../hooks/useErrorModal.js';
 import { useTheme } from '../../hooks/useTheme.js';
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard.js';
+import { useDocChannel } from '../../live/doc-channel.js';
+import { markdownLivePlugin } from '../../live/markdown-live-plugin.js';
+import type { JsonValue } from '../../live/messages.js';
+import { pageSettingEdits } from '../../live/page-settings.js';
+import { createLocalUndo } from '../../live/undo.js';
+import { useDocEdits, useLiveDoc, usePresencePeers } from '../../live/use-live.js';
 import type { PageMetadata } from '../../types.js';
 import { getUIConfig } from '../../ui-config.js';
 import { buildMetadataUpdate, extractPageMetadata, pageSettingsSaveError } from '../../utils/pageMetadata.js';
@@ -35,9 +42,239 @@ type PersistStatus = 'saved' | 'conflict' | 'error';
  * Inline page layout. Routed via /pages/:id which lives outside CMSLayout,
  * so the editor occupies the full viewport. The sister flow for fragments
  * lives in FragmentEditor.tsx — same shape, different back target and
- * filePath label.
+ * filePath label. Inside a parent frame with a doc channel the body is
+ * co-edited live and there is nothing to save.
  */
 export function MdxPageEditor({ initialLocale = 'en' }: { initialLocale?: string } = {}) {
+  return useDocChannel() ? (
+    <LiveMdxPageEditor initialLocale={initialLocale} />
+  ) : (
+    <SavedMdxPageEditor initialLocale={initialLocale} />
+  );
+}
+
+const LIVE_PATHNAME_NOTE = "The URL path can't be changed while the page is edited live.";
+
+const UNREADABLE_FRONTMATTER = "This page's front matter can't be read, so its settings can't be changed live.";
+
+/** Outlines each top-level block a teammate has selected, with their name, in this editor's content root. */
+function usePeerBlockOutlines(docKey: string, root: HTMLElement | null): void {
+  const peers = usePresencePeers(docKey);
+  useEffect(() => {
+    if (!root) return undefined;
+    const marked = new Set<HTMLElement>();
+    const clear = () => {
+      for (const element of marked) {
+        element.style.outline = '';
+        delete element.dataset.peerName;
+      }
+      marked.clear();
+    };
+    const apply = () => {
+      clear();
+      for (const peer of peers) {
+        const index = /^block:(\d+)$/.exec(peer.selection.blockId ?? '')?.[1];
+        const element = index === undefined ? null : root.children.item(Number(index));
+        if (!(element instanceof HTMLElement)) continue;
+        element.style.outline = '2px solid var(--color-azure-04, #2563eb)';
+        element.dataset.peerName = peer.user.name;
+        marked.add(element);
+      }
+    };
+    apply();
+    // A remote apply rebuilds the blocks; outline the new ones.
+    const observer = new MutationObserver(apply);
+    observer.observe(root, { childList: true });
+    return () => {
+      observer.disconnect();
+      clear();
+    };
+  }, [peers, root]);
+}
+
+/** The co-editing branch: the body is bound to the page's shared doc, and page settings are written into it. */
+function LiveMdxPageEditor({ initialLocale }: { initialLocale: string }) {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const { resolvedTheme } = useTheme();
+  const [currentLocale, setCurrentLocale] = useState<string>(initialLocale);
+  const [metadataDialogOpen, setMetadataDialogOpen] = useState(false);
+  const { data: sitesConfig } = useSitesConfig();
+  const availableLocales = sitesConfig?.globalLocales || ['en'];
+  // Read for the page's identity only (pathname, collection); its content comes from the shared doc.
+  const { data: loadedContent } = useLocalizedContent(id || '', currentLocale);
+  const liveDoc = useLiveDoc(id ? { kind: 'mdx', id, locale: currentLocale } : null);
+  const live = liveDoc.state === 'ready' ? liveDoc.live : undefined;
+  const channel = useDocChannel();
+  const docKey = live?.docKey ?? '';
+  const [editorRoot, setEditorRoot] = useState<HTMLElement | null>(null);
+  usePeerBlockOutlines(docKey, editorRoot);
+  const writeEdits = useDocEdits(docKey);
+  const { buildUrl } = useSiteBaseUrl();
+  const publishedPathname = loadedContent?.localized?.pathname;
+  const pagePathname = publishedPathname || id || 'page';
+
+  // The undo manager goes with the replica's doc (Yjs destroys it then), so a remount needs no cleanup.
+  const bound = useMemo(() => {
+    if (!live) return null;
+    const text = live.doc.getText('body');
+    const plugin = markdownLivePlugin({
+      text,
+      undo: createLocalUndo([text, live.doc.getMap('frontmatter')]),
+      onSelectionBlock: (block) => channel?.setSelection(live.docKey, block === null ? null : `block:${block}`),
+      onRootElement: setEditorRoot,
+      held: channel
+        ? {
+            notice: () => (live.held ? channel.held() : null),
+            content: () => channel.heldContent(live.docKey)?.mdx ?? '',
+            subscribe: (onChange) => channel.on('status', onChange),
+          }
+        : undefined,
+    });
+    return { value: text.toJSON(), plugins: [plugin] };
+  }, [live, channel]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: each open of the dialog seeds from the doc as it is then.
+  const pageMetadata = useMemo(() => {
+    if (!live) return null;
+    const { pathname, publishAt, unpublishAt, ...meta } = live.doc.getMap('frontmatter').toJSON();
+    return extractPageMetadata({
+      collection: loadedContent?.collection,
+      type: 'mdx',
+      localized: {
+        // A page without a title still opens its settings, which ask for one.
+        meta: { ...meta, title: typeof meta.title === 'string' ? meta.title : '' },
+        pathname: typeof pathname === 'string' ? pathname : publishedPathname,
+        publishAt: typeof publishAt === 'string' ? publishAt : undefined,
+        unpublishAt: typeof unpublishAt === 'string' ? unpublishAt : undefined,
+      },
+    });
+  }, [live, loadedContent, publishedPathname, metadataDialogOpen]);
+
+  useEffect(() => {
+    const prev = document.title;
+    document.title = `Edit: ${pagePathname} · Conloca CMS`;
+    return () => {
+      document.title = prev;
+    };
+  }, [pagePathname]);
+
+  // Every changed key at once, in one write; a cleared value removes its key.
+  const handleSaveMetadata = async (metadata: PageMetadata) => {
+    if (!live) return;
+    const update = buildMetadataUpdate(metadata);
+    const wanted = { ...update.meta, publishAt: update.publishAt, unpublishAt: update.unpublishAt };
+    const result = writeEdits(pageSettingEdits(live.doc.getMap<JsonValue>('frontmatter').toJSON(), wanted));
+    // Settings anchors are built from the keys themselves, so not-found means the leading `---` block is not a mapping.
+    if (!result.ok) throw new Error(result.reason === 'not-found' ? UNREADABLE_FRONTMATTER : result.message);
+  };
+
+  if (liveDoc.state === 'failed') {
+    return (
+      <div className="flex flex-col items-center justify-center h-full bg-page gap-4">
+        <div className="text-red-04 dark:text-red-08">Failed to load page: {liveDoc.message}</div>
+        <button
+          type="button"
+          onClick={() => navigate('/pages')}
+          className="px-4 py-2 bg-azure-04 text-white rounded-md hover:bg-azure-03 transition-colors"
+        >
+          Back to Pages
+        </button>
+      </div>
+    );
+  }
+
+  if (!live || !bound) {
+    return (
+      <div className="flex items-center justify-center h-full bg-page">
+        <div className="flex items-center gap-3 text-muted">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-azure-04" />
+          <span>Loading page…</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-full flex flex-col bg-page">
+      <header className="flex items-center justify-between gap-4 px-4 py-2 border-b border-line bg-overlay shrink-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <button
+            type="button"
+            onClick={() => navigate('/pages')}
+            aria-label="Back to pages"
+            className="p-2 rounded text-muted hover:bg-hover"
+          >
+            ←
+          </button>
+          <h1 className="text-base font-medium text-foreground truncate">Edit: {pagePathname}</h1>
+        </div>
+        <div className="flex items-center gap-2">
+          <LocaleSelector
+            currentLocale={currentLocale}
+            availableLocales={availableLocales}
+            onChange={setCurrentLocale}
+          />
+          <DocsPreviewButton />
+          {publishedPathname && (
+            <a
+              href={buildUrl(publishedPathname)}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Open published page in a new tab"
+              title="Open published page"
+              className="p-2 rounded text-muted hover:bg-hover"
+            >
+              <ExternalLink size={16} aria-hidden />
+            </a>
+          )}
+          <button
+            type="button"
+            onClick={() => setMetadataDialogOpen(true)}
+            aria-label="Page settings"
+            title="Page settings"
+            className="p-2 rounded text-muted hover:bg-hover"
+            data-testid="mdx-page-settings"
+          >
+            <Settings size={16} aria-hidden />
+          </button>
+        </div>
+      </header>
+      <div className="flex-1 overflow-hidden flex flex-row min-h-0">
+        <div
+          className={cn('flex-1 min-w-0 overflow-hidden conloca-mdx-editor-surround', {
+            dark: resolvedTheme === 'dark',
+          })}
+          data-theme={resolvedTheme}
+        >
+          <CMSMDXEditor
+            key={live.docKey}
+            value={bound.value}
+            previewRouteUrl={publishedPathname || undefined}
+            // The live plugin writes every change; there is nothing to save.
+            onChange={() => {}}
+            extraPlugins={bound.plugins}
+            className={resolvedTheme === 'dark' ? 'dark-theme' : undefined}
+            autoFocus
+            placeholder="Start writing your page…"
+          />
+        </div>
+        <JsxPropsPanel />
+      </div>
+      {pageMetadata && (
+        <PageMetadataDialog
+          open={metadataDialogOpen}
+          onOpenChange={setMetadataDialogOpen}
+          page={pageMetadata}
+          onSave={handleSaveMetadata}
+          pathnameNote={LIVE_PATHNAME_NOTE}
+        />
+      )}
+    </div>
+  );
+}
+
+function SavedMdxPageEditor({ initialLocale }: { initialLocale: string }) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const updateContent = useUpdateLocalized();

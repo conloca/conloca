@@ -85,12 +85,11 @@ export interface PreservedEsm {
 }
 
 /**
- * Parse far enough to locate `mdxjsEsm` nodes. Returns `undefined` when the
- * document does not parse — acorn rejects `import type { … }`, for instance,
- * which also makes the editor itself fall back to source view. Bailing out
- * leaves behaviour exactly as it was.
+ * Parses MDX as the editor's pipeline does (remark-parse plus remark-mdx), with source positions. Returns `undefined`
+ * when the document does not parse — acorn rejects `import type { … }`, for instance, which also makes the editor itself
+ * fall back to source view. Callers bail out and leave behaviour exactly as it was.
  */
-function parseOrUndefined(source: string): Root | undefined {
+export function parseMdx(source: string): Root | undefined {
   try {
     return parser.parse(source);
   } catch {
@@ -172,7 +171,7 @@ export function splitEsm(source: string): PreservedEsm {
   const untouched: PreservedEsm = { prefix: '', body: source, bindings: new Set() };
   if (!ESM_HINT.test(source)) return untouched;
 
-  const tree = parseOrUndefined(source);
+  const tree = parseMdx(source);
   if (tree === undefined) return untouched;
 
   const children = tree.children;
@@ -232,7 +231,7 @@ export function joinEsm(preserved: PreservedEsm, body: string): string {
   if (preserved.prefix === '') return body;
   if (!ESM_HINT.test(body)) return preserved.prefix + body;
 
-  const tree = parseOrUndefined(body);
+  const tree = parseMdx(body);
   if (tree === undefined) return preserved.prefix + body;
 
   const children = tree.children;

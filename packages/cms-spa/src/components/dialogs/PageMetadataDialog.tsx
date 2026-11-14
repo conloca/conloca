@@ -53,9 +53,18 @@ interface PageMetadataDialogProps {
   onSave?: (metadata: PageMetadata) => void | Promise<void>;
   /** The field to open at: focused and scrolled into view. */
   focusField?: string;
+  /** Disables the URL path field and says why under it. */
+  pathnameNote?: string;
 }
 
-export function PageMetadataDialog({ open, onOpenChange, page, onSave, focusField }: PageMetadataDialogProps) {
+export function PageMetadataDialog({
+  open,
+  onOpenChange,
+  page,
+  onSave,
+  focusField,
+  pathnameNote,
+}: PageMetadataDialogProps) {
   const pageSchemas = usePageSchemas();
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -102,6 +111,7 @@ export function PageMetadataDialog({ open, onOpenChange, page, onSave, focusFiel
             descriptor={descriptor}
             onSave={onSave}
             onSaved={() => onOpenChange?.(false)}
+            pathnameNote={pathnameNote}
           />
         </Dialog.Content>
       </Dialog.Portal>
@@ -115,10 +125,11 @@ interface PageMetadataFormProps {
   descriptor: PageSchemaDescriptor | null;
   onSave?: (metadata: PageMetadata) => void | Promise<void>;
   onSaved: () => void;
+  pathnameNote?: string;
 }
 
 /** Edits a copy of the page's settings taken when the form mounts; unmounting it discards unsaved edits. */
-function PageMetadataForm({ formRef, page, descriptor, onSave, onSaved }: PageMetadataFormProps) {
+function PageMetadataForm({ formRef, page, descriptor, onSave, onSaved, pathnameNote }: PageMetadataFormProps) {
   const mode = descriptor?.coreFields?.mode ?? 'full';
 
   // Convert PageMetadata to form values (flatten dates to strings).
@@ -241,12 +252,10 @@ function PageMetadataForm({ formRef, page, descriptor, onSave, onSaved }: PageMe
           )}
         </div>
       )}
-      <SchemaForm
-        className={cn({ 'mt-6': mode === 'full' })}
-        fields={pathnameOnlyFields}
-        values={coreValues}
-        onChange={changeCoreValues}
-      />
+      <fieldset disabled={pathnameNote !== undefined} className={cn({ 'mt-6': mode === 'full' })}>
+        <SchemaForm fields={pathnameOnlyFields} values={coreValues} onChange={changeCoreValues} />
+        {pathnameNote && <p className="mt-1 text-sm text-grey-04 dark:text-grey-07">{pathnameNote}</p>}
+      </fieldset>
 
       {descriptor &&
         (descriptor.ui ? (

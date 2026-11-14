@@ -87,8 +87,8 @@ function jsxElementEnd(md: string, from: number): number {
 
 /**
  * Start offsets of the top-level blocks: runs of lines split by blank lines, where a fenced code block, a JSX element
- * or a list (any marker, with its indented content) stays one block across blank lines. Mirrors the editor's
- * `markdownBlockRanges` in cms-spa so both sides cut a body at the same places.
+ * or a list (any marker, with its indented content) stays one block across blank lines. The live editor binding cuts
+ * bodies with the same scanner, so both sides cut a body at the same places.
  */
 function blockStarts(md: string): number[] {
   const starts: number[] = [];

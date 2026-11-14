@@ -1,10 +1,9 @@
-import { serializeMdxWithFrontmatter } from '../mdx-frontmatter.js';
 import type { JsonObject, JsonValue } from '../types.js';
 import { parseAnchor, parsePlaceAnchor } from './anchor.js';
 import { blockId } from './blocks.js';
 import { locateBodyRegion, regionText, replaceBodyRegion, tokenizeBody } from './body.js';
 import { fieldRules } from './json.js';
-import { rewriteSection, splitMdx } from './mdx.js';
+import { EMPTY_SECTION, rewriteSection, splitMdx } from './mdx.js';
 import { isId, readAt, writeAt } from './path.js';
 import { duplicateIds, placeTarget } from './places.js';
 import { deepEqual, isRecord, parseJson } from './record.js';
@@ -74,8 +73,8 @@ function mdxTarget(doc: string, anchor: string, base: string | undefined): Targe
     write: (value) => {
       const written = field.write(value);
       const updated = isRecord(written) && isRecord(written.frontmatter) ? written.frontmatter : {};
-      if (parts.section !== '') return rewriteSection(parts.section, updated) + parts.body;
-      return (Object.keys(updated).length > 0 ? serializeMdxWithFrontmatter(updated, '') : '') + parts.body;
+      if (parts.section === '' && Object.keys(updated).length === 0) return parts.body;
+      return rewriteSection(parts.section || EMPTY_SECTION, updated) + parts.body;
     },
   };
 }
