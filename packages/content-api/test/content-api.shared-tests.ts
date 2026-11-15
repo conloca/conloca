@@ -628,6 +628,30 @@ export function createContentAPITestSuite(name: string, createContext: () => Pro
         expect(updated!.localized.pathname).toBe('/test'); // Should preserve other fields
       });
 
+      test("a create's etag is accepted by updateLocalized", async () => {
+        // An editor saves its first edit against the tag the create returned, without reading the entry again.
+        const createResult = await contentApi.createContent({
+          kind: 'page',
+          site: 'shop',
+          collection: 'pages',
+          type: 'puck',
+          locales: {
+            en: { pathname: '/created-etag', meta: { title: 'Created' }, content: { puckData: { root: {} } } },
+          },
+        });
+        const id = getCreatedId(createResult);
+        expect(createResult.success && createResult.etag).toBeTruthy();
+        const etag = createResult.success ? (createResult.etag ?? '') : '';
+
+        const updateResult = await contentApi.updateLocalized({
+          id,
+          locale: 'en',
+          data: { meta: { title: 'Edited' } },
+          etag,
+        });
+        expect(updateResult.success).toBe(true);
+      });
+
       test('updateLocalized clears a meta field when the patch sets it to null', async () => {
         // A properties dialog owns a fixed set of fields and always saves all
         // of them. "Cleared" used to travel as undefined, which JSON drops,

@@ -209,7 +209,7 @@ export function DataList({ dataSchemas }: DataListProps) {
     });
   };
 
-  /** Writes the new entry the editor is open on, holding `entryData`; resolves true once it is created. */
+  /** Writes the new entry the editor is open on, holding `entryData`; resolves its id and etag once created. */
   const createEntry = async (entryData: DataCollectionEntry['data']) => {
     const { collection, entryTitle: title, locale, name } = editDataDialog;
     const description = editDataDialog.description || undefined;
@@ -252,14 +252,14 @@ export function DataList({ dataSchemas }: DataListProps) {
         ),
         error,
       );
-      return false;
+      return null;
     }
 
     if (!result.success) {
       const nameTaken = result.reason === 'name_taken' || result.reason === 'already_exists';
       showError(withNameNote(contentFailureMessage(result, 'Failed to create data entry'), nameTaken), result.error);
     }
-    return result.success;
+    return result.success ? { id: result.id, etag: result.etag } : null;
   };
 
   const handleDeleteEntry = (entryId: string) => {

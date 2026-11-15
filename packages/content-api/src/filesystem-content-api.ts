@@ -2086,7 +2086,8 @@ export class FileSystemContentAPI implements ContentAPI {
         this.contentIndex.addContent(manifest, localeVersion, contentCache[locale]);
       }
 
-      return { success: true, id };
+      // The first locale's tag, as the in-memory API returns, so the creator can save its next edit against it.
+      return { success: true, id, etag: localesOf(manifest).next().value?.etag };
     } catch (error) {
       return {
         success: false,

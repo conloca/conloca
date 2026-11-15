@@ -10,6 +10,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { DataEditor } from '../src/components/editors/DataEditor.js';
 import { setDataSchemas } from '../src/data-schemas.js';
+import { type EditorFlushResult, flushOpenEditor, registerEditorFlushHandler } from '../src/editor-flush.js';
 import { invalidateEditorQueries } from '../src/editor-queries.js';
 import { dropHeldDataValues, hasHeldDataValues } from '../src/live/data-binding.js';
 import { configureUI } from '../src/ui-config.js';
@@ -72,7 +73,7 @@ function renderEditor(id: string) {
           initialLocale="en"
           existingLocales={['en', 'de']}
           schema={requiredBio}
-          create={async () => true}
+          create={async () => ({})}
         />
       ),
     },
@@ -153,6 +154,19 @@ describe('the data editor on a shared doc', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Leave anyway' }));
     await screen.findByText('elsewhere');
     expect(hasHeldDataValues()).toBe(false);
+  });
+
+  test('leaves the host save to whoever saves the shared doc', async () => {
+    const live: EditorFlushResult = { ok: false, message: 'the shared doc' };
+    const stop = registerEditorFlushHandler(async () => live);
+    try {
+      const id = await createAuthor();
+      renderEditor(id);
+      fireEvent.change(await screen.findByLabelText(/^Name/), { target: { value: 'Ab' } });
+      expect(await flushOpenEditor()).toEqual(live);
+    } finally {
+      stop();
+    }
   });
 });
 

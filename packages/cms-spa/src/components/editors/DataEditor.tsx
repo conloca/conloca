@@ -6,6 +6,7 @@ import {
 } from '@conloca/content-api-client';
 import { AlertCircle, Code2, Loader2, Save } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { notifyEditorDirtyChanged, registerEditorFlushHandler } from '../../editor-flush.js';
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard.js';
 import { type HostSchema, isHostSchema } from '../../host-schema.js';
 import { dropHeldDataValues, heldDataKeys, useLiveDataValues } from '../../live/data-binding.js';
@@ -25,8 +26,8 @@ interface DataEditorProps {
   initialLocale: string;
   existingLocales: string[];
   schema: HostSchema | null;
-  /** Writes a new entry holding `data`; resolves true once it is created. */
-  create?: (data: DataCollectionEntry['data']) => Promise<boolean>;
+  /** Writes a new entry holding `data`; resolves its id and etag once created, null when refused. */
+  create?: (data: DataCollectionEntry['data']) => Promise<{ id?: string; etag?: string } | null>;
   onSave?: () => void;
   onCancel?: () => void;
 }
@@ -37,7 +38,7 @@ interface DataEditorProps {
  * Supports locale switching similar to FragmentEditor.
  */
 export function DataEditor({
-  id,
+  id: entryId,
   collection,
   initialLocale,
   existingLocales,
@@ -46,45 +47,55 @@ export function DataEditor({
   onSave,
   onCancel,
 }: DataEditorProps) {
+  // The entry's id: a new entry gets one once created, so a save after typing during the create updates it.
+  const [id, setId] = useState(entryId);
   // Locale state
   const [currentLocale, setCurrentLocale] = useState(initialLocale);
-  const [currentEtag, setCurrentEtag] = useState<string>('');
+  // null: the version is not known (nothing loaded, or a create that returned no tag); '' is a real, loaded tag.
+  const [currentEtag, setCurrentEtag] = useState<string | null>(null);
   const [pendingLocaleSwitch, setPendingLocaleSwitch] = useState<string | null>(null);
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
 
   // Track saved values to detect changes
   const savedValuesRef = useRef<Record<string, unknown>>({});
+  // The values as typed, current even inside a save's await (state is only current after the next render).
+  const latestValuesRef = useRef(savedValuesRef.current);
 
   const { data: entry, isLoading, error } = useLocalizedContent(id, currentLocale);
   const updateLocalized = useUpdateLocalized();
 
   // Local state for form values
-  const [values, setValues] = useState<Record<string, unknown>>({});
+  // The same object the refs hold, so a save of untouched values is not taken for typing during it.
+  const [values, setValues] = useState(savedValuesRef.current);
   const [hasChanges, setHasChanges] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const isNew = id === '';
-  // Bound to the entry's shared doc, each valid change is written as it is typed; a new entry has no doc until created.
+  // Bound to the entry's shared doc, each valid change is written as it is typed; a new entry has no doc until created,
+  // and one created in this editor stays unbound so the typing it holds is not dropped.
   const channel = useDocChannel();
-  const bound = channel !== null && !isNew;
+  const bound = channel !== null && entryId !== '';
   const liveDoc = useLiveDoc(bound ? { kind: 'data', id, locale: currentLocale } : null);
   const [dropSwitch, setDropSwitch] = useState<{ locale: string; keys: string[] } | null>(null);
 
-  // Initialize form values and etag when entry loads
+  // Initialize form values and etag when entry loads. A save's cache update or a refetch also emits a
+  // new entry; an edit not yet stored is kept, and so is the etag it was based on, so its save conflicts
+  // with a newer server version instead of overwriting it.
   useEffect(() => {
-    if (entry?.localized?.content?.data) {
-      const data = entry.localized.content.data as Record<string, unknown>;
+    if (entry?.localized && latestValuesRef.current === savedValuesRef.current) {
+      // An entry stored with no data still loads, so its etag is taken and its first save is checked.
+      const data = entry.localized.content?.data ?? {};
       setValues(data);
       savedValuesRef.current = data;
+      latestValuesRef.current = data;
       setHasChanges(false);
-    }
-    if (entry?.localized?.etag) {
-      setCurrentEtag(entry.localized.etag);
+      setCurrentEtag(entry.localized.etag ?? null);
     }
   }, [entry]);
 
   // Track changes
   const handleChange = (newValues: Record<string, unknown>) => {
+    latestValuesRef.current = newValues;
     setValues(newValues);
     setHasChanges(true);
   };
@@ -102,11 +113,25 @@ export function DataEditor({
     setSaving(true);
     try {
       if (isNew) {
-        const created = (await create?.(values)) ?? false;
-        if (created) onSave?.();
-        return created;
+        const created = (await create?.(values)) ?? null;
+        if (!created) return false;
+        savedValuesRef.current = values;
+        // Typing during the create is not stored yet: keep it open and unsaved; the next save updates the entry.
+        if (latestValuesRef.current !== values && created.id) {
+          setCurrentEtag(created.etag ?? null);
+          setId(created.id);
+        } else {
+          setHasChanges(false);
+          onSave?.();
+        }
+        return true;
       }
 
+      // Never write unchecked: a tag fetched now would match a teammate's later save and overwrite it.
+      if (currentEtag === null) {
+        setSaveError("Could not confirm this entry's version. Close it, reopen it and enter your changes again.");
+        return false;
+      }
       const result = await updateLocalized.mutateAsync({
         id,
         locale: currentLocale,
@@ -120,17 +145,57 @@ export function DataEditor({
         setSaveError(contentFailureMessage(result, 'Failed to save data'));
         return false;
       }
-      setHasChanges(false);
       savedValuesRef.current = values;
       if (result.etag) {
         setCurrentEtag(result.etag);
       }
-      onSave?.();
+      // Typing during the write is not stored yet: the edit stays unsaved and the editor stays open.
+      if (latestValuesRef.current === values) {
+        setHasChanges(false);
+        onSave?.();
+      }
       return true;
     } finally {
       setSaving(false);
     }
   };
+
+  // The host's Save, Cmd+S and status pill read and flush this edit; bound, the shared doc is already synced.
+  const hasChangesRef = useRef(hasChanges);
+  hasChangesRef.current = hasChanges;
+  // One save at a time: the button, the locale dialog and the host's flush all join the save already running.
+  const activeSaveRef = useRef<Promise<boolean> | null>(null);
+  const save = (): Promise<boolean> => {
+    if (activeSaveRef.current) return activeSaveRef.current;
+    const running = handleSave().finally(() => {
+      activeSaveRef.current = null;
+    });
+    activeSaveRef.current = running;
+    return running;
+  };
+  // save is recreated each render; the flush runs the latest.
+  const saveRef = useRef(save);
+  saveRef.current = save;
+  useEffect(() => {
+    if (bound) return undefined;
+    return registerEditorFlushHandler(
+      async () => {
+        const active = activeSaveRef.current;
+        if (!active && !hasChangesRef.current) return { ok: true };
+        const saved = await (active ?? saveRef.current()).catch(() => false);
+        // A joined save wrote older values; the edit typed since is not stored, so this flush did not save it.
+        if (saved && latestValuesRef.current !== savedValuesRef.current) {
+          return { ok: false, message: 'The editor changed while saving; save again.' };
+        }
+        return saved ? { ok: true } : { ok: false, message: 'Could not save editor changes.' };
+      },
+      { isDirty: () => hasChangesRef.current },
+    );
+  }, [bound]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: The dependency change is the event; handlers read current state through refs.
+  useEffect(() => {
+    notifyEditorDirtyChanged();
+  }, [hasChanges]);
 
   // Locale switching handlers
   const handleLocaleChange = async (newLocale: string) => {
@@ -157,6 +222,7 @@ export function DataEditor({
         const newData = (newLocaleContent.localized.content?.data as Record<string, unknown>) || {};
         setValues(newData);
         savedValuesRef.current = newData;
+        latestValuesRef.current = newData;
         setCurrentEtag(newLocaleContent.localized.etag);
         setHasChanges(false);
         setCurrentLocale(newLocale);
@@ -173,7 +239,7 @@ export function DataEditor({
 
     // Save current content first; a refused save keeps the locale and the edits, with the reason shown.
     try {
-      const saved = await handleSave();
+      const saved = await save();
       setShowUnsavedDialog(false);
       if (saved) await switchLocale(pendingLocaleSwitch);
       else setPendingLocaleSwitch(null);
@@ -196,8 +262,8 @@ export function DataEditor({
     setPendingLocaleSwitch(null);
   };
 
-  // Loading state
-  if (isLoading) {
+  // Loading state; an entry just created here keeps its unsaved form while it loads.
+  if (isLoading && !hasChanges) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-6 w-6 animate-spin text-azure-04 dark:text-azure-08" />
@@ -356,7 +422,7 @@ export function DataEditor({
             )}
             <button
               type="button"
-              onClick={handleSave}
+              onClick={save}
               disabled={(!hasChanges && !isNew) || saving || !isHostSchema(schema)}
               className="px-4 py-2 bg-azure-04 text-white rounded-md hover:bg-azure-03 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
             >

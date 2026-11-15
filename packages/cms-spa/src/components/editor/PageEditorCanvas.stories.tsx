@@ -2,8 +2,9 @@ import type { LocalizedEntry } from '@conloca/content-api-client';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { type ComponentProps, useEffect, useState } from 'react';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
-import { expect, waitFor } from 'storybook/test';
+import { expect, waitFor, within } from 'storybook/test';
 import '../../main.css';
+import { isOpenEditorDirty } from '../../editor-flush.js';
 import { getSiteStyles, setSiteStyles } from '../../site-styles.js';
 import { IframeBridge, PageEditor } from './PageEditor.js';
 
@@ -191,5 +192,67 @@ export const EmptyDropAreaOnANewPage: Story = {
       },
       { timeout: 5_000 },
     );
+  },
+};
+
+/** A page with blocks, as the page editor wrapper hands it over: default props merged in and resolved once. */
+const PAGE_WITH_BLOCKS: LocalizedEntry = {
+  ...NEW_PAGE,
+  id: 'page-with-blocks',
+  localized: {
+    ...NEW_PAGE.localized,
+    pathname: '/page-with-blocks',
+    meta: { title: 'Page with blocks' },
+    content: {
+      puckData: {
+        root: { props: { title: 'Page with blocks' } },
+        content: [
+          { type: 'Heading', props: { id: 'Heading-1', text: 'Hello', level: 2 } },
+          { type: 'Resolved', props: { id: 'Resolved-1', label: 'Stored' } },
+        ],
+      },
+    },
+  },
+};
+
+const PAGE_WITH_BLOCKS_CONFIG: ComponentProps<typeof PageEditor>['config'] = {
+  root: { fields: { title: { type: 'text' } } },
+  components: {
+    Heading: {
+      fields: { text: { type: 'text' }, level: { type: 'number' } },
+      defaultProps: { text: 'Heading', level: 2 },
+      render: ({ text }) => <h2>{text}</h2>,
+    },
+    // Puck runs every resolveData on load; one that answers the props it was given changes nothing.
+    Resolved: {
+      fields: { label: { type: 'text' } },
+      resolveData: async ({ props }) => ({ props }),
+      render: ({ label }) => <p>{label}</p>,
+    },
+  },
+};
+
+/**
+ * Opening a page is not an edit: the editor's Save stays off and the host reads it clean, so the host's status pill
+ * says Saved rather than Unsaved changes on open.
+ */
+export const OpeningAPageIsNotAnEdit: Story = {
+  name: 'opening a page with blocks leaves it clean',
+  render: () => (
+    <PageEditorHarness entry={PAGE_WITH_BLOCKS} config={PAGE_WITH_BLOCKS_CONFIG} onOpenMetadata={() => {}} />
+  ),
+  play: async ({ canvasElement }) => {
+    await waitFor(
+      () => {
+        const text =
+          canvasElement.querySelector<HTMLIFrameElement>('iframe#preview-frame')?.contentDocument?.body.textContent;
+        if (!text?.includes('Hello') || !text.includes('Stored')) throw new Error('the canvas has not rendered yet');
+      },
+      { timeout: 10_000 },
+    );
+    // Puck's load-time resolve and any change it reports settle within a few frames; give them time to land.
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    await expect(isOpenEditorDirty()).toBe(false);
+    await expect(within(canvasElement).getByRole('button', { name: 'Save' })).toBeDisabled();
   },
 };
