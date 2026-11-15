@@ -1,8 +1,10 @@
 import { AlertTriangle, Check, Eye, Loader2, Moon, Save, Settings, Sun, X } from 'lucide-react';
+import type { PageRef } from '../../draft-tools.js';
 import { useCanvasTheme } from '../../hooks/useCanvasTheme.js';
 import type { SaveState } from '../../types.js';
 import { getUIConfig } from '../../ui-config.js';
 import { cn } from '../../utils/cn.js';
+import { PageDraftMenu } from '../conflicts/PageDraftMenu.js';
 import { IconButton } from '../ui/IconButton.js';
 import { Separator } from '../ui/Separator.js';
 import { LocaleSelector } from './LocaleSelector.js';
@@ -46,6 +48,8 @@ interface PageEditorHeaderActionsProps {
   /** When set, Page settings are unavailable: the control stays, marked so, with this reason, and opens nothing. */
   pageSettingsDisabledReason?: string;
   onBack: () => void;
+  /** With the host's draft tools: the page the page draft menu acts on. */
+  draftPage?: PageRef | null;
 }
 
 /** PageEditor keeps preview clicks actionable so an unavailable preview can explain how to recover. */
@@ -98,6 +102,7 @@ export function PageEditorHeaderActions({
   onOpenMetadata,
   pageSettingsDisabledReason,
   onBack,
+  draftPage,
 }: PageEditorHeaderActionsProps) {
   const hideSave = getUIConfig().hideEditorSave === true || onSave === undefined;
   return (
@@ -195,6 +200,7 @@ export function PageEditorHeaderActions({
             <Settings className="h-4 w-4" />
           </button>
         )}
+        {draftPage && <PageDraftMenu page={draftPage} />}
         <IconButton icon={X} onClick={onBack} ariaLabel="Exit editor" />
       </div>
     </div>

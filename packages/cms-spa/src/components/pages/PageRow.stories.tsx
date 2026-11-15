@@ -5,7 +5,7 @@ import '../../main.css';
 import type { Page } from '../../types.js';
 import { PageRow } from './PageRow.js';
 
-/** Storybook mounts the Pages row inside its table and router; action clicks must stay on the list. */
+/** Storybook mounts PageRow inside its table and router; action clicks must stay on the list. */
 const page: Page = {
   id: 'home',
   title: 'Home',

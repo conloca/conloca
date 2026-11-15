@@ -65,7 +65,7 @@ function elementAtCentre(target: Element): Element {
 
 function onlyPageRow(canvasElement: HTMLElement): HTMLTableRowElement {
   const row = canvasElement.querySelector<HTMLTableRowElement>('tbody tr');
-  if (!row) throw new Error('Expected a page row');
+  if (!row) throw new Error('Expected the PageRow');
   return row;
 }
 

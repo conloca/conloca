@@ -24,6 +24,8 @@ import type { PageMetadata } from '../../types.js';
 import { getUIConfig } from '../../ui-config.js';
 import { buildMetadataUpdate, extractPageMetadata, pageSettingsSaveError } from '../../utils/pageMetadata.js';
 import { DraftNoticeStrip } from '../conflicts/EditorNoticeStrip.js';
+import { PageDraftMenu } from '../conflicts/PageDraftMenu.js';
+import { draftToolsPage } from '../conflicts/use-page-conflicts.js';
 import { ConflictDialog } from '../dialogs/ConflictDialog.js';
 import { ErrorModal } from '../dialogs/ErrorModal.js';
 import { PageMetadataDialog } from '../dialogs/PageMetadataDialog.js';
@@ -605,6 +607,7 @@ function SavedMdxPageEditor({ initialLocale }: { initialLocale: string }) {
           : saveState === 'conflict'
             ? 'Conflict'
             : 'Save';
+  const draftPage = draftToolsPage(id, currentLocale);
 
   return (
     <div className="h-full flex flex-col bg-page">
@@ -653,6 +656,7 @@ function SavedMdxPageEditor({ initialLocale }: { initialLocale: string }) {
           >
             <Settings size={16} aria-hidden />
           </button>
+          {draftPage && <PageDraftMenu page={draftPage} />}
           <button
             type="button"
             onClick={handleCancel}

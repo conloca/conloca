@@ -143,7 +143,7 @@ describe('Pages list status', () => {
     });
     await renderPageList();
     const row = screen.getByTestId('page-title-live').closest('tr');
-    if (!row) throw new Error('Expected the published page row');
+    if (!row) throw new Error('Expected the row of the published page');
     expect(within(row).getAllByText('Pushed to Github')).toHaveLength(2);
     expect(screen.getByRole('option', { name: 'Pushed to Github' }).getAttribute('value')).toBe('published');
     expect(statusOf('fresh')).toBe('Needs publishing');
@@ -534,7 +534,7 @@ function missingClipboardWrite() {
 }
 
 /** Locale changes can reuse a row, but clipboard feedback belongs to the path that was copied. */
-describe('Page row clipboard identity', () => {
+describe('PageRow clipboard identity', () => {
   test.each(['copied', 'failed'] as const)('clears %s feedback when the path changes', async (outcome) => {
     const original = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
     Object.defineProperty(navigator, 'clipboard', {
@@ -601,7 +601,7 @@ function deferredClipboardWrite() {
 }
 
 /** Clipboard writes and expiry timers are controlled independently to expose stale feedback. */
-describe('Page row clipboard feedback', () => {
+describe('PageRow clipboard feedback', () => {
   test.each(['copied', 'failed'] as const)(
     'guards pending clicks and announces a fresh copy after %s feedback',
     async (outcome) => {

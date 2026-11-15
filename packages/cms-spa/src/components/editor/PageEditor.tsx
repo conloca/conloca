@@ -489,6 +489,7 @@ export function PageEditor({
   const headerActionsPropsRef = useRef({
     onPublish,
     handlePreview,
+    id: entry.id,
     locale: entry.localized.locale,
     availableLocales,
     onLocaleChange,
@@ -504,6 +505,7 @@ export function PageEditor({
   headerActionsPropsRef.current = {
     onPublish,
     handlePreview,
+    id: entry.id,
     locale: entry.localized.locale,
     availableLocales,
     onLocaleChange,
@@ -539,6 +541,7 @@ export function PageEditor({
             onOpenMetadata={() => p.onOpenMetadata()}
             pageSettingsDisabledReason={p.live ? LIVE_PAGE_SETTINGS_HINT : undefined}
             onBack={p.onBack}
+            draftPage={draftToolsPage(p.id, p.locale)}
             previewDisabledReason={p.previewBlockedReason ?? undefined}
             previewPending={p.previewPending}
           />
