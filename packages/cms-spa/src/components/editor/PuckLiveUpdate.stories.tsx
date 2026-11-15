@@ -1026,7 +1026,8 @@ const childResolveIsNotAKeystroke: Play = async ({ canvasElement }) => {
   try {
     await userEvent.type(heading, '!');
     teammateSets('Block-A', { note: 'N2' });
-    await expectOnCanvas(canvasElement, 'Block-A', 'note', 'N2');
+    // Box-1 shows its slot without the blocks' edit wrappers once Puck marks it loading (50 ms into the held resolve).
+    await expectOnCanvas(canvasElement, 'Box-1', 'note', 'N2');
   } finally {
     slowBox.holding = false;
     slowBox.release();
