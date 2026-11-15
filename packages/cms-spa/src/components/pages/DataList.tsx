@@ -17,6 +17,7 @@ import type { DataSchemas } from '../../data-schemas.js';
 import { useDialogState, useErrorModal } from '../../hooks/index.js';
 import type { DataEntry } from '../../types.js';
 import { getUIConfig } from '../../ui-config.js';
+import { ApplyClashError } from '../../utils/apply-clash.js';
 import { contentFailureMessage, isStaleWrite } from '../../utils/content-failure.js';
 import { editableEntryMeta, entryMetaPatch } from '../../utils/entry-meta.js';
 import { untitledName, untitledNameNote } from '../../utils/entry-name.js';
@@ -321,6 +322,12 @@ export function DataList({ dataSchemas }: DataListProps) {
         etag: propertiesDialog.etag,
       });
 
+      const clash = result.success ? undefined : result.conflictDetails?.conflicts;
+      if (clash && clash.length > 0) {
+        // The dialog stays open with the other values loaded; the next Save sends against the page as it is now.
+        if (result.currentEtag) openPropertiesDialog({ ...propertiesDialog, etag: result.currentEtag });
+        throw new ApplyClashError(clash, result.conflictDetails?.changedBy);
+      }
       closePropertiesDialog();
 
       if (!result.success) {
@@ -331,6 +338,7 @@ export function DataList({ dataSchemas }: DataListProps) {
         }
       }
     } catch (err) {
+      if (err instanceof ApplyClashError) throw err;
       closePropertiesDialog();
       showError('Failed to save properties. Please try again.', err);
     }

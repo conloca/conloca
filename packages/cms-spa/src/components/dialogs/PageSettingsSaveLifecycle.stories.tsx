@@ -1,8 +1,10 @@
+import type { FieldConflict } from '@conloca/content-api';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import React, { useState } from 'react';
-import { expect, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import '../../main.css';
 import type { PageMetadata } from '../../types.js';
+import { pageSettingsSaveError } from '../../utils/pageMetadata.js';
 import { PageMetadataDialog } from './PageMetadataDialog.js';
 
 let finishWrite: (() => void) | undefined;
@@ -111,5 +113,46 @@ export const FailedSaveKeepsDraft: Story = {
     await waitFor(() => expect(view.getByRole('alert')).toHaveTextContent('Storage unavailable'));
     expect(view.getByRole('textbox', { name: /^Title/ })).toHaveValue('First saved draft');
     expect(view.getByRole('button', { name: 'Save' })).toBeEnabled();
+  },
+};
+
+const TITLE_CLASH: FieldConflict = {
+  anchor: 'meta.title',
+  base: 'Saved article',
+  ours: 'Mine',
+  theirs: 'Pricing for teams',
+};
+const CLASH_MESSAGE = 'Title changed while you were editing (last edited by Maria). Check it and apply again.';
+
+/** Saves refused for a clash on the title until the person applies again. */
+function ClashHarness({ onSave }: { onSave: (metadata: PageMetadata) => void }) {
+  const [open, setOpen] = useState(true);
+  const save = async (metadata: PageMetadata) => {
+    onSave(metadata);
+    throw pageSettingsSaveError({
+      success: false,
+      reason: 'stale_write',
+      conflictDetails: { metaChanged: true, contentChanged: false, conflicts: [TITLE_CLASH], changedBy: 'Maria' },
+    });
+  };
+  return <PageMetadataDialog open={open} onOpenChange={setOpen} page={savedPage} onSave={save} />;
+}
+
+/** A clash on the title loads the other value into the field, says so, and keeps the dialog open for another Save. */
+export const ClashReloadsField: StoryObj<typeof ClashHarness> = {
+  args: { onSave: fn() },
+  render: (args) => <ClashHarness {...args} />,
+  play: async ({ args, canvasElement }) => {
+    const view = within(canvasElement.ownerDocument.body);
+    const title = await view.findByRole('textbox', { name: /^Title/ });
+    await userEvent.clear(title);
+    await userEvent.type(title, 'Mine');
+    await userEvent.click(view.getByRole('button', { name: 'Save' }));
+    await expect(await view.findByRole('alert')).toHaveTextContent(CLASH_MESSAGE);
+    await expect(title).toHaveValue('Pricing for teams');
+    await expect(view.getByRole('dialog')).toBeInTheDocument();
+    await userEvent.click(view.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(args.onSave).toHaveBeenCalledTimes(2));
+    await expect(args.onSave).toHaveBeenLastCalledWith(expect.objectContaining({ title: 'Pricing for teams' }));
   },
 };

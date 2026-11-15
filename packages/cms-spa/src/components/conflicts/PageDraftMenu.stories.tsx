@@ -26,10 +26,11 @@ const tools = {
 /** The page's draft actions in the editor header: discard this page's changes, or open its recent versions. */
 const meta = {
   component: PageDraftMenu,
-  args: { page: PAGE, onOpenVersions: fn() },
+  args: { page: PAGE, label: 'Pricing' },
   beforeEach: () => {
     const previous = getUIConfig();
     tools.discardPage.mockClear();
+    tools.listVersions.mockClear();
     configureUI({ ...previous, draftTools: tools, siteId: PAGE.site });
     return () => configureUI(previous);
   },
@@ -39,7 +40,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const DiscardChanges: Story = {
-  play: async ({ canvasElement, args }) => {
+  play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
     canvas.getByRole('button', { name: 'Page draft' }).focus();
@@ -52,16 +53,17 @@ export const DiscardChanges: Story = {
     await waitFor(() => expect(discard).toHaveFocus());
     await userEvent.keyboard('{Enter}');
     await waitFor(() => expect(tools.discardPage).toHaveBeenCalledWith(PAGE));
-    await expect(args.onOpenVersions).not.toHaveBeenCalled();
+    await expect(body.queryByRole('dialog')).not.toBeInTheDocument();
   },
 };
 
 export const RecentVersions: Story = {
-  play: async ({ canvasElement, args }) => {
+  play: async ({ canvasElement }) => {
     const body = within(canvasElement.ownerDocument.body);
     await userEvent.click(within(canvasElement).getByRole('button', { name: 'Page draft' }));
     await userEvent.click(await body.findByRole('menuitem', { name: 'Recent versions' }));
-    await waitFor(() => expect(args.onOpenVersions).toHaveBeenCalledTimes(1));
+    await expect(await body.findByRole('dialog', { name: 'Recent versions of Pricing' })).toBeInTheDocument();
+    await waitFor(() => expect(tools.listVersions).toHaveBeenCalledWith(PAGE));
     await expect(tools.discardPage).not.toHaveBeenCalled();
   },
 };

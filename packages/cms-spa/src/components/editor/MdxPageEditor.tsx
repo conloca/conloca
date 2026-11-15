@@ -656,7 +656,7 @@ function SavedMdxPageEditor({ initialLocale }: { initialLocale: string }) {
           >
             <Settings size={16} aria-hidden />
           </button>
-          {draftPage && <PageDraftMenu page={draftPage} />}
+          {draftPage && <PageDraftMenu page={draftPage} label={pageMetadata?.title || pagePathname} />}
           <button
             type="button"
             onClick={handleCancel}

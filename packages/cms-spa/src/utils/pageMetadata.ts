@@ -1,6 +1,7 @@
 import { type ContentMeta, type ContentMetaPatch, metaString, type UpdateResult } from '@conloca/content-api-client';
 import { getPageSchemas, type PageSchemaDescriptor, resolvePageSchemaEntry } from '../page-schemas.js';
 import type { PageMetadata } from '../types.js';
+import { ApplyClashError } from './apply-clash.js';
 import { contentFailureMessage } from './content-failure.js';
 
 interface LocaleVersionMetaSource {
@@ -182,9 +183,12 @@ function scheduleText(date: Date | null, stored: string | undefined): string | n
 
 /**
  * What a page-settings save throws when the write failed, including one that resolved `{ success: false }`
- * instead of rejecting: the dialog then stays open with the author's edits and shows this message.
+ * instead of rejecting: the dialog then stays open with the author's edits and shows this message. A clash on
+ * the same fields is an {@link ApplyClashError}, whose fields the dialog reloads.
  */
 export function pageSettingsSaveError(result: UpdateResult): Error {
+  const conflicts = result.conflictDetails?.conflicts;
+  if (conflicts && conflicts.length > 0) return new ApplyClashError(conflicts, result.conflictDetails?.changedBy);
   return new Error(
     result.reason === 'stale_write'
       ? 'Someone else saved this page first. Close the dialog, reload to pick up their changes, then try again.'

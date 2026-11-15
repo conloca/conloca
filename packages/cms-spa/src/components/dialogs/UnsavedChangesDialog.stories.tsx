@@ -1,6 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
+import { createFakeDocChannel } from '../../../test/fake-doc-channel.js';
+import type { EditorFlushResult } from '../../editor-flush.js';
 import '../../main.css';
+import { configureUI, getUIConfig } from '../../ui-config.js';
 import { UnsavedChangesDialog } from './UnsavedChangesDialog.js';
 
 /**
@@ -91,5 +94,70 @@ export const PendingBackNavigation: Story = {
     await expect(args.onCancel).toHaveBeenCalledTimes(1);
     await expect(args.onSave).not.toHaveBeenCalled();
     await expect(args.onDiscard).not.toHaveBeenCalled();
+  },
+};
+
+/** Live: edits the server has not acknowledged and this device could not keep. */
+const unsynced = (flush: () => Promise<EditorFlushResult>) => () => {
+  const previous = getUIConfig();
+  const fake = createFakeDocChannel({}, { flush });
+  fake.channel.receive('live.status', { connection: 'syncing', pending: true, persisted: false, readOnly: null });
+  configureUI({ ...previous, docChannel: fake.channel });
+  return () => configureUI(previous);
+};
+
+export const Unsynced: Story = {
+  args: { live: true },
+  beforeEach: unsynced(async () => ({ ok: true })),
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('heading', { name: 'Changes not synced yet' })).toBeVisible();
+    await expect(
+      canvas.getByText("Some edits haven't reached the server and can't be kept on this device."),
+    ).toBeVisible();
+    await expect(canvas.getAllByRole('button').map((button) => button.textContent)).toEqual([
+      '',
+      'Stay',
+      'Leave anyway',
+      'Sync and continue',
+    ]);
+    await userEvent.click(canvas.getByRole('button', { name: 'Sync and continue' }));
+    await waitFor(() => expect(args.onDiscard).toHaveBeenCalledTimes(1));
+    await expect(args.onSave).not.toHaveBeenCalled();
+  },
+};
+
+export const UnsyncedStayAndLeave: Story = {
+  args: { live: true },
+  beforeEach: unsynced(async () => ({ ok: true })),
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'Stay' }));
+    await expect(args.onCancel).toHaveBeenCalledTimes(1);
+    await userEvent.click(canvas.getByRole('button', { name: 'Leave anyway' }));
+    await expect(args.onDiscard).toHaveBeenCalledTimes(1);
+  },
+};
+
+export const UnsyncedFlushFails: Story = {
+  args: { live: true },
+  beforeEach: unsynced(async () => ({ ok: false, message: 'The connection dropped. Try again.' })),
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'Sync and continue' }));
+    await expect(await canvas.findByRole('alert')).toHaveTextContent('The connection dropped. Try again.');
+    await expect(canvas.getByRole('heading', { name: 'Changes not synced yet' })).toBeVisible();
+    await expect(args.onDiscard).not.toHaveBeenCalled();
+  },
+};
+
+/** An editor saving with Save keeps Save inside a live frame: the channel's status is not its own. */
+export const SaveEditorInsideALiveFrame: Story = {
+  beforeEach: unsynced(async () => ({ ok: true })),
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('heading', { name: 'Unsaved Changes' })).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: 'Save & Continue' }));
+    await expect(args.onSave).toHaveBeenCalledTimes(1);
   },
 };

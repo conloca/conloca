@@ -104,3 +104,12 @@ export function fieldsOfMetadata(metadata: HostSchemaMetadata): FormFields {
 export function fieldsOfHostSchema(schema: HostSchema): FormFields {
   return fieldsOfMetadata(schema.metadata);
 }
+
+/** The label a form shows for field `name`: camelCase and snake_case in Title Case. */
+export function formatFieldLabel(name: string): string {
+  return name
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/_/g, ' ')
+    .replace(/^\w/, (c) => c.toUpperCase())
+    .trim();
+}

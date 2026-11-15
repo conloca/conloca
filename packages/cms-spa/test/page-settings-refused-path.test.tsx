@@ -140,3 +140,27 @@ describe('a page-settings save the content-API router refuses for its path', () 
     });
   }
 });
+
+/** A same-field clash loads the other value into the field on either editor, and says so. */
+describe('a page-settings save that clashes on the title', () => {
+  const clash: UpdateResult = {
+    success: false,
+    reason: 'stale_write',
+    conflictDetails: {
+      metaChanged: true,
+      contentChanged: false,
+      conflicts: [{ anchor: 'meta.title', base: 'Team', ours: 'Team', theirs: 'Our team' }],
+      changedBy: 'Maria',
+    },
+  };
+  for (const type of ['puck', 'mdx'] as const) {
+    test(`reloads the title on a ${type === 'mdx' ? 'MDX' : 'Puck'} page`, async () => {
+      await saveRefusedSettings(type, clash);
+
+      expect((await screen.findByRole('alert')).textContent).toBe(
+        'Title changed while you were editing (last edited by Maria). Check it and apply again.',
+      );
+      expect(screen.getByLabelText<HTMLInputElement>(/^Title/).value).toBe('Our team');
+    });
+  }
+});

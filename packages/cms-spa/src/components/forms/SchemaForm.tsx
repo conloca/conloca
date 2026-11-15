@@ -2,7 +2,7 @@ import { Loader2 } from 'lucide-react';
 import { useId } from 'react';
 import { type HostSchema, isHostSchema } from '../../host-schema.js';
 import { fromDatetimeLocalValue, toDatetimeLocalValue } from '../../utils/pageMetadata.js';
-import { type FieldInfo, type FormFields, fieldsOfHostSchema } from '../../utils/schema-fields.js';
+import { type FieldInfo, type FormFields, fieldsOfHostSchema, formatFieldLabel } from '../../utils/schema-fields.js';
 import { ImageFieldRender } from '../fields/ImageField.js';
 import { Input, Select, Textarea } from '../ui/index.js';
 import { ChipArrayField } from './ChipArrayField.js';
@@ -300,15 +300,6 @@ function SchemaField({ name, fieldInfo, value, onChange }: SchemaFieldProps) {
       );
     }
   }
-}
-
-function formatFieldLabel(name: string): string {
-  // Convert camelCase/snake_case to Title Case
-  return name
-    .replace(/([A-Z])/g, ' $1')
-    .replace(/_/g, ' ')
-    .replace(/^\w/, (c) => c.toUpperCase())
-    .trim();
 }
 
 function formatEnumLabel(value: string): string {

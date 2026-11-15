@@ -1,3 +1,4 @@
+import type { FieldConflict } from '@conloca/content-api';
 import * as Dialog from '@radix-ui/react-dialog';
 import cn from 'clsx';
 import { X } from 'lucide-react';
@@ -8,6 +9,7 @@ import { pathnameOnlyFields, publishWindowFields, seoPublishingFields } from '..
 import { type PageSchemaDescriptor, resolvePageSchemaEntry, usePageSchemas } from '../../page-schemas.js';
 import type { CorePageSettingName } from '../../page-setting-attributes.js';
 import type { PageMetadata } from '../../types.js';
+import { ApplyClashError, clashPath, withTheirs } from '../../utils/apply-clash.js';
 import {
   flattenForHints,
   fromDatetimeLocalValue,
@@ -173,6 +175,21 @@ function PageMetadataForm({ formRef, page, descriptor, onSave, onSaved, pathname
   // 'minimal' and 'none' modes the site's schema may hold the title, and Save sends it as is.
   const titleMissing = mode === 'full' ? !coreValues.title : 'title' in customValues && !customValues.title;
 
+  const loadTheirs = (fields: FieldConflict[]) => {
+    // The keys conloca's own sections show; in 'minimal' and 'none' the site's schema holds the title and the rest.
+    const coreKeys = new Set(mode === 'full' ? Object.keys(coreValues) : ['pathname', 'publishAt', 'unpublishAt']);
+    const isCore = (field: FieldConflict) => coreKeys.has(clashPath(field.anchor));
+    changeCoreValues(withTheirs(coreValues, fields.filter(isCore)));
+    const hintKeys = new Set(Object.keys(descriptor?.ui ?? {}));
+    changeCustomValues(
+      withTheirs(
+        customValues,
+        fields.filter((field) => !isCore(field)),
+        hintKeys,
+      ),
+    );
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     // Guard the operation itself: a disabled button does not guard every submit path.
@@ -210,9 +227,15 @@ function PageMetadataForm({ formRef, page, descriptor, onSave, onSaved, pathname
       await onSave?.(metadata);
     } catch (error) {
       if (mounted.current) {
-        setSaveError(
-          error instanceof Error ? error.message : 'Saving failed. Your changes are still here — try again.',
-        );
+        // A clash loads the other value of each clashing field, so the next Apply starts from it.
+        if (error instanceof ApplyClashError) {
+          loadTheirs(error.fields);
+          setSaveError(error.describe((path) => descriptor?.ui?.[path]?.label));
+        } else {
+          setSaveError(
+            error instanceof Error ? error.message : 'Saving failed. Your changes are still here — try again.',
+          );
+        }
       }
       return;
     } finally {

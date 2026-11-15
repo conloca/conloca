@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { expect, userEvent, waitFor, within } from 'storybook/test';
 import '../../main.css';
+import { createFakeDocChannel } from '../../../test/fake-doc-channel.js';
 import { CmsSpaApp } from '../../CmsSpaApp.js';
 import { EDITOR_DIRTY_CHANGED_EVENT, flushOpenEditor, isOpenEditorDirty } from '../../editor-flush.js';
 import { ThemeProvider } from '../../hooks/useTheme.js';
@@ -352,6 +353,26 @@ export const BackWithUnsavedEditsAsksFirst: Story = {
     await userEvent.click(canvas.getByRole('button', { name: 'Continue editing' }));
     await waitFor(() => expect(canvas.queryByRole('heading', { name: 'Discard changes?' })).toBeNull());
     await expect(canvas.getByRole('textbox', { name: 'Fragment markdown' })).toHaveValue('# Shared footer edited');
+  },
+};
+
+/** Inside a live frame the channel reports a status, but the fragment still saves with Save: leaving with edits asks. */
+export const LiveFrameKeepsTheSaveGuard: Story = {
+  beforeEach: () => {
+    const restore = installStoryApi(new FragmentContentAPI(), { hosted: true });
+    const fake = createFakeDocChannel({});
+    fake.channel.receive('live.status', { connection: 'connected', pending: false, persisted: true, readOnly: null });
+    configureUI({ ...getUIConfig(), docChannel: fake.channel });
+    return restore;
+  },
+  render: () => <FragmentEditorRoute entry={FROM_PAGE} />,
+  play: async ({ canvasElement }) => {
+    const { canvas, surface } = await openEditor(canvasElement);
+    await userEvent.type(surface, ' edited');
+    await userEvent.click(canvas.getByRole('button', { name: /^Back to/ }));
+    await expect(await canvas.findByRole('heading', { name: 'Discard changes?' })).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'Save and go back' })).toBeEnabled();
+    await expect(canvas.queryByTestId('dest-page')).toBeNull();
   },
 };
 

@@ -22,8 +22,7 @@ import { useLiveDoc } from '../../live/use-live.js';
 import { mergeDefaultProps } from '../../merge-default-props.js';
 import type { PageMetadata } from '../../types.js';
 import { getUIConfig } from '../../ui-config.js';
-import { contentFailureMessage } from '../../utils/content-failure.js';
-import { buildMetadataUpdate, extractPageMetadata } from '../../utils/pageMetadata.js';
+import { buildMetadataUpdate, extractPageMetadata, pageSettingsSaveError } from '../../utils/pageMetadata.js';
 import { PageMetadataDialog } from '../dialogs/PageMetadataDialog.js';
 import { type ContentFragmentOption, ContentFragmentSelectorField } from '../fields/ContentFragmentSelectorField.js';
 import { FragmentContentWrapper, FragmentFieldWrapper } from './FragmentWrappers.js';
@@ -569,19 +568,11 @@ function PuckPageEditorInner({ puckConfig, initialLocale }: PageEditorWrapperPro
           }
           if (!result.success) {
             // A failure must throw so the dialog stays open and shows what
-            // happened; it used to stop at console.error while the dialog
-            // closed. Some storage clients resolve failed writes as
+            // happened; some storage clients resolve failed writes as
             // { success: false } instead of throwing, so a resolved failure
-            // must take the same exit as a thrown one — otherwise the dialog
-            // closes and the lost change looks saved. Its message says why,
-            // such as a new path another page already has; that message
-            // arrives as plain text from a remote route, which the dialog
-            // could only replace with a generic "try again".
-            throw new Error(
-              result.reason === 'stale_write'
-                ? 'Someone else saved this page first. Close the dialog, reload to pick up their changes, then try again.'
-                : contentFailureMessage(result, 'Saving the page settings failed.'),
-            );
+            // takes the same exit. A same-field clash throws ApplyClashError,
+            // whose fields the dialog reloads.
+            throw pageSettingsSaveError(result);
           }
         }}
       />

@@ -1,10 +1,14 @@
 import { useEffect } from 'react';
 import { type Blocker, useBlocker } from 'react-router-dom';
+import { shouldBlockLeave } from '../components/dialogs/unsaved-guard.js';
+import { useLiveStatus } from '../live/use-live.js';
 
 /**
- * Guards against losing dirty content via either browser-level navigations
+ * Guards against losing unsaved work via either browser-level navigations
  * (reload, tab close, manual URL change) or in-app SPA navigations (back
- * button, sidebar clicks, programmatic navigate()).
+ * button, sidebar clicks, programmatic navigate()). Saving with Save, `isDirty`
+ * decides; `live` (this editor writes into the shared doc), only work that is
+ * neither synced nor kept on this device blocks (see {@link shouldBlockLeave}).
  *
  * Returns the react-router-dom v7 Blocker so the consumer can render its own
  * confirmation UI when `blocker.state === 'blocked'`. Call `blocker.proceed()`
@@ -14,22 +18,24 @@ import { type Blocker, useBlocker } from 'react-router-dom';
  * `<RouterProvider>`); v7's `useBlocker` is a no-op under the legacy
  * `<BrowserRouter>` element.
  */
-export function useUnsavedChangesGuard(isDirty: boolean): Blocker {
+export function useUnsavedChangesGuard(isDirty: boolean, live = false): Blocker {
+  const status = useLiveStatus();
   useEffect(() => {
-    if (!isDirty) return;
+    // Held work is not React state, so the leave is judged when it happens.
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!shouldBlockLeave(status, isDirty, live)) return;
       event.preventDefault();
       // Chrome / Edge still require setting returnValue to a non-empty value.
       event.returnValue = '';
     };
     window.addEventListener('beforeunload', onBeforeUnload);
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
-  }, [isDirty]);
+  }, [status, isDirty, live]);
 
   // A locale change opens another editor even when the page path stays the same.
   return useBlocker(
     ({ currentLocation, nextLocation }) =>
-      isDirty &&
+      shouldBlockLeave(status, isDirty, live) &&
       (currentLocation.pathname !== nextLocation.pathname ||
         (new URLSearchParams(currentLocation.search).get('locale') ?? '') !==
           (new URLSearchParams(nextLocation.search).get('locale') ?? '')),

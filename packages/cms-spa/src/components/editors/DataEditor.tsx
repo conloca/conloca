@@ -6,6 +6,7 @@ import {
 } from '@conloca/content-api-client';
 import { AlertCircle, Code2, Loader2, Save } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard.js';
 import { type HostSchema, isHostSchema } from '../../host-schema.js';
 import { dropHeldDataValues, heldDataKeys, useLiveDataValues } from '../../live/data-binding.js';
 import { type FrameLiveDoc, useDocChannel } from '../../live/doc-channel.js';
@@ -302,6 +303,7 @@ export function DataEditor({
             </div>
           </div>
         )}
+        <LiveLeaveGuard />
       </div>
     );
   }
@@ -383,6 +385,23 @@ export function DataEditor({
         />
       )}
     </>
+  );
+}
+
+/**
+ * Asks before a route change leaves live work unsynced. Saving with Save, the editor asks on its own
+ * (showUnsavedDialog), so only the live editor mounts this, and only it needs the data router `useBlocker` requires.
+ */
+function LiveLeaveGuard() {
+  const blocker = useUnsavedChangesGuard(false, true);
+  if (blocker.state !== 'blocked') return null;
+  return (
+    <UnsavedChangesDialog
+      live
+      onSave={() => blocker.proceed()}
+      onDiscard={() => blocker.proceed()}
+      onCancel={() => blocker.reset()}
+    />
   );
 }
 

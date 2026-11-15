@@ -1,6 +1,7 @@
 import type { FragmentEditable } from '@conloca/content-api-client';
 import { useEffect, useMemo, useState } from 'react';
 import { fragmentEditableFields } from '../../content-form-fields.js';
+import { ApplyClashError, withTheirs } from '../../utils/apply-clash.js';
 import { SchemaForm } from '../forms/SchemaForm.js';
 import { Button } from '../ui/index.js';
 
@@ -8,7 +9,8 @@ interface FragmentPropertiesDialogProps {
   isOpen: boolean;
   fragmentTitle: string;
   currentMeta: FragmentEditable;
-  onSave: (meta: FragmentEditable) => void;
+  /** Rejects with an {@link ApplyClashError} when the same fields changed meanwhile; the dialog loads theirs. */
+  onSave: (meta: FragmentEditable) => void | Promise<void>;
   onCancel: () => void;
   isSaving?: boolean;
 }
@@ -33,15 +35,17 @@ export function FragmentPropertiesDialog({
   );
 
   const [formValues, setFormValues] = useState<Record<string, unknown>>(initialValues);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Reset form when dialog opens with new data
   useEffect(() => {
     if (isOpen) {
       setFormValues(initialValues);
+      setSaveError(null);
     }
   }, [isOpen, initialValues]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     // SchemaForm returns tags as array directly
     const tags = (formValues.tags as string[]) || [];
     const filteredTags = tags.filter((tag) => tag.trim().length > 0);
@@ -53,7 +57,16 @@ export function FragmentPropertiesDialog({
       tags: filteredTags.length > 0 ? filteredTags : undefined,
     };
 
-    onSave(meta);
+    setSaveError(null);
+    try {
+      await onSave(meta);
+    } catch (error) {
+      // A clash loads the other value of each clashing field, so the next Save starts from it.
+      if (error instanceof ApplyClashError) {
+        setFormValues((values) => withTheirs(values, error.fields));
+      }
+      setSaveError(error instanceof Error ? error.message : 'Saving failed. Try again.');
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -79,13 +92,19 @@ export function FragmentPropertiesDialog({
           <SchemaForm fields={fragmentEditableFields} values={formValues} onChange={setFormValues} />
         </div>
 
+        {saveError && (
+          <p role="alert" className="mb-4 text-sm text-red-04 dark:text-red-08">
+            {saveError}
+          </p>
+        )}
+
         <div className="flex justify-end gap-3">
           <Button variant="outline" onClick={onCancel} disabled={isSaving}>
             Cancel
           </Button>
           <Button
             variant="primary"
-            onClick={handleSave}
+            onClick={() => void handleSave()}
             disabled={!canSave || isSaving}
             data-testid="save-properties-submit"
           >

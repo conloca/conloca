@@ -1,6 +1,7 @@
 import type { DataEditable } from '@conloca/content-api-client';
 import { useEffect, useMemo, useState } from 'react';
 import { dataEditableFields } from '../../content-form-fields.js';
+import { ApplyClashError, withTheirs } from '../../utils/apply-clash.js';
 import { SchemaForm } from '../forms/SchemaForm.js';
 import { Button } from '../ui/index.js';
 
@@ -8,7 +9,8 @@ interface DataPropertiesDialogProps {
   initialMeta: DataEditable;
   isPending: boolean;
   onClose: () => void;
-  onSave: (meta: DataEditable) => void;
+  /** Rejects with an {@link ApplyClashError} when the same fields changed meanwhile; the dialog loads theirs. */
+  onSave: (meta: DataEditable) => void | Promise<void>;
 }
 
 export function DataPropertiesDialog({ initialMeta, isPending, onClose, onSave }: DataPropertiesDialogProps) {
@@ -24,13 +26,14 @@ export function DataPropertiesDialog({ initialMeta, isPending, onClose, onSave }
   );
 
   const [formValues, setFormValues] = useState<Record<string, unknown>>(initialValues);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Reset form when initialMeta changes (e.g., different entry selected)
   useEffect(() => {
     setFormValues(initialValues);
   }, [initialValues]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     // SchemaForm returns tags as array directly
     const tags = (formValues.tags as string[]) || [];
     const filteredTags = tags.filter((tag) => tag.trim().length > 0);
@@ -42,7 +45,16 @@ export function DataPropertiesDialog({ initialMeta, isPending, onClose, onSave }
       tags: filteredTags.length > 0 ? filteredTags : undefined,
     };
 
-    onSave(meta);
+    setSaveError(null);
+    try {
+      await onSave(meta);
+    } catch (error) {
+      // A clash loads the other value of each clashing field, so the next Save starts from it.
+      if (error instanceof ApplyClashError) {
+        setFormValues((values) => withTheirs(values, error.fields));
+      }
+      setSaveError(error instanceof Error ? error.message : 'Saving failed. Try again.');
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -66,13 +78,19 @@ export function DataPropertiesDialog({ initialMeta, isPending, onClose, onSave }
           <SchemaForm fields={dataEditableFields} values={formValues} onChange={setFormValues} />
         </div>
 
+        {saveError && (
+          <p role="alert" className="mb-4 text-sm text-red-04 dark:text-red-08">
+            {saveError}
+          </p>
+        )}
+
         <div className="flex justify-end gap-3">
           <Button variant="outline" onClick={onClose} disabled={isPending}>
             Cancel
           </Button>
           <Button
             variant="primary"
-            onClick={handleSave}
+            onClick={() => void handleSave()}
             disabled={!canSave || isPending}
             data-testid="save-properties-submit"
           >

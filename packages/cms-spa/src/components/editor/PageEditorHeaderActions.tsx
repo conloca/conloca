@@ -50,6 +50,8 @@ interface PageEditorHeaderActionsProps {
   onBack: () => void;
   /** With the host's draft tools: the page the page draft menu acts on. */
   draftPage?: PageRef | null;
+  /** The page's title, naming it in its recent versions. */
+  draftLabel?: string;
 }
 
 /** PageEditor keeps preview clicks actionable so an unavailable preview can explain how to recover. */
@@ -103,6 +105,7 @@ export function PageEditorHeaderActions({
   pageSettingsDisabledReason,
   onBack,
   draftPage,
+  draftLabel,
 }: PageEditorHeaderActionsProps) {
   const hideSave = getUIConfig().hideEditorSave === true || onSave === undefined;
   return (
@@ -200,7 +203,7 @@ export function PageEditorHeaderActions({
             <Settings className="h-4 w-4" />
           </button>
         )}
-        {draftPage && <PageDraftMenu page={draftPage} />}
+        {draftPage && <PageDraftMenu page={draftPage} label={draftLabel ?? draftPage.id} />}
         <IconButton icon={X} onClick={onBack} ariaLabel="Exit editor" />
       </div>
     </div>

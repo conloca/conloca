@@ -474,7 +474,7 @@ export function PageEditor({
   // unloads when the page has unsaved Puck edits. Same hook used by
   // FragmentEditor / MdxPageEditor — keeps unsaved-protection consistent
   // across the editor surface.
-  const blocker = useUnsavedChangesGuard(isDirty);
+  const blocker = useUnsavedChangesGuard(isDirty, binding !== null);
 
   const {
     blockedReason: previewBlockedReason,
@@ -501,6 +501,7 @@ export function PageEditor({
     previewBlockedReason,
     live: binding !== null,
     previewPending,
+    title: entry.localized.meta.title || 'Untitled Page',
   });
   headerActionsPropsRef.current = {
     onPublish,
@@ -517,6 +518,7 @@ export function PageEditor({
     previewBlockedReason,
     live: binding !== null,
     previewPending,
+    title: entry.localized.meta.title || 'Untitled Page',
   };
 
   // Memoize overrides with NO dependencies so the reference never changes.
@@ -542,6 +544,7 @@ export function PageEditor({
             pageSettingsDisabledReason={p.live ? LIVE_PAGE_SETTINGS_HINT : undefined}
             onBack={p.onBack}
             draftPage={draftToolsPage(p.id, p.locale)}
+            draftLabel={p.title}
             previewDisabledReason={p.previewBlockedReason ?? undefined}
             previewPending={p.previewPending}
           />
@@ -603,6 +606,7 @@ export function PageEditor({
           inside useUnsavedChangesGuard. */}
       {blocker.state === 'blocked' && (
         <UnsavedChangesDialog
+          live={binding !== null}
           onSave={async () => {
             const status = await handleSave();
             if (status === 'saved') {

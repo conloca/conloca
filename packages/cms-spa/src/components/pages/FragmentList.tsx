@@ -13,6 +13,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useClickOutside, useDialogState, useErrorModal } from '../../hooks/index.js';
 import type { Fragment } from '../../types.js';
+import { ApplyClashError } from '../../utils/apply-clash.js';
 import { cn } from '../../utils/cn.js';
 import { contentFailureMessage, isStaleWrite } from '../../utils/content-failure.js';
 import { editableEntryMeta, entryMetaPatch } from '../../utils/entry-meta.js';
@@ -303,6 +304,12 @@ export function FragmentList() {
         etag: propertiesDialog.etag,
       });
 
+      const clash = result.success ? undefined : result.conflictDetails?.conflicts;
+      if (clash && clash.length > 0) {
+        // The dialog stays open with the other values loaded; the next Save sends against the page as it is now.
+        if (result.currentEtag) openPropertiesDialog({ ...propertiesDialog, etag: result.currentEtag });
+        throw new ApplyClashError(clash, result.conflictDetails?.changedBy);
+      }
       closePropertiesDialog();
 
       if (!result.success) {
@@ -313,6 +320,7 @@ export function FragmentList() {
         }
       }
     } catch (error) {
+      if (error instanceof ApplyClashError) throw error;
       closePropertiesDialog();
       showError('Failed to save properties. Please try again.', error);
     }
