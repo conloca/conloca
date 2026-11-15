@@ -84,9 +84,9 @@ export interface LiveStatus {
     snapshotId?: string;
   } | null;
   /**
-   * A page edited here was deleted on the server: its changes can never be sent, so they are kept on this device for
-   * download and do not hold a save back. Named until the download is taken or dismissed. Absent from senders that
-   * predate it, which name none.
+   * Work edited here that can never be sent now: a page deleted on the server, or stored work from before a reload
+   * that the server refused. It is kept on this device for download and does not hold a save back. Named until the
+   * download is taken, dismissed or discarded. Absent from senders that predate it, which name none.
    */
   deletedExport?: { message: string } | null;
   /**
