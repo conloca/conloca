@@ -24,6 +24,12 @@ import { Toaster as SonnerToaster, type ToasterProps } from 'sonner';
  *       fight; visual output matches cms-spa surfaces.
  *     - `richColors={false}` — keeps Sonner's accent system neutral so
  *       cms-spa's color tokens own the visual.
+ *     - `toastOptions.classNames` — the message keeps at least 12rem and an
+ *       action button that doesn't fit beside it wraps onto its own line.
+ *       Sonner keeps the button on the message's line at full width, so a
+ *       long label squeezed the message into a column one letter wide that
+ *       ran up the whole page. The `!` is needed: utilities sit in a cascade
+ *       layer, which loses to Sonner's unlayered rules.
  *   All props spread last so consumers can override width, z-index,
  *   classNames, toastOptions, etc.
  *
@@ -32,17 +38,29 @@ import { Toaster as SonnerToaster, type ToasterProps } from 'sonner';
  * internally, but the explicit re-import here documents the contract and
  * survives any future bundler that strips internal side-effect imports.
  *
- * Style provenance: any Tailwind classes baked into this wrapper are
+ * Style provenance: the Tailwind classes baked into this wrapper are
  * scanned by consumer Tailwind compilations via the
  * `@source "../src/components/toast.tsx"` directive in
- * `styles/tailwind-theme.css`. The wrapper today carries no Tailwind
- * classes — Sonner ships its own CSS — but the @source future-proofs any
- * later additions.
+ * `styles/tailwind-theme.css`.
  */
 
 export type { ExternalToast, ToastClassnames, ToasterProps, ToastT } from 'sonner';
 export { toast } from 'sonner';
 
+const TOAST_CLASS_NAMES = {
+  toast: 'flex-wrap!',
+  content: 'basis-48!',
+  actionButton: 'h-auto! min-h-6 max-w-full py-1',
+};
+
 export function Toaster(props: ToasterProps) {
-  return <SonnerToaster position="bottom-right" theme="system" richColors={false} {...props} />;
+  return (
+    <SonnerToaster
+      position="bottom-right"
+      theme="system"
+      richColors={false}
+      toastOptions={{ classNames: TOAST_CLASS_NAMES }}
+      {...props}
+    />
+  );
 }
