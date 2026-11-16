@@ -321,6 +321,16 @@ body {
   flex-direction: column;
 }
 
+/* The surface behind the page canvas, which a site without its own background shows through on. It follows the
+ * canvas toggle, never the admin theme: Puck's fallback is its surface token, which `.dark` below turns #181818. */
+[data-canvas-surface="light"] {
+  --puck-canvas-preview-color-bg: #fff;
+}
+
+[data-canvas-surface="dark"] {
+  --puck-canvas-preview-color-bg: #181818;
+}
+
 /* Puck dark mode overrides — invert grey scale so UI chrome adapts */
 .dark {
   --puck-color-grey-01: #fafafa;

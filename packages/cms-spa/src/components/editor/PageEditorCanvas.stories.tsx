@@ -5,6 +5,7 @@ import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { expect, waitFor, within } from 'storybook/test';
 import '../../main.css';
 import { isOpenEditorDirty } from '../../editor-flush.js';
+import { CanvasThemeProvider } from '../../hooks/useCanvasTheme.js';
 import { getSiteStyles, setSiteStyles } from '../../site-styles.js';
 import { IframeBridge, PageEditor } from './PageEditor.js';
 
@@ -255,4 +256,70 @@ export const OpeningAPageIsNotAnEdit: Story = {
     await expect(isOpenEditorDirty()).toBe(false);
     await expect(within(canvasElement).getByRole('button', { name: 'Save' })).toBeDisabled();
   },
+};
+
+/** The page editor reading the canvas theme the user picked. */
+function ThemedPageEditor() {
+  return (
+    <CanvasThemeProvider>
+      <PageEditorHarness entry={PAGE_WITH_BLOCKS} config={PAGE_WITH_BLOCKS_CONFIG} onOpenMetadata={() => {}} />
+    </CanvasThemeProvider>
+  );
+}
+
+/** The admin theme as theme.ts applies it, on the document root, with `canvasTheme` stored before the editor reads it. */
+function adminWithCanvas(adminTheme: 'light' | 'dark', canvasTheme: 'light' | 'dark'): () => () => void {
+  return () => {
+    const root = document.documentElement;
+    root.classList.toggle('dark', adminTheme === 'dark');
+    root.style.colorScheme = adminTheme;
+    localStorage.setItem('conloca-canvas-theme', canvasTheme);
+    return () => {
+      root.classList.remove('dark');
+      root.style.colorScheme = '';
+      localStorage.removeItem('conloca-canvas-theme');
+    };
+  };
+}
+
+/**
+ * The surface behind the site's page (Puck's canvas root, which shows through a canvas document without its own
+ * background) and the canvas document's colour scheme. Computed, so it holds whatever backdrop the browser paints.
+ */
+async function expectCanvasSurface(canvasElement: HTMLElement, background: string, colorScheme: string): Promise<void> {
+  await waitFor(
+    async () => {
+      const frame = canvasElement.querySelector<HTMLIFrameElement>('iframe#preview-frame');
+      const html = frame?.contentDocument?.documentElement;
+      const root = frame?.closest('[class*="PuckCanvas-root"]');
+      if (!html || !root) throw new Error('the canvas has not loaded yet');
+      await expect(getComputedStyle(root).backgroundColor).toBe(background);
+      await expect(getComputedStyle(html).colorScheme).toBe(colorScheme);
+    },
+    { timeout: 10_000 },
+  );
+}
+
+/** The admin theme never reaches the site's page: a light canvas in a dark admin sits on white, not the admin's dark. */
+export const LightCanvasInADarkAdmin: Story = {
+  name: 'a light canvas in a dark admin sits on white',
+  beforeEach: adminWithCanvas('dark', 'light'),
+  render: () => <ThemedPageEditor />,
+  play: ({ canvasElement }) => expectCanvasSurface(canvasElement, 'rgb(255, 255, 255)', 'light'),
+};
+
+/** Only the canvas toggle makes the surface behind the site dark. */
+export const DarkCanvasInADarkAdmin: Story = {
+  name: 'a dark canvas sits on the dark surface',
+  beforeEach: adminWithCanvas('dark', 'dark'),
+  render: () => <ThemedPageEditor />,
+  play: ({ canvasElement }) => expectCanvasSurface(canvasElement, 'rgb(24, 24, 24)', 'dark'),
+};
+
+/** The canvas toggle alone decides the surface: a dark canvas in a light admin is dark too. */
+export const DarkCanvasInALightAdmin: Story = {
+  name: 'a dark canvas in a light admin sits on the dark surface',
+  beforeEach: adminWithCanvas('light', 'dark'),
+  render: () => <ThemedPageEditor />,
+  play: ({ canvasElement }) => expectCanvasSurface(canvasElement, 'rgb(24, 24, 24)', 'dark'),
 };

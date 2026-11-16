@@ -325,6 +325,7 @@ export function PageEditor({
   live,
 }: PageEditorProps) {
   const bindingRef = useRef<PuckBinding | null>(null);
+  const { canvasTheme } = useCanvasTheme();
   const draftPage = useMemo(() => {
     const page = draftToolsPage(entry.id, entry.localized.locale);
     return page ? { page, ...(live ? { docKey: live.docKey } : {}) } : null;
@@ -580,7 +581,8 @@ export function PageEditor({
     <div className="h-full min-h-0 overflow-y-auto flex flex-col bg-grey-11 dark:bg-grey-03">
       {binding && <PuckHeldNotice binding={binding} />}
       {/* Keep a usable canvas on very short screens; this region scrolls instead of crushing Puck's iframe. */}
-      <div className="flex-1 min-h-[400px] overflow-hidden">
+      {/* The surface behind the canvas follows the canvas toggle, never the admin theme: see `[data-canvas-surface]` in main.css. */}
+      <div className="flex-1 min-h-[400px] overflow-hidden" data-canvas-surface={canvasTheme}>
         {/* Live: a page setting a block shows on the canvas says why it does not open, as the header control does. */}
         <DraftPageContext.Provider value={draftPage}>
           <PageSettingTargetsProvider onOpen={binding ? openNoPageSettings : onOpenMetadata}>
