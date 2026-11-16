@@ -29,7 +29,7 @@ import { draftToolsPage } from '../conflicts/use-page-conflicts.js';
 import { ConflictDialog } from '../dialogs/ConflictDialog.js';
 import { ErrorModal } from '../dialogs/ErrorModal.js';
 import { PageMetadataDialog } from '../dialogs/PageMetadataDialog.js';
-import { UnsavedChangesDialog } from '../dialogs/UnsavedChangesDialog.js';
+import { LiveLeaveGuard, UnsavedChangesDialog } from '../dialogs/UnsavedChangesDialog.js';
 import { CMSMDXEditor } from './CMSMDXEditor.js';
 import { DocsPreviewButton } from './DocsPreviewButton.js';
 import { JsxPropsPanel } from './JsxPropsPanel.js';
@@ -48,8 +48,12 @@ type PersistStatus = 'saved' | 'conflict' | 'error';
  * co-edited live and there is nothing to save.
  */
 export function MdxPageEditor({ initialLocale = 'en' }: { initialLocale?: string } = {}) {
+  // The guard sits above the loading and failed screens too: a locale switch reopens, and the old doc may still owe work.
   return useDocChannel() ? (
-    <LiveMdxPageEditor initialLocale={initialLocale} />
+    <>
+      <LiveLeaveGuard />
+      <LiveMdxPageEditor initialLocale={initialLocale} />
+    </>
   ) : (
     <SavedMdxPageEditor initialLocale={initialLocale} />
   );

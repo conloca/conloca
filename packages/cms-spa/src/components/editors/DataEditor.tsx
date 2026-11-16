@@ -7,7 +7,6 @@ import {
 import { AlertCircle, Code2, Loader2, Save } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { notifyEditorDirtyChanged, registerEditorFlushHandler } from '../../editor-flush.js';
-import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard.js';
 import { type HostSchema, isHostSchema } from '../../host-schema.js';
 import { dropHeldDataValues, heldDataKeys, useLiveDataValues } from '../../live/data-binding.js';
 import { type FrameLiveDoc, useDocChannel } from '../../live/doc-channel.js';
@@ -15,7 +14,7 @@ import { useLiveDoc } from '../../live/use-live.js';
 import { contentFailureMessage } from '../../utils/content-failure.js';
 import { validateEntryData } from '../../utils/data-entry-validation.js';
 import { DraftNoticeStrip } from '../conflicts/EditorNoticeStrip.js';
-import { UnsavedChangesDialog } from '../dialogs/UnsavedChangesDialog.js';
+import { LiveLeaveGuard, UnsavedChangesDialog } from '../dialogs/UnsavedChangesDialog.js';
 import { LocaleSelector } from '../editor/LocaleSelector.js';
 import { SchemaForm } from '../forms/SchemaForm.js';
 
@@ -37,7 +36,18 @@ interface DataEditorProps {
  * Uses collection-specific schema for form generation if available.
  * Supports locale switching similar to FragmentEditor.
  */
-export function DataEditor({
+export function DataEditor(props: DataEditorProps) {
+  // Above the loading and error screens too: a locale switch reloads, and the old doc may still owe work.
+  const bound = useDocChannel() !== null && props.id !== '';
+  return (
+    <>
+      {bound && <LiveLeaveGuard />}
+      <EntryEditor {...props} />
+    </>
+  );
+}
+
+function EntryEditor({
   id: entryId,
   collection,
   initialLocale,
@@ -369,7 +379,6 @@ export function DataEditor({
             </div>
           </div>
         )}
-        <LiveLeaveGuard />
       </div>
     );
   }
@@ -451,23 +460,6 @@ export function DataEditor({
         />
       )}
     </>
-  );
-}
-
-/**
- * Asks before a route change leaves live work unsynced. Saving with Save, the editor asks on its own
- * (showUnsavedDialog), so only the live editor mounts this, and only it needs the data router `useBlocker` requires.
- */
-function LiveLeaveGuard() {
-  const blocker = useUnsavedChangesGuard(false, true);
-  if (blocker.state !== 'blocked') return null;
-  return (
-    <UnsavedChangesDialog
-      live
-      onSave={() => blocker.proceed()}
-      onDiscard={() => blocker.proceed()}
-      onCancel={() => blocker.reset()}
-    />
   );
 }
 

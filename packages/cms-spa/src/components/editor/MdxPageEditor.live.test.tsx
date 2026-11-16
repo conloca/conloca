@@ -22,8 +22,13 @@ import {
 } from 'lexical';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import type * as Y from 'yjs';
-import { createFakeDocChannel, type FakeDocChannel } from '../../../test/fake-doc-channel.js';
+import {
+  createFakeDocChannel,
+  type FakeDocChannel,
+  type FakeDocChannelOptions,
+} from '../../../test/fake-doc-channel.js';
 import { setupTestAPI, testApi } from '../../../test/test-utils.js';
+import type { EditorFlushResult } from '../../editor-flush.js';
 import { ThemeProvider } from '../../hooks/useTheme.js';
 import { HELD_TOO_LARGE } from '../../live/doc-channel.js';
 import { HTML_COMMENT_NOTICE } from '../../live/markdown-live-plugin.js';
@@ -54,8 +59,8 @@ afterEach(() => {
   testApi?.clear();
 });
 
-/** Opens `mdx` as a live page in the MDX page editor, with the doc channel `fake`. */
-async function openLive(mdx: string) {
+/** Renders `mdx` as a live page in the MDX page editor, with the doc channel `fake` made with `options`. */
+async function mount(mdx: string, options?: FakeDocChannelOptions) {
   const created = await testApi.createContent({
     kind: 'page',
     site: 'default',
@@ -64,7 +69,7 @@ async function openLive(mdx: string) {
     meta: { title: 'Old' },
     locales: { en: { pathname: '/live', meta: { title: 'Old' }, content: { mdx } } },
   });
-  fake = createFakeDocChannel({ mdx });
+  fake = createFakeDocChannel({ mdx }, options);
   configureUI({ docChannel: fake.channel });
   const router = createMemoryRouter(
     [
@@ -83,6 +88,12 @@ async function openLive(mdx: string) {
       </ThemeProvider>
     </QueryClientProvider>,
   );
+  return { router, id: created.id };
+}
+
+/** Opens `mdx` as a live page in the MDX page editor, with the doc channel `fake`. */
+async function openLive(mdx: string, options?: FakeDocChannelOptions) {
+  const { router, id } = await mount(mdx, options);
   const root = await waitFor(() => {
     const element = document.querySelector<HTMLElement>('[contenteditable]');
     if (!element) throw new Error('editor not mounted');
@@ -91,9 +102,9 @@ async function openLive(mdx: string) {
   const editor = getNearestEditorFromDOMNode(root);
   if (!editor) throw new Error('no Lexical editor on the content root');
   // The replica the editor is bound to: the fake numbers each open of the page.
-  const opened = [4, 3, 2, 1].map((generation) => `mdx:web:${created.id}:en#${generation}`);
+  const opened = [4, 3, 2, 1].map((generation) => `mdx:web:${id}:en#${generation}`);
   docKey = opened.find((key) => fake.channel.live(key) !== undefined) ?? '';
-  return { editor, root };
+  return { editor, root, router };
 }
 
 /** Types `keys` at the end of the editor's last block, as one discrete update. */
@@ -116,6 +127,14 @@ function nextFrame(): Promise<void> {
   return promise;
 }
 
+const unsynced: LiveStatus = {
+  connection: 'connected',
+  pending: true,
+  persisted: false,
+  readOnly: null,
+  deletedExport: null,
+};
+
 describe('MdxPageEditor bound to a shared doc', () => {
   it('shows no Save button when bound to a shared doc', async () => {
     const { root } = await openLive('Hello\n');
@@ -130,6 +149,94 @@ describe('MdxPageEditor bound to a shared doc', () => {
     const { editor } = await openLive('Hello\n');
     typeAtEnd(editor, '!');
     await waitFor(() => expect(body().toJSON()).toBe('Hello!\n'));
+  });
+
+  it('asks before leaving while edits are not synced or kept on this device, and leaves anyway on request', async () => {
+    const { editor, router } = await openLive('Hello\n');
+    typeAtEnd(editor, '!');
+    act(() => {
+      fake.channel.receive('live.status', {
+        connection: 'connected',
+        pending: true,
+        persisted: false,
+        readOnly: null,
+        deletedExport: null,
+      });
+    });
+    const unload = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(unload);
+    expect(unload.defaultPrevented).toBe(true);
+    await act(() => router.navigate('/pages'));
+    // Exposed as a dialog named by its title, so assistive tech (and role queries) find the question.
+    await screen.findByRole('dialog', { name: 'Changes not synced yet' });
+    fireEvent.click(screen.getByRole('button', { name: 'Stay' }));
+    expect(router.state.location.pathname).not.toBe('/pages');
+    await act(() => router.navigate('/pages'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Leave anyway' }));
+    await waitFor(() => expect(router.state.location.pathname).toBe('/pages'));
+  });
+
+  it('leaves without asking once the edits are kept on this device', async () => {
+    const { editor, router } = await openLive('Hello\n');
+    typeAtEnd(editor, '!');
+    act(() => {
+      fake.channel.receive('live.status', {
+        connection: 'connected',
+        pending: true,
+        persisted: true,
+        readOnly: null,
+        deletedExport: null,
+      });
+    });
+    await act(() => router.navigate('/pages'));
+    expect(router.state.location.pathname).toBe('/pages');
+    expect(screen.queryByText('Changes not synced yet')).toBeNull();
+  });
+
+  // An open that fails (a locale switch reopens) shows the failed screen; work the old doc owes must still ask.
+  it("asks before the failed screen's Back button leaves unsynced work", async () => {
+    const { router } = await mount('Hello\n', { refuseOpen: new Error('offline') });
+    const back = await screen.findByRole('button', { name: 'Back to Pages' });
+    act(() => {
+      fake.channel.receive('live.status', unsynced);
+    });
+    fireEvent.click(back);
+    await screen.findByText('Changes not synced yet');
+    expect(router.state.location.pathname).not.toBe('/pages');
+  });
+
+  it('leaves on Sync and continue once the flush succeeds, and stays with the reason when it fails', async () => {
+    let flush: EditorFlushResult = { ok: false, message: 'Still offline.' };
+    const { editor, router } = await openLive('Hello\n', { flush: async () => flush });
+    typeAtEnd(editor, '!');
+    act(() => {
+      fake.channel.receive('live.status', unsynced);
+    });
+    await act(() => router.navigate('/pages'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Sync and continue' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('Still offline.');
+    expect(router.state.location.pathname).not.toBe('/pages');
+    flush = { ok: true };
+    fireEvent.click(screen.getByRole('button', { name: 'Sync and continue' }));
+    await waitFor(() => expect(router.state.location.pathname).toBe('/pages'));
+  });
+
+  it('asks before leaving a replica that holds a refused update, though its edits are kept on this device', async () => {
+    const { editor, router } = await openLive('Hello\n');
+    typeAtEnd(editor, ' big');
+    act(() => {
+      fake.channel.receive('live.status', {
+        connection: 'read-only',
+        pending: true,
+        persisted: true,
+        readOnly: { status: 413, code: 'update-too-large-unsaved' },
+        deletedExport: null,
+      });
+    });
+    expect((await screen.findByRole('alert')).textContent).toContain(HELD_TOO_LARGE);
+    await act(() => router.navigate('/pages'));
+    await screen.findByText('Changes not synced yet');
+    expect(router.state.location.pathname).not.toBe('/pages');
   });
 
   it("sends the caret's top-level block to teammates as the selection", async () => {

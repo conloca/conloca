@@ -12,6 +12,7 @@ import { DataEditor } from '../src/components/editors/DataEditor.js';
 import { setDataSchemas } from '../src/data-schemas.js';
 import { type EditorFlushResult, flushOpenEditor, registerEditorFlushHandler } from '../src/editor-flush.js';
 import { invalidateEditorQueries } from '../src/editor-queries.js';
+import type { HostSchema } from '../src/host-schema.js';
 import { dropHeldDataValues, hasHeldDataValues } from '../src/live/data-binding.js';
 import { configureUI } from '../src/ui-config.js';
 import { createFakeDocChannel } from './fake-doc-channel.js';
@@ -49,8 +50,8 @@ async function createAuthor() {
   return created.id;
 }
 
-/** The editor of entry `id` (`''`: a new one), with the doc channel on. */
-function renderEditor(id: string) {
+/** The editor of entry `id` (`''`: a new one), with the doc channel on; `schema` null gives the no-schema screen. */
+function renderEditor(id: string, schema: HostSchema | null = requiredBio) {
   const fake = createFakeDocChannel({ data: { name: 'Anna' } });
   configureUI({ docChannel: fake.channel, locales: { list: ['en', 'de'], defaultLocale: 'en' } });
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -72,7 +73,7 @@ function renderEditor(id: string) {
           collection="authors"
           initialLocale="en"
           existingLocales={['en', 'de']}
-          schema={requiredBio}
+          schema={schema}
           create={async () => ({})}
         />
       ),
@@ -154,6 +155,31 @@ describe('the data editor on a shared doc', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Leave anyway' }));
     await screen.findByText('elsewhere');
     expect(hasHeldDataValues()).toBe(false);
+  });
+
+  const unsynced = { connection: 'connected', pending: true, persisted: false, readOnly: null } as const;
+
+  test('asks before leaving unsynced work from the no-schema screen too', async () => {
+    const id = await createAuthor();
+    const { fake, router } = renderEditor(id, null);
+    await screen.findByText('No Schema Defined');
+    act(() => {
+      fake.channel.receive('live.status', unsynced);
+    });
+    await act(() => router.navigate('/elsewhere'));
+    await screen.findByText('Changes not synced yet');
+    expect(router.state.location.pathname).toBe('/');
+  });
+
+  test('a new entry leaves without the live question', async () => {
+    const { fake, router } = renderEditor('');
+    await screen.findByLabelText(/^Name/);
+    act(() => {
+      fake.channel.receive('live.status', unsynced);
+    });
+    await act(() => router.navigate('/elsewhere'));
+    await screen.findByText('elsewhere');
+    expect(screen.queryByText('Changes not synced yet')).toBeNull();
   });
 
   test('leaves the host save to whoever saves the shared doc', async () => {
