@@ -11,7 +11,6 @@ import { readFileSync } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import { createServer as createHttpServer, type IncomingMessage } from 'node:http';
 import { createRequire } from 'node:module';
-import { createServer as createNetServer } from 'node:net';
 import { resolve as absolute, dirname, extname, join } from 'node:path';
 import { Readable } from 'node:stream';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -25,24 +24,16 @@ export interface Host {
   stop(): void;
 }
 
-/** A port nothing listens on right now. */
-function freePort(): Promise<number> {
-  const { promise, resolve, reject } = Promise.withResolvers<number>();
-  const server = createNetServer();
-  server.on('error', reject);
-  server.listen(0, '127.0.0.1', () => {
-    const address = server.address();
-    server.close(() => (typeof address === 'object' && address !== null ? resolve(address.port) : reject()));
-  });
-  return promise;
-}
+/** The line each host prints once it listens: wrangler's and this file's `Ready on`, Astro Node's `Server listening on`. */
+const LISTENING = /(?:Ready on|Server listening on) (http:\/\/127\.0\.0\.1:\d+)/u;
 
 /**
- * Starts `dir`'s host with `env` (the deployment's variables) on a free port and waits until it answers. The child
- * gets only what a process needs, so no key from this machine reaches the fixture.
+ * Starts `dir`'s host with `env` (the deployment's variables) on a port the OS assigns, and waits until it answers. The
+ * host binds port 0 itself and prints the port it got: a port picked here and released before the host binds it can be
+ * taken in between by any other process on the machine. The child gets only what a process needs, so no key from this
+ * machine reaches the fixture.
  */
 export async function runHost(adapter: HostAdapter, dir: string, env: Record<string, string>): Promise<Host> {
-  const port = await freePort();
   const bare = {
     PATH: process.env.PATH ?? '',
     HOME: process.env.HOME ?? '',
@@ -62,9 +53,9 @@ export async function runHost(adapter: HostAdapter, dir: string, env: Record<str
         '--ip',
         '127.0.0.1',
         '--port',
-        String(port),
+        '0',
         '--inspector-port',
-        String(await freePort()),
+        '0',
         '--show-interactive-dev-session=false',
         ...vars,
       ],
@@ -73,10 +64,10 @@ export async function runHost(adapter: HostAdapter, dir: string, env: Record<str
   } else if (adapter === 'node') {
     child = spawn('node', ['dist/server/entry.mjs'], {
       cwd: dir,
-      env: { ...bare, ...env, HOST: '127.0.0.1', PORT: String(port) },
+      env: { ...bare, ...env, HOST: '127.0.0.1', PORT: '0' },
     });
   } else {
-    child = spawn('node', [fileURLToPath(import.meta.url), adapter, absolute(dir), String(port)], {
+    child = spawn('node', [fileURLToPath(import.meta.url), adapter, absolute(dir)], {
       cwd: dir,
       env: { ...bare, ...env },
     });
@@ -84,25 +75,27 @@ export async function runHost(adapter: HostAdapter, dir: string, env: Record<str
   let log = '';
   child.stdout?.on('data', (chunk) => (log += chunk));
   child.stderr?.on('data', (chunk) => (log += chunk));
-  const origin = `http://127.0.0.1:${port}`;
-  const host = { origin, log: () => log, stop: () => void child.kill() };
+  const stop = () => void child.kill();
   for (let attempt = 0; attempt < 240; attempt++) {
     if (child.exitCode !== null) break;
-    // oxlint-disable-next-line no-await-in-loop -- polling a starting server, one attempt at a time.
-    const up = await fetch(`${origin}/`, { redirect: 'manual' }).then(
-      () => true,
-      () => false,
-    );
-    if (up) return host;
+    const origin = LISTENING.exec(log)?.[1];
+    const up =
+      origin !== undefined &&
+      // oxlint-disable-next-line no-await-in-loop -- polling a starting server, one attempt at a time.
+      (await fetch(`${origin}/`, { redirect: 'manual' }).then(
+        () => true,
+        () => false,
+      ));
+    if (up) return { origin, log: () => log, stop };
     // oxlint-disable-next-line no-await-in-loop -- as above.
     await Bun.sleep(250);
   }
-  host.stop();
+  stop();
   throw new Error(`${adapter} host for ${dir} never answered:\n${log}`);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-// The Vercel and Netlify host, run by Node: `node run-host.ts <vercel|netlify> <dir> <port>`.
+// The Vercel and Netlify host, run by Node: `node run-host.ts <vercel|netlify> <dir>`.
 // ---------------------------------------------------------------------------------------------------------------------
 
 const TYPES = new Map([
@@ -201,19 +194,23 @@ async function netlifyHost(dir: string): Promise<(request: Request) => Promise<R
 
 // shortcut: no request body is passed on, since every request the suites send is a GET; pass `message` as a stream
 // once one posts.
-function toRequest(message: IncomingMessage, port: number): Request {
+function toRequest(message: IncomingMessage): Request {
   const headers = new Headers();
   for (const [name, value] of Object.entries(message.headersDistinct)) {
     for (const item of value ?? []) headers.append(name, item);
   }
-  return new Request(`http://127.0.0.1:${port}${message.url ?? '/'}`, { method: message.method ?? 'GET', headers });
+  return new Request(`http://127.0.0.1:${message.socket.localPort}${message.url ?? '/'}`, {
+    method: message.method ?? 'GET',
+    headers,
+  });
 }
 
 /**
- * Serves `dir` on `port`. A fetch to the site's production origin (`RUN_HOST_SITE`) is answered by this same host,
- * as production would answer it: that is the stub origin the function reads the site's own pages from.
+ * Serves `dir` on a port the OS assigns, and prints it as `Ready on <origin>`. A fetch to the site's production origin
+ * (`RUN_HOST_SITE`) is answered by this same host, as production would answer it: that is the stub origin the function
+ * reads the site's own pages from.
  */
-async function serve(adapter: 'vercel' | 'netlify', dir: string, port: number): Promise<void> {
+async function serve(adapter: 'vercel' | 'netlify', dir: string): Promise<void> {
   const handle = adapter === 'vercel' ? await vercelHost(dir) : await netlifyHost(dir);
   const site = process.env.RUN_HOST_SITE;
   if (site !== undefined) {
@@ -226,9 +223,9 @@ async function serve(adapter: 'vercel' | 'netlify', dir: string, port: number): 
       },
     });
   }
-  createHttpServer(async (message, reply) => {
+  const server = createHttpServer(async (message, reply) => {
     try {
-      const response = await handle(toRequest(message, port));
+      const response = await handle(toRequest(message));
       const raw: string[] = [];
       response.headers.forEach((value, name) => {
         if (name !== 'set-cookie') raw.push(name, value);
@@ -241,13 +238,18 @@ async function serve(adapter: 'vercel' | 'netlify', dir: string, port: number): 
       console.error(error);
       reply.writeHead(500).end(String(error));
     }
-  }).listen(port, '127.0.0.1');
+  });
+  server.listen(0, '127.0.0.1', () => {
+    const address = server.address();
+    if (address === null || typeof address === 'string') throw new Error(`expected a TCP address, got ${address}`);
+    console.log(`Ready on http://127.0.0.1:${address.port}`);
+  });
 }
 
 if (import.meta.main) {
-  const [adapter, dir, port] = process.argv.slice(2);
-  if ((adapter !== 'vercel' && adapter !== 'netlify') || dir === undefined || port === undefined) {
-    throw new Error('usage: node run-host.ts <vercel|netlify> <dir> <port>');
+  const [adapter, dir] = process.argv.slice(2);
+  if ((adapter !== 'vercel' && adapter !== 'netlify') || dir === undefined) {
+    throw new Error('usage: node run-host.ts <vercel|netlify> <dir>');
   }
-  await serve(adapter, dir, Number(port));
+  await serve(adapter, dir);
 }
