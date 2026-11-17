@@ -1,18 +1,25 @@
 /// <reference lib="dom" />
 /**
- * Page settings on a Puck page edited live. The page's blocks sync through the shared doc; its settings are not in
- * that doc, so Apply writes them with the version they were read from, and opening the dialog reads them first.
+ * Page settings on a Puck or MDX page edited live. The page's body syncs through the shared doc; its settings are not in
+ * that doc but in the page, so Apply writes them with the version they were read from, and opening the dialog reads
+ * them first.
  */
 import { afterEach, beforeEach, describe, expect, it, jest, onTestFinished, spyOn } from 'bun:test';
+import type { ContentMeta } from '@conloca/content-api';
 import { getContentAPIClient } from '@conloca/content-api-client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor, waitForElementToBeRemoved } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
-import { PAGE_SETTINGS_READ_WAIT_MS, PageEditorWrapper } from '../src/components/editor/PageEditorWrapper.js';
+import { MdxPageEditor } from '../src/components/editor/MdxPageEditor.js';
+import { PageEditorWrapper } from '../src/components/editor/PageEditorWrapper.js';
+import { PAGE_SETTINGS_READ_WAIT_MS } from '../src/components/editor/use-live-page-settings.js';
 import { Toaster, toast } from '../src/components/toast.js';
 import { ThemeProvider } from '../src/hooks/useTheme.js';
+import { definePageSchema } from '../src/page-schema-define.js';
+import { setPageSchemas } from '../src/page-schemas.js';
 import { configureUI } from '../src/ui-config.js';
 import { createFakeDocChannel, type FakeDocChannel } from './fake-doc-channel.js';
+import { titleFields } from './fixtures/typia/host-schemas.js';
 import { setupTestAPI, testApi } from './test-utils.js';
 
 const BASE_URL = '/__cms/api';
@@ -31,27 +38,29 @@ afterEach(() => {
   toast.dismiss();
 });
 
-/** Opens a new Puck page titled `Old` in the editor, live through a doc channel when `live`. */
-async function openPage(live: boolean): Promise<string> {
+/** Opens a new page of `type` with `meta` (titled `Old`) in its editor, live through a doc channel when `live`. */
+async function openPage(
+  live: boolean,
+  type: 'puck' | 'mdx' = 'puck',
+  meta: ContentMeta = { title: 'Old' },
+): Promise<string> {
+  // An MDX page's doc holds its body alone: its front matter is the page's settings.
+  const content = type === 'puck' ? { puckData: PUCK_DATA } : { mdx: 'Hello\n' };
   const created = await testApi.createContent({
     kind: 'page',
     site: 'default',
     collection: 'pages',
-    type: 'puck',
-    meta: { title: 'Old' },
-    locales: { en: { pathname: '/old', meta: { title: 'Old' }, content: { puckData: PUCK_DATA } } },
+    type,
+    meta,
+    locales: { en: { pathname: '/old', meta, content } },
   });
   const id = created.id ?? '';
   if (live) {
-    fake = createFakeDocChannel({ puckData: PUCK_DATA });
+    fake = createFakeDocChannel(content);
     configureUI({ docChannel: fake.channel });
   }
-  const router = createMemoryRouter(
-    [{ path: '/pages/:id', element: <PageEditorWrapper puckConfig={{ components: {} }} /> }],
-    {
-      initialEntries: [`/pages/${id}`],
-    },
-  );
+  const editor = type === 'puck' ? <PageEditorWrapper puckConfig={{ components: {} }} /> : <MdxPageEditor />;
+  const router = createMemoryRouter([{ path: '/pages/:id', element: editor }], { initialEntries: [`/pages/${id}`] });
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   render(
     <QueryClientProvider client={queryClient}>
@@ -61,7 +70,8 @@ async function openPage(live: boolean): Promise<string> {
       </ThemeProvider>
     </QueryClientProvider>,
   );
-  expect(await screen.findByTestId('mock-puck-editor')).toBeTruthy();
+  if (type === 'puck') expect(await screen.findByTestId('mock-puck-editor')).toBeTruthy();
+  else await waitFor(() => expect(document.querySelector('[contenteditable]')).toBeTruthy());
   return id;
 }
 
@@ -93,9 +103,25 @@ async function openSettings(): Promise<HTMLElement> {
   return screen.findByRole('heading', { name: /page metadata/i });
 }
 
-describe('Page settings while editing live', () => {
+describe.each(['puck', 'mdx'] as const)('Page settings while editing a %s page live', (type) => {
+  it("open with the page's settings, and an Apply keeps every setting it left alone", async () => {
+    const id = await openPage(true, type, { title: 'Guide', description: 'How it works', order: 3 });
+    const dialog = await openSettings();
+    expect(screen.getByLabelText<HTMLInputElement>(/^Title/).value).toBe('Guide');
+    expect(screen.getByLabelText<HTMLInputElement>(/^Description/).value).toBe('How it works');
+    fireEvent.change(screen.getByLabelText(/^Title/), { target: { value: 'Guide 2' } });
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+    await waitForElementToBeRemoved(dialog);
+
+    expect((await testApi.getLocalized(id, 'en'))?.localized.meta).toMatchObject({
+      title: 'Guide 2',
+      description: 'How it works',
+      order: 3,
+    });
+  });
+
   it('open, and an Apply reaches the server without writing to the shared doc', async () => {
-    const id = await openPage(true);
+    const id = await openPage(true, type);
     const dialog = await openSettings();
     fireEvent.change(screen.getByLabelText(/^Title/), { target: { value: 'New' } });
     fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
@@ -106,22 +132,21 @@ describe('Page settings while editing live', () => {
   });
 
   it("show a teammate's settings change on open, and both changes land", async () => {
-    const id = await openPage(true);
+    const id = await openPage(true, type);
     await teammateRetitles(id, 'Pricing for teams');
 
     const dialog = await openSettings();
     expect(screen.getByLabelText<HTMLInputElement>(/^Title/).value).toBe('Pricing for teams');
-    fireEvent.change(screen.getByLabelText(/^Pathname/), { target: { value: '/pricing' } });
+    fireEvent.change(screen.getByLabelText(/^Description/), { target: { value: 'Mine' } });
     fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
     await waitForElementToBeRemoved(dialog);
 
     const stored = await testApi.getLocalized(id, 'en');
-    expect(stored?.localized.meta.title).toBe('Pricing for teams');
-    expect(stored?.localized.pathname).toBe('/pricing');
+    expect(stored?.localized.meta).toMatchObject({ title: 'Pricing for teams', description: 'Mine' });
   });
 
   it('retry after a same-field clash lands, sent from the page read again after the clash', async () => {
-    const id = await openPage(true);
+    const id = await openPage(true, type);
     const dialog = await openSettings();
     await teammateRetitles(id, 'Theirs');
     // The in-memory store refuses any stale write; this stands in for the server's merge, which names a title clash.
@@ -160,7 +185,7 @@ describe('Page settings while editing live', () => {
   });
 
   it('a clash names every setting the person changed, with their values, as all reload', async () => {
-    const id = await openPage(true);
+    const id = await openPage(true, type);
     await openSettings();
     await teammateRetitles(id, 'Theirs');
     const client = getContentAPIClient();
@@ -186,7 +211,7 @@ describe('Page settings while editing live', () => {
   });
 
   it('a second clash names only what the person changed since the reload', async () => {
-    const id = await openPage(true);
+    const id = await openPage(true, type);
     await openSettings();
     await teammateRetitles(id, 'Theirs');
     const client = getContentAPIClient();
@@ -217,7 +242,7 @@ describe('Page settings while editing live', () => {
   });
 
   it('an untouched schedule is sent as the dialog opened with it, after a refetch moved its text', async () => {
-    const id = await openPage(true);
+    const id = await openPage(true, type);
     const write = async (publishAt: string) => {
       const loaded = await testApi.getLocalized(id, 'en');
       const result = await testApi.updateLocalized({
@@ -243,7 +268,7 @@ describe('Page settings while editing live', () => {
   });
 
   it('a clash whose page cannot be read again says so and keeps the form as typed', async () => {
-    await openPage(true);
+    await openPage(true, type);
     await openSettings();
     const client = getContentAPIClient();
     const update = spyOn(client, 'updateLocalized').mockResolvedValue({
@@ -269,7 +294,7 @@ describe('Page settings while editing live', () => {
   });
 
   it('a clash whose page read never answers says so after the wait, and keeps the form as typed', async () => {
-    await openPage(true);
+    await openPage(true, type);
     await openSettings();
     const client = getContentAPIClient();
     const update = spyOn(client, 'updateLocalized').mockResolvedValue({
@@ -302,7 +327,7 @@ describe('Page settings while editing live', () => {
   });
 
   it('Apply sends the version the dialog opened with, after a refetch moved the editor to a newer one', async () => {
-    const id = await openPage(true);
+    const id = await openPage(true, type);
     await openSettings();
     const opened = (await testApi.getLocalized(id, 'en'))?.localized.etag ?? '';
     await teammateRetitles(id, 'Theirs');
@@ -319,7 +344,7 @@ describe('Page settings while editing live', () => {
   });
 
   it('show the read is pending, and open with the held settings when it fails', async () => {
-    await openPage(true);
+    await openPage(true, type);
     const client = getContentAPIClient();
     const read = Promise.withResolvers<never>();
     const spy = spyOn(client, 'getLocalized').mockImplementation(() => read.promise);
@@ -335,7 +360,7 @@ describe('Page settings while editing live', () => {
   });
 
   it('read once when Page settings is clicked again while its read is pending', async () => {
-    await openPage(true);
+    await openPage(true, type);
     const read = Promise.withResolvers<null>();
     const spy = spyOn(getContentAPIClient(), 'getLocalized').mockImplementation(() => read.promise);
     onTestFinished(() => spy.mockRestore());
@@ -350,7 +375,7 @@ describe('Page settings while editing live', () => {
   });
 
   it('open with the held settings when the read never answers', async () => {
-    await openPage(true);
+    await openPage(true, type);
     const spy = spyOn(getContentAPIClient(), 'getLocalized').mockImplementation(() => new Promise(() => {}));
     onTestFinished(() => spy.mockRestore());
     const button = await screen.findByRole('button', { name: 'Page settings' });
@@ -369,6 +394,75 @@ describe('Page settings while editing live', () => {
     }
     expect(await screen.findByText(/couldn't load the latest page settings/i)).toBeTruthy();
   });
+
+  it('Save after a clash does not bring back a setting a teammate removed', async () => {
+    // The site schema holds the title, so the form holds no description key once the clash reloads it.
+    setPageSchemas({ '/': definePageSchema({ schema: titleFields, coreFields: { mode: 'minimal' } }) });
+    onTestFinished(() => setPageSchemas({}));
+    const id = await openPage(true, type, { title: 'Old', description: 'Old desc' });
+    const dialog = await openSettings();
+    const loaded = await testApi.getLocalized(id, 'en');
+    const removed = await testApi.updateLocalized({
+      id,
+      locale: 'en',
+      etag: loaded?.localized.etag ?? '',
+      data: { meta: { title: 'Theirs', description: null } },
+    });
+    expect(removed.success).toBe(true);
+    const client = getContentAPIClient();
+    const update = client.updateLocalized.bind(client);
+    const spy = spyOn(client, 'updateLocalized').mockImplementation(async (input) => {
+      const etag = (await testApi.getLocalized(input.id, input.locale))?.localized.etag ?? '';
+      if (input.etag === etag) return update(input);
+      return {
+        success: false,
+        reason: 'stale_write',
+        currentEtag: etag,
+        conflictDetails: {
+          metaChanged: true,
+          contentChanged: false,
+          conflicts: [{ anchor: 'meta.title', base: 'Old', ours: 'Mine', theirs: 'Theirs' }],
+        },
+      };
+    });
+    onTestFinished(() => spy.mockRestore());
+
+    fireEvent.change(screen.getByLabelText(/^Title/), { target: { value: 'Mine' } });
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+    await waitFor(() => expect(screen.getByLabelText<HTMLInputElement>(/^Title/).value).toBe('Theirs'));
+    fireEvent.change(screen.getByLabelText(/^Title/), { target: { value: 'Mine' } });
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+    await waitForElementToBeRemoved(dialog);
+
+    expect((await testApi.getLocalized(id, 'en'))?.localized.meta).toEqual({ title: 'Mine' });
+  });
+
+  it('a failed Apply that is not a clash keeps the dialog open and shows why', async () => {
+    await openPage(true, type);
+    await openSettings();
+    const spy = spyOn(getContentAPIClient(), 'updateLocalized').mockResolvedValue({
+      success: false,
+      reason: 'page_too_large',
+    });
+    onTestFinished(() => spy.mockRestore());
+
+    fireEvent.change(screen.getByLabelText(/^Title/), { target: { value: 'Mine' } });
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    expect(await screen.findByRole('alert')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: /page metadata/i })).toBeTruthy();
+  });
+});
+
+it('live MDX Page settings says it could not load them when neither the page nor the read on open loaded', async () => {
+  const spy = spyOn(getContentAPIClient(), 'getLocalized').mockRejectedValue(new Error('offline'));
+  onTestFinished(() => spy.mockRestore());
+  await openPage(true, 'mdx');
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Page settings' }));
+
+  expect(await screen.findByText(/couldn't load this page's settings/i)).toBeTruthy();
+  expect(screen.queryByRole('heading', { name: /page metadata/i })).toBeNull();
 });
 
 describe('Page settings with the flag off', () => {
