@@ -348,6 +348,11 @@ In the fragment editor:
   use another frame, reorder the routes or point `fragmentPreviewRoute` at a path the frame recognizes.
 - **Outline.** The page outline comes from the fragment's Markdown headings, including those written between a
   component's tags; a heading the component itself renders is not in the outline.
+- **Component outline.** Components the render module declares as contents entries, with
+  `defineFragmentComponents({ components: { Section }, outline: { Section: { id: 'id', text: 'label' } } })`, reach your
+  `ContentFragmentSection` block as `fragmentComponentOutline` (`{ component, id, text }` in document order), next to
+  the heading list in `fragmentOutline`. The published page, draft previews and the editor canvas hand the block the
+  same lists, so a contents column built from either matches on every surface.
 
 The build fails when a live fragment (published, or scheduled and not expired) fails to parse or uses a component the
 render module does not declare, naming the fragment, its file and line, and the component. When the module cannot be

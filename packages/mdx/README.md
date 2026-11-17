@@ -27,8 +27,8 @@ The fragment renderer and its checks. This entry loads where code generation fro
 Workers, a strict CSP): it imports no editor code and no Node.js APIs, and it never evaluates fragment content.
 
 - **evaluateMDXToComponent(mdx, vocabulary?)** - Render a fragment to a React component with the site's components
-- **defineFragmentComponents({ components, elements })** - Declare the components and element overrides fragments may
-  use (the vocabulary)
+- **defineFragmentComponents({ components, elements, outline })** - Declare the components and element overrides
+  fragments may use (the vocabulary), and which components are contents entries
 - **findUnknownFragmentComponents(mdx, names)** - The component tags in `mdx` that `names` does not declare, with lines
 - **checkFragmentMdx(mdx, names, propSpecs)** - Why the renderer would refuse or change `mdx`, or `undefined`; also
   checks declared prop types
@@ -190,6 +190,13 @@ The rules the renderer applies:
   declared prop types that do not match.
 - **Outline.** `outline` lists the fragment's Markdown headings, including those written between a component's tags,
   with the ids the renderer gave them. A heading the component itself renders is not in the outline.
+- **Component outline.** `defineFragmentComponents`' `outline` option makes components contents entries: it maps a
+  component name to the props that hold the anchor id and the contents text, as in
+  `outline: { Section: { id: 'id', text: 'label' } }`. `componentOutline` then lists every such component in document
+  order as `{ component, id, text }`, read from its props after the JSON-props rules above; one whose id or text is not
+  a non-empty string is left out. It is a list of its own, so `outline` keeps only headings, and a generated heading id
+  never takes a listed component's id. The component renders the id itself. `defineFragmentComponents` throws for an
+  `outline` key that is not in `components`, or prop names that are not non-empty strings.
 
 ## Migration from @conloca/mdx-client
 

@@ -2,6 +2,7 @@ import type { MDXHeading as FragmentHeading } from '@conloca/content-api';
 import {
   EMPTY_FRAGMENT_VOCABULARY,
   evaluateMDXToComponent,
+  type FragmentOutlineComponent,
   type FragmentVocabulary,
   isFragmentVocabulary,
 } from '@conloca/mdx/render';
@@ -17,10 +18,18 @@ import { type ComponentType, type ReactNode, useEffect, useState } from 'react';
  * Uses window so virtual modules and bundled code share the same state.
  */
 
-export type FragmentEvaluate = (
-  mdx: string,
-  vocabulary?: FragmentVocabulary,
-) => Promise<{ Component: ComponentType | null; error?: Error; outline: readonly FragmentHeading[] }>;
+/**
+ * What a fragment renderer returns. `componentOutline` is optional because a
+ * site's own renderer may be a copy of `@conloca/mdx` from before it existed.
+ */
+export interface EvaluatedFragment {
+  Component: ComponentType | null;
+  error?: Error;
+  outline: readonly FragmentHeading[];
+  componentOutline?: readonly FragmentOutlineComponent[];
+}
+
+export type FragmentEvaluate = (mdx: string, vocabulary?: FragmentVocabulary) => Promise<EvaluatedFragment>;
 
 export type EditorFrame = ComponentType<{ pathname: string; children: ReactNode }>;
 

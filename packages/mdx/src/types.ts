@@ -3,6 +3,7 @@ import type { ComponentType } from 'react';
 export type { MDXHeading } from '@conloca/content-api';
 
 import type { MDXHeading as Heading } from '@conloca/content-api';
+import type { FragmentOutlineComponent } from './mdx/heading-outline.js';
 
 export interface EvaluatedMDXFragment {
   ok: true;
@@ -11,6 +12,8 @@ export interface EvaluatedMDXFragment {
   Component: ComponentType;
   /** The fragment's headings, for a host block that shows a contents list. */
   outline: readonly Heading[];
+  /** The components the site's vocabulary declares contents entries, in document order. */
+  componentOutline: readonly FragmentOutlineComponent[];
 }
 
 export interface FailedMDXFragmentEvaluation {

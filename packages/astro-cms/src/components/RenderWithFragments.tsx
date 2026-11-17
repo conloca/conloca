@@ -1,5 +1,5 @@
 import type { MDXHeading } from '@conloca/content-api';
-import type { MDXFragmentEvaluationResult } from '@conloca/mdx/node';
+import type { FragmentOutlineComponent, MDXFragmentEvaluationResult } from '@conloca/mdx/node';
 import type { ComponentConfig, Config, Data, PuckComponent } from '@puckeditor/core';
 import { Render } from '@puckeditor/core/rsc';
 import type { ComponentType } from 'react';
@@ -12,6 +12,8 @@ interface MDXComponent {
   title: string;
   Component: ComponentType;
   outline: readonly MDXHeading[];
+  /** Absent from a fragment a caller built by hand; it then lists no components. */
+  componentOutline?: readonly FragmentOutlineComponent[];
 }
 
 function isRenderableFragment(fragment: MDXFragmentEvaluationResult | MDXComponent): fragment is MDXComponent {
@@ -78,6 +80,7 @@ function withResolvedFragment(
       <HostBlock
         {...props}
         fragmentOutline={selected?.outline ?? []}
+        fragmentComponentOutline={selected?.componentOutline ?? []}
         fragment={
           SelectedFragmentComponent ? (
             <div className="mdx-content conloca-prose" data-conloca-content-root="">

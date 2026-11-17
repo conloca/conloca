@@ -66,7 +66,12 @@ export async function evaluateMDXFragments(
           };
         }
 
-        const { Component: EvaluatedComponent, error, outline } = await evaluateMDXToComponent(mdxContent, vocabulary);
+        const {
+          Component: EvaluatedComponent,
+          error,
+          outline,
+          componentOutline,
+        } = await evaluateMDXToComponent(mdxContent, vocabulary);
 
         if (error || !EvaluatedComponent) {
           return {
@@ -83,6 +88,7 @@ export async function evaluateMDXFragments(
           title: fragmentTitle,
           Component: EvaluatedComponent,
           outline,
+          componentOutline,
         };
       } catch (error) {
         return {

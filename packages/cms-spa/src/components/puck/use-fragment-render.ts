@@ -1,17 +1,14 @@
-import type { MDXHeading as FragmentHeading } from '@conloca/content-api';
-import { type ComponentType, useEffect, useRef, useState } from 'react';
-import { type SiteRender, useSiteRender } from '../../site-render.js';
+import { useEffect, useRef, useState } from 'react';
+import { type EvaluatedFragment, type SiteRender, useSiteRender } from '../../site-render.js';
 import { withShownImages } from '../editor/draft-media-config.js';
 
-type Rendered = { Component: ComponentType | null; error?: Error; outline: readonly FragmentHeading[] };
-
-export type FragmentRender = { status: 'pending' } | ({ status: 'done' } & Rendered);
+export type FragmentRender = { status: 'pending' } | ({ status: 'done' } & EvaluatedFragment);
 
 interface CacheEntry {
   render: SiteRender;
   key: string;
-  promise: Promise<Rendered>;
-  result?: Rendered;
+  promise: Promise<EvaluatedFragment>;
+  result?: EvaluatedFragment;
 }
 
 const CACHE_LIMIT = 32;

@@ -4,6 +4,7 @@ import type { ComponentConfig, Config, Data, PuckComponent } from '@puckeditor/c
 import { type ComponentType, memo, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createPageRendererWithFragments } from '../src/components/RenderWithFragments.js';
+import { loadMdxComponents } from '../src/handlers/page-render-core.js';
 import type { ContentFragmentSectionProps, DataContext } from '../src/types.js';
 
 const inlineFragmentFixture = 'vx-fr4gedit';
@@ -44,8 +45,8 @@ function hostSection(calls: ContentFragmentSectionProps[]): ComponentConfig<Cont
     label: 'Article body',
     fields: { fragmentId: { type: 'text' } },
     defaultProps: { fragmentId: '' },
-    render: ({ fragmentId, fragment: resolved, fragmentOutline }) => {
-      calls.push({ fragmentId, fragment: resolved, fragmentOutline });
+    render: ({ fragmentId, fragment: resolved, fragmentOutline, fragmentComponentOutline }) => {
+      calls.push({ fragmentId, fragment: resolved, fragmentOutline, fragmentComponentOutline });
       return <article className="article-content">{resolved ?? <p>Pick a fragment.</p>}</article>;
     },
   };
@@ -174,5 +175,52 @@ describe('ContentFragmentSection renders through the host block', () => {
     expect(renderToStaticMarkup(<PageRenderer />)).toContain(
       '<div class="mdx-content conloca-prose" data-conloca-content-root=""><aside class="callout">',
     );
+  });
+});
+
+/**
+ * The published half of the pair: `@conloca/cms-spa`'s fragment-block-render test feeds the editor the same MDX
+ * and vocabulary and expects the same list, so a contents column cannot differ between the canvas and the page.
+ */
+describe('the published page hands the host the declared component outline', () => {
+  test('lists the vocabulary’s outline components from the fragment the page publishes', async () => {
+    const vocabulary = defineFragmentComponents({
+      components: {
+        Section: ({ id, children }: { id?: string; children?: ReactNode }) => <section id={id}>{children}</section>,
+      },
+      outline: { Section: { id: 'id', text: 'label' } },
+    });
+    const mdx =
+      '<Section id="intro" label="Intro’s part">\n\n## Heading\n\n</Section>\n\n<Section id="next" label="Next">\n\nBody\n\n</Section>';
+    const fragments = await loadMdxComponents(
+      { listEntries: async () => [{ id: inlineFragmentFixture, locale: 'en', title: 'Sections', mdx }] },
+      'en',
+      evaluateMDXToComponent,
+      false,
+      vocabulary,
+    );
+    const calls: ContentFragmentSectionProps[] = [];
+    const PageRenderer = createPageRendererWithFragments(
+      configOf(hostSection(calls)),
+      pageData(inlineFragmentFixture),
+      fragments,
+      context,
+    );
+
+    renderToStaticMarkup(<PageRenderer />);
+
+    expect(calls[0].fragmentComponentOutline).toEqual([
+      { component: 'Section', id: 'intro', text: 'Intro’s part' },
+      { component: 'Section', id: 'next', text: 'Next' },
+    ]);
+    expect(calls[0].fragmentOutline).toEqual([{ depth: 2, id: 'heading', text: 'Heading' }]);
+  });
+
+  test('gives an empty component outline when the id resolves to nothing', () => {
+    const calls: ContentFragmentSectionProps[] = [];
+
+    renderPage(configOf(hostSection(calls)), pageData('vx-n0suchid'));
+
+    expect(calls[0].fragmentComponentOutline).toEqual([]);
   });
 });

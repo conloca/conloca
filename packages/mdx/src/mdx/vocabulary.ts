@@ -34,9 +34,17 @@ export type FragmentElementName = (typeof FRAGMENT_ELEMENT_NAMES)[number];
 // biome-ignore lint/suspicious/noExplicitAny: site components take arbitrary props
 type AnyComponent = ComponentType<any>;
 
+/** The props of a fragment component that make it a contents entry: its anchor id and its contents text. */
+export interface FragmentOutlineProps {
+  readonly id: string;
+  readonly text: string;
+}
+
 export interface FragmentVocabulary {
   readonly components: Readonly<Record<string, AnyComponent>>;
   readonly elements: Readonly<Partial<Record<FragmentElementName, AnyComponent>>>;
+  /** Components that are contents entries, keyed by component name. Optional so a hand-built vocabulary still counts. */
+  readonly outline?: Readonly<Record<string, FragmentOutlineProps>>;
 }
 
 const COMPONENT_KEY = /^[A-Z][A-Za-z0-9]*$/;
@@ -56,12 +64,40 @@ function isComponentRecord(value: unknown): value is Record<string, AnyComponent
   );
 }
 
+function isOutlineProps(value: unknown): value is FragmentOutlineProps {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'id' in value &&
+    'text' in value &&
+    typeof value.id === 'string' &&
+    value.id !== '' &&
+    typeof value.text === 'string' &&
+    value.text !== ''
+  );
+}
+
+function isOutlineRecord(value: unknown): value is Record<string, FragmentOutlineProps> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    Object.getPrototypeOf(value) === Object.prototype &&
+    Object.values(value).every(isOutlineProps)
+  );
+}
+
+/**
+ * `outline` declares which components are contents entries and which of their props hold the anchor id and the
+ * contents text, e.g. `{ Section: { id: 'id', text: 'label' } }`; evaluation reports them as `componentOutline`.
+ */
 export function defineFragmentComponents(input: {
   components?: Record<string, AnyComponent>;
   elements?: Partial<Record<FragmentElementName, AnyComponent>>;
+  outline?: Record<string, FragmentOutlineProps>;
 }): FragmentVocabulary {
   const components = { ...input.components };
   const elements = { ...input.elements };
+  const outline: Record<string, FragmentOutlineProps> = {};
   for (const [key, value] of Object.entries(components)) {
     if (!COMPONENT_KEY.test(key)) {
       throw new TypeError(`Fragment component "${key}" must be a capitalised identifier like "Callout"`);
@@ -74,7 +110,20 @@ export function defineFragmentComponents(input: {
     }
     if (!isComponent(value)) throw new TypeError(`Fragment element "${key}" is not a React component`);
   }
-  return Object.freeze({ components: Object.freeze(components), elements: Object.freeze(elements) });
+  for (const [key, value] of Object.entries(input.outline ?? {})) {
+    if (!Object.prototype.hasOwnProperty.call(components, key)) {
+      throw new TypeError(`Fragment outline entry "${key}" is not a component`);
+    }
+    if (!isOutlineProps(value)) {
+      throw new TypeError(`Fragment outline entry "${key}" must name its id and text props as non-empty strings`);
+    }
+    outline[key] = Object.freeze({ id: value.id, text: value.text });
+  }
+  return Object.freeze({
+    components: Object.freeze(components),
+    elements: Object.freeze(elements),
+    outline: Object.freeze(outline),
+  });
 }
 
 export const EMPTY_FRAGMENT_VOCABULARY: FragmentVocabulary = defineFragmentComponents({});
@@ -87,7 +136,8 @@ export function isFragmentVocabulary(value: unknown): value is FragmentVocabular
     'components' in value &&
     'elements' in value &&
     isComponentRecord(value.components) &&
-    isComponentRecord(value.elements)
+    isComponentRecord(value.elements) &&
+    (!('outline' in value) || value.outline === undefined || isOutlineRecord(value.outline))
   );
 }
 

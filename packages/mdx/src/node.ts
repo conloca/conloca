@@ -19,6 +19,8 @@ export {
   evaluateMDXToComponent,
   FRAGMENT_ELEMENT_NAMES,
   type FragmentElementName,
+  type FragmentOutlineComponent,
+  type FragmentOutlineProps,
   type FragmentVocabulary,
   findUnknownFragmentComponents,
   isFragmentComponentName,

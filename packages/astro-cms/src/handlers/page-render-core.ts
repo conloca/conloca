@@ -22,7 +22,12 @@ import {
   pageTimestampsOf,
   selectPagesByPrefix,
 } from '@conloca/content-api';
-import { EMPTY_FRAGMENT_VOCABULARY, type FragmentVocabulary, isFragmentVocabulary } from '@conloca/mdx/render';
+import {
+  EMPTY_FRAGMENT_VOCABULARY,
+  type FragmentOutlineComponent,
+  type FragmentVocabulary,
+  isFragmentVocabulary,
+} from '@conloca/mdx/render';
 import type { Config } from '@puckeditor/core';
 import { type Data, resolveAllData } from '@puckeditor/core';
 import type { ComponentType } from 'react';
@@ -86,6 +91,7 @@ export interface MdxFragmentComponent {
   title: string;
   Component: ComponentType;
   outline: readonly MDXHeading[];
+  componentOutline: readonly FragmentOutlineComponent[];
 }
 
 type EvaluateMDXToComponentFn = typeof import('@conloca/mdx/node')['evaluateMDXToComponent'];
@@ -346,10 +352,11 @@ export async function loadMdxComponents(
             title,
             Component: () => null,
             outline: [],
+            componentOutline: [],
           };
         }
 
-        const { Component, error, outline } = await evaluateMDXToComponent(mdx, vocabulary);
+        const { Component, error, outline, componentOutline } = await evaluateMDXToComponent(mdx, vocabulary);
 
         if (!Component || error) {
           const errorMessage = error?.message || 'MDX evaluation failed';
@@ -369,6 +376,7 @@ export async function loadMdxComponents(
                   )
               : () => null,
             outline: [],
+            componentOutline: [],
           };
         }
 
@@ -377,6 +385,7 @@ export async function loadMdxComponents(
           title,
           Component,
           outline,
+          componentOutline,
         };
       }),
   );

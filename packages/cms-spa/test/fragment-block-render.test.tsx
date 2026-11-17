@@ -1,15 +1,17 @@
 /// <reference lib="dom" />
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import type { ContentManifest } from '@conloca/content-api-client';
+import { defineFragmentComponents } from '@conloca/mdx/render';
 import type { ComponentConfig, Config, CustomField, PuckComponent } from '@puckeditor/core';
 import { cleanup, waitFor } from '@testing-library/react';
-import { isValidElement, memo, type ReactElement } from 'react';
+import { isValidElement, memo, type ReactElement, type ReactNode } from 'react';
 import { FragmentContentWrapper } from '../src/components/editor/FragmentWrappers.js';
 import {
   type ContentFragmentSectionProps,
   enhancePuckConfigWithFragments,
 } from '../src/components/editor/PageEditorWrapper.js';
 import { ContentFragmentSelectorField } from '../src/components/fields/ContentFragmentSelectorField.js';
+import { setSiteRender } from '../src/site-render.js';
 import { API_ROUTES, mockAPIError, renderWithProviders, setupTestAPI, testApi } from './test-utils.js';
 
 const inlineFragmentFixture = 'vx-fr4gedit';
@@ -48,8 +50,8 @@ function hostSection(calls: ContentFragmentSectionProps[]): ComponentConfig<Cont
     label: 'Article body',
     fields: { fragmentId: { type: 'text' } },
     defaultProps: { fragmentId: '' },
-    render: ({ fragmentId, fragment, fragmentOutline }) => {
-      calls.push({ fragmentId, fragment, fragmentOutline });
+    render: ({ fragmentId, fragment, fragmentOutline, fragmentComponentOutline }) => {
+      calls.push({ fragmentId, fragment, fragmentOutline, fragmentComponentOutline });
       return <article className="article-content" />;
     },
   };
@@ -278,6 +280,48 @@ describe('a fragment is boxed exactly once whichever block holds it', () => {
     await waitFor(() => {
       expect(calls.at(-1)?.fragmentOutline).toEqual([{ depth: 2, id: 'dutch-heading', text: 'Dutch heading' }]);
     });
+  });
+
+  /**
+   * The editor half of the pair: `@conloca/astro-cms`'s fragment-block-render test publishes the same MDX with the
+   * same vocabulary and expects the same list, so the canvas's contents column is the published page's.
+   */
+  test("hands the host the component outline the site's vocabulary declares", async () => {
+    setSiteRender({
+      vocabulary: defineFragmentComponents({
+        components: {
+          Section: ({ id, children }: { id?: string; children?: ReactNode }) => <section id={id}>{children}</section>,
+        },
+        outline: { Section: { id: 'id', text: 'label' } },
+      }),
+    });
+    try {
+      const manifest = await seedFragment({
+        en: '<Section id="intro" label="Intro’s part">\n\n## Heading\n\n</Section>\n\n<Section id="next" label="Next">\n\nBody\n\n</Section>',
+      });
+      const calls: ContentFragmentSectionProps[] = [];
+      const Section = enhancedSection(hostSection(calls), manifest).render;
+
+      renderWithProviders(
+        <Section
+          fragmentId={manifest[0].id}
+          id="block-1"
+          puck={{ dragRef: null, isEditing: false, metadata: {}, renderDropZone: () => null }}
+        />,
+        undefined,
+        false,
+      );
+
+      await waitFor(() => {
+        expect(calls.at(-1)?.fragmentComponentOutline).toEqual([
+          { component: 'Section', id: 'intro', text: 'Intro’s part' },
+          { component: 'Section', id: 'next', text: 'Next' },
+        ]);
+      });
+      expect(calls.at(-1)?.fragmentOutline).toEqual([{ depth: 2, id: 'heading', text: 'Heading' }]);
+    } finally {
+      setSiteRender({});
+    }
   });
 
   /**

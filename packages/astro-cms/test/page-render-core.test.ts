@@ -271,7 +271,12 @@ describe('resolvePuckData', () => {
   });
 });
 
-const failing = async () => ({ Component: null, error: new Error('Unknown component <Nope>'), outline: [] });
+const failing = async () => ({
+  Component: null,
+  error: new Error('Unknown component <Nope>'),
+  outline: [],
+  componentOutline: [],
+});
 const brokenSource = () =>
   sourceOf({ __conloca_fragments: [{ id: 'vx-br0ken01', locale: 'de', title: 'Broken', mdx: '<Nope />' }] });
 
@@ -308,7 +313,7 @@ describe('loadMdxComponents', () => {
       'en',
       async (_mdx: string, v?: FragmentVocabulary) => {
         seen.push(v);
-        return { Component: okComponent, outline: [] };
+        return { Component: okComponent, outline: [], componentOutline: [] };
       },
       false,
       vocabulary,

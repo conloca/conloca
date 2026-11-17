@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import { createElement } from 'react';
+import { createElement, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { evaluateMDXToComponent } from '../mdx/evaluate.js';
+import { defineFragmentComponents } from '../mdx/vocabulary.js';
 
 /**
  * A fragment's outline is the list of its headings, produced while the MDX is
@@ -107,5 +108,97 @@ describe('fragment outline', () => {
     const outline = await outlineOf('<h2 id="same">Hand</h2>\n\n## Same');
 
     expect(outline.map((h) => h.id)).toEqual(['same', 'same-1']);
+  });
+});
+
+function Section({ id, children }: { id?: unknown; children?: ReactNode }) {
+  return createElement('section', { id: typeof id === 'string' ? id : undefined }, children);
+}
+
+function Note({ children }: { children?: ReactNode }) {
+  return createElement('aside', null, children);
+}
+
+const outlined = defineFragmentComponents({
+  components: { Note, Section },
+  outline: { Section: { id: 'id', text: 'label' } },
+});
+
+async function evaluated(mdx: string) {
+  const result = await evaluateMDXToComponent(mdx, outlined);
+  if (result.error) throw result.error;
+  return result;
+}
+
+describe('component outline', () => {
+  test('lists the declared components in document order, nested ones included', async () => {
+    const { componentOutline } = await evaluated(
+      '<Section id="one" label="First’s part">\n\n## Heading\n\n</Section>\n\n<Note>\n\n<Section id="two" label="Second">\n\nx\n\n</Section>\n\n</Note>',
+    );
+
+    expect(componentOutline).toEqual([
+      { component: 'Section', id: 'one', text: 'First’s part' },
+      { component: 'Section', id: 'two', text: 'Second' },
+    ]);
+  });
+
+  test('keeps components out of the heading outline', async () => {
+    const { outline } = await evaluated('<Section id="one" label="First">\n\n## Heading\n\n</Section>');
+
+    expect(outline).toEqual([{ depth: 2, id: 'heading', text: 'Heading' }]);
+  });
+
+  test('every entry id is the id the component renders, even with the attribute written twice', async () => {
+    const results = await Promise.all(
+      ['<Section id="here" label="Here">x</Section>', '<Section id="old" id="here" label="Here">x</Section>'].map(
+        evaluated,
+      ),
+    );
+    for (const { Component, componentOutline } of results) {
+      if (!Component) throw new Error('no component');
+
+      expect(componentOutline[0]?.id).toBe('here');
+      expect(renderToStaticMarkup(createElement(Component))).toContain('id="here"');
+    }
+  });
+
+  test('skips an entry unless both props are non-empty strings after the attribute gate', async () => {
+    const { componentOutline } = await evaluated(
+      [
+        '<Section label="No id">x</Section>',
+        '<Section id="no-label">x</Section>',
+        '<Section id="" label="Empty id">x</Section>',
+        '<Section id="a" label="">x</Section>',
+        '<Section id={1} label="Number id">x</Section>',
+        '<Section id="b" label={["list"]}>x</Section>',
+        '<Section id="c" label={null}>x</Section>',
+        '<Section id="d" label="javascript:alert(1)">x</Section>',
+        '<Section {...{ id: "e", label: "Spread" }}>x</Section>',
+        '<Section id="kept" label="Kept">x</Section>',
+      ].join('\n\n'),
+    );
+
+    expect(componentOutline).toEqual([{ component: 'Section', id: 'kept', text: 'Kept' }]);
+  });
+
+  test('ignores components the vocabulary does not declare as outline entries', async () => {
+    const { componentOutline } = await evaluated('<Note id="n" label="Note">x</Note>');
+
+    expect(componentOutline).toEqual([]);
+  });
+
+  test('without a declaration there are no component entries', async () => {
+    const result = await evaluateMDXToComponent(
+      '<Section id="one" label="First">x</Section>',
+      defineFragmentComponents({ components: { Section } }),
+    );
+
+    expect(result.componentOutline).toEqual([]);
+  });
+
+  test('a generated heading id never takes an outlined component’s id', async () => {
+    const { outline } = await evaluated('<Section id="same" label="Same">\n\n## Same\n\n</Section>');
+
+    expect(outline.map((h) => h.id)).toEqual(['same-1']);
   });
 });

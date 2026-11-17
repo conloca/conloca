@@ -11,6 +11,7 @@ import {
   useSitesConfig,
   useUpdateLocalized,
 } from '@conloca/content-api-client';
+import type { FragmentOutlineComponent } from '@conloca/mdx/render';
 import type { ComponentConfig, Config, Data, PuckComponent } from '@puckeditor/core';
 import { resolveAllData } from '@puckeditor/core';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
@@ -50,17 +51,28 @@ export interface ContentFragmentSectionProps {
    * a contents list without reading the rendered page back.
    */
   fragmentOutline?: readonly MDXHeading[];
+  /**
+   * The components the site's fragment vocabulary declares contents entries
+   * (`defineFragmentComponents`' `outline`), in document order, with the id and
+   * text their props carry. Supplied on both surfaces like `fragmentOutline`.
+   */
+  fragmentComponentOutline?: readonly FragmentOutlineComponent[];
 }
 
 /**
- * The selected fragment's headings, for a host block that shows a contents
- * list: the outline of the same inline render the preview shows, so this costs
- * no second render. Empty while that render is pending.
+ * The selected fragment's headings and outlined components, for a host block
+ * that shows a contents list: the outlines of the same inline render the
+ * preview shows, so this costs no second render. Empty while that render is pending.
  */
-function useFragmentOutline(fragmentId: string, locale: string): readonly MDXHeading[] {
+function useFragmentOutlines(
+  fragmentId: string,
+  locale: string,
+): Required<Pick<ContentFragmentSectionProps, 'fragmentOutline' | 'fragmentComponentOutline'>> {
   const { data: entry } = useLocalizedContent(fragmentId, locale);
   const rendered = useFragmentRender(entry?.localized?.content?.mdx ?? '');
-  return rendered.status === 'done' ? rendered.outline : [];
+  return rendered.status === 'done'
+    ? { fragmentOutline: rendered.outline, fragmentComponentOutline: rendered.componentOutline ?? [] }
+    : { fragmentOutline: [], fragmentComponentOutline: [] };
 }
 
 /**
@@ -80,12 +92,12 @@ function withFragmentPreview(
   const HostBlock = hostRender;
 
   return (props) => {
-    const fragmentOutline = useFragmentOutline(props.fragmentId, locale);
+    const outlines = useFragmentOutlines(props.fragmentId, locale);
 
     return (
       <HostBlock
         {...props}
-        fragmentOutline={fragmentOutline}
+        {...outlines}
         fragment={
           resolvable.has(props.fragmentId) ? (
             <div

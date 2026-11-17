@@ -9,7 +9,12 @@ import remarkParse from 'remark-parse';
 import remarkRehype from 'remark-rehype';
 import { type Plugin, unified } from 'unified';
 import { componentPropValue } from './component-props.js';
-import { applyHeadingIds, type FragmentHeading } from './heading-outline.js';
+import {
+  applyHeadingIds,
+  componentOutlineOf,
+  type FragmentHeading,
+  type FragmentOutlineComponent,
+} from './heading-outline.js';
 import { literalAttributeValue } from './literal-attributes.js';
 import { remarkRestrictExpressions } from './restrict-expressions.js';
 import { EMPTY_FRAGMENT_VOCABULARY, type FragmentVocabulary, isFragmentComponentName } from './vocabulary.js';
@@ -220,13 +225,22 @@ function staticEvaluater(vocabulary: FragmentVocabulary) {
 export async function evaluateMDXToComponent(
   mdxContent: string,
   vocabulary: FragmentVocabulary = EMPTY_FRAGMENT_VOCABULARY,
-): Promise<{ Component: ComponentType | null; error?: Error; outline: readonly FragmentHeading[] }> {
+): Promise<{
+  Component: ComponentType | null;
+  error?: Error;
+  outline: readonly FragmentHeading[];
+  componentOutline: readonly FragmentOutlineComponent[];
+}> {
   try {
     const mdast = processor.parse(mdxContent);
     const hast = await processor.run(mdast);
     // Before the tree becomes React: assigning the ids and reading the outline
     // in one pass is what keeps a contents link and its heading in agreement.
-    const outline = applyHeadingIds(hast);
+    const componentOutline = componentOutlineOf(hast, vocabulary.outline ?? {});
+    const outline = applyHeadingIds(
+      hast,
+      componentOutline.map((entry) => entry.id),
+    );
     // Convert eagerly so bad content (e.g. an unknown component) surfaces as
     // the error result; the returned component just replays the static tree.
     const element = toJsxRuntime(hast, {
@@ -236,12 +250,13 @@ export async function evaluateMDXToComponent(
       components: { ...vocabulary.elements },
       createEvaluater: () => staticEvaluater(vocabulary),
     });
-    return { Component: () => element, outline };
+    return { Component: () => element, outline, componentOutline };
   } catch (error) {
     return {
       Component: null,
       error: error instanceof Error ? error : new Error('MDX evaluation failed'),
       outline: [],
+      componentOutline: [],
     };
   }
 }
