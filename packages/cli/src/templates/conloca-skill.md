@@ -179,6 +179,19 @@ Entries a page's blocks list (team, testimonials) bind to the route with
 
 After writing content, run the build: it validates every entry against its schema.
 
+## Editing while the dev server runs
+
+The CLI and the editor at `/__cms` write the same files, so both can run at once:
+
+- Every write names the version of the page it read. A write against a version someone changed since is merged with that
+  change: edits to different fields, blocks or list items with ids both land.
+- A write is refused, with nothing written, only when both changed the same field to different values, when it renames
+  the page, or when the version it names is unknown to the writer (e.g. the editor after a dev-server restart). A
+  refused command exits with the error: re-run it, and it reads the page again. The editor shows the clash instead of
+  overwriting.
+- Writes to one file take a short lock, so a command and an editor save never interleave. A command whose write another
+  writer replaced before it exited fails with "overwritten by another writer": re-run it.
+
 ## Routing
 
 - `layout: './src/layouts/Layout.astro'` alone injects a catch-all `/[...slug]` route over the `pages` collection, with
