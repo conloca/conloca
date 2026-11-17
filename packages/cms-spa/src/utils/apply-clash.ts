@@ -1,4 +1,5 @@
 import type { FieldConflict, JsonObject, JsonValue } from '@conloca/content-api';
+import type { PageMetadata } from '../types.js';
 import { formatFieldLabel } from './schema-fields.js';
 
 /** A clashing field's value; `undefined` where that side deleted it. */
@@ -53,6 +54,12 @@ export function withTheirs<V>(
   return { ...values, ...Object.fromEntries(loaded) };
 }
 
+/** A value as the alert quotes it: text in quotes, a cleared value as empty, anything else as JSON. */
+function shownValue(value: unknown): string {
+  if (value === undefined || value === null || value === '') return 'empty';
+  return typeof value === 'string' ? `“${value}”` : JSON.stringify(value);
+}
+
 /** `Title`, `Title and Tags`, `Title, Tags and Category`. */
 function listLabels(labels: string[]): string {
   if (labels.length <= 1) return labels[0] ?? '';
@@ -67,26 +74,40 @@ function listLabels(labels: string[]): string {
 export class ApplyClashError extends Error {
   readonly fields: FieldConflict[];
   readonly changedBy: string | undefined;
+  /** The page read again after the clash and its version, which the dialog moves to; none where it was not read. */
+  readonly latest: { page: PageMetadata; etag?: string } | undefined;
 
-  constructor(fields: FieldConflict[], changedBy?: string) {
+  constructor(fields: FieldConflict[], changedBy?: string, latest?: { page: PageMetadata; etag?: string }) {
     super();
     this.name = 'ApplyClashError';
     this.fields = fields;
     this.changedBy = changedBy;
+    this.latest = latest;
     this.message = this.describe(() => undefined);
   }
 
   /**
    * The message with each field named by `labelOf(path)`, the label its form shows, or else by its last plain key: a
-   * field inside a list (`tags[id=x]`) is named by the list.
+   * field inside a list (`tags[id=x]`) is named by the list. `changed`, for a form that reloads every field and so no
+   * longer shows what the person typed, lists each field they had changed with their value; the alert repeats those and
+   * every clashing field not among them.
    */
-  describe(labelOf: (path: string) => string | undefined): string {
+  describe(labelOf: (path: string) => string | undefined, changed?: { path: string; value: unknown }[]): string {
     const label = (path: string) => {
       const plain = /^[A-Za-z0-9_$:.-]+/.exec(path)?.[0] ?? path;
       return labelOf(path) ?? formatFieldLabel(plain.split('.').pop() ?? plain);
     };
     const labels = [...new Set(this.fields.map((field) => label(clashPath(field.anchor))))];
     const by = this.changedBy ? ` (last edited by ${this.changedBy})` : '';
-    return `${listLabels(labels)} changed while you were editing${by}. Check ${labels.length === 1 ? 'it' : 'them'} and apply again.`;
+    const message = `${listLabels(labels)} changed while you were editing${by}. Check ${labels.length === 1 ? 'it' : 'them'} and apply again.`;
+    if (!changed) return message;
+    const paths = new Set(changed.map((field) => field.path));
+    const ours = [
+      ...this.fields
+        .filter((field) => !paths.has(clashPath(field.anchor)))
+        .map((field) => ({ path: clashPath(field.anchor), value: field.ours })),
+      ...changed,
+    ].map((field) => `${label(field.path)}: ${shownValue(field.value)}`);
+    return ours.length ? `${message} You had set ${listLabels(ours)}.` : message;
   }
 }

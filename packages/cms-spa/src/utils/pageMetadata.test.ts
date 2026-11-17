@@ -30,6 +30,14 @@ describe('dotted hint keys round-trip', () => {
     expect(roundTripped.title).toBe('Docs');
   });
 
+  test("leaves the form's own branch object as it was, so a second read of the form sees the form's values", () => {
+    const flat = flattenForHints({ sidebar: { label: 'L', order: 1 } }, hintKeys);
+    const branch = flat.sidebar;
+
+    expect(unflattenFromHints({ ...flat, 'sidebar.label': 'Mine' }).sidebar).toEqual({ label: 'Mine', order: 1 });
+    expect(branch).toEqual({ order: 1 });
+  });
+
   test('an edit to a hinted leaf survives without disturbing its siblings', () => {
     const stored = { sidebar: { label: 'Old', order: 3 } };
 

@@ -52,20 +52,27 @@ interface PageMetadataDialogProps {
   open: boolean;
   onOpenChange?: (open: boolean) => void;
   page: PageMetadata;
-  onSave?: (metadata: PageMetadata) => void | Promise<void>;
+  /** The version `page` was read from; the form keeps the one it opened with, as a refetch must not move it. */
+  etag?: string;
+  /** `etag`: the version the form's values came from, which a live write merges from. */
+  onSave?: (metadata: PageMetadata, etag: string | undefined) => void | Promise<void>;
   /** The field to open at: focused and scrolled into view. */
   focusField?: string;
   /** Disables the URL path field and says why under it. */
   pathnameNote?: string;
+  /** Edited live: the form keeps the page it opened with and takes no edits while a save is out. */
+  live?: boolean;
 }
 
 export function PageMetadataDialog({
   open,
   onOpenChange,
   page,
+  etag,
   onSave,
   focusField,
   pathnameNote,
+  live,
 }: PageMetadataDialogProps) {
   const pageSchemas = usePageSchemas();
   const formRef = useRef<HTMLFormElement>(null);
@@ -110,6 +117,8 @@ export function PageMetadataDialog({
           <PageMetadataForm
             formRef={formRef}
             page={page}
+            etag={etag}
+            live={live}
             descriptor={descriptor}
             onSave={onSave}
             onSaved={() => onOpenChange?.(false)}
@@ -124,21 +133,17 @@ export function PageMetadataDialog({
 interface PageMetadataFormProps {
   formRef: React.Ref<HTMLFormElement>;
   page: PageMetadata;
+  etag?: string;
+  live?: boolean;
   descriptor: PageSchemaDescriptor | null;
-  onSave?: (metadata: PageMetadata) => void | Promise<void>;
+  onSave?: (metadata: PageMetadata, etag: string | undefined) => void | Promise<void>;
   onSaved: () => void;
   pathnameNote?: string;
 }
 
-/** Edits a copy of the page's settings taken when the form mounts; unmounting it discards unsaved edits. */
-function PageMetadataForm({ formRef, page, descriptor, onSave, onSaved, pathnameNote }: PageMetadataFormProps) {
-  const mode = descriptor?.coreFields?.mode ?? 'full';
-
-  // Convert PageMetadata to form values (flatten dates to strings).
-  // In 'full' mode the conloca sections own title/description/robots/canonical
-  // (read from explicit PageMetadata fields). In 'minimal'/'none' modes those
-  // come from customMeta — extractPageMetadata already routed them there.
-  const [coreValues, setCoreValues] = useState<Record<string, unknown>>(() => ({
+/** The values conloca's own sections show for `page`, dates as the datetime-local text their inputs edit. */
+function coreFormValues(page: PageMetadata) {
+  return {
     title: page.title,
     pathname: page.pathname,
     description: page.description,
@@ -146,10 +151,36 @@ function PageMetadataForm({ formRef, page, descriptor, onSave, onSaved, pathname
     unpublishAt: toDatetimeLocalValue(page.unpublishDate),
     robots: page.robots || '',
     canonical: page.canonical || '',
-  }));
+  };
+}
+
+/** Edits a copy of the page's settings taken when the form mounts; unmounting it discards unsaved edits. */
+function PageMetadataForm({
+  formRef,
+  page: pageProp,
+  etag,
+  live,
+  descriptor,
+  onSave,
+  onSaved,
+  pathnameNote,
+}: PageMetadataFormProps) {
+  const mode = descriptor?.coreFields?.mode ?? 'full';
+
+  // Convert PageMetadata to form values (flatten dates to strings).
+  // In 'full' mode the conloca sections own title/description/robots/canonical
+  // (read from explicit PageMetadata fields). In 'minimal'/'none' modes those
+  // come from customMeta — extractPageMetadata already routed them there.
+  const [coreValues, setCoreValues] = useState<Record<string, unknown>>(() => coreFormValues(pageProp));
   const [customValues, setCustomValues] = useState<Record<string, unknown>>(() =>
-    flattenForHints(page.customMeta || {}, new Set(Object.keys(descriptor?.ui ?? {}))),
+    flattenForHints(pageProp.customMeta || {}, new Set(Object.keys(descriptor?.ui ?? {}))),
   );
+  // The version the form's values came from: fixed at open, as a refetch changes no value the form shows.
+  const version = useRef(etag);
+  // Live, the page the form opened with (or last reloaded): a refetch's newer schedule text must not reach the save.
+  const opened = useRef(pageProp);
+  // The values the form showed at open (or at the last clash reload), to tell the alert which fields the person changed.
+  const opening = useRef({ ...coreValues, ...customValues });
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -175,12 +206,23 @@ function PageMetadataForm({ formRef, page, descriptor, onSave, onSaved, pathname
   // 'minimal' and 'none' modes the site's schema may hold the title, and Save sends it as is.
   const titleMissing = mode === 'full' ? !coreValues.title : 'title' in customValues && !customValues.title;
 
-  const loadTheirs = (fields: FieldConflict[]) => {
+  const loadTheirs = ({ fields, latest }: ApplyClashError) => {
+    const hintKeys = new Set(Object.keys(descriptor?.ui ?? {}));
+    if (latest) {
+      // Live, the whole form moves to the page as it is now and the version it was read at, so the next Apply sends
+      // nothing older than that read; the alert says what the person had tried to set.
+      changeCoreValues(coreFormValues(latest.page));
+      const custom = flattenForHints(latest.page.customMeta || {}, hintKeys);
+      changeCustomValues(custom);
+      opening.current = { ...coreFormValues(latest.page), ...custom };
+      version.current = latest.etag;
+      opened.current = latest.page;
+      return;
+    }
     // The keys conloca's own sections show; in 'minimal' and 'none' the site's schema holds the title and the rest.
     const coreKeys = new Set(mode === 'full' ? Object.keys(coreValues) : ['pathname', 'publishAt', 'unpublishAt']);
     const isCore = (field: FieldConflict) => coreKeys.has(clashPath(field.anchor));
     changeCoreValues(withTheirs(coreValues, fields.filter(isCore)));
-    const hintKeys = new Set(Object.keys(descriptor?.ui ?? {}));
     changeCustomValues(
       withTheirs(
         customValues,
@@ -198,6 +240,8 @@ function PageMetadataForm({ formRef, page, descriptor, onSave, onSaved, pathname
     setSaveError(null);
 
     const materializedCustom = descriptor?.ui ? unflattenFromHints(customValues) : customValues;
+    // Live, every setting the form does not hold comes from the page the form opened with, never from a refetch.
+    const page = live ? opened.current : pageProp;
 
     const metadata: PageMetadata = {
       title:
@@ -224,13 +268,19 @@ function PageMetadataForm({ formRef, page, descriptor, onSave, onSaved, pathname
     try {
       pending.current = true;
       setSaving(true);
-      await onSave?.(metadata);
+      await onSave?.(metadata, version.current);
     } catch (error) {
       if (mounted.current) {
         // A clash loads the other value of each clashing field, so the next Apply starts from it.
         if (error instanceof ApplyClashError) {
-          loadTheirs(error.fields);
-          setSaveError(error.describe((path) => descriptor?.ui?.[path]?.label));
+          const shown = { ...coreValues, ...customValues };
+          const changed = error.latest
+            ? Object.keys(shown)
+                .filter((path) => JSON.stringify(shown[path]) !== JSON.stringify(opening.current[path]))
+                .map((path) => ({ path, value: shown[path] }))
+            : undefined;
+          loadTheirs(error);
+          setSaveError(error.describe((path) => descriptor?.ui?.[path]?.label, changed));
         } else {
           setSaveError(
             error instanceof Error ? error.message : 'Saving failed. Your changes are still here — try again.',
@@ -252,53 +302,61 @@ function PageMetadataForm({ formRef, page, descriptor, onSave, onSaved, pathname
 
   return (
     <form ref={formRef} onSubmit={handleSubmit}>
-      {/* Rendered here rather than by SchemaForm so the field can point at its error. */}
-      {mode === 'full' && (
-        <div data-field-name="title">
-          <label htmlFor={titleId} className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
-            Title
-            <span className="text-red-04 dark:text-red-08 ml-1">*</span>
-          </label>
-          <Input
-            id={titleId}
-            type="text"
-            value={typeof coreValues.title === 'string' ? coreValues.title : ''}
-            onChange={(e) => changeCoreValues({ ...coreValues, title: e.target.value || undefined })}
-            aria-invalid={titleMissing}
-            aria-describedby={titleMissing ? titleErrorId : undefined}
-          />
-          <p className="mt-1 text-sm text-grey-04 dark:text-grey-07">Page title for SEO and browser tab</p>
-          {titleMissing && (
-            <FieldError id={titleErrorId} className="mt-1">
-              Enter a page title before saving.
-            </FieldError>
-          )}
-        </div>
-      )}
-      <fieldset disabled={pathnameNote !== undefined} className={cn({ 'mt-6': mode === 'full' })}>
-        <SchemaForm fields={pathnameOnlyFields} values={coreValues} onChange={changeCoreValues} />
-        {pathnameNote && <p className="mt-1 text-sm text-grey-04 dark:text-grey-07">{pathnameNote}</p>}
+      {/* Live, no edits while a save is out: the form would hold values the next save sends from a version that is gone. */}
+      <fieldset disabled={live && saving}>
+        {/* Rendered here rather than by SchemaForm so the field can point at its error. */}
+        {mode === 'full' && (
+          <div data-field-name="title">
+            <label htmlFor={titleId} className="block text-sm font-medium mb-1 text-grey-01 dark:text-grey-12">
+              Title
+              <span className="text-red-04 dark:text-red-08 ml-1">*</span>
+            </label>
+            <Input
+              id={titleId}
+              type="text"
+              value={typeof coreValues.title === 'string' ? coreValues.title : ''}
+              onChange={(e) => changeCoreValues({ ...coreValues, title: e.target.value || undefined })}
+              aria-invalid={titleMissing}
+              aria-describedby={titleMissing ? titleErrorId : undefined}
+            />
+            <p className="mt-1 text-sm text-grey-04 dark:text-grey-07">Page title for SEO and browser tab</p>
+            {titleMissing && (
+              <FieldError id={titleErrorId} className="mt-1">
+                Enter a page title before saving.
+              </FieldError>
+            )}
+          </div>
+        )}
+        <fieldset disabled={pathnameNote !== undefined} className={cn({ 'mt-6': mode === 'full' })}>
+          <SchemaForm fields={pathnameOnlyFields} values={coreValues} onChange={changeCoreValues} />
+          {pathnameNote && <p className="mt-1 text-sm text-grey-04 dark:text-grey-07">{pathnameNote}</p>}
+        </fieldset>
+
+        {descriptor &&
+          (descriptor.ui ? (
+            <HintForm
+              className="mt-6"
+              hints={descriptor.ui}
+              groups={descriptor.groups}
+              values={customValues}
+              onChange={changeCustomValues}
+            />
+          ) : (
+            <SchemaForm
+              className="mt-6"
+              schema={descriptor.schema}
+              values={customValues}
+              onChange={changeCustomValues}
+            />
+          ))}
+
+        {mode === 'full' && (
+          <SchemaForm className="mt-6" fields={seoPublishingFields} values={coreValues} onChange={changeCoreValues} />
+        )}
+        {mode === 'minimal' && (
+          <SchemaForm className="mt-6" fields={publishWindowFields} values={coreValues} onChange={changeCoreValues} />
+        )}
       </fieldset>
-
-      {descriptor &&
-        (descriptor.ui ? (
-          <HintForm
-            className="mt-6"
-            hints={descriptor.ui}
-            groups={descriptor.groups}
-            values={customValues}
-            onChange={changeCustomValues}
-          />
-        ) : (
-          <SchemaForm className="mt-6" schema={descriptor.schema} values={customValues} onChange={changeCustomValues} />
-        ))}
-
-      {mode === 'full' && (
-        <SchemaForm className="mt-6" fields={seoPublishingFields} values={coreValues} onChange={changeCoreValues} />
-      )}
-      {mode === 'minimal' && (
-        <SchemaForm className="mt-6" fields={publishWindowFields} values={coreValues} onChange={changeCoreValues} />
-      )}
 
       {titleMissing && mode !== 'full' && <FieldError className="mt-6">Enter a page title before saving.</FieldError>}
       {saveError && (

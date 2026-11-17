@@ -31,7 +31,7 @@ import { ImageFieldRender } from '../fields/ImageField.js';
 import { toast } from '../toast.js';
 import { DrawerItemOverride, PUCK_ROOT_DROP_ZONE } from './DrawerItemOverride.js';
 import { withDraftMediaRendering } from './draft-media-config.js';
-import { LIVE_PAGE_SETTINGS_HINT, PageEditorHeaderActions } from './PageEditorHeaderActions.js';
+import { PageEditorHeaderActions } from './PageEditorHeaderActions.js';
 import { PuckWithUntouchedMetadata } from './PuckWithUntouchedMetadata.js';
 import {
   FieldsWithPageSettingsHint,
@@ -135,11 +135,6 @@ const livePuck = ({ children }: { children: React.ReactNode }) =>
 
 /** A held replica takes no more edits: Puck shows it read-only. */
 const NO_EDITS: Partial<Permissions> = { drag: false, duplicate: false, delete: false, edit: false, insert: false };
-
-/** A canvas click on a page setting while live: Page settings are off, and this says why. */
-const openNoPageSettings = () => {
-  toast.error(LIVE_PAGE_SETTINGS_HINT);
-};
 
 /** On the canvas's scaled-down view (about half size) this still reads at a normal text size. */
 const EMPTY_PAGE_HINT_FONT_SIZE = '24px';
@@ -542,7 +537,6 @@ export function PageEditor({
             {...(p.live ? {} : { saveState: p.saveState, isDirty: p.isDirty, onSave: () => p.handleSave() })}
             // Called with no field: the button's click event would otherwise arrive as one.
             onOpenMetadata={() => p.onOpenMetadata()}
-            pageSettingsDisabledReason={p.live ? LIVE_PAGE_SETTINGS_HINT : undefined}
             onBack={p.onBack}
             draftPage={draftToolsPage(p.id, p.locale)}
             draftLabel={p.title}
@@ -583,9 +577,8 @@ export function PageEditor({
       {/* Keep a usable canvas on very short screens; this region scrolls instead of crushing Puck's iframe. */}
       {/* The surface behind the canvas follows the canvas toggle, never the admin theme: see `[data-canvas-surface]` in main.css. */}
       <div className="flex-1 min-h-[400px] overflow-hidden" data-canvas-surface={canvasTheme}>
-        {/* Live: a page setting a block shows on the canvas says why it does not open, as the header control does. */}
         <DraftPageContext.Provider value={draftPage}>
-          <PageSettingTargetsProvider onOpen={binding ? openNoPageSettings : onOpenMetadata}>
+          <PageSettingTargetsProvider onOpen={onOpenMetadata}>
             <PuckBindingProvider binding={binding}>
               {/* Not <Puck> itself: on the canvas Puck rewrites the page data it hands blocks; see PuckWithUntouchedMetadata.tsx. */}
               <PuckWithUntouchedMetadata

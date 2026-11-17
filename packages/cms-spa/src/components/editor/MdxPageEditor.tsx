@@ -18,10 +18,11 @@ import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard.js';
 import { useDocChannel } from '../../live/doc-channel.js';
 import { markdownLivePlugin } from '../../live/markdown-live-plugin.js';
 import type { JsonValue } from '../../live/messages.js';
-import { pageSettingEdits } from '../../live/page-settings.js';
+import { pageSettingClashes, pageSettingEdits } from '../../live/page-settings.js';
 import { useDocEdits, useLiveDoc, usePresencePeers } from '../../live/use-live.js';
 import type { PageMetadata } from '../../types.js';
 import { getUIConfig } from '../../ui-config.js';
+import { ApplyClashError } from '../../utils/apply-clash.js';
 import { buildMetadataUpdate, extractPageMetadata, pageSettingsSaveError } from '../../utils/pageMetadata.js';
 import { DraftNoticeStrip } from '../conflicts/EditorNoticeStrip.js';
 import { PageDraftMenu } from '../conflicts/PageDraftMenu.js';
@@ -62,6 +63,32 @@ export function MdxPageEditor({ initialLocale = 'en' }: { initialLocale?: string
 const LIVE_PATHNAME_NOTE = "The URL path can't be changed while the page is edited live.";
 
 const UNREADABLE_FRONTMATTER = "This page's front matter can't be read, so its settings can't be changed live.";
+
+/** The front matter keys a page-settings form sets: its meta and the schedule; the path is not edited live. */
+function frontmatterSettings(metadata: PageMetadata) {
+  const update = buildMetadataUpdate(metadata);
+  return { ...update.meta, publishAt: update.publishAt, unpublishAt: update.unpublishAt };
+}
+
+/** The page settings `frontmatter` holds, as the dialog shows them. */
+function frontmatterPage(
+  frontmatter: Record<string, JsonValue>,
+  collection: string | undefined,
+  publishedPathname: string | undefined,
+): PageMetadata {
+  const { pathname, publishAt, unpublishAt, ...meta } = frontmatter;
+  return extractPageMetadata({
+    collection,
+    type: 'mdx',
+    localized: {
+      // A page without a title still opens its settings, which ask for one.
+      meta: { ...meta, title: typeof meta.title === 'string' ? meta.title : '' },
+      pathname: typeof pathname === 'string' ? pathname : publishedPathname,
+      publishAt: typeof publishAt === 'string' ? publishAt : undefined,
+      unpublishAt: typeof unpublishAt === 'string' ? unpublishAt : undefined,
+    },
+  });
+}
 
 /** Outlines each top-level block a teammate has selected, with their name, in this editor's content root. */
 function usePeerBlockOutlines(docKey: string, root: HTMLElement | null): void {
@@ -139,21 +166,18 @@ function LiveMdxPageEditor({ initialLocale }: { initialLocale: string }) {
     return { value: text.toJSON(), plugins: [plugin] };
   }, [live, channel]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: each open of the dialog seeds from the doc as it is then.
+  // The front matter as the dialog opened with it, or last reloaded it: every key a save sets must still hold it.
+  const openedFrontmatter = useRef<Record<string, JsonValue>>({});
+  // The settings the open dialog shows, taken once per open: a refetch or handover while it is open must not move the
+  // opening values a save compares against (only a clash reload does).
+  const openedPage = useRef<PageMetadata | null>(null);
   const pageMetadata = useMemo(() => {
     if (!live) return null;
-    const { pathname, publishAt, unpublishAt, ...meta } = live.doc.getMap('frontmatter').toJSON();
-    return extractPageMetadata({
-      collection: loadedContent?.collection,
-      type: 'mdx',
-      localized: {
-        // A page without a title still opens its settings, which ask for one.
-        meta: { ...meta, title: typeof meta.title === 'string' ? meta.title : '' },
-        pathname: typeof pathname === 'string' ? pathname : publishedPathname,
-        publishAt: typeof publishAt === 'string' ? publishAt : undefined,
-        unpublishAt: typeof unpublishAt === 'string' ? unpublishAt : undefined,
-      },
-    });
+    if (metadataDialogOpen && openedPage.current) return openedPage.current;
+    openedFrontmatter.current = live.doc.getMap<JsonValue>('frontmatter').toJSON();
+    const page = frontmatterPage(openedFrontmatter.current, loadedContent?.collection, publishedPathname);
+    openedPage.current = metadataDialogOpen ? page : null;
+    return page;
   }, [live, loadedContent, publishedPathname, metadataDialogOpen]);
 
   useEffect(() => {
@@ -164,14 +188,22 @@ function LiveMdxPageEditor({ initialLocale }: { initialLocale: string }) {
     };
   }, [pagePathname]);
 
-  // Every changed key at once, in one write; a cleared value removes its key.
+  // Every setting the form holds, at once, in one write; a cleared value removes its key. A key someone changed since the
+  // form opened clashes, and the form reloads the front matter as it is now.
   const handleSaveMetadata = async (metadata: PageMetadata) => {
     if (!live) return;
-    const update = buildMetadataUpdate(metadata);
-    const wanted = { ...update.meta, publishAt: update.publishAt, unpublishAt: update.unpublishAt };
-    const result = writeEdits(pageSettingEdits(live.doc.getMap<JsonValue>('frontmatter').toJSON(), wanted));
+    const frontmatter = live.doc.getMap<JsonValue>('frontmatter').toJSON();
+    const edits = pageSettingEdits(frontmatter, frontmatterSettings(metadata), openedFrontmatter.current);
+    const result = writeEdits(edits);
+    if (result.ok) return;
+    if (result.reason === 'changed') {
+      openedFrontmatter.current = frontmatter;
+      throw new ApplyClashError(pageSettingClashes(frontmatter, edits), undefined, {
+        page: frontmatterPage(frontmatter, loadedContent?.collection, publishedPathname),
+      });
+    }
     // Settings anchors are built from the keys themselves, so not-found means the leading `---` block is not a mapping.
-    if (!result.ok) throw new Error(result.reason === 'not-found' ? UNREADABLE_FRONTMATTER : result.message);
+    throw new Error(result.reason === 'not-found' ? UNREADABLE_FRONTMATTER : result.message);
   };
 
   if (liveDoc.state === 'failed') {
@@ -274,6 +306,7 @@ function LiveMdxPageEditor({ initialLocale }: { initialLocale: string }) {
           page={pageMetadata}
           onSave={handleSaveMetadata}
           pathnameNote={LIVE_PATHNAME_NOTE}
+          live
         />
       )}
     </div>

@@ -1,5 +1,5 @@
 /// <reference lib="dom" />
-import { afterEach, beforeEach, describe, expect, it, spyOn } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, spyOn } from 'bun:test';
 import { serializeDoc } from '@conloca/content-api/ydoc';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
@@ -27,12 +27,15 @@ import {
   type FakeDocChannel,
   type FakeDocChannelOptions,
 } from '../../../test/fake-doc-channel.js';
+import { titleFields } from '../../../test/fixtures/typia/host-schemas.js';
 import { setupTestAPI, testApi } from '../../../test/test-utils.js';
 import type { EditorFlushResult } from '../../editor-flush.js';
 import { ThemeProvider } from '../../hooks/useTheme.js';
 import { HELD_TOO_LARGE } from '../../live/doc-channel.js';
 import { HTML_COMMENT_NOTICE } from '../../live/markdown-live-plugin.js';
 import type { LiveStatus } from '../../live/messages.js';
+import { definePageSchema } from '../../page-schema-define.js';
+import { setPageSchemas } from '../../page-schemas.js';
 import { configureUI } from '../../ui-config.js';
 import { MdxPageEditor } from './MdxPageEditor.js';
 
@@ -88,12 +91,12 @@ async function mount(mdx: string, options?: FakeDocChannelOptions) {
       </ThemeProvider>
     </QueryClientProvider>,
   );
-  return { router, id: created.id };
+  return { router, id: created.id, client };
 }
 
 /** Opens `mdx` as a live page in the MDX page editor, with the doc channel `fake`. */
 async function openLive(mdx: string, options?: FakeDocChannelOptions) {
-  const { router, id } = await mount(mdx, options);
+  const { router, id, client } = await mount(mdx, options);
   const root = await waitFor(() => {
     const element = document.querySelector<HTMLElement>('[contenteditable]');
     if (!element) throw new Error('editor not mounted');
@@ -104,7 +107,7 @@ async function openLive(mdx: string, options?: FakeDocChannelOptions) {
   // The replica the editor is bound to: the fake numbers each open of the page.
   const opened = [4, 3, 2, 1].map((generation) => `mdx:web:${id}:en#${generation}`);
   docKey = opened.find((key) => fake.channel.live(key) !== undefined) ?? '';
-  return { editor, root, router };
+  return { editor, root, router, client };
 }
 
 /** Types `keys` at the end of the editor's last block, as one discrete update. */
@@ -406,6 +409,126 @@ describe('MdxPageEditor bound to a shared doc', () => {
     expect(frontmatter.has('publishAt')).toBe(false);
     expect(fake.updates()).toHaveLength(updates + 1);
     expect(puts).toBe(0);
+  }, 30_000);
+
+  it("keeps a teammate's settings changed while the dialog is open: theirs is loaded on the same field, kept on another", async () => {
+    await openLive('---\ntitle: Old\ndescription: Old desc\n---\n\nHello\n');
+    fireEvent.click(screen.getByLabelText('Page settings'));
+    const dialog = await screen.findByRole('dialog');
+    fake.parentEdit(docKey, (doc) => {
+      doc.getMap('frontmatter').set('title', 'Theirs');
+      doc.getMap('frontmatter').set('description', 'Their desc');
+    });
+    const frontmatter = fake.parent(docKey).getMap('frontmatter');
+    await waitFor(() => expect(fake.channel.live(docKey)?.doc.getMap('frontmatter').get('title')).toBe('Theirs'));
+    const title = within(dialog).getByDisplayValue<HTMLInputElement>('Old');
+    fireEvent.change(title, { target: { value: 'Mine' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    expect((await within(dialog).findByRole('alert')).textContent).toContain('changed while you were editing');
+    expect(title.value).toBe('Theirs');
+    expect(frontmatter.toJSON()).toEqual({ title: 'Theirs', description: 'Their desc' });
+
+    fireEvent.change(title, { target: { value: 'Mine' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await waitForElementToBeRemoved(dialog);
+    expect(frontmatter.toJSON()).toEqual({ title: 'Mine', description: 'Their desc' });
+  }, 30_000);
+
+  it('a clash names every setting the person changed, with their values, as all reload', async () => {
+    await openLive('---\ntitle: Old\ndescription: Old desc\n---\n\nHello\n');
+    fireEvent.click(screen.getByLabelText('Page settings'));
+    const dialog = await screen.findByRole('dialog');
+    fake.parentEdit(docKey, (doc) => doc.getMap('frontmatter').set('title', 'Theirs'));
+    await waitFor(() => expect(fake.channel.live(docKey)?.doc.getMap('frontmatter').get('title')).toBe('Theirs'));
+    fireEvent.change(within(dialog).getByDisplayValue('Old'), { target: { value: 'Mine' } });
+    fireEvent.change(within(dialog).getByDisplayValue('Old desc'), { target: { value: 'My desc' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    expect((await within(dialog).findByRole('alert')).textContent).toBe(
+      'Title changed while you were editing. Check it and apply again. You had set Title: “Mine” and Description: “My desc”.',
+    );
+  }, 30_000);
+
+  it('a second clash names only what the person changed since the reload', async () => {
+    await openLive('---\ntitle: Old\ndescription: Old desc\n---\n\nHello\n');
+    fireEvent.click(screen.getByLabelText('Page settings'));
+    const dialog = await screen.findByRole('dialog');
+    fake.parentEdit(docKey, (doc) => doc.getMap('frontmatter').set('title', 'Theirs'));
+    await waitFor(() => expect(fake.channel.live(docKey)?.doc.getMap('frontmatter').get('title')).toBe('Theirs'));
+    fireEvent.change(within(dialog).getByDisplayValue('Old'), { target: { value: 'Mine' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await within(dialog).findByRole('alert');
+
+    fake.parentEdit(docKey, (doc) => doc.getMap('frontmatter').set('description', 'Their desc'));
+    await waitFor(() =>
+      expect(fake.channel.live(docKey)?.doc.getMap('frontmatter').get('description')).toBe('Their desc'),
+    );
+    fireEvent.change(within(dialog).getByDisplayValue('Old desc'), { target: { value: 'My desc' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(within(dialog).getByRole('alert').textContent).toBe(
+        'Description changed while you were editing. Check it and apply again. You had set Description: “My desc”.',
+      ),
+    );
+  }, 30_000);
+
+  it("a refetch while the dialog is open does not let Save revert a teammate's change to a setting left alone", async () => {
+    const { client } = await openLive('---\ntitle: Old\ndescription: Old desc\n---\n\nHello\n');
+    fireEvent.click(screen.getByLabelText('Page settings'));
+    const dialog = await screen.findByRole('dialog');
+    fake.parentEdit(docKey, (doc) => doc.getMap('frontmatter').set('description', 'Their desc'));
+    await waitFor(() =>
+      expect(fake.channel.live(docKey)?.doc.getMap('frontmatter').get('description')).toBe('Their desc'),
+    );
+    // The page read again (focus, a host Save): the content query holds a new version.
+    await act(async () => {
+      client.setQueriesData<{ localized?: object }>({}, (data) =>
+        data?.localized ? { ...data, localized: { ...data.localized, etag: 'refetched' } } : data,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    fireEvent.change(within(dialog).getByDisplayValue('Old'), { target: { value: 'Mine' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    await waitForElementToBeRemoved(dialog);
+    expect(fake.parent(docKey).getMap('frontmatter').toJSON()).toEqual({ title: 'Mine', description: 'Their desc' });
+  }, 30_000);
+
+  it('Save after a clash does not bring back a setting a teammate removed', async () => {
+    // The site schema holds the title, so the form holds no description key once the clash reloads it.
+    setPageSchemas({ '/': definePageSchema({ schema: titleFields, coreFields: { mode: 'minimal' } }) });
+    onTestFinished(() => setPageSchemas({}));
+    await openLive('---\ntitle: Old\ndescription: Old desc\n---\n\nHello\n');
+    fireEvent.click(screen.getByLabelText('Page settings'));
+    const dialog = await screen.findByRole('dialog');
+    fake.parentEdit(docKey, (doc) => {
+      doc.getMap('frontmatter').set('title', 'Theirs');
+      doc.getMap('frontmatter').delete('description');
+    });
+    await waitFor(() => expect(fake.channel.live(docKey)?.doc.getMap('frontmatter').get('title')).toBe('Theirs'));
+    fireEvent.change(within(dialog).getByDisplayValue('Old'), { target: { value: 'Mine' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await within(dialog).findByRole('alert');
+    const frontmatter = fake.parent(docKey).getMap('frontmatter');
+    expect(frontmatter.toJSON()).toEqual({ title: 'Theirs' });
+
+    fireEvent.change(within(dialog).getByDisplayValue('Theirs'), { target: { value: 'Mine' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await waitForElementToBeRemoved(dialog);
+    expect(frontmatter.toJSON()).toEqual({ title: 'Mine' });
+  }, 30_000);
+
+  it('sets a description that was not text, with no clash', async () => {
+    await openLive('---\ntitle: Old\ndescription: 2024\n---\n\nHello\n');
+    fireEvent.click(screen.getByLabelText('Page settings'));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText(/^Description/), { target: { value: 'Mine' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    await waitForElementToBeRemoved(dialog);
+    expect(fake.parent(docKey).getMap('frontmatter').get('description')).toBe('Mine');
   }, 30_000);
 
   // The server refuses any client write to `_meta`; the section of a page without front matter is derived from the map.

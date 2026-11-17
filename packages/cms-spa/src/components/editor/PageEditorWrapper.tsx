@@ -1,5 +1,6 @@
 import {
   type ContentManifest,
+  getContentAPIClient,
   type MDXHeading,
   metaString,
   pageReferenceOf,
@@ -14,6 +15,7 @@ import {
 } from '@conloca/content-api-client';
 import type { ComponentConfig, Config, Data, PuckComponent } from '@puckeditor/core';
 import { resolveAllData } from '@puckeditor/core';
+import { useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useDocChannel } from '../../live/doc-channel.js';
@@ -25,6 +27,7 @@ import { getUIConfig } from '../../ui-config.js';
 import { buildMetadataUpdate, extractPageMetadata, pageSettingsSaveError } from '../../utils/pageMetadata.js';
 import { PageMetadataDialog } from '../dialogs/PageMetadataDialog.js';
 import { type ContentFragmentOption, ContentFragmentSelectorField } from '../fields/ContentFragmentSelectorField.js';
+import { toast } from '../toast.js';
 import { FragmentContentWrapper, FragmentFieldWrapper } from './FragmentWrappers.js';
 import { MdxPageEditor } from './MdxPageEditor.js';
 import { PageEditor } from './PageEditor.js';
@@ -238,6 +241,25 @@ function PageLoadFailure({ message }: { message?: string }) {
   );
 }
 
+/** How long opening Page settings live waits for the latest settings before it opens with the ones held. */
+export const PAGE_SETTINGS_READ_WAIT_MS = 5000;
+/** `read`, or a rejection once it has taken PAGE_SETTINGS_READ_WAIT_MS. */
+async function readWithin<T>(read: Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expired = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(reject, PAGE_SETTINGS_READ_WAIT_MS, new Error('timed out'));
+  });
+  try {
+    return await Promise.race([read, expired]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+const PAGE_SETTINGS_READ_FAILED =
+  "Couldn't load the latest page settings, so these may be out of date. If someone changed the same setting, Apply will tell you instead of overwriting it.";
+const PAGE_SETTINGS_CLASH_UNREAD =
+  "Someone changed these settings while you were editing, and the latest couldn't be loaded. Your changes weren't saved. Close Page settings and open it again.";
+
 export function PageEditorWrapper({ puckConfig }: PageEditorWrapperProps) {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
@@ -315,6 +337,7 @@ function PuckPageEditorInner({ puckConfig, initialLocale }: PageEditorWrapperPro
   const { id } = useParams();
   const navigate = useNavigate();
   const updateContent = useUpdateLocalized();
+  const queryClient = useQueryClient();
 
   // Mirrors FragmentEditor / MdxPageEditor: derive the locale list from the
   // host's sites config and let the editor switch between them. It opens on
@@ -347,6 +370,7 @@ function PuckPageEditorInner({ puckConfig, initialLocale }: PageEditorWrapperPro
 
   // Metadata dialog state, and the field it opens at when a block's part on the canvas opened it
   const [metadataDialogOpen, setMetadataDialogOpen] = useState(false);
+  const settingsReadPending = useRef(false);
   const [metadataFocusField, setMetadataFocusField] = useState<string>();
 
   // Pre-resolved Puck data (resolved BEFORE passing to Puck)
@@ -542,8 +566,32 @@ function PuckPageEditorInner({ puckConfig, initialLocale }: PageEditorWrapperPro
         }}
         onBack={() => navigate('/pages')}
         onOpenMetadata={(field) => {
-          setMetadataFocusField(field);
-          setMetadataDialogOpen(true);
+          const open = () => {
+            setMetadataFocusField(field);
+            setMetadataDialogOpen(true);
+          };
+          if (!live) return open();
+          if (settingsReadPending.current) return;
+          // Live, a teammate's settings change reaches no open editor, so the dialog reads the page first. Not with
+          // the flag off: there the etag also guards the block Save, which a newer one would let overwrite unseen work.
+          // A failed or slow read opens with the settings held, and their version: a setting changed since clashes.
+          settingsReadPending.current = true;
+          const pending = toast.loading('Loading the latest page settings…');
+          void readWithin(getContentAPIClient().getLocalized(content.id, currentLocale))
+            .then(
+              (fresh) => {
+                if (fresh) queryClient.setQueryData(['content', content.id, currentLocale], fresh);
+                toast.dismiss(pending);
+              },
+              (err: Error) => {
+                console.warn('[PageEditorWrapper] Could not re-read the page settings:', err);
+                toast.warning(PAGE_SETTINGS_READ_FAILED, { id: pending });
+              },
+            )
+            .finally(() => {
+              settingsReadPending.current = false;
+              open();
+            });
         }}
         onReload={() => {
           window.location.reload();
@@ -555,12 +603,16 @@ function PuckPageEditorInner({ puckConfig, initialLocale }: PageEditorWrapperPro
         onOpenChange={setMetadataDialogOpen}
         focusField={metadataFocusField}
         page={pageMetadata!}
-        onSave={async (metadata: PageMetadata) => {
+        etag={content.localized?.etag}
+        live={live !== undefined}
+        onSave={async (metadata: PageMetadata, formEtag: string | undefined) => {
           const result = await updateContent.mutateAsync({
             id: content.id,
             locale: currentLocale,
             data: buildMetadataUpdate(metadata),
-            etag: currentEtag,
+            // Live, the write merges from the version the form's values came from, not one a refetch moved to: a
+            // teammate's change to a setting the person left alone is then kept, and one to the same setting clashes.
+            etag: live ? (formEtag ?? currentEtag) : currentEtag,
           });
 
           if (result.success && result.etag) {
@@ -572,7 +624,15 @@ function PuckPageEditorInner({ puckConfig, initialLocale }: PageEditorWrapperPro
             // { success: false } instead of throwing, so a resolved failure
             // takes the same exit. A same-field clash throws ApplyClashError,
             // whose fields the dialog reloads.
-            throw pageSettingsSaveError(result);
+            if (!live || !result.conflictDetails?.conflicts?.length) throw pageSettingsSaveError(result);
+            // Live, the dialog moves to the page as it is now, read whole: a version known only by its clashing
+            // fields would let the next Apply overwrite another field a teammate changed in it.
+            const fresh = await readWithin(getContentAPIClient().getLocalized(content.id, currentLocale)).catch(
+              (err: Error) => console.warn('[PageEditorWrapper] Could not re-read the page settings:', err),
+            );
+            if (!fresh?.localized) throw new Error(PAGE_SETTINGS_CLASH_UNREAD);
+            queryClient.setQueryData(['content', content.id, currentLocale], fresh);
+            throw pageSettingsSaveError(result, { page: extractPageMetadata(fresh), etag: fresh.localized.etag });
           }
         }}
       />

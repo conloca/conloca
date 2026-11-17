@@ -184,11 +184,12 @@ function scheduleText(date: Date | null, stored: string | undefined): string | n
 /**
  * What a page-settings save throws when the write failed, including one that resolved `{ success: false }`
  * instead of rejecting: the dialog then stays open with the author's edits and shows this message. A clash on
- * the same fields is an {@link ApplyClashError}, whose fields the dialog reloads.
+ * the same fields is an {@link ApplyClashError}, whose fields the dialog reloads, or with `latest`, the page read again.
  */
-export function pageSettingsSaveError(result: UpdateResult): Error {
+export function pageSettingsSaveError(result: UpdateResult, latest?: { page: PageMetadata; etag?: string }): Error {
   const conflicts = result.conflictDetails?.conflicts;
-  if (conflicts && conflicts.length > 0) return new ApplyClashError(conflicts, result.conflictDetails?.changedBy);
+  if (conflicts && conflicts.length > 0)
+    return new ApplyClashError(conflicts, result.conflictDetails?.changedBy, latest);
   return new Error(
     result.reason === 'stale_write'
       ? 'Someone else saved this page first. Close the dialog, reload to pick up their changes, then try again.'
@@ -309,9 +310,8 @@ export function unflattenFromHints(value: Record<string, unknown>): Record<strin
     for (let i = 0; i < segments.length - 1; i++) {
       const seg = segments[i];
       const existing = Object.getOwnPropertyDescriptor(cursor, seg)?.value;
-      if (!existing || typeof existing !== 'object') {
-        setDataKey(cursor, seg, {});
-      }
+      // A copy: the branch may be the form's own object, which a leaf written into it would change too.
+      setDataKey(cursor, seg, existing && typeof existing === 'object' ? { ...existing } : {});
       cursor = cursor[seg] as Record<string, unknown>;
     }
     setDataKey(cursor, segments[segments.length - 1], val);

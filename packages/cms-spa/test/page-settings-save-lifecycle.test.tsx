@@ -192,3 +192,28 @@ describe('a same-field clash reloads the field the form shows', () => {
     expect(screen.getByLabelText<HTMLInputElement>(/^Publish/).value).toBe(toDatetimeLocalValue(new Date(theirs)));
   });
 });
+
+test('live, Apply carries no refetched value for a setting the form never held', async () => {
+  setPageSchemas({ '/': definePageSchema({ schema: titleFields, coreFields: { mode: 'minimal' } }) });
+  const save = mock(async (_metadata: PageMetadata) => {});
+  const opened = { ...savedPage, customMeta: { title: savedPage.title } };
+  const { rerender } = render(<PageMetadataDialog open live etag="v0" page={opened} onSave={save} />);
+  await screen.findByRole('dialog');
+  // A refetch brings a teammate's description and robots the person never saw.
+  rerender(
+    <PageMetadataDialog
+      open
+      live
+      etag="v1"
+      page={{ ...opened, description: 'Their desc', robots: 'noindex' }}
+      onSave={save}
+    />,
+  );
+  fireEvent.change(titleField(), { target: { value: 'Mine' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+  await waitFor(() => expect(save).toHaveBeenCalled());
+  const sent = save.mock.calls[0]?.[0];
+  expect(sent?.description).toBe('');
+  expect(sent?.robots).toBeUndefined();
+});

@@ -697,12 +697,10 @@ const slowResolveKeepsTeammate: Play = async ({ canvasElement }) => {
 /** A page waiting to be published (the parent refused an edit for size) is read-only, says why, and registers no save of its own. */
 const heldPageIsReadOnly: Play = async ({ canvasElement }) => {
   await expectOnCanvas(canvasElement, 'Block-B', 'text', 'Second block');
-  // Live, Page settings are off and say why: they save by a write the shared page does not merge yet.
-  await expect(
-    within(canvasElement).getByRole('button', {
-      name: 'Page settings unavailable. Page settings are not available yet while changes save as you type.',
-    }),
-  ).toHaveAttribute('aria-disabled', 'true');
+  // Live, Page settings stay open to edit: they write with their own version check, not through the shared page.
+  await expect(within(canvasElement).getByRole('button', { name: 'Page settings' })).not.toHaveAttribute(
+    'aria-disabled',
+  );
   bound.fake?.channel.receive('live.status', {
     connection: 'read-only',
     pending: true,
@@ -891,8 +889,8 @@ const teammateBlockGetsDefaults: Play = async ({ canvasElement }) => {
   await waitFor(() => expect(getPuck().getItemById('Block-C')?.props).toMatchObject({ tone: 'plain' }));
 };
 
-/** Live, a page setting a block shows on the canvas opens nothing. */
-const canvasPageSettingOpensNothing: Play = async ({ canvasElement }) => {
+/** Live, a page setting a block shows on the canvas opens Page settings at its field. */
+const canvasPageSettingOpensSettings: Play = async ({ canvasElement }) => {
   await expectOnCanvas(canvasElement, 'Block-B', 'text', 'Second block');
   openedSettings.length = 0;
   const win = canvasWindow(canvasElement);
@@ -903,7 +901,7 @@ const canvasPageSettingOpensNothing: Play = async ({ canvasElement }) => {
   });
   date.dispatchEvent(new win.MouseEvent('click', { bubbles: true, cancelable: true }));
   await settle();
-  await expect(openedSettings).toEqual([]);
+  await expect(openedSettings).toEqual(['publishAt']);
 };
 
 /** The user removes item 0 while a teammate edits item 2: the teammate's edit stays on that item. */
@@ -1177,9 +1175,9 @@ export const TeammateBlockGetsDefaults = boundStory(
   teammateBlockGetsDefaults,
   DEFAULTS_CONFIG,
 );
-export const CanvasPageSettingOpensNothing = boundStory(
-  'a page setting on the canvas opens nothing while live',
-  canvasPageSettingOpensNothing,
+export const CanvasPageSettingOpensSettings = boundStory(
+  'a page setting on the canvas opens Page settings at its field while live',
+  canvasPageSettingOpensSettings,
   PAGE_SETTING_CONFIG,
 );
 export const RemoveKeepsTeammateItemEdit = boundStory(

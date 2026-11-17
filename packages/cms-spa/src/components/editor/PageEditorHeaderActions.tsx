@@ -23,9 +23,6 @@ function CanvasThemeToggle() {
   );
 }
 
-/** Why Page settings are off on a live page: they save by a separate write the shared page does not merge yet. */
-export const LIVE_PAGE_SETTINGS_HINT = 'Page settings are not available yet while changes save as you type.';
-
 interface PageEditorHeaderActionsProps {
   onPublish?: () => void;
   onPreview: () => void;
@@ -45,8 +42,6 @@ interface PageEditorHeaderActionsProps {
   isDirty?: boolean;
   onSave?: () => void;
   onOpenMetadata: () => void;
-  /** When set, Page settings are unavailable: the control stays, marked so, with this reason, and opens nothing. */
-  pageSettingsDisabledReason?: string;
   onBack: () => void;
   /** With the host's draft tools: the page the page draft menu acts on. */
   draftPage?: PageRef | null;
@@ -102,7 +97,6 @@ export function PageEditorHeaderActions({
   isDirty,
   onSave,
   onOpenMetadata,
-  pageSettingsDisabledReason,
   onBack,
   draftPage,
   draftLabel,
@@ -189,20 +183,7 @@ export function PageEditorHeaderActions({
 
       {/* Settings & Exit Group */}
       <div className="flex items-center gap-1">
-        {pageSettingsDisabledReason === undefined ? (
-          <IconButton icon={Settings} onClick={onOpenMetadata} ariaLabel="Page settings" />
-        ) : (
-          <button
-            type="button"
-            // Not `disabled`: a disabled button shows no title, so the reason would show nowhere.
-            aria-disabled="true"
-            title={pageSettingsDisabledReason}
-            aria-label={`Page settings unavailable. ${pageSettingsDisabledReason}`}
-            className="p-2 rounded-md text-muted cursor-not-allowed opacity-60"
-          >
-            <Settings className="h-4 w-4" />
-          </button>
-        )}
+        <IconButton icon={Settings} onClick={onOpenMetadata} ariaLabel="Page settings" />
         {draftPage && <PageDraftMenu page={draftPage} label={draftLabel ?? draftPage.id} />}
         <IconButton icon={X} onClick={onBack} ariaLabel="Exit editor" />
       </div>
