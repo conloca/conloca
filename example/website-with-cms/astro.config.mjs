@@ -26,6 +26,8 @@ export default defineConfig({
       // page embeds the fragment, so it IS the representative context.
       fragmentPreviewRoute: '/prose-parity',
       puckConfigPath: './src/puck.config.tsx',
+      // The components the fragments may use (callout-demo places a Callout).
+      fragmentComponentsPath: './src/fragment-components.tsx',
       // Same module content.config.ts imports `dataSchemas` from: the option
       // feeds the editor's entry forms, the import feeds build validation and
       // entry types. The one object is the contract — keep both pointing at it.

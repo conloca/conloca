@@ -17,7 +17,6 @@ import type {
   GlobalFilters,
   LocaleVersion,
   LocalizedEntry,
-  MDXCompileResponse,
   PageReference,
   SitesConfig,
   UpdateLocaleInput,
@@ -51,16 +50,6 @@ function isContentListResult(value: unknown): value is ContentListResult {
     Array.isArray((value as { items: unknown }).items) &&
     typeof (value as { total: unknown }).total === 'number'
   );
-}
-
-function hashString(value: string): string {
-  let hash = 0;
-  for (let index = 0; index < value.length; index++) {
-    const char = value.charCodeAt(index);
-    hash = (hash << 5) - hash + char;
-    hash |= 0;
-  }
-  return hash.toString(36);
 }
 
 /**
@@ -104,7 +93,6 @@ const queryKeys = {
   assetFolders: (path?: string) => ['asset-folders', path] as const,
   assetUsage: (path: string | null) => ['asset-usage', path] as const,
   folderTree: () => ['folder-tree'] as const,
-  mdxCompile: (cacheKey: string) => ['mdx', 'compile', cacheKey] as const,
 };
 
 // ===== Core Content Hooks =====
@@ -126,24 +114,6 @@ export function useLocalizedContent(id: string, locale: string) {
     queryKey: queryKeys.localized(id, locale),
     queryFn: () => client.getLocalized(id, locale),
     enabled: !!id && !!locale,
-  });
-}
-
-export interface UseCompileMDXOptions {
-  mdxContent: string | null;
-  cacheKey?: string;
-}
-
-export function useCompileMDX({ mdxContent, cacheKey }: UseCompileMDXOptions) {
-  const client = getContentAPIClient();
-  const resolvedCacheKey = cacheKey || (mdxContent ? `mdx-${hashString(mdxContent)}` : 'mdx-empty');
-
-  return useQuery<MDXCompileResponse>({
-    queryKey: queryKeys.mdxCompile(resolvedCacheKey),
-    queryFn: () => client.compileMDX(mdxContent!),
-    enabled: !!mdxContent,
-    retry: false,
-    staleTime: Number.POSITIVE_INFINITY,
   });
 }
 

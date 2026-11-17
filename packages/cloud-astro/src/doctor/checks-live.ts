@@ -10,51 +10,21 @@ import {
 } from '@conloca/content-api/editor-host';
 import { messageOf } from '../message-of.js';
 import { resolveBuildSiteId } from '../site-id.js';
+import { checkEditorFrames } from './checks-frames.js';
 import { INTEGRATION_NOT_CALLED, suppliedEndpoint } from './checks-offline.js';
 import { runPreviewLiveChecks } from './checks-preview-live.js';
-import { type ConfigScan, optionLiteral } from './config-scan.js';
-import {
-  type CheckId,
-  type CheckOutcome,
-  type CloudDoctorContext,
-  type DoctorDeps,
-  outcomeOf,
-  REQUEST_TIMEOUT_MS,
-  skipped,
-} from './types.js';
+import { optionLiteral } from './config-scan.js';
+import { type LiveInput, request } from './request.js';
+import { type CheckId, type CheckOutcome, type DoctorDeps, outcomeOf, skipped } from './types.js';
 
-const LIVE_CHECK_IDS: readonly CheckId[] = ['CC11', 'CC12', 'CC13', 'CC24', 'CC29'];
+const LIVE_CHECK_IDS: readonly CheckId[] = ['CC11', 'CC12', 'CC13', 'CC24', 'CC29', 'CC30'];
 
 /** The server probe's conloca.json cap; a longer answer reads as `invalid` here as there. */
 const CONLOCA_JSON_CAP_BYTES = 16 * 1024;
 /** CC11 judges everything but the protocol; CC13 holds that against the range the editor publishes. */
 const ANY_PROTOCOL = { min: Number.NEGATIVE_INFINITY, max: Number.POSITIVE_INFINITY };
 
-interface LiveInput {
-  context: CloudDoctorContext;
-  deps: DoctorDeps;
-  scan: ConfigScan;
-  /** CC9's verdict: `https://<host><base>`, undefined when CC9 failed. */
-  address: string | undefined;
-  /** What the build writes as `repo`, undefined when it cannot tell. */
-  repoUri: string | undefined;
-}
-
 const skipAll = (reason: string): CheckOutcome[] => LIVE_CHECK_IDS.map((id) => skipped(id, reason));
-
-/** GET with no credential and no followed redirect: the answer the server's probe would see. */
-async function request(fetchFn: DoctorDeps['fetch'], url: string): Promise<Response | Error> {
-  try {
-    return await fetchFn(url, {
-      method: 'GET',
-      redirect: 'manual',
-      credentials: 'omit',
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    });
-  } catch (error) {
-    return new Error(messageOf(error));
-  }
-}
 
 /** A 200 body as text when it fits in `CONLOCA_JSON_CAP_BYTES`, else null; reading stops at the cap, as the probe's does. */
 async function cappedText(answer: Response): Promise<string | null> {
@@ -295,8 +265,9 @@ async function checkProtocol(
 }
 
 /**
- * CC11–CC13 and CC24. Networks only under --live and sends no credential: it contacts only the site's own domain, the
- * editor UI's public protocols.json and the site's previewUrl, so it runs anywhere, forks and Dependabot included.
+ * CC11–CC13, CC24, CC29 and CC30. Networks only under --live and sends no credential: it contacts only the site's own
+ * domain, the editor UI's public protocols.json and the site's previewUrl, so it runs anywhere, forks and Dependabot
+ * included.
  */
 export async function runLiveChecks(input: LiveInput): Promise<CheckOutcome[]> {
   const { context, deps, scan, address } = input;
@@ -313,5 +284,6 @@ export async function runLiveChecks(input: LiveInput): Promise<CheckOutcome[]> {
     frame,
     await checkProtocol(page.info, origin, deps.fetch),
     ...(await runPreviewLiveChecks({ context, deps, scan, info: page.info, address })),
+    await checkEditorFrames(input, address),
   ];
 }

@@ -1,7 +1,7 @@
 /// <reference lib="dom" />
 import { afterEach, beforeEach, describe, expect, type Mock, spyOn, test } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { CMSMDXEditor } from '../src/components/editor/CMSMDXEditor.js';
 import { setMdxComponents } from '../src/mdx-components.js';
 import { configureUI } from '../src/ui-config.js';
@@ -53,6 +53,24 @@ describe('an editor the site mounts under its own route', () => {
 
     await waitFor(() => expect(requested).toContain('/admin/api/render'));
     expect(requested.filter((url) => url.startsWith('/__cms'))).toEqual([]);
+  });
+
+  test('page mode with the empty vocabulary still offers every descriptor and renders through /api/render', async () => {
+    setMdxComponents([
+      { name: 'Callout', kind: 'flow', import: { from: './src/components/Callout.astro' } },
+      { name: 'LinkOut', kind: 'flow' },
+      { name: 'Steps', kind: 'flow', import: { from: './src/components/Steps.astro' } },
+    ]);
+    renderEditor('<Callout>Note</Callout>');
+
+    fireEvent.pointerDown(await screen.findByRole('button', { name: 'Insert component' }), {
+      button: 0,
+      ctrlKey: false,
+      pointerType: 'mouse',
+    });
+    const items = (await screen.findAllByRole('menuitem')).map((item) => item.textContent);
+    expect(items).toEqual(['Callout', 'LinkOut', 'Steps']);
+    await waitFor(() => expect(requested).toContain('/admin/api/render'));
   });
 });
 

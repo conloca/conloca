@@ -60,6 +60,10 @@ export interface EditorBundleDescriptors {
   dataBindings?: EditorDataBindings;
   /** The URL the site serves its media folder at (conlocaCMS `assetRefBase`), which every picked image link starts with. */
   assetRefBase?: string;
+  /** Absolute path of the fragment components render module (conlocaCMS `fragmentComponentsPath`). */
+  fragmentComponentsPath?: string;
+  /** Route name → absolute path of that route's editor frame module (conlocaCMS routing `editorFrame`). */
+  editorFrames?: Record<string, string>;
 }
 
 export interface EditorPageBundleInput {
@@ -164,7 +168,12 @@ export async function bundleEditorPage(input: EditorPageBundleInput): Promise<Ed
   const entryPath = resolve(input.root, input.puckConfigPath);
   const descriptors = input.descriptors;
   const discovered = descriptors?.discoveredMdxComponents ?? [];
-  const virtualEntry = [
+  const renderPath = descriptors?.fragmentComponentsPath && resolve(descriptors.fragmentComponentsPath);
+  const frames = Object.entries(descriptors?.editorFrames ?? {}).map(([route, path]) => ({
+    route,
+    path: resolve(path),
+  }));
+  const staticEntry = [
     `export { default } from ${JSON.stringify(entryPath)};`,
     // Copy the namespace before selecting optional names: a direct named
     // re-export would reject schemas modules that declare only some of them.
@@ -181,7 +190,22 @@ export async function bundleEditorPage(input: EditorPageBundleInput): Promise<Ed
     ...(descriptors?.assetRefBase === undefined
       ? []
       : [`export const assetRefBase = ${JSON.stringify(descriptors.assetRefBase)};`]),
-  ].join('\n');
+    // Namespace copies, like the schemas module's: a missing export reaches generateBundle's checks.
+    ...(renderPath
+      ? [
+          `import * as __fc from ${JSON.stringify(renderPath)};`,
+          'export const fragmentComponents = { ...__fc }.fragmentComponents;',
+        ]
+      : []),
+    ...(frames.length > 0
+      ? [
+          ...frames.map(({ path }, index) => `import * as __f${index} from ${JSON.stringify(path)};`),
+          `export const editorFrames = { ${frames
+            .map(({ route }, index) => `${JSON.stringify(route)}: { ...__f${index} }.default`)
+            .join(', ')} };`,
+        ]
+      : []),
+  ];
 
   const jsAssets: EditorAsset[] = [];
   const entryId = '\0conloca-editor-page-entry.js';
@@ -190,14 +214,48 @@ export async function bundleEditorPage(input: EditorPageBundleInput): Promise<Ed
     resolveId(id) {
       return id === entryId ? id : null;
     },
-    load(id) {
-      return id === entryId ? virtualEntry : null;
+    async load(id) {
+      if (id !== entryId) return null;
+      if (!descriptors) return staticEntry.join('\n');
+      // The renderer publish runs: the @conloca/mdx copy the site's @conloca/astro-cms resolves.
+      // A resolve that throws (an exports map without `./render`, as in @conloca/mdx ≤0.2.6) counts as unresolved.
+      const tryResolve = (specifier: string, importer: string) =>
+        this.resolve(specifier, importer).then(
+          (resolved) => resolved?.id,
+          () => undefined,
+        );
+      const astroCms = await tryResolve('@conloca/astro-cms', join(input.root, 'package.json'));
+      const renderer = astroCms && (await tryResolve('@conloca/mdx/render', astroCms));
+      if (!renderer) {
+        input.logger.warn(
+          `${PACKAGE_NAME}: @conloca/mdx/render does not resolve from ` +
+            `${astroCms ?? `@conloca/astro-cms (looked up from ${input.root})`}; ` +
+            "the editor renders fragments with its own renderer instead of the site's.",
+        );
+        return staticEntry.join('\n');
+      }
+      return [...staticEntry, `export { evaluateMDXToComponent } from ${JSON.stringify(renderer)};`].join('\n');
     },
     async generateBundle() {
+      // Vite resolves symlinks (macOS's /var → /private/var), so look modules up by their resolved ids.
+      const exportsOf = async (path: string) => {
+        const id = (await this.resolve(path))?.id;
+        return (id && this.getModuleInfo(id)?.exports) || [];
+      };
+      if (renderPath && !(await exportsOf(renderPath)).includes('fragmentComponents')) {
+        input.logger.warn(
+          `${renderPath}: the fragment components module does not export fragmentComponents; ` +
+            'the editor renders fragments with no site components.',
+        );
+      }
+      for (const { route, path } of frames) {
+        // oxlint-disable-next-line eslint/no-await-in-loop -- in order, so the first frame without one is reported.
+        if (!(await exportsOf(path)).includes('default')) {
+          this.error(`${PACKAGE_NAME}: the editor frame for route "${route}" (${path}) has no default export.`);
+        }
+      }
       if (!descriptors?.schemasPath) return;
-      // Vite resolves symlinks (macOS's /var → /private/var), so look the module up by its resolved id.
-      const schemasId = (await this.resolve(resolve(descriptors.schemasPath)))?.id;
-      const exports = (schemasId && this.getModuleInfo(schemasId)?.exports) || [];
+      const exports = await exportsOf(resolve(descriptors.schemasPath));
       if (!SCHEMA_MODULE_EXPORTS.some((name) => exports.includes(name))) {
         input.logger.warn(
           `${PACKAGE_NAME}: the schemas module at ${descriptors.schemasPath} exports none of ` +

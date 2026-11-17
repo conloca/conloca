@@ -109,6 +109,113 @@ const ROUTED_WRANGLER = `${JSON.stringify(
   2,
 )}\n`;
 
+/** What a fragment using the site's `Callout` renders: the component's own markup. */
+export const CALLOUT_MARKUP = '<aside class="callout">Read this first</aside>';
+/** The fragment's `## Why` through the site's `h2` override. */
+export const WHY_MARKUP = '<h2 id="why" class="fragment-heading">Why</h2>';
+/** The site's stateful `Badge`, rendered with its initial state from JSON-literal props. */
+export const BADGE_MARKUP = '<span class="badge">5 new</span>';
+
+/**
+ * A site whose fragment uses its own `Callout`: the render module `fragmentComponentsPath` names, the fragment, and the
+ * CMS page `/fragment/` that places it.
+ */
+export const FRAGMENT_SITE = {
+  cmsOptions: "fragmentComponentsPath: './src/fragment-components.tsx'",
+  files: {
+    'src/content.config.ts': [
+      "import { conlocaFragments, conlocaPages } from '@conloca/astro-cms/node/content';",
+      '',
+      "export const collections = { pages: conlocaPages(), ...conlocaFragments('general') };",
+      '',
+    ].join('\n'),
+    'src/fragment-components.tsx': [
+      "import { defineFragmentComponents } from '@conloca/mdx/render';",
+      "import { useState } from 'react';",
+      '',
+      'const Badge = ({ start, labels }: { start: number; labels: string[] }) => {',
+      '  const [count] = useState(start);',
+      '  return <span className="badge">{count} {labels[0]}</span>;',
+      '};',
+      '',
+      'export const fragmentComponents = defineFragmentComponents({',
+      '  components: { Callout: ({ children }: { children?: unknown }) => <aside className="callout">{children as never}</aside>, Badge },',
+      '  elements: { h2: (props: object) => <h2 {...props} className="fragment-heading" /> },',
+      '});',
+      '',
+    ].join('\n'),
+    'content/fragments/general/callout.en.mdx': [
+      '---',
+      'title: Callout',
+      'id: vx-c4llout1',
+      "created: '2026-04-20T00:00:00.000Z'",
+      "modified: '2026-04-20T00:00:00.000Z'",
+      '---',
+      '',
+      '<Callout>Read this first</Callout>',
+      '',
+      '## Why',
+      '',
+      '<Badge start={5} labels={["new"]} />',
+      '',
+    ].join('\n'),
+    'content/default/pages/fragment.en.vxjson': `${JSON.stringify({
+      created: '2026-04-20T00:00:00.000Z',
+      id: 'vx-fragment',
+      meta: { title: 'Fragment' },
+      modified: '2026-04-20T00:00:00.000Z',
+      type: 'puck',
+      content: {
+        puckData: {
+          content: [{ type: 'Fragment_vx-c4llout1', props: { id: 'Fragment-callout', contentId: 'vx-c4llout1' } }],
+          root: {},
+          zones: {},
+        },
+      },
+    })}\n`,
+  },
+};
+
+/**
+ * A site with a framed route `blog` (`/articles/...`) and the frameless route `pages`; with `framed` false no route
+ * declares a frame. `/articles/a` places the `Callout` fragment, `/articles/empty` has no blocks.
+ */
+export const framedSite = (framed: boolean) => ({
+  cmsOptions: FRAGMENT_SITE.cmsOptions,
+  routing: [
+    '{ routes: {',
+    `  blog: { pattern: '/articles/[...slug]', collection: 'blog', layout: './src/layouts/Layout.astro'${
+      framed ? ", editorFrame: './src/cms/blog-frame.tsx'" : ''
+    } },`,
+    "  pages: { pattern: '/[...slug]', collection: 'pages', layout: './src/layouts/Layout.astro' },",
+    '} }',
+  ].join(' '),
+  files: {
+    ...FRAGMENT_SITE.files,
+    'src/content.config.ts': [
+      "import { conlocaFragments, conlocaPages } from '@conloca/astro-cms/node/content';",
+      '',
+      'export const collections = {',
+      "  pages: conlocaPages(), blog: conlocaPages({ collection: 'blog' }), ...conlocaFragments('general'),",
+      '};',
+      '',
+    ].join('\n'),
+    'src/cms/blog-frame.tsx':
+      'export default ({ children }: { children?: unknown }) => <div className="page-shell">{children as never}</div>;\n',
+    'content/default/blog/articles/a.en.vxjson': FRAGMENT_SITE.files[
+      'content/default/pages/fragment.en.vxjson'
+    ].replace('vx-fragment', 'vx-article'),
+    'content/default/blog/articles/empty.en.vxjson': `${JSON.stringify({
+      created: '2026-04-20T00:00:00.000Z',
+      id: 'vx-empty',
+      meta: { title: 'Empty' },
+      modified: '2026-04-20T00:00:00.000Z',
+      type: 'puck',
+      content: { puckData: {} },
+    })}\n`,
+  },
+});
+
 /** The adapter call's argument a shape names; the adapter's default otherwise. */
 const ADAPTER_OPTIONS = new Map<Shape, string>([
   ['isr', '{ isr: true }'],
@@ -116,6 +223,9 @@ const ADAPTER_OPTIONS = new Map<Shape, string>([
   ['edge', "{ middlewareMode: 'edge' }"],
   ['static-cache', '{ cacheOnDemandPages: true }'],
 ]);
+
+const SHAPE_ROUTING =
+  "{ routes: { pages: { pattern: '/[...slug]', collection: 'pages', layout: './src/layouts/Layout.astro' } } }";
 
 function shapeOptions(adapter: Adapter, shape: Shape): FixtureSiteOptions {
   const server = isServerShape(shape);
@@ -154,8 +264,7 @@ function shapeOptions(adapter: Adapter, shape: Shape): FixtureSiteOptions {
     ...(shape === 'static-base' ? { base: '/docs' } : {}),
     ...(shape === 'nosite' ? { withoutSite: true } : {}),
     extraConfig,
-    cmsOptions:
-      "routing: { routes: { pages: { pattern: '/[...slug]', collection: 'pages', layout: './src/layouts/Layout.astro' } } }",
+    cmsOptions: `routing: ${SHAPE_ROUTING}`,
     extraFiles: files,
   };
 }
@@ -205,6 +314,8 @@ export async function buildFixture(
     env = {},
     endpoint,
     files = {},
+    cmsOptions,
+    routing,
     beforeBuild,
   }: {
     preview: boolean;
@@ -212,14 +323,20 @@ export async function buildFixture(
     env?: Record<string, string>;
     endpoint?: string;
     files?: Record<string, string | Uint8Array>;
+    /** `conlocaCMS({...})` properties added to the shape's. */
+    cmsOptions?: string;
+    /** The `routing` value written in place of the shape's. */
+    routing?: string;
     beforeBuild?: (dir: string) => Promise<void>;
   },
 ): Promise<BuiltFixture> {
   const name = `d8-${adapter}-${shape}-${preview ? 'preview' : 'plain'}${copy}`;
   const options = shapeOptions(adapter, shape);
+  const shapeCmsOptions = routing === undefined ? options.cmsOptions : `routing: ${routing}`;
   const dir = await createFixtureSite(name, {
     ...options,
     extraFiles: { ...options.extraFiles, ...files },
+    cmsOptions: cmsOptions === undefined ? shapeCmsOptions : `${shapeCmsOptions}, ${cmsOptions}`,
     integrationOptions: `{ repoUri: 'acme/fixture'${preview ? ', previewBuild: {}' : ''}${
       endpoint === undefined ? '' : `, endpoint: ${JSON.stringify(endpoint)}`
     } }`,

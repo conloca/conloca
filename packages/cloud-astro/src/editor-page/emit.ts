@@ -43,6 +43,7 @@ import type { InheritedOptions } from '../resolve-options.js';
 import { resolveBuildSiteId } from '../site-id.js';
 import { bundleEditorPage } from './bundle.js';
 import { emitDataSchemas } from './data-schemas.js';
+import { emitFrameChains } from './frame-chains.js';
 import { findFramingBlockers } from './framing.js';
 import { renderEditorPage } from './page.js';
 import { baseMismatch } from './site-base.js';
@@ -71,6 +72,9 @@ export interface EmitEditorPageInput {
   serverOutput: boolean;
   /** Astro's `i18n`, whose non-default locale folders hold no pages to offer. */
   i18n: AstroI18nLocales | undefined;
+  /** Astro's `trailingSlash` and `build.format`: whether a built page is served with a trailing slash. */
+  trailingSlash: 'always' | 'never' | 'ignore';
+  buildFormat: 'directory' | 'file' | 'preserve';
   logger: { info(message: string): void; warn(message: string): void };
 }
 
@@ -126,6 +130,17 @@ export async function emitEditorPage(input: EmitEditorPageInput): Promise<void> 
       logger,
     });
   }
+  await emitFrameChains({
+    folder,
+    root: input.root,
+    vite: input.vite,
+    editorFrames: descriptors?.editorFrames,
+    dataBindings: descriptors?.dataBindings,
+    contentRoot,
+    trailingSlash: input.trailingSlash,
+    buildFormat: input.buildFormat,
+    logger,
+  });
 
   let editorCssFile: string | null = null;
   if (inherited.editorCss) {

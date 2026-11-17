@@ -6,6 +6,7 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { isFragmentVocabulary } from '@conloca/mdx/render';
 import type { Plugin } from 'vite';
 import {
   bundleEditorPage,
@@ -517,6 +518,158 @@ describe('bundleEditorPage — editor descriptors', () => {
     expect(bundleModule.mdxComponents).toBeUndefined();
     expect(bundleModule.discoveredMdxComponents).toBeUndefined();
     expect(bundleModule.dataBindings).toBeUndefined();
+    expect('fragmentComponents' in bundleModule).toBe(false);
+    expect('editorFrames' in bundleModule).toBe(false);
+    expect('evaluateMDXToComponent' in bundleModule).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The site's fragment renderer, vocabulary and editor frames
+// ---------------------------------------------------------------------------
+
+/** What React's `createElement` returns, as far as these tests pass it on. */
+interface ReactElementLike {
+  readonly type: unknown;
+}
+
+describe('bundleEditorPage — fragment render', () => {
+  // cloud-astro has no react of its own: resolve the site's packages from the repository root.
+  const rootRequire = createRequire(join(import.meta.dir, '..', '..', '..', '..', 'package.json'));
+  const renderToStaticMarkup: (element: ReactElementLike) => string =
+    rootRequire('react-dom/server').renderToStaticMarkup;
+  const createElement: (type: unknown) => ReactElementLike = rootRequire('react').createElement;
+
+  let renderPath: string;
+  let framePath: string;
+
+  beforeEach(async () => {
+    // The renderer is bundled for the browser: its entity decoder makes an element when it loads.
+    Object.assign(globalThis, { document: { createElement: () => ({}) } });
+    await mkdir(join(projectDir, 'node_modules', '@conloca'), { recursive: true });
+    // astro-cms is cloud-astro's own dependency; react comes from the repository root.
+    const packages = [
+      ['@conloca/astro-cms', createRequire(import.meta.url)],
+      ['react', rootRequire],
+      ['react-dom', rootRequire],
+    ] as const;
+    await Promise.all(
+      packages.map(([name, require]) =>
+        symlink(dirname(require.resolve(`${name}/package.json`)), join(projectDir, 'node_modules', name)),
+      ),
+    );
+    renderPath = join(projectDir, 'fragment-components.tsx');
+    framePath = join(projectDir, 'blog-frame.tsx');
+    await writeFile(entryPath, 'export default { components: {} };\n');
+    await writeFile(
+      renderPath,
+      'export const fragmentComponents = { components: { Callout: ({ children }) => <aside className="callout">{children}</aside> }, elements: {} };\n',
+    );
+    await writeFile(framePath, 'export default function Frame({ children }) { return <main>{children}</main>; }\n');
+  });
+  afterEach(() => {
+    Reflect.deleteProperty(globalThis, 'document');
+  });
+
+  interface RenderExports {
+    fragmentComponents?: unknown;
+    editorFrames?: { blog?: unknown };
+    evaluateMDXToComponent?: (mdx: string, vocabulary?: unknown) => Promise<{ Component: unknown }>;
+  }
+
+  async function bundleRender(descriptors: EditorBundleDescriptors) {
+    const { result, js, logger } = await runBundle({ descriptors });
+    const bundleModule: RenderExports = await import(pathToFileURL(join(editorDir, result.site)).href);
+    return { bundleModule, js, logger };
+  }
+
+  it("exports the site's vocabulary, renderer and frames, rendering a fragment with the site's components", async () => {
+    const { bundleModule } = await bundleRender({
+      fragmentComponentsPath: renderPath,
+      editorFrames: { blog: framePath },
+    });
+
+    expect(isFragmentVocabulary(bundleModule.fragmentComponents)).toBe(true);
+    const evaluateFragment = bundleModule.evaluateMDXToComponent;
+    if (!evaluateFragment) throw new Error('the bundle exports no renderer');
+    const { Component } = await evaluateFragment('<Callout>Hi</Callout>', bundleModule.fragmentComponents);
+    expect(renderToStaticMarkup(createElement(Component))).toContain('<aside class="callout">Hi</aside>');
+    expect(typeof bundleModule.editorFrames?.blog).toBe('function');
+  });
+
+  it('keeps React external to the renderer', async () => {
+    const { js } = await bundleRender({ fragmentComponentsPath: renderPath });
+
+    expect(js).toContain('react/jsx-runtime');
+    for (const marker of ['react.production', 'ReactCurrentOwner', '__SECRET_INTERNALS']) {
+      expect(js).not.toContain(marker);
+    }
+  });
+
+  it('warns, naming the module, when the render module exports no fragmentComponents', async () => {
+    await writeFile(renderPath, 'export {};\n');
+
+    const { bundleModule, logger } = await bundleRender({ fragmentComponentsPath: renderPath });
+
+    expect(bundleModule.fragmentComponents).toBeUndefined();
+    expect(logger.warnings.filter((warning) => warning.startsWith(renderPath))).toHaveLength(1);
+  });
+
+  it('fails the build when a frame module has no default export, naming the route and the path', async () => {
+    await writeFile(framePath, 'export function Frame() { return null; }\n');
+
+    let failure: unknown;
+    try {
+      await bundleRender({ editorFrames: { blog: framePath } });
+    } catch (error) {
+      failure = error;
+    }
+    expect(String(failure)).toContain('"blog"');
+    expect(String(failure)).toContain(framePath);
+  });
+
+  it('exports the frames and the renderer without a render module', async () => {
+    const { bundleModule } = await bundleRender({ editorFrames: { blog: framePath } });
+
+    expect(typeof bundleModule.editorFrames?.blog).toBe('function');
+    expect(typeof bundleModule.evaluateMDXToComponent).toBe('function');
+    expect('fragmentComponents' in bundleModule).toBe(false);
+  });
+
+  it('warns and leaves the renderer out when @conloca/mdx/render does not resolve from astro-cms', async () => {
+    // An astro-cms copy with no @conloca/mdx reachable from it.
+    const astroCms = join(projectDir, 'node_modules', '@conloca', 'astro-cms');
+    await rm(astroCms);
+    await mkdir(astroCms);
+    await writeFile(join(astroCms, 'package.json'), '{ "name": "@conloca/astro-cms", "main": "index.js" }\n');
+    await writeFile(join(astroCms, 'index.js'), 'export {};\n');
+
+    const { bundleModule, logger } = await bundleRender({ editorFrames: { blog: framePath } });
+
+    expect('evaluateMDXToComponent' in bundleModule).toBe(false);
+    expect(logger.warnings.join('\n')).toContain(`@conloca/mdx/render does not resolve from ${astroCms}`);
+  });
+
+  it('warns and leaves the renderer out when the site’s @conloca/mdx has no ./render export', async () => {
+    // Published @conloca/mdx ≤0.2.6: an exports map without ./render makes the lookup throw.
+    const astroCms = join(projectDir, 'node_modules', '@conloca', 'astro-cms');
+    const mdx = join(astroCms, 'node_modules', '@conloca', 'mdx');
+    await rm(astroCms);
+    await mkdir(mdx, { recursive: true });
+    await writeFile(join(astroCms, 'package.json'), '{ "name": "@conloca/astro-cms", "main": "index.js" }\n');
+    await writeFile(join(astroCms, 'index.js'), 'export {};\n');
+    await writeFile(
+      join(mdx, 'package.json'),
+      '{ "name": "@conloca/mdx", "exports": { ".": "./index.js", "./node": "./index.js" } }\n',
+    );
+    await writeFile(join(mdx, 'index.js'), 'export {};\n');
+
+    const { bundleModule, logger } = await bundleRender({ assetRefBase: '/media' });
+
+    expect('evaluateMDXToComponent' in bundleModule).toBe(false);
+    expect(logger.warnings.filter((warning) => warning.includes('@conloca/mdx/render does not resolve'))).toHaveLength(
+      1,
+    );
   });
 });
 

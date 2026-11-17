@@ -14,6 +14,8 @@ import { useEditorPref } from '../../hooks/useEditorPref.js';
 import { useErrorModal } from '../../hooks/useErrorModal.js';
 import { useTheme } from '../../hooks/useTheme.js';
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard.js';
+import { setSelectedBlock } from '../../selected-block.js';
+import { useSiteRender } from '../../site-render.js';
 import type { SaveState } from '../../types.js';
 import { getUIConfig } from '../../ui-config.js';
 import { DraftNoticeStrip } from '../conflicts/EditorNoticeStrip.js';
@@ -23,14 +25,17 @@ import { UnsavedChangesDialog } from '../dialogs/UnsavedChangesDialog.js';
 import { CMSMDXEditor, type CMSMDXEditorProps } from './CMSMDXEditor.js';
 import { EditorChromeToggles } from './EditorChromeToggles.js';
 import { FRAGMENT_STATUS_ID, FragmentEditorHeaderActions, fragmentStatusText } from './FragmentEditorHeaderActions.js';
+import { checkFragmentSave } from './fragment-save-check.js';
 import {
   pendingFragmentSave,
   trackFragmentSave,
   useFragmentContent,
   waitForFragmentSave,
 } from './fragment-save-lifetime.js';
+import { JsxPropsPanel } from './JsxPropsPanel.js';
 import { LocaleSelector } from './LocaleSelector.js';
-import { MDXLivePreview } from './MDXLivePreview.js';
+import { fragmentPreviewPathname, MDXLivePreview } from './MDXLivePreview.js';
+import { useOfferedMdxComponents } from './offered-mdx-components.js';
 
 type PersistStatus = 'saved' | 'conflict' | 'error';
 
@@ -52,6 +57,10 @@ export function FragmentEditor({ EditorComponent = CMSMDXEditor }: FragmentEdito
   const contentClient = getContentAPIClient();
   const updateContent = useUpdateLocalized();
   const { resolvedTheme } = useTheme();
+  const { vocabulary } = useSiteRender();
+  const descriptors = useOfferedMdxComponents();
+  // Why the last save was refused without writing, for the host flush to report.
+  const refusalRef = useRef<string | undefined>(undefined);
 
   // When the editor is opened from inside the Puck page editor (via the
   // "Open fragment editor" button on the page's right-hand panel), `?from=page`
@@ -232,10 +241,20 @@ export function FragmentEditor({ EditorComponent = CMSMDXEditor }: FragmentEdito
     return queueSave(
       identity,
       () => {
+        refusalRef.current = undefined;
         if (!isContentLoaded || routeIdentityChanged || identity.id !== id || identity.locale !== currentLocale) {
           return Promise.resolve('error');
         }
         if (forceEtag === undefined && newContent === savedContentRef.current) return Promise.resolve('saved');
+        const committed = flushRef.current;
+        const refusal = checkFragmentSave(newContent, committed.vocabulary, committed.descriptors);
+        if (refusal) {
+          setErrorOperation('save');
+          showError(refusal.message);
+          setSaveState('error');
+          refusalRef.current = refusal.message;
+          return Promise.resolve('error');
+        }
         return writeContent(newContent, identity, forceEtag);
       },
       () => saveIdentityRef.current === identity,
@@ -243,7 +262,7 @@ export function FragmentEditor({ EditorComponent = CMSMDXEditor }: FragmentEdito
   };
 
   const discardedBufferRef = useRef<{ identity: typeof saveIdentityRef.current; content: string } | null>(null);
-  const flushRef = useRef({ content, isDirty, persist, waitingForSave, contentClient });
+  const flushRef = useRef({ content, isDirty, persist, waitingForSave, contentClient, vocabulary, descriptors });
   useLayoutEffect(() => {
     // The host must read the committed buffer and request, never an abandoned route render.
     const discarded = discardedBufferRef.current;
@@ -256,6 +275,8 @@ export function FragmentEditor({ EditorComponent = CMSMDXEditor }: FragmentEdito
       persist,
       waitingForSave,
       contentClient,
+      vocabulary,
+      descriptors,
     };
     if (dirtyChanged) notifyEditorDirtyChanged();
   });
@@ -276,7 +297,7 @@ export function FragmentEditor({ EditorComponent = CMSMDXEditor }: FragmentEdito
           // oxlint-disable-next-line no-await-in-loop -- Each write needs the ETag returned by the previous save.
           const status = await committed.persist(committed.content);
           if (status !== 'saved' || saveIdentityRef.current !== identity) {
-            return { ok: false, message: 'Could not save editor changes.' };
+            return { ok: false, message: refusalRef.current ?? 'Could not save editor changes.' };
           }
           // A completed write changes the baseline before React necessarily commits a new dirty flag.
           committed = flushRef.current;
@@ -845,6 +866,12 @@ function FragmentEditorSurface({
   onChange,
   onSave,
 }: FragmentEditorSurfaceProps) {
+  // The props panel reads a selection shared across editors; a block from another or a disposed editor must not show.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: clear again when the editor remounts under a new key.
+  useEffect(() => {
+    setSelectedBlock(null);
+    return () => setSelectedBlock(null);
+  }, [editorKey]);
   return (
     <div className="flex-1 overflow-hidden flex flex-row min-h-0">
       {/* `conloca-mdx-editor-surround` paints the area around the
@@ -864,6 +891,7 @@ function FragmentEditorSurface({
           // from the initial prop and doesn't reactively swap it).
           key={editorKey}
           value={content}
+          fragment
           // Fragment content has no canonical page route, so we
           // synthesize one from the integration's
           // `fragmentPreviewRoute` option (defaults to `/` — see
@@ -874,7 +902,7 @@ function FragmentEditorSurface({
           // to the editor's bare chrome. Per-fragment overrides via
           // frontmatter (`previewRoute`) are on the roadmap for the
           // case where one fragment is tied to a specific layout.
-          previewRouteUrl={import.meta.env.CONLOCA_FRAGMENT_PREVIEW_ROUTE || '/'}
+          previewRouteUrl={fragmentPreviewPathname()}
           onChange={onChange}
           onSave={onSave}
           className={editorClassName}
@@ -882,6 +910,7 @@ function FragmentEditorSurface({
           placeholder="Start writing your fragment…"
         />
       </div>
+      <JsxPropsPanel />
       {previewOpen && (
         <div className="w-1/2 min-w-0 overflow-auto border-l border-line bg-panel">
           <MDXLivePreview markdown={content} />

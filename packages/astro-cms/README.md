@@ -178,31 +178,42 @@ const { title, description } = Astro.props;
 Supplying `layout` and nothing else turns on a catch-all `/[...slug]` route over the `pages` collection with a `404`
 fallback. Sites that need more than one route drop `layout` and use `routing.routes.<name>.layout` instead.
 
+A route may also name an `editorFrame`: a module whose default export is a React component
+`({ pathname, children }) => ReactNode` that renders the markup the route's layout puts around page content, for example
+`<div className="page-shell">{children}</div>`. The editor canvas shows each page of that route inside it, so blocks
+look as they do on the site. Publish ignores the frame apart from one thing: every published page of that route wraps
+its content in `<div data-conloca-page-root="">`, which marks where page content starts. Routes without a frame are
+unchanged, byte for byte. Selectors in the layout's CSS that target page content as a direct child (`main > section`)
+may need adjusting on framed routes. Fragments render inline inside the frame with the site's own components, so prose
+in the canvas sits in the same wrappers as on the page; `conloca doctor --live` (CC30) warns when a published page's
+wrappers drift from its frame.
+
 With those four files in place, run the Astro dev server and open `/__cms`.
 
 ### Options
 
 Passed to `conlocaCMS({ ... })`. Only two are required.
 
-| Option                 | Required | What it does                                                                                                                                                                                                           |
-| ---------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `contentRoot`          | yes      | Directory holding `sites.json` and the content files. Also handed to the collection factories, so the content config needs no copy of it.                                                                              |
-| `puckConfigPath`       | yes      | Module whose default export is the Puck `Config`. Supplies the visual editor's component palette and seeds component auto-discovery.                                                                                   |
-| `canvasDir`            | no       | Directory for canvas documents.                                                                                                                                                                                        |
-| `route`                | no       | Where the CMS mounts. Defaults to `/__cms`.                                                                                                                                                                            |
-| `layout`               | no       | Default layout for content pages. On its own it enables routing with a catch-all pattern.                                                                                                                              |
-| `routing`              | no       | Full routing configuration, for sites with more than one content route.                                                                                                                                                |
-| `templates`            | no       | Page templates offered in the create-page dialog.                                                                                                                                                                      |
-| `schemasPath`          | no       | Module exporting `dataSchemas`, `pageSchemas` and `mdxComponents`. Drives the page-settings form and the MDX component registry.                                                                                       |
-| `contentSchemasPath`   | no       | Schema-only module exporting the `pageSchemas` / `dataSchemas` your content config passes to `conlocaPages()` / `conlocaData()`. Draft previews parse entries with the entry parsers built from it, as the build does. |
-| `componentPaths`       | no       | Extra folders to scan for components wrapped in `withHydration()`.                                                                                                                                                     |
-| `mdxComponentFolders`  | no       | Folders scanned for locally authored MDX components, whose `interface Props` becomes the editor's prop panel. Defaults to `['src/components/mdx']`.                                                                    |
-| `assetsPath`           | no       | Upload directory; enables the Media Library. The site must serve it from `publicDir`, directly or through a link there, or dev and build fail.                                                                         |
-| `siteStyles`           | no       | CSS injected into the Puck preview iframe so components render with site styling.                                                                                                                                      |
-| `editorStyles`         | no       | CSS injected into the MDX editor's admin document. Host-component selectors only — see the file's own notes on what does not belong.                                                                                   |
-| `editorCSS`            | no       | Raw CSS applied after auto-discovered host styles in the editor's host-preview layer.                                                                                                                                  |
-| `fragmentPreviewRoute` | no       | Route whose styles and content wrapper frame the standalone fragment editor. Defaults to `/`.                                                                                                                          |
-| `locales`              | no       | The site's locales and default locale. Without it: the site's `locales` and `defaultLocale` in `sites.json`, else `globalLocales`.                                                                                     |
+| Option                   | Required | What it does                                                                                                                                                                                                           |
+| ------------------------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `contentRoot`            | yes      | Directory holding `sites.json` and the content files. Also handed to the collection factories, so the content config needs no copy of it.                                                                              |
+| `puckConfigPath`         | yes      | Module whose default export is the Puck `Config`. Supplies the visual editor's component palette and seeds component auto-discovery.                                                                                   |
+| `canvasDir`              | no       | Directory for canvas documents.                                                                                                                                                                                        |
+| `route`                  | no       | Where the CMS mounts. Defaults to `/__cms`.                                                                                                                                                                            |
+| `layout`                 | no       | Default layout for content pages. On its own it enables routing with a catch-all pattern.                                                                                                                              |
+| `routing`                | no       | Full routing configuration, for sites with more than one content route.                                                                                                                                                |
+| `templates`              | no       | Page templates offered in the create-page dialog.                                                                                                                                                                      |
+| `schemasPath`            | no       | Module exporting `dataSchemas`, `pageSchemas` and `mdxComponents`. Drives the page-settings form and the MDX component registry.                                                                                       |
+| `contentSchemasPath`     | no       | Schema-only module exporting the `pageSchemas` / `dataSchemas` your content config passes to `conlocaPages()` / `conlocaData()`. Draft previews parse entries with the entry parsers built from it, as the build does. |
+| `componentPaths`         | no       | Extra folders to scan for components wrapped in `withHydration()`.                                                                                                                                                     |
+| `mdxComponentFolders`    | no       | Folders scanned for locally authored MDX components, whose `interface Props` becomes the editor's prop panel. Defaults to `['src/components/mdx']`.                                                                    |
+| `assetsPath`             | no       | Upload directory; enables the Media Library. The site must serve it from `publicDir`, directly or through a link there, or dev and build fail.                                                                         |
+| `siteStyles`             | no       | CSS injected into the Puck preview iframe so components render with site styling.                                                                                                                                      |
+| `editorStyles`           | no       | CSS injected into the MDX editor's admin document. Host-component selectors only — see the file's own notes on what does not belong.                                                                                   |
+| `editorCSS`              | no       | Raw CSS applied after auto-discovered host styles in the editor's host-preview layer.                                                                                                                                  |
+| `fragmentPreviewRoute`   | no       | Route whose styles and content wrapper frame the standalone fragment editor, and the `pathname` the fragment live preview's editor frame receives, in dev and in the built editor. Defaults to `/`.                    |
+| `fragmentComponentsPath` | no       | Module exporting `fragmentComponents = defineFragmentComponents(...)`: the components and element overrides fragments may use. See [Fragment components](#fragment-components).                                        |
+| `locales`                | no       | The site's locales and default locale. Without it: the site's `locales` and `defaultLocale` in `sites.json`, else `globalLocales`.                                                                                     |
 
 `ConlocaCMSOptions` also extends the editor's `UIConfig` (minus `basename`), so fields such as `apiBaseUrl`,
 `siteBaseUrl`, `enableDevtools`, `queryClientOptions`, `projectRoot` and `hosted` are accepted as well. Those exist for
@@ -282,6 +293,80 @@ editing a page never moves it; `'date-asc'` and `'title'` are the others; pages 
 and `locale` to read another language. It reads the pages of the content routes `conlocaCMS()` serves, so it needs
 `layout` or `routing` set there and throws when neither is.
 
+## Fragment components
+
+Fragments can use the site's own React components and restyle the HTML their Markdown produces. The site declares both
+in a render module and names it with `fragmentComponentsPath`:
+
+```tsx
+// src/fragment-components.tsx
+import { defineFragmentComponents } from '@conloca/mdx/render';
+import { Callout } from './components/Callout';
+import { SectionHeading } from './components/SectionHeading';
+
+export const fragmentComponents = defineFragmentComponents({
+  components: { Callout },
+  elements: { h2: SectionHeading },
+});
+```
+
+```js
+// astro.config.mjs
+conlocaCMS({
+  contentRoot: './content',
+  puckConfigPath: './src/puck.config.tsx',
+  fragmentComponentsPath: './src/fragment-components.tsx',
+});
+```
+
+Published pages, draft previews, the editor canvas and the fragment editor's live preview all render fragments from this
+module, with `evaluateMDXToComponent` from `@conloca/mdx/render`. That is why it is its own module and not part of
+`schemasPath`: it loads in the server runtime that renders pages, which may forbid code generation from strings, so it
+must import no editor code. `schemasPath` holds the editor's descriptors and may import editor code. The rules for
+components, element overrides and JSON props are in the `@conloca/mdx` README.
+
+In the fragment editor:
+
+- **Descriptors join by name.** The editor offers the vocabulary's components only, and uses the `mdxComponents`
+  descriptor of the same name (from `schemasPath`, see below) for its label, insert hint and props. A descriptor with no
+  vocabulary component stays available on MDX pages only. A vocabulary component without a descriptor is still offered,
+  with no settings fields, and is inserted without a body; declare a descriptor with `hasChildren: true` to give it an
+  editable body.
+- **No custom editors.** A descriptor's custom `Editor` is not used in fragments: the editor renders the site's
+  component itself, with the settings panel for props.
+- **List and object props.** A descriptor prop may be `{ type: 'list', of: … }` or `{ type: 'object', fields: … }`.
+  Authors edit them in the settings panel, never as JSON, and the editor writes them as JSON attribute values.
+  `defineMdxComponents` warns when a string, number or boolean default does not match its type, and throws for a list or
+  object prop with no `of` or `fields`, or a default of the wrong shape.
+- **The save check.** The editor refuses to save a fragment the renderer would refuse or change: a parse failure,
+  `import`/`export` lines, `{…}` expressions, a component the vocabulary lacks, a prop value that is not valid JSON, a
+  `{...spread}` or code in an attribute, or a declared prop of the wrong type. The message names the component or line;
+  for a component the vocabulary lacks, it also lists the vocabulary. The text stays in the editor, unsaved. A component
+  prop value that is not valid JSON is never published.
+- **The live preview** renders the fragment in the editor frame of the first routing entry, in declaration order, that
+  declares an `editorFrame`, with `fragmentPreviewRoute` as its `pathname`. With no framed route there is no frame. To
+  use another frame, reorder the routes or point `fragmentPreviewRoute` at a path the frame recognizes.
+- **Outline.** The page outline comes from the fragment's Markdown headings, including those written between a
+  component's tags; a heading the component itself renders is not in the outline.
+
+The build fails when a live fragment (published, or scheduled and not expired) fails to parse or uses a component the
+render module does not declare, naming the fragment, its file and line, and the component. When the module cannot be
+loaded outside Astro's pipeline, the build only warns and skips the name check.
+
+Author-written `style` is dropped from every element and component in fragments, raw HTML included; the column alignment
+the renderer gives Markdown tables is kept. Props and attributes whose names start with `on`, in any case, are never
+passed; rename them.
+
+A component that renders a prop as HTML (`dangerouslySetInnerHTML`) turns author text into markup, in the editor page
+and on the published site. That is the site's code choice; render props as text unless the markup is trusted.
+
+Inside an object or list prop, a key starting with `on`, in any case, is dropped at any depth when its value is text, so
+a component that spreads the object onto an element never publishes an author's handler; `{"online": true}` is kept. The
+save check refuses such a key, naming its path.
+
+Discovered components can be adjusted with `src/cms-overrides`, but an override cannot declare list or object props;
+declare those in `mdxComponents`.
+
 ## MDX component registry
 
 Hosts can register JSX components (their own, or third-party ones like Starlight's `<Steps>`, `<Tabs>`, `<Card>`) with
@@ -319,9 +404,10 @@ In the editor, registered components appear in two places:
 
 ### Auto-import injection (and its pruning caveat)
 
-Setting `import: { from: '<module>' }` on a descriptor opts the component into automatic import injection: whenever the
-component appears in the document, the CMS save serializer emits the matching `import { Name } from '<module>'` line at
-the top of the file (after frontmatter).
+Setting `import: { from: '<module>' }` on a descriptor opts the component into automatic import injection on MDX pages:
+whenever the component appears in the document, the CMS save serializer emits the matching
+`import { Name } from '<module>'` line at the top of the file (after frontmatter). Fragments never get an `import` line:
+their components come from the render module, and the editor refuses to save a fragment with one.
 
 **Important: the editor rebuilds the import block on every save from components actually referenced in the tree.**
 Imports for unused components are dropped. So are non-JSX imports — type imports, side-effect imports

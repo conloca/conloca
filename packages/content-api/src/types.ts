@@ -68,19 +68,7 @@ export interface APIError {
   };
 }
 
-export interface MDXCompileResponse {
-  code: string;
-  metadata: Record<string, unknown>;
-  /**
-   * The content's headings, in document order, carrying the ids the compiled
-   * markup puts on them. Editing surfaces render the body inside a sandbox
-   * they cannot read, so the outline rides the compile they already request
-   * rather than being scraped back off the frame.
-   */
-  outline: readonly MDXHeading[];
-}
-
-/** One heading of compiled MDX: the anchor target and the text to label it with. */
+/** One heading of rendered MDX: the anchor target and the text to label it with. */
 export interface MDXHeading {
   /** Heading level as authored: 2 for `##`, 3 for `###`. */
   depth: number;
@@ -110,7 +98,6 @@ export const ErrorCodes = {
   INVALID_LOCALE: 'INVALID_LOCALE',
   INVALID_CONTENT_TYPE: 'INVALID_CONTENT_TYPE',
   INVALID_REQUEST: 'INVALID_REQUEST',
-  MDX_COMPILE_FAILED: 'MDX_COMPILE_FAILED',
 
   // Request errors
   /** A write another website sent through the developer's browser. */
@@ -792,6 +779,18 @@ export interface EditorDataBindings {
   siteName: string;
   locale: string;
   routes: Record<string, DataBindingConfig>;
+  /** Every routing entry, in declaration order. */
+  entries?: readonly EditorRouteEntry[];
+  /** The site path the fragment editor previews at; its frame and the site's styles come from that page. */
+  fragmentPreviewRoute?: string;
+}
+
+/** One routing entry as the editor sees it. */
+export interface EditorRouteEntry {
+  name: string;
+  collection: string;
+  /** The route name, keying the bundle's frames export; present only when the route declares an editor frame. Never a filesystem path. */
+  frame?: string;
 }
 
 // Internal type for locale data returned by readLocaleFile

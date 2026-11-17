@@ -35,7 +35,7 @@ import { unified } from 'unified';
  * with an explicit `import.from` (see `MdxJsxComponentDescriptor`), which
  * `joinEsm` reconciles so a binding is never declared twice.
  *
- * This narrows what reaches `compileMDX`, so it cannot weaken the
+ * This narrows what reaches the renderer, so it cannot weaken the
  * `remarkRestrictExpressions` gate: the editor's live markdown now carries
  * strictly fewer ESM statements than before, never more.
  */

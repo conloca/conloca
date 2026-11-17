@@ -8,7 +8,6 @@ import {
   FileSystemContentAPI,
   validateCFAccessRequest,
 } from '@conloca/content-api/node';
-import { handleMDXCompileRequest } from '@conloca/mdx/node';
 import type { APIRoute } from 'astro';
 import { SPA_MIME_TYPES } from './mime-types.js';
 import { isPathWithinBase } from './path-validation.js';
@@ -85,7 +84,7 @@ export const ALL: APIRoute = async ({ params, request }) => {
  * Generate HTML for dev mode that loads cms-spa source through Vite.
  * This ensures React is resolved from Vite's pre-bundled deps, not from the cms-spa bundle.
  */
-function generateDevHtml(config: typeof spaConfig): string {
+export function generateDevHtml(config: typeof spaConfig): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -100,6 +99,7 @@ function generateDevHtml(config: typeof spaConfig): string {
     window.__UI_CONFIG__ = ${safeJsonStringify(config)};
   </script>
   <script type="module" src="${config.basename}/schemas-entry.js"></script>
+  <script type="module" src="${config.basename}/site-render-entry.js"></script>
   <script type="module" src="${config.basename}/puck-entry.js"></script>
   <script type="module" src="${config.basename}/content-listener.js"></script>
 </head>
@@ -157,6 +157,7 @@ async function handleSpa(params: { path?: string | string[] }): Promise<Response
         <script type="module" src="${spaConfig.basename}/site-styles.js"></script>
         <script type="module" src="${spaConfig.basename}/editor-styles.js"></script>
         <script type="module" src="${spaConfig.basename}/schemas-entry.js"></script>
+        <script type="module" src="${spaConfig.basename}/site-render-entry.js"></script>
         <script type="module" src="${spaConfig.basename}/puck-entry.js"></script>
         <script type="module" src="${spaConfig.basename}/content-listener.js"></script>
       `;
@@ -233,10 +234,6 @@ async function handleContentApi(request: Request, cfResult: CFAccessResult): Pro
     ...(assetsPath && { assetsPath, assetRefBase: spaConfig.assetRefBase }),
     contentRoot,
   });
-
-  // Mounted here rather than in @conloca/content-api because compiling MDX is a
-  // renderer concern; content-api is purely storage.
-  app.post('/mdx/compile', (c) => handleMDXCompileRequest(c.req.raw));
 
   // Extract the path after the API base
   const url = new URL(request.url);

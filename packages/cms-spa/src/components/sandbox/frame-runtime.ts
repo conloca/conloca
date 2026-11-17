@@ -5,8 +5,6 @@
  */
 export {
   buildSandboxSrcdoc,
-  createSandboxRuntime,
-  runCompiledMdx,
   SANDBOX_FRAME_CSP,
   SANDBOX_FRAME_PATH,
   type SandboxOutboundMessage,

@@ -321,7 +321,8 @@ class DescriptorBuilder {
     const requiredAttributes: Record<string, string | number | boolean> = {};
     for (const p of props) {
       if (!p.required) continue;
-      requiredAttributes[p.name] = placeholderForProp(p, this.observedValues.get(p.name));
+      const placeholder = placeholderForProp(p, this.observedValues.get(p.name));
+      if (placeholder !== null) requiredAttributes[p.name] = placeholder;
     }
 
     const descriptor: DiscoveredComponent = {
@@ -358,10 +359,14 @@ class DescriptorBuilder {
  * string path, where union options and observed usage give us real
  * authored values to reuse.
  */
-function placeholderForProp(prop: MdxComponentProp, observed: Set<string> | undefined): string | number | boolean {
+function placeholderForProp(
+  prop: MdxComponentProp,
+  observed: Set<string> | undefined,
+): string | number | boolean | null {
   if (prop.type === 'number') return 0;
   if (prop.type === 'boolean') return true;
-  // string
+  // Discovery never produces list or object props.
+  if (prop.type !== 'string') return null;
   if (prop.options && prop.options.length > 0) return prop.options[0].value;
   if (observed && observed.size > 0) {
     const first = observed.values().next();

@@ -1,7 +1,14 @@
-import { useCompileMDX } from '@conloca/content-api-client';
 import React, { useEffect, useState } from 'react';
-import { useSandboxPreviewStyles } from '../../sandbox-preview-styles.js';
-import { ContentSandbox } from '../sandbox/ContentSandbox.js';
+import { useSiteRender } from '../../site-render.js';
+import { getUIConfig } from '../../ui-config.js';
+import { useFragmentRender } from '../puck/use-fragment-render.js';
+import { FramedContent } from './EditorFrame.js';
+import { InlinePreviewFrame } from './InlinePreviewFrame.js';
+
+/** The site path a fragment previews at: the bindings' route, else the build's define, else `/`. */
+export function fragmentPreviewPathname(): string {
+  return getUIConfig().dataBindings?.fragmentPreviewRoute ?? import.meta.env.CONLOCA_FRAGMENT_PREVIEW_ROUTE ?? '/';
+}
 
 interface MDXLivePreviewProps {
   /** The raw MDX source the editor is currently holding. */
@@ -18,15 +25,13 @@ interface MDXLivePreviewProps {
 /**
  * Render an MDX string side-by-side with the editor.
  *
- * Reuses the same compile + evaluate chain that powers `MDXContent.tsx`
- * (which renders saved fragments inside the Puck preview). Three differences:
+ * Renders with the same site renderer and vocabulary as `MDXContent.tsx`
+ * (which renders saved fragments inside the Puck canvas). Differences:
  *
  * 1. Source is the editor's live `markdown` value rather than a saved
- *    `LocalizedEntry`, so we debounce updates to keep the compile
- *    pipeline calm while the user is typing.
- * 2. The cache key follows the markdown content rather than the entry's
- *    etag — every distinct snapshot gets its own cache slot, so toggling
- *    the preview off/on doesn't re-compile identical source.
+ *    `LocalizedEntry`, so we debounce updates while the user is typing.
+ * 2. It renders inside `InlinePreviewFrame`, which carries the site styles
+ *    and the prose floor without leaking them into the editor's own UI.
  * 3. Parse/eval errors render inline as a small banner (instead of the
  *    full-block error card MDXContent.tsx uses) so the preview pane stays
  *    readable while the author fixes their syntax.
@@ -79,12 +84,10 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
 }
 
 /**
- * Detect ESM `import` / `export` statements at the top level. `compileMDX`
+ * Detect ESM `import` / `export` statements at the top level. The renderer
  * rejects them outright: `remarkRestrictExpressions` throws on `mdxjsEsm`
- * nodes, and it runs early enough that compilation never reaches a stage
- * where the import could resolve. Rather than surfacing that as a failed
- * request, we short-circuit with a friendly message — the editor itself
- * still works fine.
+ * nodes. Rather than surfacing that as a render error, we short-circuit with
+ * a friendly message — the editor itself still works fine.
  *
  * Page-level content (which may `import` JSX components scoped by the host
  * site's MDX provider) no longer reaches this component — the page editor
@@ -97,32 +100,12 @@ function hasTopLevelImportsOrExports(source: string): boolean {
 }
 
 function MDXLivePreviewInner({ markdown, debounceMs }: { markdown: string; debounceMs: number }) {
-  const sandboxStyles = useSandboxPreviewStyles();
   const debouncedMarkdown = useDebouncedValue(markdown, debounceMs);
   const mdxContent = debouncedMarkdown.length > 0 ? debouncedMarkdown : null;
   const hasImports = mdxContent ? hasTopLevelImportsOrExports(mdxContent) : false;
-  // Hash-free cache key. The compile hook treats this purely as an identity
-  // marker, so a substring suffix is enough to avoid collisions in practice
-  // while keeping the key cheap to compute.
-  const cacheKey = `live:${debouncedMarkdown.length}:${debouncedMarkdown.slice(0, 64)}`;
-
-  // Skip the server compile call when we know it'll fail (top-level imports
-  // are rejected before compilation) — keeps the network panel clean and
-  // shows the friendly message immediately below.
-  const {
-    data: compiledResult,
-    error: compileError,
-    isLoading: isCompiling,
-  } = useCompileMDX({ mdxContent: hasImports ? null : mdxContent, cacheKey });
-
-  // The MDX eval + render happens inside the sandbox iframe, not in this
-  // privileged document; a render failure comes back as an error message.
-  const [evaluationError, setEvaluationError] = useState<Error | null>(null);
-  const compiledCode = compiledResult?.code ?? null;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: A new compiled artifact invalidates the prior render error.
-  useEffect(() => {
-    setEvaluationError(null);
-  }, [compiledCode]);
+  // Imports are rejected anyway; the friendly message below says why.
+  const rendered = useFragmentRender(hasImports || !mdxContent ? '' : mdxContent);
+  const { frames } = useSiteRender();
 
   if (!mdxContent) {
     return (
@@ -144,29 +127,44 @@ function MDXLivePreviewInner({ markdown, debounceMs }: { markdown: string; debou
     );
   }
 
-  if (compileError || evaluationError) {
-    const error = compileError ?? evaluationError;
+  if (rendered.status === 'done' && (rendered.error || !rendered.Component)) {
     return (
       <div className="m-4 p-3 rounded-md border border-red-08 bg-red-11 dark:bg-red-02 dark:border-red-03 text-sm text-red-04 dark:text-red-08">
         <p className="font-semibold mb-1">MDX error</p>
-        <p className="text-xs whitespace-pre-wrap">{error?.message}</p>
+        <p className="text-xs whitespace-pre-wrap">{rendered.error?.message}</p>
       </div>
     );
   }
 
-  if (isCompiling || !compiledCode) {
+  if (rendered.status === 'pending' || !rendered.Component) {
     return (
       <div className="p-6 text-sm text-grey-05 dark:text-grey-07 flex items-center gap-2">
         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-azure-04" />
-        <span>Compiling preview…</span>
+        <span>Rendering preview…</span>
       </div>
     );
   }
 
-  return (
-    <div className="mdx-content conloca-prose max-w-none p-6">
-      <ContentSandbox mode="mdx" content={compiledCode} styles={sandboxStyles} onError={setEvaluationError} />
+  const { Component } = rendered;
+  const content = (
+    // The prose floor is scoped to this id; editor utility classes do not reach into the frame.
+    <div id="__sandbox_root" className="mdx-content conloca-prose" style={{ padding: '1.5rem' }}>
+      <Component />
     </div>
+  );
+  // A fragment has no route of its own: it previews inside the first entry that declares a frame.
+  const route = getUIConfig().dataBindings?.entries?.find((e) => e.frame !== undefined)?.frame;
+  const Frame = route === undefined ? undefined : frames[route];
+  return (
+    <InlinePreviewFrame title="Fragment preview">
+      {route === undefined || Frame === undefined ? (
+        content
+      ) : (
+        <FramedContent route={route} Frame={Frame} pathname={fragmentPreviewPathname()}>
+          {content}
+        </FramedContent>
+      )}
+    </InlinePreviewFrame>
   );
 }
 

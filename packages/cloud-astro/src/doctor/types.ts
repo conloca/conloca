@@ -72,6 +72,7 @@ const CHECK_LABELS = {
   CC13: "the editor speaks this page's protocol",
   CC24: 'the separate preview deploy runs this release',
   CC29: "the site's preview route answers, uncached",
+  CC30: 'editor frames match the published layout',
 } as const;
 
 /** A typo in a check id fails tsc here; the CLI would otherwise drop a label-less outcome silently. */

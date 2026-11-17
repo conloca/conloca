@@ -1,6 +1,7 @@
 import type {
   DataBindingConfig,
   EditorDataBindings,
+  EditorRouteEntry,
   ResolvedRoutingConfig,
   RouteConfig,
   RoutingConfig,
@@ -71,7 +72,7 @@ export function normalizeRoutingConfig(
  * @param config - Partial route configuration
  * @returns Complete route configuration with all fields
  */
-export function resolveRouteConfig(config: RouteConfig): Required<RouteConfig> {
+export function resolveRouteConfig(config: RouteConfig): ResolvedRoutingConfig['routes'][string] {
   return {
     pattern: config.pattern,
     collection: config.collection ?? 'pages',
@@ -79,6 +80,7 @@ export function resolveRouteConfig(config: RouteConfig): Required<RouteConfig> {
     prerender: config.prerender ?? true,
     meta: config.meta ?? {},
     dataBindings: config.dataBindings ?? { collections: [] },
+    ...(config.editorFrame === undefined ? {} : { editorFrame: config.editorFrame }),
   };
 }
 
@@ -89,10 +91,12 @@ export function resolveRouteConfig(config: RouteConfig): Required<RouteConfig> {
  */
 export function toEditorDataBindings(resolved: ResolvedRoutingConfig): EditorDataBindings {
   const routes: Record<string, DataBindingConfig> = {};
-  for (const route of Object.values(resolved.routes)) {
+  const entries: EditorRouteEntry[] = [];
+  for (const [name, route] of Object.entries(resolved.routes)) {
     routes[route.collection] ??= route.dataBindings;
+    entries.push({ name, collection: route.collection, ...(route.editorFrame === undefined ? {} : { frame: name }) });
   }
-  return { siteName: resolved.siteName, locale: resolved.locale, routes };
+  return { siteName: resolved.siteName, locale: resolved.locale, routes, entries };
 }
 
 /**

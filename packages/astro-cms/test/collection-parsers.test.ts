@@ -6,7 +6,11 @@ import { pathToFileURL } from 'node:url';
 import { definePageSchema } from '@conloca/cms-spa/page-schemas';
 import { previewEntryParsers } from '../src/internal/collection-parsers.js';
 import { createPageEntryParser } from '../src/internal/entry-validation.js';
-import { generateContentSchemasModule } from '../src/lib/virtual-module-generators.js';
+import {
+  generateContentSchemasModule,
+  generateFragmentComponentsModule,
+  generateSiteRenderModule,
+} from '../src/lib/virtual-module-generators.js';
 import type { ResolvedRoutingConfig } from '../src/types.js';
 import { optionalAuthorFields, testimonialPayload } from './fixtures/typia/host-schemas.js';
 
@@ -39,6 +43,56 @@ describe('generateContentSchemasModule', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+/** Evaluates a generated fragment components module next to a `fragments.mjs` and calls its loader. */
+async function load(source: string): Promise<object> {
+  const dir = mkdtempSync(join(tmpdir(), 'conloca-fragment-components-'));
+  try {
+    const modulePath = join(dir, 'fragment-components-virtual.mjs');
+    writeFileSync(join(dir, 'fragments.mjs'), 'export const fragmentComponents = { components: {}, elements: {} };\n');
+    writeFileSync(modulePath, source.replace(/__DIR__/g, dir));
+    const { loadFragmentComponents } = await import(pathToFileURL(modulePath).href);
+    return await loadFragmentComponents();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+describe('generateFragmentComponentsModule', () => {
+  test("loads the site's fragmentComponentsPath module", async () => {
+    expect(await load(generateFragmentComponentsModule('__DIR__/fragments.mjs'))).toMatchObject({
+      fragmentComponents: { components: {}, elements: {} },
+    });
+  });
+
+  test('a site that names no module has no fragment components', async () => {
+    expect(await load(generateFragmentComponentsModule(undefined))).toEqual({});
+  });
+
+  test('exports the resolved fragmentComponentsPath', () => {
+    expect(generateFragmentComponentsModule('/abs/fc.tsx')).toContain(
+      'export const fragmentComponentsPath = "/abs/fc.tsx"',
+    );
+    expect(generateFragmentComponentsModule(undefined)).toContain('export const fragmentComponentsPath = undefined');
+  });
+});
+
+describe('generateSiteRenderModule', () => {
+  test("imports the site's render module and each frame module", () => {
+    const source = generateSiteRenderModule('/a/fragments.tsx', { blog: '/a/f.tsx' });
+    expect(source).toContain('import * as fragmentRender from "/a/fragments.tsx"');
+    expect(source).toContain('import * as frame0 from "/a/f.tsx"');
+    expect(source).toContain('export const editorFrames = { "blog": frame0.default }');
+    expect(source).toContain('export { evaluateMDXToComponent } from');
+  });
+
+  test('a site with neither imports no render module and has no frames', () => {
+    const source = generateSiteRenderModule(undefined, {});
+    expect(source).not.toContain('import * as');
+    expect(source).toContain('export const fragmentComponents = undefined');
+    expect(source).toMatch(/export const editorFrames = \{\s*\}/);
   });
 });
 

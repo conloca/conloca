@@ -16,9 +16,6 @@ export type ContentMethodAccess = 'read' | 'write';
  * Removed client methods must also be removed from this classification;
  * browser-side helpers are not part of the content API's access boundary.
  *
- * `compileMDX` is a POST and still a read: it renders a preview of content
- * the caller already holds and persists nothing.
- *
  * `pullChanges` is a write. It rewrites the workspace tree from the remote;
  * that it destroys rather than creates does not make it an observation.
  */
@@ -38,7 +35,6 @@ const CONTENT_METHOD_ACCESS = {
   movePage: 'write',
   getFragments: 'read',
   getFragmentByName: 'read',
-  compileMDX: 'read',
   getData: 'read',
   getDataByName: 'read',
   isDataNameAvailable: 'read',

@@ -13,5 +13,10 @@
     "emitDeclarationOnly": false,
     "noEmit": true
   },
-  "include": ["src/env.d.ts", "dist/virtual-modules.d.ts", "dist/internal/page-handler.astro"]
+  "include": [
+    "src/env.d.ts",
+    "dist/virtual-modules.d.ts",
+    "dist/internal/page-handler.astro",
+    "dist/internal/PageRoot.astro"
+  ]
 }

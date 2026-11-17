@@ -29,7 +29,7 @@ function ensureSandboxHeightBus(win: Window): void {
 }
 
 /**
- * Data URLs of the images in `code` (compiled MDX or sanitized HTML), which the opaque-origin frame cannot fetch
+ * Data URLs of the images in `code` (sanitized HTML), which the opaque-origin frame cannot fetch
  * from the site or read as this page's blob URLs; `null` while they load (bounded by `draftImageData`), `undefined` when `code` is `undefined`.
  */
 function useDraftImageData(code: string | undefined): Record<string, string> | null | undefined {
@@ -50,9 +50,7 @@ function useDraftImageData(code: string | undefined): Record<string, string> | n
 }
 
 export interface ContentSandboxProps {
-  /** `mdx` delivers a compiled MDX function body; `html` a sanitized HTML string. */
-  mode: 'mdx' | 'html';
-  /** Compiled MDX code or sanitized HTML, delivered to the frame via postMessage. */
+  /** Sanitized HTML, delivered to the frame via postMessage. */
   content: string;
   /** Optional stylesheet text forwarded into the frame for preview fidelity. */
   styles?: string;
@@ -72,7 +70,7 @@ export interface ContentSandboxProps {
 }
 
 /**
- * Renders untrusted MDX or HTML inside an opaque-origin `sandbox="allow-scripts"`
+ * Renders untrusted HTML inside an opaque-origin `sandbox="allow-scripts"`
  * iframe.
  *
  * Frame identity uses per-instance `?k=` / `data-sandbox-k` echoed on outbound
@@ -80,7 +78,6 @@ export interface ContentSandboxProps {
  * is where sandbox `parent.postMessage` lands under Puck's nested preview frame.
  */
 export function ContentSandbox({
-  mode,
   content,
   styles,
   className,
@@ -94,10 +91,8 @@ export function ContentSandbox({
   const frameKeyRef = useRef(`sf_${reactId}_${Math.random().toString(36).slice(2, 10)}`);
   const frameSrc = `${getUIConfig().sandboxFramePath ?? SANDBOX_FRAME_PATH}?k=${encodeURIComponent(frameKeyRef.current)}`;
 
-  const modeRef = useRef(mode);
   const contentRef = useRef(content);
   const stylesRef = useRef(styles);
-  modeRef.current = mode;
   contentRef.current = content;
   stylesRef.current = styles;
   const images = useDraftImageData(getUIConfig().loadMedia ? content : undefined);
@@ -115,7 +110,7 @@ export function ContentSandbox({
       {
         __conlocaSandbox: true,
         kind: 'render',
-        mode: modeRef.current,
+        mode: 'html',
         payload,
         styles: stylesRef.current,
         ...(imagesRef.current ? { images: imagesRef.current } : {}),
@@ -189,11 +184,11 @@ export function ContentSandbox({
     };
   }, [ready, deliver]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Mode, content, styles and images are delivery events; deliver reads their current values from refs to keep message listeners stable.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Content, styles and images are delivery events; deliver reads their current values from refs to keep message listeners stable.
   useEffect(() => {
     if (!ready) return;
     deliver();
-  }, [ready, mode, content, styles, images, deliver]);
+  }, [ready, content, styles, images, deliver]);
 
   return (
     <iframe

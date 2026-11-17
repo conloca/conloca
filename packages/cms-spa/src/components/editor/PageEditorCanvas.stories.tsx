@@ -1,12 +1,16 @@
 import type { LocalizedEntry } from '@conloca/content-api-client';
+import { type PuckApi, useGetPuck } from '@puckeditor/core';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { type ComponentProps, useEffect, useState } from 'react';
+import { type ComponentProps, type ReactNode, useEffect, useState } from 'react';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { expect, waitFor, within } from 'storybook/test';
 import '../../main.css';
 import { isOpenEditorDirty } from '../../editor-flush.js';
 import { CanvasThemeProvider } from '../../hooks/useCanvasTheme.js';
+import { setSiteRender } from '../../site-render.js';
 import { getSiteStyles, setSiteStyles } from '../../site-styles.js';
+import { configureUI, getUIConfig } from '../../ui-config.js';
+import { PUCK_ROOT_DROP_ZONE } from './DrawerItemOverride.js';
 import { IframeBridge, PageEditor } from './PageEditor.js';
 
 /**
@@ -255,6 +259,99 @@ export const OpeningAPageIsNotAnEdit: Story = {
     await new Promise((resolve) => setTimeout(resolve, 1_000));
     await expect(isOpenEditorDirty()).toBe(false);
     await expect(within(canvasElement).getByRole('button', { name: 'Save' })).toBeDisabled();
+  },
+};
+
+/** The routing entries and site frame the editor frame story serves its `blog` page with. */
+const BLOG_ENTRY: LocalizedEntry = {
+  ...NEW_PAGE,
+  id: 'blog-post',
+  collection: 'blog',
+  localized: { ...NEW_PAGE.localized, pathname: '/blog/a', meta: { title: 'A post' } },
+};
+
+/** Puck's API, handed over by the root field below so the play function can dispatch an insert. */
+let framedGetPuck: (() => PuckApi) | undefined;
+
+function GetPuckField() {
+  const getPuck = useGetPuck();
+  useEffect(() => {
+    framedGetPuck = getPuck;
+  }, [getPuck]);
+  return <></>;
+}
+
+const BLOG_CONFIG: ComponentProps<typeof PageEditor>['config'] = {
+  root: { fields: { api: { type: 'custom', render: GetPuckField } } },
+  components: {
+    Note: { fields: {}, render: () => <p data-testid="block-note">Note</p> },
+  },
+};
+
+/**
+ * A page whose routing entry declares an editor frame shows inside it on the canvas, around the page-root marker the
+ * published page carries; blocks still drop into it, and the site font and the insert marker still apply.
+ */
+export const EditorFrameWrapsTheCanvas: Story = {
+  name: "a page shows inside its routing entry's editor frame on the canvas",
+  beforeEach: () => {
+    framedGetPuck = undefined;
+    setSiteStyles(['@layer base{body{font-family:Georgia}}']);
+    setSiteRender({
+      frames: { blog: ({ children }: { children: ReactNode }) => <div className="page-shell">{children}</div> },
+    });
+    // The UI config is module state shared across stories, so put back whatever was installed.
+    const previous = getUIConfig();
+    configureUI({
+      ...previous,
+      dataBindings: {
+        siteName: 'default',
+        locale: 'en',
+        routes: {},
+        entries: [{ name: 'blog', collection: 'blog', frame: 'blog' }],
+      },
+    });
+    return () => {
+      setSiteStyles([]);
+      setSiteRender({});
+      configureUI(previous);
+    };
+  },
+  render: () => <PageEditorHarness entry={BLOG_ENTRY} config={BLOG_CONFIG} onOpenMetadata={() => {}} />,
+  play: async ({ canvasElement }) => {
+    const canvas = await waitFor(
+      () => {
+        const doc = canvasElement.querySelector<HTMLIFrameElement>('iframe#preview-frame')?.contentDocument;
+        if (!doc?.querySelector('[data-puck-dropzone]')) throw new Error('the canvas has not rendered yet');
+        return doc;
+      },
+      { timeout: 10_000 },
+    );
+    await expect(canvas.querySelector('.page-shell [data-conloca-page-root] [data-puck-dropzone]')).not.toBeNull();
+
+    const getPuck = await waitFor(
+      () => {
+        if (!framedGetPuck) throw new Error('the root field has not handed over the Puck API yet');
+        return framedGetPuck;
+      },
+      { timeout: 5_000 },
+    );
+    getPuck().dispatch({
+      type: 'insert',
+      componentType: 'Note',
+      destinationZone: PUCK_ROOT_DROP_ZONE,
+      destinationIndex: 0,
+    });
+    await waitFor(
+      () =>
+        expect(canvas.querySelector('.page-shell [data-conloca-page-root] [data-testid="block-note"]')).not.toBeNull(),
+      { timeout: 5_000 },
+    );
+
+    const view = canvas.defaultView;
+    if (!view) throw new Error('the canvas document has no window');
+    await waitFor(() => expect(view.getComputedStyle(canvas.body).fontFamily).toBe('Georgia'), { timeout: 5_000 });
+    await expect(canvas.documentElement.hasAttribute('data-conloca-can-insert')).toBe(true);
   },
 };
 

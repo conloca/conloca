@@ -20,10 +20,14 @@ export * from './mdx-components-define.js';
  *
  * Snippet descriptors are not JSX — call sites filter them out before
  * dispatching here. Passing one throws to surface the misuse loudly.
+ *
+ * `withImport: false` drops the import a save would emit: a fragment's
+ * components come from the site's vocabulary, never from an import.
  */
 export function toJsxComponentDescriptor(
   d: MdxComponentDescriptor,
   fallbackEditor: ComponentType<JsxEditorProps>,
+  { withImport }: { withImport: boolean } = { withImport: true },
 ): JsxComponentDescriptor {
   if (!isJsxDescriptor(d)) {
     throw new Error(`toJsxComponentDescriptor: '${d.name}' is a snippet, not a JSX component.`);
@@ -33,12 +37,12 @@ export function toJsxComponentDescriptor(
     kind: d.kind,
     props: (d.props ?? []).map((p) => ({
       name: p.name,
-      type: p.type === 'boolean' ? 'expression' : p.type,
+      type: p.type === 'string' || p.type === 'number' ? p.type : 'expression',
       required: p.required,
     })),
     hasChildren: d.hasChildren,
     Editor: d.Editor ?? fallbackEditor,
-    ...(d.import ? { source: d.import.from, defaultExport: d.import.default ?? false } : {}),
+    ...(withImport && d.import ? { source: d.import.from, defaultExport: d.import.default ?? false } : {}),
   };
 }
 

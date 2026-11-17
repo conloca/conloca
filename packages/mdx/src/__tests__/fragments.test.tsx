@@ -1,7 +1,30 @@
 import { describe, expect, test } from 'bun:test';
-import { evaluateMDXFragments } from '../node.js';
+import { createElement, type ReactNode } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { defineFragmentComponents, evaluateMDXFragments } from '../node.js';
 
 describe('evaluateMDXFragments', () => {
+  test('renders a fragment using a site component from the vocabulary', async () => {
+    const api = {
+      *listAllContent() {
+        yield { id: 'note', locales: { en: { name: 'note' } } };
+      },
+      async getLocalized() {
+        return { localized: { content: { mdx: '<Callout>\n\nHi\n\n</Callout>' } } };
+      },
+    };
+    const vocabulary = defineFragmentComponents({
+      components: { Callout: ({ children }: { children?: ReactNode }) => createElement('aside', null, children) },
+    });
+
+    const [fragment] = await evaluateMDXFragments(api, 'en', vocabulary);
+
+    expect(fragment?.ok).toBe(true);
+    if (fragment?.ok) {
+      expect(renderToStaticMarkup(createElement(fragment.Component))).toBe('<aside><p>Hi</p></aside>');
+    }
+  });
+
   test('returns rendered fragment components', async () => {
     const api = {
       *listAllContent() {

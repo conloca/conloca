@@ -5,7 +5,8 @@ Astro integration that adds the editor page for Conloca's workspace editor to a 
 
 1. Write the editor page to `/_conloca/editor/` in every build: the site's Puck config compiled into one bundle
    (react/react-dom/jsx-runtime/`@puckeditor/core` stay external — the workspace editor supplies them at runtime), its
-   styles, the MDX sandbox frame and `conloca.json`. The page carries no credential.
+   styles, the sandbox frame for a component's raw HTML and `conloca.json`. Fragments render inline in the page with the
+   site's own renderer and `fragmentComponents`. The page carries no credential.
 2. When `previewBuild` is given as an object, serve draft previews: in the site's own build through its adapter
    (`@astrojs/vercel`, `@astrojs/netlify`, `@astrojs/node`, `@astrojs/cloudflare`), next to a static site on Cloudflare
    Workers (under `/_conloca/preview/<branch>/`), or from a separate deploy.
@@ -129,7 +130,9 @@ The workspace editor shows `/_conloca/editor/` in a frame. A site that sends no 
   ```
 
   `! Name` removes a header an earlier rule set. The site's own policy has to come off this path: two policies are both
-  enforced, and the editor page carries its own.
+  enforced, and the editor page carries its own, which admits no inline script, so a fragment the canvas renders inline
+  cannot run one. `sandbox-frame.html` renders a component's raw HTML in an opaque frame; its own policy has no
+  `unsafe-eval`.
 
 - **Netlify**, in `public/_headers`. Netlify cannot remove a header, so the rule only adds the policy; a site-wide
   `X-Frame-Options` is then ignored by browsers, because `frame-ancestors` wins:
@@ -518,6 +521,7 @@ depends on it runs this package's checks after the CMS ones, offline by default.
 | CC27  | d8: the host routes the preview: Vercel `build.format: 'file'`, Vercel or Netlify without `site`, a static Cloudflare site whose `wrangler.jsonc` lacks the routes or `"404-page"` (warnings), and the host's rate-limit rule as a note                                                                                                                                                                                                  |
 | CC28  | d8 on `@astrojs/node`: `security.allowedDomains` names the site's domains                                                                                                                                                                                                                                                                                                                                                                |
 | CC29  | `--live`, D3 and d8: `<host><base>_conloca/preview/__exit` answers 302 twice, labelled with the configured mode, `no-store` and `Vary: Cookie`, and no CDN serves it from cache; a failure names where the host keeps logs                                                                                                                                                                                                               |
+| CC30  | `--live`, a routing entry with an editor frame: for each route in `_conloca/editor/frames.json`, its published page wraps `data-conloca-page-root` in the same elements and classes the frame renders (warnings: a redirect, a missing marker, a different chain)                                                                                                                                                                        |
 
 `conloca doctor` reads the rate-limit binding and the recorded plan from your project's files; it never contacts
 Cloudflare and needs no token. `conloca doctor --live` sends no credential: it contacts your site's host, its

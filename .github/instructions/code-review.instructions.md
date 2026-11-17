@@ -143,7 +143,9 @@ console.error(`  Stack trace:`, error.stack);
 
 ```typescript
 // ✅ Safe - Build time, admin content, React auto-escapes
-const { Component, error } = await evaluateMDXToComponent(mdxContent);
+import { evaluateMDXToComponent } from '@conloca/mdx/render';
+// vocabulary is optional: the site's defineFragmentComponents({ components, elements })
+const { Component, error } = await evaluateMDXToComponent(mdxContent, vocabulary);
 React.createElement('p', {}, error.message);
 ```
 

@@ -1,4 +1,5 @@
 import { evaluateMDXToComponent } from './mdx/evaluate.js';
+import { EMPTY_FRAGMENT_VOCABULARY, type FragmentVocabulary } from './mdx/vocabulary.js';
 import type { MDXFragmentEvaluationResult } from './types.js';
 
 interface FragmentLocaleSummary {
@@ -35,8 +36,13 @@ interface FragmentAPI {
  *
  * Returns structured success/error results so callers can decide how to
  * surface broken fragments instead of hardcoding fallback UI in this package.
+ * `vocabulary` is the site's fragment components; without it only plain content renders.
  */
-export async function evaluateMDXFragments(api: FragmentAPI, locale: string): Promise<MDXFragmentEvaluationResult[]> {
+export async function evaluateMDXFragments(
+  api: FragmentAPI,
+  locale: string,
+  vocabulary: FragmentVocabulary = EMPTY_FRAGMENT_VOCABULARY,
+): Promise<MDXFragmentEvaluationResult[]> {
   const fragments = Array.from(api.listAllContent({ kind: 'fragment' }));
 
   return Promise.all(
@@ -60,7 +66,7 @@ export async function evaluateMDXFragments(api: FragmentAPI, locale: string): Pr
           };
         }
 
-        const { Component: EvaluatedComponent, error, outline } = await evaluateMDXToComponent(mdxContent);
+        const { Component: EvaluatedComponent, error, outline } = await evaluateMDXToComponent(mdxContent, vocabulary);
 
         if (error || !EvaluatedComponent) {
           return {

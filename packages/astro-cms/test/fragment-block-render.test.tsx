@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
+import { defineFragmentComponents, evaluateMDXToComponent } from '@conloca/mdx/render';
 import type { ComponentConfig, Config, Data, PuckComponent } from '@puckeditor/core';
-import { type ComponentType, memo } from 'react';
+import { type ComponentType, memo, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createPageRendererWithFragments } from '../src/components/RenderWithFragments.js';
 import type { ContentFragmentSectionProps, DataContext } from '../src/types.js';
@@ -152,5 +153,26 @@ describe('ContentFragmentSection renders through the host block', () => {
 
     expect(calls).toHaveLength(1);
     expect(html).toBe(HOST_MARKUP_WITH_FRAGMENT);
+  });
+
+  test("renders a fragment that uses the site's Callout inside the content root", async () => {
+    const vocabulary = defineFragmentComponents({
+      components: {
+        Callout: ({ children }: { children?: ReactNode }) => <aside className="callout">{children}</aside>,
+      },
+    });
+    const { Component, error } = await evaluateMDXToComponent('<Callout>Heads up</Callout>', vocabulary);
+    expect(error).toBeUndefined();
+    if (!Component) throw new Error('the fragment did not evaluate');
+    const PageRenderer = createPageRendererWithFragments(
+      configOf(hostSection([])),
+      pageData(inlineFragmentFixture),
+      [{ ...fragment, Component, outline: [] }],
+      context,
+    );
+
+    expect(renderToStaticMarkup(<PageRenderer />)).toContain(
+      '<div class="mdx-content conloca-prose" data-conloca-content-root=""><aside class="callout">',
+    );
   });
 });

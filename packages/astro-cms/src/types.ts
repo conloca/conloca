@@ -255,6 +255,19 @@ export interface RouteConfig {
   collection?: string;
 
   /**
+   * Module whose default export renders `({ pathname, children })` with the markup the route's layout puts around
+   * page content. It may be the route's `.tsx` layout, if that layout has this signature.
+   *
+   * Applies to the editor canvas only. Declaring it wraps the route's published page content in
+   * `<div data-conloca-page-root="">`, so direct-child selectors from the layout may need adjusting.
+   *
+   * Resolved against the working directory, like `fragmentComponentsPath`; run Astro from the project root.
+   *
+   * @example './src/cms/blog-frame.tsx'
+   */
+  editorFrame?: string;
+
+  /**
    * Path to the Astro layout component.
    *
    * The layout wraps the Puck-rendered content. It receives
@@ -521,7 +534,7 @@ export type LayoutComponent = (props: LayoutProps) => unknown;
  */
 export interface ResolvedRoutingConfig {
   enabled: boolean;
-  routes: Record<string, Required<RouteConfig>>;
+  routes: Record<string, Required<Omit<RouteConfig, 'editorFrame'>> & Pick<RouteConfig, 'editorFrame'>>;
   fallback: '404' | 'passthrough';
   onConflict: 'warn' | 'error' | 'silent';
   /** Site name for content resolution. */
@@ -536,6 +549,7 @@ export type {
   DataCollectionEntry,
   DataContext,
   EditorDataBindings,
+  EditorRouteEntry,
   PageReference,
 } from '@conloca/content-api';
 

@@ -65,6 +65,11 @@
       "import": "./dist/ts/puck-config.js",
       "default": "./dist/ts/puck-config.js"
     },
+    "./site-render": {
+      "types": "./dist/ts/site-render.d.ts",
+      "import": "./dist/ts/site-render.js",
+      "default": "./dist/ts/site-render.js"
+    },
     "./site-styles": {
       "types": "./dist/ts/site-styles.d.ts",
       "import": "./dist/ts/site-styles.js",
@@ -252,7 +257,8 @@
           "default",
           "^production",
           "{workspaceRoot}/package.json",
-          "{workspaceRoot}/bun.lock"
+          "{workspaceRoot}/bun.lock",
+          "{workspaceRoot}/packages/mdx/src/__tests__/fixtures/**"
         ],
         "outputs": [
           "{workspaceRoot}/dist/storybook/cms-spa"
@@ -270,7 +276,8 @@
         "parallelism": false,
         "inputs": [
           "default",
-          "^production"
+          "^production",
+          "{workspaceRoot}/packages/mdx/src/__tests__/fixtures/**"
         ],
         "dependsOn": [
           "^build",

@@ -22,6 +22,7 @@ import {
   pageTimestampsOf,
   selectPagesByPrefix,
 } from '@conloca/content-api';
+import { EMPTY_FRAGMENT_VOCABULARY, type FragmentVocabulary, isFragmentVocabulary } from '@conloca/mdx/render';
 import type { Config } from '@puckeditor/core';
 import { type Data, resolveAllData } from '@puckeditor/core';
 import type { ComponentType } from 'react';
@@ -254,16 +255,73 @@ export async function getDataCollectionEntries(
     })) satisfies DataCollectionEntry[];
 }
 
+/** A site's `fragmentComponentsPath` module, as loaded: its export is checked by {@link fragmentVocabularyOf}. */
+export interface FragmentComponentsModule {
+  readonly fragmentComponents?: unknown;
+}
+
+/**
+ * The vocabulary a site's `fragmentComponentsPath` module exports; the empty
+ * vocabulary when it exports none.
+ */
+export function fragmentVocabularyOf(module: FragmentComponentsModule, path: string | undefined): FragmentVocabulary {
+  if (!('fragmentComponents' in module)) return EMPTY_FRAGMENT_VOCABULARY;
+  if (!isFragmentVocabulary(module.fragmentComponents)) {
+    throw new TypeError(`${path} must export fragmentComponents = defineFragmentComponents(...)`);
+  }
+  return module.fragmentComponents;
+}
+
+// Module state, not .astro frontmatter state: frontmatter re-runs on every render.
+const fragmentVocabularies = new WeakMap<() => Promise<FragmentComponentsModule>, Promise<FragmentVocabulary>>();
+const reportedFragmentVocabularyFailures = new WeakSet<() => Promise<FragmentComponentsModule>>();
+
+/**
+ * The site's fragment vocabulary, loaded once per server instance. A broken
+ * render module throws when `failHard` (prerender, dev, draft preview); a live
+ * on-demand page gets `undefined`, renders without fragments, and the failure
+ * is logged once.
+ */
+export async function loadFragmentVocabulary(
+  load: () => Promise<FragmentComponentsModule>,
+  failHard: boolean,
+  path: string | undefined,
+): Promise<FragmentVocabulary | undefined> {
+  let vocabulary = fragmentVocabularies.get(load);
+  if (!vocabulary) {
+    vocabulary = load().then(
+      (module) => fragmentVocabularyOf(module, path),
+      (error: unknown) => {
+        throw new Error(`[Conloca] The module named by fragmentComponentsPath failed to load: ${String(error)}`);
+      },
+    );
+    fragmentVocabularies.set(load, vocabulary);
+  }
+  try {
+    return await vocabulary;
+  } catch (error) {
+    if (failHard) throw error;
+    if (!reportedFragmentVocabularyFailures.has(load)) {
+      reportedFragmentVocabularyFailures.add(load);
+      console.error('[Conloca] Rendering pages without fragments:', error);
+    }
+    return undefined;
+  }
+}
+
 /**
  * Evaluate every published MDX fragment for a locale into a renderable React
- * component. `evaluateMDXToComponent` and `isDev` are injected so the core
- * stays astro/vite-free.
+ * component, with the site's fragment `vocabulary`. `evaluateMDXToComponent`
+ * and `isDev` are injected so the core stays astro/vite-free; `showErrors`
+ * renders a failing fragment's error card (dev and draft previews).
  */
 export async function loadMdxComponents(
   source: PageContentSource,
   locale: string,
   evaluateMDXToComponent: EvaluateMDXToComponentFn,
   isDev: boolean,
+  vocabulary: FragmentVocabulary = EMPTY_FRAGMENT_VOCABULARY,
+  showErrors: boolean = isDev,
 ): Promise<MdxFragmentComponent[]> {
   const entries = (await source.listEntries(ALL_FRAGMENTS_COLLECTION)).map(
     (data) => data as Partial<FragmentEntryData>,
@@ -291,16 +349,16 @@ export async function loadMdxComponents(
           };
         }
 
-        const { Component, error, outline } = await evaluateMDXToComponent(mdx);
+        const { Component, error, outline } = await evaluateMDXToComponent(mdx, vocabulary);
 
         if (!Component || error) {
           const errorMessage = error?.message || 'MDX evaluation failed';
-          console.error(`[Conloca] MDX compilation error in fragment "${title}": ${errorMessage}`);
+          console.error(`[Conloca] Fragment ${data.id} (${locale}, "${title}") failed to render: ${errorMessage}`);
 
           return {
             id: data.id || title,
             title,
-            Component: isDev
+            Component: showErrors
               ? () =>
                   React.createElement(
                     'div',

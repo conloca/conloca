@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
@@ -341,20 +341,30 @@ describe('@conloca/astro-cms', () => {
       const channel = readEditorDescriptors(process.env);
       // Absolute: a reader may use it as an import specifier, where a
       // project-relative path has no meaningful base.
-      expect(channel?.schemasPath).toBe(resolve('./src/schemas/data.ts'));
-      expect(channel?.registry).toEqual({
-        contentRoot: './test',
-        componentFolders: ['src/components/prose'],
-        projectRoot: process.cwd(),
+      expect(channel).toEqual({
+        schemasPath: resolve('./src/schemas/data.ts'),
+        puckConfigPath: resolve('./src/puck.config.tsx'),
+        contentPaths: [resolve('./test'), resolve('./public/assets')],
+        assetsPath: resolve('./public/assets'),
+        assetRefBase: '/assets',
+        registry: {
+          contentRoot: './test',
+          componentFolders: ['src/components/prose'],
+          projectRoot: process.cwd(),
+        },
       });
     });
 
     it('should apply the same component-folder default the dev registry endpoint uses', async () => {
       await collectConfigUpdates({ contentRoot: './test' });
 
-      const channel = readEditorDescriptors(process.env);
-      expect(channel?.registry.componentFolders).toEqual(['src/components/mdx']);
-      expect(channel?.schemasPath).toBeUndefined();
+      expect(readEditorDescriptors(process.env)).toEqual({
+        registry: { contentRoot: './test', componentFolders: ['src/components/mdx'], projectRoot: process.cwd() },
+        puckConfigPath: resolve('./src/puck.config.tsx'),
+        contentPaths: [resolve('./test'), resolve('./public/assets')],
+        assetsPath: resolve('./public/assets'),
+        assetRefBase: '/assets',
+      });
     });
 
     it('should publish the data bindings the dev editor gets, so another integration in the same build reads the same ones', async () => {
@@ -366,6 +376,7 @@ describe('@conloca/astro-cms', () => {
         siteName: 'default',
         locale: 'en',
         routes: { pages: { pages: { prefix: '/' } } },
+        entries: [{ name: 'pages', collection: 'pages' }],
       });
     });
 
@@ -447,7 +458,13 @@ describe('@conloca/astro-cms', () => {
         const vite = u.vite as { plugins?: { load?: (id: string) => unknown }[] } | undefined;
         return vite?.plugins ?? [];
       });
-      const sources = ['puck-entry.js', 'schemas-entry.js', 'site-styles.js', 'editor-styles.js'].flatMap((name) =>
+      const sources = [
+        'puck-entry.js',
+        'schemas-entry.js',
+        'site-styles.js',
+        'editor-styles.js',
+        'site-render-entry.js',
+      ].flatMap((name) =>
         plugins
           .filter((plugin): plugin is { load: (id: string) => unknown } => typeof plugin.load === 'function')
           .map((plugin) => plugin.load(`/__cms/${name}`))
@@ -489,7 +506,14 @@ describe('@conloca/astro-cms', () => {
         return pick<string>(plugins.map((plugin) => plugin.load?.(resolved)));
       };
 
-      const reaching = ['puck-entry.js', 'schemas-entry.js', 'site-styles.js', 'editor-styles.js', 'cms-spa-entry.js']
+      const reaching = [
+        'puck-entry.js',
+        'schemas-entry.js',
+        'site-styles.js',
+        'editor-styles.js',
+        'site-render-entry.js',
+        'cms-spa-entry.js',
+      ]
         .map((name) => ({ name, code: loadVirtual(`/__cms/${name}`) }))
         .filter((module): module is { name: string; code: string } => Boolean(module.code?.includes(cmsSpaDir)));
 
@@ -498,6 +522,7 @@ describe('@conloca/astro-cms', () => {
         'schemas-entry.js',
         'site-styles.js',
         'editor-styles.js',
+        'site-render-entry.js',
         'cms-spa-entry.js',
       ]);
       for (const { name, code } of reaching) {
@@ -505,6 +530,17 @@ describe('@conloca/astro-cms', () => {
         const preamble = firstImport ? loadVirtual(firstImport) : undefined;
         expect(preamble ?? `${name} imports ${firstImport} first`).toContain('$RefreshReg$');
       }
+    });
+
+    it('should load the site render entry from the dev HTML', async () => {
+      await mock.module('virtual:conloca-config', () => ({ default: {} }));
+      await mock.module('virtual:conloca-page-api', () => ({ contentOptions: {} }));
+      await mock.module('virtual:conloca-routing-config', () => ({ default: {} }));
+      // Imported after the mocks: the handler reads Astro's virtual modules at load.
+      const { generateDevHtml } = await import('../src/cms-handler.js');
+      expect(generateDevHtml({ basename: '/__cms' })).toContain(
+        '<script type="module" src="/__cms/site-render-entry.js"></script>',
+      );
     });
   });
 
@@ -709,7 +745,33 @@ describe('@conloca/astro-cms', () => {
         siteName: 'default',
         locale: 'en',
         routes: { pages: { pages: { prefix: '/' } } },
+        entries: [{ name: 'pages', collection: 'pages' }],
       });
+    });
+
+    it('carries the fragment preview route to the editor and the channel when routing is on', async () => {
+      const updates = await collectConfigUpdates({
+        command: 'dev',
+        fragmentPreviewRoute: '/prose-parity',
+        routing: { routes: { pages: { pattern: '/[...page]', dataBindings: { pages: { prefix: '/' } } } } },
+      });
+      const expected = {
+        siteName: 'default',
+        locale: 'en',
+        routes: { pages: { pages: { prefix: '/' } } },
+        entries: [{ name: 'pages', collection: 'pages' }],
+        fragmentPreviewRoute: '/prose-parity',
+      };
+
+      expect(editorConfigOf(updates).dataBindings).toEqual(expected);
+      expect(readEditorDescriptors(process.env)?.dataBindings).toEqual(expected);
+    });
+
+    it('hands the editor no data bindings when routing is off', async () => {
+      const updates = await collectConfigUpdates({ command: 'dev', fragmentPreviewRoute: '/prose-parity' });
+
+      expect(editorConfigOf(updates).dataBindings).toBeUndefined();
+      expect(readEditorDescriptors(process.env)?.dataBindings).toBeUndefined();
     });
   });
 

@@ -11,6 +11,8 @@ const CONFIG = join(PROJECT, 'astro.config.mjs');
 const ADDRESS = 'https://www.acme.test/';
 const INFO_URL = `${ADDRESS}_conloca/editor/conloca.json`;
 const PAGE_URL = `${ADDRESS}_conloca/editor/`;
+const FRAMES_URL = `${ADDRESS}_conloca/editor/frames.json`;
+const POST_URL = `${ADDRESS}blog/live`;
 const PROTOCOLS_URL = 'https://app.conloca.com/host/protocols.json';
 const HEAD = 'a'.repeat(40);
 const LIVE_IDS = ['CC11', 'CC12', 'CC13'];
@@ -58,6 +60,7 @@ const ROUTES = {
   [INFO_URL]: () => json(info()),
   [PAGE_URL]: () => new Response('<!doctype html>', { headers: { 'content-type': 'text/html' } }),
   [PROTOCOLS_URL]: () => json({ min: 1, max: 1 }),
+  [FRAMES_URL]: () => new Response('', { status: 404 }),
 } satisfies Routes;
 
 /** The editor page with these response headers. */
@@ -133,7 +136,8 @@ describe('doctor --live — the deployed editor page', () => {
     expect(check('CC12').detail).toBe(`${PAGE_URL} may be framed by https://*.conloca.com`);
     expect(check('CC13').detail).toBe('protocol 1, the editor speaks 1–1');
     // Only the site's own address and the editor's public file; never a credential; never a followed redirect.
-    expect(calls.map((c) => c.url)).toHaveLength(3);
+    expect(calls.map((c) => c.url)).toHaveLength(4);
+    expect(calls.map((c) => c.url)).toContain(FRAMES_URL);
     expect(calls.map((c) => c.url)).toEqual(expect.arrayContaining([PAGE_URL, INFO_URL, PROTOCOLS_URL]));
     for (const call of calls) {
       expect(call).toMatchObject({ authorization: null, cookie: null, redirect: 'manual', timed: true });
@@ -167,6 +171,7 @@ describe('doctor --live — the deployed editor page', () => {
       'CC13',
       'CC24',
       'CC29',
+      'CC30',
     ]);
   });
 
@@ -352,7 +357,8 @@ describe('CC12 — the deployed editor page may be framed', () => {
     });
     expect(check('CC12').skipped).toBe('no editor UI origin');
     expect(check('CC13').skipped).toBe('no editor UI origin');
-    expect(calls.map((c) => c.url)).toEqual([INFO_URL]);
+    // CC30 compares the site's own pages, so it needs no editor UI origin.
+    expect(calls.map((c) => c.url)).toEqual([INFO_URL, FRAMES_URL]);
   });
 });
 
@@ -380,5 +386,72 @@ describe('CC13 — the editor speaks this page’s protocol', () => {
   it('skips when CC11 read no conloca.json', async () => {
     const { check } = await runLive({ ...ROUTES, [INFO_URL]: () => new Response('', { status: 404 }) });
     expect(check('CC13').skipped).toBe('no conloca.json to read (see CC11)');
+  });
+});
+
+const frames = () =>
+  json({
+    version: 1,
+    entries: [
+      {
+        route: 'blog',
+        pathname: '/blog/live',
+        chain: [
+          { tag: 'div', classes: ['a', 'b', 'page-wrapper'] },
+          { tag: 'main', classes: ['page-shell'] },
+        ],
+      },
+    ],
+  });
+const html = (body: string) => () => new Response(`<!doctype html><html><body>${body}</body></html>`);
+const withFrames = (post: () => Response) => ({ ...ROUTES, [FRAMES_URL]: frames, [POST_URL]: post });
+
+describe('CC30 — editor frames match the published layout', () => {
+  const ARTICLE_BODY_ROW =
+    '<div class="page-wrapper b a"><main class="page-shell"><div data-conloca-page-root><div class="article-body"><article class="article-content"><div class="mdx-content conloca-prose" data-conloca-content-root><p>x</p></div></article></div></div></main></div>';
+
+  it('has no problems when the published page matches the frame', async () => {
+    const { check } = await runLive(withFrames(html(ARTICLE_BODY_ROW)));
+    expect(check('CC30').skipped).toBeUndefined();
+    expect(check('CC30').problems).toEqual([]);
+  });
+
+  it('warns naming the route and the frame chain when the page lacks the frame element', async () => {
+    const { messages } = await runLive(
+      withFrames(html('<div class="page-wrapper b a"><main><div data-conloca-page-root></div></main></div>')),
+    );
+    expect(messages('CC30')).toEqual([
+      'warn: blog (/blog/live): the frame renders div.a.b.page-wrapper > main.page-shell but the page has div.a.b.page-wrapper > main',
+    ]);
+  });
+
+  it('warns naming the Location of a redirect', async () => {
+    const { messages } = await runLive(
+      withFrames(() => new Response(null, { status: 301, headers: { location: 'https://www.acme.test/blog/live/' } })),
+    );
+    expect(messages('CC30')).toHaveLength(1);
+    expect(messages('CC30')[0]).toContain('https://www.acme.test/blog/live/');
+    expect(messages('CC30')[0]).toStartWith('warn: ');
+  });
+
+  it('warns with the status when the page answers 404 or 500', async () => {
+    for (const status of [404, 500]) {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- one doctor run per status, each on fresh routes.
+      const { messages } = await runLive(withFrames(() => new Response('<body></body>', { status })));
+      expect(messages('CC30')).toEqual([
+        `warn: ${POST_URL} answered HTTP ${status}, so the frame of blog cannot be compared`,
+      ]);
+    }
+  });
+
+  it('warns when the page has no marker', async () => {
+    const { messages } = await runLive(withFrames(html('<main class="page-shell"></main>')));
+    expect(messages('CC30')).toHaveLength(1);
+    expect(messages('CC30')[0]).toContain('data-conloca-page-root');
+  });
+
+  it('skips when frames.json is missing', async () => {
+    const { check } = await runLive();
+    expect(check('CC30').skipped).toBe('no routing entry declares an editor frame');
   });
 });

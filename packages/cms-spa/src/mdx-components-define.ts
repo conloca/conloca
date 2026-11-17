@@ -6,6 +6,7 @@
  * `mdx-components.ts`, which re-exports everything here for compatibility.
  * Mirrors the `page-schemas` / `page-schema-define` split.
  */
+import type { JsonValue } from '@conloca/mdx/render';
 import type { JsxEditorProps } from '@mdxeditor/editor';
 import type { MdxJsxAttribute, MdxJsxFlowElement, MdxJsxTextElement } from 'mdast-util-mdx-jsx';
 import type { ComponentType } from 'react';
@@ -60,7 +61,30 @@ export type MdxComponentProp =
       label?: string;
       help?: string;
       defaultValue?: boolean;
+    }
+  | {
+      name: string;
+      type: 'list';
+      label?: string;
+      help?: string;
+      required?: boolean;
+      of: MdxComponentField;
+    }
+  | {
+      name: string;
+      type: 'object';
+      label?: string;
+      help?: string;
+      required?: boolean;
+      fields: Record<string, MdxComponentField>;
     };
+
+/** A list item or object field: an `MdxComponentProp` without `name`. */
+export type MdxComponentField = MdxComponentProp extends infer P
+  ? P extends MdxComponentProp
+    ? Omit<P, 'name'>
+    : never
+  : never;
 
 export interface MdxComponentInsertHint {
   /** Human-readable label shown in the slash menu and the toolbar dropdown. */
@@ -97,7 +121,7 @@ export interface MdxJsxComponentDescriptor {
   hasChildren?: boolean;
   /** Default attributes used at insert time. */
   defaults?: {
-    attributes?: Record<string, string | number | boolean>;
+    attributes?: Record<string, JsonValue>;
     /** Raw MDX snippet parsed to mdast children at insert time. */
     children?: string;
   };
@@ -183,6 +207,7 @@ export function defineMdxComponents(components: MdxComponents): MdxComponents {
       }
       throw new Error(`defineMdxComponents: duplicate descriptor for '${descriptor.name}'.`);
     }
+    if (isJsxDescriptor(descriptor)) checkJsxProps(descriptor);
     if (isJsxDescriptor(descriptor) && descriptor.kind === 'text' && descriptor.hasChildren) {
       throw new Error(
         `defineMdxComponents: descriptor '${descriptor.name}' has kind: 'text' with hasChildren: true — ` +
@@ -198,6 +223,64 @@ export function defineMdxComponents(components: MdxComponents): MdxComponents {
     seen.set(descriptor.name, descriptor);
   }
   return components;
+}
+
+function isPlainObject(v: unknown): v is { [key: string]: JsonValue } {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+/** Throws when a field has an unusable shape or `value` (when given) contradicts it. `path` is `Card.cta.href`. */
+function checkField(field: MdxComponentField, path: string, value?: JsonValue): void {
+  const fail = (why: string): never => {
+    throw new Error(`defineMdxComponents: ${path} ${why}.`);
+  };
+  const typeName: unknown = field.type;
+  const has = value !== undefined && value !== null;
+  switch (field.type) {
+    case 'string':
+    case 'number':
+    case 'boolean':
+      if (has && typeof value !== field.type) fail(`default must be a ${field.type}`);
+      return;
+    case 'list':
+      if (!field.of) fail("is a list without 'of'");
+      if (has && !Array.isArray(value)) fail('default must be an array');
+      checkField(field.of, `${path}[]`);
+      if (Array.isArray(value)) {
+        for (const [i, item] of value.entries()) checkField(field.of, `${path}[${i}]`, item);
+      }
+      return;
+    case 'object':
+      if (!field.fields || Object.keys(field.fields).length === 0) fail("is an object without 'fields'");
+      if (has && !isPlainObject(value)) fail('default must be an object');
+      for (const [key, sub] of Object.entries(field.fields)) {
+        checkField(sub, `${path}.${key}`, isPlainObject(value) ? value[key] : undefined);
+      }
+      return;
+    default:
+      fail(`has unknown type '${String(typeName)}'`);
+  }
+}
+
+function checkJsxProps(d: MdxJsxComponentDescriptor): void {
+  const defaults = d.defaults?.attributes ?? {};
+  for (const prop of d.props ?? []) {
+    if (/^on/i.test(prop.name)) {
+      console.warn(
+        `defineMdxComponents: ${d.name}.${prop.name} starts with "on" and is never passed to the component; rename it.`,
+      );
+    }
+    const value = defaults[prop.name];
+    const scalar = prop.type === 'string' || prop.type === 'number' || prop.type === 'boolean';
+    // Scalar props predate this check; a throw here would crash existing sites at boot, so warn instead.
+    if (scalar && value !== undefined && value !== null && typeof value !== prop.type) {
+      console.warn(
+        `defineMdxComponents: ${d.name}.${prop.name} default should be a ${prop.type}, got ${JSON.stringify(value)}.`,
+      );
+      continue;
+    }
+    checkField(prop, `${d.name}.${prop.name}`, value);
+  }
 }
 
 /**
@@ -270,7 +353,7 @@ export function writeStringAttribute<T extends MdxJsxFlowElement | MdxJsxTextEle
 export function writeAttribute<T extends MdxJsxFlowElement | MdxJsxTextElement>(
   attributes: T['attributes'],
   name: string,
-  value: string | boolean | number | null | undefined,
+  value: JsonValue | null | undefined,
 ): T['attributes'] {
   const next = attributes.filter((a) => !(a.type === 'mdxJsxAttribute' && a.name === name));
   if (value === null || value === undefined) return next as T['attributes'];
@@ -290,6 +373,13 @@ export function writeAttribute<T extends MdxJsxFlowElement | MdxJsxTextElement>(
       type: 'mdxJsxAttribute',
       name,
       value: { type: 'mdxJsxAttributeValueExpression', value: String(value) },
+    });
+  } else if (typeof value === 'object') {
+    // Lists and objects: a JSON literal expression, which readAttrs parses back.
+    next.push({
+      type: 'mdxJsxAttribute',
+      name,
+      value: { type: 'mdxJsxAttributeValueExpression', value: JSON.stringify(value) },
     });
   }
   return next as T['attributes'];

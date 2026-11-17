@@ -590,6 +590,9 @@ export function conlocaCloud(options: ConlocaCloudOptions = {}): AstroIntegratio
           pagesDir: fileURLToPath(new URL('pages/', srcDir ?? new URL('src/', projectRoot))),
           serverOutput,
           i18n,
+          // Optional-chained: unit tests drive the hooks with a partial config.
+          trailingSlash: astroConfig?.trailingSlash ?? 'ignore',
+          buildFormat: astroConfig?.build?.format ?? 'directory',
           logger,
         });
         // After the editor page: on Cloudflare the list goes in its folder, which the editor page must create.

@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import type { UIConfig } from '@conloca/cms-spa';
 import { readSitesConfig } from '@conloca/content-api/node';
 import viteReact from '@vitejs/plugin-react';
-import type { AstroIntegration } from 'astro';
+import type { AstroConfig, AstroIntegration } from 'astro';
 import { type HotPayload, type InferCustomEventPayload, type NormalizedHotChannel, searchForWorkspaceRoot } from 'vite';
 import { deriveAssetRefBase } from './asset-ref-base.js';
 import type { MdxRegistryScanOptions } from './discovery/discover.js';
@@ -58,9 +58,11 @@ const TIPTAP_HTML_SHIM_PATH = join(__dirname, 'tiptap-html-static.js');
 
 import {
   generateContentSchemasModule,
+  generateFragmentComponentsModule,
   generateLayoutModule,
   generatePuckConfigModule,
   generateRoutingConfigModule,
+  generateSiteRenderModule,
 } from './lib/virtual-module-generators.js';
 import type { EditorDataBindings, ResolvedRoutingConfig, RoutingConfigInput, TemplateConfig } from './types.js';
 
@@ -73,12 +75,14 @@ const VIRTUAL_ROUTING_CONFIG = 'virtual:conloca-routing-config';
 const VIRTUAL_LAYOUT = 'virtual:conloca-layout';
 const VIRTUAL_PUCK_CONFIG = 'virtual:conloca-puck-config';
 const VIRTUAL_CONTENT_SCHEMAS = 'virtual:conloca-content-schemas';
+const VIRTUAL_FRAGMENT_COMPONENTS = 'virtual:conloca-fragment-components';
 
 // Resolved IDs (with \0 prefix to prevent file resolution)
 const RESOLVED_ROUTING_CONFIG = `\0${VIRTUAL_ROUTING_CONFIG}`;
 const RESOLVED_LAYOUT = `\0${VIRTUAL_LAYOUT}`;
 const RESOLVED_PUCK_CONFIG = `\0${VIRTUAL_PUCK_CONFIG}`;
 const RESOLVED_CONTENT_SCHEMAS = `\0${VIRTUAL_CONTENT_SCHEMAS}`;
+const RESOLVED_FRAGMENT_COMPONENTS = `\0${VIRTUAL_FRAGMENT_COMPONENTS}`;
 
 // Virtual modules for hydration system
 const VIRTUAL_HYDRATION_REGISTRY = 'virtual:conloca-hydration-registry';
@@ -120,6 +124,10 @@ export function createEditorReloadGate(): EditorReloadGate {
 const VIRTUAL_CMS_SPA_ENTRY = 'virtual:conloca-cms-spa-entry';
 const RESOLVED_CMS_SPA_ENTRY = `\0${VIRTUAL_CMS_SPA_ENTRY}`;
 
+// The site's fragment vocabulary, editor frames and renderer (dev only)
+const VIRTUAL_SITE_RENDER = 'virtual:conloca-site-render';
+const RESOLVED_SITE_RENDER = `\0${VIRTUAL_SITE_RENDER}`;
+
 async function loadContentApiNode() {
   return import('@conloca/content-api/node');
 }
@@ -148,6 +156,18 @@ export interface ConlocaCMSOptions extends Omit<UIConfig, 'basename'> {
    * @example './src/page-schemas.ts'
    */
   contentSchemasPath?: string;
+
+  /**
+   * Path to a module exporting `fragmentComponents = defineFragmentComponents(...)`
+   * from `@conloca/mdx/render`: the components and element overrides content
+   * fragments may use on published pages and draft previews. It must load in a
+   * server runtime and import no editor code. In dev, a render module that is
+   * also in the client module graph may keep a cached load failure until the
+   * dev server restarts.
+   *
+   * @example './src/fragment-components.tsx'
+   */
+  fragmentComponentsPath?: string;
 
   /**
    * Default layout for content pages.
@@ -492,6 +512,31 @@ export default {};
 `;
 };
 
+// Template for the site render loader virtual module: hands the site's
+// fragment renderer, vocabulary and editor frames to cms-spa's site-render
+// registry. The preamble comes first because frames and fragment components
+// are React modules.
+const siteRenderLoader = (cmsSpaDistDir?: string) => {
+  const siteRenderImport = cmsSpaDistDir ? `${cmsSpaDistDir}/ts/site-render.js` : '@conloca/cms-spa/site-render';
+  return `
+import '${VIRTUAL_REFRESH_PREAMBLE}';
+import { setSiteRender } from '${siteRenderImport}';
+import * as site from '${VIRTUAL_SITE_RENDER}';
+
+setSiteRender({ evaluate: site.evaluateMDXToComponent, vocabulary: site.fragmentComponents, frames: site.editorFrames });
+
+if (import.meta.hot) {
+  import.meta.hot.accept('${VIRTUAL_SITE_RENDER}', (next) => {
+    if (next) {
+      setSiteRender({ evaluate: next.evaluateMDXToComponent, vocabulary: next.fragmentComponents, frames: next.editorFrames });
+    }
+  });
+}
+
+export default {};
+`;
+};
+
 /**
  * Whether a resolved package directory came from the registry rather than from
  * a workspace. @conloca/cms-spa ships its sources so source maps resolve, so
@@ -547,8 +592,10 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
   // that run after this one may still switch it. The duplicate-route-name check
   // below keys on it.
   let outputMode: 'static' | 'server' | undefined;
+  // The site's Vite config, kept for the build:done fragment check.
+  let siteConfig: Pick<AstroConfig, 'vite'> | undefined;
   if (routingConfig?.enabled !== false && routingConfig) {
-    const resolvedRoutes: Record<string, Required<import('./types.js').RouteConfig>> = {};
+    const resolvedRoutes: ResolvedRoutingConfig['routes'] = {};
     for (const [name, config] of Object.entries(routingConfig.routes || {})) {
       resolvedRoutes[name] = resolveRouteConfig(config);
     }
@@ -697,7 +744,10 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
         // The editor builds each page's data context in the browser from
         // these, the same bindings the published page resolves with.
         spaConfig.dataBindings = resolvedRoutingConfig?.enabled
-          ? toEditorDataBindings(resolvedRoutingConfig)
+          ? {
+              ...toEditorDataBindings(resolvedRoutingConfig),
+              ...(options.fragmentPreviewRoute ? { fragmentPreviewRoute: options.fragmentPreviewRoute } : {}),
+            }
           : undefined;
         // The editor's prompt for making existing Astro pages editable runs the
         // newest CLI against this site; the routes come from the dev server.
@@ -738,8 +788,17 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
           ? resolve(options.assetsPath)
           : join(fileURLToPath(config.publicDir), 'assets');
         const assetRefBase = deriveAssetRefBase(mediaFolder, config.publicDir, config.base);
+        // Route name → absolute frame module, for each route that declares an editor frame.
+        const frameEntries = Object.entries(resolvedRoutingConfig?.routes ?? {}).flatMap(([name, route]) =>
+          route.editorFrame === undefined ? [] : [[name, resolve(route.editorFrame)] as const],
+        );
+        const editorFrames = frameEntries.length > 0 ? Object.fromEntries(frameEntries) : undefined;
         const editorDescriptors: EditorDescriptorChannel = {
           ...(options.schemasPath ? { schemasPath: resolve(options.schemasPath) } : {}),
+          ...(options.fragmentComponentsPath
+            ? { fragmentComponentsPath: resolve(options.fragmentComponentsPath) }
+            : {}),
+          ...(editorFrames === undefined ? {} : { editorFrames }),
           puckConfigPath: resolve(options.puckConfigPath),
           ...(siteStyles === undefined ? {} : { siteStyles }),
           ...(editorStyles === undefined ? {} : { editorStyles }),
@@ -910,6 +969,9 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
                   if (id === VIRTUAL_CONTENT_SCHEMAS) {
                     return RESOLVED_CONTENT_SCHEMAS;
                   }
+                  if (id === VIRTUAL_FRAGMENT_COMPONENTS) {
+                    return RESOLVED_FRAGMENT_COMPONENTS;
+                  }
                   // Hydration virtual modules
                   if (id === VIRTUAL_HYDRATION_REGISTRY) {
                     return RESOLVED_HYDRATION_REGISTRY;
@@ -937,6 +999,11 @@ export function conlocaCMS(options: ConlocaCMSOptions): AstroIntegration {
                   if (id === RESOLVED_CONTENT_SCHEMAS) {
                     return generateContentSchemasModule(
                       options.contentSchemasPath ? resolve(options.contentSchemasPath) : undefined,
+                    );
+                  }
+                  if (id === RESOLVED_FRAGMENT_COMPONENTS) {
+                    return generateFragmentComponentsModule(
+                      options.fragmentComponentsPath ? resolve(options.fragmentComponentsPath) : undefined,
                     );
                   }
                   // Hydration virtual modules
@@ -1059,10 +1126,8 @@ initHydration(componentRegistry)
                 'nanoid',
                 'sort-keys',
                 // MDX processing
-                '@mdx-js/mdx',
                 'remark-frontmatter',
                 'remark-gfm',
-                'remark-mdx-frontmatter',
               ],
             },
             plugins: [
@@ -1110,6 +1175,12 @@ initHydration(componentRegistry)
                   }
                   if (id === `${cmsRoute}/editor-styles.js`) {
                     return id;
+                  }
+                  if (id === `${cmsRoute}/site-render-entry.js`) {
+                    return id;
+                  }
+                  if (id === VIRTUAL_SITE_RENDER) {
+                    return RESOLVED_SITE_RENDER;
                   }
                   if (id === VIRTUAL_CMS_SPA_ENTRY) {
                     return RESOLVED_CMS_SPA_ENTRY;
@@ -1159,6 +1230,15 @@ initHydration(componentRegistry)
                       return editorStylesLoader(paths, cmsSpaDistDir);
                     }
                     return 'export default {};';
+                  }
+                  if (id === `${cmsRoute}/site-render-entry.js`) {
+                    return siteRenderLoader(cmsSpaDistDir);
+                  }
+                  if (id === RESOLVED_SITE_RENDER) {
+                    return generateSiteRenderModule(
+                      options.fragmentComponentsPath ? resolve(options.fragmentComponentsPath) : undefined,
+                      Object.fromEntries(frameEntries),
+                    );
                   }
                   if (id === RESOLVED_CMS_SPA_ENTRY) {
                     // Detect whether cms-spa is a workspace checkout (import its
@@ -1486,6 +1566,24 @@ if (import.meta.hot) {
 
       'astro:config:done': ({ config }) => {
         outputMode = config.output;
+        siteConfig = config;
+      },
+
+      'astro:build:done': async ({ logger }) => {
+        if (!siteConfig) return;
+        // Loaded here: the checker pulls in the page renderer (Puck, React), which a config load must not pay for.
+        const { checkFragmentComponents } = await import('./build/check-fragment-components.js');
+        const problems = await checkFragmentComponents({
+          contentRoot: options.contentRoot,
+          // projectRoot, not config.root: the plugin resolves contentRoot and fragmentComponentsPath against it.
+          root: projectRoot,
+          vite: siteConfig.vite,
+          fragmentComponentsPath: options.fragmentComponentsPath,
+          logger,
+        });
+        if (problems.length > 0) {
+          throw new Error(`Fragments the site would fail to render:\n${problems.map((p) => `  ${p}`).join('\n')}`);
+        }
       },
 
       'astro:server:setup': ({ logger, refreshContent }) => {

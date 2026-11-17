@@ -3,13 +3,12 @@ import {
   EDITOR_HOST_PROTOCOL,
   EDITOR_UI_MODULE_FILES,
   type EditorHostPageData,
+  editorPageContentSecurityPolicy,
 } from '@conloca/content-api/editor-host';
 
 /**
  * The editor page's `index.html`: the editor UI from `<editorUiOrigin>/host/v<protocol>/`, its `importmap` script, and
- * the page data as a JSON block that never executes. The meta CSP admits scripts only from the page itself, that path
- * and the `importmap` script's hash; it leaves styles and fonts alone, so the editor UI's stylesheet may load its web
- * font.
+ * the page data as a JSON block that never executes, under `editorPageContentSecurityPolicy`.
  */
 export function renderEditorPage(data: EditorHostPageData, editorUiOrigin: string): string {
   const uiPath = `${editorUiOrigin}/host/v${EDITOR_HOST_PROTOCOL}/`;
@@ -24,7 +23,7 @@ export function renderEditorPage(data: EditorHostPageData, editorUiOrigin: strin
     '<head>',
     '<meta charset="utf-8">',
     '<meta name="robots" content="noindex, nofollow">',
-    `<meta http-equiv="Content-Security-Policy" content="script-src 'self' ${uiPath} 'sha256-${importMapHash}'; object-src 'none'; base-uri 'none'">`,
+    `<meta http-equiv="Content-Security-Policy" content="${editorPageContentSecurityPolicy(uiPath, importMapHash)}">`,
     '<title>Conloca editor</title>',
     `<script type="importmap">${importMapJson}</script>`,
     // `<` escaped so no value can close the element; JSON.parse reads `\u003c` back as `<`.

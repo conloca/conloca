@@ -79,7 +79,7 @@ describe('the editor frame contract', () => {
   });
 
   test('the content methods are every classified method except the eight the parent never serves', () => {
-    expect(FRAME_CONTENT_METHODS).toHaveLength(31);
+    expect(FRAME_CONTENT_METHODS).toHaveLength(30);
     const served = [...FRAME_CONTENT_METHODS, ...REFUSED];
     expect(served).toHaveLength(Object.keys(CONTENT_METHOD_CLASSIFICATION).length);
     expect(new Set(served)).toEqual(new Set(Object.keys(CONTENT_METHOD_CLASSIFICATION)));

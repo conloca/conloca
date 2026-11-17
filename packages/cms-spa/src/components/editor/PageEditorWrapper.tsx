@@ -4,7 +4,6 @@ import {
   metaString,
   pageReferenceOf,
   StaleWriteError,
-  useCompileMDX,
   useContent,
   useDataContext,
   useFragments,
@@ -25,7 +24,9 @@ import { getUIConfig } from '../../ui-config.js';
 import { buildMetadataUpdate, extractPageMetadata, pageSettingsSaveError } from '../../utils/pageMetadata.js';
 import { PageMetadataDialog } from '../dialogs/PageMetadataDialog.js';
 import { type ContentFragmentOption, ContentFragmentSelectorField } from '../fields/ContentFragmentSelectorField.js';
+import { useFragmentRender } from '../puck/use-fragment-render.js';
 import { FragmentContentWrapper, FragmentFieldWrapper } from './FragmentWrappers.js';
+import { preventLinkNavigation } from './InlinePreviewFrame.js';
 import { MdxPageEditor } from './MdxPageEditor.js';
 import { PageEditor } from './PageEditor.js';
 import { useLivePageSettings } from './use-live-page-settings.js';
@@ -46,24 +47,20 @@ export interface ContentFragmentSectionProps {
   /**
    * The fragment's headings, in document order, carrying the ids its markup
    * puts on them. Supplied by the platform on both surfaces so a site can show
-   * a contents list without reading the rendered page back — which the editor
-   * cannot do anyway, since the body renders in a sandbox it cannot see into.
+   * a contents list without reading the rendered page back.
    */
   fragmentOutline?: readonly MDXHeading[];
 }
 
 /**
  * The selected fragment's headings, for a host block that shows a contents
- * list. The body renders in a sandbox this document cannot read, so the
- * outline comes off the compile instead — the same compile the preview
- * already requests, deduplicated by its query key, so this costs no second
- * round trip.
+ * list: the outline of the same inline render the preview shows, so this costs
+ * no second render. Empty while that render is pending.
  */
 function useFragmentOutline(fragmentId: string, locale: string): readonly MDXHeading[] {
   const { data: entry } = useLocalizedContent(fragmentId, locale);
-  const mdx = entry?.localized?.content?.mdx ?? null;
-  const { data } = useCompileMDX({ mdxContent: mdx, cacheKey: entry?.localized?.etag });
-  return data?.outline ?? [];
+  const rendered = useFragmentRender(entry?.localized?.content?.mdx ?? '');
+  return rendered.status === 'done' ? rendered.outline : [];
 }
 
 /**
@@ -91,7 +88,13 @@ function withFragmentPreview(
         fragmentOutline={fragmentOutline}
         fragment={
           resolvable.has(props.fragmentId) ? (
-            <div className="mdx-content conloca-prose" data-conloca-content-root="">
+            <div
+              className="mdx-content conloca-prose"
+              data-conloca-content-root=""
+              onClickCapture={preventLinkNavigation}
+              onAuxClickCapture={preventLinkNavigation}
+              onSubmitCapture={preventLinkNavigation}
+            >
               <FragmentContentWrapper contentId={props.fragmentId} locale={locale} />
             </div>
           ) : undefined
@@ -150,7 +153,13 @@ export function enhancePuckConfigWithFragments(
       },
       defaultProps: { contentId: fragment.id },
       render: ({ contentId }: { contentId: string }) => (
-        <div className="mdx-content conloca-prose" data-conloca-content-root="">
+        <div
+          className="mdx-content conloca-prose"
+          data-conloca-content-root=""
+          onClickCapture={preventLinkNavigation}
+          onAuxClickCapture={preventLinkNavigation}
+          onSubmitCapture={preventLinkNavigation}
+        >
           <FragmentContentWrapper contentId={contentId} locale={locale} />
         </div>
       ),

@@ -1,31 +1,20 @@
 /**
- * Opaque-origin MDX preview frame document + runtime. Confines the MDX
- * `'unsafe-eval'` to this frame — see `SANDBOX_FRAME_CSP` below.
+ * Opaque-origin HTML preview frame document + runtime. Renders host-sanitized
+ * HTML where it has no origin, cookies or privileged globals of its own.
  * Shared by the cms-spa ContentSandbox and the server route that serves this
  * frame's HTML at `SANDBOX_FRAME_PATH`.
- */
-
-/**
- * Build a jsx runtime that constructs real DOM nodes instead of React
- * elements. The two isolated MDX preview surfaces render markdown-subset MDX
- * with no component map supplied, so intrinsic elements plus `Fragment` cover
- * everything they emit; this keeps the frame dependency-free (no React bundle
- * to inline). Inline event-handler props are dropped defensively.
  */
 
 /** Discriminated messages the frame and its host exchange. */
 export interface SandboxRenderMessage {
   __conlocaSandbox: true;
   kind: 'render';
-  mode: 'mdx' | 'html';
-  /** Compiled MDX function body (mode `mdx`) or sanitized HTML (mode `html`). */
+  mode: 'html';
+  /** Sanitized HTML. */
   payload: string;
   /** Optional stylesheet text injected into the frame for preview fidelity. */
   styles?: string;
-  /**
-   * Data URLs to show instead of an image the frame cannot load itself, keyed by its stored value: an element's
-   * `src` in both modes, and an MDX component's string prop.
-   */
+  /** Data URLs to show instead of an image the frame cannot load itself, keyed by an element's stored `src`. */
   images?: Record<string, string>;
 }
 
@@ -37,129 +26,13 @@ export type SandboxOutboundMessage =
   | { __conlocaSandbox: true; k: string; kind: 'rendered' }
   | { __conlocaSandbox: true; k: string; kind: 'error'; message: string };
 
-export function createSandboxRuntime(images?: Record<string, string>): {
-  Fragment: symbol;
-  jsx: (type: unknown, props: Record<string, unknown>) => Node;
-  jsxs: (type: unknown, props: Record<string, unknown>) => Node;
-  jsxDEV: (type: unknown, props: Record<string, unknown>) => Node;
-} {
-  // Everything below stays inside this function: the frame receives it as source text.
-  const Fragment = Symbol('sandbox.fragment');
-  const SVG_NS = 'http://www.w3.org/2000/svg';
-  // A child is built before its parent, so an element written inside <svg>
-  // starts out as HTML, which a browser does not draw there. The <svg> builds
-  // it again as SVG from what each HTML element was made of, kept here, which
-  // is the namespace React would have given it.
-  const madeOf = new WeakMap<Node, { type: string; props: Record<string, unknown> }>();
-  // oxlint-disable-next-line unicorn/consistent-function-scoping -- the frame receives this function as source text, so its helpers stay inside it.
-  const toNodes = (value: unknown): Node[] => {
-    if (value == null || value === true || value === false) return [];
-    if (Array.isArray(value)) return value.flatMap(toNodes);
-    if (typeof value === 'string' || typeof value === 'number') return [document.createTextNode(String(value))];
-    if (value instanceof Node) return [value];
-    return [document.createTextNode(String(value))];
-  };
-  const element = (type: string, p: Record<string, unknown>, inSvg: boolean): Element => {
-    const svg = inSvg || type === 'svg';
-    const el = svg ? document.createElementNS(SVG_NS, type) : document.createElement(type);
-    if (!svg) madeOf.set(el, { type, props: p });
-    for (const key in p) {
-      if (key === 'children' || key === 'key') continue;
-      const value = p[key];
-      // Inherited keys are never strings, so only a src the host sent is swapped.
-      const sent = type === 'img' && key === 'src' && typeof value === 'string' ? images?.[value] : undefined;
-      if (/^on/i.test(key)) continue; // never wire an event handler
-      if (key === 'className') {
-        el.setAttribute('class', String(value));
-      } else if (key === 'htmlFor') {
-        el.setAttribute('for', String(value));
-      } else if (key === 'style' && value && typeof value === 'object') {
-        Object.assign((el as HTMLElement).style, value as Record<string, string>);
-      } else if (value === true) {
-        el.setAttribute(key, '');
-      } else if (typeof sent === 'string') {
-        el.setAttribute('src', sent);
-      } else if (value != null && value !== false) {
-        el.setAttribute(key, String(value));
-      }
-    }
-    // What a <foreignObject> holds is HTML again, as in a browser.
-    const svgChildren = svg && type !== 'foreignObject';
-    for (const child of toNodes(p.children)) {
-      const source = svgChildren ? madeOf.get(child) : undefined;
-      el.appendChild(source ? element(source.type, source.props, true) : child);
-    }
-    return el;
-  };
-  // A component takes images as props of any name, so every string prop at any depth the host sent bytes for is
-  // swapped; `children` is content, not a link, and stays as written.
-  // oxlint-disable-next-line unicorn/consistent-function-scoping, anti-slop/no-unknown-returns, anti-slop/no-known-value-widening -- the frame receives this function as source text, so its helpers stay inside it; props are whatever the component takes, so every value passes through as it came.
-  const withSentImages = (value: unknown, sent: Record<string, string>): unknown => {
-    if (typeof value === 'string') {
-      // Inherited keys are never strings, so only a value the host sent is swapped.
-      const data = sent[value];
-      return typeof data === 'string' ? data : value;
-    }
-    if (Array.isArray(value)) return value.map((item) => withSentImages(item, sent));
-    if (value === null || typeof value !== 'object') return value;
-    const prototype: unknown = Object.getPrototypeOf(value);
-    if (prototype !== Object.prototype && prototype !== null) return value;
-    // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- a copy of the component's own props, values as they came.
-    const out: Record<string, unknown> = {};
-    for (const [key, item] of Object.entries(value)) out[key] = key === 'children' ? item : withSentImages(item, sent);
-    // oxlint-disable-next-line anti-slop/no-known-value-widening -- the copy is as open as the props it came from.
-    return out;
-  };
-  const jsx = (type: unknown, props: Record<string, unknown>): Node => {
-    const p = props || {};
-    if (type === Fragment) {
-      const frag = document.createDocumentFragment();
-      for (const child of toNodes(p.children)) frag.appendChild(child);
-      return frag;
-    }
-    if (typeof type === 'function') {
-      // SAFETY: `p` is a plain props object, and withSentImages copies a plain object into a plain object.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion, anti-slop/no-unsafe-dictionary-type -- same reason as the SAFETY note.
-      const componentProps = images ? (withSentImages(p, images) as Record<string, unknown>) : p;
-      // SAFETY: compiled MDX passes only components, which take one props object and return this runtime's DOM nodes.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion, anti-slop/no-unsafe-dictionary-type -- same reason as the SAFETY note.
-      return (type as (props: Record<string, unknown>) => Node)(componentProps);
-    }
-    if (typeof type === 'string') return element(type, p, false);
-    const missing = document.createElement('span');
-    missing.setAttribute('data-sandbox-unknown', '');
-    return missing;
-  };
-  return { Fragment, jsx, jsxs: jsx, jsxDEV: jsx };
-}
-
-/**
- * Evaluate a pre-compiled MDX function body. This is the `new AsyncFunction`
- * eval that used to run in the privileged parent (`useMDXEvaluation`) — it now
- * runs only here, inside the sandbox, which is why `'unsafe-eval'` is confined
- * to the frame CSP. Returns the module's default export (the MDX component).
- */
-export function runCompiledMdx(
-  code: string,
-  runtime: Record<string, unknown>,
-): Promise<{ default?: (props: Record<string, unknown>) => Node }> {
-  const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor as new (
-    body: string,
-  ) => (runtime: Record<string, unknown>) => Promise<{ default?: (props: Record<string, unknown>) => Node }>;
-  return new AsyncFunction(String(code))(runtime);
-}
-
 /**
  * The frame entry point. Wires the message listener, height reporting, and
- * link/interaction interception, then announces readiness. Every dependency
- * arrives as `deps` so the serialized source carries no free identifiers a
- * minifier could rename.
+ * link/interaction interception, then announces readiness. It is serialized
+ * into the frame document, so it references nothing outside itself.
  */
-export function sandboxFrameMain(deps: {
-  createSandboxRuntime: typeof createSandboxRuntime;
-  runCompiledMdx: typeof runCompiledMdx;
-}): void {
-  // MDX runs only where it has no origin of its own: an opaque origin inside a parent frame.
+export function sandboxFrameMain(): void {
+  // Preview content runs only where it has no origin of its own: an opaque origin inside a parent frame.
   if (self.origin !== 'null' || window.parent === window) return;
   const root = document.getElementById('__sandbox_root');
   if (!root) return;
@@ -208,6 +81,7 @@ export function sandboxFrameMain(deps: {
   );
   document.addEventListener('pointerdown', () => post({ __conlocaSandbox: true, kind: 'interact' }), true);
 
+  // oxlint-disable-next-line unicorn/consistent-function-scoping -- serialized whole into the frame, so it stays inside.
   const applyStyles = (css: string): void => {
     let style = document.getElementById('__sandbox_styles');
     if (!style) {
@@ -216,28 +90,6 @@ export function sandboxFrameMain(deps: {
       document.head.appendChild(style);
     }
     style.textContent = css;
-  };
-  const renderMdx = (code: string, images: Record<string, string> | undefined): void => {
-    const runtime = deps.createSandboxRuntime(images);
-    deps
-      .runCompiledMdx(code, runtime as unknown as Record<string, unknown>)
-      .then((module) => {
-        const Component = module?.default;
-        root.textContent = '';
-        if (typeof Component === 'function') {
-          const output = Component({});
-          if (output) root.appendChild(output);
-        }
-        post({ __conlocaSandbox: true, kind: 'rendered' });
-        postHeight();
-      })
-      .catch((error: unknown) => {
-        post({
-          __conlocaSandbox: true,
-          kind: 'error',
-          message: error instanceof Error ? error.message : String(error),
-        });
-      });
   };
   const renderHtml = (html: string, images: Record<string, string> | undefined): void => {
     // Already allowlist-sanitized by the host; the sandbox contains anything
@@ -261,11 +113,12 @@ export function sandboxFrameMain(deps: {
     // Brand + kind only. Requiring event.source === parent drops legitimate
     // host posts under some nested/opaque-origin Chromium cases.
     const data = event.data as SandboxRenderMessage | undefined;
-    if (data?.__conlocaSandbox !== true || data.kind !== 'render') return;
+    // Only HTML renders here; a message in any other mode (an old host's `mdx`) is ignored.
+    // oxlint-disable-next-line no-underscore-dangle -- `__conlocaSandbox` is the protocol's message brand.
+    if (data?.__conlocaSandbox !== true || data.kind !== 'render' || data.mode !== 'html') return;
     if (typeof data.styles === 'string') applyStyles(data.styles);
     try {
-      if (data.mode === 'mdx') renderMdx(data.payload, data.images);
-      else renderHtml(data.payload, data.images);
+      renderHtml(data.payload, data.images);
     } catch (error: unknown) {
       post({ __conlocaSandbox: true, kind: 'error', message: error instanceof Error ? error.message : String(error) });
     }
@@ -279,8 +132,8 @@ export function sandboxFrameMain(deps: {
 }
 
 /**
- * The frame's own Content-Security-Policy. `'unsafe-eval'` is intentional and
- * confined here (the MDX eval lives in the frame). What it does and does NOT
+ * The frame's own Content-Security-Policy. Inline scripts run (the frame's own
+ * bootstrap and whatever sanitized HTML slips through), but nothing evals. What it does and does NOT
  * close, stated precisely:
  *   - The isolation that HOLDS: no `allow-same-origin` gives the frame an opaque
  *     origin, so it exposes no cookies, no privileged globals, and no
@@ -302,7 +155,7 @@ export function sandboxFrameMain(deps: {
  * no CSP mitigation. Both leak only request metadata, never privileged content.
  */
 export const SANDBOX_FRAME_CSP =
-  "default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline'; img-src data: https: blob:; font-src data: https:";
+  "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: https: blob:; font-src data: https:";
 
 /**
  * The policy a server sends with the frame document. It adds what a meta
@@ -320,17 +173,15 @@ export const MDX_SANDBOX_FRAME_POLICY = `${SANDBOX_FRAME_CSP}; sandbox allow-scr
 const SANDBOX_BUNDLE_HELPERS = 'var __name=function(fn){return fn};';
 
 /**
- * Assemble the sandbox frame document. The runtime functions are injected as
- * argument expressions to `sandboxFrameMain` so no cross-function identifier
- * has to survive minification by name.
+ * Assemble the sandbox frame document. `sandboxFrameMain` is serialized whole
+ * and called with no arguments, so no identifier has to survive minification by name.
  *
- * The editor loads this from `GET /api/v1/mdx/sandbox-frame` (own response CSP
- * with unsafe-eval). Do NOT use srcdoc/blob from the parent document: those
- * inherit the parent CSP, which forbids unsafe-inline/unsafe-eval and leaves
- * MDX fragment previews as empty white boxes.
+ * The editor loads this from `GET /api/v1/mdx/sandbox-frame` (own response CSP).
+ * Do NOT use srcdoc/blob from the parent document: those inherit the parent CSP,
+ * which forbids unsafe-inline and leaves previews as empty white boxes.
  */
 export function buildSandboxSrcdoc(): string {
-  const bootstrap = `${SANDBOX_BUNDLE_HELPERS}(${sandboxFrameMain.toString()})({createSandboxRuntime:${createSandboxRuntime.toString()},runCompiledMdx:${runCompiledMdx.toString()}})`;
+  const bootstrap = `${SANDBOX_BUNDLE_HELPERS}(${sandboxFrameMain.toString()})()`;
   return [
     '<!doctype html><html><head><meta charset="utf-8">',
     `<meta http-equiv="Content-Security-Policy" content="${SANDBOX_FRAME_CSP}">`,

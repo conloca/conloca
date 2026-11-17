@@ -59,4 +59,51 @@ describe('readEditorDataBindings', () => {
     expect(readEditorDataBindings({ siteName: 'default', locale: 'en' })).toBeUndefined();
     expect(readEditorDataBindings({ siteName: 'default', locale: 'en', routes: [] })).toBeUndefined();
   });
+
+  test('keeps well-formed route entries in order, dropping a bad item and a non-string frame', () => {
+    const read = readEditorDataBindings({
+      siteName: 'default',
+      locale: 'en',
+      routes: {},
+      entries: [
+        { name: 'blog', collection: 'blog', frame: 'blog' },
+        { name: 1 },
+        { name: 'x', collection: 'x', frame: 2 },
+      ],
+    });
+
+    expect(read).toEqual({
+      siteName: 'default',
+      locale: 'en',
+      routes: {},
+      entries: [
+        { name: 'blog', collection: 'blog', frame: 'blog' },
+        { name: 'x', collection: 'x' },
+      ],
+    });
+  });
+
+  test('leaves entries absent when the input has none', () => {
+    const read = readEditorDataBindings({ siteName: 'default', locale: 'en', routes: {} });
+
+    expect(read !== undefined && 'entries' in read).toBe(false);
+  });
+
+  test('keeps a fragment preview route, with and without entries', () => {
+    const bare = { siteName: 'default', locale: 'en', routes: {}, fragmentPreviewRoute: '/blog/x' };
+    const withEntries = { ...bare, entries: [{ name: 'blog', collection: 'blog' }] };
+
+    expect(readEditorDataBindings(bare)).toEqual(bare);
+    expect(readEditorDataBindings(withEntries)).toEqual(withEntries);
+  });
+
+  test('drops a fragment preview route that is not a site path', () => {
+    const base = { siteName: 'default', locale: 'en', routes: {} };
+
+    expect(readEditorDataBindings({ ...base, fragmentPreviewRoute: 1 })).toEqual(base);
+    expect(readEditorDataBindings({ ...base, fragmentPreviewRoute: 'blog', entries: [] })).toEqual({
+      ...base,
+      entries: [],
+    });
+  });
 });

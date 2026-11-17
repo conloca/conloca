@@ -72,6 +72,30 @@ declare module 'virtual:conloca-content-schemas' {
 }
 
 /**
+ * Virtual module: virtual:conloca-fragment-components
+ *
+ * The site's `fragmentComponentsPath` module, imported on the first call only;
+ * an empty object when the site names none.
+ */
+declare module 'virtual:conloca-fragment-components' {
+  export function loadFragmentComponents(): Promise<{ fragmentComponents?: unknown }>;
+  /** The resolved absolute path of that module, or `undefined` when the site names none. */
+  export const fragmentComponentsPath: string | undefined;
+}
+
+/**
+ * Virtual module: virtual:conloca-site-render (dev only)
+ *
+ * The site's fragment vocabulary, its editor frames (route name → frame) and
+ * the fragment renderer, handed to cms-spa's `setSiteRender`.
+ */
+declare module 'virtual:conloca-site-render' {
+  export const fragmentComponents: unknown;
+  export const editorFrames: unknown;
+  export { evaluateMDXToComponent } from '@conloca/mdx/render';
+}
+
+/**
  * Virtual module: virtual:conloca-hydration-entry
  *
  * Client-side script that handles progressive hydration of interactive

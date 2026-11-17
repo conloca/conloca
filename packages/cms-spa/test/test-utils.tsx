@@ -6,7 +6,6 @@ import {
   type SitesConfig,
 } from '@conloca/content-api/node';
 import { API_ROUTES, ContentAPIClient, setContentAPIClient } from '@conloca/content-api-client';
-import { handleMDXCompileRequest } from '@conloca/mdx/node';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { type RenderOptions, render } from '@testing-library/react';
 import { Hono } from 'hono';
@@ -64,12 +63,6 @@ export function setupTestAPI(baseUrl = '/__cms/api', sitesConfig?: SitesConfig) 
 
     // Create the content API router with error injection
     const apiRouter = createContentAPIRouter(testApi);
-
-    // POST /mdx/compile lives in @conloca/astro-cms's cms-handler (not in
-    // createContentAPIRouter) because compileMDX is a renderer concern. It is
-    // mounted here the way the Astro host mounts it, so tests that exercise
-    // useCompileMDX get the real endpoint.
-    apiRouter.post('/mdx/compile', (c) => handleMDXCompileRequest(c.req.raw));
 
     // Create the main app and mount at the specified base URL
     const app = new Hono();

@@ -2,7 +2,7 @@
   "//": "Type-check only. The typia transform ttsc would pick up from this package's dependencies is disabled: its native emit fails on the .tsx tests, and the Typia fixtures type-check as declared. test-native-preload.ts runs the transform where tests execute.",
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
-    "rootDir": ".",
+    "rootDir": "..",
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "jsx": "react-jsx",

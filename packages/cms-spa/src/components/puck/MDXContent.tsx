@@ -1,23 +1,14 @@
-import { APIClientError, ErrorCodes, type LocalizedEntry, useCompileMDX } from '@conloca/content-api-client';
-import React, { useMemo, useState } from 'react';
-import { useSandboxPreviewStyles } from '../../sandbox-preview-styles.js';
-import { ContentSandbox } from '../sandbox/ContentSandbox.js';
+import type { LocalizedEntry } from '@conloca/content-api-client';
+import React from 'react';
+import { preventLinkNavigation } from '../editor/InlinePreviewFrame.js';
+import { useFragmentRender } from './use-fragment-render.js';
 
-const SYNTAX_HELPER = "This fragment's MDX could not be compiled. Edit the fragment to fix the syntax.";
-const SERVICE_HELPER = 'Preview could not reach the compile service. Retry, or reload the editor.';
-const RENDER_HELPER = 'The compiled fragment failed while rendering.';
-
-/** Honest helper copy: only blame MDX syntax when compile failed with MDX_COMPILE_FAILED. */
-export function fragmentRenderErrorHelper(error: Error | null | undefined, isCompileError: boolean): string {
-  if (!isCompileError) return RENDER_HELPER;
-  if (error instanceof APIClientError && error.code === ErrorCodes.MDX_COMPILE_FAILED) {
-    return SYNTAX_HELPER;
+/** The helper line under a fragment that cannot render: what to do about it. */
+export function fragmentRenderErrorHelper(error: Error): string {
+  if (error.message.startsWith('Unknown component <')) {
+    return `${error.message} Declare it in the site's fragmentComponentsPath module.`;
   }
-  // @conloca/mdx's compile throws a plain Error with "MDX compilation failed: …"
-  if (error?.message?.includes('MDX compilation failed')) {
-    return SYNTAX_HELPER;
-  }
-  return SERVICE_HELPER;
+  return `This fragment cannot be rendered: ${error.message}`;
 }
 
 interface MDXContentProps {
@@ -31,7 +22,7 @@ interface MDXContentProps {
 }
 
 /**
- * Error Boundary for catching React errors in MDXContent rendering.
+ * Error Boundary for a site component that throws while the fragment renders.
  */
 class MDXContentErrorBoundary extends React.Component<
   { children: React.ReactNode; contentId: string },
@@ -72,85 +63,16 @@ class MDXContentErrorBoundary extends React.Component<
 }
 
 /**
- * Component for rendering MDX content fragments in the CMS editor.
+ * Renders a fragment's MDX inline in the CMS editor with the site's renderer
+ * and components (or the editor's fallback). Nothing shows while it renders.
  *
- * Receives a LocalizedEntry, compiles its MDX, and renders the result inside
- * the sandboxed content frame.
- * Displays appropriate loading, error, and empty states.
- *
- * @param props - Component props
- * @param props.entry - LocalizedEntry containing the content and ETag
+ * @param props.entry - LocalizedEntry containing the content
  */
 function MDXContentInner({ entry, wrapped = true }: MDXContentProps) {
-  const sandboxStyles = useSandboxPreviewStyles();
-  // Get MDX content from localized entry
-  const actualMdxContent = useMemo(() => {
-    if (!entry?.localized?.content) return null;
+  const mdx = entry?.localized?.content?.mdx || '';
+  const rendered = useFragmentRender(mdx);
 
-    const content = entry.localized.content as { mdx?: string };
-    return content.mdx || null;
-  }, [entry]);
-
-  const cacheKey = entry.localized.etag;
-  const {
-    data: compiledResult,
-    error: compileError,
-    isLoading: isCompiling,
-    refetch: retryCompile,
-  } = useCompileMDX({
-    mdxContent: actualMdxContent,
-    cacheKey,
-  });
-
-  // The MDX eval + render now happens inside the sandbox iframe, never in
-  // this privileged document. Render failures surface as a message out.
-  const [evaluationError, setEvaluationError] = useState<Error | null>(null);
-  const compiledCode = compiledResult?.code || null;
-
-  // A fresh compile clears a stale render error from the previous content.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: A new compiled artifact invalidates the prior render error.
-  React.useEffect(() => {
-    setEvaluationError(null);
-  }, [compiledCode]);
-
-  const retry = () => {
-    setEvaluationError(null);
-    void retryCompile();
-  };
-
-  // Loading state
-  if (isCompiling) {
-    return (
-      <div className="flex items-center justify-center p-8 text-grey-04 dark:text-grey-07">
-        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-azure-04 mr-3" />
-        Loading content...
-      </div>
-    );
-  }
-
-  // Evaluation / compile error
-  if (compileError || evaluationError) {
-    const error = compileError || evaluationError;
-    const helper = fragmentRenderErrorHelper(error, Boolean(compileError));
-
-    return (
-      <div className="p-4 bg-red-11 dark:bg-red-02 border border-red-08 dark:border-red-03 rounded-md text-red-04 dark:text-red-08">
-        <p className="font-semibold mb-2">Cannot Render Fragment Content</p>
-        <p className="text-sm mb-2">{error?.message}</p>
-        <p className="text-xs text-red-04 dark:text-red-08 mb-3">{helper}</p>
-        <button
-          type="button"
-          onClick={retry}
-          className="px-3 py-1 text-sm bg-red-04 text-white rounded-md hover:bg-red-03 transition-colors"
-        >
-          Retry
-        </button>
-      </div>
-    );
-  }
-
-  // No content
-  if (!actualMdxContent) {
+  if (!mdx) {
     return (
       <div className="p-4 bg-yellow-11 dark:bg-yellow-02 border border-yellow-08 dark:border-yellow-03 rounded-md text-yellow-02 dark:text-yellow-09">
         <p className="font-semibold mb-1">Empty Fragment Content</p>
@@ -161,30 +83,32 @@ function MDXContentInner({ entry, wrapped = true }: MDXContentProps) {
     );
   }
 
-  if (!compiledCode) {
+  if (rendered.status === 'pending') return null;
+
+  if (rendered.error || !rendered.Component) {
+    const error = rendered.error ?? new Error('the renderer returned no component');
     return (
-      <div className="flex items-center justify-center p-8 text-grey-04 dark:text-grey-07">
-        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-azure-04 mr-3" />
-        Loading MDX...
+      <div className="p-4 bg-red-11 dark:bg-red-02 border border-red-08 dark:border-red-03 rounded-md text-red-04 dark:text-red-08">
+        <p className="font-semibold mb-2">Cannot Render Fragment Content</p>
+        <p className="text-sm">{fragmentRenderErrorHelper(error)}</p>
       </div>
     );
   }
 
-  // Non-interactive: this preview lives inside the Puck canvas, which
-  // owns block selection and drag — the sandbox is display-only.
-  const preview = (
-    <ContentSandbox
-      mode="mdx"
-      content={compiledCode}
-      styles={sandboxStyles}
-      interactive={false}
-      onError={setEvaluationError}
-    />
+  const { Component } = rendered;
+  if (!wrapped) return <Component />;
+
+  return (
+    <div
+      className="mdx-content conloca-prose"
+      data-conloca-content-root=""
+      onClickCapture={preventLinkNavigation}
+      onAuxClickCapture={preventLinkNavigation}
+      onSubmitCapture={preventLinkNavigation}
+    >
+      <Component />
+    </div>
   );
-
-  if (!wrapped) return preview;
-
-  return <div className="mdx-content conloca-prose max-w-none">{preview}</div>;
 }
 
 /**

@@ -21,26 +21,15 @@ interface EscapeWindow extends Omit<Window, '__QUERY_CLIENT__'> {
   __QUERY_CLIENT__?: unknown;
 }
 
-/** A compiled MDX body (as the server would emit) that tries every escape
- * before returning a valid component — simulating a sanitizer bypass or a
- * malicious registry component reaching the eval. */
-const HOSTILE_MDX_COMPILED = [
-  'try { window.parent.__SANDBOX_ESCAPED__ = true; } catch (e) {}',
-  'try { if (window.parent.__CONTENT_API_CLIENT__) window.parent.__CONTENT_API_CLIENT__.mutate(); } catch (e) {}',
-  'try { var c = window.top.document.cookie; if (c) window.parent.__SANDBOX_COOKIE__ = c; } catch (e) {}',
-  'const { jsx } = arguments[0];',
-  "return { default: function MDXContent() { return jsx('p', { children: 'rendered inside the sandbox' }); } };",
-].join('\n');
-
 const HOSTILE_HTML = [
-  '<img src="x" onerror="try{window.parent.__SANDBOX_ESCAPED__=true}catch(e){}">',
+  '<img src="x" onerror="try{window.parent.__SANDBOX_ESCAPED__=true}catch(e){}try{window.parent.__CONTENT_API_CLIENT__.mutate()}catch(e){}">',
   '<a href="javascript:(window.parent.__SANDBOX_ESCAPED__=true)">link</a>',
   '<p>visible</p>',
 ].join('');
 
 /** Arms parent-window tripwires, mounts the sandbox, and reports when the
  * frame has executed its payload (via the frame's own `rendered` message). */
-function IsolationHarness({ mode, content }: { mode: 'mdx' | 'html'; content: string }) {
+function IsolationHarness({ content }: { content: string }) {
   const [executed, setExecuted] = React.useState(false);
   React.useEffect(() => {
     const w = window as EscapeWindow;
@@ -62,7 +51,7 @@ function IsolationHarness({ mode, content }: { mode: 'mdx' | 'html'; content: st
   return (
     <div>
       <div data-testid="frame-executed">{executed ? 'yes' : 'no'}</div>
-      <ContentSandbox mode={mode} content={content} />
+      <ContentSandbox content={content} />
     </div>
   );
 }
@@ -86,7 +75,7 @@ function EmptyContentHarness() {
         Clear content
       </button>
       <div data-testid="render-count">{renderCount}</div>
-      <ContentSandbox mode="html" content={content} />
+      <ContentSandbox content={content} />
     </div>
   );
 }
@@ -95,44 +84,24 @@ const meta = {
   component: ContentSandbox,
   // Default args satisfy `StoryObj`'s required-prop check; every story below
   // fully overrides `render`, so these are never read at runtime.
-  args: { mode: 'mdx', content: '' },
+  args: { content: '' },
 } satisfies Meta<typeof ContentSandbox>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Canary: the sandbox renders benign MDX in an isolated frame. */
-export const RendersMdx: Story = {
-  render: () => <ContentSandbox mode="mdx" content={HOSTILE_MDX_COMPILED} />,
+export const HostileHtmlCannotEscape: Story = {
+  render: () => <IsolationHarness content={HOSTILE_HTML} />,
   play: async ({ canvasElement }) => {
     const frame = canvasElement.querySelector('iframe');
-    expect(frame).not.toBeNull();
-    expect(frame?.getAttribute('sandbox')).toBe('allow-scripts');
-    expect(frame?.getAttribute('sandbox') ?? '').not.toContain('allow-same-origin');
-  },
-};
-
-export const HostileMdxCannotEscape: Story = {
-  render: () => <IsolationHarness mode="mdx" content={HOSTILE_MDX_COMPILED} />,
-  play: async ({ canvasElement }) => {
+    await expect(frame?.getAttribute('sandbox')).toBe('allow-scripts');
     const executed = canvasElement.querySelector('[data-testid="frame-executed"]');
     await waitFor(() => expect(executed?.textContent).toBe('yes'), { timeout: 5000 });
     const w = window as EscapeWindow;
     expect(w.__SANDBOX_ESCAPED__).toBe(false);
-    expect(w.__SANDBOX_CLIENT_CALLED__).toBe(false);
-    // The rendered content lives in the opaque frame, not this document.
-    expect(canvasElement.textContent).not.toContain('rendered inside the sandbox');
-  },
-};
-
-export const HostileHtmlCannotEscape: Story = {
-  render: () => <IsolationHarness mode="html" content={HOSTILE_HTML} />,
-  play: async ({ canvasElement }) => {
-    const executed = canvasElement.querySelector('[data-testid="frame-executed"]');
-    await waitFor(() => expect(executed?.textContent).toBe('yes'), { timeout: 5000 });
-    const w = window as EscapeWindow;
-    expect(w.__SANDBOX_ESCAPED__).toBe(false);
-    expect(canvasElement.textContent).not.toContain('visible');
+    // oxlint-disable-next-line no-underscore-dangle -- the global the hostile content tries to set.
+    await expect(w.__SANDBOX_CLIENT_CALLED__).toBe(false);
+    await expect(canvasElement.textContent).not.toContain('visible');
   },
 };
 

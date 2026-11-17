@@ -1,6 +1,6 @@
 /* oxlint-disable anti-slop/no-unknown-parameters -- This module is the parser boundary for untrusted build/module descriptor values. */
 /* oxlint-disable anti-slop/no-unsafe-dictionary-type -- The temporary dictionary exists only while this parser validates every field before returning domain types. */
-import type { DataBindingConfig, EditorDataBindings } from './types.js';
+import type { DataBindingConfig, EditorDataBindings, EditorRouteEntry } from './types.js';
 
 type PageFeed = NonNullable<DataBindingConfig['pages']>;
 
@@ -55,12 +55,24 @@ function readRouteBindings(raw: unknown): DataBindingConfig | undefined {
  */
 export function readEditorDataBindings(raw: unknown): EditorDataBindings | undefined {
   if (!isRecord(raw)) return undefined;
-  const { siteName, locale, routes } = raw;
+  const { siteName, locale, routes, entries, fragmentPreviewRoute } = raw;
   if (!isString(siteName) || !isString(locale) || !isRecord(routes)) return undefined;
   const readRoutes: Record<string, DataBindingConfig> = {};
   for (const [collection, route] of Object.entries(routes)) {
     const bindings = readRouteBindings(route);
     if (bindings !== undefined) readRoutes[collection] = bindings;
   }
-  return { siteName, locale, routes: readRoutes };
+  const preview =
+    isString(fragmentPreviewRoute) && fragmentPreviewRoute.startsWith('/') ? { fragmentPreviewRoute } : {};
+  if (!Array.isArray(entries)) return { siteName, locale, routes: readRoutes, ...preview };
+  const readEntries: EditorRouteEntry[] = [];
+  for (const entry of entries) {
+    if (!isRecord(entry) || !isString(entry.name) || !isString(entry.collection)) continue;
+    readEntries.push({
+      name: entry.name,
+      collection: entry.collection,
+      ...(isString(entry.frame) ? { frame: entry.frame } : {}),
+    });
+  }
+  return { siteName, locale, routes: readRoutes, entries: readEntries, ...preview };
 }

@@ -1,5 +1,7 @@
 /// <reference lib="dom" />
 import { afterEach, beforeEach, describe, expect, jest, mock, spyOn, test } from 'bun:test';
+import type { LocalizedEntry } from '@conloca/content-api-client';
+import { defineFragmentComponents } from '@conloca/mdx/render';
 import type { MDXEditorMethods } from '@mdxeditor/editor';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
@@ -10,9 +12,11 @@ import {
   DRAFT_IMAGE_WAIT_MS,
   draftImageData,
 } from '../src/components/editor/draft-media-config.js';
+import { MDXContent } from '../src/components/puck/MDXContent.js';
 import { ContentSandbox } from '../src/components/sandbox/ContentSandbox.js';
 import { clearMediaCache } from '../src/frame/media-cache.js';
 import type { MediaLoadInput } from '../src/frame/protocol.js';
+import { setSiteRender } from '../src/site-render.js';
 import { configureUI } from '../src/ui-config.js';
 
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
@@ -86,8 +90,8 @@ describe('an image in the MDX editor canvas', () => {
 });
 
 /** The render messages `ContentSandbox` posts into its frame once the frame reports loaded. */
-async function renderMessages(content: string, mode: 'mdx' | 'html' = 'mdx') {
-  const { container } = render(<ContentSandbox mode={mode} content={content} />);
+async function renderMessages(content: string) {
+  const { container } = render(<ContentSandbox content={content} />);
   const iframe = container.querySelector('iframe');
   const frameWindow = iframe?.contentWindow;
   if (!iframe || !frameWindow) throw new Error('the sandbox frame did not mount');
@@ -100,23 +104,11 @@ async function renderMessages(content: string, mode: 'mdx' | 'html' = 'mdx') {
 // A compiled MDX body names its image sources as string literals.
 const COMPILED = 'return {default: () => _jsx("img", {src: "/assets/hero.png", alt: "Hero"})};';
 
-describe('a draft image in the sandboxed MDX preview', () => {
+describe('a draft image in the sandboxed HTML preview', () => {
   test('crosses as a data URL, since the opaque-origin frame cannot read the page blob URLs', async () => {
     configureUI({ loadMedia });
-    const messages = await renderMessages(COMPILED);
-    for (const message of messages) {
-      expect(message).toMatchObject({
-        payload: COMPILED,
-        images: { '/assets/hero.png': 'data:image/png;base64,iVBORw==' },
-      });
-    }
-    expect(loads).toEqual([{ route: 'repo', path: 'hero.png' }]);
-  });
-
-  test('crosses as a data URL into an HTML preview too', async () => {
-    configureUI({ loadMedia });
     const html = '<p><img src="/assets/hero.png" alt="Hero"></p>';
-    const messages = await renderMessages(html, 'html');
+    const messages = await renderMessages(html);
     for (const message of messages) {
       expect(message).toMatchObject({
         mode: 'html',
@@ -124,12 +116,63 @@ describe('a draft image in the sandboxed MDX preview', () => {
         images: { '/assets/hero.png': 'data:image/png;base64,iVBORw==' },
       });
     }
+    expect(loads).toEqual([{ route: 'repo', path: 'hero.png' }]);
+  });
+});
+
+function fragmentEntry(mdx: string): LocalizedEntry {
+  return {
+    id: 'fragment-img',
+    kind: 'fragment',
+    type: 'mdx',
+    collection: 'fragments',
+    localized: {
+      locale: 'en',
+      etag: 'e',
+      created: '2026-01-01T00:00:00.000Z',
+      modified: '2026-01-01T00:00:00.000Z',
+      name: 'img',
+      meta: { title: 'img' },
+      content: { mdx },
+    },
+  };
+}
+
+describe('an image in an inline fragment', () => {
+  beforeEach(() => {
+    Reflect.deleteProperty(window, '__SITE_RENDER_STATE__');
+  });
+  afterEach(() => {
+    Reflect.deleteProperty(window, '__SITE_RENDER_STATE__');
   });
 
-  test('crosses unchanged without a loader', async () => {
-    const messages = await renderMessages(COMPILED);
-    for (const message of messages) expect(message).not.toHaveProperty('images');
+  test('keeps its stored src without a loader', async () => {
+    const { container } = render(<MDXContent entry={fragmentEntry('![x](/assets/a.png)')} />);
+    await waitFor(() => expect(container.querySelector('img')?.getAttribute('src')).toBe('/assets/a.png'));
     expect(loads).toEqual([]);
+  });
+
+  test('shows the placeholder, then the draft bytes once they load', async () => {
+    const { promise, resolve } = Promise.withResolvers<Blob>();
+    configureUI({ loadMedia: () => promise });
+    const { container } = render(<MDXContent entry={fragmentEntry('![x](/api/v1/assets/serve/draft-a.png)')} />);
+    await waitFor(() => expect(container.querySelector('img')?.getAttribute('src')).toBe(DRAFT_IMAGE_PLACEHOLDER));
+    resolve(new Blob([PNG], { type: 'image/png' }));
+    await waitFor(() => expect(container.querySelector('img')?.getAttribute('src')).toStartWith('blob:'));
+  });
+
+  test('hands a site img override the shown src', async () => {
+    const seen: unknown[] = [];
+    const SiteImg = (props: { src?: string }) => {
+      seen.push(props.src);
+      return <img alt="" className="site-img" src={props.src} />;
+    };
+    setSiteRender({ vocabulary: defineFragmentComponents({ elements: { img: SiteImg } }) });
+    configureUI({ loadMedia: () => Promise.withResolvers<Blob>().promise });
+    const { container } = render(<MDXContent entry={fragmentEntry('![x](/assets/site-b.png)')} />);
+    await waitFor(() => expect(container.querySelector('img.site-img')).toBeTruthy());
+    expect(seen).toContain(DRAFT_IMAGE_PLACEHOLDER);
+    expect(seen).not.toContain('/assets/site-b.png');
   });
 });
 

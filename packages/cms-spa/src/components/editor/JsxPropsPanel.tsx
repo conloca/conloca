@@ -1,7 +1,10 @@
+import type { JsonValue } from '@conloca/mdx/render';
 import { Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { containsMarkdownMarkers, type MdxComponentProp } from '../../mdx-components.js';
 import { useSelectedBlock } from '../../selected-block.js';
+import { HintForm } from '../forms/HintForm.js';
+import { normalizeFieldValue, propFieldHint } from './prop-field-hint.js';
 import { SearchableSelect } from './SearchableSelect.js';
 
 /**
@@ -79,7 +82,7 @@ interface PropFieldProps {
   rawValue: unknown;
   /** Apply a prop change. The block's bound handler accepts the full
    * value-type union; see `selected-block.ts` for the contract. */
-  onChange: (value: string | boolean | number | null | undefined) => void;
+  onChange: (value: JsonValue | null | undefined) => void;
 }
 
 /**
@@ -140,6 +143,10 @@ function PropField({ prop, rawValue, onChange }: PropFieldProps) {
     );
   }
 
+  if (prop.type === 'list' || prop.type === 'object') {
+    return <StructuredField prop={prop} rawValue={rawValue} onChange={onChange} />;
+  }
+
   // String (default). With options → select; without → text input.
   const stringValue = typeof rawValue === 'string' ? rawValue : rawValue == null ? '' : String(rawValue);
   // Mirror the inline-prop wiring's bail rule (see `containsMarkdownMarkers`
@@ -183,6 +190,77 @@ function PropField({ prop, rawValue, onChange }: PropFieldProps) {
       )}
       {help && <small className="conloca-jsx-props-panel__help">{help}</small>}
     </div>
+  );
+}
+
+/**
+ * A list or object prop as `HintForm` fields, never JSON text. Edits stay in a local draft and commit
+ * once focus leaves the field, or at once for discrete controls, so typing never refocuses the editor.
+ */
+function StructuredField({ prop, rawValue, onChange }: PropFieldProps) {
+  const container = useRef<HTMLFieldSetElement>(null);
+  const [draft, setDraft] = useState<unknown>(rawValue);
+  // Only a real edit may write: tabbing or clicking through the field leaves the attribute alone.
+  const dirty = useRef(false);
+  const rawKey = JSON.stringify(rawValue ?? null);
+  useEffect(() => {
+    dirty.current = false;
+    setDraft(JSON.parse(rawKey));
+  }, [rawKey]);
+
+  // shortcut: checks only the top-level shape; a nested mismatch is still edited, upgrade if that shows up.
+  const editable =
+    rawValue === undefined ||
+    (prop.type === 'list'
+      ? Array.isArray(rawValue)
+      : rawValue !== null && typeof rawValue === 'object' && !Array.isArray(rawValue));
+  if (!editable) {
+    return (
+      <div className="conloca-jsx-props-panel__field">
+        <span className="conloca-jsx-props-panel__label">{prop.label ?? prop.name}</span>
+        <small className="conloca-jsx-props-panel__help">
+          This value is not valid JSON, so it is not published; fix it in source mode.
+        </small>
+      </div>
+    );
+  }
+
+  const commit = (value: unknown) => {
+    if (!dirty.current) return;
+    dirty.current = false;
+    const normalized = normalizeFieldValue(prop, value);
+    // A cleared object removes the attribute; an empty list stays `[]`.
+    const next = prop.type === 'object' && Object.keys(normalized ?? {}).length === 0 ? null : normalized;
+    if (JSON.stringify(next) !== rawKey) onChange(next);
+  };
+
+  return (
+    <fieldset
+      ref={container}
+      aria-label={prop.label ?? prop.name}
+      className="conloca-jsx-props-panel__field m-0 min-w-0 border-0 p-0"
+      onBlur={(e) => {
+        if (!(e.relatedTarget instanceof Node && container.current?.contains(e.relatedTarget))) commit(draft);
+      }}
+    >
+      <HintForm
+        hints={{ [prop.name]: propFieldHint(prop) }}
+        values={{ [prop.name]: draft }}
+        onChange={(values) => {
+          const next = values[prop.name];
+          dirty.current = true;
+          setDraft(next);
+          // Typing commits on blur; any other control (Add item, Remove, switch, select) commits now.
+          // A list length change is always discrete: Safari does not focus a clicked button.
+          const lengthChanged = Array.isArray(next) && (!Array.isArray(draft) || next.length !== draft.length);
+          const active = document.activeElement;
+          const typing =
+            active instanceof HTMLTextAreaElement ||
+            (active instanceof HTMLInputElement && active.type !== 'checkbox' && active.type !== 'radio');
+          if (lengthChanged || !(typing && container.current?.contains(active))) commit(next);
+        }}
+      />
+    </fieldset>
   );
 }
 

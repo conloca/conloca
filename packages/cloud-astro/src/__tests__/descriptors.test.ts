@@ -85,4 +85,20 @@ describe('resolveEditorDescriptors', () => {
 
     expect(resolved).toEqual({ dataBindings });
   });
+
+  it('carries the render module — even when it is the only descriptor', async () => {
+    const env = { [CHANNEL]: JSON.stringify({ registry, fragmentComponentsPath: '/a/fc.tsx' }) };
+
+    expect(await resolveEditorDescriptors(makeLogger(), env, async () => [])).toEqual({
+      fragmentComponentsPath: '/a/fc.tsx',
+    });
+  });
+
+  it('carries the editor frames — even when they are the only descriptor', async () => {
+    const env = { [CHANNEL]: JSON.stringify({ registry, editorFrames: { blog: '/a/f.tsx' } }) };
+
+    expect(await resolveEditorDescriptors(makeLogger(), env, async () => [])).toEqual({
+      editorFrames: { blog: '/a/f.tsx' },
+    });
+  });
 });

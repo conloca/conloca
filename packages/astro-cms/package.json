@@ -152,6 +152,7 @@
         "cache": true,
         "inputs": [
           "{projectRoot}/src/handlers/page-handler.astro",
+          "{projectRoot}/src/components/PageRoot.astro",
           "{projectRoot}/src/internal/acorn-default.mjs",
           "{projectRoot}/src/virtual-modules.d.ts",
           "{projectRoot}/copy-assets.ts"

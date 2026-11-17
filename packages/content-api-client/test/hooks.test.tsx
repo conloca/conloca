@@ -19,7 +19,6 @@ import {
   setContentAPIClient,
   useBatchUpdate,
   useBulkDeleteAssets,
-  useCompileMDX,
   useContent,
   useCreateContent,
   useCreateFolder,
@@ -70,6 +69,8 @@ describe('Content API Hooks', () => {
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     );
 
+    // SAFETY: a partial mock client; the hooks under test call only the methods listed here.
+    /* oxlint-disable typescript/no-unsafe-type-assertion -- see the SAFETY note. */
     mockClient = {
       getContent: mock(() => Promise.resolve(null)),
       getLocalized: mock(() => Promise.resolve(null)),
@@ -84,9 +85,6 @@ describe('Content API Hooks', () => {
       movePage: mock(() => Promise.resolve({ moved: true })),
       getFragments: mock(() => Promise.resolve({ items: [], total: 0 })),
       getFragmentByName: mock(() => Promise.resolve(null)),
-      compileMDX: mock(() =>
-        Promise.resolve({ code: 'return { default: function Test() { return null } }', metadata: {} }),
-      ),
       getData: mock(() => Promise.resolve({ items: [], total: 0 })),
       getDataByName: mock(() => Promise.resolve(null)),
       isDataNameAvailable: mock(() => Promise.resolve(true)),
@@ -96,6 +94,7 @@ describe('Content API Hooks', () => {
       getSitesConfig: mock(() => Promise.resolve({ sites: {} })),
       batchUpdate: mock(() => Promise.resolve({ success: true, updated: 0, failed: 0, operations: [] })),
     } as any;
+    /* oxlint-enable typescript/no-unsafe-type-assertion */
 
     setContentAPIClient(mockClient);
   });
@@ -194,34 +193,6 @@ describe('Content API Hooks', () => {
 
       expect(mockClient.getLocalized).toHaveBeenCalledWith('test-id', 'en');
       expect(result.current.data).toEqual(mockContent);
-    });
-  });
-
-  describe('useCompileMDX', () => {
-    it('should not compile when content is empty', () => {
-      const { result } = renderHook(() => useCompileMDX({ mdxContent: null }), { wrapper });
-
-      expect(result.current.isLoading).toBe(false);
-      expect(mockClient.compileMDX).not.toHaveBeenCalled();
-    });
-
-    it('should compile MDX content', async () => {
-      const compileResult = {
-        code: 'return { default: function Test() { return null } }',
-        metadata: { title: 'Test' },
-        outline: [],
-      };
-
-      mockClient.compileMDX = mock(() => Promise.resolve(compileResult));
-
-      const { result } = renderHook(() => useCompileMDX({ mdxContent: '# Test', cacheKey: 'etag-1' }), { wrapper });
-
-      await waitFor(() => {
-        expect(result.current.isSuccess).toBe(true);
-      });
-
-      expect(mockClient.compileMDX).toHaveBeenCalledWith('# Test');
-      expect(result.current.data).toEqual(compileResult);
     });
   });
 

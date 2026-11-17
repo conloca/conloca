@@ -16,8 +16,6 @@ const inlineFragmentFixture = 'vx-fr4gedit';
 
 const HOST_MARKUP = '<article class="article-content"></article>';
 
-const FRAGMENT_PREVIEW_TITLE = 'Sandboxed content preview';
-
 /** The single element a rendered fragment sits in, published renderer and editor alike. */
 const CONTENT_ROOT_OPEN = '<div class="mdx-content conloca-prose" data-conloca-content-root="">';
 
@@ -225,7 +223,10 @@ describe('a fragment is boxed exactly once whichever block holds it', () => {
   /** Mount a block and wait for the fragment preview, whose branch carries the wrapper. */
   async function mountFragment(ui: ReactElement): Promise<HTMLElement> {
     const view = renderWithProviders(ui, undefined, false);
-    await view.findByTitle(FRAGMENT_PREVIEW_TITLE);
+    // The fragment renders inline, inside the one content root, not in a frame.
+    const heading = await view.findByRole('heading', { name: 'Edit what you see' });
+    expect(heading.parentElement?.outerHTML.startsWith(CONTENT_ROOT_OPEN)).toBe(true);
+    expect(view.container.querySelector('iframe')).toBeNull();
     return view.container;
   }
 
@@ -238,10 +239,9 @@ describe('a fragment is boxed exactly once whichever block holds it', () => {
   }
 
   /**
-   * The editor cannot read the headings out of the rendered body — that renders
-   * in a sandbox with no same-origin access — so it takes them off the compile
-   * it already requests for the preview. This is the editor half of the pair;
-   * `@conloca/mdx` proves the two pipelines produce the same list.
+   * The host block gets the outline of the same inline render the canvas
+   * shows. This is the editor half of the pair; `@conloca/mdx` proves the two
+   * pipelines produce the same list.
    */
   test('hands the host the outline compiled from the selected fragment', async () => {
     const manifest = await seedFragment({ en: '## First\n\n### Nested\n\n## Second' });
@@ -296,7 +296,7 @@ describe('a fragment is boxed exactly once whichever block holds it', () => {
 
     await view.findByText(/^Could not load this fragment: /);
     expect(view.container.textContent).not.toContain('Loading content');
-    expect(view.queryByTitle(FRAGMENT_PREVIEW_TITLE)).toBeNull();
+    expect(view.queryByRole('heading')).toBeNull();
   });
 
   test('the standalone fragment block says a missing locale version is missing instead of spinning', async () => {
@@ -309,7 +309,7 @@ describe('a fragment is boxed exactly once whichever block holds it', () => {
 
     await view.findByText("This fragment has no 'fr' version yet.");
     expect(view.container.textContent).not.toContain('Loading content');
-    expect(view.queryByTitle(FRAGMENT_PREVIEW_TITLE)).toBeNull();
+    expect(view.queryByRole('heading')).toBeNull();
   });
 
   test('the host block boxes the fragment once, not once inside another', async () => {

@@ -18,6 +18,10 @@ export const EDITOR_DESCRIPTORS_ENV_VAR = 'CONLOCA_EDITOR_DESCRIPTORS';
 export interface EditorDescriptorChannel {
   /** Absolute path of the host's schemas module (the `schemasPath` option), when configured. */
   schemasPath?: string;
+  /** Absolute path of the fragment components render module (the `fragmentComponentsPath` option), when configured. */
+  fragmentComponentsPath?: string;
+  /** Route name → absolute path of that route's `editorFrame` module, for each route that declares one. */
+  editorFrames?: Record<string, string>;
   /**
    * Absolute path of the puck config module (the `puckConfigPath` option).
    * Optional only because an older `@conloca/astro-cms` wrote no such field;
@@ -73,6 +77,8 @@ export function readEditorDescriptors(
   const contentPathValue = 'contentPaths' in parsed ? parsed.contentPaths : undefined;
   const assetsPath = 'assetsPath' in parsed ? parsed.assetsPath : undefined;
   const assetRefBase = 'assetRefBase' in parsed ? parsed.assetRefBase : undefined;
+  const fragmentComponentsPath = 'fragmentComponentsPath' in parsed ? parsed.fragmentComponentsPath : undefined;
+  const editorFrames = readEditorFrames('editorFrames' in parsed ? parsed.editorFrames : undefined);
   if (typeof registry !== 'object' || registry === null) return undefined;
   const contentRoot = 'contentRoot' in registry ? registry.contentRoot : undefined;
   const componentFolders = 'componentFolders' in registry ? registry.componentFolders : undefined;
@@ -113,6 +119,8 @@ export function readEditorDescriptors(
       ...(typeof overridesFolder === 'string' ? { overridesFolder } : {}),
     },
     ...(templates === undefined ? {} : { templates }),
+    ...(typeof fragmentComponentsPath === 'string' ? { fragmentComponentsPath } : {}),
+    ...(editorFrames === undefined ? {} : { editorFrames }),
     ...(dataBindings === undefined ? {} : { dataBindings }),
     ...(contentPaths === undefined ? {} : { contentPaths }),
     ...(typeof assetsPath === 'string' && isAbsolute(assetsPath) ? { assetsPath } : {}),
@@ -139,4 +147,13 @@ function readTemplates(raw: unknown): Record<string, TemplateConfig> | undefined
     };
   }
   return Object.keys(templates).length > 0 ? templates : undefined;
+}
+
+/** Per-entry, like `readTemplates`: a route whose frame is not a string is dropped, the rest survive. */
+function readEditorFrames(raw: unknown): Record<string, string> | undefined {
+  if (typeof raw !== 'object' || raw === null) return undefined;
+  const frames = Object.fromEntries(
+    Object.entries(raw).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+  );
+  return Object.keys(frames).length > 0 ? frames : undefined;
 }

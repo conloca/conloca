@@ -1,3 +1,4 @@
+import type { JsonValue } from '@conloca/mdx/render';
 import { insertJsx$, insertMarkdown$ } from '@mdxeditor/editor';
 import { fromMarkdown } from 'mdast-util-from-markdown';
 import type { MdxJsxFlowElement, MdxJsxTextElement } from 'mdast-util-mdx-jsx';
@@ -41,9 +42,9 @@ export type InsertJsxPayload =
  * Build the payload accepted by @mdxeditor/editor's `insertJsx$` signal.
  *
  * Strings round-trip as plain attributes; numbers/booleans become
- * expression attributes (`{2}`, `{true}`) because the upstream
- * `mdxJsxAttribute.value` shape is either a string or an
- * `{ type: 'expression', value: string }` object.
+ * expression attributes (`{2}`, `{true}`) and lists/objects JSON
+ * expressions, because the upstream `mdxJsxAttribute.value` shape is
+ * either a string or an `{ type: 'expression', value: string }` object.
  *
  * `descriptor.defaults.children` is parsed with `mdast-util-from-markdown`
  * using only CommonMark — descriptors that need MDX-flavored starter
@@ -52,13 +53,21 @@ export type InsertJsxPayload =
  */
 export function buildInsertPayload(
   descriptor: MdxJsxComponentDescriptor,
-  overrides: Record<string, string | number | boolean> = {},
+  overrides: Record<string, JsonValue> = {},
 ): InsertJsxPayload {
   const merged = { ...(descriptor.defaults?.attributes ?? {}), ...overrides };
   const props: InsertJsxProps = {};
   for (const [name, value] of Object.entries(merged)) {
+    if (value === null) continue;
     const propType = descriptor.props?.find((p) => p.name === name)?.type;
-    if (propType === 'number' || propType === 'boolean' || typeof value === 'number' || typeof value === 'boolean') {
+    if (typeof value === 'object' && value !== null) {
+      props[name] = { type: 'expression', value: JSON.stringify(value) };
+    } else if (
+      propType === 'number' ||
+      propType === 'boolean' ||
+      typeof value === 'number' ||
+      typeof value === 'boolean'
+    ) {
       props[name] = { type: 'expression', value: String(value) };
     } else {
       props[name] = String(value);

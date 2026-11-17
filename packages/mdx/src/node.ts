@@ -12,14 +12,22 @@
  */
 
 export { evaluateMDXFragments } from './fragments.js';
-// MDX compilation and evaluation (Node.js only)
-export { compileMDX } from './mdx/compile.js';
-export { handleMDXCompileRequest } from './mdx/compile-request.js';
-export { evaluateMDXToComponent } from './mdx/evaluate.js';
+// MDX evaluation (Node.js only)
+export {
+  defineFragmentComponents,
+  EMPTY_FRAGMENT_VOCABULARY,
+  evaluateMDXToComponent,
+  FRAGMENT_ELEMENT_NAMES,
+  type FragmentElementName,
+  type FragmentVocabulary,
+  findUnknownFragmentComponents,
+  isFragmentComponentName,
+  isFragmentVocabulary,
+  parseFragmentMdx,
+} from './render.js';
 // MDX types
 export type {
   EvaluatedMDXFragment,
   FailedMDXFragmentEvaluation,
-  MDXCompileResult,
   MDXFragmentEvaluationResult,
 } from './types.js';

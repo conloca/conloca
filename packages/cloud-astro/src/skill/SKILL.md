@@ -36,7 +36,7 @@ conloca doctor --live     # sends no credential: only your site's host and the e
 conloca doctor            # offline: wiring, sites.json host, committed framing headers, key leftovers
 ```
 
-This package's checks are `CC1` and `CC8`–`CC29`:
+This package's checks are `CC1` and `CC8`–`CC30`:
 
 - **CC9** — `sites.json`: the site named `default` (or the only one) has a bare host in `domains[defaultLocale]` and a
   valid `base`. The editor opens `https://<host><base>_conloca/editor/`; it refuses IPs, `localhost`, `*.conloca.com`.
@@ -66,6 +66,10 @@ This package's checks are `CC1` and `CC8`–`CC29`:
   `security.allowedDomains` on `@astrojs/node`. Fix: `npx @conloca/cli connect` (adds the adapter and its options).
 - **CC29** (live) — `<host><base>_conloca/preview/__exit` answers 302, uncached, as the configured mode. A failure names
   where the host keeps logs; a 401/403/429 means something in front of the site blocks `/_conloca/preview/*`.
+- **CC30** (live) — a routing entry with an `editorFrame`: for each route in `_conloca/editor/frames.json`, the
+  published page wraps its `data-conloca-page-root` element in the same elements and classes the frame renders. The
+  canvas renders fragments inline inside that frame, so a drift shows the editor's prose in a different wrapper than the
+  page. Fix: change the frame or the layout so both wrap the page root alike. Only warns.
 
 ## Draft previews in the site's own build (d8)
 
@@ -82,7 +86,8 @@ This package's checks are `CC1` and `CC8`–`CC29`:
 
 A site sending no `X-Frame-Options` and no `frame-ancestors` needs nothing (GitHub Pages included). Otherwise
 `/_conloca/editor/*` needs `Content-Security-Policy: frame-ancestors 'self' https://*.conloca.com`, plus
-`/_conloca/editor/sandbox-frame.html` → `Content-Security-Policy: sandbox allow-scripts`. Cloudflare `_headers` also
+`/_conloca/editor/sandbox-frame.html` → `Content-Security-Policy: sandbox allow-scripts` (the frame for a component's
+raw HTML; its own CSP has no `unsafe-eval`, and fragments render inline in the editor page). Cloudflare `_headers` also
 detaches the site's headers on that path (`! X-Frame-Options`, `! Content-Security-Policy`); Netlify cannot detach;
 Vercel uses `source: "/_conloca/editor/:path*"`. A site-wide CSP with `frame-ancestors` must be narrowed by hand — a
 second policy cannot loosen it.

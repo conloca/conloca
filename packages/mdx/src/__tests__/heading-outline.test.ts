@@ -1,14 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { compileMDX } from '../mdx/compile.js';
 import { evaluateMDXToComponent } from '../mdx/evaluate.js';
 
 /**
  * A fragment's outline is the list of its headings, produced while the MDX is
  * already being parsed. It exists so every surface reads the same list from the
- * same code: the published page renders through `evaluate.ts`, and every
- * editing surface compiles through `compile.ts`. A second extraction pass —
+ * same code: the published page and every editing surface render through
+ * `evaluate.ts`. A second extraction pass —
  * scanning rendered HTML in a browser, say — is what these tests exist to keep
  * out, because two passes drift and only one of them is ever looked at.
  */
@@ -108,29 +107,5 @@ describe('fragment outline', () => {
     const outline = await outlineOf('<h2 id="same">Hand</h2>\n\n## Same');
 
     expect(outline.map((h) => h.id)).toEqual(['same', 'same-1']);
-  });
-});
-
-describe('fragment outline — both pipelines agree', () => {
-  /**
-   * `evaluate.ts` renders the published page and `compile.ts` serves every
-   * editing surface. They are separate pipelines, so the outline is only
-   * trustworthy while they produce the same one for the same source. This is
-   * the test that fails if a future change lands in one and not the other.
-   */
-  test('the editor pipeline produces the same outline as the published one', async () => {
-    const mdx = "## Here's how it works\n\n### Detail\n\n## Same\n\n## Same\n\n## Контакты\n\n<h2>JSX one</h2>";
-
-    const published = await outlineOf(mdx);
-    const { outline: editor } = await compileMDX(mdx);
-
-    expect(editor).toEqual(published);
-  });
-
-  test('the editor pipeline puts those ids on its headings too', async () => {
-    const { code, outline } = await compileMDX('## A heading here');
-
-    expect(outline[0]?.id).toBe('a-heading-here');
-    expect(code).toContain('a-heading-here');
   });
 });

@@ -217,6 +217,12 @@ describe('FragmentEditor header actions', () => {
     expect(screen.getByTestId('fragment-editor-status').textContent).toBe('No unsaved changes.');
   });
 
+  test('the fragment editor shows the component settings panel', async () => {
+    configureUI({ locales: { list: ['en'], defaultLocale: 'en' }, hosted: true });
+    await openFragment();
+    expect(screen.getByText('Select a component to edit its props.')).toBeTruthy();
+  });
+
   for (const basename of ['/', '/__cms', '/branches/main/edit']) {
     for (const origin of [
       { search: '', label: 'Back to fragments', path: '/fragments', destination: 'dest-fragments' },

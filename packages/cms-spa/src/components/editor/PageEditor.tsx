@@ -31,6 +31,7 @@ import { ImageFieldRender } from '../fields/ImageField.js';
 import { toast } from '../toast.js';
 import { DrawerItemOverride, PUCK_ROOT_DROP_ZONE } from './DrawerItemOverride.js';
 import { withDraftMediaRendering } from './draft-media-config.js';
+import { CanvasPageContext, EditorFrameBoundary } from './EditorFrame.js';
 import { PageEditorHeaderActions } from './PageEditorHeaderActions.js';
 import { PuckWithUntouchedMetadata } from './PuckWithUntouchedMetadata.js';
 import {
@@ -290,8 +291,8 @@ export function IframeBridge({ children, document: iframeDoc }: { children: Reac
 
 /**
  * `IframeBridge` for the canvas inside <Puck>: also marks the canvas document while the page can take a block, which
- * the empty-page hint in `EMPTY_DROP_AREA_CSS` waits for. Separate because the marker reads Puck's state, so it only
- * works inside <Puck>, while the bridge also renders on its own.
+ * the empty-page hint in `EMPTY_DROP_AREA_CSS` waits for, and shows the page in its editor frame. Separate because the
+ * marker reads Puck's state, so it only works inside <Puck>, while the bridge also renders on its own.
  */
 function IframeWithInsertMarker({ children, document: iframeDoc }: { children: React.ReactNode; document?: Document }) {
   const canTakeAnInsert = usePageCanTakeAnInsert();
@@ -303,7 +304,11 @@ function IframeWithInsertMarker({ children, document: iframeDoc }: { children: R
     return () => html.removeAttribute(CAN_INSERT_ATTRIBUTE);
   }, [iframeDoc, canTakeAnInsert]);
 
-  return <IframeBridge document={iframeDoc}>{children}</IframeBridge>;
+  return (
+    <IframeBridge document={iframeDoc}>
+      <EditorFrameBoundary>{children}</EditorFrameBoundary>
+    </IframeBridge>
+  );
 }
 
 export function PageEditor({
@@ -320,6 +325,11 @@ export function PageEditor({
   live,
 }: PageEditorProps) {
   const bindingRef = useRef<PuckBinding | null>(null);
+  // As pageReferenceOf gives the page to its data context.
+  const canvasPage = useMemo(
+    () => ({ pathname: entry.localized.pathname || '/', collection: entry.collection }),
+    [entry.localized.pathname, entry.collection],
+  );
   const { canvasTheme } = useCanvasTheme();
   const draftPage = useMemo(() => {
     const page = draftToolsPage(entry.id, entry.localized.locale);
@@ -577,24 +587,26 @@ export function PageEditor({
       {/* Keep a usable canvas on very short screens; this region scrolls instead of crushing Puck's iframe. */}
       {/* The surface behind the canvas follows the canvas toggle, never the admin theme: see `[data-canvas-surface]` in main.css. */}
       <div className="flex-1 min-h-[400px] overflow-hidden" data-canvas-surface={canvasTheme}>
-        <DraftPageContext.Provider value={draftPage}>
-          <PageSettingTargetsProvider onOpen={onOpenMetadata}>
-            <PuckBindingProvider binding={binding}>
-              {/* Not <Puck> itself: on the canvas Puck rewrites the page data it hands blocks; see PuckWithUntouchedMetadata.tsx. */}
-              <PuckWithUntouchedMetadata
-                config={renderConfig}
-                data={binding?.shadow ?? data}
-                metadata={metadata}
-                onChange={handleDataChange}
-                headerTitle={entry.localized.meta.title || 'Untitled Page'}
-                viewports={viewports}
-                overrides={overrides}
-                iframe={CANVAS_IFRAME}
-                permissions={held ? NO_EDITS : undefined}
-              />
-            </PuckBindingProvider>
-          </PageSettingTargetsProvider>
-        </DraftPageContext.Provider>
+        <CanvasPageContext.Provider value={canvasPage}>
+          <DraftPageContext.Provider value={draftPage}>
+            <PageSettingTargetsProvider onOpen={onOpenMetadata}>
+              <PuckBindingProvider binding={binding}>
+                {/* Not <Puck> itself: on the canvas Puck rewrites the page data it hands blocks; see PuckWithUntouchedMetadata.tsx. */}
+                <PuckWithUntouchedMetadata
+                  config={renderConfig}
+                  data={binding?.shadow ?? data}
+                  metadata={metadata}
+                  onChange={handleDataChange}
+                  headerTitle={entry.localized.meta.title || 'Untitled Page'}
+                  viewports={viewports}
+                  overrides={overrides}
+                  iframe={CANVAS_IFRAME}
+                  permissions={held ? NO_EDITS : undefined}
+                />
+              </PuckBindingProvider>
+            </PageSettingTargetsProvider>
+          </DraftPageContext.Provider>
+        </CanvasPageContext.Provider>
       </div>
 
       {/* In-app navigation guard. beforeunload handles reload / tab close

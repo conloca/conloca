@@ -7,7 +7,8 @@ import {
 import { usePublisher } from '@mdxeditor/editor';
 import { useCallback, useContext, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { type MdxComponentDescriptor, useMdxComponents } from '../../../mdx-components.js';
+import type { MdxComponentDescriptor } from '../../../mdx-components.js';
+import { useOfferedMdxComponents } from '../offered-mdx-components.js';
 import { dispatchInsert, insertJsx$, insertMarkdown$ } from './insert-payload.js';
 
 class MdxComponentOption extends MenuOption {
@@ -51,7 +52,7 @@ export function SlashMenuPlugin() {
   // to re-render with a populated context.
   const ctx = useContext(LexicalComposerContext);
   const editor = ctx?.[0] ?? null;
-  const allComponents = useMdxComponents();
+  const allComponents = useOfferedMdxComponents();
   const publishJsx = usePublisher(insertJsx$);
   const publishMarkdown = usePublisher(insertMarkdown$);
   const [queryString, setQueryString] = useState<string | null>(null);

@@ -1,0 +1,10 @@
+---
+/** Wraps page content in the marker the editor frame's drift check stops at, on routes that declare an `editorFrame`. */
+interface Props {
+  framed: boolean;
+}
+
+const { framed } = Astro.props;
+---
+
+{framed ? <div data-conloca-page-root=""><slot /></div> : <slot />}

@@ -3,8 +3,8 @@ import GithubSlugger, { slug } from 'github-slugger';
 
 /**
  * One heading of a fragment: the anchor target and the contents entry. Aliased
- * from the compile response's own type rather than restated, so the shape the
- * editor receives over HTTP and the shape this pass produces cannot drift.
+ * from the content API's own type rather than restated, so the shape hosts
+ * exchange and the shape this pass produces cannot drift.
  */
 export type FragmentHeading = MDXHeading;
 
@@ -117,8 +117,8 @@ function idFor(text: string, slugger: GithubSlugger, reserved: ReadonlySet<strin
 /**
  * Give every heading in the tree an id and report them in document order.
  *
- * Both pipelines call this: the published render (`evaluate.ts`) and the
- * compile every editing surface goes through (`compile.ts`). One pass assigns
+ * The one pipeline calls this: `evaluate.ts`, which the published page and
+ * every editing surface render through. One pass assigns
  * the id and records it, so the anchor in the markup and the anchor in the
  * outline cannot disagree — which is the whole reason the outline is produced
  * here rather than read back off rendered HTML.

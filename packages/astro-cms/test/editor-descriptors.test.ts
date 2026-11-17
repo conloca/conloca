@@ -49,10 +49,43 @@ describe('readEditorDescriptors', () => {
     expect(readEditorDescriptors({ [EDITOR_DESCRIPTORS_ENV_VAR]: raw })).toEqual({ registry, dataBindings });
   });
 
+  it('reads back the fragment preview route in the data bindings', () => {
+    const dataBindings = { siteName: 'default', locale: 'en', routes: {}, fragmentPreviewRoute: '/prose-parity' };
+    const raw = JSON.stringify({ registry, dataBindings });
+
+    expect(readEditorDescriptors({ [EDITOR_DESCRIPTORS_ENV_VAR]: raw })).toEqual({ registry, dataBindings });
+  });
+
   it('drops data bindings with no site name and keeps the rest of the channel', () => {
     const raw = JSON.stringify({ registry, dataBindings: { locale: 'en', routes: {} } });
 
     expect(readEditorDescriptors({ [EDITOR_DESCRIPTORS_ENV_VAR]: raw })).toEqual({ registry });
+  });
+
+  it('keeps the render module and the editor frames, dropping a malformed frame', () => {
+    const dataBindings = {
+      siteName: 'default',
+      locale: 'en',
+      routes: {},
+      entries: [{ name: 'blog', collection: 'blog', frame: 'blog' }],
+    };
+    const raw = JSON.stringify({
+      registry,
+      dataBindings,
+      fragmentComponentsPath: '/a/fc.tsx',
+      editorFrames: { blog: '/a/f.tsx' },
+    });
+
+    expect(readEditorDescriptors({ [EDITOR_DESCRIPTORS_ENV_VAR]: raw })).toEqual({
+      registry,
+      dataBindings,
+      fragmentComponentsPath: '/a/fc.tsx',
+      editorFrames: { blog: '/a/f.tsx' },
+    });
+    const bad = readEditorDescriptors({
+      [EDITOR_DESCRIPTORS_ENV_VAR]: JSON.stringify({ registry, editorFrames: { blog: 1 } }),
+    });
+    expect(bad?.editorFrames?.blog).toBeUndefined();
   });
 
   it('carries the options a build add-on inherits, exactly as published', () => {
@@ -152,17 +185,29 @@ describe('the content paths conlocaCMS publishes', () => {
   it("publishes the website's real relative configuration as absolute content paths, and reads them back", async () => {
     const channel = await publishFrom('./src/content/docs', './public/assets');
 
-    expect(channel?.contentPaths).toEqual([
-      join(projectRoot, 'content'),
-      join(projectRoot, 'src/content/docs'),
-      join(projectRoot, 'public/assets'),
-    ]);
+    expect(channel).toEqual({
+      contentPaths: [
+        join(projectRoot, 'content'),
+        join(projectRoot, 'src/content/docs'),
+        join(projectRoot, 'public/assets'),
+      ],
+      puckConfigPath: join(projectRoot, 'src/puck.config.tsx'),
+      registry: { contentRoot: './src/content/docs', componentFolders: ['src/components/mdx'], projectRoot },
+      assetsPath: join(projectRoot, 'public/assets'),
+      assetRefBase: '/assets',
+    });
   });
 
   it('lists the media folder in contentPaths even when assetsPath is unset', async () => {
     const channel = await publishFrom(undefined);
 
-    expect(channel?.contentPaths).toEqual([join(projectRoot, 'content'), join(projectRoot, 'public/assets')]);
+    expect(channel).toEqual({
+      contentPaths: [join(projectRoot, 'content'), join(projectRoot, 'public/assets')],
+      puckConfigPath: join(projectRoot, 'src/puck.config.tsx'),
+      registry: { contentRoot: './content', componentFolders: ['src/components/mdx'], projectRoot },
+      assetsPath: join(projectRoot, 'public/assets'),
+      assetRefBase: '/assets',
+    });
   });
 
   it('publishes the configured media folder and the URL it is served at', async () => {

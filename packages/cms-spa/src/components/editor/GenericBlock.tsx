@@ -1,3 +1,4 @@
+import type { JsonValue } from '@conloca/mdx/render';
 import type { JsxEditorProps } from '@mdxeditor/editor';
 import {
   NestedLexicalEditor,
@@ -955,7 +956,7 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
     const wrap = wrapperRef.current;
     if (!wrap || html == null) return;
     const { attrs: currentAttrs, node: currentNode, updater: currentUpdater } = previewBindingsRef.current;
-    const currentOnPropChange = (propName: string, value: string | boolean | number | null | undefined) => {
+    const currentOnPropChange = (propName: string, value: JsonValue | null | undefined) => {
       currentUpdater({
         attributes: writeAttribute(currentNode.attributes, propName, value) as typeof currentNode.attributes,
       });
@@ -1018,7 +1019,7 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
         // the right region.
         region.setAttribute('data-conloca-child-path', slotId);
         const childAttrs = readAttrs(childNode);
-        const childOnPropChange = (propName: string, value: string | boolean | number | null | undefined) => {
+        const childOnPropChange = (propName: string, value: JsonValue | null | undefined) => {
           const newChild = {
             ...childNode,
             attributes: writeAttribute(childNode.attributes, propName, value),
@@ -1055,7 +1056,7 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
   );
 
   const onPropChange = useCallback(
-    (propName: string, next: string | boolean | number | null | undefined) => {
+    (propName: string, next: JsonValue | null | undefined) => {
       // Route through the type-aware writer so booleans become JSX
       // shorthand (`<CardGrid stagger />`), numbers become expressions
       // (`<Box columns={3} />`), and strings stay as string literals.
@@ -1139,7 +1140,7 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
       const childDescriptor = descriptorsByName.get(childNode.name);
       if (!childDescriptor || !isJsxDescriptor(childDescriptor)) return;
       const childAttrs = readAttrs(childNode);
-      const childOnPropChange = (propName: string, value: string | boolean | number | null | undefined) => {
+      const childOnPropChange = (propName: string, value: JsonValue | null | undefined) => {
         const newChild = {
           ...childNode,
           attributes: writeAttribute(childNode.attributes, propName, value),
@@ -1194,7 +1195,7 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
             if (childDescriptor && isJsxDescriptor(childDescriptor)) {
               const childAttrs = readAttrs(childNode);
               const childKey = `${blockKey}:${childPath.join('.')}`;
-              const childOnPropChange = (propName: string, value: string | boolean | number | null | undefined) => {
+              const childOnPropChange = (propName: string, value: JsonValue | null | undefined) => {
                 const newChild = {
                   ...childNode,
                   attributes: writeAttribute(childNode.attributes, propName, value),
@@ -1283,7 +1284,7 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
         onMouseDownCapture={handleSelect}
         onFocusCapture={handleSelect}
       >
-        <ContentSandbox mode="html" content={rawHtml} styles={sandboxStyles} />
+        <ContentSandbox content={rawHtml} styles={sandboxStyles} />
       </div>
     );
   }

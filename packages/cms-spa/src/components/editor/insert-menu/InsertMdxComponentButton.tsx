@@ -5,7 +5,8 @@ import { usePublisher } from '@mdxeditor/editor';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { Plus } from 'lucide-react';
 import { useMemo } from 'react';
-import { type MdxComponentDescriptor, useMdxComponents } from '../../../mdx-components.js';
+import type { MdxComponentDescriptor } from '../../../mdx-components.js';
+import { useOfferedMdxComponents } from '../offered-mdx-components.js';
 import { dispatchInsert, insertJsx$, insertMarkdown$ } from './insert-payload.js';
 
 interface DescriptorGroup {
@@ -57,7 +58,7 @@ function groupByCategory(descriptors: MdxComponentDescriptor[]): DescriptorGroup
  * components and snippets sees them sectioned (e.g. "Components" / "Patterns").
  */
 export function InsertMdxComponentButton() {
-  const allComponents = useMdxComponents();
+  const allComponents = useOfferedMdxComponents();
   const publishJsx = usePublisher(insertJsx$);
   const publishMarkdown = usePublisher(insertMarkdown$);
 

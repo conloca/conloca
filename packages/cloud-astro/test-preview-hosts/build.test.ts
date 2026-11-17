@@ -3,7 +3,16 @@ import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'n
 import { basename, join, relative } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { snapshotTree } from '../test-editor-build/fixture-site.js';
-import { type Adapter, type BuiltFixture, buildFixture, isServerShape, SHAPES, type Shape } from './fixtures.js';
+import {
+  type Adapter,
+  type BuiltFixture,
+  buildFixture,
+  CALLOUT_MARKUP,
+  framedSite,
+  isServerShape,
+  SHAPES,
+  type Shape,
+} from './fixtures.js';
 
 /** One adapter per run (`CONLOCA_FIXTURE_ADAPTER`): each Nx target builds one adapter's fixtures. */
 const ADAPTERS = ['vercel', 'netlify', 'node', 'cloudflare'] as const;
@@ -367,4 +376,69 @@ describe(`${ADAPTER}: d8 fixture builds`, () => {
       }
     });
   }
+});
+
+const ROOT_OPEN = '<div data-conloca-page-root="">';
+
+/** `html` with the page-root marker's open tag and its matching close removed. */
+function withoutPageRoot(html: string): string {
+  const start = html.indexOf(ROOT_OPEN);
+  let depth = 1;
+  const tags = /<div\b|<\/div>/gu;
+  tags.lastIndex = start + ROOT_OPEN.length;
+  for (let tag = tags.exec(html); tag !== null; tag = tags.exec(html)) {
+    depth += tag[0] === '</div>' ? -1 : 1;
+    if (depth === 0) {
+      return html.slice(0, start) + html.slice(start + ROOT_OPEN.length, tag.index) + html.slice(tag.index + 6);
+    }
+  }
+  throw new Error('page root not closed');
+}
+
+describe(`${ADAPTER}: editor frames leave published pages alone`, () => {
+  const sites = new Map<boolean, string>();
+  beforeAll(async () => {
+    await Promise.all(
+      [true, false].map(async (framed) => {
+        const site = framedSite(framed);
+        const { dir } = await buildFixture(ADAPTER, 'static', {
+          preview: false,
+          copy: framed ? '-framed' : '-frameless',
+          files: site.files,
+          cmsOptions: site.cmsOptions,
+          routing: site.routing,
+        });
+        sites.set(framed, clientDir(dir));
+      }),
+    );
+  }, SUITE_TIMEOUT);
+  const page = (framed: boolean, path: string) =>
+    readFileSync(join(sites.get(framed) ?? '', path, 'index.html'), 'utf8');
+
+  it('changes no byte of a frameless route', () => {
+    expect(page(true, 'about')).toBe(page(false, 'about'));
+  });
+
+  it('wraps a framed page once, and only adds the wrapper', () => {
+    const framed = page(true, 'articles/a');
+    expect(framed).toContain(CALLOUT_MARKUP);
+    expect(framed.split('data-conloca-page-root').length - 1).toBe(1);
+    expect(withoutPageRoot(framed)).toBe(page(false, 'articles/a'));
+  });
+
+  it('puts the empty-page placeholder inside the marker on a framed page', () => {
+    const framed = page(true, 'articles/empty');
+    expect(framed.indexOf(ROOT_OPEN)).toBeGreaterThan(-1);
+    // The element, not the scoped style rule in <head>.
+    expect(framed.indexOf('<div class="conloca-empty-page')).toBeGreaterThan(framed.indexOf(ROOT_OPEN));
+    expect(page(false, 'articles/empty')).toContain('<div class="conloca-empty-page');
+    expect(withoutPageRoot(framed)).toBe(page(false, 'articles/empty'));
+  });
+
+  it('marks no page of a frameless build', () => {
+    const root = sites.get(false) ?? '';
+    for (const file of files(root).filter((path) => path.endsWith('.html'))) {
+      expect(readFileSync(join(root, file), 'utf8'), file).not.toContain('data-conloca-page-root');
+    }
+  });
 });

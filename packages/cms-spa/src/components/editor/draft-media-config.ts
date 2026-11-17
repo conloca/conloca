@@ -1,6 +1,7 @@
 /** Resolve unpublished draft images for site renderers without changing Puck's persisted data. */
 /* oxlint-disable anti-slop/no-unsafe-dictionary-type, anti-slop/no-unknown-returns -- block props are whatever the site's components take; this walk only swaps image strings and passes every other value through as it came. */
 import { draftMediaRefPath, mediaRefPath } from '@conloca/content-api-client';
+import type { FragmentVocabulary } from '@conloca/mdx/render';
 import type { Config, Field, Fields, PuckContext } from '@puckeditor/core';
 import { type ComponentType, createElement, isValidElement } from 'react';
 import { loadedMedia, mediaLoadState, useMediaCacheVersion } from '../../frame/media-cache.js';
@@ -250,4 +251,25 @@ export function withDraftMediaRendering(config: Config): Config {
       ]),
     ),
   };
+}
+
+const shownImageVocabularies = new WeakMap<FragmentVocabulary, FragmentVocabulary>();
+
+/**
+ * `vocabulary` with its `img` (the site's override, or the plain element) showing each image as `shownImage`
+ * decides, re-rendering when a load lands; `vocabulary` itself without `UIConfig.loadMedia`.
+ */
+export function withShownImages(vocabulary: FragmentVocabulary): FragmentVocabulary {
+  if (getUIConfig().loadMedia === undefined) return vocabulary;
+  const cached = shownImageVocabularies.get(vocabulary);
+  if (cached) return cached;
+  const Img = vocabulary.elements.img ?? 'img';
+  const ShownImg = (props: { src?: unknown }) => {
+    useMediaCacheVersion();
+    const source = typeof props.src === 'string' ? mediaSourceOf(props.src) : undefined;
+    return createElement(Img, source ? { ...props, src: shownImage(source) } : props);
+  };
+  const shown: FragmentVocabulary = { ...vocabulary, elements: { ...vocabulary.elements, img: ShownImg } };
+  shownImageVocabularies.set(vocabulary, shown);
+  return shown;
 }

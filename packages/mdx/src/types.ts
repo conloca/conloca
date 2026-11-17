@@ -1,6 +1,6 @@
 import type { ComponentType } from 'react';
 
-export type { MDXCompileResponse as MDXCompileResult, MDXHeading } from '@conloca/content-api';
+export type { MDXHeading } from '@conloca/content-api';
 
 import type { MDXHeading as Heading } from '@conloca/content-api';
 

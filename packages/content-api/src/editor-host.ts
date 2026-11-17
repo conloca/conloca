@@ -114,6 +114,15 @@ export const EDITOR_UI_MODULE_FILES = {
   '@puckeditor/core': 'puck.js',
 } as const;
 
+/**
+ * The editor page's meta CSP: scripts only from the page itself, the editor UI path and the `importmap` script's
+ * hash, so no inline script or handler in a fragment the canvas renders can run. Styles and fonts stay open, so the
+ * editor UI's stylesheet may load its web font.
+ */
+export function editorPageContentSecurityPolicy(uiPath: string, importMapHash: string): string {
+  return `script-src 'self' ${uiPath} 'sha256-${importMapHash}'; object-src 'none'; base-uri 'none'`;
+}
+
 export type EditorHostStatus =
   | 'ready'
   | 'no-address'

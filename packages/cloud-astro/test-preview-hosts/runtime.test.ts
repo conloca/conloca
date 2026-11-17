@@ -1,8 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
+import { createRequire } from 'node:module';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import type { ContentManifest } from '@conloca/content-api';
 import { previewBranchSlug } from '@conloca/content-api/editor-host';
 import { FileSystemContentAPI } from '@conloca/content-api/node';
+import { Glob } from 'bun';
 import {
   BRANCH_MEDIA,
   DRAFT_TEXT,
@@ -15,7 +18,15 @@ import {
   VERDICT_TABLE,
   withBranchMedia,
 } from './fake-conloca.js';
-import { type Adapter, buildFixture, type Shape } from './fixtures.js';
+import {
+  type Adapter,
+  BADGE_MARKUP,
+  buildFixture,
+  CALLOUT_MARKUP,
+  FRAGMENT_SITE,
+  type Shape,
+  WHY_MARKUP,
+} from './fixtures.js';
 import { type Host, runHost } from './run-host.js';
 
 /** One adapter per run (`CONLOCA_FIXTURE_ADAPTER`), as `build.test.ts`. */
@@ -80,6 +91,7 @@ beforeAll(async () => {
           preview: run.preview,
           copy: `-run${run.production ? '-production' : ''}`,
           env: run.production ? PRODUCTION_ENV : {},
+          ...(name === 'static' ? FRAGMENT_SITE : {}),
         });
         dirs.set(name, dir);
         // oxlint-disable-next-line no-await-in-loop -- as above.
@@ -350,6 +362,66 @@ describe(`${ADAPTER}: the draft render`, () => {
     });
   });
 });
+
+describe(`${ADAPTER}: fragments in a draft render`, () => {
+  it("renders a fragment with the site's fragmentComponentsPath components", async () => {
+    const page = await navigate('static', `${PREFIX}/${MAIN}/fragment/`, await passCookie());
+    expect(page.status).toBe(200);
+    expect(await page.text()).toContain(CALLOUT_MARKUP);
+  });
+
+  it('renders the fragment identically on the published page, the d8 preview and the canvas', async () => {
+    const published = await navigate('static', '/fragment/');
+    expect(published.status).toBe(200);
+    const a = contentRootInner(await published.text());
+    const draft = await navigate('static', `${PREFIX}/${MAIN}/fragment/`, await passCookie());
+    expect(draft.status).toBe(200);
+    const b = contentRootInner(await draft.text());
+
+    const dir = dirs.get('static') ?? '';
+    const site = [...new Glob('**/_conloca/editor/site.*.js').scanSync({ cwd: join(dir, 'dist') })][0];
+    if (site === undefined) throw new Error('no editor bundle in the static build');
+    // The renderer is bundled for the browser: its entity decoder makes an element when it loads.
+    Object.assign(globalThis, { document: { createElement: () => ({}) } });
+    try {
+      const mod: {
+        fragmentComponents: unknown;
+        evaluateMDXToComponent: (mdx: string, vocabulary: unknown) => Promise<{ Component: unknown }>;
+      } = await import(pathToFileURL(join(dir, 'dist', site)).href);
+      const mdx = FRAGMENT_SITE.files['content/fragments/general/callout.en.mdx'].replace(/^---\n[\s\S]*?\n---\n/u, '');
+      const { Component } = await mod.evaluateMDXToComponent(mdx, mod.fragmentComponents);
+      // The fixture's own React, which the bundle keeps external.
+      const fixtureRequire = createRequire(join(dir, 'package.json'));
+      const { createElement } = fixtureRequire('react');
+      const { renderToStaticMarkup } = fixtureRequire('react-dom/server');
+      const c = renderToStaticMarkup(createElement(Component));
+
+      expect(a).toBe(b);
+      expect(a).toBe(c);
+      expect(a).toContain(CALLOUT_MARKUP);
+      expect(a).toContain(WHY_MARKUP);
+      expect(a).toContain(BADGE_MARKUP);
+    } finally {
+      Reflect.deleteProperty(globalThis, 'document');
+    }
+  });
+});
+
+/**
+ * The inner HTML of the first `[data-conloca-content-root]`, without React's text-separator comments: Astro streams
+ * React with `renderToReadableStream`, the canvas renders with `renderToStaticMarkup`.
+ */
+function contentRootInner(html: string): string {
+  const open = /<div\b[^>]*\bdata-conloca-content-root\b[^>]*>/u.exec(html);
+  if (open === null) throw new Error('no content root');
+  const tags = /<(\/?)div\b[^>]*>/gu;
+  tags.lastIndex = open.index + open[0].length;
+  for (let depth = 1, tag = tags.exec(html); tag !== null; tag = tags.exec(html)) {
+    depth += tag[1] === '/' ? -1 : 1;
+    if (depth === 0) return html.slice(open.index + open[0].length, tag.index).replaceAll('<!-- -->', '');
+  }
+  throw new Error('content root not closed');
+}
 
 describe(`${ADAPTER}: site pages under the prefix`, () => {
   const sitePages = ['/contact/', '/blog/hello/'];

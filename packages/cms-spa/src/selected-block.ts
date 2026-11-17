@@ -1,3 +1,4 @@
+import type { JsonValue } from '@conloca/mdx/render';
 import { useEffect, useState } from 'react';
 import type { MdxJsxComponentDescriptor } from './mdx-components.js';
 
@@ -34,11 +35,12 @@ export interface SelectedBlock {
   attrs: Record<string, unknown>;
   /** Apply a prop change. Wrapped by the owning block over its updater.
    * Accepts strings (text props), booleans (checkbox props), numbers
-   * (numeric inputs), or `null`/`undefined` (remove the attribute).
+   * (numeric inputs), lists and objects (JSON expressions), or
+   * `null`/`undefined` (remove the attribute).
    * The block routes the value through `writeAttribute` which picks
    * the right mdast shape — string literal, JSX shorthand, or
    * expression. */
-  onPropChange: (name: string, value: string | boolean | number | null | undefined) => void;
+  onPropChange: (name: string, value: JsonValue | null | undefined) => void;
   /** Remove the block from the document. */
   onRemove: () => void;
 }

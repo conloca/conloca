@@ -60,6 +60,26 @@ describe('buildInsertPayload', () => {
     const out = buildInsertPayload(d);
     expect(out.children).toBeUndefined();
   });
+
+  test('null defaults are not written', () => {
+    const d: MdxJsxComponentDescriptor = { name: 'Card', kind: 'flow', defaults: { attributes: { title: null } } };
+    expect(buildInsertPayload(d).props).toEqual({});
+  });
+
+  test('list and object defaults insert as JSON expressions', () => {
+    const d: MdxJsxComponentDescriptor = {
+      name: 'Card',
+      kind: 'flow',
+      props: [
+        { name: 'items', type: 'list', of: { type: 'object', fields: { label: { type: 'string' } } } },
+        { name: 'cta', type: 'object', fields: { href: { type: 'string' } } },
+      ],
+      defaults: { attributes: { items: [{ label: 'A' }], cta: { href: '/x' } } },
+    };
+    const out = buildInsertPayload(d);
+    expect(out.props.items).toEqual({ type: 'expression', value: '[{"label":"A"}]' });
+    expect(out.props.cta).toEqual({ type: 'expression', value: '{"href":"/x"}' });
+  });
 });
 
 describe('dispatchInsert', () => {

@@ -1,12 +1,16 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, spyOn, test } from 'bun:test';
+import { defineFragmentComponents, EMPTY_FRAGMENT_VOCABULARY, type FragmentVocabulary } from '@conloca/mdx/render';
 import type { Config } from '@puckeditor/core';
 import { type ComponentType, createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import {
   buildDataContext,
   createCollectionContentSource,
+  fragmentVocabularyOf,
   getDataCollectionEntries,
   getPageEntries,
   getPagesByPrefix,
+  loadFragmentVocabulary,
   loadMdxComponents,
   normalizePathname,
   type PageContentSource,
@@ -267,6 +271,10 @@ describe('resolvePuckData', () => {
   });
 });
 
+const failing = async () => ({ Component: null, error: new Error('Unknown component <Nope>'), outline: [] });
+const brokenSource = () =>
+  sourceOf({ __conloca_fragments: [{ id: 'vx-br0ken01', locale: 'de', title: 'Broken', mdx: '<Nope />' }] });
+
 describe('loadMdxComponents', () => {
   const okComponent = (() => null) as ComponentType;
 
@@ -290,6 +298,65 @@ describe('loadMdxComponents', () => {
     if (!fragment) throw new Error('test fixture invariant: fragment was not returned');
     expect((fragment.Component as () => unknown)()).toBeNull();
   });
+
+  test("hands the evaluator the site's vocabulary", async () => {
+    const vocabulary = defineFragmentComponents({ components: { Callout: () => null } });
+    const seen: unknown[] = [];
+    const source = sourceOf({ __conloca_fragments: [{ id: 'welcome', locale: 'en', title: 'Welcome', mdx: '# Hi' }] });
+    await loadMdxComponents(
+      source,
+      'en',
+      async (_mdx: string, v?: FragmentVocabulary) => {
+        seen.push(v);
+        return { Component: okComponent, outline: [] };
+      },
+      false,
+      vocabulary,
+    );
+    expect(seen).toEqual([vocabulary]);
+  });
+
+  test('logs a failing fragment with its id and locale', async () => {
+    const original = console.error;
+    const lines: string[] = [];
+    console.error = (line: string) => lines.push(line);
+    try {
+      await loadMdxComponents(brokenSource(), 'de', failing, false);
+    } finally {
+      console.error = original;
+    }
+    expect(lines).toEqual(['[Conloca] Fragment vx-br0ken01 (de, "Broken") failed to render: Unknown component <Nope>']);
+  });
+
+  test('renders the error card when showErrors is set outside dev (a draft preview)', async () => {
+    const original = console.error;
+    console.error = () => {};
+    try {
+      const [shown] = await loadMdxComponents(brokenSource(), 'de', failing, false, EMPTY_FRAGMENT_VOCABULARY, true);
+      const [hidden] = await loadMdxComponents(brokenSource(), 'de', failing, false);
+      expect(renderToStaticMarkup(createElement(shown?.Component))).toContain('Unknown component');
+      expect(renderToStaticMarkup(createElement(hidden?.Component))).toBe('');
+    } finally {
+      console.error = original;
+    }
+  });
+});
+
+describe('fragmentVocabularyOf', () => {
+  test('a module without fragmentComponents gives the empty vocabulary', () => {
+    expect(fragmentVocabularyOf({}, '/site/fragments.ts')).toBe(EMPTY_FRAGMENT_VOCABULARY);
+  });
+
+  test('an export that is not a vocabulary throws naming the module', () => {
+    expect(() => fragmentVocabularyOf({ fragmentComponents: {} }, '/site/fragments.ts')).toThrow(
+      '/site/fragments.ts must export fragmentComponents = defineFragmentComponents(...)',
+    );
+  });
+
+  test('a structurally valid vocabulary is returned', () => {
+    const fragmentComponents = { components: { Callout: () => null }, elements: {} };
+    expect(fragmentVocabularyOf({ fragmentComponents }, '/site/fragments.ts')).toBe(fragmentComponents);
+  });
 });
 
 describe('pageNotFoundResponse', () => {
@@ -305,5 +372,47 @@ describe('pageNotFoundResponse', () => {
 
     expect(response.status).toBe(404);
     expect(await response.text()).toBe('Page not found');
+  });
+});
+
+const brokenRenderModule = () => Promise.reject(new Error('boom'));
+
+describe('loadFragmentVocabulary', () => {
+  test('a module with the wrong export is named by its resolved path', async () => {
+    const error = await loadFragmentVocabulary(
+      () => Promise.resolve({ fragmentComponents: {} }),
+      true,
+      '/abs/fc.tsx',
+    ).then(
+      () => undefined,
+      (thrown: Error) => thrown,
+    );
+    expect(error?.message).toMatch(/^\/abs\/fc\.tsx must export/);
+  });
+
+  test('a broken render module throws when failing hard, naming fragmentComponentsPath', async () => {
+    const error = await loadFragmentVocabulary(brokenRenderModule, true, undefined).then(
+      () => undefined,
+      (thrown: Error) => thrown,
+    );
+    expect(error?.message).toContain('fragmentComponentsPath failed to load: Error: boom');
+  });
+
+  test('on demand it renders without fragments, loading and logging once per instance', async () => {
+    let loads = 0;
+    const load = () => {
+      loads++;
+      return Promise.reject(new Error('boom'));
+    };
+    const log = spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      expect(await loadFragmentVocabulary(load, false, undefined)).toBeUndefined();
+      expect(await loadFragmentVocabulary(load, false, undefined)).toBeUndefined();
+      expect(loads).toBe(1);
+      expect(log).toHaveBeenCalledTimes(1);
+      expect(String(log.mock.calls[0])).toContain('fragmentComponentsPath');
+    } finally {
+      log.mockRestore();
+    }
   });
 });

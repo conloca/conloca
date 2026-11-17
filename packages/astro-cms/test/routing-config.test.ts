@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'bun:test';
-import { normalizeRoutingConfig, resolveRouteConfig, validateRoutePattern } from '../src/lib/routing-config.js';
+import { readEditorDataBindings } from '@conloca/content-api';
+import {
+  normalizeRoutingConfig,
+  resolveRouteConfig,
+  toEditorDataBindings,
+  validateRoutePattern,
+} from '../src/lib/routing-config.js';
+import type { ResolvedRoutingConfig } from '../src/types.js';
 
 describe('normalizeRoutingConfig', () => {
   it('returns undefined for undefined input', () => {
@@ -125,5 +132,41 @@ describe('validateRoutePattern', () => {
     expect(() => validateRoutePattern('/[[slug]', 'unbalanced')).toThrow(
       "Route 'unbalanced': pattern has unbalanced brackets: '/[[slug]'",
     );
+  });
+});
+
+describe('toEditorDataBindings entries', () => {
+  const resolved: ResolvedRoutingConfig = {
+    enabled: true,
+    routes: {
+      blog: resolveRouteConfig({
+        pattern: '/blog/[slug]',
+        collection: 'blog',
+        editorFrame: './src/cms/blog-frame.tsx',
+      }),
+      pages: resolveRouteConfig({ pattern: '/[...slug]' }),
+    },
+    fallback: '404',
+    onConflict: 'warn',
+    siteName: 'default',
+    locale: 'en',
+  };
+
+  it('lists every route in declaration order, naming the frame only for a route that declares one', () => {
+    expect(toEditorDataBindings(resolved).entries).toEqual([
+      { name: 'blog', collection: 'blog', frame: 'blog' },
+      { name: 'pages', collection: 'pages' },
+    ]);
+  });
+
+  it('gives a frameless route no editorFrame key', () => {
+    expect('editorFrame' in resolveRouteConfig({ pattern: '/[...slug]' })).toBe(false);
+    expect(resolveRouteConfig({ pattern: '/b', editorFrame: './f.tsx' }).editorFrame).toBe('./f.tsx');
+  });
+
+  it('survives a JSON round trip through readEditorDataBindings', () => {
+    const bindings = toEditorDataBindings(resolved);
+
+    expect(readEditorDataBindings(JSON.parse(JSON.stringify(bindings)))?.entries).toEqual(bindings.entries);
   });
 });

@@ -1,3 +1,6 @@
+import type { JsonValue } from './literal-attributes.js';
+import { isFragmentComponentName } from './vocabulary.js';
+
 interface MdastNode {
   type?: string;
   children?: MdastNode[];
@@ -58,6 +61,35 @@ function hasDangerousScheme(value: string): boolean {
   return DANGEROUS_URL_SCHEME.test(value.replace(/[\p{Cc} ]+/gu, ''));
 }
 
+/** A key inside a JSON prop that React SSR would emit as a live handler if a component spread the object onto a
+ * custom element: an `on*` name, in any case, holding a string. Other value types never become a handler. */
+export function isNestedHandlerKey(key: string, value: JsonValue): boolean {
+  return typeof value === 'string' && /^on/i.test(key);
+}
+
+/** A component prop's JSON value with every dangerous-scheme string leaf emptied and every
+ * `dangerouslySetInnerHTML` key and string-valued `on*` key dropped, at any depth: a component may
+ * render any prop as a URL or spread a data object onto an element. */
+export function neutralizeJsonProp(value: JsonValue): JsonValue {
+  if (typeof value === 'string') return hasDangerousScheme(value) ? '' : value;
+  if (Array.isArray(value)) return value.map(neutralizeJsonProp);
+  if (value && typeof value === 'object') {
+    // defineProperty keeps a `__proto__` key an own data property, as JSON.parse made it.
+    const out: { [key: string]: JsonValue } = {};
+    for (const [key, item] of Object.entries(value)) {
+      if (key.toLowerCase() === 'dangerouslysetinnerhtml' || isNestedHandlerKey(key, item)) continue;
+      Object.defineProperty(out, key, {
+        value: neutralizeJsonProp(item),
+        enumerable: true,
+        writable: true,
+        configurable: true,
+      });
+    }
+    return out;
+  }
+  return value;
+}
+
 function isDangerousElement(node: MdastNode): boolean {
   if (node?.type !== 'mdxJsxFlowElement' && node?.type !== 'mdxJsxTextElement') return false;
   const name = typeof node.name === 'string' ? node.name : '';
@@ -88,8 +120,10 @@ function isDangerousLiteralUrl(value: unknown): boolean {
 
 /** Filter/neutralize a JSX element's attributes: drop the `dangerouslySetInnerHTML`
  * raw-HTML sink and inline `on*` handlers, drop non-literal expression props, and
- * empty a URL-bearing attribute carrying a dangerous scheme. */
-function sanitizeAttributes(attributes: MdastAttribute[]): MdastAttribute[] {
+ * empty a URL-bearing attribute carrying a dangerous scheme. On a component every
+ * string attribute is scheme-filtered; its JSON props are filtered by
+ * `neutralizeJsonProp` where the published render parses them. */
+export function sanitizeAttributes(attributes: MdastAttribute[], component: boolean): MdastAttribute[] {
   const out: MdastAttribute[] = [];
   for (const attr of attributes) {
     if (attr?.type === 'mdxJsxExpressionAttribute') continue; // `{...spread}` — arbitrary props
@@ -102,20 +136,22 @@ function sanitizeAttributes(attributes: MdastAttribute[]): MdastAttribute[] {
     // (`{"__html": "<script>…"}`) passes the literal exemption yet injects live
     // HTML on the published path, so drop it regardless of value shape.
     if (name.toLowerCase() === 'dangerouslysetinnerhtml') continue;
-    // Inline event handlers are never content. React strips string handlers, but
-    // dropping them here keeps the gate renderer-agnostic.
+    // `__proto__={{…}}` would become the props object's prototype, smuggling any prop in.
+    if (name === '__proto__') continue;
+    // Inline event handlers are never content. React SSR emits a lowercase string handler verbatim on a custom
+    // element (`<x-widget onclick>`), so every `on*` name is dropped, on components too, in any case.
     if (/^on/i.test(name)) continue;
     const value = attr.value;
     if (value && typeof value === 'object') {
       if (!isLiteralExpression(value)) continue; // non-literal expression prop
-      if (URL_ATTR.test(name) && isDangerousLiteralUrl(value)) {
+      if ((component || URL_ATTR.test(name)) && isDangerousLiteralUrl(value)) {
         out.push({ ...attr, value: '' });
         continue;
       }
       out.push(attr);
       continue;
     }
-    if (typeof value === 'string' && URL_ATTR.test(name) && hasDangerousScheme(value)) {
+    if (typeof value === 'string' && (component || URL_ATTR.test(name)) && hasDangerousScheme(value)) {
       out.push({ ...attr, value: '' });
       continue;
     }
@@ -125,12 +161,12 @@ function sanitizeAttributes(attributes: MdastAttribute[]): MdastAttribute[] {
 }
 
 /** Remark transform that neutralizes the author-code AND HTML-injection vectors
- * in authored MDX at every compile/eval entry point.
+ * in authored MDX at every eval entry point.
  *
  * Two layers, because expression-restriction is NOT HTML sanitization:
  *   1. Author code — standalone `{…}` flow/text expressions (`mdxFlowExpression`/
  *      `mdxTextExpression`) and top-level ESM `import`/`export` (`mdxjsEsm`) reach
- *      `new AsyncFunction`/`evaluate()` as live code, so they fail the compile
+ *      a JS evaluator as live code, so they fail the render
  *      with a clear error; content fragments never legitimately need either.
  *      A comment, `{/* … *\/}`, holds no code and is removed instead, so it
  *      renders as nothing, as it does in MDX.
@@ -140,21 +176,20 @@ function sanitizeAttributes(attributes: MdastAttribute[]): MdastAttribute[] {
  *      `data:text/html`) on URL-bearing attributes and markdown link/image URLs,
  *      and script/navigate/embed intrinsic elements (`<script>`, `<iframe>`, …)
  *      are dropped or emptied. This layers atop React's own SSR neutralization
- *      (it blocks `javascript:` URLs, strips string `on*` handlers, and escapes
- *      all text/attribute values). The set above is a renderer-agnostic superset:
- *      some of it (`javascript:`, string `on*`) React also covers, but it is
- *      re-applied here for the compile and mdast-serializer paths where React is
+ *      (it blocks `javascript:` URLs, strips string `on*` handlers on known HTML
+ *      elements but not on custom elements, and escapes all text/attribute
+ *      values). The set above is a renderer-agnostic superset: some of it
+ *      (`javascript:`, string `on*` on known elements) React also covers, but it is
+ *      re-applied here for the mdast-serializer path where React is
  *      not in the loop, and it adds what React does NOT handle (`data:text/html`,
  *      `dangerouslySetInnerHTML`, raw `<script>`/embed elements) — which the
  *      published `evaluateMDXToComponent` path would otherwise emit verbatim to
  *      every visitor.
  *
  * Non-literal JSX attribute and spread expressions are dropped so a component
- * still renders with its safe props. Shared by `compileMDX` (editor preview) and
- * `evaluateMDXToComponent` (published-site render), so the control is identical
- * on both. In the editor the sandbox is the sufficient boundary; on the published
- * path this transform is the boundary, so it must close the class, not just the
- * eval vector. */
+ * still renders with its safe props. `evaluateMDXToComponent` renders both the
+ * published site and every editing surface through it, so the control is
+ * identical on both, and it must close the class, not just the eval vector. */
 export function remarkRestrictExpressions() {
   return (tree: MdastNode): void => {
     const walk = (node: MdastNode): void => {
@@ -173,7 +208,10 @@ export function remarkRestrictExpressions() {
       ) {
         node.url = '';
       }
-      if (Array.isArray(node.attributes)) node.attributes = sanitizeAttributes(node.attributes);
+      if (Array.isArray(node.attributes)) {
+        const component = typeof node.name === 'string' && isFragmentComponentName(node.name);
+        node.attributes = sanitizeAttributes(node.attributes, component);
+      }
       if (Array.isArray(node.children)) {
         node.children = node.children.filter((child) => !isDangerousElement(child) && !isComment(child));
         node.children.forEach(walk);

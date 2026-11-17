@@ -1,4 +1,4 @@
-import { toJsxRuntime } from 'hast-util-to-jsx-runtime';
+import { type EvaluateExpression, toJsxRuntime } from 'hast-util-to-jsx-runtime';
 import type { Parent, Root, RootContent } from 'mdast';
 import type { ComponentType } from 'react';
 import { Fragment, jsx, jsxs } from 'react/jsx-runtime';
@@ -8,9 +8,11 @@ import remarkMdx from 'remark-mdx';
 import remarkParse from 'remark-parse';
 import remarkRehype from 'remark-rehype';
 import { type Plugin, unified } from 'unified';
+import { componentPropValue } from './component-props.js';
 import { applyHeadingIds, type FragmentHeading } from './heading-outline.js';
 import { literalAttributeValue } from './literal-attributes.js';
 import { remarkRestrictExpressions } from './restrict-expressions.js';
+import { EMPTY_FRAGMENT_VOCABULARY, type FragmentVocabulary, isFragmentComponentName } from './vocabulary.js';
 
 interface JsxAttributeNode {
   type?: string;
@@ -25,12 +27,14 @@ interface TreeNode {
   [key: string]: unknown;
 }
 
+/** An ECMAScript identifier name, the rule `estree-util-is-identifier-name` applies. */
+const IDENTIFIER = /^[\p{ID_Start}$_][\p{ID_Continue}$\u200C\u200D]*$/u;
+
 /**
  * Make every JSX element in the tree statically renderable.
  *
- * Capitalized component names are rejected with a clear author-facing error —
- * this path has no component registry to resolve them from, and letting them
- * through surfaces as a cryptic converter error instead.
+ * Component names are left alone here; `evaluateMDXToComponent` resolves them
+ * against the site's fragment vocabulary during the same eager conversion.
  *
  * JSON-literal `{…}` attribute values (the only expressions
  * `remarkRestrictExpressions` admits) are resolved into plain static values,
@@ -38,27 +42,41 @@ interface TreeNode {
  * numbers stringify (identical SSR output), and `{true}`/`{false}` reach React
  * as booleans, which it renders as it renders any boolean prop: `{false}`
  * leaves out `disabled` but writes `aria-hidden="false"` and `data-open="false"`.
- * `null` and object literals drop the attribute. The converter reads an object
- * value as an expression to run, which this path never does, so `style={{…}}`
- * on an HTML element is dropped too.
+ * `null` and object literals drop the attribute, as does `style` on raw HTML.
+ * On a fragment component every JSON value (objects and lists too) reaches the
+ * component through a synthetic `Literal` the evaluater returns as is, with
+ * dangerous-scheme strings emptied at any depth.
  */
 function resolveStaticJsx() {
   return (tree: TreeNode): void => {
     const walk = (node: TreeNode): void => {
+      const name = typeof node.name === 'string' ? node.name : '';
+      const component = name !== '' && isFragmentComponentName(name);
       if (node.type === 'mdxJsxFlowElement' || node.type === 'mdxJsxTextElement') {
-        const name = typeof node.name === 'string' ? node.name : '';
-        if (/^[A-Z]/.test(name)) {
-          throw new Error(
-            `Unknown component <${name}>: fragments render as plain content and cannot use React components.`,
-          );
+        // The converter turns `<Foo-bar>`/`<Foo:bar>` into raw tags, never asking the evaluater; reject them here.
+        if (component && !name.includes('.') && !IDENTIFIER.test(name)) {
+          throw unknownComponent(name);
         }
       }
       if (Array.isArray(node.attributes)) {
         node.attributes = node.attributes.flatMap((attr) => {
+          if (component) {
+            const prop = componentPropValue(attr);
+            if (prop === undefined) return [];
+            const literal = { type: 'Literal', value: prop };
+            const estree = {
+              type: 'Program',
+              sourceType: 'module',
+              body: [{ type: 'ExpressionStatement', expression: literal }],
+            };
+            const raw = JSON.stringify(prop);
+            return [{ ...attr, value: { type: 'mdxJsxAttributeValueExpression', value: raw, data: { estree } } }];
+          }
+          if (attr?.name?.toLowerCase() === 'style') return []; // author styles never publish on raw HTML either
           const value = attr?.value;
           if (!value || typeof value !== 'object') return [attr];
           const raw = (value as { value?: unknown }).value;
-          // The same rule compileMDX applies, so the editor preview drops what this drops.
+          // A non-literal expression can only be dropped: this pipeline never runs code.
           const literal = typeof raw === 'string' ? literalAttributeValue(raw) : undefined;
           if (literal === undefined) return [];
           return [{ ...attr, value: typeof literal === 'number' ? String(literal) : literal }];
@@ -79,7 +97,7 @@ type JsxBlock = Extract<RootContent, { type: 'mdxJsxFlowElement' }>;
 /**
  * Lift HTML tags out of a paragraph that holds nothing else. Markdown reads a tag written on one line,
  * `<div>x</div>`, as the start of a paragraph, and `<p><div>x</div></p>` is HTML a browser splits into
- * an empty paragraph and a loose `<div>`. The `@mdx-js/mdx` compiler this pipeline replaced does the
+ * an empty paragraph and a loose `<div>`. The `@mdx-js/mdx` compiler this pipeline replaced did the
  * same lifting (its `remarkMarkAndUnravel`); a paragraph with any text beside its tags keeps its `<p>`.
  */
 function unravelJsxParagraphs() {
@@ -112,13 +130,59 @@ const processor = unified()
   .use(remarkMdx)
   .use(remarkFrontmatter)
   .use(remarkGfm)
-  // Both transformers use loose structural node types (they predate this
-  // pipeline and also run inside @mdx-js's own plugin list), so bridge them to
+  // Both transformers use loose structural node types, so bridge them to
   // unified's strict Plugin shape here rather than forking their signatures.
   .use(remarkRestrictExpressions as unknown as Plugin<[], Root>)
   .use(resolveStaticJsx as unknown as Plugin<[], Root>)
   .use(unravelJsxParagraphs)
   .use(remarkRehype, { passThrough: ['mdxJsxFlowElement', 'mdxJsxTextElement'] });
+
+/** The fragment pipeline's mdast for `mdx`, before any transform runs. */
+export function parseFragmentMdx(mdx: string): Root {
+  return processor.parse(mdx);
+}
+
+interface EstreeNode {
+  type: string;
+  name?: string;
+  value?: unknown;
+  object?: EstreeNode;
+  property?: EstreeNode;
+}
+
+function unknownComponent(name: string): Error {
+  return new Error(`Unknown component <${name}>: the site does not declare it in its fragment components.`);
+}
+
+function dottedName(node: EstreeNode): string {
+  if (node.type === 'MemberExpression' && node.object && node.property) {
+    return `${dottedName(node.object)}.${dottedName(node.property)}`;
+  }
+  return node.name ?? String(node.value);
+}
+
+/**
+ * The converter turns component names (capitalized or dotted) into estree nodes and asks this to resolve them.
+ * It only looks names up in the vocabulary and reads literals: it never runs code.
+ */
+function staticEvaluater(vocabulary: FragmentVocabulary) {
+  return {
+    evaluateExpression(node: Parameters<EvaluateExpression>[0]) {
+      if (node.type === 'Identifier') {
+        // Own keys only, so `constructor` or `toString` never resolve to Object.prototype members.
+        if (Object.keys(vocabulary.components).includes(node.name)) return vocabulary.components[node.name];
+        throw unknownComponent(node.name);
+      }
+      // Also the synthetic Literals resolveStaticJsx makes, whose value is a JSON object or list.
+      if (node.type === 'Literal') return node.value;
+      if (node.type === 'MemberExpression') throw unknownComponent(dottedName(node));
+      throw new Error('Unsupported expression in fragment');
+    },
+    evaluateProgram(): never {
+      throw new Error('Unsupported expression in fragment');
+    },
+  };
+}
 
 /**
  * Turn an MDX content string into a React component WITHOUT executing any
@@ -135,9 +199,11 @@ const processor = unified()
  * attribute values survive — nothing in admissible content needs code
  * execution to render.
  *
- * Unregistered capitalized JSX components fail here (evaluate time) rather
- * than when React renders the component, so callers get the error result and
- * can show their fragment-error UI instead of failing the whole page render.
+ * Capitalized JSX names render the site's own components from its
+ * fragment vocabulary (`defineFragmentComponents`; dotted names are rejected), and lowercase elements use
+ * its element overrides. A name the vocabulary does not declare fails here
+ * (evaluate time) rather than when React renders, so callers get the error
+ * result and can show their fragment-error UI instead of failing the page.
  *
  * @example
  * ```typescript
@@ -153,6 +219,7 @@ const processor = unified()
  */
 export async function evaluateMDXToComponent(
   mdxContent: string,
+  vocabulary: FragmentVocabulary = EMPTY_FRAGMENT_VOCABULARY,
 ): Promise<{ Component: ComponentType | null; error?: Error; outline: readonly FragmentHeading[] }> {
   try {
     const mdast = processor.parse(mdxContent);
@@ -162,7 +229,13 @@ export async function evaluateMDXToComponent(
     const outline = applyHeadingIds(hast);
     // Convert eagerly so bad content (e.g. an unknown component) surfaces as
     // the error result; the returned component just replays the static tree.
-    const element = toJsxRuntime(hast, { Fragment, jsx, jsxs });
+    const element = toJsxRuntime(hast, {
+      Fragment,
+      jsx,
+      jsxs,
+      components: { ...vocabulary.elements },
+      createEvaluater: () => staticEvaluater(vocabulary),
+    });
     return { Component: () => element, outline };
   } catch (error) {
     return {

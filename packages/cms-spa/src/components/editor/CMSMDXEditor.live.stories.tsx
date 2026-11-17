@@ -1,3 +1,4 @@
+import { defineFragmentComponents } from '@conloca/mdx/render';
 import {
   createRootEditorSubscription$,
   type MDXEditorMethods,
@@ -16,11 +17,12 @@ import {
   $isRangeSelection,
   $setSelection,
   COMMAND_PRIORITY_CRITICAL,
+  getNearestEditorFromDOMNode,
   type LexicalEditor,
   REDO_COMMAND,
   UNDO_COMMAND,
 } from 'lexical';
-import { createRef, type RefObject, useMemo, useState } from 'react';
+import { createRef, type ReactNode, type RefObject, useMemo, useState } from 'react';
 import { expect, userEvent, waitFor } from 'storybook/test';
 import * as Y from 'yjs';
 import '../../main.css';
@@ -34,6 +36,7 @@ import {
   writeEditorEdit,
 } from '../../live/markdown-binding.js';
 import { markdownLivePlugin } from '../../live/markdown-live-plugin.js';
+import { setSiteRender } from '../../site-render.js';
 import { CMSMDXEditor } from './CMSMDXEditor.js';
 
 /**
@@ -1059,5 +1062,44 @@ export const LiveTypeAtEndKeepsBlankLine: Story = {
     await waitFor(() => expect(solo.text.toJSON()).toBe('ab\n\n'));
     await userEvent.keyboard('{Enter}c');
     await waitFor(() => expect(solo.text.toJSON()).toBe('ab\n\nc\n\n'));
+  },
+};
+
+const SiteCallout = ({ tone, children }: { tone?: string; children?: ReactNode }) => (
+  <aside data-tone={tone} className="site-callout">
+    {children}
+  </aside>
+);
+
+/** A fragment's component renders as the site's own component, and its body takes typing in place. */
+export const FragmentModeRendersSiteComponent: Story = {
+  beforeEach: () => {
+    setSiteRender({ vocabulary: defineFragmentComponents({ components: { Callout: SiteCallout } }) });
+    return () => setSiteRender({});
+  },
+  render: () => (
+    <QueryClientProvider client={queryClient}>
+      <div style={{ height: 400 }}>
+        <CMSMDXEditor value={'<Callout tone="info">\n\nHello\n\n</Callout>\n'} onChange={() => {}} fragment />
+      </div>
+    </QueryClientProvider>
+  ),
+  play: async ({ canvasElement }) => {
+    const body = await waitFor(() => {
+      const element = canvasElement.querySelector<HTMLElement>('aside.site-callout [contenteditable="true"] p');
+      if (!element) throw new Error('site callout not rendered');
+      return element;
+    });
+    await userEvent.click(body);
+    const nested = getNearestEditorFromDOMNode(body);
+    if (!nested) throw new Error('no nested editor');
+    nested.update(() => $getRoot().getLastChildOrThrow().selectEnd(), { discrete: true });
+    await userEvent.keyboard(' there');
+    await waitFor(() =>
+      expect(canvasElement.querySelector('aside.site-callout [contenteditable="true"]')?.textContent).toBe(
+        'Hello there',
+      ),
+    );
+    await expect(canvasElement.querySelector('aside.site-callout[data-tone="info"]')).toBeTruthy();
   },
 };

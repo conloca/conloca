@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, test } from 'bun:test';
+import { beforeEach, describe, expect, spyOn, test } from 'bun:test';
+import type { MdxJsxFlowElement } from 'mdast-util-mdx-jsx';
 import {
   containsMarkdownMarkers,
   defineMdxComponents,
@@ -9,7 +10,9 @@ import {
   type MdxSnippetDescriptor,
   mergeDiscoveredMdxComponents,
   toJsxComponentDescriptor,
+  writeAttribute,
 } from '../src/mdx-components.js';
+import { readAttrs } from '../src/utils/mdast-tree.js';
 
 // Smallest JSX descriptor that satisfies the type — `kind: 'flow'` is the
 // default insert path, `name` is required, everything else stays optional.
@@ -198,5 +201,106 @@ describe('toJsxComponentDescriptor', () => {
     const OwnEditor = () => null;
 
     expect(toJsxComponentDescriptor(minimal({ Editor: OwnEditor }), FallbackEditor).Editor).toBe(OwnEditor);
+  });
+});
+
+describe('list and object props', () => {
+  test('writeAttribute writes lists and objects as JSON expressions that readAttrs reads back', () => {
+    const values = [[], [{ label: 'A "quoted" one', n: 2 }], { href: '/x', nested: { on: true } }];
+    for (const v of values) {
+      const attrs = writeAttribute<MdxJsxFlowElement>([], 'p', v);
+      expect(attrs).toEqual([
+        {
+          type: 'mdxJsxAttribute',
+          name: 'p',
+          value: { type: 'mdxJsxAttributeValueExpression', value: JSON.stringify(v) },
+        },
+      ]);
+      const node: MdxJsxFlowElement = { type: 'mdxJsxFlowElement', name: 'X', attributes: attrs, children: [] };
+      expect(readAttrs(node)).toEqual({ p: v });
+    }
+  });
+
+  test('defineMdxComponents rejects a list prop without of', () => {
+    const bad = minimal({ name: 'Card', props: [{ name: 'items', type: 'list', of: { type: 'string' } }] });
+    // Untyped host config can omit `of`.
+    Reflect.deleteProperty(bad.props?.[0] ?? {}, 'of');
+    expect(() => defineMdxComponents([bad])).toThrow(/Card\.items/);
+  });
+
+  test('defineMdxComponents rejects an object prop without fields', () => {
+    const missing = minimal({ name: 'Card', props: [{ name: 'cta', type: 'object', fields: {} }] });
+    // Untyped host config can omit `fields`.
+    Reflect.deleteProperty(missing.props?.[0] ?? {}, 'fields');
+    expect(() => defineMdxComponents([missing])).toThrow(/Card\.cta/);
+    const empty = minimal({ name: 'Card', props: [{ name: 'cta', type: 'object', fields: {} }] });
+    expect(() => defineMdxComponents([empty])).toThrow(/Card\.cta/);
+    const href = { type: 'string' } as const;
+    // Untyped host config can name a field type that does not exist.
+    Reflect.set(href, 'type', 'date');
+    const unknownField = minimal({ name: 'Card', props: [{ name: 'cta', type: 'object', fields: { href } }] });
+    expect(() => defineMdxComponents([unknownField])).toThrow(/Card\.cta\.href/);
+  });
+
+  test('defineMdxComponents warns on a prop name starting with "on" in any case', () => {
+    const warn = spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      defineMdxComponents([
+        minimal({
+          name: 'Card',
+          props: [
+            { name: 'onSale', type: 'boolean' },
+            { name: 'online', type: 'boolean' },
+          ],
+        }),
+      ]);
+      expect(warn).toHaveBeenCalledTimes(2);
+      expect(String(warn.mock.calls[0]?.[0])).toContain('Card.onSale starts with "on" and is never passed');
+      expect(String(warn.mock.calls[1]?.[0])).toContain('Card.online starts with "on" and is never passed');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  test('defineMdxComponents rejects a default that contradicts its declared prop', () => {
+    const bad = minimal({
+      name: 'Card',
+      props: [{ name: 'cta', type: 'object', fields: { href: { type: 'string' } } }],
+      defaults: { attributes: { cta: { href: 3 } } },
+    });
+    expect(() => defineMdxComponents([bad])).toThrow(/Card\.cta\.href/);
+    const notList = minimal({
+      name: 'Card',
+      props: [{ name: 'items', type: 'list', of: { type: 'string' } }],
+      defaults: { attributes: { items: 'x' } },
+    });
+    expect(() => defineMdxComponents([notList])).toThrow(/Card\.items/);
+  });
+
+  test('defineMdxComponents warns, without throwing, on a scalar default of the wrong type', () => {
+    const warn = spyOn(console, 'warn').mockImplementation(() => {});
+    const input = [
+      minimal({ name: 'Card', props: [{ name: 'title', type: 'string' }], defaults: { attributes: { title: 3 } } }),
+    ];
+    try {
+      expect(defineMdxComponents(input)).toBe(input);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0]?.[0])).toContain('Card.title default should be a string, got 3');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  test('toJsxComponentDescriptor maps list and object props to expression', () => {
+    const d = minimal({
+      props: [
+        { name: 'items', type: 'list', of: { type: 'object', fields: { label: { type: 'string' } } } },
+        { name: 'cta', type: 'object', fields: { href: { type: 'string' } } },
+      ],
+    });
+    expect(toJsxComponentDescriptor(d, () => null).props).toEqual([
+      { name: 'items', type: 'expression', required: undefined },
+      { name: 'cta', type: 'expression', required: undefined },
+    ]);
   });
 });

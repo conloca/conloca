@@ -68,13 +68,15 @@ export async function resolveEditorDescriptors(
   }
 
   const templateCount = Object.keys(channel.templates ?? {}).length;
-  const { dataBindings, assetRefBase } = channel;
+  const { dataBindings, assetRefBase, fragmentComponentsPath, editorFrames } = channel;
   if (
     channel.schemasPath === undefined &&
     discovered.length === 0 &&
     templateCount === 0 &&
     dataBindings === undefined &&
-    assetRefBase === undefined
+    assetRefBase === undefined &&
+    fragmentComponentsPath === undefined &&
+    editorFrames === undefined
   ) {
     return undefined;
   }
@@ -90,5 +92,7 @@ export async function resolveEditorDescriptors(
     ...(templateCount === 0 ? {} : { templates: channel.templates }),
     ...(dataBindings === undefined ? {} : { dataBindings }),
     ...(assetRefBase === undefined ? {} : { assetRefBase }),
+    ...(fragmentComponentsPath === undefined ? {} : { fragmentComponentsPath }),
+    ...(editorFrames === undefined ? {} : { editorFrames }),
   };
 }

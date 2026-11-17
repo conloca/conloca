@@ -16,6 +16,13 @@
             "id": "Fragment_vx-6RmcMpA0-prose-parity-fixture"
           },
           "type": "Fragment_vx-6RmcMpA0"
+        },
+        {
+          "props": {
+            "contentId": "vx-c4LLdem0",
+            "id": "Fragment_vx-c4LLdem0-prose-parity-callout"
+          },
+          "type": "Fragment_vx-c4LLdem0"
         }
       ],
       "root": {},

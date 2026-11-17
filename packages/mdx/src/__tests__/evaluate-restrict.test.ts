@@ -1,13 +1,14 @@
 import { describe, expect, test } from 'bun:test';
-import { createElement } from 'react';
+import { createElement, type HTMLAttributes } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { evaluateMDXToComponent } from '../mdx/evaluate.js';
+import { defineFragmentComponents, type FragmentVocabulary } from '../mdx/vocabulary.js';
 
 /**
- * The expression restriction reaches the PUBLISHED render path.
- * `evaluateMDXToComponent` renders CMS content fragments at Astro build/SSR, so
- * it applies the same `remarkRestrictExpressions` gate as the editor's
- * `compileMDX`: standalone `{…}` expressions and top-level ESM
+ * The expression restriction on the one render path.
+ * `evaluateMDXToComponent` renders CMS content fragments at Astro build/SSR and
+ * in the editor, through the `remarkRestrictExpressions` gate:
+ * standalone `{…}` expressions and top-level ESM
  * `import`/`export` statements are rejected up front (the static pipeline never
  * executes them, but a clear author-facing rejection beats silently dropping
  * content). Legitimate prose still evaluates unchanged.
@@ -21,6 +22,24 @@ async function renderMdx(mdx: string): Promise<string> {
   if (error || !Component) return '';
   return renderToStaticMarkup(createElement(Component));
 }
+
+/** Render with a site's `vocabulary`; a rejected fragment fails the test. */
+async function renderWith(mdx: string, vocabulary: FragmentVocabulary): Promise<string> {
+  const { Component, error } = await evaluateMDXToComponent(mdx, vocabulary);
+  if (!Component) throw error ?? new Error('the fragment was rejected');
+  return renderToStaticMarkup(createElement(Component));
+}
+
+const strings = (v: unknown): string[] =>
+  typeof v === 'string' ? [v] : v && typeof v === 'object' ? Object.values(v).flatMap(strings) : [];
+interface CardProps {
+  link?: string;
+  cta?: { href?: string };
+  items?: string[];
+}
+const Spread = (props: HTMLAttributes<HTMLDivElement>) => createElement('div', props);
+const Box = ({ data }: { data: { inner: HTMLAttributes<HTMLDivElement> } }) =>
+  createElement('div', data.inner, String(data.inner.title));
 
 describe('evaluateMDXToComponent — expression + ESM restriction', () => {
   test('evaluates plain markdown to a component', async () => {
@@ -158,5 +177,71 @@ describe('evaluateMDXToComponent — HTML-injection neutralization (rendered out
     expect(html).toContain('class="callout"');
     expect(html).toContain('href="https://example.com"');
     expect(html).toContain('title="ok"');
+  });
+});
+
+describe('evaluateMDXToComponent — dangerous schemes inside component props', () => {
+  test('empties dangerous schemes in any prop, nested object or array item', async () => {
+    const vocabulary = defineFragmentComponents({
+      components: { Card: (props: CardProps) => createElement('p', null, strings(props).join(' ')) },
+    });
+    const html = await renderWith(
+      '<Card link="javascript:x" cta={{"href":"data:text/html,x"}} items={["vbscript:x"]} />',
+      vocabulary,
+    );
+    expect(html).not.toMatch(/javascript:|data:text\/html|vbscript:/);
+  });
+});
+
+describe('evaluateMDXToComponent — unsafe keys in component props', () => {
+  test('a __proto__ attribute cannot smuggle dangerouslySetInnerHTML', async () => {
+    const vocabulary = defineFragmentComponents({ components: { Card: Spread } });
+    const html = await renderWith(
+      '<Card __proto__={{"key":"k","dangerouslySetInnerHTML":{"__html":"<img src=x onerror=alert(1)>"}}} />',
+      vocabulary,
+    );
+    expect(html).not.toContain('onerror');
+    expect(html).not.toContain('<img');
+  });
+
+  test('nested dangerouslySetInnerHTML never reach a spread element', async () => {
+    const vocabulary = defineFragmentComponents({ components: { Box } });
+    const html = await renderWith(
+      '<Box data={{"inner":{"dangerouslySetInnerHTML":{"__html":"<b>x</b>"},"title":"yes"}}} />',
+      vocabulary,
+    );
+    expect(html).not.toContain('<b>');
+    expect(html).toContain('>yes<');
+  });
+
+  test('a scalar expression prop with a dangerous scheme is emptied', async () => {
+    const vocabulary = defineFragmentComponents({
+      components: { Show: ({ link }: { link?: string }) => createElement('p', null, link) },
+    });
+    expect(await renderWith('<Show link={"javascript:x"} />', vocabulary)).not.toContain('javascript:');
+  });
+});
+
+/** Probe echoes every prop it gets; `columns` is the one a test expects to survive. */
+interface ProbeProps {
+  columns?: number;
+}
+
+describe('evaluateMDXToComponent — JSX attribute expressions', () => {
+  const vocabulary = defineFragmentComponents({
+    components: { Probe: (props: ProbeProps) => createElement('p', null, JSON.stringify(props)) },
+  });
+
+  test('keeps a JSON-literal attribute expression', async () => {
+    expect(await renderWith('<Probe columns={3} />', vocabulary)).toContain('&quot;columns&quot;:3');
+  });
+
+  test('drops a non-literal attribute expression but still renders', async () => {
+    const html = await renderWith('<Probe onClick={fetch("/api")} />', vocabulary);
+    expect(html).toBe('<p>{}</p>');
+  });
+
+  test('drops a spread-attribute expression', async () => {
+    expect(await renderWith('<Probe {...stealAll} />', vocabulary)).toBe('<p>{}</p>');
   });
 });

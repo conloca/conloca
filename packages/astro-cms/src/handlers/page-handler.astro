@@ -11,6 +11,7 @@
 
 import { getCollection } from 'astro:content';
 import { loadContentSchemas } from 'virtual:conloca-content-schemas';
+import { fragmentComponentsPath, loadFragmentComponents } from 'virtual:conloca-fragment-components';
 import Layout from 'virtual:conloca-layout';
 import puckConfig from 'virtual:conloca-puck-config';
 import routingConfig from 'virtual:conloca-routing-config';
@@ -30,6 +31,7 @@ import {
   createReaderContentSource,
   findUnknownComponentTypes,
   getPageEntries,
+  loadFragmentVocabulary,
   loadMdxComponents,
   normalizePathname,
   type PageContentSource,
@@ -39,6 +41,7 @@ import {
   resolvePuckData,
 } from '../ts/src/handlers/page-render-core.js';
 import { previewEntryParsers } from '../ts/src/internal/collection-parsers.js';
+import PageRoot from './PageRoot.astro';
 
 // prerender is controlled by injectRoute({ prerender }) in plugin-spa.ts
 // Do not hardcode here — it overrides the route-level config
@@ -210,6 +213,9 @@ try {
   throw error;
 }
 
+// A route with an editor frame marks where page content starts, which the canvas drift check stops at.
+const framed = page !== undefined && config.routes[routeName]?.editorFrame !== undefined;
+
 const dataContext = await buildDataContext(source, config.routes[routeName], config, matchedPage);
 
 const hasPuckData = !!page?.puckData && Object.keys(page.puckData).length > 0;
@@ -235,23 +241,35 @@ const needsHydration = hasPuckData && resolvedPuckData && hasHydratableComponent
 let PageRenderer: ComponentType | undefined;
 
 if (hasPuckData && page && resolvedPuckData) {
-  try {
-    const mdxComponents = await loadMdxComponents(
-      source,
-      config.locale,
-      await loadEvaluateMDXToComponent(),
-      import.meta.env.DEV,
-    );
-    PageRenderer = createPageRendererWithFragments(puckConfig, resolvedPuckData, mdxComponents, dataContext);
-  } catch (error) {
-    console.error('[Conloca] MDX evaluation failed, falling back to plain render:', error);
-    PageRenderer = undefined;
+  const showErrors = import.meta.env.DEV || previewContentApi !== undefined;
+  // A broken render module fails the static build and shows in previews, but must not take down a live SSR site.
+  const fragmentVocabulary = await loadFragmentVocabulary(
+    loadFragmentComponents,
+    Astro.isPrerendered || showErrors,
+    fragmentComponentsPath,
+  );
+  if (fragmentVocabulary) {
+    try {
+      const mdxComponents = await loadMdxComponents(
+        source,
+        config.locale,
+        await loadEvaluateMDXToComponent(),
+        import.meta.env.DEV,
+        fragmentVocabulary,
+        showErrors,
+      );
+      PageRenderer = createPageRendererWithFragments(puckConfig, resolvedPuckData, mdxComponents, dataContext);
+    } catch (error) {
+      console.error('[Conloca] MDX evaluation failed, falling back to plain render:', error);
+      PageRenderer = undefined;
+    }
   }
 }
 ---
 
 {Layout && page ? (
   <Layout title={page.title ?? 'Page'} description={page.description} page={dataContext.page}>
+    <PageRoot framed={framed}>
     {hasPuckData && PageRenderer ? (
       <PageRenderer />
     ) : hasPuckData && resolvedPuckData ? (
@@ -265,6 +283,7 @@ if (hasPuckData && page && resolvedPuckData) {
         <p>This page has no content yet.</p>
       </div>
     )}
+    </PageRoot>
   </Layout>
 ) : page ? (
   <html lang={config.locale || 'en'}>
@@ -276,6 +295,7 @@ if (hasPuckData && page && resolvedPuckData) {
       {needsHydration && <script>import 'virtual:conloca-hydration-entry'</script>}
     </head>
     <body>
+      <PageRoot framed={framed}>
       {hasPuckData && PageRenderer ? (
         <PageRenderer />
       ) : hasPuckData && resolvedPuckData ? (
@@ -289,6 +309,7 @@ if (hasPuckData && page && resolvedPuckData) {
           <p>This page has no content yet.</p>
         </div>
       )}
+      </PageRoot>
     </body>
   </html>
 ) : (

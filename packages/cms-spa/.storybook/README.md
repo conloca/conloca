@@ -7,9 +7,9 @@ bunx nx run cms-spa:build-storybook
 ```
 
 The standalone site is written to `dist/storybook/cms-spa`. Serve that directory at an origin root with a static server
-that supports directory indexes. The sandboxed MDX frame uses the production root-absolute URL
-`/api/v1/mdx/sandbox-frame`; its HTML is emitted into the catalog, so no content API or application server is needed to
-serve that frame.
+that supports directory indexes. The sandbox frame, which renders a component's raw HTML (html mode only; fragments
+render inline), uses the production root-absolute URL `/api/v1/mdx/sandbox-frame`; its HTML is emitted into the catalog,
+so no content API or application server is needed to serve that frame.
 
 `build-storybook` intentionally does not end in an application-output suffix such as `-web` or `-html`: the Smoo Nx
 plugin must not fold a documentation catalog into the publishable application's aggregate `build`. The target builds its

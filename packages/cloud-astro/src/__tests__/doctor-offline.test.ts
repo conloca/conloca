@@ -131,8 +131,9 @@ describe('doctor extension — contract', () => {
       'CC13',
       'CC24',
       'CC29',
+      'CC30',
     ]);
-    for (const id of ['CC11', 'CC12', 'CC13']) {
+    for (const id of ['CC11', 'CC12', 'CC13', 'CC30']) {
       expect(check(result, id).skipped).toBe('live checks run only with --live');
     }
   });

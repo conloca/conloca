@@ -24,7 +24,6 @@ export type {
   LocaleVersion,
   LocalizedEntry,
   LocalizedManifest,
-  MDXCompileResponse,
   MDXHeading,
   PageEditable,
   PageReference,
