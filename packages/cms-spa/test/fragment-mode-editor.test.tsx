@@ -1,13 +1,15 @@
 /// <reference lib="dom" />
 import { afterAll, afterEach, beforeEach, describe, expect, type Mock, mock, spyOn, test } from 'bun:test';
 import { defineFragmentComponents, EMPTY_FRAGMENT_VOCABULARY, evaluateMDXToComponent } from '@conloca/mdx/render';
-import type { MDXEditorMethods } from '@mdxeditor/editor';
+import { insertJsx$, type MDXEditorMethods, type RealmPlugin, realmPlugin } from '@mdxeditor/editor';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import {
+  $createNodeSelection,
   $createTextNode,
   $getRoot,
   $isElementNode,
+  $setSelection,
   BLUR_COMMAND,
   getNearestEditorFromDOMNode,
   type LexicalEditor,
@@ -15,6 +17,7 @@ import {
 import { createRef, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { CMSMDXEditor } from '../src/components/editor/CMSMDXEditor.js';
+import { checkFragmentSave } from '../src/components/editor/fragment-save-check.js';
 import { JsxPropsPanel } from '../src/components/editor/JsxPropsPanel.js';
 import { offeredMdxComponents } from '../src/components/editor/offered-mdx-components.js';
 import { type MdxComponents, setMdxComponents } from '../src/mdx-components.js';
@@ -81,6 +84,47 @@ const descriptors: MdxComponents = [
   { name: 'Steps', kind: 'flow', hasChildren: true, import: { from: './Steps.astro' } },
 ];
 
+const SiteSection = ({ children }: { children?: ReactNode }) => <section className="site-section">{children}</section>;
+const Eyebrow = ({ children }: { children?: ReactNode }) => <span className="site-eyebrow">{children}</span>;
+const Group = ({ children }: { children?: ReactNode }) => <div className="site-group">{children}</div>;
+const QuietTitle = ({ children }: { children?: ReactNode }) => <h2 className="site-quiet">{children}</h2>;
+const TextTable = ({ items }: { items?: unknown }) => <dl data-rows={JSON.stringify(items)} />;
+const siteVocabulary = defineFragmentComponents({
+  components: { Section: SiteSection, Eyebrow, Group, QuietTitle, TextTable },
+});
+// The site's fragment descriptors: defaults that hold component tags, lists and list-of-object props.
+const siteDescriptors: MdxComponents = [
+  { name: 'Eyebrow', kind: 'flow', hasChildren: true },
+  { name: 'QuietTitle', kind: 'flow', hasChildren: true, defaults: { children: 'Title' } },
+  {
+    name: 'Group',
+    kind: 'flow',
+    hasChildren: true,
+    defaults: { children: "<QuietTitle>Here's how it works:</QuietTitle>\n\n1. First step\n2. Second step\n" },
+  },
+  {
+    name: 'Section',
+    kind: 'flow',
+    hasChildren: true,
+    props: [{ name: 'id', type: 'string' }],
+    defaults: { children: '<Eyebrow>01 — Section label</Eyebrow>\n\n## Section title\n\nSection text.\n' },
+  },
+  {
+    name: 'TextTable',
+    kind: 'flow',
+    hasChildren: false,
+    props: [
+      {
+        name: 'items',
+        type: 'list',
+        required: true,
+        of: { type: 'object', fields: { title: { type: 'string', required: true }, text: { type: 'string' } } },
+      },
+    ],
+    defaults: { attributes: { items: [{ title: 'Term.', text: 'What it means.' }] } },
+  },
+];
+
 let fetchSpy: Mock<typeof fetch>;
 const renderRequests = () =>
   fetchSpy.mock.calls
@@ -103,10 +147,11 @@ afterEach(() => {
   setSelectedBlock(null);
 });
 
-function renderEditor(markdown: string, ref = createRef<MDXEditorMethods>()) {
+function renderEditor(markdown: string, ref = createRef<MDXEditorMethods>(), extraPlugins?: RealmPlugin[]) {
   const view = render(
     <QueryClientProvider client={new QueryClient()}>
-      <CMSMDXEditor ref={ref} value={markdown} onChange={() => {}} fragment />
+      <CMSMDXEditor ref={ref} value={markdown} onChange={() => {}} fragment extraPlugins={extraPlugins} />
+      <JsxPropsPanel />
     </QueryClientProvider>,
   );
   return { ...view, ref };
@@ -355,5 +400,110 @@ describe('fragment mode', () => {
     expect(container.querySelector('aside.site-callout')).toBeNull();
     expect(await openInsertMenu()).toEqual(['Note']);
     expect(renderRequests()).toEqual([]);
+  });
+
+  test('the slash menu also mounts in a component body, offering the same components', async () => {
+    const { container } = renderEditor('<Callout tone="info">\n\nHello\n\n</Callout>');
+    const nested = await waitFor(() => {
+      const el = container.querySelector('aside.site-callout [data-testid="slash-options"]');
+      if (!el) throw new Error('no slash menu in the component body');
+      return el;
+    });
+    const root = Array.from(container.querySelectorAll('[data-testid="slash-options"]')).find(
+      (el) => !el.closest('aside.site-callout'),
+    );
+    expect(root).toBeDefined();
+    expect(root).not.toBe(nested);
+    expect(nested.textContent).toBe(root?.textContent ?? '');
+    expect(nested.textContent).toContain('Badge');
+  });
+
+  test('with a component selected in a body, the toolbar inserts right after it in that body', async () => {
+    const { container, ref } = renderEditor(
+      '<Callout tone="info">\n\nHello\n\n<Img src="/a.png" />\n\nAfter\n\n</Callout>',
+    );
+    const body = await waitFor(() => {
+      const el = container.querySelector('aside.site-callout [contenteditable="true"]');
+      if (!el?.querySelector('img.site-img')) throw new Error('no body with the image');
+      return el;
+    });
+    // What an arrow key onto the image does: the image itself is selected, with no caret.
+    act(() => {
+      lexicalOf(body).update(
+        () => {
+          const image = $getRoot().getChildAtIndex(1);
+          if (!image) throw new Error('no image node');
+          const selection = $createNodeSelection();
+          selection.add(image.getKey());
+          $setSelection(selection);
+        },
+        { discrete: true },
+      );
+    });
+    await openInsertMenu();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Badge' }));
+    await waitFor(() => expect(ref.current?.getMarkdown()).toMatch(/<Img[^>]*\/>\s*<Badge \/>\s*After/));
+    expect(ref.current?.getMarkdown()).toMatch(/^<Callout tone="info">[\s\S]*<\/Callout>\s*$/);
+  });
+
+  test.each(siteDescriptors.map((d) => d.name))(
+    'the %s default inserts as written and passes the save check',
+    async (name) => {
+      setSiteRender({ vocabulary: siteVocabulary });
+      setMdxComponents(siteDescriptors);
+      const { ref, container } = renderEditor('Hello');
+      await openInsertMenu();
+      fireEvent.click(screen.getByRole('menuitem', { name }));
+      await waitFor(() => expect(ref.current?.getMarkdown()).toContain(`<${name}`));
+      expect(container.textContent).not.toContain('failed to render');
+      expect(checkFragmentSave(ref.current?.getMarkdown() ?? '', siteVocabulary, siteDescriptors)).toBeUndefined();
+    },
+  );
+
+  test('a component body that cannot be loaded is contained to its block and the editor keeps working', async () => {
+    let insertBroken: (() => void) | undefined;
+    const brokenInsert = realmPlugin({
+      init(realm) {
+        // The payload a CommonMark-parsed default produced: an `html` node no editor can load.
+        insertBroken = () =>
+          realm.pub(insertJsx$, {
+            kind: 'flow',
+            name: 'Callout',
+            props: {},
+            children: [{ type: 'html', value: '<Eyebrow>label</Eyebrow>' }],
+          });
+      },
+    });
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const { container, ref } = renderEditor('Hello', undefined, [brokenInsert()]);
+      await waitFor(() => expect(container.querySelector('[contenteditable="true"]')).not.toBeNull());
+      act(() => insertBroken?.());
+      const card = await waitFor(() => {
+        const el = container.querySelector('[data-mdx-block="Callout"][role="alert"]');
+        if (!el) throw new Error('no failure card');
+        return el;
+      });
+      expect(card.textContent).toContain('Callout failed to render');
+      // The rest of the editor still edits and saves.
+      const root = lexicalOf(container.querySelector('[contenteditable="true"]'));
+      act(() => {
+        root.update(
+          () => {
+            const paragraph = $getRoot().getFirstChild();
+            if ($isElementNode(paragraph)) paragraph.append($createTextNode(' again'));
+          },
+          { discrete: true },
+        );
+      });
+      await waitFor(() => expect(ref.current?.getMarkdown()).toContain('Hello again'));
+      // The broken block is removable from the panel.
+      fireEvent.click(card);
+      fireEvent.click(await screen.findByRole('button', { name: 'Remove Callout' }));
+      await waitFor(() => expect(ref.current?.getMarkdown()).not.toContain('<Callout'));
+      expect(ref.current?.getMarkdown()).toContain('Hello again');
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 });

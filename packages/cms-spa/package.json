@@ -158,7 +158,6 @@
     "dompurify": "^3.4.17",
     "lexical": "^0.48.0",
     "lucide-react": "^0.564.0",
-    "mdast-util-from-markdown": "^2.0.3",
     "mdast-util-mdx-jsx": "^3.2.0",
     "react-router-dom": "^7.18.3",
     "sonner": "^2.0.8",

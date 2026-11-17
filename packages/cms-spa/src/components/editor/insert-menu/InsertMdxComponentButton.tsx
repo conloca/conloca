@@ -1,13 +1,9 @@
-// IMPORTANT: Import gurx hooks from @mdxeditor/editor, NOT from @mdxeditor/gurx directly.
-// @mdxeditor/editor re-exports gurx, and using that ensures we get the same module instance
-// as the editor internals, avoiding React context isolation issues.
-import { usePublisher } from '@mdxeditor/editor';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { Plus } from 'lucide-react';
 import { useMemo } from 'react';
 import type { MdxComponentDescriptor } from '../../../mdx-components.js';
 import { useOfferedMdxComponents } from '../offered-mdx-components.js';
-import { dispatchInsert, insertJsx$, insertMarkdown$ } from './insert-payload.js';
+import { dispatchInsert, useInsertPublishers } from './insert-payload.js';
 
 interface DescriptorGroup {
   /** Section header label. Empty string for the ungrouped bucket. */
@@ -59,8 +55,7 @@ function groupByCategory(descriptors: MdxComponentDescriptor[]): DescriptorGroup
  */
 export function InsertMdxComponentButton() {
   const allComponents = useOfferedMdxComponents();
-  const publishJsx = usePublisher(insertJsx$);
-  const publishMarkdown = usePublisher(insertMarkdown$);
+  const publishers = useInsertPublishers();
 
   const groups = useMemo<DescriptorGroup[]>(() => {
     const visible = allComponents
@@ -92,7 +87,7 @@ export function InsertMdxComponentButton() {
   if (total === 0) return null;
 
   const onSelect = (descriptor: MdxComponentDescriptor) => {
-    dispatchInsert(descriptor, { jsx: publishJsx, markdown: publishMarkdown });
+    dispatchInsert(descriptor, publishers);
   };
 
   return (

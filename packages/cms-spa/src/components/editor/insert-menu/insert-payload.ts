@@ -1,7 +1,11 @@
-import type { JsonValue } from '@conloca/mdx/render';
-import { insertJsx$, insertMarkdown$ } from '@mdxeditor/editor';
-import { fromMarkdown } from 'mdast-util-from-markdown';
+import { type JsonValue, parseFragmentMdx } from '@conloca/mdx/render';
+// Import gurx hooks from @mdxeditor/editor, not @mdxeditor/gurx: its re-export is the module instance the editor's
+// realm context comes from.
+import { activeEditor$, insertJsx$, insertMarkdown$, usePublisher, useRealm } from '@mdxeditor/editor';
+import { $getSelection, $isNodeSelection } from 'lexical';
+import type { Root } from 'mdast';
 import type { MdxJsxFlowElement, MdxJsxTextElement } from 'mdast-util-mdx-jsx';
+import { useMemo } from 'react';
 import {
   isJsxDescriptor,
   isSnippetDescriptor,
@@ -38,6 +42,16 @@ export type InsertJsxPayload =
       children?: MdxJsxTextElement['children'];
     };
 
+/** A default body as a loaded fragment parses it; one the parser refuses inserts the component with an empty body. */
+function parseDefaultBody(name: string, body: string): Root {
+  try {
+    return parseFragmentMdx(body);
+  } catch (error) {
+    console.warn(`[insert] ${name}: its default body could not be parsed, inserting it empty.`, error);
+    return { type: 'root', children: [] };
+  }
+}
+
 /**
  * Build the payload accepted by @mdxeditor/editor's `insertJsx$` signal.
  *
@@ -46,10 +60,9 @@ export type InsertJsxPayload =
  * expressions, because the upstream `mdxJsxAttribute.value` shape is
  * either a string or an `{ type: 'expression', value: string }` object.
  *
- * `descriptor.defaults.children` is parsed with `mdast-util-from-markdown`
- * using only CommonMark — descriptors that need MDX-flavored starter
- * content (e.g. nested JSX) should leave `children` undefined and let the
- * author build the body via in-place editing.
+ * `descriptor.defaults.children` is parsed by `parseFragmentMdx`, the parse
+ * the save check reads a fragment with, so component tags in a default
+ * become JSX nodes exactly as they would in a loaded fragment.
  */
 export function buildInsertPayload(
   descriptor: MdxJsxComponentDescriptor,
@@ -76,14 +89,14 @@ export function buildInsertPayload(
 
   // Parse the optional starter body. The cast on the result narrows the
   // upstream mdast root's `children` to the flow/text element children types
-  // the library expects — `fromMarkdown` itself returns a Root whose
-  // children are block-level, which is the same set as `MdxJsxFlowElement`
-  // accepts. For text-kind descriptors, callers are responsible for
-  // providing CommonMark that is phrasing-only (the wildcard cast is
-  // explicit so the contract is visible at the call site).
+  // the library expects — the parsed Root's children are block-level, which
+  // is the same set as `MdxJsxFlowElement` accepts. For text-kind
+  // descriptors, callers are responsible for providing markdown that is
+  // phrasing-only (the wildcard cast is explicit so the contract is visible
+  // at the call site).
   let children: InsertJsxPayload['children'];
   if (descriptor.hasChildren && descriptor.defaults?.children) {
-    const root = fromMarkdown(descriptor.defaults.children);
+    const root = parseDefaultBody(descriptor.name, descriptor.defaults.children);
     children = root.children as InsertJsxPayload['children'];
   }
 
@@ -113,16 +126,50 @@ export function hasRequiredProps(descriptor: MdxJsxComponentDescriptor): boolean
 }
 
 /**
- * Publisher bundle accepted by `dispatchInsert`. The slash menu and the
- * toolbar `+` button each call `usePublisher` for both signals up-front
- * (hooks can't be conditional) and pass the pair in; the dispatcher then
- * routes by descriptor kind. Keeping the two publishers together in one
- * value also makes future signal additions a single-line change at the
- * call sites.
+ * Publisher bundle accepted by `dispatchInsert`, one per insert signal; the
+ * dispatcher routes by descriptor kind.
  */
 export interface InsertPublishers {
   jsx: (payload: InsertJsxPayload) => void;
   markdown: (value: string) => void;
+}
+
+/**
+ * A caret right after the selected component. An arrow key onto a block component selects the component itself, and
+ * MDXEditor inserts only at a caret: `insertJsx$` silently inserts nothing, and `insertMarkdown$` replaces the
+ * selected component with the snippet.
+ */
+function $caretAfterSelectedComponent(): void {
+  const selection = $getSelection();
+  if (!$isNodeSelection(selection)) return;
+  const nodes = selection.getNodes();
+  const last = nodes[nodes.length - 1];
+  if (!last) return;
+  const after = last.getIndexWithinParent() + 1;
+  last.getParentOrThrow().select(after, after);
+}
+
+/**
+ * The slash menu's and toolbar's publishers. Each insert lands in the editor the author was last in (a component's
+ * body is its own editor), at its caret, or right after the component selected there.
+ */
+export function useInsertPublishers(): InsertPublishers {
+  const realm = useRealm();
+  const publishJsx = usePublisher(insertJsx$);
+  const publishMarkdown = usePublisher(insertMarkdown$);
+  return useMemo<InsertPublishers>(() => {
+    const toCaret = () => realm.getValue(activeEditor$)?.update($caretAfterSelectedComponent, { discrete: true });
+    return {
+      jsx: (payload) => {
+        toCaret();
+        publishJsx(payload);
+      },
+      markdown: (value) => {
+        toCaret();
+        publishMarkdown(value);
+      },
+    };
+  }, [realm, publishJsx, publishMarkdown]);
 }
 
 /**
@@ -150,10 +197,3 @@ export function dispatchInsert(descriptor: MdxComponentDescriptor, publishers: I
   const _exhaustive: never = descriptor;
   void _exhaustive;
 }
-
-/**
- * Convenience re-export of the upstream signals so call sites don't need
- * to import them separately. Keeping both signal references in one module
- * also documents which library symbols the insert pipeline depends on.
- */
-export { insertJsx$, insertMarkdown$ };

@@ -71,12 +71,16 @@ export function FragmentComponentBlock({ mdastNode }: JsxEditorProps) {
   // A component with no descriptor is inserted without a body: inventing children would crash a void component.
   // Sites declare a descriptor with `hasChildren` to get an editable body.
   const hasChildren = descriptor?.hasChildren === true && (registered || node.children.length > 0);
+  // The body has its own boundary: a body that fails to load shows the card without a body, where the component's
+  // boundary would remount the same failing body in its card forever.
   const editable = hasChildren ? (
-    <NestedLexicalEditor<typeof mdastNode>
-      getContent={(n) => n.children}
-      getUpdatedMdastNode={(n, children) => withChildren(n, children)}
-      block={block}
-    />
+    <ComponentBoundary name={name} resetKey="" editable={null}>
+      <NestedLexicalEditor<typeof mdastNode>
+        getContent={(n) => n.children}
+        getUpdatedMdastNode={(n, children) => withChildren(n, children)}
+        block={block}
+      />
+    </ComponentBoundary>
   ) : null;
 
   // The published callbacks read the latest node and updater, so a prop edit after typing in the body, or a second

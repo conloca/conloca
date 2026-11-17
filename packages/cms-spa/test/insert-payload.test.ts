@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, spyOn, test } from 'bun:test';
 import {
   buildInsertPayload,
   dispatchInsert,
@@ -37,7 +37,7 @@ describe('buildInsertPayload', () => {
     expect(out.props.stagger).toEqual({ type: 'expression', value: 'true' });
   });
 
-  test('parses defaults.children as CommonMark when hasChildren is true', () => {
+  test('parses defaults.children as markdown when hasChildren is true', () => {
     const d: MdxJsxComponentDescriptor = {
       name: 'Steps',
       kind: 'flow',
@@ -49,6 +49,39 @@ describe('buildInsertPayload', () => {
     expect(Array.isArray(children)).toBe(true);
     expect(children[0]?.type).toBe('list');
   });
+
+  test('parses component tags in defaults.children as JSX, the way a loaded fragment parses them', () => {
+    const d: MdxJsxComponentDescriptor = {
+      name: 'Section',
+      kind: 'flow',
+      hasChildren: true,
+      defaults: { children: '<Eyebrow>01 — Section label</Eyebrow>\n\n<Badge />\n\n## Section title\n' },
+    };
+    expect(buildInsertPayload(d).children).toMatchObject([
+      { type: 'paragraph', children: [{ type: 'mdxJsxTextElement', name: 'Eyebrow' }] },
+      { type: 'mdxJsxFlowElement', name: 'Badge' },
+      { type: 'heading' },
+    ]);
+  });
+
+  test.each(['a <b', '{bad'])(
+    'a default body %p that cannot parse inserts the component with an empty body',
+    (body) => {
+      const warn = spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        const d: MdxJsxComponentDescriptor = {
+          name: 'Section',
+          kind: 'flow',
+          hasChildren: true,
+          defaults: { children: body },
+        };
+        expect(buildInsertPayload(d)).toEqual({ kind: 'flow', name: 'Section', props: {}, children: [] });
+        expect(String(warn.mock.calls[0]?.[0])).toContain('Section');
+      } finally {
+        warn.mockRestore();
+      }
+    },
+  );
 
   test('leaves children undefined when hasChildren is false', () => {
     const d: MdxJsxComponentDescriptor = {
