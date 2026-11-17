@@ -41,7 +41,7 @@ const IDENTIFIER = /^[\p{ID_Start}$_][\p{ID_Continue}$\u200C\u200D]*$/u;
  * Component names are left alone here; `evaluateMDXToComponent` resolves them
  * against the site's fragment vocabulary during the same eager conversion.
  *
- * JSON-literal `{…}` attribute values (the only expressions
+ * Static-data `{…}` attribute values (`staticDataValue`, the only expressions
  * `remarkRestrictExpressions` admits) are resolved into plain static values,
  * so rendering never needs an expression evaluator: strings pass through,
  * numbers stringify (identical SSR output), and `{true}`/`{false}` reach React

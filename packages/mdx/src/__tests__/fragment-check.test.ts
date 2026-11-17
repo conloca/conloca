@@ -94,11 +94,36 @@ describe('checkFragmentMdx', () => {
     expect(check('Hi\n\n<Callout />\n')).toEqual({ message: 'Callout needs prop "tone" (line 3).', line: 3 });
   });
 
-  test('a prop expression that is not JSON is refused: publish would drop it', () => {
-    expect(checkFragmentMdx("<T items={[{ label: 'A' }]} />\n", new Set(['T']), {})).toEqual({
-      message: 'T prop "items" is not valid JSON and would not be published (line 1).',
+  test('a prop written as code is refused: publish would drop it', () => {
+    expect(checkFragmentMdx('<T items={[{ label: A }]} />\n', new Set(['T']), {})).toEqual({
+      message: 'T prop "items" is code, not data, and would not be published (line 1).',
       line: 1,
     });
+  });
+
+  test('a list prop in the object-literal form prettier writes passes and publishes', async () => {
+    const mdx = `<Links
+  open
+  items={[
+    {
+      href: '/a', // first
+    },
+    { "href": "/b" },
+  ]}
+  meta={{}}
+/>
+`;
+    expect(check(mdx)).toBeUndefined();
+    const vocabulary = defineFragmentComponents({
+      components: {
+        Links: ({ items }: { items: { href: string }[] }) =>
+          createElement('ul', null, ...items.map(({ href }) => createElement('li', { key: href }, href))),
+      },
+    });
+    const { Component, error } = await evaluateMDXToComponent(mdx, vocabulary);
+    expect(error).toBeUndefined();
+    if (!Component) throw new Error('no Component');
+    expect(renderToStaticMarkup(createElement(Component))).toBe('<ul><li>/a</li><li>/b</li></ul>');
   });
 
   test('reads props as publish does: a dropped __proto__ attribute does not satisfy a required prop', () => {

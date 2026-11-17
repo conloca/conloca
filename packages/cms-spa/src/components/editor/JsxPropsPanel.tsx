@@ -219,7 +219,7 @@ function StructuredField({ prop, rawValue, onChange }: PropFieldProps) {
       <div className="conloca-jsx-props-panel__field">
         <span className="conloca-jsx-props-panel__label">{prop.label ?? prop.name}</span>
         <small className="conloca-jsx-props-panel__help">
-          This value is not valid JSON, so it is not published; fix it in source mode.
+          This value is code, not data, so it is not published; fix it in source mode.
         </small>
       </div>
     );

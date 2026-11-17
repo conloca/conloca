@@ -1,4 +1,4 @@
-import type { JsonValue } from './literal-attributes.js';
+import { type JsonValue, staticDataValue } from './literal-attributes.js';
 import { isFragmentComponentName } from './vocabulary.js';
 
 interface MdastNode {
@@ -14,20 +14,13 @@ interface MdastAttribute {
   value?: unknown;
 }
 
-/** A JSON-literal attribute expression (`{3}`, `{true}`, `{"x"}`) is a static
- * value with no executable content — the editor's prop serializers already
- * treat these as data. Anything that doesn't `JSON.parse` is author-controlled
- * code and is dropped. */
+/** A static-data attribute expression (`{3}`, `{true}`, `{'x'}`, `{{ a: [1] }}`) holds no executable
+ * content: `staticDataValue` reads it without running it. Anything else is author-controlled code and is
+ * dropped. */
 function isLiteralExpression(value: unknown): boolean {
   if (!value || typeof value !== 'object') return true;
   const raw = (value as { value?: unknown }).value;
-  if (typeof raw !== 'string') return true;
-  try {
-    JSON.parse(raw.trim());
-    return true;
-  } catch {
-    return false;
-  }
+  return typeof raw !== 'string' || staticDataValue(raw) !== undefined;
 }
 
 /** URL-bearing attributes the browser fetches or navigates to. React neutralizes
@@ -105,17 +98,12 @@ function isComment(node: MdastNode): boolean {
   return Array.isArray(program?.body) && program.body.length === 0;
 }
 
-/** A JSON-literal expression whose parsed value is a dangerous-scheme URL string
- * (`href={"data:text/html,…"}` round-trips through `JSON.parse` yet navigates). */
+/** A data expression whose value is a dangerous-scheme URL string
+ * (`href={"data:text/html,…"}` is data yet navigates). */
 function isDangerousLiteralUrl(value: unknown): boolean {
   const raw = (value as { value?: unknown })?.value;
-  if (typeof raw !== 'string') return false;
-  try {
-    const parsed = JSON.parse(raw.trim());
-    return typeof parsed === 'string' && hasDangerousScheme(parsed);
-  } catch {
-    return false;
-  }
+  const parsed = typeof raw === 'string' ? staticDataValue(raw) : undefined;
+  return typeof parsed === 'string' && hasDangerousScheme(parsed);
 }
 
 /** Filter/neutralize a JSX element's attributes: drop the `dangerouslySetInnerHTML`

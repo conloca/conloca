@@ -7,7 +7,7 @@ export type FragmentJsxAttribute = Extract<RootContent, { type: 'mdxJsxFlowEleme
 
 /**
  * The value a fragment component receives for one attribute that passed the gate, or undefined when the
- * attribute is dropped: `style` in any case, a spread, and an expression that is not JSON or is `null`.
+ * attribute is dropped: `style` in any case, a spread, and an expression that is code (not static data) or is `null`.
  */
 export function componentPropValue(attr: { type?: string; name?: string; value?: unknown }): JsonValue | undefined {
   if (attr.type !== 'mdxJsxAttribute' || typeof attr.name !== 'string') return undefined;

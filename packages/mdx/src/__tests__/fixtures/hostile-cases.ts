@@ -83,6 +83,32 @@ export const hostileCases = {
     renders: true,
   },
   componentStyleString: { mdx: '<Spread STYLE="position:fixed">t</Spread>', renders: true },
+  // The same props in the object-literal form a formatter writes: unquoted keys, single quotes, trailing commas.
+  nestedHandlerKeysLiteral: {
+    mdx: "<Rec data={{ onclick: 'alert(1)', online: true, nested: { OnError: 'x' }, }} />",
+    renders: true,
+  },
+  jsonSchemesLiteral: {
+    mdx: '<Card link="javascript:x" cta={{ href: \'data:text/html,x\' }} items={[\'vbscript:x\',]} ok="https://example.com" />',
+    renders: true,
+  },
+  jsonMarkupLiteral: { mdx: "<Callout data={{ x: '<script>alert(1)</script>' }} />", renders: true },
+  nestedInnerHtmlLiteral: {
+    mdx: "<Callout data={{\n  inner: { DangerouslySetInnerHTML: { __html: 'PWN' } },\n  onload: 'keep-on',\n  __proto__: { p: 'keep-proto' },\n}} />",
+    renders: true,
+  },
+  topLevelProtoLiteral: {
+    mdx: "<Spread __proto__={{ key: 'k', dangerouslySetInnerHTML: { __html: '<img src=x onerror=alert(1)>' } }} />",
+    renders: true,
+  },
+  componentStyleObjectLiteral: {
+    mdx: "<Spread style={{ position: 'fixed', background: 'url(https://evil)' }}>t</Spread>",
+    renders: true,
+  },
+  elementSchemesLiteral: {
+    mdx: "<a href={'javascript:alert(1)'}>x</a>\n\n<img src={'data:text/html,x'} />",
+    renders: true,
+  },
   undeclared: { mdx: '<Nope />', renders: false },
   nonIdentifier: { mdx: '<Foo-bar />', renders: false },
   dotted: { mdx: '<Callout.Inner />', renders: false },

@@ -1,3 +1,4 @@
+import { staticDataValue } from '@conloca/mdx/render';
 import type { MdxJsxFlowElement } from 'mdast-util-mdx-jsx';
 
 /**
@@ -46,13 +47,11 @@ export function stripBodyFields(node: unknown): unknown {
  *   - `prop={expression}`      → object `{ type: 'mdxJsxAttributeValueExpression', value: '<src>' }`
  *   - `prop`                   → `value: null` (shorthand boolean true)
  *
- * Expression values are parsed as JSON so numeric / boolean / array /
- * object literals (`<Box columns={3}>`, `<Card featured={true}>`,
- * `<Grid sizes={[1,2,3]}>`) reach the Astro component as real values
- * instead of being dropped. Non-JSON expressions (variable refs,
- * function calls) fall through as their literal source string — not
- * ideal but no worse than the previous "drop entirely" behavior, and
- * supporting JS evaluation properly needs a real parser.
+ * Expression values are read as static data the way publish reads them
+ * (`staticDataValue`), so JSON and the object-literal form formatters write
+ * (`<Box columns={3}>`, `<Grid sizes={[1, 2, 3,]}>`, `<Card cta={{ href: '/a' }}>`)
+ * reach the component as real values. Code (variable refs, function calls)
+ * falls through as its source string, which publish drops.
  */
 export function readAttrs(node: MdxJsxFlowElement): Record<string, unknown> {
   const out: Record<string, unknown> = {};
@@ -66,11 +65,8 @@ export function readAttrs(node: MdxJsxFlowElement): Record<string, unknown> {
       out[a.name] = true;
     } else if (typeof v === 'object' && 'value' in v && typeof v.value === 'string') {
       const src = v.value.trim();
-      try {
-        out[a.name] = JSON.parse(src);
-      } catch {
-        out[a.name] = src;
-      }
+      const value = staticDataValue(src);
+      out[a.name] = value === undefined ? src : value;
     }
   }
   return out;

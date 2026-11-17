@@ -1,7 +1,7 @@
 import type { Root, RootContent } from 'mdast';
 import { componentPropValue, fragmentComponentProps } from './component-props.js';
 import { parseFragmentMdx } from './evaluate.js';
-import { type JsonValue, jsonAttributeValue, literalAttributeValue } from './literal-attributes.js';
+import { type JsonValue, jsonAttributeValue, literalAttributeValue, staticDataValue } from './literal-attributes.js';
 import { isNestedHandlerKey, sanitizeAttributes } from './restrict-expressions.js';
 import { isFragmentComponentName } from './vocabulary.js';
 import { findUnknownFragmentComponents } from './vocabulary-check.js';
@@ -31,15 +31,6 @@ function nodes(root: Root): Node[] {
 }
 
 const lineOf = (node: Node): number => node.position?.start.line ?? 1;
-
-function isJsonExpression(raw: string): boolean {
-  try {
-    JSON.parse(raw.trim());
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 /** The path below `path` of the first string-valued `on*` key publish drops from `value`, or undefined. */
 function nestedHandlerPath(value: JsonValue, path: string): string | undefined {
@@ -194,9 +185,9 @@ export function checkFragmentMdx(
         };
       }
       const raw = attr.value && typeof attr.value === 'object' ? attr.value.value : undefined;
-      if (raw !== undefined && !isJsonExpression(raw)) {
+      if (raw !== undefined && staticDataValue(raw) === undefined) {
         const message = component
-          ? `${name} prop "${attr.name}" is not valid JSON and would not be published (line ${line}).`
+          ? `${name} prop "${attr.name}" is code, not data, and would not be published (line ${line}).`
           : `${name} attribute "${attr.name}" is code and would not be published (line ${line}).`;
         return { message, line };
       }

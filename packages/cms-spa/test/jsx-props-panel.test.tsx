@@ -1,9 +1,11 @@
 /// <reference lib="dom" />
 import { afterEach, expect, mock, test } from 'bun:test';
+import { parseFragmentMdx } from '@conloca/mdx/render';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { JsxPropsPanel } from '../src/components/editor/JsxPropsPanel.js';
 import type { MdxComponentProp } from '../src/mdx-components.js';
 import { type SelectedBlock, setSelectedBlock } from '../src/selected-block.js';
+import { readAttrs } from '../src/utils/mdast-tree.js';
 
 afterEach(() => {
   cleanup();
@@ -114,13 +116,24 @@ test('an object edit keeps keys the descriptor does not declare, in order', () =
   expect(JSON.stringify(onPropChange.mock.calls)).toBe(JSON.stringify([['cta', { icon: 'star', label: 'Went' }]]));
 });
 
-test('a value that is not plain JSON is shown read-only and never overwritten', () => {
+test('a value written as code is shown read-only and never overwritten', () => {
   const { onPropChange } = select([{ name: 'items', type: 'list', of: { type: 'string' } }], {
-    items: "[{ label: 'A' }]",
+    items: '[{ label: A }]',
   });
-  expect(screen.getByText(/is not valid JSON, so it is not published; fix it in source mode/)).toBeTruthy();
+  expect(screen.getByText(/is code, not data, so it is not published; fix it in source mode/)).toBeTruthy();
   expect(screen.queryByRole('button', { name: '+ Add item' })).toBeNull();
   expect(onPropChange).not.toHaveBeenCalled();
+});
+
+test('a list prop in the object-literal form prettier writes is editable, as publish reads it', () => {
+  const [node] = parseFragmentMdx(
+    '<Thing\n  items={[\n    {\n      label: \'A\',\n      href: "/a",\n    },\n  ]}\n/>\n',
+  ).children;
+  if (node?.type !== 'mdxJsxFlowElement') throw new Error('no Thing element');
+  select([{ name: 'items', type: 'list', of: { type: 'object', fields: linkFields } }], readAttrs(node));
+  expect(screen.queryByText(/so it is not published/)).toBeNull();
+  expect(screen.getByRole('button', { name: '+ Add item' })).toBeTruthy();
+  expect(screen.getByLabelText('Label')).toHaveProperty('value', 'A');
 });
 
 test('Add item commits even when a text input keeps focus, as in Safari', () => {

@@ -8,7 +8,7 @@ export { type FragmentJsxAttribute, fragmentComponentProps } from './mdx/compone
 export { evaluateMDXToComponent, parseFragmentMdx } from './mdx/evaluate.js';
 export { checkFragmentMdx, type FragmentMdxProblem, type FragmentPropSpec } from './mdx/fragment-check.js';
 export type { FragmentOutlineComponent } from './mdx/heading-outline.js';
-export type { JsonValue } from './mdx/literal-attributes.js';
+export { type JsonValue, staticDataValue } from './mdx/literal-attributes.js';
 export {
   defineFragmentComponents,
   EMPTY_FRAGMENT_VOCABULARY,
