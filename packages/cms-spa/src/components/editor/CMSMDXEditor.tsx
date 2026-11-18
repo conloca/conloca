@@ -32,7 +32,9 @@ import { hostWrapperPlugin } from './host-wrapper-plugin.js';
 import { ImagePickerDialog } from './ImagePickerDialog.js';
 import { InsertMdxComponentButton } from './insert-menu/InsertMdxComponentButton.js';
 import { mdxComponentsPlugin } from './insert-menu/mdx-components-plugin.js';
+import { jsxLayoutPlugin } from './jsx-layout-plugin.js';
 import { FragmentModeContext, offeredMdxComponents } from './offered-mdx-components.js';
+import { softBreakPlugin } from './soft-break-plugin.js';
 
 const EDITOR_CSS: string = import.meta.env.CONLOCA_EDITOR_CSS || '';
 
@@ -218,7 +220,9 @@ export const CMSMDXEditor = forwardRef<MDXEditorMethods, CMSMDXEditorProps>(
     // The caller's plugins (co-editing) come after the editor's own.
     const extraPlugins = useMemo<RealmPlugin[]>(
       () => [
+        jsxLayoutPlugin(),
         mdxComponentsPlugin(),
+        softBreakPlugin(),
         hostWrapperPlugin({ wrapper: hostWrappers.content, codeBlockWrapper: hostWrappers.codeBlock }),
         ...(props.extraPlugins ?? []),
       ],

@@ -386,6 +386,20 @@ describe('MdxPageEditor bound to a shared doc', () => {
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
+  it("keeps a paragraph's source line endings through local and remote edits, still shown as spaces", async () => {
+    const { editor, root } = await openLive('First line\nsecond line.\n\nb\n');
+    typeAtEnd(editor, 'z');
+    await waitFor(() => expect(body().toJSON()).toBe('First line\nsecond line.\n\nbz\n'));
+    // A teammate's edit on either side of the line ending, which the editor shows with setMarkdown.
+    fake.parentEdit(docKey, (doc) => doc.getText('body').insert('First line'.length, ' one'));
+    fake.parentEdit(docKey, (doc) => doc.getText('body').insert('First line one\n'.length, 'the '));
+    await waitFor(() => expect(root.textContent).toContain('First line one\nthe second line.'));
+    const breaks = [...root.querySelectorAll<HTMLElement>('p span')].filter((span) => span.textContent === '\n');
+    expect(breaks.map((span) => span.style.whiteSpace)).toEqual(['normal']);
+    typeAtEnd(editor, 'y');
+    await waitFor(() => expect(body().toJSON()).toBe('First line one\nthe second line.\n\nbzy\n'));
+  });
+
   // The shared doc holds the body only; the settings are the page's own (test/page-settings-live.test.tsx).
   it('applies page settings to the page, not the shared doc, with the URL path fixed', async () => {
     await openLive('Hello\n');
