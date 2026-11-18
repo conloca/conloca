@@ -129,9 +129,34 @@ export const FRAGMENT_SITE = {
       "export const collections = { pages: conlocaPages(), ...conlocaFragments('general') };",
       '',
     ].join('\n'),
+    'src/islands/Counter.tsx': [
+      "import { withHydration } from '@conloca/astro-cms/hydration';",
+      "import { useState } from 'react';",
+      '',
+      'const CounterView = ({ start, children }: { start: number; children?: unknown }) => {',
+      '  const [count, setCount] = useState(start);',
+      '  return (',
+      '    <div className="counter">',
+      '      {children as never}',
+      '      <button type="button" aria-label="counter-chunk" onClick={() => setCount(count + 1)}>{count}</button>',
+      '    </div>',
+      '  );',
+      '};',
+      '',
+      "export const Counter = withHydration(CounterView, 'load');",
+      '',
+    ].join('\n'),
+    'src/islands/Ticker.tsx': [
+      "import { withHydration } from '@conloca/astro-cms/hydration';",
+      '',
+      'export const Ticker = withHydration(() => <output aria-label="ticker-chunk">0</output>, \'idle\');',
+      '',
+    ].join('\n'),
     'src/fragment-components.tsx': [
       "import { defineFragmentComponents } from '@conloca/mdx/render';",
       "import { useState } from 'react';",
+      "import { Counter } from './islands/Counter';",
+      "import { Ticker } from './islands/Ticker';",
       '',
       'const Badge = ({ start, labels }: { start: number; labels: string[] }) => {',
       '  const [count] = useState(start);',
@@ -139,7 +164,7 @@ export const FRAGMENT_SITE = {
       '};',
       '',
       'export const fragmentComponents = defineFragmentComponents({',
-      '  components: { Callout: ({ children }: { children?: unknown }) => <aside className="callout">{children as never}</aside>, Badge },',
+      '  components: { Callout: ({ children }: { children?: unknown }) => <aside className="callout">{children as never}</aside>, Badge, Counter, Ticker },',
       '  elements: { h2: (props: object) => <h2 {...props} className="fragment-heading" /> },',
       '});',
       '',
@@ -173,6 +198,68 @@ export const FRAGMENT_SITE = {
         },
       },
     })}\n`,
+    'content/fragments/general/island.en.mdx': [
+      '---',
+      'title: Island',
+      'id: vx-1sland01',
+      "created: '2026-04-20T00:00:00.000Z'",
+      "modified: '2026-04-20T00:00:00.000Z'",
+      '---',
+      '',
+      '<Counter start={2}>\n\nCount **this**\n\n</Counter>',
+      '',
+    ].join('\n'),
+    'content/default/pages/island.en.vxjson': `${JSON.stringify({
+      created: '2026-04-20T00:00:00.000Z',
+      id: 'vx-island',
+      meta: { title: 'Island' },
+      modified: '2026-04-20T00:00:00.000Z',
+      type: 'puck',
+      content: {
+        puckData: {
+          content: [{ type: 'Fragment_vx-1sland01', props: { id: 'Fragment-island', contentId: 'vx-1sland01' } }],
+          root: {},
+          zones: {},
+        },
+      },
+    })}\n`,
+  },
+};
+
+/** What the build says of a hydrated fragment component it cannot map to a module. */
+export const UNMAPPED_ISLAND_ERROR =
+  'Fragment component <Inline> is wrapped in withHydration(), but the build found no module for it.';
+
+/**
+ * A site whose render module defines its hydrated `Inline` itself, and whose CMS pages render on demand: the build finds
+ * no module to give `Inline` a chunk, and no prerendered page reveals that, so only the build's own check refuses it.
+ */
+export const UNMAPPED_ISLAND_SITE = {
+  cmsOptions: FRAGMENT_SITE.cmsOptions,
+  routing:
+    "{ routes: { pages: { pattern: '/[...slug]', collection: 'pages', layout: './src/layouts/Layout.astro', prerender: false } } }",
+  files: {
+    'src/content.config.ts': FRAGMENT_SITE.files['src/content.config.ts'],
+    'src/fragment-components.tsx': [
+      "import { withHydration } from '@conloca/astro-cms/hydration';",
+      "import { defineFragmentComponents } from '@conloca/mdx/render';",
+      '',
+      "const Inline = withHydration(() => <output>inline</output>, 'load');",
+      '',
+      'export const fragmentComponents = defineFragmentComponents({ components: { Inline } });',
+      '',
+    ].join('\n'),
+    'content/fragments/general/inline.en.mdx': [
+      '---',
+      'title: Inline',
+      'id: vx-1nline01',
+      "created: '2026-04-20T00:00:00.000Z'",
+      "modified: '2026-04-20T00:00:00.000Z'",
+      '---',
+      '',
+      '<Inline />',
+      '',
+    ].join('\n'),
   },
 };
 

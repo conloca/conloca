@@ -170,12 +170,15 @@ function dottedName(node: EstreeNode): string {
  * The converter turns component names (capitalized or dotted) into estree nodes and asks this to resolve them.
  * It only looks names up in the vocabulary and reads literals: it never runs code.
  */
-function staticEvaluater(vocabulary: FragmentVocabulary) {
+function staticEvaluater(vocabulary: FragmentVocabulary, names: Set<string>) {
   return {
     evaluateExpression(node: Parameters<EvaluateExpression>[0]) {
       if (node.type === 'Identifier') {
         // Own keys only, so `constructor` or `toString` never resolve to Object.prototype members.
-        if (Object.keys(vocabulary.components).includes(node.name)) return vocabulary.components[node.name];
+        if (Object.keys(vocabulary.components).includes(node.name)) {
+          names.add(node.name);
+          return vocabulary.components[node.name];
+        }
         throw unknownComponent(node.name);
       }
       // Also the synthetic Literals resolveStaticJsx makes, whose value is a JSON object or list.
@@ -214,7 +217,8 @@ function staticEvaluater(vocabulary: FragmentVocabulary) {
  * ```typescript
  * import { evaluateMDXToComponent } from '@conloca/mdx/node';
  *
- * const { Component, error } = await evaluateMDXToComponent('# Hello\n\nThis is **MDX**');
+ * const { Component, error, componentNames } = await evaluateMDXToComponent('<Callout>Hi</Callout>', vocabulary);
+ * // componentNames: ['Callout'], the vocabulary components it renders, in first-use order
  * if (error) {
  *   console.error('Failed to evaluate:', error);
  * } else if (Component) {
@@ -230,6 +234,7 @@ export async function evaluateMDXToComponent(
   error?: Error;
   outline: readonly FragmentHeading[];
   componentOutline: readonly FragmentOutlineComponent[];
+  componentNames: readonly string[];
 }> {
   try {
     const mdast = processor.parse(mdxContent);
@@ -243,20 +248,22 @@ export async function evaluateMDXToComponent(
     );
     // Convert eagerly so bad content (e.g. an unknown component) surfaces as
     // the error result; the returned component just replays the static tree.
+    const names = new Set<string>();
     const element = toJsxRuntime(hast, {
       Fragment,
       jsx,
       jsxs,
       components: { ...vocabulary.elements },
-      createEvaluater: () => staticEvaluater(vocabulary),
+      createEvaluater: () => staticEvaluater(vocabulary, names),
     });
-    return { Component: () => element, outline, componentOutline };
+    return { Component: () => element, outline, componentOutline, componentNames: [...names] };
   } catch (error) {
     return {
       Component: null,
       error: error instanceof Error ? error : new Error('MDX evaluation failed'),
       outline: [],
       componentOutline: [],
+      componentNames: [],
     };
   }
 }

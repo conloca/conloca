@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { FileSystemContentAPI } from '@conloca/content-api/node';
 import { checkFragmentComponents } from '../src/build/check-fragment-components.js';
 
@@ -82,11 +83,12 @@ describe('checkFragmentComponents', () => {
     expect(parseLine(lines)).toBeDefined();
   });
 
-  test('a module that fails to load warns and skips the name check', async () => {
+  test('a module that fails to load warns and skips the name and hydration checks', async () => {
     const lines = await check('./broken.mjs');
     expect(warn).toHaveBeenCalledTimes(1);
     expect(warn.mock.calls[0]?.[0]).toContain('./broken.mjs');
     expect(warn.mock.calls[0]?.[0]).toContain('cannot load here');
+    expect(warn.mock.calls[0]?.[0]).toContain('nor the hydration mapping');
     expect(lines).toHaveLength(1);
     expect(parseLine(lines)).toBeDefined();
   });
@@ -95,5 +97,59 @@ describe('checkFragmentComponents', () => {
     const lines = await check('./empty.mjs');
     expect(lines.filter((l) => l.includes('./empty.mjs'))).toHaveLength(1);
     expect(parseLine(lines)).toBeDefined();
+  });
+
+  describe('hydrated fragment components', () => {
+    // The fixture sits outside any package, so the hydration entry resolves to this package's source.
+    const vite = {
+      resolve: {
+        alias: { '@conloca/astro-cms/hydration': fileURLToPath(new URL('../src/hydration.ts', import.meta.url)) },
+      },
+    };
+    const hydration = "import { withHydration } from '@conloca/astro-cms/hydration';\n";
+    const checkWithHydration = (fragmentComponentsPath: string) =>
+      checkFragmentComponents({ contentRoot, root, vite, fragmentComponentsPath, logger });
+
+    test('one the build cannot map is a problem line with the render error', async () => {
+      await writeFile(
+        join(root, 'inline.mjs'),
+        `${hydration}const Counter = withHydration(() => null, 'load');\nexport const fragmentComponents = { components: { Counter }, elements: {} };\n`,
+      );
+      const lines = await checkWithHydration('./inline.mjs');
+      expect(lines).toContain(
+        'Fragment component <Counter> is wrapped in withHydration(), but the build found no module for it. Import it into the render module by name from the file that calls withHydration().',
+      );
+    });
+
+    test('one imported by name from its own module passes, and names are still checked', async () => {
+      await mkdir(join(root, 'islands'));
+      await writeFile(
+        join(root, 'islands', 'Counter.mjs'),
+        `${hydration}export const Counter = withHydration(() => null, 'load');\n`,
+      );
+      await writeFile(
+        join(root, 'mapped.mjs'),
+        "import { Counter } from './islands/Counter.mjs';\nexport const fragmentComponents = { components: { Counter, Callout: () => null }, elements: {} };\n",
+      );
+      const lines = await checkWithHydration('./mapped.mjs');
+      expect(warn).not.toHaveBeenCalled();
+      expect(lines.some((line) => line.includes('withHydration'))).toBe(false);
+      expect(lines).toContain('a (en) content/fragments/general/a.en.mdx:9: <Nope> is not in ./mapped.mjs');
+    });
+
+    test('one imported under another name maps by that name', async () => {
+      await mkdir(join(root, 'islands'));
+      await writeFile(
+        join(root, 'islands', 'Counter.mjs'),
+        `${hydration}export const Counter = withHydration(() => null, 'load');\n`,
+      );
+      await writeFile(
+        join(root, 'renamed.mjs'),
+        "import { Counter as Clicker } from './islands/Counter.mjs';\nexport const fragmentComponents = { components: { Clicker }, elements: {} };\n",
+      );
+      const lines = await checkWithHydration('./renamed.mjs');
+      expect(warn).not.toHaveBeenCalled();
+      expect(lines.some((line) => line.includes('withHydration'))).toBe(false);
+    });
   });
 });

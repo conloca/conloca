@@ -372,6 +372,49 @@ save check refuses such a key, naming its path.
 Discovered components can be adjusted with `src/cms-overrides`, but an override cannot declare list or object props;
 declare those in `mdxComponents`.
 
+### Interactive fragment components
+
+Fragment components are static HTML by default. To make one interactive on published pages, wrap it with `withHydration`
+from `@conloca/astro-cms/hydration` and pick a strategy: `'load'` (on page load), `'visible'` (when it scrolls into
+view) or `'idle'` (when the browser is idle).
+
+```tsx
+// src/fragments/Disclosure.tsx
+import { withHydration } from '@conloca/astro-cms/hydration';
+
+export const Disclosure = withHydration(DisclosureView, 'load');
+```
+
+```tsx
+// the render module
+import { defineFragmentComponents } from '@conloca/mdx/render';
+import { Disclosure } from './fragments/Disclosure';
+
+export const fragmentComponents = defineFragmentComponents({ components: { Disclosure } });
+```
+
+- **One file per hydrated component.** Put each hydrated component in its own file that calls `withHydration`, and
+  import it into the render module by name. A page then downloads only the chunks of the islands it uses; two hydrated
+  components in one file share a chunk. One defined in the render module, or re-exported through another file, has no
+  module the build can map. `astro build` then fails, whatever the output mode, with
+  `Fragment component <Name> is wrapped in withHydration(), but the build found no module for it. Import it into the render module by name from the file that calls withHydration().`
+  That build check needs to load the render module outside Astro's pipeline; when it cannot, the build only warns that
+  the mapping was not checked. Prerendering, `astro dev` and draft previews throw the same error when they render
+  fragments; a live on-demand page logs it once and renders that component without hydration, with every other fragment
+  and island intact.
+- **Props are JSON.** The component receives the props the server render passed, after the rules above (JSON, or the
+  object-literal form `staticDataValue` also accepts).
+- **Children are the page's server HTML.** The browser re-uses the HTML the page already contains for the component's
+  children; state inside them is not React state. An island nested in them hydrates on its own; after the outer island
+  remounts its children, the nested one stays static.
+- **Element overrides cannot hydrate.** Wrapping one throws
+  `Element override <a> is wrapped in withHydration(); only fragment components can hydrate.`
+- **Outline.** A hydrated component can be an `outline` entry; it still appears in the contents.
+- **No island, no script.** A page with no island ships no hydration script.
+- **Wrappers.** The `conloca-island` and `conloca-island-slot` wrappers are `display:contents`, so direct-child
+  selectors across them stop matching.
+- **In the editor** the component is live immediately and its strategy is ignored.
+
 ## MDX component registry
 
 Hosts can register JSX components (their own, or third-party ones like Starlight's `<Steps>`, `<Tabs>`, `<Card>`) with

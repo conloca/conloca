@@ -17,7 +17,6 @@ import {
   type ContentManifest,
   type ContentMeta,
   isContentPublished,
-  type LocalizedEntry,
   type MDXHeading,
   pageTimestampsOf,
   selectPagesByPrefix,
@@ -32,9 +31,12 @@ import type { Config } from '@puckeditor/core';
 import { type Data, resolveAllData } from '@puckeditor/core';
 import type { ComponentType } from 'react';
 import React from 'react';
+import { isFragmentIsland, islandVocabulary } from '../components/FragmentIsland.js';
 import { describeEntryIssues } from '../internal/entry-issues.js';
 import type { EntryParser } from '../internal/entry-validation.js';
+import { isSlotContent, type PuckItem } from '../lib/unknown-components.js';
 import type { DataCollectionEntry, DataContext, PageReference, ResolvedRoutingConfig } from '../types.js';
+import { builtRecordOf } from './collection-content-api.js';
 import { ALL_FRAGMENTS_COLLECTION } from './collection-names.js';
 
 // Re-exported so the copied `dist/internal/page-handler.astro` reaches
@@ -92,6 +94,8 @@ export interface MdxFragmentComponent {
   Component: ComponentType;
   outline: readonly MDXHeading[];
   componentOutline: readonly FragmentOutlineComponent[];
+  /** Whether the fragment renders a `withHydration()` component, so the page needs the hydration script. */
+  islands: boolean;
 }
 
 type EvaluateMDXToComponentFn = typeof import('@conloca/mdx/node')['evaluateMDXToComponent'];
@@ -278,33 +282,56 @@ export function fragmentVocabularyOf(module: FragmentComponentsModule, path: str
   return module.fragmentComponents;
 }
 
+/** A loaded vocabulary; `mappingError` is set when a hydrated value has no island, and `vocabulary` renders it static. */
+interface LoadedFragmentVocabulary {
+  vocabulary: FragmentVocabulary;
+  mappingError?: unknown;
+}
+
 // Module state, not .astro frontmatter state: frontmatter re-runs on every render.
-const fragmentVocabularies = new WeakMap<() => Promise<FragmentComponentsModule>, Promise<FragmentVocabulary>>();
+const fragmentVocabularies = new WeakMap<() => Promise<FragmentComponentsModule>, Promise<LoadedFragmentVocabulary>>();
 const reportedFragmentVocabularyFailures = new WeakSet<() => Promise<FragmentComponentsModule>>();
 
 /**
- * The site's fragment vocabulary, loaded once per server instance. A broken
+ * The site's fragment vocabulary, loaded once per server instance, with each
+ * hydrated component the build discovered wrapped as an island. A broken
  * render module throws when `failHard` (prerender, dev, draft preview); a live
  * on-demand page gets `undefined`, renders without fragments, and the failure
- * is logged once.
+ * is logged once. A hydrated component the build could not map throws the same
+ * way when `failHard`; a live on-demand page renders it without hydration,
+ * keeps every other fragment and island, and logs that once.
+ *
+ * @param islandLoaders - Registry key → loader of each discovered hydrated component (`fragmentIslandLoaders`)
  */
 export async function loadFragmentVocabulary(
   load: () => Promise<FragmentComponentsModule>,
   failHard: boolean,
   path: string | undefined,
+  islandLoaders: Readonly<Record<string, () => Promise<object | undefined>>>,
 ): Promise<FragmentVocabulary | undefined> {
-  let vocabulary = fragmentVocabularies.get(load);
-  if (!vocabulary) {
-    vocabulary = load().then(
-      (module) => fragmentVocabularyOf(module, path),
+  let loading = fragmentVocabularies.get(load);
+  if (!loading) {
+    loading = load().then(
+      async (module): Promise<LoadedFragmentVocabulary> => {
+        const vocabulary = fragmentVocabularyOf(module, path);
+        const keys = new Map(
+          await Promise.all(Object.entries(islandLoaders).map(async ([key, loader]) => [await loader(), key] as const)),
+        );
+        try {
+          return { vocabulary: islandVocabulary(vocabulary, keys) };
+        } catch (mappingError) {
+          return { vocabulary: islandVocabulary(vocabulary, keys, 'static'), mappingError };
+        }
+      },
       (error: unknown) => {
         throw new Error(`[Conloca] The module named by fragmentComponentsPath failed to load: ${String(error)}`);
       },
     );
-    fragmentVocabularies.set(load, vocabulary);
+    fragmentVocabularies.set(load, loading);
   }
+  let loaded: LoadedFragmentVocabulary;
   try {
-    return await vocabulary;
+    loaded = await loading;
   } catch (error) {
     if (failHard) throw error;
     if (!reportedFragmentVocabularyFailures.has(load)) {
@@ -313,6 +340,13 @@ export async function loadFragmentVocabulary(
     }
     return undefined;
   }
+  if (loaded.mappingError === undefined) return loaded.vocabulary;
+  if (failHard) throw loaded.mappingError;
+  if (!reportedFragmentVocabularyFailures.has(load)) {
+    reportedFragmentVocabularyFailures.add(load);
+    console.error('[Conloca] Rendering hydrated fragment components without hydration:', loaded.mappingError);
+  }
+  return loaded.vocabulary;
 }
 
 /**
@@ -353,10 +387,14 @@ export async function loadMdxComponents(
             Component: () => null,
             outline: [],
             componentOutline: [],
+            islands: false,
           };
         }
 
-        const { Component, error, outline, componentOutline } = await evaluateMDXToComponent(mdx, vocabulary);
+        const { Component, error, outline, componentOutline, componentNames } = await evaluateMDXToComponent(
+          mdx,
+          vocabulary,
+        );
 
         if (!Component || error) {
           const errorMessage = error?.message || 'MDX evaluation failed';
@@ -377,6 +415,7 @@ export async function loadMdxComponents(
               : () => null,
             outline: [],
             componentOutline: [],
+            islands: false,
           };
         }
 
@@ -386,9 +425,27 @@ export async function loadMdxComponents(
           Component,
           outline,
           componentOutline,
+          islands: componentNames.some((name) => isFragmentIsland(vocabulary.components[name])),
         };
       }),
   );
+}
+
+/**
+ * Whether `data` places a fragment that renders an island, as a `Fragment_<id>`
+ * block or a `ContentFragmentSection`, anywhere: content, zones or slot props.
+ */
+export function pageHasFragmentIslands(data: Data, fragments: readonly MdxFragmentComponent[]): boolean {
+  const islandIds = new Set(fragments.filter((fragment) => fragment.islands).map((fragment) => fragment.id));
+  if (islandIds.size === 0) return false;
+  const placesIsland = (items: readonly PuckItem[]): boolean =>
+    items.some(
+      ({ type = '', props }) =>
+        (type.startsWith('Fragment_') && islandIds.has(type.slice('Fragment_'.length))) ||
+        (type === 'ContentFragmentSection' && islandIds.has(String(props?.fragmentId))) ||
+        Object.values(props ?? {}).some((value) => isSlotContent(value) && placesIsland(value)),
+    );
+  return placesIsland(data.content ?? []) || Object.values(data.zones ?? {}).some(placesIsland);
 }
 
 /**
@@ -475,23 +532,10 @@ export interface ReaderContentSourceOptions {
    * where the published one gets Dates. A collection absent here has no
    * parser to run; its records pass through.
    * An entry the reader serves from the build's own parsed collections (see
-   * {@link rememberBuiltRecord}) is not parsed again: it already is what the
+   * {@link builtRecordOf}) is not parsed again: it already is what the
    * build made of it.
    */
   parsers: Readonly<Record<string, EntryParser<Record<string, unknown>>>>;
-}
-
-/**
- * The build's parsed record behind each entry a collection-backed ContentAPI
- * hands out. A preview reader serves unchanged entries from that API, and
- * the reader source uses the record the build already made instead of
- * reshaping and parsing it again.
- */
-const builtRecords = new WeakMap<LocalizedEntry, Record<string, unknown>>();
-
-/** Mark `entry` as projected from the build's parsed collection record `record`. */
-export function rememberBuiltRecord(entry: LocalizedEntry, record: Record<string, unknown>): void {
-  builtRecords.set(entry, record);
 }
 
 /**
@@ -532,7 +576,7 @@ export function createReaderContentSource(api: ContentAPI, options: ReaderConten
     const localeVersion = manifest.locales[locale];
     if (!localeVersion) return null;
     const localized = await api.getLocalized(manifest.id, locale);
-    const built = localized ? builtRecords.get(localized) : undefined;
+    const built = localized ? builtRecordOf(localized) : undefined;
     if (built) return built;
     const content = localized?.localized.content;
     const record: Record<string, unknown> = {

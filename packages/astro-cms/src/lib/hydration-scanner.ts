@@ -26,6 +26,71 @@ export const HYDRATION_PATTERN = /withHydration\s*\(\s*\w+\s*,\s*['"](\w+)['"]\s
 // Valid hydration strategies
 const VALID_STRATEGIES = new Set(['load', 'visible', 'idle']);
 
+/** A value the render module imports from a module that calls `withHydration`. */
+export interface FragmentIslandDiscovery {
+  /** The binding the render module imports: the island's registry key. */
+  key: string;
+  /** The resolved module the binding comes from. */
+  filePath: string;
+  /** The imported name; `'default'` for a default import. */
+  exportName: string;
+}
+
+// Static import declarations with bindings: `import <clause> from '<specifier>'`, single- or multi-line.
+const IMPORT_DECLARATION = /^\s*import\s+(?!type\s)([\w$\s{},]*?)\s+from\s+['"]([^'"]+)['"]/gm;
+
+/** The value bindings of an import clause, as `[localName, exportName]`. */
+function importBindings(clause: string): [string, string][] {
+  const braceAt = clause.indexOf('{');
+  const defaultName = (braceAt === -1 ? clause : clause.slice(0, braceAt)).replace(',', '').trim();
+  const bindings: [string, string][] = defaultName ? [[defaultName, 'default']] : [];
+  if (braceAt === -1) return bindings;
+  for (const specifier of clause.slice(braceAt + 1, clause.indexOf('}')).split(',')) {
+    const parts = specifier.trim().split(/\s+/);
+    if (parts[0] === '' || parts[0] === 'type') continue;
+    bindings.push([parts[2] ?? parts[0], parts[0]]);
+  }
+  return bindings;
+}
+
+/**
+ * Finds the hydrated fragment components the render module imports: every value binding imported from a module
+ * that imports `withHydration`, in import order. Type-only, namespace and side-effect-only imports never match.
+ *
+ * @param renderModulePath - Absolute path of the site's render module
+ * @param resolveImport - Resolves a specifier from an importer (Vite's `this.resolve` in the plugin); an externalized
+ *   result is a package the build never bundles, so it is skipped unread
+ */
+export async function discoverFragmentIslands(
+  renderModulePath: string,
+  resolveImport: (
+    specifier: string,
+    importer: string,
+  ) => Promise<{ id: string; external?: boolean | 'absolute' | 'relative' } | null | undefined>,
+): Promise<FragmentIslandDiscovery[]> {
+  const source = await readFile(renderModulePath, 'utf-8');
+  const declarations = [...source.matchAll(IMPORT_DECLARATION)].map(([, clause, specifier]) => ({
+    bindings: importBindings(clause),
+    specifier,
+  }));
+  const perDeclaration = await Promise.all(
+    declarations.map(async ({ bindings, specifier }): Promise<FragmentIslandDiscovery[]> => {
+      if (bindings.length === 0) return [];
+      const resolved = await resolveImport(specifier, renderModulePath);
+      if (!resolved || resolved.external || resolved.id.startsWith('\0')) return [];
+      const filePath = resolved.id;
+      try {
+        if (!HYDRATION_IMPORT_PATTERN.test(await readFile(filePath, 'utf-8'))) return [];
+      } catch (err) {
+        console.warn(`[Conloca Hydration] Error reading ${filePath}:`, err);
+        return [];
+      }
+      return bindings.map(([key, exportName]) => ({ key, filePath, exportName }));
+    }),
+  );
+  return perDeclaration.flat();
+}
+
 /**
  * Derives component scan paths from puckConfigPath.
  *

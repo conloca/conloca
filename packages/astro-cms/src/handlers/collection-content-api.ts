@@ -36,7 +36,6 @@ import type {
 } from '@conloca/content-api';
 import type { ResolvedRoutingConfig } from '../types.js';
 import { ALL_FRAGMENTS_COLLECTION } from './collection-names.js';
-import { rememberBuiltRecord } from './page-render-core.js';
 
 interface CollectionEntry {
   data: Record<string, unknown>;
@@ -45,6 +44,20 @@ interface CollectionEntry {
 type ContentKind = 'fragment' | 'page' | 'data';
 
 const WRITE_REJECTED = 'collection-backed ContentAPI is read-only';
+
+/**
+ * The build's parsed record behind each entry a collection-backed ContentAPI
+ * hands out. A preview reader serves unchanged entries from that API, and
+ * the reader source uses the record the build already made instead of
+ * reshaping and parsing it again. Kept here, not in the render core, so the
+ * root entry never loads the render core and its server-only imports.
+ */
+const builtRecords = new WeakMap<LocalizedEntry, CollectionEntry['data']>();
+
+/** The build's parsed record behind `entry`, if a collection-backed ContentAPI handed it out. */
+export function builtRecordOf(entry: LocalizedEntry) {
+  return builtRecords.get(entry);
+}
 
 function str(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
@@ -130,7 +143,7 @@ export async function createCollectionBackedContentAPI(opts: CollectionBackedCon
         const entry: LocalizedEntry = { ...identity, localized: { ...version, content } };
         // The record is the build's parse output; a reader source hands it
         // out as is instead of parsing what was reconstructed from it.
-        rememberBuiltRecord(entry, record);
+        builtRecords.set(entry, record);
         entries.set(`${id} ${locale}`, entry);
       }
       manifests.push({ ...identity, locales });

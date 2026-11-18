@@ -363,6 +363,22 @@ describe(`${ADAPTER}: the draft render`, () => {
   });
 });
 
+/** The island page, published and as the `main` draft. */
+const islandPages = async () => [
+  { path: '/island/', cookie: '' },
+  { path: `${PREFIX}/${MAIN}/island/`, cookie: await passCookie() },
+];
+const pageHtml = async (path: string, cookie: string) => {
+  const page = await navigate('static', path, cookie);
+  expect(page.status).toBe(200);
+  return page.text();
+};
+const fetchBody = async (url: string) => {
+  const answer = await fetch(url);
+  expect(answer.status).toBe(200);
+  return answer.text();
+};
+
 describe(`${ADAPTER}: fragments in a draft render`, () => {
   it("renders a fragment with the site's fragmentComponentsPath components", async () => {
     const page = await navigate('static', `${PREFIX}/${MAIN}/fragment/`, await passCookie());
@@ -405,7 +421,91 @@ describe(`${ADAPTER}: fragments in a draft render`, () => {
       Reflect.deleteProperty(globalThis, 'document');
     }
   });
+
+  it('an island page loads hydration, published and previewed', async () => {
+    for (const { path, cookie } of await islandPages()) {
+      // oxlint-disable-next-line no-await-in-loop -- one page at a time keeps failures readable.
+      const html = await pageHtml(path, cookie);
+      expect(html).toContain('<conloca-island');
+      expect(html).toContain('data-conloca-component="Counter"');
+      // oxlint-disable-next-line no-await-in-loop -- as above.
+      const { bodies, lazy } = await hydrationModules('static', html);
+      expect(bodies.some((body) => body.includes('[Conloca Hydration]'))).toBe(true);
+      // oxlint-disable-next-line no-await-in-loop -- as above.
+      const all = [...bodies, ...(await Promise.all(lazy.map(fetchBody)))];
+      // The parser's error text: the MDX renderer stayed out of the client bundle.
+      expect(all.filter((body) => body.includes('Unknown component <'))).toEqual([]);
+    }
+  });
+
+  it("a page with one island loads only that island's chunk", async () => {
+    for (const { path, cookie } of await islandPages()) {
+      // oxlint-disable-next-line no-await-in-loop -- one page at a time keeps failures readable.
+      const html = await pageHtml(path, cookie);
+      // oxlint-disable-next-line no-await-in-loop -- as above.
+      const { bodies, lazy } = await hydrationModules('static', html);
+      expect(bodies.filter((body) => body.includes('counter-chunk') || body.includes('ticker-chunk'))).toEqual([]);
+      // oxlint-disable-next-line no-await-in-loop -- as above.
+      const fetched = await Promise.all(lazy.map(async (url) => ({ url, body: await fetchBody(url) })));
+      const counter = fetched.filter(({ body }) => body.includes('counter-chunk'));
+      const ticker = fetched.filter(({ body }) => body.includes('ticker-chunk'));
+      expect(counter).toHaveLength(1);
+      expect(ticker).toHaveLength(1);
+      expect(counter[0]?.url).not.toBe(ticker[0]?.url);
+      expect(counter[0]?.body).not.toContain('ticker-chunk');
+      const tickerFile = new URL(ticker[0]?.url ?? '').pathname.split('/').at(-1) ?? '';
+      expect(html).not.toContain(tickerFile);
+    }
+  });
+
+  it('a static-fragment page loads no hydration', async () => {
+    for (const path of ['/fragment/', `${PREFIX}/${MAIN}/fragment/`]) {
+      // oxlint-disable-next-line no-await-in-loop -- one page at a time keeps failures readable.
+      const html = await pageHtml(path, path === '/fragment/' ? '' : await passCookie());
+      expect(html).not.toContain('<conloca-island');
+      // oxlint-disable-next-line no-await-in-loop -- as above.
+      const { bodies } = await hydrationModules('static', html);
+      expect(bodies.filter((body) => body.includes('[Conloca Hydration]'))).toEqual([]);
+    }
+  });
 });
+
+const STATIC_IMPORT = /\b(?:import|from)\s*["']([^"']+)["']/gu;
+// The bundler quotes dynamic specifiers with backticks.
+const DYNAMIC_IMPORT = /\bimport\(\s*["'`]([^"'`]+)["'`]\s*\)/gu;
+
+/**
+ * The module scripts a page loads from `name`'s host: every `<script type="module">` source and inline import, then
+ * their static imports (same origin, each once), fetched (200); `lazy` is their dynamic imports' URLs, unfetched.
+ */
+async function hydrationModules(name: string, html: string): Promise<{ bodies: string[]; lazy: string[] }> {
+  const origin = host(name).origin;
+  const pageUrl = `${origin}/`;
+  const queue: string[] = [];
+  for (const script of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gu)) {
+    const attributes = script[1] ?? '';
+    if (!/\btype="module"/u.test(attributes)) continue;
+    const src = /\bsrc="([^"]+)"/u.exec(attributes)?.[1];
+    if (src !== undefined) queue.push(new URL(src.replaceAll('&amp;', '&'), pageUrl).href);
+    for (const match of (script[2] ?? '').matchAll(STATIC_IMPORT)) queue.push(new URL(match[1] ?? '', pageUrl).href);
+  }
+  const seen = new Set<string>();
+  const bodies: string[] = [];
+  const lazy = new Set<string>();
+  for (let url = queue.shift(); url !== undefined; url = queue.shift()) {
+    if (seen.has(url) || new URL(url).origin !== origin) continue;
+    seen.add(url);
+    // oxlint-disable-next-line no-await-in-loop -- the graph is walked as each body names its imports.
+    const answer = await fetch(url);
+    expect(answer.status).toBe(200);
+    // oxlint-disable-next-line no-await-in-loop -- as above.
+    const body = await answer.text();
+    bodies.push(body);
+    for (const match of body.matchAll(STATIC_IMPORT)) queue.push(new URL(match[1] ?? '', url).href);
+    for (const match of body.matchAll(DYNAMIC_IMPORT)) lazy.add(new URL(match[1] ?? '', url).href);
+  }
+  return { bodies, lazy: [...lazy] };
+}
 
 /**
  * The inner HTML of the first `[data-conloca-content-root]`, without React's text-separator comments: Astro streams

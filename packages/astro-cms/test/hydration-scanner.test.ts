@@ -1,13 +1,18 @@
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, spyOn, test } from 'bun:test';
+import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   deriveComponentPaths,
+  discoverFragmentIslands,
   HYDRATION_IMPORT_PATTERN,
   HYDRATION_PATTERN,
   scanForHydratableComponents,
 } from '../src/lib/hydration-scanner.js';
+
+/** Source of a module that imports `withHydration` from `from`. */
+const hydrated = (from: string) => `import { withHydration } from '${from}';\nexport const X = 1;\n`;
 
 describe('Hydration Scanner', () => {
   // -----------------------------------------------------------------
@@ -387,6 +392,67 @@ describe('Hydration Scanner', () => {
       expect(results).toHaveLength(1);
       expect(results[0].componentName).toBe('WhitespaceCall');
       expect(results[0].strategy).toBe('load');
+    });
+  });
+
+  describe('discoverFragmentIslands', () => {
+    test("maps each value binding the render module imports from a withHydration module to that module's export", async () => {
+      const dir = await mkdtemp(join(tmpdir(), 'fragment-islands-'));
+      try {
+        await mkdir(join(dir, 'islands'));
+        await writeFile(join(dir, 'islands', 'Counter.tsx'), hydrated('@conloca/astro-cms/hydration'));
+        await writeFile(join(dir, 'islands', 'Panel.tsx'), hydrated('@conloca/astro-cms/hydration'));
+        await writeFile(join(dir, 'islands', 'More.tsx'), hydrated('@conloca/astro-cms/hydration'));
+        await writeFile(join(dir, 'islands', 'Ticker.tsx'), hydrated('@conloca/astro-cms'));
+        await writeFile(join(dir, 'Callout.tsx'), 'export const Callout = () => null;\n');
+        await writeFile(join(dir, 'types.tsx'), hydrated('@conloca/astro-cms'));
+        const renderPath = join(dir, 'fragments.tsx');
+        await writeFile(
+          renderPath,
+          [
+            "import { defineFragmentComponents } from '@conloca/mdx/render';",
+            "import type { Props } from './types';",
+            "import { Counter } from './islands/Counter';",
+            "import Ticker, { tickerLabel } from './islands/Ticker';",
+            "import { Callout } from './Callout';",
+            'import {',
+            '  Panel as Box,',
+            '  type PanelProps,',
+            "} from './islands/Panel';",
+            "import * as more from './islands/More';",
+            "import './styles.css';",
+          ].join('\n'),
+        );
+        const resolveImport = async (specifier: string) => {
+          const file = join(dir, `${specifier}.tsx`);
+          return specifier.startsWith('.') && existsSync(file) ? { id: file } : null;
+        };
+
+        expect(await discoverFragmentIslands(renderPath, resolveImport)).toEqual([
+          { key: 'Counter', filePath: join(dir, 'islands', 'Counter.tsx'), exportName: 'Counter' },
+          { key: 'Ticker', filePath: join(dir, 'islands', 'Ticker.tsx'), exportName: 'default' },
+          { key: 'tickerLabel', filePath: join(dir, 'islands', 'Ticker.tsx'), exportName: 'tickerLabel' },
+          { key: 'Box', filePath: join(dir, 'islands', 'Panel.tsx'), exportName: 'Panel' },
+        ]);
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+
+    test('skips imports the resolver externalizes, without reading them', async () => {
+      const dir = await mkdtemp(join(tmpdir(), 'fragment-islands-'));
+      const warn = spyOn(console, 'warn');
+      try {
+        const renderPath = join(dir, 'fragments.tsx');
+        await writeFile(renderPath, "import { defineFragmentComponents } from '@conloca/mdx/render';\n");
+        expect(
+          await discoverFragmentIslands(renderPath, async (specifier) => ({ id: specifier, external: true })),
+        ).toEqual([]);
+        expect(warn).not.toHaveBeenCalled();
+      } finally {
+        warn.mockRestore();
+        await rm(dir, { recursive: true, force: true });
+      }
     });
   });
 });

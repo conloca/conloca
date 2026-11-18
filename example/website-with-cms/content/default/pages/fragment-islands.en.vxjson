@@ -1,0 +1,25 @@
+{
+  "created": "2026-11-18T00:00:00.000Z",
+  "id": "vx-fragment-islands",
+  "meta": {
+    "description": "Fixture page for fragment islands — embeds the disclosure-demo fragment, whose Disclosure component hydrates in the browser.",
+    "title": "Fragment Islands Fixture"
+  },
+  "modified": "2026-11-18T00:00:00.000Z",
+  "type": "puck",
+  "content": {
+    "puckData": {
+      "content": [
+        {
+          "props": {
+            "contentId": "vx-disclosure-demo",
+            "id": "Fragment_vx-disclosure-demo-fragment-islands"
+          },
+          "type": "Fragment_vx-disclosure-demo"
+        }
+      ],
+      "root": {},
+      "zones": {}
+    }
+  }
+}

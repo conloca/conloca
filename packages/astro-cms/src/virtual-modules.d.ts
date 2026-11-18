@@ -81,6 +81,8 @@ declare module 'virtual:conloca-fragment-components' {
   export function loadFragmentComponents(): Promise<{ fragmentComponents?: unknown }>;
   /** The resolved absolute path of that module, or `undefined` when the site names none. */
   export const fragmentComponentsPath: string | undefined;
+  /** Registry key → loader of each hydrated fragment component the render module imports. */
+  export const fragmentIslandLoaders: Readonly<Record<string, () => Promise<object | undefined>>>;
 }
 
 /**

@@ -1,8 +1,14 @@
 import { describe, expect, spyOn, test } from 'bun:test';
-import { defineFragmentComponents, EMPTY_FRAGMENT_VOCABULARY, type FragmentVocabulary } from '@conloca/mdx/render';
+import {
+  defineFragmentComponents,
+  EMPTY_FRAGMENT_VOCABULARY,
+  evaluateMDXToComponent,
+  type FragmentVocabulary,
+} from '@conloca/mdx/render';
 import type { Config } from '@puckeditor/core';
 import { type ComponentType, createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { isFragmentIsland } from '../src/components/FragmentIsland.js';
 import {
   buildDataContext,
   createCollectionContentSource,
@@ -12,12 +18,15 @@ import {
   getPagesByPrefix,
   loadFragmentVocabulary,
   loadMdxComponents,
+  type MdxFragmentComponent,
   normalizePathname,
   type PageContentSource,
+  pageHasFragmentIslands,
   pageNotFoundResponse,
   resolvePuckData,
 } from '../src/handlers/page-render-core.js';
 import { resolveRouteConfig } from '../src/lib/routing-config.js';
+import { withHydration } from '../src/lib/withHydration.js';
 import type { DataContext, ResolvedRoutingConfig } from '../src/types.js';
 
 // The extracted render core is pinned two ways: the
@@ -276,6 +285,7 @@ const failing = async () => ({
   error: new Error('Unknown component <Nope>'),
   outline: [],
   componentOutline: [],
+  componentNames: [],
 });
 const brokenSource = () =>
   sourceOf({ __conloca_fragments: [{ id: 'vx-br0ken01', locale: 'de', title: 'Broken', mdx: '<Nope />' }] });
@@ -287,7 +297,12 @@ describe('loadMdxComponents', () => {
     const source = sourceOf({
       __conloca_fragments: [{ id: 'welcome', locale: 'en', title: 'Welcome', mdx: '# Hi' }],
     });
-    const fragments = await loadMdxComponents(source, 'en', (async () => ({ Component: okComponent })) as never, false);
+    const fragments = await loadMdxComponents(
+      source,
+      'en',
+      async () => ({ Component: okComponent, outline: [], componentOutline: [], componentNames: [] }),
+      false,
+    );
     expect(fragments).toHaveLength(1);
     expect(fragments[0]).toMatchObject({ id: 'welcome', title: 'Welcome', Component: okComponent });
   });
@@ -313,7 +328,7 @@ describe('loadMdxComponents', () => {
       'en',
       async (_mdx: string, v?: FragmentVocabulary) => {
         seen.push(v);
-        return { Component: okComponent, outline: [], componentOutline: [] };
+        return { Component: okComponent, outline: [], componentOutline: [], componentNames: [] };
       },
       false,
       vocabulary,
@@ -388,6 +403,7 @@ describe('loadFragmentVocabulary', () => {
       () => Promise.resolve({ fragmentComponents: {} }),
       true,
       '/abs/fc.tsx',
+      {},
     ).then(
       () => undefined,
       (thrown: Error) => thrown,
@@ -396,7 +412,7 @@ describe('loadFragmentVocabulary', () => {
   });
 
   test('a broken render module throws when failing hard, naming fragmentComponentsPath', async () => {
-    const error = await loadFragmentVocabulary(brokenRenderModule, true, undefined).then(
+    const error = await loadFragmentVocabulary(brokenRenderModule, true, undefined, {}).then(
       () => undefined,
       (thrown: Error) => thrown,
     );
@@ -411,13 +427,176 @@ describe('loadFragmentVocabulary', () => {
     };
     const log = spyOn(console, 'error').mockImplementation(() => {});
     try {
-      expect(await loadFragmentVocabulary(load, false, undefined)).toBeUndefined();
-      expect(await loadFragmentVocabulary(load, false, undefined)).toBeUndefined();
+      expect(await loadFragmentVocabulary(load, false, undefined, {})).toBeUndefined();
+      expect(await loadFragmentVocabulary(load, false, undefined, {})).toBeUndefined();
       expect(loads).toBe(1);
       expect(log).toHaveBeenCalledTimes(1);
       expect(String(log.mock.calls[0])).toContain('fragmentComponentsPath');
     } finally {
       log.mockRestore();
     }
+  });
+});
+
+// Fresh functions: withHydration mutates the function it wraps.
+const Counter = withHydration(() => null, 'load');
+const Callout = () => null;
+const islandModule = () =>
+  Promise.resolve({ fragmentComponents: defineFragmentComponents({ components: { Counter, Callout } }) });
+const fragmentWithIslands = (id: string, islands: boolean): MdxFragmentComponent => ({
+  id,
+  title: id,
+  Component: Callout,
+  outline: [],
+  componentOutline: [],
+  islands,
+});
+
+/** A Puck block of `type`, with a fragment id or a `left` slot. */
+interface TestItem {
+  type: string;
+  props: { id: string; fragmentId?: string; left?: TestItem[] };
+}
+const item = (type: string, props: Omit<TestItem['props'], 'id'> = {}): TestItem => ({
+  type,
+  props: { id: type, ...props },
+});
+
+/** The message `loadFragmentVocabulary` rejects with when failing hard, or undefined. */
+const messageOf = (load: typeof islandModule) =>
+  loadFragmentVocabulary(load, true, undefined, {}).then(
+    () => undefined,
+    (thrown: Error) => thrown.message,
+  );
+
+describe('fragment islands', () => {
+  test('loadFragmentVocabulary turns a discovered hydrated component into an island', async () => {
+    const vocabulary = await loadFragmentVocabulary(islandModule, true, undefined, { Counter: async () => Counter });
+    expect(isFragmentIsland(vocabulary?.components.Counter)).toBe(true);
+    expect(vocabulary?.components.Callout).toBe(Callout);
+  });
+
+  test('loadFragmentVocabulary rejects an unmapped hydrated component and a hydrated element override when failing hard', async () => {
+    const H2 = withHydration(() => null, 'load');
+    const elementModule = () =>
+      Promise.resolve({ fragmentComponents: defineFragmentComponents({ components: {}, elements: { h2: H2 } }) });
+    expect(await messageOf(() => islandModule())).toBe(
+      'Fragment component <Counter> is wrapped in withHydration(), but the build found no module for it. Import it into the render module by name from the file that calls withHydration().',
+    );
+    expect(await messageOf(elementModule)).toBe(
+      'Element override <h2> is wrapped in withHydration(); only fragment components can hydrate.',
+    );
+  });
+
+  test('on demand, an unmapped hydrated component renders without hydration and every fragment still renders', async () => {
+    const Lone = withHydration(() => createElement('b', null, 'lone'), 'load');
+    const H2 = withHydration(() => null, 'load');
+    const load = () =>
+      Promise.resolve({ fragmentComponents: defineFragmentComponents({ components: { Counter, Lone, Callout } }) });
+    const elementLoad = () =>
+      Promise.resolve({ fragmentComponents: defineFragmentComponents({ components: {}, elements: { h2: H2 } }) });
+    const loaders = { Counter: async () => Counter };
+    const log = spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const vocabulary = await loadFragmentVocabulary(load, false, undefined, loaders);
+      await loadFragmentVocabulary(load, false, undefined, loaders);
+      if (!vocabulary) throw new Error('on demand the fragments must still render');
+      expect(vocabulary.components.Lone).toBe(Lone);
+      expect((await loadFragmentVocabulary(elementLoad, false, undefined, loaders))?.elements.h2).toBe(H2);
+      expect(isFragmentIsland(vocabulary.components.Counter)).toBe(true);
+      const { Component } = await evaluateMDXToComponent('<Lone />\n\n<Counter />', vocabulary);
+      if (!Component) throw new Error('the fragment must evaluate');
+      const html = renderToStaticMarkup(createElement(Component));
+      expect(html).toContain('<b>lone</b>');
+      expect(html.match(/<conloca-island /g)).toHaveLength(1);
+      expect(html).toContain('data-conloca-component="Counter"');
+      expect(log).toHaveBeenCalledTimes(2);
+      expect(String(log.mock.calls[0])).toContain(
+        '<Lone> is wrapped in withHydration(), but the build found no module',
+      );
+      // Prerendering, dev and previews still fail on the same module.
+      const thrown = await loadFragmentVocabulary(load, true, undefined, loaders).then(
+        () => undefined,
+        (error: Error) => error.message,
+      );
+      expect(thrown).toContain('<Lone> is wrapped in withHydration(), but the build found no module for it');
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  test('loadMdxComponents marks the fragments that render an island', async () => {
+    const vocabulary = await loadFragmentVocabulary(() => islandModule(), true, undefined, {
+      Counter: async () => Counter,
+    });
+    const source = sourceOf({
+      __conloca_fragments: [
+        { id: 'a', locale: 'en', title: 'A', mdx: '<Counter />' },
+        { id: 'b', locale: 'en', title: 'B', mdx: '<Callout />' },
+        { id: 'c', locale: 'en', title: 'C', mdx: '<Nope />' },
+      ],
+    });
+    const names = new Map([
+      ['<Counter />', ['Counter']],
+      ['<Callout />', ['Callout']],
+    ]);
+    const log = spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const fragments = await loadMdxComponents(
+        source,
+        'en',
+        async (mdx: string) => {
+          const componentNames = names.get(mdx);
+          return componentNames
+            ? { Component: Callout, outline: [], componentOutline: [], componentNames }
+            : await failing();
+        },
+        false,
+        vocabulary,
+      );
+      expect(fragments.map((f) => [f.id, f.islands])).toEqual([
+        ['a', true],
+        ['b', false],
+        ['c', false],
+      ]);
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  describe('pageHasFragmentIslands', () => {
+    const fragments = [fragmentWithIslands('a', true), fragmentWithIslands('b', false)];
+
+    test('sees an island fragment placed anywhere', () => {
+      expect(pageHasFragmentIslands({ root: { props: {} }, content: [item('Fragment_a')] }, fragments)).toBe(true);
+      expect(
+        pageHasFragmentIslands({ root: { props: {} }, content: [], zones: { 'x:y': [item('Fragment_a')] } }, fragments),
+      ).toBe(true);
+      expect(
+        pageHasFragmentIslands(
+          { root: { props: {} }, content: [item('Columns', { left: [item('Fragment_a')] })] },
+          fragments,
+        ),
+      ).toBe(true);
+      expect(
+        pageHasFragmentIslands(
+          { root: { props: {} }, content: [item('ContentFragmentSection', { fragmentId: 'a' })] },
+          fragments,
+        ),
+      ).toBe(true);
+    });
+
+    test('ignores static fragments and island fragments the page does not place', () => {
+      expect(pageHasFragmentIslands({ root: { props: {} }, content: [item('Fragment_b')] }, fragments)).toBe(false);
+      expect(pageHasFragmentIslands({ root: { props: {} }, content: [item('Hero')] }, fragments)).toBe(false);
+      expect(pageHasFragmentIslands({ root: { props: {} }, content: [] }, fragments)).toBe(false);
+    });
+
+    test('tolerates partial page data: no content, null props', () => {
+      // Stored page JSON is not guaranteed to match Puck's types; JSON.parse models that input.
+      expect(pageHasFragmentIslands(JSON.parse('{"root":{}}'), fragments)).toBe(false);
+      const partial = '{"root":{},"content":[{"type":"Hero","props":null}],"zones":{"x:y":[{"type":"Fragment_a"}]}}';
+      expect(pageHasFragmentIslands(JSON.parse(partial), fragments)).toBe(true);
+    });
   });
 });

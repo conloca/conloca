@@ -1,5 +1,5 @@
 /** One entry in a Puck content array: a component type plus its props. */
-interface PuckItem {
+export interface PuckItem {
   type?: string;
   props?: Record<string, unknown>;
 }

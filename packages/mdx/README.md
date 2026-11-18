@@ -144,7 +144,7 @@ Then renders a fragment with that vocabulary:
 import { evaluateMDXToComponent } from '@conloca/mdx/render';
 import { fragmentComponents } from './fragment-components';
 
-const { Component, error, outline } = await evaluateMDXToComponent(
+const { Component, error, outline, componentNames } = await evaluateMDXToComponent(
   '## Plans\n\n<Callout tone="info">Prices include VAT.</Callout>',
   fragmentComponents
 );
@@ -197,6 +197,8 @@ The rules the renderer applies:
   a non-empty string is left out. It is a list of its own, so `outline` keeps only headings, and a generated heading id
   never takes a listed component's id. The component renders the id itself. `defineFragmentComponents` throws for an
   `outline` key that is not in `components`, or prop names that are not non-empty strings.
+- **Component names.** `componentNames` lists the vocabulary components the fragment renders, each once, in first-use
+  order (`['Callout']` above); it is empty when the fragment is rejected.
 
 ## Migration from @conloca/mdx-client
 

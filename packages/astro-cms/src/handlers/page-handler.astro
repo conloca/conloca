@@ -11,7 +11,11 @@
 
 import { getCollection } from 'astro:content';
 import { loadContentSchemas } from 'virtual:conloca-content-schemas';
-import { fragmentComponentsPath, loadFragmentComponents } from 'virtual:conloca-fragment-components';
+import {
+  fragmentComponentsPath,
+  fragmentIslandLoaders,
+  loadFragmentComponents,
+} from 'virtual:conloca-fragment-components';
 import Layout from 'virtual:conloca-layout';
 import puckConfig from 'virtual:conloca-puck-config';
 import routingConfig from 'virtual:conloca-routing-config';
@@ -33,10 +37,12 @@ import {
   getPageEntries,
   loadFragmentVocabulary,
   loadMdxComponents,
+  type MdxFragmentComponent,
   normalizePathname,
   type PageContentSource,
   type PageEntryData,
   type PageEntryRecord,
+  pageHasFragmentIslands,
   pageNotFoundResponse,
   resolvePuckData,
 } from '../ts/src/handlers/page-render-core.js';
@@ -236,9 +242,8 @@ if (hasPuckData && resolvedPuckData) {
   }
 }
 
-const needsHydration = hasPuckData && resolvedPuckData && hasHydratableComponents(resolvedPuckData, puckConfig);
-
 let PageRenderer: ComponentType | undefined;
+let mdxComponents: MdxFragmentComponent[] = [];
 
 if (hasPuckData && page && resolvedPuckData) {
   const showErrors = import.meta.env.DEV || previewContentApi !== undefined;
@@ -247,10 +252,11 @@ if (hasPuckData && page && resolvedPuckData) {
     loadFragmentComponents,
     Astro.isPrerendered || showErrors,
     fragmentComponentsPath,
+    fragmentIslandLoaders,
   );
   if (fragmentVocabulary) {
     try {
-      const mdxComponents = await loadMdxComponents(
+      mdxComponents = await loadMdxComponents(
         source,
         config.locale,
         await loadEvaluateMDXToComponent(),
@@ -265,6 +271,12 @@ if (hasPuckData && page && resolvedPuckData) {
     }
   }
 }
+
+const needsHydration =
+  hasPuckData &&
+  resolvedPuckData &&
+  (hasHydratableComponents(resolvedPuckData, puckConfig) ||
+    (PageRenderer !== undefined && pageHasFragmentIslands(resolvedPuckData, mdxComponents)));
 ---
 
 {Layout && page ? (

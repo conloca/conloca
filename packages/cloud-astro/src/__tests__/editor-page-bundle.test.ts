@@ -606,6 +606,20 @@ describe('bundleEditorPage — fragment render', () => {
     }
   });
 
+  it('keeps react-dom/server out of a component that imports the astro-cms root entry, so the bundle loads in a browser', async () => {
+    await writeFile(
+      entryPath,
+      "import { pageSettingAttributes } from '@conloca/astro-cms';\nexport default { components: { Hero: { render: () => <h1 {...pageSettingAttributes('title')}>Hi</h1> } } };\n",
+    );
+
+    const { js } = await runBundle();
+
+    // Bun's import provides require, so loading the bundle here would hide the browser crash.
+    expect(js).not.toContain('react-dom/server');
+    expect(js).not.toContain('Calling `require`');
+    expect(js).not.toContain('renderToString');
+  });
+
   it('warns, naming the module, when the render module exports no fragmentComponents', async () => {
     await writeFile(renderPath, 'export {};\n');
 

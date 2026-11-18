@@ -242,3 +242,37 @@ test('style dropped on a component that spreads its props, whatever its case', a
   );
   expect(rendered).toEqual(['<div>t</div>', '<div>t</div>']);
 });
+
+describe('evaluateMDXToComponent — componentNames', () => {
+  const vocabulary = defineFragmentComponents({
+    components: {
+      Callout: ({ children }: { children?: ReactNode }) => createElement('aside', null, children),
+      Badge: () => createElement('span', null, 'b'),
+    },
+    elements: { h2: (props: HTMLAttributes<HTMLHeadingElement>) => createElement('h2', props) },
+  });
+
+  test('distinct names in first-use order', async () => {
+    const result = await evaluateMDXToComponent(
+      '<Callout>a</Callout>\n\n<Badge />\n\n<Callout>b</Callout>',
+      vocabulary,
+    );
+    expect(result.componentNames).toEqual(['Callout', 'Badge']);
+  });
+
+  test('nested components are reported', async () => {
+    const result = await evaluateMDXToComponent('<Callout><Badge /></Callout>', vocabulary);
+    expect(result.componentNames).toEqual(['Callout', 'Badge']);
+  });
+
+  test('element overrides are not components', async () => {
+    const result = await evaluateMDXToComponent('## Title\n\nSome prose', vocabulary);
+    expect(result.componentNames).toEqual([]);
+  });
+
+  test('an unknown component reports none', async () => {
+    const result = await evaluateMDXToComponent('<Nope />', vocabulary);
+    expect(result.error).toBeDefined();
+    expect(result.componentNames).toEqual([]);
+  });
+});

@@ -12,6 +12,8 @@ import {
   isServerShape,
   SHAPES,
   type Shape,
+  UNMAPPED_ISLAND_ERROR,
+  UNMAPPED_ISLAND_SITE,
 } from './fixtures.js';
 
 /** One adapter per run (`CONLOCA_FIXTURE_ADAPTER`): each Nx target builds one adapter's fixtures. */
@@ -441,4 +443,20 @@ describe(`${ADAPTER}: editor frames leave published pages alone`, () => {
       expect(readFileSync(join(root, file), 'utf8'), file).not.toContain('data-conloca-page-root');
     }
   });
+});
+
+describe(`${ADAPTER}: an unmapped hydrated fragment component`, () => {
+  // On-demand CMS pages: no prerendered page renders the fragment, so only the build's own check can refuse it.
+  it(
+    'fails an on-demand build',
+    async () => {
+      const unmapped = { preview: false, copy: '-unmapped', ...UNMAPPED_ISLAND_SITE };
+      const outcome = await buildFixture(ADAPTER, 'server', unmapped).then(
+        () => 'built',
+        (error: Error) => error.message,
+      );
+      expect(outcome).toContain(UNMAPPED_ISLAND_ERROR);
+    },
+    SUITE_TIMEOUT,
+  );
 });
