@@ -215,6 +215,16 @@ function keepShownProps(next: Data, shown: Data): Data {
 }
 
 /**
+ * `data` with root in the shape Puck 0.23 holds it from its first state (`root.props || root`, without the id `root`
+ * that it and resolveAllData give root), so that reshape writes nothing.
+ */
+function withPuckRoot(data: Data): Data {
+  const props = { ...(data.root.props ?? data.root) };
+  Reflect.deleteProperty(props, 'id');
+  return { ...data, root: { ...data.root, props } };
+}
+
+/**
  * `shown` is what Puck was handed on load; `prepare` gives a re-seed the load's shape (default props). Resolved props
  * the doc never stored stay from what Puck showed, under the doc's values.
  *
@@ -227,7 +237,8 @@ export function createPuckBinding(
   shown: Data = readPuckData(live.doc),
   prepare: (data: Data) => Data = (data) => data,
 ): PuckBinding {
-  let shadow = heldViews.get(live) ?? shown;
+  const shape = (data: Data) => withPuckRoot(prepare(data));
+  let shadow = heldViews.get(live) ?? withPuckRoot(shown);
   /** The ids of `shadow`'s list items; lists the doc does not hold (resolved defaults) have none. */
   let shadowIds = readItemIds(live.doc);
   /**
@@ -303,7 +314,7 @@ export function createPuckBinding(
         // Another block's change lacks the keystrokes a waiting resolve wrote; the doc holds them, so it is the next
         // keystroke's base (as a re-seed's), or that keystroke inserts again what they inserted.
         if (wasTyped && resolves.length > 0)
-          typed = { data: prepare(keepShownProps(readPuckData(live.doc), handed)), ids: readItemIds(live.doc) };
+          typed = { data: shape(keepShownProps(readPuckData(live.doc), handed)), ids: readItemIds(live.doc) };
         // Puck still shows the stale copies: a re-seed shows it the doc again.
         if (fixed) live.doc.transact(() => {}, RESHOW_ORIGIN);
         return;
@@ -312,7 +323,7 @@ export function createPuckBinding(
     },
     reseed() {
       if (live.held) return null;
-      const next = prepare(keepShownProps(readPuckData(live.doc), shadow));
+      const next = shape(keepShownProps(readPuckData(live.doc), shadow));
       shadow = next;
       typed = null;
       shadowIds = readItemIds(live.doc);

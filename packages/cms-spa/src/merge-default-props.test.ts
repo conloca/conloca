@@ -30,6 +30,19 @@ describe('mergeDefaultProps', () => {
     const empty = { content: undefined } as never;
     expect(mergeDefaultProps(empty, config)).toBe(empty);
   });
+
+  it("layers config.root's defaultProps under the stored root props, as Puck fills them in", () => {
+    const rootConfig = { root: { defaultProps: { title: 'Default title' } }, components: {} };
+    // The real file's root, as stored and as the page creator writes it.
+    expect(mergeDefaultProps({ root: {}, content: [] }, rootConfig).root).toEqual({
+      props: { title: 'Default title' },
+    });
+    expect(mergeDefaultProps({ root: { props: { title: 'Mine' } }, content: [] }, rootConfig).root).toEqual({
+      props: { title: 'Mine' },
+    });
+    const plain: Data = { root: {}, content: [] };
+    expect(mergeDefaultProps(plain, config).root).toBe(plain.root);
+  });
 });
 
 describe('mergeDefaultProps for blocks inside a slot', () => {

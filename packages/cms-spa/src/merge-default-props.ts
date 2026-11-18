@@ -50,8 +50,12 @@ export function mergeDefaultProps(data: Data, config: Config): Data {
     }
   }
 
+  // Root's defaultProps go under its props as Puck fills them in on load (`root.props || root`).
+  const rootDefaults = config.root?.defaultProps;
+
   return {
     ...data,
+    ...(rootDefaults && { root: { ...data.root, props: { ...rootDefaults, ...(data.root?.props ?? data.root) } } }),
     content: mergedContent,
     ...(mergedZones && { zones: mergedZones }),
   };

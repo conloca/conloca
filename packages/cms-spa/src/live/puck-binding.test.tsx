@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, jest, spyOn } from 'bun:test';
 import { applyItemChanges, hydrateDoc, type ItemIds, readItemIds } from '@conloca/content-api/ydoc';
-import type { Data } from '@puckeditor/core';
+import type { Config, Data, DefaultComponents } from '@puckeditor/core';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import * as Y from 'yjs';
 import { createFakeDocChannel } from '../../test/fake-doc-channel.js';
+import { mergeDefaultProps } from '../merge-default-props.js';
 import { HELD_WRITE_FAILED, LOCAL_ORIGIN } from './doc-channel.js';
 import {
   createPuckBinding,
@@ -777,5 +778,79 @@ describe('createPuckBinding', () => {
     const after = readPuckData(live.doc);
     expect(propsOf(after, 'h1')?.title).toBe('One');
     expect(propsOf(after, 'h2')?.title).toBe('Theirs');
+  });
+});
+
+// A page file as stored (and as the page creator writes it): Puck 0.23 holds root as `{ props }` from its first state.
+const FILE: Data = {
+  content: [{ props: { id: 'Hero-library-two-staging-acceptance', title: 'Library two seed' }, type: 'Hero' }],
+  root: {},
+  zones: {},
+};
+const puckShaped = (data: Data, title: string): Data => ({
+  ...data,
+  root: { props: {} },
+  content: data.content.map((block) => ({ ...block, props: { ...block.props, title } })),
+});
+
+describe('createPuckBinding with a file whose root is {}', () => {
+  it('writes no root props when the user types and deletes it again', async () => {
+    const fake = createFakeDocChannel({ puckData: FILE });
+    const live = await fake.channel.open({ kind: 'puck', id: 'p', locale: 'en' });
+    const binding = createPuckBinding(live, FILE);
+    binding.change(puckShaped(FILE, 'zqxLibrary two seed'));
+    binding.change(puckShaped(FILE, 'Library two seed'));
+    expect(live.doc.getMap('puck').toJSON().root).toEqual({});
+    const shown = binding.reseed();
+    if (shown) binding.change(puckShaped(shown, 'Library two seed'));
+    expect(live.doc.getMap('puck').toJSON().root).toEqual({});
+  });
+
+  it('still writes a real root prop edit', async () => {
+    const fake = createFakeDocChannel({ puckData: FILE });
+    const live = await fake.channel.open({ kind: 'puck', id: 'p', locale: 'en' });
+    const binding = createPuckBinding(live, FILE);
+    binding.change({ ...puckShaped(FILE, 'Library two seed'), root: { props: { title: 'Mine' } } });
+    expect(readPuckData(live.doc).root).toMatchObject({ props: { title: 'Mine' } });
+  });
+});
+
+// The real file as the page editor hands it to the binding and to Puck: Puck 0.23's resolveAllData gives root its own
+// id and type, and Puck holds root without that id (and with config.root's defaultProps filled in). These shapes were
+// logged from Puck 0.23 on this file; `id` and `type` are root keys its default Data type leaves out.
+type RuntimeRoot = Data<DefaultComponents, { id?: string; type?: string; title?: string }>['root'];
+const LOADED_ROOT: RuntimeRoot = { props: { id: 'root' }, type: 'root' };
+const LOADED: Data = { ...FILE, root: LOADED_ROOT };
+const HELD: RuntimeRoot = { props: {}, type: 'root' };
+const HELD_WITH_DEFAULTS: RuntimeRoot = { props: { title: 'Default title' }, type: 'root' };
+const handedWith = (root: RuntimeRoot, title: string): Data => ({ ...puckShaped(FILE, title), root });
+
+describe('createPuckBinding handed the file as the page editor loads it', () => {
+  it("writes no root props when the user types and deletes it again: the id resolveAllData gave root isn't a change", async () => {
+    const fake = createFakeDocChannel({ puckData: FILE });
+    const live = await fake.channel.open({ kind: 'puck', id: 'p', locale: 'en' });
+    const binding = createPuckBinding(live, LOADED);
+    binding.change(handedWith(HELD, 'zqxLibrary two seed'));
+    binding.change(handedWith(HELD, 'Library two seed'));
+    expect(readPuckData(live.doc)).toEqual(FILE);
+  });
+
+  it("writes no root props for config.root's defaultProps Puck fills in", async () => {
+    const config: Config = {
+      root: { defaultProps: { title: 'Default title' } },
+      components: { Hero: { render: () => <p /> } },
+    };
+    const prepare = (data: Data) => mergeDefaultProps(data, config);
+    const fake = createFakeDocChannel({ puckData: FILE });
+    const live = await fake.channel.open({ kind: 'puck', id: 'p', locale: 'en' });
+    const binding = createPuckBinding(live, prepare(LOADED), prepare);
+    binding.change(handedWith(HELD_WITH_DEFAULTS, 'zqxLibrary two seed'));
+    binding.change(handedWith(HELD_WITH_DEFAULTS, 'Library two seed'));
+    expect(readPuckData(live.doc)).toEqual(FILE);
+    // A re-seed hands Puck the defaults again, so the root Puck then holds and hands back is the re-seed's.
+    const shown = binding.reseed();
+    expect(shown?.root).toEqual({ props: { title: 'Default title' } });
+    if (shown) binding.change({ ...shown });
+    expect(readPuckData(live.doc)).toEqual(FILE);
   });
 });
