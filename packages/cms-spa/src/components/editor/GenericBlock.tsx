@@ -6,7 +6,7 @@ import {
   useMdastNodeUpdater,
   useNestedEditorContext,
 } from '@mdxeditor/editor';
-import { $getNodeByKey } from 'lexical';
+import { $getNodeByKey, getNearestEditorFromDOMNode } from 'lexical';
 import type * as Mdast from 'mdast';
 import type { MdxJsxFlowElement } from 'mdast-util-mdx-jsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -19,7 +19,7 @@ import {
   writeAttribute,
 } from '../../mdx-components.js';
 import { useSandboxPreviewStyles } from '../../sandbox-preview-styles.js';
-import { getSelectedBlock, setSelectedBlock, useSelectedBlock } from '../../selected-block.js';
+import { getSelectedBlock, setSelectedBlock, trackDraft, useSelectedBlock } from '../../selected-block.js';
 import { getCmsRoute } from '../../ui-config.js';
 import { bodyNeedsStaticHtml, isHtmlTag, mdastToHtml } from '../../utils/mdast-to-html.js';
 import {
@@ -230,6 +230,19 @@ function wireInlinePropEditors(
 }
 
 /**
+ * A field that commits on blur holds typed text only while focused: tracked then, so co-editing can commit it first.
+ * A field that left the page without a blur is released unwritten: its commit holds a stale snapshot of the block.
+ */
+function trackDraftWhileFocused(field: HTMLElement, commit: () => void): void {
+  let release: (() => void) | undefined;
+  field.addEventListener('focus', () => {
+    release?.();
+    release = trackDraft(() => (field.isConnected ? commit() : release?.()));
+  });
+  field.addEventListener('blur', () => release?.());
+}
+
+/**
  * Attach the inline-prop event listeners to a target element. Pulled
  * out of `wireInlinePropEditors` so both the selector-driven path
  * (defaults like Aside's auto-derived "Note" title) and the text-match
@@ -263,6 +276,7 @@ function bindInlinePropEditor(
     }
   };
   target.addEventListener('blur', commit);
+  trackDraftWhileFocused(target, commit);
   target.addEventListener('keydown', (e: KeyboardEvent) => {
     // Enter commits (string props are single-line); Escape reverts.
     if (e.key === 'Enter') {
@@ -608,6 +622,7 @@ function wireListItemEditors(
     };
 
     li.addEventListener('blur', commit);
+    trackDraftWhileFocused(li, commit);
     li.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         // Enter splits the list: commit current text, append a new
@@ -973,7 +988,23 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
     // handlers, dangerous URL schemes, and CSS `url()` beacons. Escaped entities
     // survive untouched, so legitimate prop text (`5 &lt; 10`) still renders;
     // `conloca-slot` stays allowlisted so the inline-editing slots survive.
+    // A new render (a teammate's insert above shifts every block's index, which re-renders it) must not take the
+    // author's place. A field that commits on blur (an inline prop or a list item) is committed first, and an inline
+    // prop is refocused below with its text; the body slots move into the new markup as they are, so their editors
+    // stay mounted, and focus goes back into them.
+    const focused =
+      document.activeElement instanceof HTMLElement && wrap.contains(document.activeElement)
+        ? document.activeElement
+        : null;
+    const typedProp = focused?.getAttribute('data-conloca-prop');
+    const typed = focused?.textContent ?? '';
+    if (focused?.matches('[data-conloca-prop], [data-conloca-listitem]')) focused.blur();
+    const slots = new Map(Array.from(wrap.querySelectorAll(SLOT_TAG), (el) => [el.getAttribute('data-slot-id'), el]));
     wrap.innerHTML = sanitizeComponentHtml(html);
+    for (const el of Array.from(wrap.querySelectorAll(SLOT_TAG))) {
+      const kept = slots.get(el.getAttribute('data-slot-id'));
+      if (kept) el.replaceWith(kept);
+    }
     // After replacing the preview HTML, scan for string-prop values that
     // appear exactly once as a leaf element's textContent and wire those
     // elements as contenteditable. Authors edit eg LinkCard's `description`
@@ -1042,6 +1073,22 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
       wireListItemEditors(wrap, currentNode, currentUpdater, pendingListItemFocusRef);
       setContainerSlots(new Map());
       setSlotEl(wrap.querySelector(SLOT_TAG));
+    }
+    const field = typedProp
+      ? Array.from(wrap.querySelectorAll<HTMLElement>('[data-conloca-prop]')).find(
+          (el) => el.getAttribute('data-conloca-prop') === typedProp,
+        )
+      : undefined;
+    if (field) {
+      field.textContent = typed;
+      field.focus();
+      document.getSelection()?.selectAllChildren(field);
+      document.getSelection()?.collapseToEnd();
+    } else if (focused?.isConnected && document.activeElement !== focused) {
+      // A body's editor keeps its caret; focusing it through Lexical puts the caret back on the page.
+      const body = getNearestEditorFromDOMNode(focused);
+      if (body) body.focus();
+      else focused.focus();
     }
     // `previewBindingsRef` supplies the current attrs, node, and updater
     // without making their render-local identities effect triggers.
@@ -1165,6 +1212,21 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
     // descriptor map changes only when the host registry changes.
     // Render-local editor bindings are read from the ref above.
   }, [selectionSignature, descriptor, name, blockKey, containerMode, descriptorsByName]);
+
+  // A block that goes (a teammate's change rebuilt the block around it, or it was removed) leaves the side panel
+  // bound to nothing, where a prop change would silently go nowhere. Checked after the commit: StrictMode's rehearsal
+  // unmount leaves the block in place, and a rebuilt top-level block has already handed its selection on.
+  useEffect(
+    () => () => {
+      queueMicrotask(() => {
+        const gone =
+          parentEditor.getRootElement() === null ||
+          !parentEditor.getEditorState().read(() => $getNodeByKey(blockKey) !== null);
+        if (gone && getSelectedBlock()?.key.split(':')[0] === blockKey) setSelectedBlock(null);
+      });
+    },
+    [parentEditor, blockKey],
+  );
 
   const handleSelect = useCallback(
     (e?: React.SyntheticEvent) => {

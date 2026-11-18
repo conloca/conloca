@@ -124,6 +124,18 @@ describe('applyMarkdownEdit', () => {
     expect(replica.text.toJSON()).toBe(text.toJSON());
   });
 
+  it('keeps a remote insert right after a run the editor wrapped (bold) after the wrap, whichever client id is lower', () => {
+    for (const replicaId of [1, 2 ** 32 - 1]) {
+      const text = textWith('Hello\n\nOther\n');
+      const replica = createEditorReplica(text);
+      replica.doc.clientID = replicaId;
+      if (text.doc) text.doc.clientID = 2 ** 31;
+      text.insert('Hello'.length, ' there');
+      writeEditorEdit(replica, text, 'Hello\n\nOther', '**Hello**\n\nOther', LOCAL);
+      expect(text.toJSON()).toBe('**Hello** there\n\nOther\n');
+    }
+  });
+
   it('sends a replica edit to the shared doc under the given origin, from its own client id', () => {
     const text = textWith('a\n');
     const replica = createEditorReplica(text);

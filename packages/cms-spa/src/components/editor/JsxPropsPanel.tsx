@@ -2,7 +2,7 @@ import type { JsonValue } from '@conloca/mdx/render';
 import { Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { containsMarkdownMarkers, type MdxComponentProp } from '../../mdx-components.js';
-import { useSelectedBlock } from '../../selected-block.js';
+import { useSelectedBlock, useTrackedDraft } from '../../selected-block.js';
 import { HintForm } from '../forms/HintForm.js';
 import { normalizeFieldValue, propFieldHint } from './prop-field-hint.js';
 import { SearchableSelect } from './SearchableSelect.js';
@@ -211,6 +211,16 @@ function StructuredField({ prop, rawValue, onChange }: PropFieldProps) {
     setDraft(JSON.parse(rawKey));
   }, [rawKey]);
 
+  const commit = (value: unknown) => {
+    if (!dirty.current) return;
+    dirty.current = false;
+    const normalized = normalizeFieldValue(prop, value);
+    // A cleared object removes the attribute; an empty list stays `[]`.
+    const next = prop.type === 'object' && Object.keys(normalized ?? {}).length === 0 ? null : normalized;
+    if (JSON.stringify(next) !== rawKey) onChange(next);
+  };
+  useTrackedDraft(() => commit(draft));
+
   // shortcut: checks only the top-level shape; a nested mismatch is still edited, upgrade if that shows up.
   const editable =
     rawValue === undefined ||
@@ -227,15 +237,6 @@ function StructuredField({ prop, rawValue, onChange }: PropFieldProps) {
       </div>
     );
   }
-
-  const commit = (value: unknown) => {
-    if (!dirty.current) return;
-    dirty.current = false;
-    const normalized = normalizeFieldValue(prop, value);
-    // A cleared object removes the attribute; an empty list stays `[]`.
-    const next = prop.type === 'object' && Object.keys(normalized ?? {}).length === 0 ? null : normalized;
-    if (JSON.stringify(next) !== rawKey) onChange(next);
-  };
 
   return (
     <fieldset
@@ -299,6 +300,7 @@ function TextInput({
       onCommit(draft);
     }
   };
+  useTrackedDraft(commit);
   return (
     <input
       type="text"
@@ -353,6 +355,7 @@ function NumberInput({
     if (!Number.isFinite(n)) return;
     onCommit(n);
   };
+  useTrackedDraft(commit);
   return (
     <input
       type="number"

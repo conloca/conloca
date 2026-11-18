@@ -1,5 +1,5 @@
 import type { JsonValue } from '@conloca/mdx/render';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { MdxJsxComponentDescriptor } from './mdx-components.js';
 
 /**
@@ -48,6 +48,8 @@ export interface SelectedBlock {
 interface SharedState {
   selected: SelectedBlock | null;
   subscribers: Set<(next: SelectedBlock | null) => void>;
+  /** Optional: state made by an older copy of this module has none. */
+  drafts?: Set<() => void>;
 }
 
 declare global {
@@ -120,4 +122,32 @@ export function useSelectedBlock(): SelectedBlock | null {
   }, [selected]);
 
   return selected;
+}
+
+/**
+ * Registers a field's commit while it may hold typed text that commits only when the field is left (the side panel's
+ * fields, a block's inline prop and list-item fields). The co-editing binding commits them all before a teammate's
+ * change rebuilds the block they write to, and before the editor closes. `commit` must do nothing when nothing is typed.
+ * Returns the release.
+ */
+export function trackDraft(commit: () => void): () => void {
+  const state = getState();
+  state.drafts ??= new Set();
+  const drafts = state.drafts;
+  drafts.add(commit);
+  return () => {
+    drafts.delete(commit);
+  };
+}
+
+/** Commits every tracked draft; see `trackDraft`. */
+export function commitDrafts(): void {
+  for (const commit of getState().drafts ?? []) commit();
+}
+
+/** `trackDraft` for a React field: its latest `commit` stays tracked while it is mounted. */
+export function useTrackedDraft(commit: () => void): void {
+  const latest = useRef(commit);
+  latest.current = commit;
+  useEffect(() => trackDraft(() => latest.current()), []);
 }

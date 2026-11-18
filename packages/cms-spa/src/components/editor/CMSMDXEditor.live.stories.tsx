@@ -36,8 +36,12 @@ import {
   writeEditorEdit,
 } from '../../live/markdown-binding.js';
 import { markdownLivePlugin } from '../../live/markdown-live-plugin.js';
+import { setMdxComponents } from '../../mdx-components.js';
+import { setSelectedBlock } from '../../selected-block.js';
 import { setSiteRender } from '../../site-render.js';
+import { shouldBlockLeave } from '../dialogs/unsaved-guard.js';
 import { CMSMDXEditor } from './CMSMDXEditor.js';
+import { JsxPropsPanel } from './JsxPropsPanel.js';
 
 /**
  * The gate for keeping MDX bodies as markdown in a `Y.Text` (candidate A of live co-editing): the real editor must
@@ -962,7 +966,7 @@ interface Solo {
 let solo: Solo;
 
 /** One editor bound with `markdownLivePlugin`; a teammate's doc sends it updates, and every update it sends is counted. */
-function SoloEditor({ initial }: { initial: string }) {
+function SoloEditor({ initial, fragment = false }: { initial: string; fragment?: boolean }) {
   const [s] = useState(() => {
     const doc = new Y.Doc();
     const text = doc.getText('body');
@@ -993,7 +997,7 @@ function SoloEditor({ initial }: { initial: string }) {
   return (
     <QueryClientProvider client={queryClient}>
       <div style={{ height: 200 }}>
-        <CMSMDXEditor value={initial} onChange={() => {}} extraPlugins={plugins} />
+        <CMSMDXEditor value={initial} onChange={() => {}} extraPlugins={plugins} fragment={fragment} />
       </div>
     </QueryClientProvider>
   );
@@ -1101,5 +1105,415 @@ export const FragmentModeRendersSiteComponent: Story = {
       ),
     );
     await expect(canvasElement.querySelector('aside.site-callout[data-tone="info"]')).toBeTruthy();
+  },
+};
+
+/**
+ * Typing in a component's body while a teammate's edit lands: the teammate's edit shows at once, and the body stays,
+ * with the caret, so typing goes on in it; what the user typed is in the text before they leave the body.
+ */
+export const LiveTypeInComponentBodyDuringTeammateEdit: Story = {
+  beforeEach: () => {
+    setSiteRender({ vocabulary: defineFragmentComponents({ components: { Callout: SiteCallout } }) });
+    return () => setSiteRender({});
+  },
+  render: () => <SoloEditor initial={'<Callout tone="info">\n\nHello\n\n</Callout>\n'} fragment />,
+  play: async ({ canvasElement }) => {
+    const body = await waitFor(() => {
+      const element = canvasElement.querySelector<HTMLElement>('aside.site-callout [contenteditable="true"] p');
+      if (!element) throw new Error('site callout not rendered');
+      return element;
+    });
+    await userEvent.click(body);
+    const nested = getNearestEditorFromDOMNode(body);
+    if (!nested) throw new Error('no nested editor');
+    nested.update(() => $getRoot().getLastChildOrThrow().selectEnd(), { discrete: true });
+    await userEvent.keyboard('!');
+    soloTeammateEdit((text) => text.insert(0, 'Intro\n\n'));
+    await waitFor(() => expect(solo.editor?.getRootElement()?.textContent).toContain('Intro'));
+    await userEvent.keyboard('?');
+    await expect(body.isConnected).toBe(true);
+    await expect(body.textContent).toBe('Hello!?');
+    await waitFor(() => expect(solo.text.toJSON()).toContain('Hello!?'));
+    await expect(solo.text.toJSON().startsWith('Intro\n\n')).toBe(true);
+  },
+};
+
+/** The page editor's shape: the editor, and the side panel its selected component publishes to. */
+function SoloWithPanel({ initial }: { initial: string }) {
+  return (
+    <>
+      <SoloEditor initial={initial} />
+      <JsxPropsPanel />
+    </>
+  );
+}
+
+const withCallout = () => {
+  setMdxComponents([{ name: 'Callout', kind: 'flow', hasChildren: true, props: [{ name: 'title', type: 'string' }] }]);
+  return () => {
+    setSelectedBlock(null);
+    setMdxComponents([]);
+  };
+};
+
+async function soloBody(canvasElement: HTMLElement, content: string): Promise<HTMLElement> {
+  return waitFor(() => {
+    const found = [
+      ...canvasElement.querySelectorAll<HTMLElement>('.conloca-generic-block [contenteditable="true"]'),
+    ].find((element) => element.textContent === content);
+    if (!found) throw new Error(`no component body showing ${content}`);
+    return found;
+  });
+}
+
+/**
+ * A prop typed in the side panel while teammates edit the page, one of them the very component: nothing typed is lost,
+ * and the field stays bound to the component, so typing on and leaving it writes to it.
+ */
+export const LivePanelPropDuringTeammateEdits: Story = {
+  beforeEach: withCallout,
+  render: () => <SoloWithPanel initial={'<Callout>\n\nHello\n\n</Callout>\n\nOther\n'} />,
+  play: async ({ canvasElement }) => {
+    const body = await soloBody(canvasElement, 'Hello');
+    await userEvent.click(body);
+    getNearestEditorFromDOMNode(body)?.update(() => $getRoot().getLastChildOrThrow().selectEnd(), { discrete: true });
+    await userEvent.keyboard('!');
+    soloTeammateEdit((text) => text.insert(0, 'Intro\n\n'));
+    await waitFor(() => expect(solo.editor?.getRootElement()?.textContent).toContain('Intro'));
+    const title = await waitFor(() => {
+      const field = canvasElement.querySelector<HTMLInputElement>('input[aria-label="title"]');
+      if (!field) throw new Error('side panel not showing the Callout');
+      return field;
+    });
+    await userEvent.click(title);
+    await userEvent.keyboard('Tip');
+    soloTeammateEdit((text) => text.insert(text.toJSON().indexOf('Hello'), 'Hey '));
+    await waitFor(() => expect(solo.editor?.getRootElement()?.textContent).toContain('Hey Hello!'));
+    await userEvent.keyboard('s');
+    await userEvent.tab();
+    await waitFor(() => expect(solo.text.toJSON()).toContain('<Callout title="Tips">'));
+    await expect(solo.text.toJSON()).toContain('Hey Hello!');
+  },
+};
+
+/**
+ * Bold on a body's selection, with a teammate's edit to the same component landing between pressing and releasing the
+ * button: the bold applies, and the teammate's word typed right after the bolded one stays after it.
+ */
+export const LiveToolbarActionDuringTeammateEdit: Story = {
+  beforeEach: withCallout,
+  render: () => <SoloWithPanel initial={'<Callout>\n\nHello\n\n</Callout>\n\nOther\n'} />,
+  play: async ({ canvasElement }) => {
+    const body = await soloBody(canvasElement, 'Hello');
+    await userEvent.click(body);
+    const nested = getNearestEditorFromDOMNode(body);
+    if (!nested) throw new Error('no nested editor');
+    nested.update(() => $getRoot().getAllTextNodes()[0]?.select(0, 'Hello'.length), { discrete: true });
+    const bold = canvasElement.querySelector<HTMLElement>('[aria-label="Bold"]');
+    if (!bold) throw new Error('no Bold button');
+    // One session, so the release knows about the press and clicks.
+    const user = userEvent.setup();
+    await user.pointer({ keys: '[MouseLeft>]', target: bold });
+    soloTeammateEdit((text) => text.insert(text.toJSON().indexOf('Hello') + 'Hello'.length, ' there'));
+    await nextFrame();
+    await nextFrame();
+    await user.pointer({ keys: '[/MouseLeft]', target: bold });
+    await waitFor(() => expect(solo.text.toJSON()).toContain('**Hello** there'));
+    await waitFor(() => expect(solo.editor?.getRootElement()?.textContent).toContain('Hello there'));
+  },
+};
+
+function pause(ms: number): Promise<void> {
+  const { promise, resolve } = Promise.withResolvers<void>();
+  setTimeout(() => resolve(), ms);
+  return promise;
+}
+
+/**
+ * Typing in a component's body at a person's pace while a teammate types at the start of the same body, as on a stage
+ * with two people: every key lands in the body, after the user's earlier keys, and none in the paragraph the caret was
+ * in before the body.
+ */
+export const LiveTypeInBodyWhileTeammateTypesInIt: Story = {
+  beforeEach: withCallout,
+  render: () => <SoloWithPanel initial={'<Callout>\n\nHello\n\n</Callout>\n\nOther\n'} />,
+  play: async ({ canvasElement }) => {
+    const body = await soloBody(canvasElement, 'Hello');
+    await soloCaretAtEnd();
+    await userEvent.click(body);
+    getNearestEditorFromDOMNode(body)?.update(() => $getRoot().getLastChildOrThrow().selectEnd(), { discrete: true });
+    const typed = 'abcdefghij';
+    const theirs = 'TUVWXYZ';
+    await Promise.all([
+      (async () => {
+        for (const key of typed) {
+          // oxlint-disable-next-line eslint/no-await-in-loop -- one key after another, at a person's pace
+          await userEvent.keyboard(key);
+          // oxlint-disable-next-line eslint/no-await-in-loop -- one key after another, at a person's pace
+          await pause(120);
+        }
+      })(),
+      (async () => {
+        for (let index = 0; index < theirs.length; index++) {
+          // oxlint-disable-next-line eslint/no-await-in-loop -- the teammate's keys, one after another
+          await pause(index === 0 ? 150 : 60);
+          soloTeammateEdit((text) => text.insert(text.toJSON().indexOf('Hello'), theirs[index]));
+        }
+      })(),
+    ]);
+    await waitFor(() => expect(solo.text.toJSON()).toContain(`${theirs}Hello${typed}`));
+    await expect(solo.text.toJSON()).toContain('\n\nOther\n');
+  },
+};
+
+/**
+ * A key typed in the frame between a teammate's edit rebuilding the body being typed in and the body coming back, while
+ * focus is on the page: it lands in the body, where the caret was, and typing goes on there.
+ */
+export const LiveKeyTypedWhileBodyComesBack: Story = {
+  beforeEach: withCallout,
+  render: () => <SoloWithPanel initial={'<Callout>\n\nHello\n\n</Callout>\n\nOther\n'} />,
+  play: async ({ canvasElement }) => {
+    const body = await soloBody(canvasElement, 'Hello');
+    await userEvent.click(body);
+    getNearestEditorFromDOMNode(body)?.update(() => $getRoot().getLastChildOrThrow().selectEnd(), { discrete: true });
+    await userEvent.keyboard('!');
+    soloTeammateEdit((text) => text.insert(text.toJSON().indexOf('Hello'), 'Hey '));
+    // The teammate's edit shows in this frame, before this callback; the body comes back in the next one.
+    await nextFrame();
+    await expect(document.activeElement).toBe(document.body);
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', bubbles: true, cancelable: true }));
+    await waitFor(() => expect(solo.text.toJSON()).toContain('Hey Hello!x'));
+    await userEvent.keyboard('y');
+    await waitFor(() => expect(solo.text.toJSON()).toContain('Hey Hello!xy'));
+    await expect(solo.text.toJSON()).toContain('\n\nOther\n');
+  },
+};
+
+/** Waits `count` frames, one after another. */
+async function frames(count: number): Promise<void> {
+  for (let index = 0; index < count; index++) {
+    // oxlint-disable-next-line eslint/no-await-in-loop -- frames come one after another
+    await nextFrame();
+  }
+}
+
+/** Hides the solo editor's component bodies from a lookup inside a block while on, as a body whose preview is slow. */
+function slowBodies() {
+  // oxlint-disable-next-line typescript/unbound-method -- put back as it was, and only ever called with `.call`
+  const original = Element.prototype.querySelectorAll;
+  let hidden = false;
+  Element.prototype.querySelectorAll = function (this: Element, selector: string) {
+    const inSolo = this.closest('[data-lexical-editor="true"]') === solo.editor?.getRootElement();
+    return original.call(this, hidden && inSolo && selector === '[data-lexical-editor="true"]' ? ':not(*)' : selector);
+  };
+  return {
+    set: (next: boolean) => {
+      hidden = next;
+    },
+    restore: () => {
+      Element.prototype.querySelectorAll = original;
+    },
+  };
+}
+
+/**
+ * A second teammate edit rebuilds the same body while it is still coming back (a slow preview), and it takes longer than
+ * two seconds: the keys typed meanwhile still land in the body, and typing goes on there.
+ */
+export const LiveKeysHeldThroughSecondRebuild: Story = {
+  beforeEach: withCallout,
+  render: () => <SoloWithPanel initial={'<Callout>\n\nHello\n\n</Callout>\n\nOther\n'} />,
+  play: async ({ canvasElement }) => {
+    const body = await soloBody(canvasElement, 'Hello');
+    await userEvent.click(body);
+    getNearestEditorFromDOMNode(body)?.update(() => $getRoot().getLastChildOrThrow().selectEnd(), { discrete: true });
+    await userEvent.keyboard('!');
+    const slow = slowBodies();
+    try {
+      soloTeammateEdit((text) => text.insert(text.toJSON().indexOf('Hello'), 'Hey '));
+      await nextFrame();
+      slow.set(true);
+      await expect(document.activeElement).toBe(document.body);
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', bubbles: true, cancelable: true }));
+      await frames(2);
+      soloTeammateEdit((text) => text.insert(text.toJSON().indexOf('Hey'), 'Oh '));
+      await frames(3);
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'y', bubbles: true, cancelable: true }));
+      await frames(130);
+      slow.set(false);
+    } finally {
+      slow.restore();
+    }
+    await waitFor(() => expect(solo.text.toJSON()).toContain('Oh Hey Hello!xy'));
+    await userEvent.keyboard('z');
+    await waitFor(() => expect(solo.text.toJSON()).toContain('Oh Hey Hello!xyz'));
+  },
+};
+
+/**
+ * A key held while the body comes back, then the user focuses another block: the key still lands in the body, where
+ * the caret was, and focus stays where the user put it.
+ */
+export const LiveKeyHeldThenFocusElsewhere: Story = {
+  beforeEach: withCallout,
+  render: () => <SoloWithPanel initial={'<Callout>\n\nHello\n\n</Callout>\n\nOther\n'} />,
+  play: async ({ canvasElement }) => {
+    const body = await soloBody(canvasElement, 'Hello');
+    await userEvent.click(body);
+    getNearestEditorFromDOMNode(body)?.update(() => $getRoot().getLastChildOrThrow().selectEnd(), { discrete: true });
+    await userEvent.keyboard('!');
+    soloTeammateEdit((text) => text.insert(text.toJSON().indexOf('Hello'), 'Hey '));
+    await nextFrame();
+    await expect(document.activeElement).toBe(document.body);
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', bubbles: true, cancelable: true }));
+    const root = solo.editor?.getRootElement();
+    root?.focus();
+    await waitFor(() => expect(solo.text.toJSON()).toContain('Hey Hello!x'));
+    await frames(5);
+    await expect(document.activeElement).toBe(root);
+  },
+};
+
+/** Like `LiveKeyHeldThenFocusElsewhere`, with focus moved to an input outside the editor: it stays there. */
+export const LiveKeyHeldThenFocusOutsideInput: Story = {
+  beforeEach: withCallout,
+  render: () => (
+    <>
+      <input aria-label="outside" />
+      <SoloWithPanel initial={'<Callout>\n\nHello\n\n</Callout>\n\nOther\n'} />
+    </>
+  ),
+  play: async ({ canvasElement }) => {
+    const slow = await holdKeysWhileBodySlow(canvasElement);
+    const outside = canvasElement.querySelector<HTMLInputElement>('input[aria-label="outside"]');
+    outside?.focus();
+    slow.restore();
+    await waitFor(() => expect(solo.text.toJSON()).toContain('Hey Hello!x'));
+    await frames(5);
+    await expect(document.activeElement).toBe(outside);
+  },
+};
+
+/** Like `LiveKeyHeldThenFocusElsewhere`, with Tab (never held) moving focus on: the key lands, focus stays moved. */
+export const LiveKeyHeldThenTab: Story = {
+  beforeEach: withCallout,
+  render: () => <SoloWithPanel initial={'<Callout>\n\nHello\n\n</Callout>\n\nOther\n'} />,
+  play: async ({ canvasElement }) => {
+    const slow = await holdKeysWhileBodySlow(canvasElement);
+    await userEvent.tab();
+    const moved = document.activeElement;
+    slow.restore();
+    await waitFor(() => expect(solo.text.toJSON()).toContain('Hey Hello!x'));
+    await frames(5);
+    await expect(moved).not.toBe(document.body);
+    await expect(document.activeElement).toBe(moved);
+  },
+};
+
+/** Holds `keys` for the Callout body while it comes back (a slow preview), with the body still hidden on return. */
+async function holdKeysWhileBodySlow(canvasElement: HTMLElement, keys = ['x']) {
+  const body = await soloBody(canvasElement, 'Hello');
+  await userEvent.click(body);
+  getNearestEditorFromDOMNode(body)?.update(() => $getRoot().getLastChildOrThrow().selectEnd(), { discrete: true });
+  await userEvent.keyboard('!');
+  const slow = slowBodies();
+  soloTeammateEdit((text) => text.insert(text.toJSON().indexOf('Hello'), 'Hey '));
+  await nextFrame();
+  slow.set(true);
+  await expect(document.activeElement).toBe(document.body);
+  for (const key of keys) {
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+  }
+  await frames(2);
+  return slow;
+}
+
+const heldAlert = (canvasElement: HTMLElement) =>
+  [...canvasElement.querySelectorAll('[role="alert"]')].find((alert) => alert.textContent?.includes(': x'));
+
+/**
+ * A teammate deletes the component whose body a held key waits for: the key goes at the end of the page, with a notice
+ * saying so, to copy or dismiss. While held, leaving asks.
+ */
+export const LiveKeyHeldThenBlockRemoved: Story = {
+  beforeEach: withCallout,
+  render: () => <SoloWithPanel initial={'<Callout>\n\nHello\n\n</Callout>\n\nOther\n'} />,
+  play: async ({ canvasElement }) => {
+    const slow = await holdKeysWhileBodySlow(canvasElement);
+    try {
+      await expect(shouldBlockLeave(null, false, true)).toBe(true);
+      soloTeammateEdit((text) => {
+        const start = text.toJSON().indexOf('<Callout>');
+        text.delete(start, text.toJSON().indexOf('Other') - start);
+      });
+      await waitFor(() => expect(heldAlert(canvasElement)).toBeDefined());
+      await waitFor(() => expect(solo.text.toJSON().trimEnd()).toMatch(/Other\n+x$/));
+      await expect(shouldBlockLeave(null, false, true)).toBe(false);
+      const buttons = [...(heldAlert(canvasElement)?.querySelectorAll('button') ?? [])].map((b) => b.textContent);
+      await expect(buttons).toEqual(['Copy text', 'Dismiss']);
+      await userEvent.click([...(heldAlert(canvasElement)?.querySelectorAll('button') ?? [])][1] ?? document.body);
+      await waitFor(() => expect(heldAlert(canvasElement)).toBeUndefined());
+    } finally {
+      slow.restore();
+    }
+  },
+};
+
+let closeSolo = () => {};
+/** The solo editor with its side panel, until `closeSolo` closes it. */
+function ClosableSolo({ initial }: { initial: string }) {
+  const [open, setOpen] = useState(true);
+  closeSolo = () => setOpen(false);
+  return open ? <SoloWithPanel initial={initial} /> : null;
+}
+
+/** The editor closes while a held key waits for the body: the key goes into the doc where the caret was. */
+export const LiveKeyHeldThenEditorCloses: Story = {
+  beforeEach: withCallout,
+  render: () => <ClosableSolo initial={'<Callout>\n\nHello\n\n</Callout>\n\nOther\n'} />,
+  play: async ({ canvasElement }) => {
+    const slow = await holdKeysWhileBodySlow(canvasElement);
+    try {
+      closeSolo();
+      await waitFor(() => expect(solo.text.toJSON()).toContain('Hey Hello!x'));
+    } finally {
+      slow.restore();
+    }
+  },
+};
+
+/** As above with a held Backspace first: where the caret's text is known, it erases the character before the caret. */
+export const LiveKeyHeldBackspaceThenEditorCloses: Story = {
+  beforeEach: withCallout,
+  render: () => <ClosableSolo initial={'<Callout>\n\nHello\n\n</Callout>\n\nOther\n'} />,
+  play: async ({ canvasElement }) => {
+    const slow = await holdKeysWhileBodySlow(canvasElement, ['Backspace', 'x']);
+    try {
+      closeSolo();
+      await waitFor(() => expect(solo.text.toJSON()).toContain('Hey Hellox'));
+    } finally {
+      slow.restore();
+    }
+  },
+};
+
+/**
+ * The editor closes while held keys wait for the body, and the caret's text shows twice on the page: the typed text
+ * goes at the end of the component's body. The held Backspace has no known character to erase and is dropped.
+ */
+export const LiveKeyHeldThenEditorClosesAmbiguousCaret: Story = {
+  beforeEach: withCallout,
+  render: () => <ClosableSolo initial={'<Callout>\n\nHello\n\n</Callout>\n\nHello!\n'} />,
+  play: async ({ canvasElement }) => {
+    const slow = await holdKeysWhileBodySlow(canvasElement, ['Backspace', 'x']);
+    try {
+      closeSolo();
+      await waitFor(() => expect(solo.text.toJSON()).toMatch(/Hey Hello!\s+x\s+<\/Callout>/));
+      await expect(solo.text.toJSON().trimEnd()).toMatch(/<\/Callout>\n+Hello!$/);
+    } finally {
+      slow.restore();
+    }
   },
 };

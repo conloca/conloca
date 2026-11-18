@@ -16,7 +16,7 @@ import { useErrorModal } from '../../hooks/useErrorModal.js';
 import { useTheme } from '../../hooks/useTheme.js';
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard.js';
 import { useDocChannel } from '../../live/doc-channel.js';
-import { markdownLivePlugin } from '../../live/markdown-live-plugin.js';
+import { hasHeldKeys, markdownLivePlugin } from '../../live/markdown-live-plugin.js';
 import { useLiveDoc, usePresencePeers } from '../../live/use-live.js';
 import type { PageMetadata } from '../../types.js';
 import { getUIConfig } from '../../ui-config.js';
@@ -423,7 +423,8 @@ function SavedMdxPageEditor({ initialLocale }: { initialLocale: string }) {
         }
         return { ok: true };
       },
-      { isDirty: () => isDirtyRef.current },
+      // Keys held for a component body on its way back are in no doc yet: the shell's leave asks for them too.
+      { isDirty: () => isDirtyRef.current || hasHeldKeys() },
     );
   }, []);
 

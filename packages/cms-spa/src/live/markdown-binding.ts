@@ -407,6 +407,11 @@ function replaceTrimmed(text: Y.Text, old: string, from: number, insert: string)
   while (suffix < max - prefix && old[old.length - 1 - suffix] === insert[insert.length - 1 - suffix]) suffix++;
   if (suffix > 0 && (old.charCodeAt(old.length - suffix) & 0xfc00) === 0xdc00) suffix--;
   const deleted = old.length - prefix - suffix;
-  if (deleted > 0) text.delete(from + prefix, deleted);
-  if (insert.length - prefix - suffix > 0) text.insert(from + prefix, insert.slice(prefix, insert.length - suffix));
+  const inserted = insert.slice(prefix, insert.length - suffix);
+  // A wrap (bold, a link) keeps the old run inside the new text. Inserted after the deleted run, it would sit among the
+  // tombstones with a teammate's text typed right after the run, ordered by client id; inserted first, it stays before.
+  const wrap = deleted > 0 && inserted.includes(old.slice(prefix, old.length - suffix));
+  if (wrap) text.insert(from + prefix, inserted);
+  if (deleted > 0) text.delete(from + prefix + (wrap ? inserted.length : 0), deleted);
+  if (!wrap && inserted.length > 0) text.insert(from + prefix, inserted);
 }
