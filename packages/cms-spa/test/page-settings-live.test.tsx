@@ -307,7 +307,11 @@ describe.each(['puck', 'mdx'] as const)('Page settings while editing a %s page l
         conflicts: [{ anchor: 'meta.title', base: 'Old', ours: 'Mine', theirs: 'Theirs' }],
       },
     });
-    const read = spyOn(client, 'getLocalized').mockImplementation(() => new Promise(() => {}));
+    const readStarted = Promise.withResolvers<void>();
+    const read = spyOn(client, 'getLocalized').mockImplementation(() => {
+      readStarted.resolve();
+      return new Promise(() => {});
+    });
     onTestFinished(() => {
       update.mockRestore();
       read.mockRestore();
@@ -317,13 +321,15 @@ describe.each(['puck', 'mdx'] as const)('Page settings while editing a %s page l
     jest.useFakeTimers();
     try {
       fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+      // Save reads the page again only once its write has answered: move the clock once that read and its wait run.
+      await act(() => readStarted.promise);
       await act(async () => jest.advanceTimersByTime(PAGE_SETTINGS_READ_WAIT_MS));
+      expect(screen.getByRole('alert').textContent).toContain("the latest couldn't be loaded");
+      expect(screen.getByLabelText<HTMLInputElement>(/^Title/).value).toBe('Mine');
     } finally {
       await act(async () => jest.runOnlyPendingTimers());
       jest.useRealTimers();
     }
-    expect((await screen.findByRole('alert')).textContent).toContain("the latest couldn't be loaded");
-    expect(screen.getByLabelText<HTMLInputElement>(/^Title/).value).toBe('Mine');
   });
 
   it('Apply sends the version the dialog opened with, after a refetch moved the editor to a newer one', async () => {
@@ -383,16 +389,21 @@ describe.each(['puck', 'mdx'] as const)('Page settings while editing a %s page l
     jest.useFakeTimers();
     try {
       fireEvent.click(button);
+      // The click starts the read and its wait at once, so the clock moves only once both run.
+      expect(spy).toHaveBeenCalledTimes(1);
       await act(async () => jest.advanceTimersByTime(PAGE_SETTINGS_READ_WAIT_MS));
+      // The toast shows on a zero-delay timer queued as the wait ran out.
+      await act(async () => jest.advanceTimersByTime(0));
       expect(screen.getByRole('heading', { name: /page metadata/i })).toBeTruthy();
       expect(screen.getByLabelText<HTMLInputElement>(/^Title/).value).toBe('Old');
+      // Checked before the clock moves on: running the pending timers can pass the toast's own 4 s lifetime and close it.
+      expect(screen.getByText(/couldn't load the latest page settings/i)).toBeTruthy();
     } finally {
       // Timers the dialog, the toast and react-query queued under fake time would be dropped with it, and React
       // Query's batching then stalls for later tests: run them first.
       await act(async () => jest.runOnlyPendingTimers());
       jest.useRealTimers();
     }
-    expect(await screen.findByText(/couldn't load the latest page settings/i)).toBeTruthy();
   });
 
   it('Save after a clash does not bring back a setting a teammate removed', async () => {
