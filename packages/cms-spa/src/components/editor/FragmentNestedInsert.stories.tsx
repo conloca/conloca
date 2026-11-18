@@ -236,7 +236,8 @@ export const ToolbarInsertLoopsInsideComponentBody: Story = {
       },
     ];
     /* oxlint-disable no-await-in-loop -- each insert must land before the next caret placement starts. */
-    for (let round = 0; round < 20; round++) {
+    // Two rounds per placement, the second after earlier inserts split the body; 20 rounds outran CI's 15s budget.
+    for (let round = 0; round < placements.length * 2; round++) {
       const before = eyebrowCounts(outer, canvasElement);
       await placements[round % placements.length]?.();
       await real.click(within(canvasElement).getByRole('button', { name: 'Insert component' }));

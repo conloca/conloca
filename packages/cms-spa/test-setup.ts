@@ -24,8 +24,13 @@ expect.extend(matchers);
 // file order the run happened to use (a stale-write suite's Force Save button
 // broke an unrelated header test on CI). Clean up after every test, globally;
 // per-file cleanup() calls remain harmless duplicates.
+// Persisted editor prefs leak the same way: a test that opened the live preview left it open for every later file,
+// whose debounced preview could then remount mid-test. Every test starts with empty storage.
 const { cleanup } = await import('@testing-library/react');
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  localStorage.clear();
+});
 
 // Mock Radix UI Portal to render inline for testing
 mock.module('@radix-ui/react-portal', () => ({
