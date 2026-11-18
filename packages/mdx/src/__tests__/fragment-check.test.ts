@@ -8,6 +8,7 @@ import {
   defineFragmentComponents,
   evaluateMDXToComponent,
   type FragmentPropSpec,
+  mdxCarriesNoCode,
   parseFragmentMdx,
 } from '../render.js';
 
@@ -276,6 +277,27 @@ describe('checkFragmentMdx matches publish', () => {
     test(JSON.stringify(mdx), async () => {
       const refused = checkFragmentMdx(mdx, new Set(['Probe']), {}) !== undefined;
       expect(refused).toBe((await publishOutcome(mdx)) !== 'kept');
+    });
+  }
+});
+
+describe('mdxCarriesNoCode, for MDX a site compiles itself', () => {
+  test('takes prose, frontmatter and site components with literal props', () => {
+    expect(mdxCarriesNoCode('---\ntitle: Post\n---\n# Hi\n\n<Callout tone="info">Text</Callout>\n')).toBe(true);
+  });
+
+  for (const mdx of [
+    "import { Tabs } from '@astrojs/starlight/components';\n\n# Hi\n",
+    'export const x = 1;\n',
+    'Total: {1 + 1}\n',
+    '<Callout tone={tone()} />\n',
+    '<script>alert(1)</script>\n',
+    '[x](javascript:alert(1))\n',
+    '<div {...props}>x</div>\n',
+    '<Callout>\n',
+  ]) {
+    test(`refuses ${JSON.stringify(mdx)}`, () => {
+      expect(mdxCarriesNoCode(mdx)).toBe(false);
     });
   }
 });

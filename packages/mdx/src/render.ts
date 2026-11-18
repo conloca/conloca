@@ -6,7 +6,12 @@
 
 export { type FragmentJsxAttribute, fragmentComponentProps } from './mdx/component-props.js';
 export { evaluateMDXToComponent, parseFragmentMdx } from './mdx/evaluate.js';
-export { checkFragmentMdx, type FragmentMdxProblem, type FragmentPropSpec } from './mdx/fragment-check.js';
+export {
+  checkFragmentMdx,
+  type FragmentMdxProblem,
+  type FragmentPropSpec,
+  mdxCarriesNoCode,
+} from './mdx/fragment-check.js';
 export type { FragmentOutlineComponent } from './mdx/heading-outline.js';
 export { type JsonValue, staticDataValue } from './mdx/literal-attributes.js';
 export {

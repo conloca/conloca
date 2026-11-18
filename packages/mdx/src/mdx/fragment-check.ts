@@ -2,7 +2,7 @@ import type { Root, RootContent } from 'mdast';
 import { componentPropValue, fragmentComponentProps } from './component-props.js';
 import { parseFragmentMdx } from './evaluate.js';
 import { type JsonValue, jsonAttributeValue, literalAttributeValue, staticDataValue } from './literal-attributes.js';
-import { isNestedHandlerKey, sanitizeAttributes } from './restrict-expressions.js';
+import { isNestedHandlerKey, remarkRestrictExpressions, sanitizeAttributes } from './restrict-expressions.js';
 import { isFragmentComponentName } from './vocabulary.js';
 import { findUnknownFragmentComponents } from './vocabulary-check.js';
 
@@ -223,4 +223,25 @@ export function checkFragmentMdx(
     }
   }
   return undefined;
+}
+
+/**
+ * Whether `mdx` carries no author code: {@link checkFragmentMdx} finds nothing with every component it names allowed
+ * (components are the site's own code), and the published renderer's gate refuses, drops and empties nothing. For a
+ * file a site's own MDX compile builds, where nothing neutralizes it first. A file that does not parse carries code.
+ */
+export function mdxCarriesNoCode(mdx: string): boolean {
+  try {
+    const named = new Set(findUnknownFragmentComponents(mdx, new Set()).map((found) => found.name));
+    if (checkFragmentMdx(mdx, named, {}) !== undefined) return false;
+    const tree = parseFragmentMdx(mdx);
+    const before = JSON.stringify(tree);
+    // SAFETY: the gate walks loose structural nodes (restrict-expressions.ts) and `Root` is one; evaluate.ts bridges it
+    // into unified the same way.
+    // oxlint-disable-next-line anti-slop/no-chained-type-assertions, typescript/no-unsafe-type-assertion -- same reason as the SAFETY note.
+    (remarkRestrictExpressions() as unknown as (root: Root) => void)(tree);
+    return JSON.stringify(tree) === before;
+  } catch {
+    return false;
+  }
 }
