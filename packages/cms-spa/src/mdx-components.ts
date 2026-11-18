@@ -121,9 +121,12 @@ export function installDiscoveredMdxComponents(components: MdxComponents): void 
  *
  * Discovered entries win on a name collision: they are derived from the
  * source of truth (the MDX files and component folders themselves), while a
- * hand-written list can lag. ONE rule for every caller — the dev SPA merges
- * the `/api/registry` response over the `schemasPath` exports, and a host app
- * merges the same two lists from what it supplies.
+ * hand-written list can lag. Discovery cannot see the host's editor settings,
+ * though: the host's `insert` (labels, descriptions), `props` (labels, help,
+ * `hidden`) and `blockType` stay on the merged entry. ONE rule for every
+ * caller — the dev SPA merges the `/api/registry` response over the
+ * `schemasPath` exports, and a host app merges the same two lists from what
+ * it supplies.
  *
  * Host survivors keep their relative order and discovered entries append
  * after them, so a colliding entry surfaces at its discovered position, not
@@ -133,7 +136,21 @@ export function installDiscoveredMdxComponents(components: MdxComponents): void 
 export function mergeDiscoveredMdxComponents(hostAuthored: MdxComponents, discovered: MdxComponents): MdxComponents {
   if (discovered.length === 0) return hostAuthored;
   const discoveredNames = new Set(discovered.map((descriptor) => descriptor.name));
-  return [...hostAuthored.filter((descriptor) => !discoveredNames.has(descriptor.name)), ...discovered];
+  const host = new Map(hostAuthored.map((descriptor) => [descriptor.name, descriptor]));
+  return [
+    ...hostAuthored.filter((descriptor) => !discoveredNames.has(descriptor.name)),
+    ...discovered.map((descriptor) => {
+      const authored = host.get(descriptor.name);
+      if (!authored || !isJsxDescriptor(authored) || !isJsxDescriptor(descriptor)) return descriptor;
+      const { insert, props, blockType } = authored;
+      return {
+        ...descriptor,
+        ...(insert && { insert }),
+        ...(props && { props }),
+        ...(blockType !== undefined && { blockType }),
+      };
+    }),
+  ];
 }
 
 /**

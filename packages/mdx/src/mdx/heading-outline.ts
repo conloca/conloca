@@ -123,6 +123,11 @@ function idFor(text: string, slugger: GithubSlugger, reserved: ReadonlySet<strin
   return id;
 }
 
+/** An anchor id for an outline entry's text, slugged the way headings are, that is none of the `taken` ids. */
+export function outlineIdFor(text: string, taken: Iterable<string>): string {
+  return idFor(text, new GithubSlugger(), new Set(taken));
+}
+
 /**
  * Give every heading in the tree an id and report them in document order.
  *

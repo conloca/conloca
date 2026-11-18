@@ -6,7 +6,7 @@
  * `mdx-components.ts`, which re-exports everything here for compatibility.
  * Mirrors the `page-schemas` / `page-schema-define` split.
  */
-import type { JsonValue } from '@conloca/mdx/render';
+import { type FragmentOutlineProps, type JsonValue, outlineIdFor } from '@conloca/mdx/render';
 import type { JsxEditorProps } from '@mdxeditor/editor';
 import type { MdxJsxAttribute, MdxJsxFlowElement, MdxJsxTextElement } from 'mdast-util-mdx-jsx';
 import type { ComponentType } from 'react';
@@ -36,48 +36,25 @@ import type { ComponentType } from 'react';
  * effects) are dropped. See the astro-cms README for the full constraint.
  */
 
+/** Fields every prop shares. `hidden` keeps a top-level prop out of the settings panel; its value is still kept. */
+interface MdxComponentPropBase {
+  name: string;
+  required?: boolean;
+  label?: string;
+  help?: string;
+  hidden?: boolean;
+}
+
 export type MdxComponentProp =
-  | {
-      name: string;
+  | (MdxComponentPropBase & {
       type: 'string';
-      required?: boolean;
-      label?: string;
-      help?: string;
       defaultValue?: string;
       options?: ReadonlyArray<{ value: string; label: string }>;
-    }
-  | {
-      name: string;
-      type: 'number';
-      required?: boolean;
-      label?: string;
-      help?: string;
-      defaultValue?: number;
-    }
-  | {
-      name: string;
-      type: 'boolean';
-      required?: boolean;
-      label?: string;
-      help?: string;
-      defaultValue?: boolean;
-    }
-  | {
-      name: string;
-      type: 'list';
-      label?: string;
-      help?: string;
-      required?: boolean;
-      of: MdxComponentField;
-    }
-  | {
-      name: string;
-      type: 'object';
-      label?: string;
-      help?: string;
-      required?: boolean;
-      fields: Record<string, MdxComponentField>;
-    };
+    })
+  | (MdxComponentPropBase & { type: 'number'; defaultValue?: number })
+  | (MdxComponentPropBase & { type: 'boolean'; defaultValue?: boolean })
+  | (MdxComponentPropBase & { type: 'list'; of: MdxComponentField })
+  | (MdxComponentPropBase & { type: 'object'; fields: Record<string, MdxComponentField> });
 
 /** A list item or object field: an `MdxComponentProp` without `name`. */
 export type MdxComponentField = MdxComponentProp extends infer P
@@ -119,6 +96,12 @@ export interface MdxJsxComponentDescriptor {
   props?: ReadonlyArray<MdxComponentProp>;
   /** Whether the component accepts children (nested rich-text editor). */
   hasChildren?: boolean;
+  /**
+   * Offer the component in the fragment editor's Block type dropdown, next to Paragraph and the headings: its body is
+   * one line of text, such as an eyebrow or a quiet title. Choosing it turns the line into the component; choosing
+   * Paragraph turns it back. Needs `kind: 'flow'` and `hasChildren: true`.
+   */
+  blockType?: boolean;
   /** Default attributes used at insert time. */
   defaults?: {
     attributes?: Record<string, JsonValue>;
@@ -212,6 +195,16 @@ export function defineMdxComponents(components: MdxComponents): MdxComponents {
       throw new Error(
         `defineMdxComponents: descriptor '${descriptor.name}' has kind: 'text' with hasChildren: true — ` +
           "text-kind JSX is treated as an inline atom; use kind: 'flow' for components with children.",
+      );
+    }
+    if (
+      isJsxDescriptor(descriptor) &&
+      descriptor.blockType &&
+      (descriptor.kind !== 'flow' || !descriptor.hasChildren)
+    ) {
+      throw new Error(
+        `defineMdxComponents: descriptor '${descriptor.name}' has blockType: true — a block type holds a line of text, ` +
+          "so it needs kind: 'flow' and hasChildren: true.",
       );
     }
     if (isSnippetDescriptor(descriptor) && descriptor.content.length === 0) {
@@ -331,6 +324,24 @@ export function writeStringAttribute<T extends MdxJsxFlowElement | MdxJsxTextEle
     next.push({ type: 'mdxJsxAttribute', name, value });
   }
   return next as T['attributes'];
+}
+
+/**
+ * `attributes` with the outline anchor (the `outline.id` prop) made from the contents text (`outline.text`) when the
+ * element has no anchor and has text. An existing anchor is never changed, so links to it keep working after the text
+ * is edited. `taken` holds the anchors already in the document.
+ */
+export function withOutlineId<T extends MdxJsxFlowElement | MdxJsxTextElement>(
+  attributes: T['attributes'],
+  outline: FragmentOutlineProps,
+  taken: Iterable<string>,
+): T['attributes'] {
+  const named = (name: string) =>
+    attributes.find((a): a is MdxJsxAttribute => a.type === 'mdxJsxAttribute' && a.name === name);
+  const id = named(outline.id);
+  const text = named(outline.text)?.value;
+  if ((id && id.value !== '') || typeof text !== 'string' || text.trim() === '') return attributes;
+  return writeAttribute<T>(attributes, outline.id, outlineIdFor(text, taken));
 }
 
 /**

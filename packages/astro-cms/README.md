@@ -338,6 +338,17 @@ In the fragment editor:
   Authors edit them in the settings panel, never as JSON, and the editor writes them as JSON attribute values.
   `defineMdxComponents` warns when a string, number or boolean default does not match its type, and throws for a list or
   object prop with no `of` or `fields`, or a default of the wrong shape.
+- **Block types.** A descriptor with `blockType: true` (it needs `kind: 'flow'` and `hasChildren: true`) is a text
+  style, such as an eyebrow: its body is one line of text. The toolbar's Block type dropdown lists it after Paragraph,
+  Quote and the headings, and shows it while the caret is inside one. Choosing it turns the selected lines into the
+  component, each holding its line; choosing Paragraph, Quote or a heading turns the component's lines back. Every
+  component, block type or not, stays in the `/` menu and Insert component.
+- **Hidden props.** A top-level prop with `hidden: true` is kept out of the settings panel; its value is kept as
+  written.
+- **Outline anchors.** For a component the render module declares as an `outline` entry (see Component outline below),
+  the editor fills in the anchor prop from the contents text when the author sets the text and the component has no
+  anchor yet. It never changes an anchor that exists, so links to it keep working when the text changes. Pair it with
+  `hidden: true` on the anchor prop so authors only write the contents text.
 - **The save check.** The editor refuses to save a fragment the renderer would refuse or change: a parse failure,
   `import`/`export` lines, `{…}` expressions, a component the vocabulary lacks, a prop value that is not valid JSON, a
   `{...spread}` or code in an attribute, or a declared prop of the wrong type. The message names the component or line;

@@ -238,6 +238,20 @@
   color: var(--color-accent-foreground);
 }
 
+/* A scroll box whose scrollbar always shows. macOS overlay scrollbars appear only while scrolling, so a menu cut
+ * off at its last visible entry gave no sign that more entries sit below. */
+@utility scrollbar-visible {
+  &::-webkit-scrollbar {
+    width: 10px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background-color: var(--color-line);
+    background-clip: content-box;
+    border: 2px solid transparent;
+    border-radius: 9999px;
+  }
+}
+
 /* Dark mode: selector strategy for manual toggle + system preference.
  * Uses :is() (not :where()) so dark variants beat any host site's
  * Tailwind that gets injected into /__cms — its plain .bg-white

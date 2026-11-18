@@ -196,7 +196,10 @@ The rules the renderer applies:
   order as `{ component, id, text }`, read from its props after the JSON-props rules above; one whose id or text is not
   a non-empty string is left out. It is a list of its own, so `outline` keeps only headings, and a generated heading id
   never takes a listed component's id. The component renders the id itself. `defineFragmentComponents` throws for an
-  `outline` key that is not in `components`, or prop names that are not non-empty strings.
+  `outline` key that is not in `components`, or prop names that are not non-empty strings. `outlineIdFor(text, taken)`
+  gives an anchor id for an entry's text, slugged the way headings are, that is none of the `taken` ids. Pass it the
+  document's component ids and `fragmentHeadingIds(mdx, vocabulary)`, the ids `outline` gives the headings, so a new
+  anchor takes no heading's id either.
 - **Component names.** `componentNames` lists the vocabulary components the fragment renders, each once, in first-use
   order (`['Callout']` above); it is empty when the fragment is rejected.
 

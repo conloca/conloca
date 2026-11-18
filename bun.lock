@@ -211,6 +211,7 @@
         "@conloca/content-api-client": "workspace:*",
         "@conloca/mdx": "workspace:*",
         "@lexical/react": "^0.48.0",
+        "@lexical/rich-text": "^0.48.0",
         "@mdxeditor/editor": "^4.2.3",
         "@puckeditor/core": "^0.23.0",
         "@radix-ui/react-dialog": "^1.1.23",

@@ -74,8 +74,12 @@ export function SlashMenuPlugin() {
             insert: { label: d.name, category: d.kind === 'flow' ? 'Components' : 'Patterns' },
           },
     );
-    const matching = visible.filter((d) => matchesQuery(d, queryString ?? ''));
-    return matching.map((d) => new MdxComponentOption(d));
+    const query = (queryString ?? '').toLowerCase();
+    const exact = (d: MdxComponentDescriptor) =>
+      query !== '' && (d.name.toLowerCase() === query || d.insert?.label.toLowerCase() === query);
+    // An entry named exactly what the author typed goes first; the rest keep the site's order.
+    const matching = visible.filter((d) => matchesQuery(d, query));
+    return [...matching.filter(exact), ...matching.filter((d) => !exact(d))].map((d) => new MdxComponentOption(d));
   }, [allComponents, queryString]);
 
   const onSelectOption = useCallback(
@@ -213,7 +217,7 @@ function SlashMenuList({ anchor, optionCount, children }: SlashMenuListProps) {
       <div
         ref={menuRef}
         role="listbox"
-        className="z-50 min-w-[14rem] overflow-auto rounded-md border border-line bg-panel shadow-md py-1 text-sm text-foreground"
+        className="scrollbar-visible z-50 min-w-[14rem] overflow-auto rounded-md border border-line bg-panel shadow-md py-1 text-sm text-foreground"
         // Hidden at the top left for the first measurement, before the layout effect places it.
         style={{ position: 'fixed', ...(placement ?? { top: 0, left: 0, visibility: 'hidden' }) }}
         data-slash-menu

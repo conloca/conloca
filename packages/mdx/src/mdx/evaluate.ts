@@ -147,6 +147,20 @@ export function parseFragmentMdx(mdx: string): Root {
   return processor.parse(mdx);
 }
 
+/**
+ * The ids `evaluateMDXToComponent`'s `outline` gives the fragment's headings, from the same pass but without rendering,
+ * so a caller can pick a new anchor that takes none of them. Empty when the fragment is rejected.
+ */
+export function fragmentHeadingIds(mdx: string, vocabulary: FragmentVocabulary = EMPTY_FRAGMENT_VOCABULARY): string[] {
+  try {
+    const hast = processor.runSync(processor.parse(mdx));
+    const reserved = componentOutlineOf(hast, vocabulary.outline ?? {}).map((entry) => entry.id);
+    return applyHeadingIds(hast, reserved).map((heading) => heading.id);
+  } catch {
+    return [];
+  }
+}
+
 interface EstreeNode {
   type: string;
   name?: string;

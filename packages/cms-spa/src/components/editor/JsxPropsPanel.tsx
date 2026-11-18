@@ -42,23 +42,26 @@ export function JsxPropsPanel() {
   }
 
   const { descriptor, attrs, onPropChange, onRemove } = selected;
+  const props = descriptor.props?.filter((prop) => !prop.hidden) ?? [];
+  // The name authors see in the menus, not the tag in the file.
+  const title = descriptor.insert?.label ?? descriptor.name;
 
   return (
     <aside className="conloca-jsx-props-panel">
       <header className="conloca-jsx-props-panel__header">
-        <h3 className="conloca-jsx-props-panel__title">{descriptor.name}</h3>
+        <h3 className="conloca-jsx-props-panel__title">{title}</h3>
         <button
           type="button"
           onClick={onRemove}
-          aria-label={`Remove ${descriptor.name}`}
+          aria-label={`Remove ${title}`}
           className="conloca-jsx-props-panel__remove"
         >
           <Trash2 size={14} aria-hidden /> Remove
         </button>
       </header>
-      {descriptor.props && descriptor.props.length > 0 ? (
+      {props.length > 0 ? (
         <div className="conloca-jsx-props-panel__fields">
-          {descriptor.props.map((prop) => (
+          {props.map((prop) => (
             <PropField
               key={prop.name}
               prop={prop}

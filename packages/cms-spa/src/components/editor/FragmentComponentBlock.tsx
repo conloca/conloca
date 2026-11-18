@@ -1,14 +1,28 @@
-import { fragmentComponentProps, type JsonValue } from '@conloca/mdx/render';
+import {
+  type FragmentVocabulary,
+  fragmentComponentProps,
+  fragmentHeadingIds,
+  type JsonValue,
+  parseFragmentMdx,
+} from '@conloca/mdx/render';
 import {
   type JsxEditorProps,
+  markdown$,
   NestedLexicalEditor,
   useLexicalNodeRemove,
   useMdastNodeUpdater,
   useNestedEditorContext,
+  useRealm,
 } from '@mdxeditor/editor';
 import type * as Mdast from 'mdast';
 import { Component, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
-import { isJsxDescriptor, useMdxComponents, writeAttribute } from '../../mdx-components.js';
+import {
+  isJsxDescriptor,
+  readStringAttribute,
+  useMdxComponents,
+  withOutlineId,
+  writeAttribute,
+} from '../../mdx-components.js';
 import { getSelectedBlock, setSelectedBlock } from '../../selected-block.js';
 import { useSiteRender } from '../../site-render.js';
 import { readAttrs } from '../../utils/mdast-tree.js';
@@ -61,6 +75,7 @@ export function FragmentComponentBlock({ mdastNode }: JsxEditorProps) {
   const removeNode = useLexicalNodeRemove();
   const { lexicalNode } = useNestedEditorContext();
   const { vocabulary } = useSiteRender();
+  const realm = useRealm();
   const offered = useOfferedMdxComponents().find((d) => d.name === name);
   const descriptor = offered && isJsxDescriptor(offered) ? offered : undefined;
   const registered = useMdxComponents().some((d) => d.name === name);
@@ -68,6 +83,23 @@ export function FragmentComponentBlock({ mdastNode }: JsxEditorProps) {
   const block = mdastNode.type === 'mdxJsxFlowElement';
   const Wrapper = block ? 'div' : 'span';
 
+  /** `attributes` with the outline anchor made from the contents label if missing; the document is read only then. */
+  const withAnchor = useCallback(
+    (attributes: typeof node.attributes) => {
+      const outline = vocabulary.outline?.[name];
+      if (!outline) return attributes;
+      return withOutlineId(
+        attributes,
+        outline,
+        takenAnchors(() => realm.getValue(markdown$), vocabulary),
+      );
+    },
+    [name, realm, vocabulary],
+  );
+  // The callbacks read the latest node and updater, so a prop edit after typing in the body, a second prop edit, or a
+  // body written back twice before the block re-renders never builds on a stale snapshot.
+  const bindings = useRef({ node, updater });
+  bindings.current = { node, updater };
   // A component with no descriptor is inserted without a body: inventing children would crash a void component.
   // Sites declare a descriptor with `hasChildren` to get an editable body.
   const hasChildren = descriptor?.hasChildren === true && (registered || node.children.length > 0);
@@ -107,17 +139,24 @@ export function FragmentComponentBlock({ mdastNode }: JsxEditorProps) {
     <ComponentBoundary name={name} resetKey="" editable={null}>
       <NestedLexicalEditor<typeof mdastNode>
         getContent={(n) => n.children}
-        getUpdatedMdastNode={(n, children) => withChildren(n, children)}
+        // An edit to the body is an edit to the component: one read without an anchor gets it now. Leaving the body
+        // writes it back unedited too, which is no edit.
+        getUpdatedMdastNode={(_, children) => {
+          const current = bindings.current.node;
+          const edited = contentOf(children) !== contentOf(current.children);
+          const next = withChildren(
+            { ...current, attributes: edited ? withAnchor(current.attributes) : current.attributes },
+            children,
+          );
+          bindings.current.node = next;
+          return next;
+        }}
         block={block}
         contentEditableProps={bodyProps}
       />
     </ComponentBoundary>
   ) : null;
 
-  // The published callbacks read the latest node and updater, so a prop edit after typing in the body, or a second
-  // prop edit, never writes back a stale snapshot.
-  const bindings = useRef({ node, updater });
-  bindings.current = { node, updater };
   const blockKey = lexicalNode.getKey();
   const publish = useCallback(() => {
     if (!descriptor) return;
@@ -129,14 +168,22 @@ export function FragmentComponentBlock({ mdastNode }: JsxEditorProps) {
       attrs: readAttrs({ type: 'mdxJsxFlowElement', name, attributes: bindings.current.node.attributes, children: [] }),
       onPropChange: (propName: string, value: JsonValue | null | undefined) => {
         const current = bindings.current.node;
-        const attributes = writeAttribute(current.attributes, propName, value);
+        const attributes = withAnchor(writeAttribute(current.attributes, propName, value));
         // Until the block re-renders, a second edit in the same tick builds on this one.
         bindings.current.node = { ...current, attributes };
         bindings.current.updater({ attributes });
       },
       onRemove: removeNode,
     });
-  }, [descriptor, blockKey, name, removeNode]);
+  }, [descriptor, blockKey, name, removeNode, withAnchor]);
+  // A component made in the editor gets its anchor at once. One read from the file keeps its tag as written until it
+  // is edited, so opening and saving changes nothing.
+  const made = node.type === 'mdxJsxFlowElement' && !node.data?.sourceLayout;
+  useEffect(() => {
+    if (!made) return;
+    const attributes = withAnchor(node.attributes);
+    if (attributes !== node.attributes) bindings.current.updater({ attributes });
+  }, [made, node, withAnchor]);
   const signature = JSON.stringify(node);
   // Keep the panel's attrs current while this block stays selected.
   // biome-ignore lint/correctness/useExhaustiveDependencies: republish when the node's content changes.
@@ -174,8 +221,37 @@ export function FragmentComponentBlock({ mdastNode }: JsxEditorProps) {
   );
 }
 
+/** What `nodes` say, without where they were read from or the layout they were read in, to tell an edit apart. */
+function contentOf(nodes: readonly Mdast.Nodes[]): string {
+  return JSON.stringify(nodes, (key, value) => (key === 'position' || key === 'data' ? undefined : value));
+}
+
 /** `node` with the nested editor's children; the editor writes the content kind the element holds. */
 function withChildren<T extends object>(node: T, children: Mdast.RootContent[]): T {
   const next = { ...node };
   return Object.assign(next, { children });
+}
+
+/** The anchors `markdown` already uses, outlined components' and headings': a generated anchor must not take one. */
+function anchorIdsIn(markdown: string, vocabulary: FragmentVocabulary): string[] {
+  const outline = vocabulary.outline ?? {};
+  let pending: Mdast.Nodes[];
+  try {
+    pending = [parseFragmentMdx(markdown)];
+  } catch {
+    return [];
+  }
+  const ids = fragmentHeadingIds(markdown, vocabulary);
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    const entry = node.type === 'mdxJsxFlowElement' && node.name ? outline[node.name] : undefined;
+    const id = entry && node.type === 'mdxJsxFlowElement' ? readStringAttribute(node, entry.id) : '';
+    if (id) ids.push(id);
+    if ('children' in node) pending.push(...node.children);
+  }
+  return ids;
+}
+
+/** `anchorIdsIn`, parsed only once iterated: `withOutlineId` reads it only when it makes an anchor, not on each edit. */
+function* takenAnchors(markdown: () => string, vocabulary: FragmentVocabulary): Generator<string> {
+  yield* anchorIdsIn(markdown(), vocabulary);
 }

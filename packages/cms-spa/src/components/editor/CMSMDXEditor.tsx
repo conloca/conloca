@@ -25,7 +25,9 @@ import {
 } from '../../site-styles.js';
 import { getUIConfig, inEditorFrame } from '../../ui-config.js';
 import { assetRefOf } from '../../utils/asset-url.js';
+import { bodySyncPlugin } from './body-sync-plugin.js';
 import { draftImagePreview } from './draft-media-config.js';
+import { FragmentBlockTypeSelect } from './FragmentBlockTypeSelect.js';
 import { FragmentComponentBlock } from './FragmentComponentBlock.js';
 import { GenericBlock } from './GenericBlock.js';
 import { hostWrapperPlugin } from './host-wrapper-plugin.js';
@@ -41,6 +43,7 @@ const EDITOR_CSS: string = import.meta.env.CONLOCA_EDITOR_CSS || '';
 export interface CMSMDXEditorProps
   extends Omit<
     BaseMDXEditorProps,
+    | 'blockTypeSelect'
     | 'disableImageSettingsButton'
     | 'extraToolbarItems'
     | 'imageButtonRef'
@@ -223,6 +226,7 @@ export const CMSMDXEditor = forwardRef<MDXEditorMethods, CMSMDXEditorProps>(
         jsxLayoutPlugin(),
         mdxComponentsPlugin(),
         softBreakPlugin(),
+        bodySyncPlugin(),
         hostWrapperPlugin({ wrapper: hostWrappers.content, codeBlockWrapper: hostWrappers.codeBlock }),
         ...(props.extraPlugins ?? []),
       ],
@@ -240,6 +244,15 @@ export const CMSMDXEditor = forwardRef<MDXEditorMethods, CMSMDXEditorProps>(
               })
             : toJsxComponentDescriptor(descriptor, GenericBlock),
         ),
+      [registeredMdxComponents, fragment],
+    );
+    const blockTypeSelect = useMemo(
+      () =>
+        fragment ? (
+          <FragmentBlockTypeSelect
+            components={registeredMdxComponents.filter(isJsxDescriptor).filter((d) => d.blockType)}
+          />
+        ) : undefined,
       [registeredMdxComponents, fragment],
     );
 
@@ -270,6 +283,7 @@ export const CMSMDXEditor = forwardRef<MDXEditorMethods, CMSMDXEditorProps>(
           jsxComponentDescriptors={jsxComponentDescriptors}
           extraPlugins={extraPlugins}
           extraToolbarItems={<InsertMdxComponentButton />}
+          blockTypeSelect={blockTypeSelect}
           onImageShortcut={() => {
             if (insertImageRef.current) {
               insertImageRef.current.click();

@@ -114,7 +114,7 @@ export function InsertMdxComponentButton() {
         <DropdownMenu.Content
           sideOffset={4}
           align="start"
-          className="z-50 min-w-[14rem] max-h-72 overflow-auto rounded-md border border-line bg-panel shadow-md py-1 text-sm text-foreground"
+          className="scrollbar-visible z-50 min-w-[14rem] max-h-[min(18rem,var(--radix-dropdown-menu-content-available-height))] overflow-auto rounded-md border border-line bg-panel shadow-md py-1 text-sm text-foreground"
         >
           {groups.map((group, groupIndex) => (
             <div key={group.category || '__ungrouped__'}>

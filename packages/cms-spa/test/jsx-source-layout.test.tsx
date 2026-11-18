@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { defineFragmentComponents } from '@conloca/mdx/render';
 import { act, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { BLUR_COMMAND, getNearestEditorFromDOMNode } from 'lexical';
 import type { ReactNode } from 'react';
 import { getSelectedBlock, setSelectedBlock } from '../src/selected-block.js';
 import { setSiteRender } from '../src/site-render.js';
@@ -20,6 +21,7 @@ beforeEach(() => {
         Section: ({ children }: { children?: ReactNode }) => <section>{children}</section>,
         TextTable: () => null,
       },
+      outline: { Section: { id: 'id', text: 'label' } },
     }),
   });
 });
@@ -30,7 +32,8 @@ afterEach(() => {
 });
 
 // A fragment written the way sites write them: wrapped paragraphs, children at the tag's column, a blank line before
-// each closing tag, lists and a multi-line JSON prop inside components, and a root paragraph last.
+// each closing tag, lists and a multi-line JSON prop inside components, a section with a contents label but no anchor,
+// and a root paragraph last.
 const fragment = readFileSync(new URL('./fixtures/source-layout.mdx', import.meta.url), 'utf8');
 
 describe('component blocks keep their source layout', () => {
@@ -50,6 +53,34 @@ describe('component blocks keep their source layout', () => {
     const line = 'warm until the lunch crowd arrives.\n';
     appendWord(container, 'Each oven holds');
     await waitFor(() => expect(saved()).toBe(fragment.replace(line, `${line.trimEnd()} word\n`)));
+  });
+
+  // Opening and saving leaves the anchorless section as it was; the anchor comes with the first edit to the section.
+  test('a word added inside a section with no anchor gives it one', async () => {
+    const { container, saved } = await open(fragment);
+    const line = 'with coffee before the bread is sliced.';
+    appendWord(container, 'The counter opens');
+    await waitFor(() =>
+      expect(saved()).toBe(
+        fragment
+          .replace('<Section label="The counter">', '<Section label="The counter" id="the-counter">')
+          .replace(line, `${line} word`),
+      ),
+    );
+  });
+
+  test('leaving a section with no anchor unedited leaves it as it was', async () => {
+    const { container, saved } = await open(fragment);
+    const body = [...container.querySelectorAll('section [contenteditable="true"]')].find((el) =>
+      el.textContent?.includes('The counter opens'),
+    );
+    const editor = body && getNearestEditorFromDOMNode(body);
+    if (!editor) throw new Error('no counter body');
+    act(() => {
+      editor.focus();
+      editor.dispatchCommand(BLUR_COMMAND, new FocusEvent('blur'));
+    });
+    expect(saved()).toBe(fragment);
   });
 
   // The editor keeps the line endings inside what it read and writes its own breaks between blocks as `\n`.

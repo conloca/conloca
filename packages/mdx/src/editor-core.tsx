@@ -132,6 +132,8 @@ export interface BaseMDXEditorProps {
    * stock toolbar.
    */
   extraToolbarItems?: React.ReactNode;
+  /** Replaces the toolbar's Block type dropdown. Omit it for the stock one. */
+  blockTypeSelect?: React.ReactNode;
   /**
    * Class applied to the MDXEditor root element (library forwards it to the
    * toolbar and portaled popups too). Pass `"dark-theme"` to activate the
@@ -232,6 +234,7 @@ export const BaseMDXEditor = React.forwardRef<MDXEditorMethods, BaseMDXEditorPro
       jsxComponentDescriptors,
       extraPlugins,
       extraToolbarItems,
+      blockTypeSelect,
       className,
       placeholder,
       autoFocus,
@@ -387,7 +390,7 @@ export const BaseMDXEditor = React.forwardRef<MDXEditorMethods, BaseMDXEditorPro
                           <Separator />
                           <ListsToggle />
                           <Separator />
-                          <BlockTypeSelect />
+                          {blockTypeSelect ?? <BlockTypeSelect />}
                           <Separator />
                           <CreateLink />
                           {renderInsertImageButton(imageButtonRef)}

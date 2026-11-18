@@ -3,6 +3,7 @@ import { createElement, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { evaluateMDXToComponent } from '../mdx/evaluate.js';
 import { defineFragmentComponents } from '../mdx/vocabulary.js';
+import { fragmentHeadingIds, outlineIdFor } from '../render.js';
 
 /**
  * A fragment's outline is the list of its headings, produced while the MDX is
@@ -200,5 +201,34 @@ describe('component outline', () => {
     const { outline } = await evaluated('<Section id="same" label="Same">\n\n## Same\n\n</Section>');
 
     expect(outline.map((h) => h.id)).toEqual(['same-1']);
+  });
+});
+
+describe('outlineIdFor', () => {
+  test('slugs the text the way headings are slugged', () => {
+    expect(outlineIdFor('Git’s safety net', [])).toBe('gits-safety-net');
+  });
+
+  test('never returns a taken id, and text with no slug still gets one', () => {
+    expect(outlineIdFor('Overview', ['overview', 'overview-1'])).toBe('overview-2');
+    expect(outlineIdFor('!!!', [])).toBe('section');
+  });
+});
+
+describe('fragmentHeadingIds', () => {
+  test('lists the ids the outline gives the headings, without rendering', async () => {
+    const vocabulary = defineFragmentComponents({
+      components: { Section: ({ children }: { children?: ReactNode }) => children },
+      outline: { Section: { id: 'id', text: 'label' } },
+    });
+    const mdx = '<Section id="intro" label="Intro">\n\n## Intro\n\n## Same\n\n## Same\n\n</Section>';
+
+    const { outline } = await evaluateMDXToComponent(mdx, vocabulary);
+    expect(fragmentHeadingIds(mdx, vocabulary)).toEqual(outline.map((heading) => heading.id));
+    expect(fragmentHeadingIds(mdx, vocabulary)).toEqual(['intro-1', 'same', 'same-1']);
+  });
+
+  test('is empty for a fragment the pipeline rejects', () => {
+    expect(fragmentHeadingIds('## Title\n\n<Unclosed>')).toEqual([]);
   });
 });

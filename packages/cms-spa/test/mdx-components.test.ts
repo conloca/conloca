@@ -10,6 +10,7 @@ import {
   type MdxSnippetDescriptor,
   mergeDiscoveredMdxComponents,
   toJsxComponentDescriptor,
+  withOutlineId,
   writeAttribute,
 } from '../src/mdx-components.js';
 import { readAttrs } from '../src/utils/mdast-tree.js';
@@ -81,6 +82,39 @@ describe('defineMdxComponents', () => {
   test('throws on snippet with empty content', () => {
     expect(() => defineMdxComponents([snippetMinimal({ content: '' })])).toThrow(/empty content/);
   });
+
+  test('a block type is a flow component with children', () => {
+    expect(() => defineMdxComponents([minimal({ name: 'Eyebrow', hasChildren: true, blockType: true })])).not.toThrow();
+    expect(() => defineMdxComponents([minimal({ name: 'Rule', hasChildren: false, blockType: true })])).toThrow(
+      /blockType/,
+    );
+    expect(() => defineMdxComponents([minimal({ name: 'Icon', kind: 'text', blockType: true })])).toThrow(/blockType/);
+  });
+});
+
+const attributesOf = (values: Record<string, string>) =>
+  Object.entries(values).map(([name, value]) => ({ type: 'mdxJsxAttribute' as const, name, value }));
+
+describe('withOutlineId', () => {
+  const outline = { id: 'id', text: 'label' };
+
+  test('makes the anchor from the text when there is none', () => {
+    expect(withOutlineId(attributesOf({ label: 'Git history' }), outline, [])).toEqual(
+      attributesOf({ label: 'Git history', id: 'git-history' }),
+    );
+  });
+
+  test('never changes an existing anchor', () => {
+    const kept = attributesOf({ id: 'real-page', label: 'Something else' });
+    expect(withOutlineId(kept, outline, [])).toEqual(kept);
+  });
+
+  test('leaves an element without text alone, and never takes an anchor already in the document', () => {
+    expect(withOutlineId([], outline, [])).toEqual([]);
+    expect(withOutlineId(attributesOf({ label: 'Overview' }), outline, ['overview'])).toEqual(
+      attributesOf({ label: 'Overview', id: 'overview-1' }),
+    );
+  });
 });
 
 /**
@@ -124,14 +158,37 @@ describe('containsMarkdownMarkers', () => {
  */
 describe('mergeDiscoveredMdxComponents', () => {
   test('auto-discovered descriptors win on a name collision', () => {
-    const hostAuthored = [minimal({ name: 'Aside', insert: { label: 'Host Aside' } }), minimal({ name: 'Steps' })];
-    const discovered = [minimal({ name: 'Aside', insert: { label: 'Discovered Aside' } })];
+    const hostAuthored = [minimal({ name: 'Aside', hasChildren: false }), minimal({ name: 'Steps' })];
+    const discovered = [minimal({ name: 'Aside', hasChildren: true })];
 
     const merged = mergeDiscoveredMdxComponents(hostAuthored, discovered);
 
     // Shadowed host entry is dropped, order puts the survivors first.
     expect(merged.map((descriptor) => descriptor.name)).toEqual(['Steps', 'Aside']);
-    expect(merged.find((descriptor) => descriptor.name === 'Aside')?.insert?.label).toBe('Discovered Aside');
+    expect(merged.find((descriptor) => descriptor.name === 'Aside')).toMatchObject({ hasChildren: true });
+  });
+
+  test("the host's editor settings survive discovery of the same component", () => {
+    const section = minimal({
+      name: 'Section',
+      hasChildren: true,
+      insert: { label: 'Section', description: 'A titled part of the page' },
+      props: [{ name: 'id', type: 'string', label: 'Anchor', hidden: true }],
+    });
+    const eyebrow = minimal({ name: 'Eyebrow', hasChildren: true, blockType: true, insert: { label: 'Eyebrow' } });
+    const discovered = [
+      minimal({
+        name: 'Section',
+        hasChildren: true,
+        insert: { label: 'section' },
+        props: [{ name: 'id', type: 'string' }],
+      }),
+      minimal({ name: 'Eyebrow', hasChildren: true }),
+    ];
+
+    const merged = mergeDiscoveredMdxComponents([section, eyebrow], discovered);
+
+    expect(merged).toEqual([section, eyebrow]);
   });
 
   test('returns the host list untouched when nothing was discovered', () => {
@@ -176,12 +233,12 @@ describe('slotted mdx component installs', () => {
   });
 
   test('discovered still wins a name collision through the slots', () => {
-    installDiscoveredMdxComponents([minimal({ name: 'Aside', insert: { label: 'Discovered' } })]);
-    installHostAuthoredMdxComponents([minimal({ name: 'Aside', insert: { label: 'Host' } })]);
+    installDiscoveredMdxComponents([minimal({ name: 'Aside', hasChildren: true })]);
+    installHostAuthoredMdxComponents([minimal({ name: 'Aside', hasChildren: false })]);
 
     const [aside] = getMdxComponents();
     expect(getMdxComponents()).toHaveLength(1);
-    expect(aside.insert?.label).toBe('Discovered');
+    expect(aside).toMatchObject({ hasChildren: true });
   });
 });
 
