@@ -344,16 +344,18 @@ export const TypingSurfaceMatchesHostTypography: Story = {
     // — there is no selector left to match or miss.
     expect(probeTag).toContain(`${'.conloca-mdx-editor-surround'} {`);
     expect(probeTag).toContain('--sl-color-bg: #020617');
-    // The probe owns heading metrics too. `:where()` is deliberate upstream
-    // (host-style-probe.ts) to hold the rule at (0,0,1) — the SAME specificity
-    // as editor-styles.css's own unlayered `:where(.conloca-prose--editor) h2`
-    // scale, so head order alone would break the tie. The probe therefore also
-    // publishes `--conloca-host-h2-*` on the heading, which that scale reads
-    // first. The rule text and the computed value are asserted together: text
-    // alone would not prove it wins, and the computed value alone would not
-    // prove the probe is what produced it.
-    expect(probeTag).toMatch(/:where\(\.conloca-prose--editor\) h2 \{(?:[^}]*;)? font-size: 35px/);
-    expect(probeTag).toMatch(/:where\(\.conloca-prose--editor\) h2 \{[^}]*--conloca-host-h2-font-size: 35px/);
+    // The probe owns heading metrics too. The host sheet gives the heading the
+    // same metrics in the editor's shape, so the probe's value is a fallback in
+    // `conloca-host-defaults`, under the host's own rules, and the editor's own
+    // unlayered `:where(.conloca-prose--editor) h2` scale (editor-styles.css) is
+    // handed back to the layers by a (0,0,2) `revert-layer` rule. The rule text
+    // and the computed value are asserted together: text alone would not prove
+    // it wins, and the computed value alone would not prove the probe is what
+    // produced it.
+    await expect(probeTag).toMatch(
+      /@layer conloca-host-defaults \{ :where\(\.conloca-prose--editor\) h2 \{(?:[^}]*;)? font-size: 35px/,
+    );
+    await expect(probeTag).toContain(':where(.conloca-prose--editor) h2:is(h2) { font-size: revert-layer;');
     const surface = paintedBackground(editable);
     // Heading metrics come from the host sheet, not the editor's default
     // 1.75em/700 scale.

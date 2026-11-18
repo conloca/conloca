@@ -1,5 +1,12 @@
 import { codeBlockWrapperInfo$ } from '@conloca/mdx';
-import { addEditorWrapper$, Cell, realmPlugin, useCellValue } from '@mdxeditor/editor';
+import {
+  addEditorWrapper$,
+  Cell,
+  contentEditableClassName$,
+  type Realm,
+  realmPlugin,
+  useCellValue,
+} from '@mdxeditor/editor';
 import { type ComponentType, createElement, Fragment, type ReactElement, type ReactNode } from 'react';
 
 /**
@@ -78,14 +85,28 @@ export interface HostWrapperPluginParams {
   codeBlockWrapper?: HostWrapperInfo[] | null;
 }
 
+/**
+ * The wrapper's classes also go on the contenteditable itself: on the page the
+ * prose blocks are the wrapper's own children, so the site's flow rules
+ * (`.prose > * + *`, `.prose > p + p`) only reach the editor's blocks from
+ * their parent. The clone stays for tag-qualified and descendant selectors;
+ * main.css keeps the wrapper's box off the contenteditable so it paints once.
+ * Runs after the core plugin, which publishes the editor's own classes first on
+ * every init and update, so the wrapper's are added once.
+ */
+function publishWrapper(realm: Realm, params: HostWrapperPluginParams | undefined): void {
+  const wrapper = params?.wrapper ?? null;
+  realm.pub(hostWrapperInfo$, wrapper);
+  realm.pub(codeBlockWrapperInfo$, params?.codeBlockWrapper ?? null);
+  if (wrapper?.className) {
+    realm.pub(contentEditableClassName$, `${realm.getValue(contentEditableClassName$)} ${wrapper.className}`);
+  }
+}
+
 export const hostWrapperPlugin = realmPlugin<HostWrapperPluginParams>({
   init(realm, params) {
     realm.pub(addEditorWrapper$, HostWrapperRenderer);
-    realm.pub(hostWrapperInfo$, params?.wrapper ?? null);
-    realm.pub(codeBlockWrapperInfo$, params?.codeBlockWrapper ?? null);
+    publishWrapper(realm, params);
   },
-  update(realm, params) {
-    realm.pub(hostWrapperInfo$, params?.wrapper ?? null);
-    realm.pub(codeBlockWrapperInfo$, params?.codeBlockWrapper ?? null);
-  },
+  update: publishWrapper,
 });

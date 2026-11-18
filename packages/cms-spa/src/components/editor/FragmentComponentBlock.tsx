@@ -7,7 +7,7 @@ import {
   useNestedEditorContext,
 } from '@mdxeditor/editor';
 import type * as Mdast from 'mdast';
-import { Component, type ReactNode, useCallback, useEffect, useRef } from 'react';
+import { Component, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { isJsxDescriptor, useMdxComponents, writeAttribute } from '../../mdx-components.js';
 import { getSelectedBlock, setSelectedBlock } from '../../selected-block.js';
 import { useSiteRender } from '../../site-render.js';
@@ -71,6 +71,36 @@ export function FragmentComponentBlock({ mdastNode }: JsxEditorProps) {
   // A component with no descriptor is inserted without a body: inventing children would crash a void component.
   // Sites declare a descriptor with `hasChildren` to get an editable body.
   const hasChildren = descriptor?.hasChildren === true && (registered || node.children.length > 0);
+  // On the published page the body's blocks are the site component's own children, which the site spaces with rules
+  // like `.section > * + *`; here they are the nested editor's children. The nested editor carries the component's
+  // classes so those rules reach them (main.css keeps the component's box off it), as the root contenteditable
+  // carries the page wrapper's classes. Read off the rendered element: only the site component knows its classes.
+  // Written straight onto the element rather than through state, and only when a class is missing or stale: a
+  // re-render of the block, or a class write the element already had, as its body mounts raced the author's first
+  // caret placement in it.
+  const bodyRef = useRef<HTMLElement | null>(null);
+  const bodyClasses = useRef<string[]>([]);
+  const syncBodyClass = useCallback(() => {
+    const body = bodyRef.current;
+    if (!body?.parentElement) return;
+    const next = Array.from(body.parentElement.classList);
+    const stale = bodyClasses.current.filter((token) => !next.includes(token));
+    const missing = next.filter((token) => !body.classList.contains(token));
+    if (stale.length > 0) body.classList.remove(...stale);
+    if (missing.length > 0) body.classList.add(...missing);
+    bodyClasses.current = next;
+  }, []);
+  const attachBody = useCallback(
+    (element: HTMLElement | null) => {
+      bodyRef.current = element;
+      syncBodyClass();
+    },
+    [syncBodyClass],
+  );
+  // The component's classes may follow its props.
+  useLayoutEffect(syncBodyClass);
+  // The fallback card's classes are Conloca's chrome, not the site's.
+  const bodyProps = useMemo(() => (SiteComponent ? { ref: attachBody } : undefined), [SiteComponent, attachBody]);
   // The body has its own boundary: a body that fails to load shows the card without a body, where the component's
   // boundary would remount the same failing body in its card forever.
   const editable = hasChildren ? (
@@ -79,6 +109,7 @@ export function FragmentComponentBlock({ mdastNode }: JsxEditorProps) {
         getContent={(n) => n.children}
         getUpdatedMdastNode={(n, children) => withChildren(n, children)}
         block={block}
+        contentEditableProps={bodyProps}
       />
     </ComponentBoundary>
   ) : null;

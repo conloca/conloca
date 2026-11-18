@@ -256,6 +256,15 @@ function buildProbeStylesheet(doc: Document, wrapperClass: string | null): strin
   // rule beats inheritance and restores the host's typography.
   const wrapperRule = probeWrapper(view, wrapper);
   if (wrapperRule) rules.push(wrapperRule);
+  // The page's own colour scheme (`normal`, ie light, for a site that declares none), so the browser draws the
+  // content's links, controls and scrollbars as the published page does rather than in the editor chrome's scheme.
+  // Resolved: `light dark` in the editor would follow the OS preference again, not the scheme probed here.
+  rules.push(`:where(.conloca-prose--editor) { color-scheme: ${usedScheme(view, wrapper)}; }`);
+  // A site that can be dark rebases its `:root { color-scheme: light dark }` onto the surround, whose
+  // `light-dark()` paper would then follow the OS too; only then does the surround take the resolved scheme.
+  if (/\bdark\b/.test(view.getComputedStyle(doc.body).colorScheme)) {
+    rules.push(`${HOST_TOKEN_SCOPE} { color-scheme: ${usedScheme(view, doc.body)}; }`);
+  }
 
   // Page background, read off BODY rather than the wrapper. The wrapper is
   // transparent on most hosts (Starlight's is), so the page's surface colour
@@ -359,40 +368,67 @@ function buildProbeStylesheet(doc: Document, wrapperClass: string | null): strin
 function probeBlockTagInSiblingContext(view: Window, wrapper: HTMLElement, tag: string): string {
   const doc = wrapper.ownerDocument;
 
-  // Build the synthetic context. The element we read is always
-  // `target` — everything before it just creates the right adjacency.
-  let host: HTMLElement;
-  let target: HTMLElement;
-  if (tag === 'li') {
-    host = doc.createElement('ul');
-    host.appendChild(makeProbeEl(doc, 'li'));
-    target = makeProbeEl(doc, 'li');
-    host.appendChild(target);
-  } else if (tag === 'th' || tag === 'td') {
-    host = doc.createElement('table');
-    const tr1 = doc.createElement('tr');
-    tr1.appendChild(makeProbeEl(doc, tag));
-    host.appendChild(tr1);
-    const tr2 = doc.createElement('tr');
-    target = makeProbeEl(doc, tag);
-    tr2.appendChild(target);
-    host.appendChild(tr2);
-  } else {
-    // Standard "block element after a paragraph" context.
-    host = doc.createElement('div');
+  // List items and table cells: inside their parent, after a sibling of the same kind.
+  if (tag === 'li' || tag === 'th' || tag === 'td') {
+    let host: HTMLElement;
+    let target: HTMLElement;
+    if (tag === 'li') {
+      host = doc.createElement('ul');
+      host.appendChild(makeProbeEl(doc, 'li'));
+      target = makeProbeEl(doc, 'li');
+      host.appendChild(target);
+    } else {
+      host = doc.createElement('table');
+      const tr1 = doc.createElement('tr');
+      tr1.appendChild(makeProbeEl(doc, tag));
+      host.appendChild(tr1);
+      const tr2 = doc.createElement('tr');
+      target = makeProbeEl(doc, tag);
+      tr2.appendChild(target);
+      host.appendChild(tr2);
+    }
     host.setAttribute('data-conloca-probe-host', 'true');
-    host.appendChild(makeProbeEl(doc, 'p'));
-    target = makeProbeEl(doc, tag);
-    host.appendChild(target);
+    wrapper.appendChild(host);
+    try {
+      return generateRule(view, target, tag);
+    } finally {
+      host.remove();
+    }
   }
 
-  host.setAttribute('data-conloca-probe-host', 'true');
-  wrapper.appendChild(host);
-
+  // A block after a paragraph, twice. On the page: the wrapper's own
+  // children, where its flow rules (`.prose > p + p`) reach. In the editor:
+  // the contenteditable carries the wrapper's classes under a clone of the
+  // wrapper and nothing else of the page (host-wrapper-plugin.ts), so the
+  // twin sits in that shape at the top of the body. Where both agree on the
+  // spacing, the site's CSS gives it in the editor on its own. A paragraph
+  // follows each, so neither is measured as a last child (`.prose >
+  // :last-child { margin-bottom: 0 }`).
+  const before = makeProbeEl(doc, 'p');
+  const target = makeProbeEl(doc, tag);
+  const after = makeProbeEl(doc, 'p');
+  wrapper.append(before, target, after);
+  const clone = doc.createElement(wrapper.tagName);
+  clone.className = wrapper.className;
+  clone.setAttribute('data-conloca-probe-host', 'true');
+  // The editor publishes the wrapper's resolved font (probeWrapper), so `em` spacing resolves there at the
+  // wrapper's size even where the page inherits it from an ancestor the clone lacks.
+  const wrapperStyle = view.getComputedStyle(wrapper);
+  clone.style.fontSize = wrapperStyle.fontSize;
+  clone.style.lineHeight = wrapperStyle.lineHeight;
+  const editable = doc.createElement('div');
+  editable.className = `conloca-prose conloca-prose--editor ${wrapper.className}`.trim();
+  const twin = makeProbeEl(doc, tag);
+  editable.append(makeProbeEl(doc, 'p'), twin, makeProbeEl(doc, 'p'));
+  clone.appendChild(editable);
+  doc.body.appendChild(clone);
   try {
-    return generateRule(view, target, tag);
+    return generateRule(view, target, tag, view.getComputedStyle(twin));
   } finally {
-    host.remove();
+    before.remove();
+    target.remove();
+    after.remove();
+    clone.remove();
   }
 }
 
@@ -456,6 +492,20 @@ function probeWrapper(view: Window, wrapper: HTMLElement): string {
   return `:root { ${decls.join('; ')}; }`;
 }
 
+/** The scheme `el` is drawn in: its `color-scheme`, with `light dark` resolved to the one the browser picked for it. */
+function usedScheme(view: Window, el: HTMLElement): string {
+  const declared = view.getComputedStyle(el).colorScheme;
+  if (!/\blight\b/.test(declared) || !/\bdark\b/.test(declared)) return declared;
+  const sample = el.ownerDocument.createElement('span');
+  sample.style.color = 'light-dark(rgb(0, 0, 0), rgb(255, 255, 255))';
+  el.appendChild(sample);
+  try {
+    return view.getComputedStyle(sample).color === 'rgb(0, 0, 0)' ? 'light' : 'dark';
+  } finally {
+    sample.remove();
+  }
+}
+
 function makeProbeEl(doc: Document, tag: string): HTMLElement {
   const el = doc.createElement(tag);
   el.textContent = 'probe';
@@ -485,20 +535,74 @@ const HEADING_SCALE_PROPS: Partial<Record<(typeof PROBE_PROPS)[number], true>> =
   'line-height': true,
 };
 
-function generateRule(view: Window, sample: HTMLElement, tag: string): string {
+/** The layerable properties a block inherits from its parent when nothing sets them on it. */
+const INHERITED_PROPS = new Set<(typeof PROBE_PROPS)[number]>([
+  'color',
+  'font-family',
+  'font-size',
+  'font-weight',
+  'font-style',
+  'line-height',
+  'letter-spacing',
+]);
+
+/** Properties a probed block keeps only as a fallback, in the layer under the site's CSS, wherever the site's own CSS
+ * gives the block the same value in the editor's shape: its spacing, colours and typography. */
+const LAYERABLE_PROPS = new Set<(typeof PROBE_PROPS)[number]>([
+  'margin-block-start',
+  'margin-block-end',
+  'color',
+  'background-color',
+  'font-family',
+  'font-size',
+  'font-weight',
+  'font-style',
+  'line-height',
+  'letter-spacing',
+]);
+
+/**
+ * `inEditor` is the same sample laid out the way the editor lays it out (see
+ * `probeBlockTagInSiblingContext`), or null where the probe has no such twin.
+ */
+function generateRule(
+  view: Window,
+  sample: HTMLElement,
+  tag: string,
+  inEditor: CSSStyleDeclaration | null = null,
+): string {
   const cs = view.getComputedStyle(sample);
+  // What the sample inherits where it sits: the wrapper's values, which the contenteditable already carries.
+  const around = sample.parentElement ? view.getComputedStyle(sample.parentElement) : null;
   const decls: string[] = [];
+  const fallback: string[] = [];
+  const reverted: string[] = [];
   const isListContainer = tag === 'ul' || tag === 'ol';
   const isHeading = /^h[1-6]$/.test(tag);
   for (const prop of PROBE_PROPS) {
     if (LIST_STYLE_PROPS.has(prop) && !isListContainer) continue;
     const value = cs.getPropertyValue(prop);
     if (value && value !== 'normal' && value !== 'none') {
-      decls.push(`${prop}: ${value}`);
-      if (isHeading && HEADING_SCALE_PROPS[prop]) decls.push(`--conloca-host-${tag}-${prop}: ${value}`);
+      // Spacing the site's own CSS also gives the block in the editor (a wrapper
+      // flow rule like `.prose > p + p`) is only a fallback: unlayered, this
+      // one sample's value would override the rule for every other pair of
+      // blocks. Spacing the editor would lose (`article p` with no `article`
+      // around the editor, under a margin reset) stays unlayered so it wins.
+      // Colours and typography alike: unlayered, a bare paragraph's ink and
+      // font beat the site's own class rules on a paragraph that has them (an
+      // eyebrow `p.eyebrow` in a monospace face).
+      const reproduced = LAYERABLE_PROPS.has(prop) && inEditor?.getPropertyValue(prop) === value;
+      // A reproduced value the tag only inherits from the wrapper is no default of the tag's own: pinned on every
+      // `p`, the wrapper's 16px overrode the 20px a paragraph inherits inside a component that sizes its text.
+      const merelyInherited = reproduced && INHERITED_PROPS.has(prop) && around?.getPropertyValue(prop) === value;
+      if (!merelyInherited) (reproduced ? fallback : decls).push(`${prop}: ${value}`);
+      if (isHeading && HEADING_SCALE_PROPS[prop]) {
+        // The editor's own unlayered heading scale would beat the layer; hand the property back to the layers.
+        if (reproduced) reverted.push(`${prop}: revert-layer`);
+        else decls.push(`--conloca-host-${tag}-${prop}: ${value}`);
+      }
     }
   }
-  if (decls.length === 0) return '';
   // Wrap the wrapper class in `:where()` so the selector has the same
   // specificity as a bare element selector (0,0,1). Without :where(),
   // `.conloca-prose--editor ol` has specificity (0,1,1) — higher than
@@ -506,8 +610,15 @@ function generateRule(view: Window, sample: HTMLElement, tag: string): string {
   // "ol defaults" override component-specific styling on `<ol>`
   // elements that carry component classes (Steps, Tabs, etc.).
   // With :where() the probe acts as a defaults layer for BARE prose
-  // tags: any host class selector targeting the same element wins.
-  return `:where(.conloca-prose--editor) ${tag} { ${decls.join('; ')}; }`;
+  // tags; the declarations in the layer below also lose to host class rules.
+  const selector = `:where(.conloca-prose--editor) ${tag}`;
+  const rules: string[] = [];
+  if (decls.length > 0) rules.push(`${selector} { ${decls.join('; ')}; }`);
+  // The layer before the host's CSS (see main.css): the site's own rules win wherever they reach the editor's blocks.
+  if (fallback.length > 0) rules.push(`@layer conloca-host-defaults { ${selector} { ${fallback.join('; ')}; } }`);
+  // (0,0,2) beats the heading scale's (0,0,1) whichever sheet comes last in `<head>`.
+  if (reverted.length > 0) rules.push(`${selector}:is(${tag}) { ${reverted.join('; ')}; }`);
+  return rules.join('\n');
 }
 
 /**
@@ -599,13 +710,22 @@ export function probeHostStyles(
       // of what the user is editing in. We override `data-theme` (and
       // mirror as `.dark` class for Tailwind-style hosts) so the probe
       // captures the scheme the editor is rendering, not the published
-      // page's stale scheme.
+      // page's stale scheme. Those are the site's own switches, so a site
+      // with no dark mode stays light. `color-scheme` is the third switch,
+      // the one `light-dark()` and system colours follow: set only when the
+      // site declares the editor's scheme among its own (`light dark`), since
+      // forcing it on a light-only page would paint its undeclared ink and
+      // controls in the browser's dark defaults, and forcing light on a
+      // dark-only page would flip it the other way. Inside a frame the
+      // browser's own preference is the OS's, not the editor's, so a site
+      // that offers both would otherwise follow the OS.
       try {
         const doc = iframe.contentDocument;
         if (doc && theme) {
           doc.documentElement.dataset.theme = theme;
           doc.documentElement.classList.toggle('dark', theme === 'dark');
-          doc.documentElement.style.colorScheme = theme;
+          const declared = doc.defaultView?.getComputedStyle(doc.documentElement).colorScheme ?? '';
+          if (declared.split(/\s+/).includes(theme)) doc.documentElement.style.colorScheme = theme;
         }
       } catch (err) {
         // Same-origin iframe access can throw if the dev server emitted

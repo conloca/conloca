@@ -43,8 +43,10 @@
  * `utilities` layers.
  *
  * `conloca-host-defaults` is the slot for the computed-style probe's
- * synthesized stylesheet (`.conloca-prose--editor h1 { font-size: …
- * }`, etc.). Declared BEFORE `conloca-host-preview` so the probe is
+ * block spacing and colours (`margin-block-*`, `color`, `background-color`
+ * where the site's CSS reproduces them in the editor, see `generateRule` in
+ * host-style-probe.ts; its typography stays unlayered to beat the editor's
+ * own prose scale). Declared BEFORE `conloca-host-preview` so the probe is
  * a FALLBACK, not an override.
  *
  * Why this ordering matters: the probe captures static snapshots of
@@ -819,11 +821,47 @@ body.mdxeditor-focus-mode .mdxeditor-root-contenteditable {
    * runtime without a containing `@layer`), and unlayered rules win
    * over layered rules in the cascade regardless of declaration
    * order. This is the documented way to override unlayered styles
-   * from inside a layer. */
-  .conloca-generic-block__rendered [class*="_nestedEditor_"] {
+   * from inside a layer.
+   *
+   * A fragment's site component (`FragmentComponentBlock`) is the same
+   * kind of surface. Left alone, its body painted MDXEditor's
+   * `--basePageBg`, which the editor's dark theme sets to admin grey
+   * (`.dark .mdxeditor` above): the site's dark ink on dark grey.
+   *
+   * A fragment block's body also carries its component's classes, so the
+   * site's flow rules reach its blocks; the component's own element already
+   * draws everything else those classes do, so none of it lands here twice:
+   * its box (border, shadow, size), sizes relative to it (a `1.25em` lead
+   * would compound to 1.5625em), its placement and effects (an offset,
+   * transform or 0.8 opacity applied again) and its decoration (`::before`
+   * drawn twice). Its layout (display, gap) stays: on the page those lay out
+   * the blocks. */
+  :is(.conloca-generic-block__rendered, .conloca-fragment-block) [class*="_nestedEditor_"] {
     background: transparent !important;
     padding: 0 !important;
     margin: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    width: auto !important;
+    max-width: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+    font-size: inherit !important;
+    letter-spacing: inherit !important;
+    line-height: inherit !important;
+    position: static !important;
+    inset: auto !important;
+    transform: none !important;
+    translate: none !important;
+    rotate: none !important;
+    scale: none !important;
+    opacity: 1 !important;
+    filter: none !important;
+  }
+
+  :is(.conloca-generic-block__rendered, .conloca-fragment-block) [class*="_nestedEditor_"]::before,
+  :is(.conloca-generic-block__rendered, .conloca-fragment-block) [class*="_nestedEditor_"]::after {
+    content: none !important;
   }
 
   /* MDXEditor's NestedLexicalEditor always wraps the editor content in
@@ -847,6 +885,47 @@ body.mdxeditor-focus-mode .mdxeditor-root-contenteditable {
     margin: 0 !important;
     padding: 0 !important;
   }
+}
+
+/* A component body's paragraphs are the site's paragraphs, spaced by its own
+ * flow rules (`.section > * + *`, which reach them because the body carries
+ * the component's classes, see FragmentComponentBlock). MDXEditor zeroes them
+ * with an unlayered `._nestedEditor_ > p { margin: 0 }` (0,1,1) that every
+ * layered site rule loses to; hand the margins back to the layers. (0,2,1). */
+.conloca-fragment-block [class*="_nestedEditor_"] > p {
+  margin: revert-layer;
+}
+
+/* A fragment component that draws its body in a paragraph or heading (an
+ * eyebrow `<p class>`, a title `<h2 class>`), or inline (a text element's
+ * `<span>` block), holds that body in a nested editor, which puts the text in
+ * a `<p>` of its own. The published page has no such paragraph (a `<p>`
+ * cannot sit in a `<p>`, a heading or inline content), so every paragraph
+ * rule of the site and the probe dressed the text as body copy over the
+ * component's own font and ink. The editor's paragraph takes the component's
+ * instead. Unlayered at (0,2,2): beats the layered site CSS, the probe's
+ * (0,0,1) tag rules and the margin hand-back above. */
+:is(
+  .conloca-fragment-block :is(p, h1, h2, h3, h4, h5, h6) > [class*="_nestedEditor_"],
+  span.conloca-fragment-block [class*="_nestedEditor_"]
+) > p {
+  margin: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+}
+
+/* A component written on its own line inside a body (conloca.com's eyebrow)
+ * arrives as an inline element in a paragraph of its own, and Lexical ends a
+ * paragraph whose last child is such an element with a `<br>`. The component
+ * draws a block, so that break became a whole empty line under it (a 34px
+ * gap the published page does not have). The caret still reaches the line
+ * through the component's own body. */
+.conloca-prose--editor
+  p:has(> span > .conloca-fragment-block > :is(p, div, section, h1, h2, h3, h4, h5, h6, dl, ul, ol, blockquote))
+  > br:last-child {
+  display: none;
 }
 
 /* Adjacent JSX blocks: when two consecutive Lexical paragraphs each
@@ -1163,4 +1242,24 @@ body.mdxeditor-focus-mode .mdxeditor-root-contenteditable {
   color: white;
   background: var(--color-azure-04, #2563eb);
   pointer-events: none;
+}
+
+/* The contenteditable carries the host wrapper's classes so the site's flow rules reach its blocks
+   (host-wrapper-plugin.ts); the wrapper's box and layout are already drawn by the clone around it, so keep
+   them off the contenteditable: it stays a plain block with MDXEditor's own padding and width. The paper
+   background is left alone on purpose (prose-surface-css.ts paints it here). Unlayered and (0,2,0): beats
+   the layered host CSS and the unlayered prose tier. */
+[class*="_contentEditable_"].conloca-prose--editor {
+  display: block;
+  gap: normal;
+  margin: 0;
+  padding: var(--spacing-3);
+  border: 0;
+  box-shadow: none;
+  width: 100%;
+  max-width: none;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  overflow: visible;
 }

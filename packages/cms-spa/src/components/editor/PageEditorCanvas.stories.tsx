@@ -420,3 +420,80 @@ export const DarkCanvasInALightAdmin: Story = {
   render: () => <ThemedPageEditor />,
   play: ({ canvasElement }) => expectCanvasSurface(canvasElement, 'rgb(24, 24, 24)', 'dark'),
 };
+
+/** `adminWithCanvas` for a site whose stylesheet is `siteCss`. */
+function siteInAdminWithCanvas(
+  siteCss: string,
+  adminTheme: 'light' | 'dark',
+  canvasTheme: 'light' | 'dark',
+): () => () => void {
+  return () => {
+    setSiteStyles([siteCss]);
+    const restoreThemes = adminWithCanvas(adminTheme, canvasTheme)();
+    return () => {
+      restoreThemes();
+      setSiteStyles([]);
+    };
+  };
+}
+
+/** The site's colours on the canvas: the page's paper and the ink of the blocks on it. */
+async function expectSiteColors(
+  canvasElement: HTMLElement,
+  expected: { paper: string; heading: string; paragraph: string },
+): Promise<void> {
+  await waitFor(
+    async () => {
+      const doc = canvasElement.querySelector<HTMLIFrameElement>('iframe#preview-frame')?.contentDocument;
+      const heading = doc?.querySelector('h2');
+      const paragraph = doc?.querySelector('p');
+      if (!doc || !heading || !paragraph) throw new Error('the canvas has not rendered the blocks yet');
+      await expect({
+        paper: getComputedStyle(doc.body).backgroundColor,
+        heading: getComputedStyle(heading).color,
+        paragraph: getComputedStyle(paragraph).color,
+      }).toEqual(expected);
+    },
+    { timeout: 10_000 },
+  );
+}
+
+/** A site with no dark mode, like conloca.com: its colours on `:root` and nothing else. */
+const LIGHT_ONLY_SITE =
+  ':root{color:rgb(28, 25, 23);background:rgb(255, 255, 255)}body{background:inherit}p{color:rgb(41, 37, 36)}';
+const LIGHT_SITE_COLORS = { paper: 'rgb(255, 255, 255)', heading: 'rgb(28, 25, 23)', paragraph: 'rgb(41, 37, 36)' };
+
+/** A site with a dark mode keyed off the `dark` class, Tailwind's convention. */
+const DARK_CAPABLE_SITE = `${LIGHT_ONLY_SITE}:root.dark{color:rgb(250, 250, 249);background:rgb(12, 10, 9)}.dark p{color:rgb(214, 211, 209)}`;
+const DARK_SITE_COLORS = { paper: 'rgb(12, 10, 9)', heading: 'rgb(250, 250, 249)', paragraph: 'rgb(214, 211, 209)' };
+
+/** The admin's dark theme never reaches a light-only site: the canvas shows its published colours. */
+export const LightOnlySiteInADarkAdmin: Story = {
+  name: 'a light-only site in a dark admin shows its published colours',
+  beforeEach: siteInAdminWithCanvas(LIGHT_ONLY_SITE, 'dark', 'light'),
+  render: () => <ThemedPageEditor />,
+  play: ({ canvasElement }) => expectSiteColors(canvasElement, LIGHT_SITE_COLORS),
+};
+
+/** A site with no dark mode has nothing to switch: a dark canvas still shows its published colours. */
+export const LightOnlySiteOnADarkCanvas: Story = {
+  name: 'a light-only site on a dark canvas shows its published colours',
+  beforeEach: siteInAdminWithCanvas(LIGHT_ONLY_SITE, 'dark', 'dark'),
+  render: () => <ThemedPageEditor />,
+  play: ({ canvasElement }) => expectSiteColors(canvasElement, LIGHT_SITE_COLORS),
+};
+
+/** A site with a dark mode follows the canvas toggle, not the admin theme. */
+export const DarkCapableSiteOnALightCanvasInADarkAdmin: Story = {
+  name: 'a dark-capable site is light on a light canvas in a dark admin',
+  beforeEach: siteInAdminWithCanvas(DARK_CAPABLE_SITE, 'dark', 'light'),
+  render: () => <ThemedPageEditor />,
+  play: ({ canvasElement }) => expectSiteColors(canvasElement, LIGHT_SITE_COLORS),
+};
+
+export const DarkCapableSiteOnADarkCanvas: Story = {
+  name: 'a dark-capable site is dark on a dark canvas',
+  beforeEach: siteInAdminWithCanvas(DARK_CAPABLE_SITE, 'dark', 'dark'),
+  render: () => <ThemedPageEditor />,
+  play: ({ canvasElement }) => expectSiteColors(canvasElement, DARK_SITE_COLORS),
+};
