@@ -62,6 +62,7 @@ export function fakeTools(lists: PageConflict[][], answers: ResolveConflictOutco
     restoreVersion: fn(
       async (_input: { snapshotId: string }): Promise<RestoreVersionOutcome> => ({ ok: true, kept: [] }),
     ),
+    listPageNotes: fn(async () => []),
   } satisfies DraftToolsHost;
 }
 

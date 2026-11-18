@@ -4,6 +4,7 @@ import type {
   DraftToolsHost,
   EarlierVersion,
   PageConflict,
+  PageNote,
   PageRef,
   ResolveConflictInput,
   ResolveConflictOutcome,
@@ -112,6 +113,13 @@ function isEarlierVersion(value: unknown): value is EarlierVersion {
 
 function isStrings(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === 'string');
+}
+
+function isPageNote(value: unknown): value is PageNote {
+  if (typeof value !== 'object' || value === null) return false;
+  return ['site', 'id', 'locale', 'note'].every(
+    (field) => field in value && typeof Reflect.get(value, field) === 'string',
+  );
 }
 
 function listOf<T>(isItem: (value: unknown) => value is T) {
@@ -249,6 +257,11 @@ function draftTools(channel: FrameChannel): DraftToolsHost {
     discardPage: (page) => draftWrite(channel, 'pages.discard', page, isDiscardOutcome),
     listVersions: (page) => checkedCall(channel, 'snapshots.list', page, listOf(isEarlierVersion)),
     restoreVersion: (input) => draftWrite(channel, 'snapshots.restore', input, isRestoreOutcome),
+    // An older parent refuses the method; its pages simply carry no notes.
+    listPageNotes: async () => {
+      const answer = await channel.call('listPageNotes', []).catch(() => []);
+      return listOf(isPageNote)(answer) ? answer : [];
+    },
   };
 }
 

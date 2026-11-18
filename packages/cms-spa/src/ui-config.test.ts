@@ -10,6 +10,7 @@ describe('configureUI', () => {
       discardPage: async () => ({ ok: true }),
       listVersions: async () => [],
       restoreVersion: async () => ({ ok: true, kept: [] }),
+      listPageNotes: async () => [],
     };
     expect(() => configureUI({ draftTools })).toThrow('draftTools needs siteId');
     expect(getUIConfig().draftTools).toBeUndefined();

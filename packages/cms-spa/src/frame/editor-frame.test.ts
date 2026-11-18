@@ -446,6 +446,7 @@ describe('connecting the editor to its parent frame', () => {
       ['pages.discard', { ok: true }],
       ['snapshots.list', [version]],
       ['snapshots.restore', { ok: true, kept: ['title'] }],
+      ['listPageNotes', [{ ...PAGE_REF, note: 'Waiting for review' }]],
     ]);
     const resolve = {
       ...PAGE_REF,
@@ -460,13 +461,23 @@ describe('connecting the editor to its parent frame', () => {
     expect(await config.draftTools?.discardPage(PAGE_REF)).toEqual({ ok: true });
     expect(await config.draftTools?.listVersions(PAGE_REF)).toEqual([version]);
     expect(await config.draftTools?.restoreVersion({ snapshotId: 's1' })).toEqual({ ok: true, kept: ['title'] });
+    expect(await config.draftTools?.listPageNotes()).toEqual([{ ...PAGE_REF, note: 'Waiting for review' }]);
     expect(calls).toEqual([
       ['conflicts.list', [PAGE_REF]],
       ['conflicts.resolve', [resolve]],
       ['pages.discard', [PAGE_REF]],
       ['snapshots.list', [PAGE_REF]],
       ['snapshots.restore', [{ snapshotId: 's1' }]],
+      ['listPageNotes', []],
     ]);
+  });
+
+  test('page notes are none when the parent refuses the call or answers something else', async () => {
+    const { config } = await connected({ ...INIT, draftTools: true });
+    answers = new Map<string, Answer>([['listPageNotes', new Error('Method not allowed: listPageNotes')]]);
+    expect(await config.draftTools?.listPageNotes()).toEqual([]);
+    answers = new Map<string, Answer>([['listPageNotes', [{ site: 's' }]]]);
+    expect(await config.draftTools?.listPageNotes()).toEqual([]);
   });
 
   test('without draft tools in init there are none', async () => {

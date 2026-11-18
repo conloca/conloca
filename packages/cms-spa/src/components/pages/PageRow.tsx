@@ -169,6 +169,8 @@ interface PageRowProps {
   isMultiLocale: boolean;
   onPreview: (path: string) => void;
   onDelete: (pageId: string, locale?: string) => void;
+  /** Short notes the host gives this page, shown under its title. */
+  notes?: string[];
 }
 
 /**
@@ -179,7 +181,7 @@ interface PageRowProps {
  * their buttons take pointer events, so the gaps between them stay part of the row. The table wrapper
  * isolates the stacking context, so the raised actions never paint over dialogs.
  */
-export function PageRow({ page, isMultiLocale, onPreview, onDelete }: PageRowProps) {
+export function PageRow({ page, isMultiLocale, onPreview, onDelete, notes = [] }: PageRowProps) {
   const navigate = useNavigate();
   const openEditor = (locale: string) => {
     void navigate(`/pages/${page.id}?locale=${encodeURIComponent(locale)}`);
@@ -212,6 +214,18 @@ export function PageRow({ page, isMultiLocale, onPreview, onDelete }: PageRowPro
             </span>
           )}
         </div>
+        {notes.length > 0 ? (
+          <ul className={cn('mt-1 flex flex-wrap gap-1')} data-testid={`page-notes-${page.id}`}>
+            {notes.map((note) => (
+              <li
+                key={note}
+                className={cn('px-1.5 py-0.5 text-[11px] rounded bg-subtle text-grey-03 dark:text-grey-09')}
+              >
+                {note}
+              </li>
+            ))}
+          </ul>
+        ) : null}
         <div className="md:hidden mt-1 flex items-center gap-2 min-w-0">
           <span className="font-mono text-xs text-grey-04 dark:text-grey-07 truncate">{page.path}</span>
           <span

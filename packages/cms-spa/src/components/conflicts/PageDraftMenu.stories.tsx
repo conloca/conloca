@@ -21,6 +21,7 @@ const tools = {
   discardPage: fn(async (_page: PageRef): Promise<DiscardOutcome> => ({ ok: true })),
   listVersions: fn(async (_page: PageRef): Promise<EarlierVersion[]> => []),
   restoreVersion: fn(async (): Promise<RestoreVersionOutcome> => ({ ok: true, kept: [] })),
+  listPageNotes: fn(async () => []),
 } satisfies DraftToolsHost;
 
 /** The page's draft actions in the editor header: discard this page's changes, or open its recent versions. */

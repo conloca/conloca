@@ -38,6 +38,7 @@ const tools = {
   discardPage: fn(async (_page: PageRef): Promise<DiscardOutcome> => ({ ok: true })),
   listVersions: fn(async (_page: PageRef): Promise<EarlierVersion[]> => listed),
   restoreVersion: fn(async (_input: { snapshotId: string }): Promise<RestoreVersionOutcome> => outcome),
+  listPageNotes: fn(async () => []),
 } satisfies DraftToolsHost;
 
 const setUp =

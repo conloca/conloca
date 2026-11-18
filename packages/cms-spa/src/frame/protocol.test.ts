@@ -97,6 +97,7 @@ describe('the editor frame contract', () => {
       'pages.discard',
       'snapshots.list',
       'snapshots.restore',
+      'listPageNotes',
     ]);
   });
 
@@ -107,7 +108,7 @@ describe('the editor frame contract', () => {
       expect<number>(FRAME_METHOD_MAX_ARGS[method]).toBe(method === 'listFolder' ? 1 : declared);
     }
     for (const method of FRAME_HOST_METHODS) {
-      expect<number>(FRAME_METHOD_MAX_ARGS[method]).toBe(method === 'doc.flush' ? 0 : 1);
+      expect<number>(FRAME_METHOD_MAX_ARGS[method]).toBe(method === 'doc.flush' || method === 'listPageNotes' ? 0 : 1);
     }
   });
 

@@ -27,6 +27,7 @@ export type {
   DraftToolsHost,
   EarlierVersion,
   PageConflict,
+  PageNote,
   PageRef,
   ResolveConflictInput,
   ResolveConflictOutcome,

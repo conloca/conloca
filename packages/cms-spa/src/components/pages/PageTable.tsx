@@ -8,10 +8,12 @@ interface PageTableProps {
   isMultiLocale: boolean;
   onPreview: (path: string) => void;
   onDelete: (pageId: string, locale?: string) => void;
+  /** The host's notes for a page (draft tools); none when absent. */
+  notesOf?: (page: Page) => string[];
 }
 
 /** The list's table. Its wrapper isolates the stacking context, so a row's raised actions never paint over dialogs. */
-export function PageTable({ pages, selectedLocale, isMultiLocale, onPreview, onDelete }: PageTableProps) {
+export function PageTable({ pages, selectedLocale, isMultiLocale, onPreview, onDelete, notesOf }: PageTableProps) {
   return (
     <div className="isolate bg-white dark:bg-grey-02 border border-line rounded-md overflow-x-auto">
       <table className="w-full table-fixed md:table-auto md:min-w-[720px]">
@@ -37,6 +39,7 @@ export function PageTable({ pages, selectedLocale, isMultiLocale, onPreview, onD
               selectedLocale={selectedLocale}
               isMultiLocale={isMultiLocale}
               onPreview={onPreview}
+              notes={notesOf?.(page)}
               onDelete={onDelete}
             />
           ))}

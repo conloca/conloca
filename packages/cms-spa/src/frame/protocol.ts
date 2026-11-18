@@ -224,6 +224,8 @@ export const FRAME_HOST_METHODS = [
   'snapshots.list',
   /** Takes `{ snapshotId }`, answers a `RestoreVersionOutcome`. */
   'snapshots.restore',
+  /** Takes nothing, answers `PageNote[]`; an older parent refuses it, and the page then shows no notes. */
+  'listPageNotes',
 ] as const;
 
 /**
@@ -279,6 +281,7 @@ export const FRAME_METHOD_MAX_ARGS = {
   'pages.discard': 1,
   'snapshots.list': 1,
   'snapshots.restore': 1,
+  listPageNotes: 0,
 } as const satisfies Readonly<Record<FrameMethod, number>>;
 
 const FRAME_PATH_RE = /^\/[A-Za-z0-9/_.:%-]{0,512}(\?[A-Za-z0-9_.:%=&-]{0,512})?$/;

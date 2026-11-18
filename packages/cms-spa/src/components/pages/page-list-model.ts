@@ -1,4 +1,5 @@
 import { type ContentManifest, localesOf, pageStatusOf } from '@conloca/content-api-client';
+import type { PageNote } from '../../draft-tools.js';
 import type { Page } from '../../types.js';
 
 /** A page of the list, with the per-locale values needed to act on one locale of it. */
@@ -88,4 +89,10 @@ export function filterAndSortPages(
     .filter((page) => statusFilter === 'all' || page.status === statusFilter);
   filtered.sort((a, b) => (sortOrder === 'asc' ? 1 : -1) * compareBy(a, b, sortBy));
   return filtered;
+}
+
+/** The distinct notes the host gave the page's locales in `site`, in the order the host listed them. */
+export function notesOfPage(notes: readonly PageNote[], site: string | undefined, page: Pick<Page, 'id' | 'locales'>) {
+  const own = notes.filter((note) => note.site === site && note.id === page.id && page.locales.includes(note.locale));
+  return [...new Set(own.map((note) => note.note))];
 }

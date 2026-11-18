@@ -1,6 +1,8 @@
 import { contentEtag, useDeleteContent, useSitePages } from '@conloca/content-api-client';
+import { useQuery } from '@tanstack/react-query';
 import { AlertCircle, Loader2, Plus, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import type { PageNote } from '../../draft-tools.js';
 import { useErrorModal, usePageConversion, useSiteBaseUrl } from '../../hooks/index.js';
 import { getUIConfig, pageStatusLabel } from '../../ui-config.js';
 import { contentFailureMessage, isStaleWrite } from '../../utils/content-failure.js';
@@ -16,9 +18,26 @@ import {
   filterableLocales,
   groupPagesById,
   type ListedPage,
+  notesOfPage,
   type SortField,
   type StatusFilter,
 } from './page-list-model.js';
+
+const NO_NOTES: PageNote[] = [];
+/** shortcut: the host's page notes are re-read on this interval; a host event could push them instead. */
+const PAGE_NOTES_REFRESH_MS = 15_000;
+
+/** The host's note per page (draft tools); none without draft tools. */
+function usePageNotes(): PageNote[] {
+  const tools = getUIConfig().draftTools;
+  const { data } = useQuery({
+    queryKey: ['draft-tools', 'page-notes'],
+    queryFn: () => (tools ? tools.listPageNotes() : NO_NOTES),
+    enabled: Boolean(tools),
+    refetchInterval: PAGE_NOTES_REFRESH_MS,
+  });
+  return data ?? NO_NOTES;
+}
 
 interface PageListProps {
   selectedSite?: string;
@@ -64,6 +83,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
   // Fetch pages for the current site
   const { data, isLoading, error } = useSitePages(currentSite, selectedLocale === 'all' ? undefined : selectedLocale);
   const conversion = usePageConversion(data?.items ?? []);
+  const pageNotes = usePageNotes();
 
   // Transform entries into Page objects
   const pages = useMemo<ListedPage[]>(() => groupPagesById(data?.items ?? [], selectedLocale), [data, selectedLocale]);
@@ -281,6 +301,7 @@ export function PageList({ selectedSite, selectedLocale: initialLocale }: PageLi
           isMultiLocale={isMultiLocale}
           onPreview={openLiveSite}
           onDelete={handleDeletePage}
+          notesOf={(page) => notesOfPage(pageNotes, getUIConfig().siteId, page)}
         />
       )}
 

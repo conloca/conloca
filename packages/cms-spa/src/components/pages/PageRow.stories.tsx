@@ -64,6 +64,13 @@ export const PreviewStaysOnList: Story = {
   },
 };
 
+export const ShowsHostNotes: Story = {
+  args: { notes: ['Waiting for review'] },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByTestId('page-notes-home')).toHaveTextContent('Waiting for review');
+  },
+};
+
 export const DeleteOneLocale: Story = {
   args: { page: { ...page, locales: ['en', 'nl'] }, selectedLocale: 'all', isMultiLocale: true },
   play: async ({ canvasElement, args }) => {

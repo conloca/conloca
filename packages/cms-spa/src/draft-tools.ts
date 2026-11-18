@@ -61,10 +61,17 @@ export interface ResolveConflictInput extends PageRef {
   value?: JsonValue;
 }
 
+/** A short note the host shows beside one page in the Pages list, such as where its published change waits. */
+export interface PageNote extends PageRef {
+  note: string;
+}
+
 export interface DraftToolsHost {
   listConflicts(page: PageRef): Promise<PageConflict[]>;
   resolveConflict(input: ResolveConflictInput): Promise<ResolveConflictOutcome>;
   discardPage(page: PageRef): Promise<DiscardOutcome>;
   listVersions(page: PageRef): Promise<EarlierVersion[]>;
   restoreVersion(input: { snapshotId: string }): Promise<RestoreVersionOutcome>;
+  /** The host's note for each page that has one; pages without a note are left out. */
+  listPageNotes(): Promise<PageNote[]>;
 }
