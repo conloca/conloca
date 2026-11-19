@@ -1028,6 +1028,78 @@ export const DiffComparesWithTheSavedText: Story = {
   },
 };
 
+/** Switching to Diff and back keeps the edit history: the toolbar Undo stays armed and the shortcut takes the word out. */
+export const UndoSurvivesTheDiffView: Story = {
+  beforeEach: () => installStoryApi(new FragmentContentAPI(), { hosted: false }),
+  render: () => <FragmentEditorRoute entry={FROM_PAGE} keyboard />,
+  play: async ({ canvasElement }) => {
+    const heading = await waitFor(() => {
+      const found = canvasElement.querySelector<HTMLElement>('[contenteditable="true"] h1');
+      if (!found) throw new Error('Waiting for the fragment heading');
+      return found;
+    });
+    const mode = async (label: string) => {
+      const toggle = canvasElement.querySelector<HTMLElement>(`[aria-label="${label}"]`);
+      if (!toggle) throw new Error(`No ${label} toggle`);
+      await userEvent.click(toggle);
+    };
+    const undoButton = () => {
+      const found = canvasElement.querySelector<HTMLElement>('[aria-label^="Undo"]');
+      if (!found) throw new Error('No Undo button');
+      return found;
+    };
+    await userEvent.type(heading, ' edited');
+    await expect(heading).toHaveTextContent('Shared footer edited');
+    await waitFor(() => expect(undoButton()).toBeEnabled());
+    await mode('Diff mode');
+    await waitFor(() => expect(canvasElement.querySelector('.cm-merge-b')).not.toBeNull());
+    await mode('Rich text');
+    await waitFor(() => expect(undoButton()).toBeEnabled());
+    const modifier = /Mac|iPhone|iPad/.test(navigator.platform) ? 'Meta' : 'Control';
+    await userEvent.keyboard(`{${modifier}>}z{/${modifier}}`);
+    await waitFor(() => expect(heading).toHaveTextContent(/^Shared footer$/));
+  },
+};
+
+/** A fragment whose body sits inside a component, so typing happens in a nested editor. */
+class NestedBodyContentAPI extends FragmentContentAPI {
+  constructor() {
+    super();
+    this.entries.set(`${FRAGMENT.id}/en`, {
+      ...FRAGMENT,
+      localized: { ...FRAGMENT.localized, content: { mdx: '<Group>\n  Inside body\n</Group>' } },
+    });
+  }
+}
+
+/** Undo after Diff reaches the component body that was being edited, not only the document's top level. */
+export const UndoInAComponentBodySurvivesTheDiffView: Story = {
+  beforeEach: () => installStoryApi(new NestedBodyContentAPI(), { hosted: false }),
+  render: () => <FragmentEditorRoute entry={FROM_PAGE} keyboard />,
+  play: async ({ canvasElement }) => {
+    const body = await waitFor(() => {
+      const found = canvasElement.querySelector<HTMLElement>('[contenteditable="true"] [contenteditable="true"]');
+      if (!found?.textContent?.includes('Inside body')) throw new Error('Waiting for the component body');
+      return found;
+    });
+    const mode = async (label: string) => {
+      const toggle = canvasElement.querySelector<HTMLElement>(`[aria-label="${label}"]`);
+      if (!toggle) throw new Error(`No ${label} toggle`);
+      await userEvent.click(toggle);
+    };
+    await userEvent.type(body, ' edited');
+    await expect(body).toHaveTextContent('Inside body edited');
+    await mode('Diff mode');
+    await waitFor(() => expect(canvasElement.querySelector('.cm-merge-b')).not.toBeNull());
+    await mode('Rich text');
+    const modifier = /Mac|iPhone|iPad/.test(navigator.platform) ? 'Meta' : 'Control';
+    await userEvent.keyboard(`{${modifier}>}z{/${modifier}}`);
+    await waitFor(() => expect(body).toHaveTextContent(/^Inside body$/));
+    // The document follows the body: once the word is undone there is nothing left to save.
+    await waitFor(() => expect(isOpenEditorDirty()).toBe(false));
+  },
+};
+
 /** Without a saved text (the page editor), Diff compares with the loaded document as the editor writes it. */
 export const DiffOfAnUneditedNonCanonicalDocumentIsEmpty: Story = {
   render: () => (

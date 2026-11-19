@@ -33,7 +33,6 @@ import {
   tablePlugin,
   thematicBreakPlugin,
   toolbarPlugin,
-  UndoRedo,
 } from '@mdxeditor/editor';
 import { Maximize2, Minimize2 } from 'lucide-react';
 import React, { useCallback, useEffect, useImperativeHandle, useRef, useSyncExternalStore } from 'react';
@@ -41,6 +40,7 @@ import { conlocaCodeBlockDescriptor } from './code-block-frame.js';
 import { joinEsm, type PreservedEsm, splitEsm } from './esm-passthrough.js';
 import { markdownFidelityPlugin } from './markdown-fidelity/plugin.js';
 import { TO_MARKDOWN_OPTIONS } from './markdown-options.js';
+import { UndoRedo, undoHistoryPlugin } from './undo-history.js';
 
 const FOCUS_MODE_STORAGE_KEY = 'conloca.mdxeditor.focusMode';
 const FOCUS_MODE_BODY_CLASS = 'mdxeditor-focus-mode';
@@ -348,6 +348,7 @@ export const BaseMDXEditor = React.forwardRef<MDXEditorMethods, BaseMDXEditorPro
           tablePlugin(),
           thematicBreakPlugin(),
           markdownFidelityPlugin(),
+          undoHistoryPlugin(),
           // frontmatterPlugin intentionally omitted: metadata (title,
           // description, id, created, modified) is server-owned and stripped
           // from `content.mdx` on load. Re-introducing the plugin would let
