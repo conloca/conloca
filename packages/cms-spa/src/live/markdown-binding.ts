@@ -1,6 +1,6 @@
 import { tokenizeBody } from '@conloca/content-api/merge';
 import { parseMdx, splitEsm } from '@conloca/mdx';
-import { diffArrays } from 'diff';
+import { type ArrayChange, diffArrays } from 'diff';
 import type { Nodes } from 'mdast';
 import * as Y from 'yjs';
 
@@ -217,9 +217,10 @@ export function caretAtAnchor(text: Y.Text, anchor: Y.RelativePosition, blocks: 
  * Writes the editor's new markdown into the shared text as the smallest edit. `shadow` is the editor's previous
  * markdown and the text is what it was made from, so the two differ only by the editor's normalization. Blocks are
  * paired through a three-way alignment (shadow ↔ text, shadow ↔ next): only the stretches between blocks the user left
- * alone are rewritten, so every untouched block keeps its stored bytes even where the editor split or merged blocks.
- * All writes happen in one transaction tagged with `origin`, the symbol the binding uses to tell its own writes from
- * remote ones.
+ * alone are written, so every untouched block keeps its stored bytes even where the editor split or merged blocks.
+ * A stretch is written line by line and cell by cell (see `replacePieces`), so a key that also rewrites distant lines
+ * (table padding, list numbers) never overlaps a teammate's edit there. All writes happen in one transaction tagged
+ * with `origin`, the symbol the binding uses to tell its own writes from remote ones.
  */
 export function applyMarkdownEdit(text: Y.Text, shadow: string, next: string, origin: symbol): void {
   if (shadow === next) return;
@@ -238,7 +239,10 @@ export function applyMarkdownEdit(text: Y.Text, shadow: string, next: string, or
     // Back to front, so the offsets of earlier edits stay valid.
     for (let i = edits.length - 1; i >= 0; i--) {
       const [from, to, insert] = edits[i];
-      replaceTrimmed(text, raw.slice(from, to), from, insert);
+      // The line break before the span goes along unchanged, so its first line owns one too: every line is written
+      // with the break before it (see LINE_START).
+      const start = from > 0 && raw[from - 1] === '\n' ? from - 1 : from;
+      replacePieces(text, raw.slice(start, to), start, raw.slice(start, from) + insert);
     }
   }, origin);
 }
@@ -394,6 +398,215 @@ function hunkSpan(ranges: Range[], from: number, to: number, rewrite: boolean): 
     from === 0 ? ranges[0][0] : ranges[from - 1][1],
     to === ranges.length ? ranges[ranges.length - 1][1] : ranges[to][0],
   ];
+}
+
+/**
+ * Where `replacePieces` cuts text into lines: before each line break, so a line owns the break before it. Keys a
+ * teammate typed meanwhile into a deleted line, which Yjs keeps, then end up after the line above. The first line of a
+ * table body or a list is the exception (see LINE_LEAD).
+ */
+const LINE_START = /(?=\n)/;
+
+/**
+ * A table row's line break, indent and `|`, or a list item's with its marker. The line above the first row of a table
+ * body is the separator row, and above a list's first item a blank line: keys typed after either end the table or
+ * join the paragraph above. So a deleted first line that another one follows is written from after its own start to
+ * after the next line's: keys typed into it meanwhile join the next line's text.
+ */
+const LINE_LEAD = /^\n[ \t]*(?:\||(?:\d+[.)]|[-*+])[ \t]+)/;
+
+/** A table's separator row. */
+const SEPARATOR_ROW = /^\n?[ \t]*\|?[ \t]*:?-+:?[ \t]*(\|[ \t]*:?-+:?[ \t]*)*\|?[ \t]*$/;
+
+/**
+ * Where it cuts a line into pieces written on their own: after an ordered-list number, so renumbering never rewrites
+ * the item's text, and after each `|`, which ends a table cell. An escaped `\|` only cuts a cell finer, which any
+ * pairing still writes correctly.
+ */
+const CELL_END = /(?<=^\n?[ \t]*\d+(?=[.)])|\|)/;
+
+/**
+ * Changed lines between two unchanged ones further apart than this are written as one span: the line diff stays a few
+ * ms per key on any block, and the editor never makes that many line inserts or deletes in one key.
+ */
+const MAX_LINE_EDITS = 64;
+
+/**
+ * Replaces `old` at `from` by `insert` line by line, and a line by table cell when both have as many cells, each pair
+ * trimmed to the characters that changed. One key in the editor can rewrite lines far from the caret: padding a table
+ * column rewrites every row, and a new ordered-list item renumbers every item after it. One span from the first change
+ * to the last would overlap a teammate's edit there, and Yjs keeps both inserts, which duplicates rows and items.
+ * Writing each line on its own keeps every write where its change is. The stored text is `insert` whatever the pairing.
+ */
+function replacePieces(text: Y.Text, old: string, from: number, insert: string): void {
+  const oldLines = old.split(LINE_START);
+  const newLines = insert.split(LINE_START);
+  const oldAt = pieceStarts(oldLines);
+  const newAt = pieceStarts(newLines);
+  const cuts = lineCuts(oldLines, newLines);
+  // How far each cut moves into its lines on each side (see LINE_LEAD).
+  const oldShift = cuts.map(() => 0);
+  const newShift = cuts.map(() => 0);
+  for (let c = 1; c < cuts.length; c++) {
+    const [o0, n0] = cuts[c - 1];
+    const [o1, n1] = cuts[c];
+    if (n0 !== n1 || o1 >= oldLines.length || n1 >= newLines.length) continue;
+    const above = oldLines[o0 - 1];
+    if (above !== undefined && above.trim() !== '' && !SEPARATOR_ROW.test(above)) continue;
+    const own = LINE_LEAD.exec(oldLines[o0])?.[0];
+    const nextOld = LINE_LEAD.exec(oldLines[o1])?.[0];
+    const nextNew = LINE_LEAD.exec(newLines[n1])?.[0];
+    if (!own || !nextOld || own !== nextNew) continue;
+    oldShift[c - 1] = own.length;
+    newShift[c - 1] = own.length;
+    oldShift[c] = nextOld.length;
+    newShift[c] = nextNew.length;
+  }
+  // Back to front, so the offsets of earlier pieces stay valid.
+  for (let c = cuts.length - 1; c > 0; c--) {
+    const [o0, n0] = cuts[c - 1];
+    const [o1, n1] = cuts[c];
+    const start = oldAt[o0] + oldShift[c - 1];
+    const before = old.slice(start, oldAt[o1] + oldShift[c]);
+    const after = insert.slice(newAt[n0] + newShift[c - 1], newAt[n1] + newShift[c]);
+    if (o1 - o0 === 1 && n1 - n0 === 1) replaceCells(text, before, from + start, after);
+    else replaceTrimmed(text, before, from + start, after);
+  }
+}
+
+/**
+ * Replaces line `old` at `from` by `insert` piece by piece, in order. Cells added at the end (a new column) go in right
+ * before the row's closing `|`: after it they would tie with a row a teammate inserts below, and after the last cell's
+ * text with a key typed there. Old pieces past the new ones (stray text after the last `|`) are deleted on their own.
+ * A changed list number is rewritten whole: two people renumbering `12` to `13` and `11` would otherwise each keep a
+ * digit the other deletes.
+ */
+function replaceCells(text: Y.Text, old: string, from: number, insert: string): void {
+  const oldCells = old.split(CELL_END);
+  const newCells = insert.split(CELL_END);
+  const last = Math.min(oldCells.length, newCells.length) - 1;
+  const oldAt = pieceStarts(oldCells);
+  const added = newCells.slice(last + 1).join('');
+  if (old.endsWith('|') && added.endsWith('|')) text.insert(from + old.length - 1, `|${added.slice(0, -1)}`);
+  else if (added) text.insert(from + old.length, added);
+  if (oldCells.length > last + 1) text.delete(from + oldAt[last + 1], old.length - oldAt[last + 1]);
+  for (let c = last; c > 0; c--) replacePadded(text, oldCells[c], from + oldAt[c], newCells[c]);
+  if (oldCells[0] === newCells[0]) return;
+  const oldNumber = LIST_NUMBER.exec(oldCells[0]);
+  const newNumber = LIST_NUMBER.exec(newCells[0]);
+  if (!oldNumber || !newNumber || oldNumber[1] !== newNumber[1]) {
+    replaceTrimmed(text, oldCells[0], from, newCells[0]);
+    return;
+  }
+  // The line break and indent stay; only the digits are rewritten.
+  text.delete(from + oldNumber[1].length, oldNumber[2].length);
+  text.insert(from + oldNumber[1].length, newNumber[2]);
+}
+
+/** A line's first piece when it is an ordered-list number: the line break and indent, then the digits. */
+const LIST_NUMBER = /^(\n?[ \t]*)(\d+)$/;
+
+/**
+ * Replaces piece `old` at `from` by `insert`, its text and the padding after it (up to a closing `|`) apart. A key
+ * typed before a cell's text moves it right into its padding: trimmed as one, that rewrites the text, and a teammate
+ * deleting the row meanwhile would leave the rewritten copy behind.
+ */
+function replacePadded(text: Y.Text, old: string, from: number, insert: string): void {
+  const oldText = old.length - (TRAILING_PAD.exec(old)?.[0].length ?? 0);
+  const newText = insert.length - (TRAILING_PAD.exec(insert)?.[0].length ?? 0);
+  replaceTrimmed(text, old.slice(oldText), from + oldText, insert.slice(newText));
+  replaceTrimmed(text, old.slice(0, oldText), from, insert.slice(0, newText));
+}
+
+/** The spaces that end a piece, with the `|` closing its cell. */
+const TRAILING_PAD = / *\|?$/;
+
+/**
+ * Line boundaries `[in old, in next]` to write between. As many lines on both sides: line by line, which is linear and
+ * never pairs a line with a neighbour of the same text. Otherwise lines pair by their text without spaces, runs of `-`
+ * and an ordered-list number, which the editor's padding and renumbering change leave alone, so a key's rewrite of
+ * distant lines never moves a write. Between two paired lines, a changed run of the same length on both sides pairs
+ * line by line, and others pair their similar lines (typed in) so that only whole lines are inserted or deleted: a span
+ * trimmed across lines would start a row delete inside a teammate's row.
+ */
+function lineCuts(oldLines: string[], newLines: string[]): [number, number][] {
+  if (oldLines.length === newLines.length) return [...oldLines.keys(), oldLines.length].map((k) => [k, k]);
+  const oldKeys = oldLines.map(lineKey);
+  const newKeys = newLines.map(lineKey);
+  let head = 0;
+  while (head < oldKeys.length && head < newKeys.length && oldKeys[head] === newKeys[head]) head++;
+  let tail = 0;
+  const most = Math.min(oldKeys.length, newKeys.length) - head;
+  while (tail < most && oldKeys[oldKeys.length - 1 - tail] === newKeys[newKeys.length - 1 - tail]) tail++;
+  const oldEnd = oldKeys.length - tail;
+  const newEnd = newKeys.length - tail;
+  const cuts: [number, number][] = [...Array(head + 1).keys()].map((k) => [k, k]);
+  const parts = diffArrays(oldKeys.slice(head, oldEnd), newKeys.slice(head, newEnd), { maxEditLength: MAX_LINE_EDITS });
+  if (parts) {
+    pushRunCuts(parts, head, head, cuts, (i0, j0, i, j) => {
+      const similar = diffArrays(oldKeys.slice(i0, i), newKeys.slice(j0, j), { comparator: similarKeys });
+      pushRunCuts(similar, i0, j0, cuts, (_i0, _j0, iEnd, jEnd) => cuts.push([iEnd, jEnd]));
+    });
+  } else if (oldEnd > head || newEnd > head) cuts.push([oldEnd, newEnd]);
+  for (let k = 1; k <= tail; k++) cuts.push([oldEnd + k, newEnd + k]);
+  return cuts;
+}
+
+/**
+ * Appends the cuts of diff `parts` that starts at lines `oldStart` and `newStart`: one per line of an unchanged run or
+ * of a changed run as long on both sides; `unequal` cuts a changed run of different lengths, `[i0, i)` and `[j0, j)`.
+ */
+function pushRunCuts(
+  parts: ArrayChange<string>[],
+  oldStart: number,
+  newStart: number,
+  cuts: [number, number][],
+  unequal: (i0: number, j0: number, i: number, j: number) => void,
+): void {
+  let i = oldStart;
+  let j = newStart;
+  for (let p = 0; p < parts.length; ) {
+    const [i0, j0] = [i, j];
+    const same = !parts[p].added && !parts[p].removed;
+    if (same) {
+      i += parts[p].count;
+      j += parts[p].count;
+      p++;
+    } else {
+      for (; p < parts.length && (parts[p].added || parts[p].removed); p++) {
+        if (parts[p].removed) i += parts[p].count;
+        else j += parts[p].count;
+      }
+    }
+    if (same || i - i0 === j - j0) for (let k = 1; k <= i - i0; k++) cuts.push([i0 + k, j0 + k]);
+    else if (i0 === i || j0 === j) cuts.push([i, j]);
+    else unequal(i0, j0, i, j);
+  }
+}
+
+/** Line keys one edit can have made from each other: their common start and end cover half the shorter one or more. */
+function similarKeys(x: string, y: string): boolean {
+  const max = Math.min(x.length, y.length);
+  let same = 0;
+  while (same < max && x[same] === y[same]) same++;
+  let end = 0;
+  while (end < max - same && x[x.length - 1 - end] === y[y.length - 1 - end]) end++;
+  return 2 * (same + end) >= max;
+}
+
+/** A line without what the editor's padding and renumbering change: spaces, the length of `-` runs, a list number. */
+function lineKey(line: string): string {
+  return line
+    .replace(/^\s*\d+(?=[.)])/, '')
+    .replace(/\s+/g, '')
+    .replace(/-+/g, '-');
+}
+
+/** The offset each piece starts at, then the total length. */
+function pieceStarts(pieces: string[]): number[] {
+  const starts = [0];
+  for (const piece of pieces) starts.push(starts[starts.length - 1] + piece.length);
+  return starts;
 }
 
 /** Replaces `old` at `from` by `insert`, touching only the characters between their common prefix and suffix. */

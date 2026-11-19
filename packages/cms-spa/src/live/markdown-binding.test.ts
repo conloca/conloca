@@ -19,6 +19,45 @@ function textWith(raw: string): Y.Text {
   return text;
 }
 
+/** A two-column table between two paragraphs, its columns padded as the editor writes them. */
+function paddedTable(rows: string[][]): string {
+  const widths = [0, 1].map((col) => Math.max(3, ...rows.map((row) => (row[col] ?? '').length)));
+  const line = (row: string[]) => `| ${widths.map((width, col) => (row[col] ?? '').padEnd(width)).join(' | ')} |`;
+  const rule = `| ${widths.map((width) => '-'.repeat(width)).join(' | ')} |`;
+  return `Intro\n\n${[line(rows[0]), rule, ...rows.slice(1).map(line)].join('\n')}\n\nEnd`;
+}
+
+/** The cells of each table row in `md`, header first, as the editor shows them. */
+function cellsOf(md: string): string[][] {
+  return md
+    .split('\n')
+    .filter((line) => line.startsWith('|') && !line.startsWith('| -'))
+    .map((line) =>
+      line
+        .slice(1, -1)
+        .split('|')
+        .map((cell) => cell.trim()),
+    );
+}
+
+/** The text people reach who each turn `start` into one of `nexts` in the editor before seeing the others' edits. */
+function mergeConcurrent(start: string, nexts: string[]): string {
+  const seed = new Y.Doc();
+  seed.getText('body').insert(0, `${start}\n`);
+  const docs = nexts.map((next, who) => {
+    const doc = new Y.Doc();
+    Y.applyUpdate(doc, Y.encodeStateAsUpdate(seed));
+    const text = doc.getText('body');
+    const replica = createEditorReplica(text);
+    // Fixed client ids: Yjs orders inserts at the same place by them.
+    replica.doc.clientID = who + 1;
+    writeEditorEdit(replica, text, start, next, LOCAL);
+    return doc;
+  });
+  for (const doc of docs.slice(1)) Y.applyUpdate(docs[0], Y.encodeStateAsUpdate(doc));
+  return docs[0].getText('body').toJSON();
+}
+
 describe('applyMarkdownEdit', () => {
   it('keeps untouched raw blocks byte-for-byte when one block changes', () => {
     const doc = new Y.Doc();
@@ -164,6 +203,175 @@ describe('applyMarkdownEdit', () => {
     const crlf = textWith('\r\n\r\n');
     applyMarkdownEdit(crlf, '', 'Hi', LOCAL);
     expect(crlf.toJSON()).toBe('Hi\r\n\r\n');
+  });
+
+  it('keeps a table whole when two people type into different cells of it at once', () => {
+    // The editor pads table columns, so a key that widens a column rewrites the header and separator rows too.
+    const seed = new Y.Doc();
+    seed.getText('body').insert(0, 'Intro\n\n| Name  | Note |\n| ----- | ---- |\n| a     | b    |\n\nEnd\n');
+    const people = [0, 1].map(() => {
+      const doc = new Y.Doc();
+      Y.applyUpdate(doc, Y.encodeStateAsUpdate(seed));
+      const text = doc.getText('body');
+      return { doc, text, replica: createEditorReplica(text) };
+    });
+    // One key in the editor: its markdown before (the shadow) and after, both from the cells it shows.
+    const typeKey = (person: number, edit: (row: string[]) => void) => {
+      const { text, replica } = people[person];
+      const cells = cellsOf(text.toJSON());
+      const shadow = paddedTable(cells);
+      edit(cells[1]);
+      syncEditorReplica(replica, text);
+      writeEditorEdit(replica, text, shadow, paddedTable(cells), LOCAL);
+    };
+    const exchange = () => {
+      const [a, b] = people;
+      Y.applyUpdate(b.doc, Y.encodeStateAsUpdate(a.doc, Y.encodeStateVector(b.doc)));
+      Y.applyUpdate(a.doc, Y.encodeStateAsUpdate(b.doc, Y.encodeStateVector(a.doc)));
+    };
+    // A appends to the first cell while B types before the text of the second; their edits cross every other key.
+    const aKeys = 'lphaXYZW';
+    const bKeys = 'BXYZW';
+    for (let step = 0; step < aKeys.length; step++) {
+      typeKey(0, (row) => {
+        row[0] += aKeys[step];
+      });
+      if (step < bKeys.length) {
+        typeKey(1, (row) => {
+          row[1] = bKeys.slice(0, step + 1) + row[1].slice(step);
+        });
+      }
+      if (step % 2 === 1) exchange();
+    }
+    exchange();
+    expect(people[1].text.toJSON()).toBe(people[0].text.toJSON());
+    expect(cellsOf(people[0].text.toJSON())).toEqual([
+      ['Name', 'Note'],
+      ['alphaXYZW', 'BXYZWb'],
+    ]);
+  });
+
+  it('keeps every item once when two people add an item at the top of an ordered list at once', () => {
+    // The editor renumbers every item after a new one, so each key rewrites the numbers of all the lines below it.
+    const merged = mergeConcurrent('Intro\n\n1. one\n2. two\n\nEnd', [
+      'Intro\n\n1. new\n2. one\n3. two\n\nEnd',
+      'Intro\n\n1. x\n2. one\n3. two\n\nEnd',
+    ]);
+    const items = merged
+      .split('\n')
+      .filter((line) => /^\d/.test(line))
+      .map((line) => /^\d+\. (.*)$/.exec(line)?.[1] ?? line);
+    expect(items).toHaveLength(4);
+    expect(items).toEqual(expect.arrayContaining(['new', 'one', 'two', 'x']));
+  });
+
+  it('keeps a row whole when two people delete the same letter in a cell next to one with the same text', () => {
+    const merged = mergeConcurrent(
+      paddedTable([
+        ['Name', 'Note'],
+        ['ba', 'b'],
+      ]),
+      [
+        paddedTable([
+          ['Name', 'Note'],
+          ['b', 'b'],
+        ]),
+        paddedTable([
+          ['Name', 'Note'],
+          ['b', 'b'],
+        ]),
+      ],
+    );
+    expect(cellsOf(merged)).toEqual([
+      ['Name', 'Note'],
+      ['b', 'b'],
+    ]);
+  });
+
+  it('leaves none of a deleted row behind but the key a teammate typed into it meanwhile', () => {
+    // B's key moves the cell's text right into its padding; written as one span, it would rewrite "pa" as "ypa".
+    const merged = mergeConcurrent(
+      paddedTable([
+        ['Name', 'Note'],
+        ['pa', 'b'],
+        ['c', 'd'],
+      ]),
+      [
+        paddedTable([
+          ['Name', 'Note'],
+          ['c', 'd'],
+        ]),
+        paddedTable([
+          ['Name', 'Note'],
+          ['ypa', 'b'],
+          ['c', 'd'],
+        ]),
+      ],
+    );
+    expect(merged).not.toContain('pa');
+    // The key joins the next row: after the separator row it would end the table.
+    expect(cellsOf(merged).slice(-1)).toEqual([['y c', 'd']]);
+  });
+
+  it('keeps the separator row as wide as the header when a column is added while a teammate inserts a row', () => {
+    const start = 'Intro\n\n| Name | Note |\n| ---- | ---- |\n| a    | b    |\n\nEnd';
+    const columnAdded = 'Intro\n\n| Name | Note |     |\n| ---- | ---- | --- |\n| a    | b    |     |\n\nEnd';
+    const rowInserted = 'Intro\n\n| Name | Note |\n| ---- | ---- |\n|      |      |\n| a    | b    |\n\nEnd';
+    // Both orders, as Yjs orders inserts at the same place by client id.
+    for (const nexts of [
+      [columnAdded, rowInserted],
+      [rowInserted, columnAdded],
+    ]) {
+      const [header, separator] = mergeConcurrent(start, nexts)
+        .split('\n')
+        .filter((line) => line.startsWith('|'));
+      expect(separator.split('|').length).toBe(header.split('|').length);
+    }
+  });
+
+  it('keeps a table whole when a teammate types into the first row while it is deleted', () => {
+    const start = paddedTable([
+      ['Name', 'Note'],
+      ['a', 'b'],
+      ['c', 'd'],
+      ['e', 'f'],
+    ]);
+    const deleted = paddedTable([
+      ['Name', 'Note'],
+      ['c', 'd'],
+      ['e', 'f'],
+    ]);
+    for (const typed of ['ax', 'xyzzya']) {
+      const keyed = paddedTable([
+        ['Name', 'Note'],
+        [typed, 'b'],
+        ['c', 'd'],
+        ['e', 'f'],
+      ]);
+      // Both orders, as Yjs orders inserts at the same place by client id.
+      for (const nexts of [
+        [deleted, keyed],
+        [keyed, deleted],
+      ]) {
+        const rows = mergeConcurrent(start, nexts).split('\n').slice(2, -3);
+        // GFM drops text after the last `|` of a body row, but on the header or separator row it ends the table.
+        expect(rows.slice(0, 2).every((row) => row.endsWith('|'))).toBe(true);
+        expect(cellsOf(rows.join('\n'))).toEqual([
+          ['Name', 'Note'],
+          [`${typed.replace('a', '')} c`, 'd'],
+          ['e', 'f'],
+        ]);
+      }
+    }
+  });
+
+  it('keeps a list after its paragraph when a teammate types into the first item while it is deleted', () => {
+    const start = 'Mid\n\n1. one\n2. two\n3. three\n\nEnd';
+    const deleted = 'Mid\n\n1. two\n2. three\n\nEnd';
+    const typed = 'Mid\n\n1. onex\n2. two\n3. three\n\nEnd';
+    // Both orders, as Yjs orders inserts at the same place by client id. After the blank line, the key would join "Mid".
+    expect(mergeConcurrent(start, [deleted, typed])).toBe('Mid\n\n1. xtwo\n2. three\n\nEnd\n');
+    expect(mergeConcurrent(start, [typed, deleted])).toBe('Mid\n\n1. xtwo\n2. three\n\nEnd\n');
   });
 });
 
