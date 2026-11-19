@@ -4,6 +4,7 @@ import type { EditorFlushResult } from '../../editor-flush.js';
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard.js';
 import { dropHeldDataValues } from '../../live/data-binding.js';
 import { useDocChannel } from '../../live/doc-channel.js';
+import { dropHeldFragmentEdits } from '../../live/held-fragment-edits.js';
 import { flushLive, useLiveStatus } from '../../live/use-live.js';
 import { Button, IconButton } from '../ui/index.js';
 
@@ -24,9 +25,9 @@ export function UnsavedChangesDialog(props: UnsavedChangesDialogProps) {
 }
 
 /**
- * Asks before a route change or unload leaves live work unsynced. The live MDX and data editors mount it; the live page
- * editor has its own blocker, one saving with Save asks on its own, and only live editors need the data router
- * `useBlocker` requires.
+ * Asks before a route change or unload leaves live work unsynced. The live MDX, fragment and data editors mount it; the
+ * live page editor has its own blocker, one saving with Save asks on its own, and only live editors need the data
+ * router `useBlocker` requires.
  */
 export function LiveLeaveGuard() {
   const blocker = useUnsavedChangesGuard(false, true);
@@ -145,9 +146,11 @@ function UnsyncedChangesDialog({ onDiscard, onCancel }: UnsavedChangesDialogProp
     void sync(false);
   }, [retry, pending, syncing, sync]);
 
-  // The user gave up the values the schema rejected; kept, they would make every later leave ask again.
+  // The user gave up the values the schema rejected and the fragment edits the save check held; kept, they would make
+  // every later leave ask again.
   const leaveAnyway = () => {
     dropHeldDataValues();
+    dropHeldFragmentEdits();
     onDiscard();
   };
 

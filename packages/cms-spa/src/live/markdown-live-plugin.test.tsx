@@ -1,5 +1,5 @@
 /// <reference lib="dom" />
-import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, spyOn } from 'bun:test';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import {
   addNestedEditorChild$,
@@ -25,6 +25,7 @@ import {
   $isRangeSelection,
   getNearestEditorFromDOMNode,
   type LexicalEditor,
+  REDO_COMMAND,
   UNDO_COMMAND,
 } from 'lexical';
 import { StrictMode, useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -33,6 +34,7 @@ import * as Y from 'yjs';
 import { GenericBlock } from '../components/editor/GenericBlock.js';
 import { JsxPropsPanel } from '../components/editor/JsxPropsPanel.js';
 import { jsxLayoutPlugin } from '../components/editor/jsx-layout-plugin.js';
+import { softBreakPlugin } from '../components/editor/soft-break-plugin.js';
 import { type MdxComponentProp, setMdxComponents } from '../mdx-components.js';
 import { isLiveEditing, setSelectedBlock } from '../selected-block.js';
 import { LOCAL_ORIGIN } from './doc-channel.js';
@@ -40,6 +42,15 @@ import { hasHeldWork, markdownLivePlugin } from './markdown-live-plugin.js';
 
 const REMOTE = Symbol('remote');
 const BODY = '<Callout>\n\nHello\n\n</Callout>\n\nOther\n';
+
+// Each scenario runs on a page and again as the fragment editor runs it: with a save check (here passing) and #730's
+// soft-break plugin, so a fragment keeps every guarantee a page has.
+const scenarios: [string, () => Promise<void>][] = [];
+// Collects; the describes at the end register each scenario per mode.
+const test = (name: string, run: () => Promise<void>) => void scenarios.push([name, run]);
+let fragmentCheck: ((markdown: string) => string | null) | undefined;
+const livePlugin = (input: Parameters<typeof markdownLivePlugin>[0]) =>
+  markdownLivePlugin(fragmentCheck ? { check: fragmentCheck, ...input } : input);
 
 // A component the side panel can edit; with no import it renders its body in the editor's fallback block.
 const CALLOUT_PROPS: MdxComponentProp[] = [
@@ -89,7 +100,8 @@ function LiveEditor({
     jsxLayoutPlugin(),
     tablePlugin(),
     toolbarPlugin({ toolbarContents: () => <BoldItalicUnderlineToggles /> }),
-    plugin ?? markdownLivePlugin({ text, undoScope: [text], onSelectionBlock: () => {} }),
+    ...(fragmentCheck ? [softBreakPlugin()] : []),
+    plugin ?? livePlugin({ text, undoScope: [text], onSelectionBlock: () => {} }),
     ...(extra ? [extra] : []),
   ]);
   return (
@@ -363,7 +375,8 @@ async function typeAsTheSiteRenderMounts(
   let live: Live | undefined;
   const stepped = Promise.withResolvers<boolean>();
   live = openLive(
-    TITLED.replace('Note', title),
+    // Each mode runs the scenario, so the title differs per mode too.
+    TITLED.replace('Note', fragmentCheck ? `${title} in a fragment` : title),
     typeOnMount((body, effectsRan) =>
       betweenCommitAndEffects(() => {
         stepped.resolve(!effectsRan());
@@ -1288,7 +1301,7 @@ test('unmounting the editor stops observing the shared text and releases its und
   // The notice watches the hold too; every subscription made is released.
   let subscribed = 0;
   let unsubscribed = 0;
-  const plugin = markdownLivePlugin({
+  const plugin = livePlugin({
     text,
     undoScope: [text],
     onSelectionBlock: () => {},
@@ -1323,7 +1336,7 @@ test('a teammate edit that lands while the editor starts is shown', async () => 
   text.insert(0, 'Hello\n');
   // Set up after the binding's plugin, before the editor mounts: the binding is not observing the text yet.
   const arrives = realmPlugin({ init: () => text.insert(0, 'Intro\n\n') })();
-  const plugins = [markdownLivePlugin({ text, undoScope: [text], onSelectionBlock: () => {} }), arrives];
+  const plugins = [livePlugin({ text, undoScope: [text], onSelectionBlock: () => {} }), arrives];
   const { container } = render(<MDXEditor markdown={text.toJSON()} plugins={plugins} />);
   await waitFor(() => expect(container.textContent).toContain('Intro'));
 });
@@ -1334,7 +1347,7 @@ test('a teammate edit that lands between the host reading the text and the edito
   text.insert(0, 'Hello\n');
   // The host reads the text and builds the plugin in one render; the editor starts in a later effect.
   const shown = text.toJSON();
-  const plugin = markdownLivePlugin({ text, undoScope: [text], onSelectionBlock: () => {} });
+  const plugin = livePlugin({ text, undoScope: [text], onSelectionBlock: () => {} });
   text.insert(0, 'Intro\n\n');
   const { container } = render(<LiveEditor text={text} plugin={plugin} markdown={shown} />);
   await waitFor(() => expect(container.textContent).toContain('Intro'));
@@ -1371,4 +1384,304 @@ test('under StrictMode the editor still shows teammate edits, writes a local edi
 
   expect(unobserve).toHaveBeenCalledTimes(observe.mock.calls.length);
   for (const [observer] of observe.mock.calls) expect(unobserve).toHaveBeenCalledWith(observer);
+});
+
+describe('on a page', () => {
+  for (const [name, run] of scenarios) it(name, run);
+});
+
+describe('in a fragment, with a save check that passes', () => {
+  beforeAll(() => {
+    fragmentCheck = () => null;
+  });
+  afterAll(() => {
+    fragmentCheck = undefined;
+  });
+  for (const [name, run] of scenarios) it(name, run);
+});
+
+/**
+ * Opens BODY bound with save check `check`; `held` collects what the editor reports held; `realm` is the editor's;
+ * `writes` counts the editor's writes to the shared text.
+ */
+function openChecked(check: (markdown: string) => string | null) {
+  const doc = new Y.Doc();
+  const text = doc.getText('body');
+  text.insert(0, BODY);
+  let writes = 0;
+  doc.on('afterTransaction', (transaction: Y.Transaction) => {
+    if (transaction.origin === LOCAL_ORIGIN) writes++;
+  });
+  const held: [string | null, string | null][] = [];
+  const plugin = markdownLivePlugin({
+    text,
+    undoScope: [text],
+    onSelectionBlock: () => {},
+    check,
+    onHeld: (notice, markdown) => held.push([notice, markdown]),
+  });
+  let grabbed: Realm | undefined;
+  const extra = realmPlugin({
+    init: (r) => {
+      grabbed = r;
+    },
+  })();
+  const view = render(<LiveEditor text={text} plugin={plugin} extra={extra} />);
+  const realm = () => {
+    if (!grabbed) throw new Error('no realm');
+    return grabbed;
+  };
+  return { ...view, text, held, realm, writes: () => writes };
+}
+
+/** Types '!' at the end of BODY's component body, which `openChecked`'s check is to refuse. */
+async function holdShout(live: { container: HTMLElement }) {
+  const { body, nested } = await bodyWith(live.container, 'Hello');
+  act(() => {
+    body.focus();
+    nested.update(() => $getRoot().selectEnd().insertText('!'), { discrete: true });
+  });
+  await waitFor(() => expect(live.container.textContent).toContain('Not saved: no shouting'));
+  return nested;
+}
+
+const bogus = (markdown: string) => (markdown.includes('<Bogus731') ? 'unknown component Bogus731' : null);
+const refusedSource = '<Callout>\n\nHello\n\n</Callout>\n\n<Bogus731 />\n';
+
+describe('in a fragment, an edit the save check refuses', () => {
+  it('typed in a component body is held with its reason, kept in the body with its caret, and sent once it passes', async () => {
+    let refuse = true;
+    const live = openChecked((markdown) => (refuse && markdown.includes('Hello!') ? 'no shouting' : null));
+    const { body, nested } = await bodyWith(live.container, 'Hello');
+    act(() => {
+      body.focus();
+      nested.update(() => $getRoot().selectEnd().insertText('!'), { discrete: true });
+    });
+    await waitFor(() => expect(live.container.textContent).toContain('Not saved: no shouting'));
+    expect(live.text.toJSON()).toBe(BODY);
+    expect(live.held.at(-1)?.[1]).toContain('Hello!');
+    // A teammate edit waits while held: showing it would rebuild the body and drop the held text.
+    live.text.doc?.transact(() => live.text.insert(0, 'Intro\n\n'), REMOTE);
+    await frames();
+    expect(live.container.textContent).not.toContain('Intro');
+    expect(body.textContent).toBe('Hello!');
+    expect(document.activeElement).toBe(body);
+    expect(caretOffset(nested)).toBe('Hello!'.length);
+    refuse = false;
+    act(() => nested.update(() => $getRoot().selectEnd().insertText('?'), { discrete: true }));
+    await waitFor(() => expect(live.text.toJSON()).toContain('Hello!?'));
+    expect(live.text.toJSON()).toContain('Intro');
+    expect(live.held.at(-1)).toEqual([null, null]);
+    await waitFor(() => expect(live.container.textContent).toContain('Intro'));
+    expect(live.container.textContent).not.toContain('Not saved');
+  });
+
+  it('a check that throws holds the edit and says so, rather than sending it unchecked', async () => {
+    const live = openChecked((markdown) => {
+      if (markdown.includes('Hello!')) throw new Error('parser crashed');
+      return null;
+    });
+    const { body, nested } = await bodyWith(live.container, 'Hello');
+    act(() => {
+      body.focus();
+      nested.update(() => $getRoot().selectEnd().insertText('!'), { discrete: true });
+    });
+    await waitFor(() => expect(live.container.textContent).toContain('Not saved: the check failed'));
+    await frames();
+    expect(live.text.toJSON()).toBe(BODY);
+    expect(live.held.at(-1)).toEqual(['Not saved: the check failed', expect.stringContaining('Hello!')]);
+  });
+
+  it('a check that throws on every text, the base too, still holds the edit rather than sending it unchecked', async () => {
+    const live = openChecked(() => {
+      throw new Error('parser crashed');
+    });
+    const { body, nested } = await bodyWith(live.container, 'Hello');
+    act(() => {
+      body.focus();
+      nested.update(() => $getRoot().selectEnd().insertText('!'), { discrete: true });
+    });
+    await waitFor(() => expect(live.container.textContent).toContain('Not saved: the check failed'));
+    await frames();
+    expect(live.text.toJSON()).toBe(BODY);
+  });
+
+  it("held while the Source view is open, a teammate's text is not shown or merged until the hold ends, then shows", async () => {
+    let refuse = true;
+    const live = openChecked((markdown) => (refuse && markdown.includes('Hello!') ? 'no shouting' : null));
+    await holdShout(live);
+    const realm = live.realm();
+    act(() => realm.pub(viewMode$, 'source'));
+    live.text.doc?.transact(() => live.text.insert(0, 'Intro\n\n'), REMOTE);
+    await sourcePause();
+    // Neither the Source view nor its write takes the teammate's text in, and the held edit is not sent by it.
+    expect(realm.getValue(markdownSourceEditorValue$)).not.toContain('Intro');
+    expect(live.text.toJSON()).toBe(`Intro\n\n${BODY}`);
+    expect(live.getByRole('alert').textContent).toContain('Not saved: no shouting');
+    act(() => realm.pub(viewMode$, 'rich-text'));
+    await frames();
+    expect(live.container.textContent).not.toContain('Intro');
+    const { nested } = await bodyWith(live.container, 'Hello!');
+    refuse = false;
+    act(() => nested.update(() => $getRoot().selectEnd().insertText('?'), { discrete: true }));
+    await waitFor(() => expect(live.text.toJSON()).toContain('Hello!?'));
+    expect(live.text.toJSON()).toContain('Intro');
+    await waitFor(() => expect(live.container.textContent).toContain('Intro'));
+    expect(live.queryByRole('alert')).toBeNull();
+  });
+
+  it('held when a teammate makes the page unreadable, the edit stays held, then is sent and the Source view opens to fix it', async () => {
+    let refuse = true;
+    const live = openChecked((markdown) => (refuse && markdown.includes('Hello!') ? 'no shouting' : null));
+    const nested = await holdShout(live);
+    const realm = live.realm();
+    live.text.doc?.transact(() => live.text.insert(live.text.length, '\n<Cal'), REMOTE);
+    await frames();
+    // One notice at a time: the held edit's, not the fix one.
+    expect(live.getAllByRole('alert').map((alert) => alert.textContent)).toEqual([
+      expect.stringContaining('Not saved: no shouting'),
+    ]);
+    expect(realm.getValue(viewMode$)).toBe('rich-text');
+    refuse = false;
+    act(() => nested.update(() => $getRoot().selectEnd().insertText('?'), { discrete: true }));
+    await waitFor(() => expect(live.getByRole('alert').textContent).toContain('needs fixing'));
+    expect(realm.getValue(viewMode$)).toBe('source');
+    expect(live.text.toJSON()).toContain('Hello!?');
+    expect(live.text.toJSON()).toContain('<Cal');
+    expect(realm.getValue(markdownSourceEditorValue$)).toContain('Hello!?');
+  });
+
+  it('held, text typed in the Source view passes the same check: refused it stays held, passing it is written once', async () => {
+    const checked: string[] = [];
+    const live = openChecked((markdown) => {
+      checked.push(markdown);
+      return markdown.includes('Hello!') ? 'no shouting' : null;
+    });
+    await holdShout(live);
+    const realm = live.realm();
+    act(() => realm.pub(viewMode$, 'source'));
+    act(() => realm.pub(markdownSourceEditorValue$, '<Callout>\n\nHello!!\n\n</Callout>\n\nOther\n'));
+    await sourcePause();
+    expect(checked.at(-1)).toContain('Hello!!');
+    expect(live.writes()).toBe(0);
+    expect(live.getByRole('alert').textContent).toContain('Not saved: no shouting');
+    act(() => realm.pub(markdownSourceEditorValue$, '<Callout>\n\nHello.\n\n</Callout>\n\nOther\n'));
+    await sourcePause();
+    expect(live.text.toJSON()).toContain('Hello.');
+    expect(live.writes()).toBe(1);
+    await waitFor(() => expect(live.queryByRole('alert')).toBeNull());
+    act(() => realm.pub(viewMode$, 'rich-text'));
+    await frames();
+    expect(live.writes()).toBe(1);
+    expect(live.held.at(-1)).toEqual([null, null]);
+  });
+
+  it('typed in the Source view with nothing held, a refused tag never reaches the shared text and its reason shows', async () => {
+    const live = openChecked(bogus);
+    await bodyWith(live.container, 'Hello');
+    const realm = live.realm();
+    act(() => realm.pub(viewMode$, 'source'));
+    act(() => realm.pub(markdownSourceEditorValue$, refusedSource));
+    await sourcePause();
+    expect(live.text.toJSON()).toBe(BODY);
+    expect(live.writes()).toBe(0);
+    expect(live.getByRole('alert').textContent).toContain('Not saved: unknown component Bogus731');
+    expect(live.held.at(-1)).toEqual(['Not saved: unknown component Bogus731', refusedSource]);
+  });
+
+  for (const { leave, how } of [
+    {
+      leave: 'the switch back to rich text',
+      how: (_live: RenderResult, realm: Realm) => realm.pub(viewMode$, 'rich-text'),
+    },
+    { leave: 'closing the editor', how: (live: RenderResult) => live.unmount() },
+    { leave: 'leaving the page', how: () => window.dispatchEvent(new Event('pagehide')) },
+    { leave: 'hiding the tab', how: hideTab },
+  ]) {
+    it(`typed in the Source view, a refused tag is held, not written, on ${leave}`, async () => {
+      const live = openChecked(bogus);
+      await bodyWith(live.container, 'Hello');
+      const realm = live.realm();
+      act(() => {
+        realm.pub(viewMode$, 'source');
+        realm.pub(markdownSourceEditorValue$, refusedSource);
+      });
+      act(() => how(live, realm));
+      expect(live.text.toJSON()).toBe(BODY);
+      expect(live.writes()).toBe(0);
+      expect(live.held.at(-1)).toEqual(['Not saved: unknown component Bogus731', refusedSource]);
+    });
+  }
+
+  for (const step of ['undo', 'redo'] as const) {
+    it(`an ${step} whose text the check refuses is held with its reason, never written`, async () => {
+      // Refuses the page once a teammate's Intro is in it without this user's '!': only undoing the '!' fails.
+      const live = openChecked((markdown) =>
+        markdown.includes('Intro') && !markdown.includes('Hello!') ? 'no quiet intro' : null,
+      );
+      const { body, nested } = await bodyWith(live.container, 'Hello');
+      if (step === 'redo') {
+        // Redo re-applies a '!' removal: type '!' and then erase it, undo the erase, then redo it with Intro in.
+        act(() => {
+          body.focus();
+          nested.update(() => $getRoot().selectEnd().insertText('!'), { discrete: true });
+        });
+        await waitFor(() => expect(live.text.toJSON()).toContain('Hello!'));
+        await act(() => Bun.sleep(600));
+        act(() =>
+          nested.update(() => $getRoot().getAllTextNodes()[0]?.setTextContent('Hello').selectEnd(), { discrete: true }),
+        );
+        await waitFor(() => expect(live.text.toJSON()).toBe(BODY));
+        act(() => void nested.dispatchCommand(UNDO_COMMAND, undefined));
+        await waitFor(() => expect(live.text.toJSON()).toContain('Hello!'));
+      } else {
+        act(() => {
+          body.focus();
+          nested.update(() => $getRoot().selectEnd().insertText('!'), { discrete: true });
+        });
+        await waitFor(() => expect(live.text.toJSON()).toContain('Hello!'));
+      }
+      live.text.doc?.transact(() => live.text.insert(live.text.length, '\nIntro\n'), REMOTE);
+      await frames();
+      const before = live.text.toJSON();
+      let updates = 0;
+      live.text.doc?.on('update', () => updates++);
+      act(() => void nested.dispatchCommand(step === 'undo' ? UNDO_COMMAND : REDO_COMMAND, undefined));
+      await frames();
+      // Not even a write put back: no update the provider could send went out.
+      expect(updates).toBe(0);
+      expect(live.text.toJSON()).toBe(before);
+      await waitFor(() => expect(live.container.textContent).toContain('Not saved: no quiet intro'));
+      expect(live.held.at(-1)?.[0]).toBe('Not saved: no quiet intro');
+    });
+  }
+
+  it('an undo that restores erased text the check refuses is held with its reason, never written', async () => {
+    // Refuses the page once it has both a teammate's Intro and this user's '!': only restoring the erased '!' fails.
+    const live = openChecked((markdown) =>
+      markdown.includes('Intro') && markdown.includes('Hello!') ? 'no loud intro' : null,
+    );
+    const { body, nested } = await bodyWith(live.container, 'Hello');
+    act(() => {
+      body.focus();
+      nested.update(() => $getRoot().selectEnd().insertText('!'), { discrete: true });
+    });
+    await waitFor(() => expect(live.text.toJSON()).toContain('Hello!'));
+    await act(() => Bun.sleep(600));
+    act(() =>
+      nested.update(() => $getRoot().getAllTextNodes()[0]?.setTextContent('Hello').selectEnd(), { discrete: true }),
+    );
+    await waitFor(() => expect(live.text.toJSON()).toBe(BODY));
+    live.text.doc?.transact(() => live.text.insert(live.text.length, '\nIntro\n'), REMOTE);
+    await frames();
+    const before = live.text.toJSON();
+    let updates = 0;
+    live.text.doc?.on('update', () => updates++);
+    act(() => void nested.dispatchCommand(UNDO_COMMAND, undefined));
+    await frames();
+    expect(updates).toBe(0);
+    expect(live.text.toJSON()).toBe(before);
+    await waitFor(() => expect(live.container.textContent).toContain('Not saved: no loud intro'));
+    expect(live.held.at(-1)).toEqual(['Not saved: no loud intro', expect.stringContaining('Hello!')]);
+  });
 });

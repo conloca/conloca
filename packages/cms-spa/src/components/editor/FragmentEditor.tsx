@@ -2,26 +2,33 @@ import {
   getContentAPIClient,
   StaleWriteError,
   type UpdateResult,
+  useLocalizedContent,
   useSitesConfig,
   useUpdateLocalized,
 } from '@conloca/content-api-client';
 import cn from 'clsx';
 import { AlertTriangle } from 'lucide-react';
-import { type ElementType, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { type ElementType, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { parsePath, useHref, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { notifyEditorDirtyChanged, registerEditorFlushHandler } from '../../editor-flush.js';
 import { useEditorPref } from '../../hooks/useEditorPref.js';
 import { useErrorModal } from '../../hooks/useErrorModal.js';
 import { useTheme } from '../../hooks/useTheme.js';
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard.js';
+import { useDocChannel } from '../../live/doc-channel.js';
+import { heldFragmentEdit, setHeldFragmentEdit, setNotAppliedFragmentEdit } from '../../live/held-fragment-edits.js';
+import { markdownLivePlugin } from '../../live/markdown-live-plugin.js';
+import { useLiveDoc } from '../../live/use-live.js';
 import { setSelectedBlock } from '../../selected-block.js';
 import { useSiteRender } from '../../site-render.js';
 import type { SaveState } from '../../types.js';
 import { getUIConfig } from '../../ui-config.js';
 import { DraftNoticeStrip } from '../conflicts/EditorNoticeStrip.js';
+import { PageDraftMenu } from '../conflicts/PageDraftMenu.js';
+import { draftToolsPage } from '../conflicts/use-page-conflicts.js';
 import { ConflictDialog } from '../dialogs/ConflictDialog.js';
 import { ErrorModal } from '../dialogs/ErrorModal.js';
-import { UnsavedChangesDialog } from '../dialogs/UnsavedChangesDialog.js';
+import { LiveLeaveGuard, UnsavedChangesDialog } from '../dialogs/UnsavedChangesDialog.js';
 import { CMSMDXEditor, type CMSMDXEditorProps } from './CMSMDXEditor.js';
 import { EditorChromeToggles } from './EditorChromeToggles.js';
 import { FRAGMENT_STATUS_ID, FragmentEditorHeaderActions, fragmentStatusText } from './FragmentEditorHeaderActions.js';
@@ -35,6 +42,7 @@ import {
 import { JsxPropsPanel } from './JsxPropsPanel.js';
 import { LocaleSelector } from './LocaleSelector.js';
 import { fragmentPreviewPathname, MDXLivePreview } from './MDXLivePreview.js';
+import { usePeerBlockOutlines } from './MdxPageEditor.js';
 import { useOfferedMdxComponents } from './offered-mdx-components.js';
 
 type PersistStatus = 'saved' | 'conflict' | 'error';
@@ -44,13 +52,242 @@ type PersistStatus = 'saved' | 'conflict' | 'error';
  *
  * Inline page layout (mirrors MdxPageEditor). Routed via /fragments/:id which
  * lives outside CMSLayout in App.tsx so the editor occupies the full viewport.
+ * Inside a parent frame with a doc channel the body is co-edited live and there
+ * is nothing to save.
  */
 interface FragmentEditorProps {
-  /** Editor surface override for parent-state tests; production uses CMSMDXEditor. */
+  /** Editor surface override for parent-state tests of the Save editor; production uses CMSMDXEditor. */
   EditorComponent?: ElementType<CMSMDXEditorProps>;
 }
 
 export function FragmentEditor({ EditorComponent = CMSMDXEditor }: FragmentEditorProps = {}) {
+  const { id } = useParams<{ id: string }>();
+  // The guard sits above the loading, missing and failed screens too: a locale switch reopens, and the old doc may still owe work.
+  return useDocChannel() ? (
+    <>
+      <LiveLeaveGuard />
+      <LiveFragmentEditor key={id} />
+    </>
+  ) : (
+    <SavedFragmentEditor EditorComponent={EditorComponent} />
+  );
+}
+
+const NOT_MDX = 'This fragment is not MDX, so it cannot be edited here.';
+
+/**
+ * The co-editing branch: the body is bound to the fragment's shared doc, an MDX doc as on MDX pages. The site's save
+ * check gates each write: an edit it refuses is held in the editor unsent, and the frame reports it held, so flushes
+ * answer not ok and leaving asks.
+ */
+function LiveFragmentEditor() {
+  const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const { resolvedTheme } = useTheme();
+  const { vocabulary } = useSiteRender();
+  const descriptors = useOfferedMdxComponents();
+  const { fromPage, backTarget, backLabel } = fragmentOrigin(searchParams);
+  const { defaultLocale, availableLocales } = useFragmentLocales();
+  const [chosenLocale, setChosenLocale] = useState<string | null>(null);
+  const currentLocale = chosenLocale ?? defaultLocale;
+  const [previewOpen, setPreviewOpen] = useEditorPref('conloca.mdxeditor.previewOpen');
+  // The fragment as stored: its name and type; its body comes from the shared doc, opened only for an MDX row.
+  const { data: loaded, isPending, error } = useLocalizedContent(id || '', currentLocale);
+  const isMdx = loaded?.type === 'mdx';
+  const liveDoc = useLiveDoc(id && isMdx ? { kind: 'mdx', id, locale: currentLocale } : null);
+  const live = liveDoc.state === 'ready' ? liveDoc.live : undefined;
+  const channel = useDocChannel();
+  const [editorRoot, setEditorRoot] = useState<HTMLElement | null>(null);
+  usePeerBlockOutlines(live?.docKey ?? '', editorRoot);
+  const [preview, setPreview] = useState('');
+  // The check reads the site's vocabulary as it is at each edit, without rebinding the editor.
+  const checkInput = useRef({ vocabulary, descriptors });
+  useLayoutEffect(() => {
+    checkInput.current = { vocabulary, descriptors };
+  });
+
+  // The entry is the locale the doc was opened in: `live` changes only once a switched locale's doc is open, so a render
+  // between the switch and that open must not tag the open editor's holds with the new locale.
+  const entry = `${id}:${currentLocale}`;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `entry` is read when `live` changes, see above.
+  const bound = useMemo(() => {
+    if (!live) return null;
+    const text = live.doc.getText('body');
+    const plugin = markdownLivePlugin({
+      text,
+      undoScope: [text],
+      onSelectionBlock: (block) => channel?.setSelection(live.docKey, block === null ? null : `block:${block}`),
+      onRootElement: setEditorRoot,
+      held: channel
+        ? {
+            notice: () => (live.held ? channel.held() : null),
+            content: () => channel.heldContent(live.docKey)?.mdx ?? '',
+            subscribe: (onChange) => channel.on('status', onChange),
+          }
+        : undefined,
+      check: (markdown) =>
+        checkFragmentSave(markdown, checkInput.current.vocabulary, checkInput.current.descriptors)?.message ?? null,
+      onHeld: (notice, markdown) => setHeldFragmentEdit(entry, live.docKey, notice, markdown),
+    });
+    return { text, value: text.toJSON(), plugins: [plugin] };
+  }, [live, channel]);
+
+  // A held edit from an earlier editor (a replaced doc, a locale switched back) is not put back: written over the body
+  // now stored, it could undo a discard or restore or a teammate's change. It is offered to copy instead, still held;
+  // a later one queues behind it, so none is dropped unseen.
+  const [notAppliedQueue, setNotAppliedQueue] = useState<{ reason: string; markdown: string; docKey: string }[]>([]);
+  const notApplied = notAppliedQueue[0];
+  // Leaving asks until each text is copied or dismissed: it exists nowhere else.
+  const closeNotApplied = () => {
+    if (!notApplied) return;
+    const rest = notAppliedQueue.slice(1);
+    if (!rest.some((edit) => edit.docKey === notApplied.docKey)) setNotAppliedFragmentEdit(notApplied.docKey, null);
+    setNotAppliedQueue(rest);
+  };
+  const boundEntry = useRef<string | null>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs once per new editor; `entry` is its locale, see above.
+  useEffect(() => {
+    if (!live) return;
+    const markdown = heldFragmentEdit(entry);
+    const reason =
+      boundEntry.current === entry ? 'the fragment was replaced (discarded or restored)' : 'the locale was switched';
+    boundEntry.current = entry;
+    if (markdown === undefined) return;
+    setHeldFragmentEdit(entry, live.docKey, null, null);
+    setNotAppliedFragmentEdit(live.docKey, 'Your unsent edit was not applied: copy it before you leave.');
+    setNotAppliedQueue((queue) => [...queue, { reason, markdown, docKey: live.docKey }]);
+  }, [live]);
+
+  // The preview follows the shared body, teammates' changes included; the editor's own onChange adds a held edit.
+  useEffect(() => {
+    if (!bound) return undefined;
+    const show = () => setPreview(bound.text.toJSON());
+    show();
+    bound.text.observe(show);
+    return () => bound.text.unobserve(show);
+  }, [bound]);
+
+  const fragmentName = fragmentDisplayName(loaded, id);
+  const filePath = `fragments/${fragmentName}`;
+  useEffect(() => {
+    const prev = document.title;
+    document.title = `Edit: ${filePath} · Conloca CMS`;
+    return () => {
+      document.title = prev;
+    };
+  }, [filePath]);
+
+  // A locale with no version is only "missing" after a switch; the locale the editor opens in must exist.
+  const absent = !!currentLocale && !isPending && !loaded;
+  const failure =
+    error?.message ??
+    (absent && chosenLocale === null ? 'Not found' : null) ??
+    (loaded && !isMdx ? NOT_MDX : null) ??
+    (liveDoc.state === 'failed' ? liveDoc.message : null);
+  if (failure !== null) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full bg-page gap-4">
+        <div className="text-red-04 dark:text-red-08">Failed to load fragment: {failure}</div>
+        <button
+          type="button"
+          onClick={() => navigate('/fragments')}
+          className="px-4 py-2 bg-azure-04 text-white rounded-md hover:bg-azure-03 transition-colors"
+        >
+          Back to Fragments
+        </button>
+      </div>
+    );
+  }
+
+  const editing = !absent && live && bound ? { live, bound } : null;
+  if (!absent && !editing) {
+    return (
+      <div className="flex items-center justify-center h-full bg-page">
+        <div className="flex items-center gap-3 text-muted" role="status">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-azure-04" />
+          <span>Loading fragment…</span>
+        </div>
+      </div>
+    );
+  }
+
+  const draftPage = editing ? draftToolsPage(id, currentLocale) : null;
+  return (
+    <div className="h-full flex flex-col bg-page">
+      <header className="flex items-center justify-between gap-4 px-4 py-2 border-b border-line bg-overlay shrink-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <button
+            type="button"
+            onClick={() => navigate(backTarget)}
+            aria-label={backLabel}
+            className="p-2 rounded text-muted hover:bg-hover"
+          >
+            ←
+          </button>
+          <h1 className="text-base font-medium text-foreground truncate">Edit: {filePath}</h1>
+        </div>
+        <div className="flex items-center gap-2">
+          <LocaleSelector
+            currentLocale={currentLocale}
+            availableLocales={availableLocales}
+            onChange={setChosenLocale}
+          />
+          {editing && (
+            <EditorChromeToggles previewOpen={previewOpen} onTogglePreview={() => setPreviewOpen(!previewOpen)} />
+          )}
+          {draftPage && <PageDraftMenu page={draftPage} label={fragmentName} />}
+        </div>
+      </header>
+      {editing ? (
+        <>
+          <DraftNoticeStrip id={id} locale={currentLocale} docKey={editing.live.docKey} />
+          <SharedFragmentBanner fromPage={fromPage} live />
+          {notApplied && (
+            <div
+              role="alert"
+              data-testid="held-edit-not-applied"
+              className="flex items-center gap-3 px-4 py-2 bg-yellow-11 text-yellow-02 text-sm"
+            >
+              <span>
+                Your unsent edit was not applied because {notApplied.reason}. This shows the fragment as stored now.
+              </span>
+              <button
+                type="button"
+                className="px-3 py-1 border border-line rounded"
+                onClick={() => void navigator.clipboard.writeText(notApplied.markdown).then(closeNotApplied)}
+              >
+                Copy changes
+              </button>
+              <button type="button" className="px-3 py-1" onClick={closeNotApplied}>
+                Dismiss
+              </button>
+            </div>
+          )}
+          <FragmentEditorSurface
+            EditorComponent={CMSMDXEditor}
+            editorKey={editing.live.docKey}
+            content={editing.bound.value}
+            // Live writes every change as made: the Diff view compares with the text opened, as the page editor's does.
+            savedContent={editing.bound.value}
+            preview={preview}
+            resolvedTheme={resolvedTheme}
+            previewOpen={previewOpen}
+            editorClassName={resolvedTheme === 'dark' ? 'dark-theme' : undefined}
+            // The live plugin writes every change; there is nothing to save.
+            onChange={(next) => setPreview(next)}
+            onSave={undefined}
+            extraPlugins={editing.bound.plugins}
+          />
+        </>
+      ) : (
+        <p className="p-8 text-center text-muted">No {currentLocale} version of this fragment yet.</p>
+      )}
+    </div>
+  );
+}
+
+function SavedFragmentEditor({ EditorComponent = CMSMDXEditor }: FragmentEditorProps) {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -831,7 +1068,7 @@ function fragmentDisplayName(loadedContent: FragmentLoad['data'], id: string | u
   return loadedContent?.localized?.name || id || 'fragment';
 }
 
-function SharedFragmentBanner({ fromPage }: { fromPage: boolean }) {
+function SharedFragmentBanner({ fromPage, live = false }: { fromPage: boolean; live?: boolean }) {
   return (
     fromPage && (
       <div
@@ -840,7 +1077,11 @@ function SharedFragmentBanner({ fromPage }: { fromPage: boolean }) {
         data-testid="shared-fragment-banner"
       >
         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-        <span>This is a shared fragment. Saving updates every page that uses it.</span>
+        <span>
+          {live
+            ? 'This is a shared fragment. Your changes reach every page that uses it.'
+            : 'This is a shared fragment. Saving updates every page that uses it.'}
+        </span>
       </div>
     )
   );
@@ -856,6 +1097,9 @@ interface FragmentEditorSurfaceProps {
   editorClassName: string | undefined;
   onChange: CMSMDXEditorProps['onChange'];
   onSave: CMSMDXEditorProps['onSave'];
+  /** What the live preview renders; `content` by default. */
+  preview?: string;
+  extraPlugins?: CMSMDXEditorProps['extraPlugins'];
 }
 
 function FragmentEditorSurface({
@@ -868,6 +1112,8 @@ function FragmentEditorSurface({
   editorClassName,
   onChange,
   onSave,
+  preview = content,
+  extraPlugins,
 }: FragmentEditorSurfaceProps) {
   // The props panel reads a selection shared across editors; a block from another or a disposed editor must not show.
   // biome-ignore lint/correctness/useExhaustiveDependencies: clear again when the editor remounts under a new key.
@@ -909,6 +1155,7 @@ function FragmentEditorSurface({
           previewRouteUrl={fragmentPreviewPathname()}
           onChange={onChange}
           onSave={onSave}
+          extraPlugins={extraPlugins}
           className={editorClassName}
           autoFocus
           placeholder="Start writing your fragment…"
@@ -917,7 +1164,7 @@ function FragmentEditorSurface({
       <JsxPropsPanel />
       {previewOpen && (
         <div className="w-1/2 min-w-0 overflow-auto border-l border-line bg-panel">
-          <MDXLivePreview markdown={content} />
+          <MDXLivePreview markdown={preview} />
         </div>
       )}
     </div>

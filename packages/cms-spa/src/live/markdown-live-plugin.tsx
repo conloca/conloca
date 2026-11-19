@@ -48,7 +48,7 @@ import {
 } from 'lexical';
 import { useEffect, useLayoutEffect, useReducer, useRef, useSyncExternalStore } from 'react';
 import { flushSync } from 'react-dom';
-import type * as Y from 'yjs';
+import * as Y from 'yjs';
 import { notifyEditorDirtyChanged } from '../editor-flush.js';
 import { commitDrafts, getSelectedBlock, markLiveEditing, setSelectedBlock } from '../selected-block.js';
 import { LOCAL_ORIGIN } from './doc-channel.js';
@@ -227,6 +227,32 @@ function shiftedOffset(before: string, after: string, offset: number): number {
 }
 
 /**
+ * The text `text` would hold after `undo`'s next step off `stack`, or null with nothing to step: the step runs on a copy
+ * of the doc (its stack items name structs by ID, which the copy keeps), so nothing is written to the shared doc.
+ */
+function stepResult(text: Y.Text, undo: Y.UndoManager, stack: 'undoStack' | 'redoStack'): string | null {
+  const items = undo[stack];
+  const item = items[items.length - 1];
+  const doc = text.doc;
+  if (!item) return null;
+  const name = doc ? [...doc.share].find(([, type]) => Object.is(type, text))?.[0] : undefined;
+  if (!doc || name === undefined) throw new Error('the text is no root type of its doc');
+  // No gc: an undo of an erase restores content the copy would otherwise drop as deleted when it loads the update.
+  const copy = new Y.Doc({ gc: false });
+  try {
+    Y.applyUpdate(copy, Y.encodeStateAsUpdate(doc));
+    const copied = copy.getText(name);
+    const manager = new Y.UndoManager(copied);
+    manager[stack].push(item);
+    if (stack === 'undoStack') manager.undo();
+    else manager.redo();
+    return copied.toJSON();
+  } finally {
+    copy.destroy();
+  }
+}
+
+/**
  * The editor side of an MDX body in a shared doc. Per mount it keeps `shadow` (the markdown the editor last showed) and
  * a replica of the doc as the editor last showed it. A local change is diffed into the replica and sent as one update,
  * so Yjs merges it with remote changes the editor has not shown. A remote change is shown on the next frame, and every
@@ -246,9 +272,36 @@ export function markdownLivePlugin(input: {
    * changes that can hold it. Held, the editor goes read-only, as typing into it would never leave the frame.
    */
   held?: { notice: () => string | null; content(): string; subscribe: (onChange: () => void) => () => void };
+  /**
+   * Why a body may not be written (a fragment the site would refuse), or null. An edit that makes a passing body fail
+   * is held in the editor unsent, with `Not saved: <reason>` shown and passed to `onHeld`; the first passing edit sends
+   * it as one change. A body the check refused (a returned reason) is not held, so it can still be fixed; a check that
+   * throws is no verdict on the body, so it always holds.
+   */
+  check?: (markdown: string) => string | null;
+  /** The held edit's notice and text on each held edit, or nulls once nothing is held. */
+  onHeld?(notice: string | null, markdown: string | null): void;
 }): RealmPlugin {
-  const { text, held } = input;
+  const { text, held, check } = input;
+  /** Why `markdown` may not be written; a check that throws holds (fails closed) rather than sending unchecked. */
+  const problemWith = (markdown: string): string | null => {
+    try {
+      return check?.(markdown) ?? null;
+    } catch {
+      return 'the check failed';
+    }
+  };
+  /** Whether the check returned a reason for `markdown`; a throw is no refusal, so it never lets an edit through. */
+  const refused = (markdown: string): boolean => {
+    try {
+      return (check?.(markdown) ?? null) !== null;
+    } catch {
+      return false;
+    }
+  };
   const notice$ = Cell<string | null>(null);
+  // The notice of an edit held unsent because it fails `check`.
+  const unsent$ = Cell<string | null>(null);
   // A body the editor cannot import: the Source view is open, editable, to fix it in.
   const fix$ = Cell<string | null>(null);
   // Keys typed for a body that went before they could be typed into it, now at the end of the page: said, to copy.
@@ -260,6 +313,7 @@ export function markdownLivePlugin(input: {
 
   function LiveNotice() {
     const notice = useCellValue(notice$);
+    const unsent = useCellValue(unsent$);
     const fix = useCellValue(fix$);
     const unplaced = useCellValue(unplaced$);
     const setUnplaced = usePublisher(unplaced$);
@@ -267,14 +321,30 @@ export function markdownLivePlugin(input: {
     const setStale = usePublisher(stale$);
     // A hold that comes after another notice locked the editor leaves `notice$` as it is, so it is watched on its own.
     const heldNotice = useSyncExternalStore(held?.subscribe ?? noSubscribe, held?.notice ?? notHeld);
+    const shown = notice ?? unsent;
     return (
       <>
-        {fix !== null && (
+        {shown !== null && (
+          <div role="alert" className="flex items-center gap-3 px-4 py-2 bg-yellow-11 text-yellow-02 text-sm">
+            <span>{shown}</span>
+            {held && notice !== null && heldNotice !== null && (
+              <button
+                type="button"
+                className="px-3 py-1 border border-line rounded"
+                onClick={() => void navigator.clipboard.writeText(held.content())}
+              >
+                Copy changes
+              </button>
+            )}
+          </div>
+        )}
+        {/* One notice at a time: a held edit's comes first. */}
+        {unsent === null && fix !== null && (
           <div role="alert" className="flex items-center gap-3 px-4 py-2 bg-yellow-11 text-yellow-02 text-sm">
             <span>{fix}</span>
           </div>
         )}
-        {stale !== null && (
+        {unsent === null && stale !== null && (
           <div role="alert" className="flex items-center gap-3 px-4 py-2 bg-yellow-11 text-yellow-02 text-sm">
             <span>{STALE_FIX}</span>
             <button
@@ -287,20 +357,6 @@ export function markdownLivePlugin(input: {
             <button type="button" className="px-3 py-1 border border-line rounded" onClick={() => setStale(null)}>
               Dismiss
             </button>
-          </div>
-        )}
-        {notice !== null && (
-          <div role="alert" className="flex items-center gap-3 px-4 py-2 bg-yellow-11 text-yellow-02 text-sm">
-            <span>{notice}</span>
-            {held && heldNotice !== null && (
-              <button
-                type="button"
-                className="px-3 py-1 border border-line rounded"
-                onClick={() => void navigator.clipboard.writeText(held.content())}
-              >
-                Copy changes
-              </button>
-            )}
           </div>
         )}
         {unplaced !== null && (
@@ -418,6 +474,42 @@ export function markdownLivePlugin(input: {
           if (frame === 0) frame = requestAnimationFrame(() => showRemote(afterUi));
         };
 
+        // The text of an edit held unsent (see `check`), which the editor shows in place of `shadow`.
+        let heldText: string | null = null;
+        // A remote change that came while an edit was held: shown once the hold ends.
+        let remotePending = false;
+        // Counts the edits taken, so a caller can tell its editor update produced one.
+        let takes = 0;
+        const setUnsent = (notice: string | null, markdown: string | null = null) => {
+          heldText = markdown;
+          if (notice === null && realm.getValue(unsent$) === null) return;
+          if (realm.getValue(unsent$) !== notice) realm.pub(unsent$, notice);
+          input.onHeld?.(notice, markdown);
+        };
+        const releaseHold = () => {
+          setUnsent(null);
+          if (!remotePending) return;
+          remotePending = false;
+          cancelAnimationFrame(frame);
+          frame = 0;
+          show();
+        };
+        /** Sends a local edit, or holds it while it makes a passing body fail. */
+        const takeEdit = (next: string) => {
+          takes++;
+          const problem = check ? problemWith(next) : null;
+          // Held while it fails, unless the check refused the text last sent too.
+          if (problem !== null && (realm.getValue(unsent$) !== null || !refused(shadow))) {
+            setUnsent(`Not saved: ${problem}`, next);
+            return;
+          }
+          if (next !== shadow) {
+            writeEditorEdit(replica, text, shadow, next, LOCAL_ORIGIN);
+            shadow = next;
+          }
+          releaseHold();
+        };
+
         // `muteChange$` set means the change is the editor showing a remote text, not the user typing.
         const stopMarkdown = realm.sub(markdown$, (next) => {
           if (realm.getValue(muteChange$) || realm.getValue(notice$) !== null) return;
@@ -425,9 +517,8 @@ export function markdownLivePlugin(input: {
             shadow = next;
             return;
           }
-          if (next === shadow) return;
-          writeEditorEdit(replica, text, shadow, next, LOCAL_ORIGIN);
-          shadow = next;
+          if (next === shadow && heldText === null) return;
+          takeEdit(next);
         });
         // Source text not written yet: it is read as MDX once typing pauses, and written if a teammate's editor could
         // show it; text that does not parse yet (a tag still being typed) waits for the switch back or the user leaving.
@@ -445,6 +536,11 @@ export function markdownLivePlugin(input: {
           // Held, nothing writes; the text stays for a later write.
           if (realm.getValue(notice$) !== null || staleFix) return;
           source = null;
+          // With a check, Source text passes it as any edit does: refused, it is held unsent with its reason shown.
+          if (check) {
+            takeEdit(next);
+            return;
+          }
           if (next === shadow) return;
           writeEditorEdit(replica, text, shadow, next, LOCAL_ORIGIN);
           shadow = next;
@@ -512,7 +608,7 @@ export function markdownLivePlugin(input: {
           pending = null;
           const { typed } = typedText(takeHeld());
           if (typed === '') return;
-          const before = shadow;
+          const before = takes;
           let inBody = false;
           // The markdown this exports is written to the doc by `stopMarkdown`, as the user's typing is.
           editor.update(
@@ -535,12 +631,10 @@ export function markdownLivePlugin(input: {
             },
             { discrete: true },
           );
-          if (shadow === before) {
-            // Nothing wrote the export (the editor locked or not exporting): the text goes at the end of the page.
+          if (takes === before) {
+            // Nothing took the export (the editor locked or not exporting): the text goes at the end of the page.
             inBody = false;
-            const next = `${shadow.trimEnd()}\n\n${typed}\n`;
-            writeEditorEdit(replica, text, shadow, next, LOCAL_ORIGIN);
-            shadow = next;
+            takeEdit(`${(heldText ?? shadow).trimEnd()}\n\n${typed}\n`);
           }
           if (!inBody) realm.pub(unplaced$, typed);
         }
@@ -549,16 +643,16 @@ export function markdownLivePlugin(input: {
         function writeHeldToText() {
           if (!pending || heldKeys.length === 0) return placeHeld();
           const { caret, text: was } = pending.at;
+          // What the editor shows: a held edit's text, else the text last sent.
+          const shown = heldText ?? shadow;
           const head = was.slice(0, caret.offset);
-          const headAt = once(shadow, head);
-          const at = headAt === null ? once(shadow, was.slice(caret.offset)) : headAt + head.length;
+          const headAt = once(shown, head);
+          const at = headAt === null ? once(shown, was.slice(caret.offset)) : headAt + head.length;
           const { typed, erased } = typedText(heldKeys);
           // Backspaces past the typed keys erase only characters known to be the caret's own text before it.
-          if (at === null || erased > head.length || shadow.slice(at - erased, at) !== head.slice(head.length - erased))
+          if (at === null || erased > head.length || shown.slice(at - erased, at) !== head.slice(head.length - erased))
             return placeHeld();
-          const next = shadow.slice(0, at - erased) + typed + shadow.slice(at);
-          writeEditorEdit(replica, text, shadow, next, LOCAL_ORIGIN);
-          shadow = next;
+          takeEdit(shown.slice(0, at - erased) + typed + shown.slice(at));
           pending = null;
           takeHeld();
         }
@@ -623,6 +717,10 @@ export function markdownLivePlugin(input: {
         function showRemote(afterUi: boolean) {
           frame = 0;
           if (realm.getValue(notice$) !== null) return;
+          if (realm.getValue(unsent$) !== null) {
+            remotePending = true;
+            return;
+          }
           // In the Source or Diff view, showing it would rebuild the view under the caret; it shows on the switch back.
           if (realm.getValue(viewMode$) !== 'rich-text') {
             // Fixing a text the editor cannot read, a teammate's text shows here while nothing of this user's waits;
@@ -843,14 +941,49 @@ export function markdownLivePlugin(input: {
           if (realm.getValue(notice$) === null && realm.getValue(fix$) === null && !staleFix) step();
           return true;
         };
+        /**
+         * Undo and redo write the shared text directly, so with a check a step is first worked out on a copy: one whose
+         * body the check refuses is never written, its body held unsent instead, as a typed edit that fails it would be.
+         */
+        const checkedStep = (stack: 'undoStack' | 'redoStack') => {
+          const step = () => (stack === 'undoStack' ? undo.undo() : undo.redo());
+          if (!check || refused(shadow)) {
+            step();
+            return;
+          }
+          let after: string | null;
+          try {
+            after = stepResult(text, undo, stack);
+          } catch {
+            // No verdict on the step's text: it fails closed, unwritten, as a check that throws does.
+            setUnsent('Not saved: the check failed', heldText ?? shadow);
+            return;
+          }
+          if (after === null) return;
+          const body = splitEsm(after).body;
+          if (problemWith(body) === null) {
+            step();
+            return;
+          }
+          realm.pub(setMarkdown$, body);
+          editor.update(() => {}, { discrete: true });
+          takeEdit(body);
+        };
+        // Undo of a held edit shows the text last sent again; there is nothing to redo.
+        const undoHeld = () => {
+          realm.pub(setMarkdown$, shadow);
+          editor.update(() => {}, { discrete: true });
+          shadow = realm.getValue(markdown$);
+          releaseHold();
+        };
         const stopUndo = editor.registerCommand(
           UNDO_COMMAND,
-          unlessLocked(() => undo.undo()),
+          unlessLocked(() => (realm.getValue(unsent$) === null ? checkedStep('undoStack') : undoHeld())),
           COMMAND_PRIORITY_CRITICAL,
         );
         const stopRedo = editor.registerCommand(
           REDO_COMMAND,
-          unlessLocked(() => undo.redo()),
+          unlessLocked(() => realm.getValue(unsent$) === null && checkedStep('redoStack')),
           COMMAND_PRIORITY_CRITICAL,
         );
         const stopSelection = editor.registerUpdateListener(({ editorState }) => {

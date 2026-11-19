@@ -5,16 +5,19 @@ import {
   setContentAPIClient,
 } from '@conloca/content-api-client';
 import { BaseMDXEditor } from '@conloca/mdx';
+import { defineFragmentComponents } from '@conloca/mdx/render';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { $getRoot, getNearestEditorFromDOMNode, type LexicalNode } from 'lexical';
+import { type ReactNode, useEffect, useState } from 'react';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { expect, userEvent, waitFor, within } from 'storybook/test';
 import '../../main.css';
-import { createFakeDocChannel } from '../../../test/fake-doc-channel.js';
+import { createFakeDocChannel, type FakeDocChannel } from '../../../test/fake-doc-channel.js';
 import { CmsSpaApp } from '../../CmsSpaApp.js';
 import { EDITOR_DIRTY_CHANGED_EVENT, flushOpenEditor, isOpenEditorDirty } from '../../editor-flush.js';
 import { ThemeProvider } from '../../hooks/useTheme.js';
+import { setSiteRender } from '../../site-render.js';
 import { configureUI, getUIConfig } from '../../ui-config.js';
 import type { CMSMDXEditorProps } from './CMSMDXEditor.js';
 import { FragmentEditor } from './FragmentEditor.js';
@@ -356,23 +359,119 @@ export const BackWithUnsavedEditsAsksFirst: Story = {
   },
 };
 
-/** Inside a live frame the channel reports a status, but the fragment still saves with Save: leaving with edits asks. */
-export const LiveFrameKeepsTheSaveGuard: Story = {
-  beforeEach: () => {
-    const restore = installStoryApi(new FragmentContentAPI(), { hosted: true });
-    const fake = createFakeDocChannel({});
-    fake.channel.receive('live.status', { connection: 'connected', pending: false, persisted: true, readOnly: null });
-    configureUI({ ...getUIConfig(), docChannel: fake.channel });
-    return restore;
-  },
+/** The fragment's body in a frame with a doc channel; each live story sets it. */
+let live: FakeDocChannel;
+
+const SiteCallout = ({ children }: { children?: ReactNode }) => <aside className="site-callout">{children}</aside>;
+
+/** A live frame over a fragment whose body is `mdx`, with the site's Callout in its vocabulary. */
+function installLiveFrame(mdx: string) {
+  return () => {
+    const next = new FragmentContentAPI();
+    next.entries.set(`${FRAGMENT.id}/en`, { ...FRAGMENT, localized: { ...FRAGMENT.localized, content: { mdx } } });
+    const restore = installStoryApi(next, { hosted: true });
+    live = createFakeDocChannel({ mdx });
+    configureUI({ ...getUIConfig(), docChannel: live.channel });
+    setSiteRender({ vocabulary: defineFragmentComponents({ components: { Callout: SiteCallout } }) });
+    return () => {
+      setSiteRender({});
+      restore();
+    };
+  };
+}
+
+/** The body of the one doc the editor has open. */
+function liveBody(): string {
+  const key = [5, 4, 3, 2, 1].map((n) => `mdx:web:${FRAGMENT.id}:en#${n}`).find((k) => live.channel.live(k));
+  if (!key) throw new Error('No fragment doc is open.');
+  return live.parent(key).getText('body').toJSON();
+}
+
+async function openLiveEditor(canvasElement: HTMLElement) {
+  const canvas = within(canvasElement);
+  const root = await waitFor(
+    () => {
+      const element = canvasElement.querySelector<HTMLElement>('.conloca-mdx-editor-surround [contenteditable]');
+      if (!element) throw new Error('The live editor is not mounted.');
+      return element;
+    },
+    { timeout: 10_000 },
+  );
+  const editor = getNearestEditorFromDOMNode(root);
+  if (!editor) throw new Error('No Lexical editor on the content root.');
+  return { canvas, root, editor };
+}
+
+/** Inside a live frame the fragment has no Save: typing reaches the shared body, and a synced editor leaves at once. */
+export const LiveEditHasNoSaveAndLeavesWithoutAsking: Story = {
+  beforeEach: installLiveFrame('Shared footer'),
   render: () => <FragmentEditorRoute entry={FROM_PAGE} />,
   play: async ({ canvasElement }) => {
-    const { canvas, surface } = await openEditor(canvasElement);
-    await userEvent.type(surface, ' edited');
-    await userEvent.click(canvas.getByRole('button', { name: /^Back to/ }));
-    await expect(await canvas.findByRole('heading', { name: 'Discard changes?' })).toBeVisible();
-    await expect(canvas.getByRole('button', { name: 'Save and go back' })).toBeEnabled();
+    const { canvas, root } = await openLiveEditor(canvasElement);
+    await expect(canvas.queryByRole('button', { name: 'Save edits' })).toBeNull();
+    await expect(canvas.getByTestId('shared-fragment-banner')).toHaveTextContent(
+      'This is a shared fragment. Your changes reach every page that uses it.',
+    );
+    // Real input: the simulated keyboard cannot place a caret in a rich-text editor.
+    const { userEvent: real } = await import('vitest/browser');
+    await real.click(root);
+    await real.keyboard('{Control>}{End}{/Control} with a link');
+    await waitFor(() => expect(liveBody()).toContain('Shared footer with a link'));
+    live.channel.receive('live.status', { connection: 'connected', pending: false, persisted: true, readOnly: null });
+    await userEvent.click(canvas.getByRole('button', { name: 'Back to page' }));
+    await expect(await canvas.findByTestId('dest-page')).toBeVisible();
+    await expect(canvas.queryByRole('dialog')).toBeNull();
+    await expect(api.saves).toHaveLength(0);
+  },
+};
+
+function isJsxNode(
+  node: LexicalNode,
+): node is LexicalNode & { getMdastNode(): { name: string | null }; setMdastNode(n: { name: string | null }): void } {
+  return node.getType() === 'jsx' && 'setMdastNode' in node;
+}
+
+/** An edit that names a component the site lacks is held unsent with its reason; leaving asks, in a real browser. */
+export const LiveHeldEditAsksBeforeLeaving: Story = {
+  beforeEach: installLiveFrame('<Callout>\n  Hi\n</Callout>\n\nIntro\n'),
+  render: () => <FragmentEditorRoute entry={FROM_PAGE} />,
+  play: async ({ canvasElement }) => {
+    const { canvas, editor } = await openLiveEditor(canvasElement);
+    live.channel.receive('live.status', { connection: 'connected', pending: false, persisted: true, readOnly: null });
+    const sent = liveBody();
+    // What a paste of `<Unknown>` makes: the component block, renamed.
+    editor.update(
+      () => {
+        for (const node of $getRoot().getChildren()) {
+          if (isJsxNode(node)) node.setMdastNode({ ...node.getMdastNode(), name: 'Unknown' });
+        }
+      },
+      { discrete: true },
+    );
+    await expect(await canvas.findByRole('alert')).toHaveTextContent("Not saved: Fragments can't use <Unknown>");
+    await expect(liveBody()).toBe(sent);
+    await userEvent.click(canvas.getByRole('button', { name: 'Back to page' }));
+    await expect(await canvas.findByRole('dialog', { name: 'Changes not synced yet' })).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: 'Stay' }));
     await expect(canvas.queryByTestId('dest-page')).toBeNull();
+  },
+};
+
+/** Typing inside a component's body (a nested editor) reaches the shared body as it is typed, before the body is left. */
+export const LiveTypingInsideAComponentBody: Story = {
+  beforeEach: installLiveFrame('Intro\n\n<Callout>\n  Hi\n</Callout>\n'),
+  render: () => <FragmentEditorRoute entry={FROM_LIST} />,
+  play: async ({ canvasElement }) => {
+    const { root } = await openLiveEditor(canvasElement);
+    const nested = await waitFor(() => {
+      const element = root.querySelector<HTMLElement>('[contenteditable="true"]');
+      if (!element) throw new Error('The component body is not mounted.');
+      return element;
+    });
+    const { userEvent: real } = await import('vitest/browser');
+    await real.click(nested);
+    await real.keyboard('{End} there');
+    await waitFor(() => expect(liveBody()).toContain('Hi there'));
   },
 };
 

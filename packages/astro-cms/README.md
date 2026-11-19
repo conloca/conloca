@@ -352,8 +352,10 @@ In the fragment editor:
 - **The save check.** The editor refuses to save a fragment the renderer would refuse or change: a parse failure,
   `import`/`export` lines, `{…}` expressions, a component the vocabulary lacks, a prop value that is not valid JSON, a
   `{...spread}` or code in an attribute, or a declared prop of the wrong type. The message names the component or line;
-  for a component the vocabulary lacks, it also lists the vocabulary. The text stays in the editor, unsaved. A component
-  prop value that is not valid JSON is never published.
+  for a component the vocabulary lacks, it also lists the vocabulary. The text stays in the editor, unsaved. An editor
+  that syncs as you type holds such an edit unsent, shows `Not saved:` with the message, and asks before leaving; it
+  syncs once fixed or undone. A body that already failed the check when it arrived is not held, so it can still be
+  fixed. A component prop value that is not valid JSON is never published.
 - **The live preview** renders the fragment in the editor frame of the first routing entry, in declaration order, that
   declares an `editorFrame`, with `fragmentPreviewRoute` as its `pathname`. With no framed route there is no frame. To
   use another frame, reorder the routes or point `fragmentPreviewRoute` at a path the frame recognizes.

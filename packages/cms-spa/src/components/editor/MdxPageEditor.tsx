@@ -61,7 +61,7 @@ export function MdxPageEditor({ initialLocale = 'en' }: { initialLocale?: string
 const LIVE_PATHNAME_NOTE = "The URL path can't be changed while the page is edited live.";
 
 /** Outlines each top-level block a teammate has selected, with their name, in this editor's content root. */
-function usePeerBlockOutlines(docKey: string, root: HTMLElement | null): void {
+export function usePeerBlockOutlines(docKey: string, root: HTMLElement | null): void {
   const peers = usePresencePeers(docKey);
   useEffect(() => {
     if (!root) return undefined;
