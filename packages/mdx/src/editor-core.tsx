@@ -96,6 +96,11 @@ function FocusModeToggle() {
 export interface BaseMDXEditorProps {
   value: string;
   /**
+   * The text Diff mode compares the editor against: the last saved document. Defaults to the document the editor was
+   * seeded with; pass the saved text so a save re-baselines the diff.
+   */
+  diffMarkdown?: string;
+  /**
    * Called whenever the editor content changes. The second argument is `true`
    * the first time the library normalizes the parsed markdown back to its
    * canonical form (bullet style, trailing newline, etc.) — consumers tracking
@@ -222,6 +227,7 @@ export const BaseMDXEditor = React.forwardRef<MDXEditorMethods, BaseMDXEditorPro
   (
     {
       value,
+      diffMarkdown,
       onChange,
       onSave,
       readOnly = false,
@@ -352,7 +358,14 @@ export const BaseMDXEditor = React.forwardRef<MDXEditorMethods, BaseMDXEditorPro
             codeBlockEditorDescriptors: [conlocaCodeBlockDescriptor],
           }),
           codeMirrorPlugin({ codeBlockLanguages }),
-          diffSourcePlugin({ viewMode: 'rich-text' }),
+          // The library exports trimmed markdown without the ESM block, so the baseline is compared in that shape.
+          diffSourcePlugin({
+            viewMode: 'rich-text',
+            diffMarkdown: (diffMarkdown === undefined
+              ? (seededRef.current?.body ?? '')
+              : splitEsm(diffMarkdown).body
+            ).trim(),
+          }),
           markdownShortcutPlugin(),
           jsxPlugin({
             jsxComponentDescriptors: [...(jsxComponentDescriptors ?? []), ...wildcardJsxDescriptors],

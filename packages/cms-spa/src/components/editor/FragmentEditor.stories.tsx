@@ -990,6 +990,68 @@ export const ExplicitSaveErrorBeforeLocale: Story = explicitSaveRace('error', tr
 /** Uses the production BaseMDXEditor document shortcut, which CMSMDXEditor forwards through unchanged. */
 export const StandaloneKeyboardSaveBeforeLocale: Story = explicitSaveRace('error', false, true);
 
+/** Diff compares the editor with the saved text: equal on open, one changed line after an edit, re-baselined by a save. */
+export const DiffComparesWithTheSavedText: Story = {
+  beforeEach: () => installStoryApi(new FragmentContentAPI(), { hosted: false }),
+  render: () => <FragmentEditorRoute entry={FROM_PAGE} keyboard />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const editable = () =>
+      waitFor(() => {
+        const surface = canvasElement.querySelector<HTMLElement>('[contenteditable="true"]');
+        if (!surface) throw new Error('Waiting for the MDX surface');
+        return surface;
+      });
+    const mode = (title: string) => {
+      const toggle = canvasElement.querySelector<HTMLElement>(`[aria-label="${title}"]`);
+      if (!toggle) throw new Error(`No ${title} toggle`);
+      return userEvent.click(toggle);
+    };
+    const expectDiff = async (saved: string, changedLines: number) => {
+      await mode('Diff mode');
+      await waitFor(async () => {
+        await expect(canvasElement.querySelector('.cm-merge-a .cm-content')?.textContent).toBe(saved);
+        await expect(canvasElement.querySelectorAll('.cm-merge-b .cm-changedLine')).toHaveLength(changedLines);
+      });
+      await mode('Rich text');
+    };
+    await editable();
+    await expectDiff('# Shared footer', 0);
+    const heading = (await editable()).querySelector('h1');
+    if (!heading) throw new Error('No heading in the fragment');
+    await userEvent.type(heading, ' edited');
+    await expectDiff('# Shared footer', 1);
+    await userEvent.keyboard('{Control>}s{/Control}');
+    await waitFor(() => expect(api.saves).toEqual(['# Shared footer edited']));
+    await waitFor(() => expect(canvas.getByRole('button', { name: 'Saved' })).toBeDisabled());
+    await expectDiff('# Shared footer edited', 0);
+  },
+};
+
+/** Without a saved text (the page editor), Diff compares with the loaded document as the editor writes it. */
+export const DiffOfAnUneditedNonCanonicalDocumentIsEmpty: Story = {
+  render: () => (
+    <BaseMDXEditor
+      value={'Title\n=====\n\n+ one\n+ two\n\n__strong__ and <https://a.b>\n\n***\n'}
+      onChange={() => {}}
+    />
+  ),
+  play: async ({ canvasElement }) => {
+    const toggle = await waitFor(() => {
+      const found = canvasElement.querySelector<HTMLElement>('[aria-label="Diff mode"]');
+      if (!found) throw new Error('Waiting for the Diff mode toggle');
+      return found;
+    });
+    await userEvent.click(toggle);
+    await waitFor(async () => {
+      await expect(canvasElement.querySelector('.cm-merge-a .cm-content')?.textContent).toBe(
+        'Title=====+ one+ two__strong__ and <https://a.b>***',
+      );
+      await expect(canvasElement.querySelectorAll('.cm-merge-b .cm-changedLine')).toHaveLength(0);
+    });
+  },
+};
+
 function ReopeningFragmentHost({ wholeApp = false }: { wholeApp?: boolean }) {
   const [generation, setGeneration] = useState(0);
   return (

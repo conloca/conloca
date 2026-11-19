@@ -537,6 +537,7 @@ export function FragmentEditor({ EditorComponent = CMSMDXEditor }: FragmentEdito
         EditorComponent={EditorComponent}
         editorKey={`${id}-${currentLocale}`}
         content={content}
+        savedContent={savedContentRef.current}
         resolvedTheme={resolvedTheme}
         previewOpen={previewOpen}
         editorClassName={editorClassName}
@@ -849,6 +850,7 @@ interface FragmentEditorSurfaceProps {
   EditorComponent: ElementType<CMSMDXEditorProps>;
   editorKey: string;
   content: string;
+  savedContent: string;
   resolvedTheme: ReturnType<typeof useTheme>['resolvedTheme'];
   previewOpen: boolean;
   editorClassName: string | undefined;
@@ -860,6 +862,7 @@ function FragmentEditorSurface({
   EditorComponent,
   editorKey,
   content,
+  savedContent,
   resolvedTheme,
   previewOpen,
   editorClassName,
@@ -902,6 +905,7 @@ function FragmentEditorSurface({
           // to the editor's bare chrome. Per-fragment overrides via
           // frontmatter (`previewRoute`) are on the roadmap for the
           // case where one fragment is tied to a specific layout.
+          diffMarkdown={savedContent}
           previewRouteUrl={fragmentPreviewPathname()}
           onChange={onChange}
           onSave={onSave}
