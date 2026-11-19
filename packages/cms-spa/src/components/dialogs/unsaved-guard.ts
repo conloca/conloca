@@ -1,5 +1,5 @@
 import { hasHeldDataValues } from '../../live/data-binding.js';
-import { hasHeldKeys } from '../../live/markdown-live-plugin.js';
+import { hasHeldWork } from '../../live/markdown-live-plugin.js';
 import type { LiveStatus } from '../../live/messages.js';
 import { anyHeld } from '../../live/use-live.js';
 
@@ -11,5 +11,5 @@ import { anyHeld } from '../../live/use-live.js';
  */
 export function shouldBlockLeave(status: LiveStatus | null, localDirty: boolean, live: boolean): boolean {
   const unsynced = !live || status === null ? localDirty : status.pending && !status.persisted;
-  return unsynced || hasHeldDataValues() || anyHeld() || hasHeldKeys();
+  return unsynced || hasHeldDataValues() || anyHeld() || hasHeldWork();
 }

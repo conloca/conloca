@@ -19,7 +19,13 @@ import {
   writeAttribute,
 } from '../../mdx-components.js';
 import { useSandboxPreviewStyles } from '../../sandbox-preview-styles.js';
-import { getSelectedBlock, setSelectedBlock, trackDraft, useSelectedBlock } from '../../selected-block.js';
+import {
+  getSelectedBlock,
+  isLiveEditing,
+  setSelectedBlock,
+  trackDraft,
+  useSelectedBlock,
+} from '../../selected-block.js';
 import { getCmsRoute } from '../../ui-config.js';
 import { bodyNeedsStaticHtml, isHtmlTag, mdastToHtml } from '../../utils/mdast-to-html.js';
 import {
@@ -400,6 +406,19 @@ function cacheKey(req: RenderRequest): string {
   return `${req.documentIndex}::${req.inline ? 'inline::' : ''}${stableStringify(stripBodyFields(req.tree as unknown as AnyProps) as AnyProps)}`;
 }
 
+/** `req`'s cache key without the text of item `item` of its list body, which is typed in place. */
+function keyApartFrom(req: RenderRequest, item: number | null): string {
+  const tree = { ...req.tree };
+  if (item !== null && tree.bodyHtml) {
+    const body = document.createElement('template');
+    body.innerHTML = tree.bodyHtml;
+    // Only flat lists are edited in place (see `wireListItemEditors`), so the body's items are its `li`s in order.
+    body.content.querySelectorAll('li').item(item)?.replaceChildren();
+    tree.bodyHtml = body.innerHTML;
+  }
+  return cacheKey({ ...req, tree });
+}
+
 function stableStringify(obj: AnyProps): string {
   // Stable across key order so attribute reordering doesn't bust the cache.
   // For nested objects/arrays (children trees) JSON.stringify already
@@ -498,9 +517,10 @@ function findTopLevelList(
 
 /**
  * Wire each `<li>` of the first ordered/unordered list in the
- * rendered preview as a contenteditable, with on-blur commit that
- * rewrites the corresponding mdast `listItem`. Used for strict-slot
- * list components (Starlight `<Steps>`, `<FileTree>`) where the
+ * rendered preview as a contenteditable that rewrites the corresponding
+ * mdast `listItem`: on blur, or co-edited as it is typed (see
+ * `wireInlinePropEditors`; `onTyping` names the item typed in). Used
+ * for strict-slot list components (Starlight `<Steps>`, `<FileTree>`) where the
  * framework rejects `<conloca-slot>` children — we can't portal a
  * Lexical editor into them, so we edit the rendered HTML in place.
  *
@@ -522,6 +542,7 @@ function wireListItemEditors(
   node: MdxJsxFlowElement,
   updater: (partial: Partial<MdxJsxFlowElement>) => void,
   pendingFocusIndexRef: { current: number | null },
+  onTyping: (item: number | null) => void,
 ): void {
   const found = findTopLevelList(node);
   if (!found) return;
@@ -568,6 +589,7 @@ function wireListItemEditors(
     li.setAttribute('contenteditable', 'plaintext-only');
     li.classList.add('conloca-listitem');
     let committed = (li.textContent ?? '').trim();
+    let atFocus = committed;
     const itemIndex = i;
     const commit = () => {
       const next = (li.textContent ?? '').trim();
@@ -621,7 +643,19 @@ function wireListItemEditors(
       writeListChildren(newListChildren);
     };
 
-    li.addEventListener('blur', commit);
+    li.addEventListener('focus', () => {
+      atFocus = (li.textContent ?? '').trim();
+    });
+    // Co-edited, it writes as it is typed, as a prop typed in place does.
+    li.addEventListener('input', () => {
+      if (!isLiveEditing()) return;
+      onTyping(itemIndex);
+      commit();
+    });
+    li.addEventListener('blur', () => {
+      commit();
+      onTyping(null);
+    });
     trackDraftWhileFocused(li, commit);
     li.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
@@ -639,8 +673,9 @@ function wireListItemEditors(
           removeSelf();
         }
       } else if (e.key === 'Escape') {
+        // Puts back the text the item had when focused.
         e.preventDefault();
-        li.textContent = committed;
+        li.textContent = atFocus;
         li.blur();
       }
     });
@@ -936,9 +971,22 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
   previewBindingsRef.current.node = node;
   previewBindingsRef.current.updater = updater;
 
+  /** The list item typed in place in this block's preview while co-edited, until it is left. */
+  const [typingItem, setTypingItem] = useState<number | null>(null);
+  const requested = useRef<RenderRequest | null>(null);
+
   // Fetch (or serve from cache) the rendered HTML on prop changes.
   useEffect(() => {
     if (!renderReq) return;
+    // The author's typing in a list item of the preview needs no render while they type: the item shows it, and a render
+    // would take the item from under the caret. Anything else changed still renders; leaving the item renders it.
+    if (
+      typingItem !== null &&
+      requested.current &&
+      keyApartFrom(renderReq, typingItem) === keyApartFrom(requested.current, typingItem)
+    )
+      return;
+    requested.current = renderReq;
     let cancelled = false;
     setError(null);
     fetchRendered(renderReq)
@@ -953,7 +1001,7 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
     return () => {
       cancelled = true;
     };
-  }, [renderReq]);
+  }, [renderReq, typingItem]);
 
   // Imperatively swap the wrapper's inner HTML when the rendered
   // string changes, then locate every body slot in the SSR'd markup.
@@ -1066,11 +1114,11 @@ export function GenericBlock({ mdastNode }: JsxEditorProps) {
       // FileTree, anything else whose framework component validates
       // its slot as a real `<ol>` / `<ul>` and rejects `<conloca-slot>`
       // children). For those, we wire each `<li>` as a contenteditable
-      // with on-blur commit — no DOM mutation, no portal collision
+      // that commits on blur (as typed when co-edited) — no DOM mutation, no portal collision
       // with React. Trade-off: plaintext-only commits (loses bold/
       // italic on edit). Future enhancement: parse inline markdown
       // back from contenteditable text so formatting round-trips.
-      wireListItemEditors(wrap, currentNode, currentUpdater, pendingListItemFocusRef);
+      wireListItemEditors(wrap, currentNode, currentUpdater, pendingListItemFocusRef, setTypingItem);
       setContainerSlots(new Map());
       setSlotEl(wrap.querySelector(SLOT_TAG));
     }

@@ -262,28 +262,36 @@ describe('MdxPageEditor bound to a shared doc', () => {
     }
   });
 
-  it('goes read-only and writes nothing when a remote text cannot be imported', async () => {
-    const { editor, root } = await openLive('a\n\nb\n');
+  it('opens the Source view to fix a remote text that cannot be imported, and the hidden rich text writes nothing', async () => {
+    const { editor } = await openLive('a\n\nb\n');
     typeAtEnd(editor, 'q');
     await waitFor(() => expect(body().toJSON()).toBe('a\n\nbq\n'));
     fake.parentEdit(docKey, (doc) => doc.getText('body').insert(3, '<Unclosed>\n\n'));
-    await screen.findByRole('alert');
-    expect(root.getAttribute('contenteditable')).toBe('false');
+    expect((await screen.findByRole('alert')).textContent).toContain('needs fixing');
+    const source = await waitFor(() => {
+      const found = document.querySelector<HTMLElement>('.cm-content');
+      if (!found) throw new Error('Source view not shown');
+      return found;
+    });
+    expect(source.getAttribute('contenteditable')).toBe('true');
     const updates = fake.updates().length;
     typeAtEnd(editor, 'z');
-    // Undo would write the earlier `q` away: read-only refuses it too.
+    // Undo would write the earlier `q` away from a rich text nobody sees.
     editor.dispatchCommand(UNDO_COMMAND, undefined);
     await nextFrame();
     expect(fake.updates()).toHaveLength(updates);
     expect(body().toJSON()).toBe('a\n\n<Unclosed>\n\nbq\n');
   });
 
-  it('opens a page with an HTML comment read-only and says how to fix it', async () => {
-    const { editor, root } = await openLive('a\n\n<!-- note -->\n\nb');
+  it('opens a page with an HTML comment in the Source view and says how to fix it', async () => {
+    await openLive('a\n\n<!-- note -->\n\nb');
     expect(await screen.findByText(HTML_COMMENT_NOTICE)).toBeTruthy();
-    expect(root.getAttribute('contenteditable')).toBe('false');
-    typeAtEnd(editor, 'z');
-    await nextFrame();
+    const source = await waitFor(() => {
+      const found = document.querySelector<HTMLElement>('.cm-content');
+      if (!found) throw new Error('Source view not shown');
+      return found;
+    });
+    expect(source.getAttribute('contenteditable')).toBe('true');
     expect(fake.updates()).toHaveLength(0);
   });
 

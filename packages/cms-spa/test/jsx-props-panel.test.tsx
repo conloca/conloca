@@ -1,15 +1,21 @@
 /// <reference lib="dom" />
-import { afterEach, expect, mock, test } from 'bun:test';
+import { afterEach, expect, mock, spyOn, test } from 'bun:test';
 import { parseFragmentMdx } from '@conloca/mdx/render';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import type { MDXEditorMethods } from '@mdxeditor/editor';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { $getRoot, getNearestEditorFromDOMNode, UNDO_COMMAND } from 'lexical';
+import { createRef } from 'react';
+import { CMSMDXEditor } from '../src/components/editor/CMSMDXEditor.js';
 import { JsxPropsPanel } from '../src/components/editor/JsxPropsPanel.js';
-import type { MdxComponentProp } from '../src/mdx-components.js';
-import { type SelectedBlock, setSelectedBlock } from '../src/selected-block.js';
+import { type MdxComponentProp, setMdxComponents } from '../src/mdx-components.js';
+import { markLiveEditing, type SelectedBlock, setSelectedBlock } from '../src/selected-block.js';
 import { readAttrs } from '../src/utils/mdast-tree.js';
 
 afterEach(() => {
   cleanup();
   setSelectedBlock(null);
+  setMdxComponents([]);
 });
 
 function select(props: MdxComponentProp[], attrs: SelectedBlock['attrs'] = {}) {
@@ -156,4 +162,167 @@ test('scalar fields keep their controls', () => {
   ]);
   expect(screen.getByRole('combobox', { name: 'tone' }).tagName).toBe('SELECT');
   expect(screen.getByRole('checkbox', { name: 'open' })).toBeTruthy();
+});
+
+test('while co-editing, a side-panel text field keeps its element and focus as it is typed and writes once it is left', () => {
+  const release = markLiveEditing();
+  try {
+    const { onPropChange } = select([{ name: 'title', type: 'string' }], { title: '' });
+    const field = screen.getByLabelText('title');
+    field.focus();
+    for (const typed of ['T', 'Ti', 'Tip']) {
+      fireEvent.change(field, { target: { value: typed } });
+      expect(screen.getByLabelText('title')).toBe(field);
+      expect(document.activeElement).toBe(field);
+    }
+    expect(onPropChange).not.toHaveBeenCalled();
+    blurTo(field, screen.getByRole('button', { name: 'outside' }));
+    expect(onPropChange.mock.calls).toEqual([['title', 'Tip']]);
+  } finally {
+    release();
+  }
+});
+
+/** Types `value` into a prop field as the browser does: a side-panel input, or a prop edited in place in the preview. */
+function typeInto(field: HTMLElement, value: string) {
+  if (field instanceof HTMLInputElement) {
+    fireEvent.change(field, { target: { value } });
+    return;
+  }
+  field.textContent = value;
+  fireEvent.input(field);
+}
+
+// Typing that wrote each key would make each key its own undo step.
+for (const { name, find } of [
+  { name: 'a side-panel field', find: () => screen.findByLabelText('title') },
+  {
+    name: 'a prop edited in place',
+    find: () =>
+      waitFor(() => {
+        const found = document.querySelector<HTMLElement>('[data-conloca-prop="title"]');
+        if (!found) throw new Error('no title edited in place');
+        return found;
+      }),
+  },
+]) {
+  test(`without co-editing, a visit to ${name} is one write and one undo step`, async () => {
+    setMdxComponents([
+      {
+        name: 'Callout',
+        kind: 'flow',
+        hasChildren: true,
+        // A source of its own: renders are cached per source for the whole run, and other test files render `site`.
+        import: { from: 'site-without-co-editing' },
+        props: [{ name: 'title', type: 'string' }],
+      },
+    ]);
+    // The site renders the title as text the author can edit in place, and the body into its slot.
+    const site = spyOn(globalThis, 'fetch').mockImplementation(
+      Object.assign(
+        async (_url: URL | RequestInfo, init?: RequestInit) => {
+          if (typeof init?.body !== 'string') throw new Error('the render request has no JSON body');
+          const request: { tree: { props: { title?: string } } } = JSON.parse(init.body);
+          return new Response(`<p>${request.tree.props.title ?? ''}</p><conloca-slot></conloca-slot>`);
+        },
+        { preconnect: fetch.preconnect },
+      ),
+    );
+    try {
+      const ref = createRef<MDXEditorMethods>();
+      const { container } = render(
+        <QueryClientProvider client={new QueryClient()}>
+          <CMSMDXEditor ref={ref} value={'<Callout title="Note">\n\nHello\n\n</Callout>\n'} onChange={() => {}} />
+          <JsxPropsPanel />
+          <button type="button">outside</button>
+        </QueryClientProvider>,
+      );
+      const markdown = () => ref.current?.getMarkdown() ?? '';
+      const body = await waitFor(() => {
+        const found = [...container.querySelectorAll<HTMLElement>('[contenteditable="true"]')].find(
+          (el) => el.textContent === 'Hello',
+        );
+        if (!found) throw new Error('no component body');
+        return found;
+      });
+      const nested = getNearestEditorFromDOMNode(body);
+      if (!nested) throw new Error('no body editor');
+      // An edit before the field visit, so undo has a step to go back to.
+      act(() => {
+        fireEvent.mouseDown(body);
+        body.focus();
+        nested.update(() => $getRoot().selectEnd().insertText('!'), { discrete: true });
+      });
+      await waitFor(() => expect(markdown()).toContain('Hello!'));
+      // Lexical merges changes to one node made within 300 ms into one undo step; a person's visit comes later.
+      await act(() => Bun.sleep(350));
+      const title = await find();
+      title.focus();
+      for (const typed of ['NoteX', 'NoteXY', 'NoteXYZ']) typeInto(title, typed);
+      expect(markdown()).toContain('title="Note"');
+      // React's onBlur listens for focusout; the field edited in place has a blur listener of its own.
+      blurTo(title, screen.getByRole('button', { name: 'outside' }));
+      fireEvent.blur(title);
+      await waitFor(() => expect(markdown()).toContain('title="NoteXYZ"'));
+      // The first editable in the page is the root editor's; component bodies are editables inside it.
+      const root = getNearestEditorFromDOMNode(container.querySelector('[contenteditable="true"]'));
+      if (!root) throw new Error('no root editor');
+      act(() => {
+        root.dispatchCommand(UNDO_COMMAND, undefined);
+      });
+      await waitFor(() => expect(markdown()).toContain('title="Note"'));
+      expect(markdown()).toContain('Hello!');
+    } finally {
+      site.mockRestore();
+    }
+  });
+}
+
+test('without co-editing, a list item typed in place writes once it is left, not on each key', async () => {
+  setMdxComponents([
+    {
+      name: 'Steps',
+      kind: 'flow',
+      hasChildren: true,
+      // A source of its own: renders are cached per source for the whole run.
+      import: { from: 'site-list-without-co-editing' },
+      props: [],
+    },
+  ]);
+  // The site renders a list body as its items, which its list component wraps.
+  const site = spyOn(globalThis, 'fetch').mockImplementation(
+    Object.assign(
+      async (_url: URL | RequestInfo, init?: RequestInit) => {
+        if (typeof init?.body !== 'string') throw new Error('the render request has no JSON body');
+        const request: { tree: { bodyHtml?: string } } = JSON.parse(init.body);
+        return new Response(`<p>Steps</p><ol>${request.tree.bodyHtml ?? ''}</ol>`);
+      },
+      { preconnect: fetch.preconnect },
+    ),
+  );
+  try {
+    const ref = createRef<MDXEditorMethods>();
+    const { container } = render(
+      <QueryClientProvider client={new QueryClient()}>
+        <CMSMDXEditor ref={ref} value={'<Steps>\n\n- one\n- two\n\n</Steps>\n'} onChange={() => {}} />
+        <button type="button">outside</button>
+      </QueryClientProvider>,
+    );
+    const markdown = () => ref.current?.getMarkdown() ?? '';
+    const item = await waitFor(() => {
+      const found = [...container.querySelectorAll<HTMLElement>('li[data-conloca-listitem]')].find(
+        (li) => li.textContent === 'one',
+      );
+      if (!found) throw new Error('no editable list item');
+      return found;
+    });
+    item.focus();
+    for (const typed of ['on', 'o', 'uno']) typeInto(item, typed);
+    expect(markdown()).toContain('one');
+    expect(markdown()).not.toContain('uno');
+    fireEvent.blur(item);
+    await waitFor(() => expect(markdown()).toContain('uno'));
+  } finally {
+    site.mockRestore();
+  }
 });

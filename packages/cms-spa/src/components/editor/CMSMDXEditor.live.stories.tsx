@@ -954,6 +954,155 @@ export const LiveTwoEditorsSameBlock: Story = {
   },
 };
 
+/** Text typed in a table cell shows in the teammate's editor while the user is still in the cell, which stays active. */
+export const LiveTwoEditorsTableCell: Story = {
+  render: () => <TwoEditors initial={'| Name  | Note |\n| ----- | ---- |\n| a     | b    |\n'} />,
+  play: async () => {
+    const cell = await waitFor(() => {
+      const found = [...(peers[0]?.editor?.getRootElement()?.querySelectorAll<HTMLElement>('td') ?? [])].find(
+        (td) => td.textContent === 'a',
+      );
+      const editable = found?.querySelector<HTMLElement>('[contenteditable="true"]');
+      if (!found || !editable) throw new Error('no editable cell showing a');
+      return { td: found, editable };
+    });
+    await userEvent.click(cell.editable);
+    getNearestEditorFromDOMNode(cell.editable)?.update(() => $getRoot().selectEnd(), { discrete: true });
+    await userEvent.keyboard('lpha');
+    await waitFor(() => expect(peers[1].text.toJSON()).toContain('| alpha'));
+    await waitFor(() => expect(peers[1].editor?.getRootElement()?.textContent).toContain('alpha'));
+    await expect(cell.editable.contains(document.activeElement)).toBe(true);
+    await expect(cell.td.dataset.active).toBe('true');
+  },
+};
+
+/** Typing in the Source view shows in the teammate's editor as it is typed, before the switch back to rich text. */
+export const LiveTwoEditorsSourceView: Story = {
+  render: () => <TwoEditors initial={'one\n'} />,
+  play: async () => {
+    const own = await waitFor(() => {
+      const found = peers[0]?.editor?.getRootElement()?.closest<HTMLElement>('.mdxeditor');
+      if (!found) throw new Error('editor 0 not mounted');
+      return found;
+    });
+    const source = own.querySelector<HTMLElement>('[aria-label="Source mode"]');
+    if (!source) throw new Error('no Source mode toggle');
+    await userEvent.click(source);
+    const content = await waitFor(() => {
+      const found = own.querySelector<HTMLElement>('.cm-content');
+      if (!found) throw new Error('Source view not shown');
+      return found;
+    });
+    await userEvent.click(content);
+    await userEvent.keyboard(`{${MOD}>}{End}{/${MOD}} two`);
+    await waitFor(() => expect(peers[1].text.toJSON()).toBe('one two\n'));
+    await waitFor(() => expect(peers[1].editor?.getRootElement()?.textContent).toBe('one two'));
+  },
+};
+
+/**
+ * Real keys typed in the side-panel title of a Callout selected by clicking its label, while a teammate
+ * edits the Callout's body: the field keeps its element, focus and every key, nothing lands in the page, and the title
+ * is written.
+ */
+export const LivePanelPropKeepsFocus: Story = {
+  // Lazily: `withCallout` is declared further down.
+  beforeEach: () => withCallout(),
+  render: () => <SoloWithPanel initial={'Hello\n\n<Callout title="Note">\n\nCallout body\n\n</Callout>\n'} />,
+  play: async ({ canvasElement }) => {
+    await soloBody(canvasElement, 'Callout body');
+    // Selected by its label, as a person does: the editor keeps a selection, which an update would put back in
+    // the page, taking focus from the field.
+    const label = [...canvasElement.querySelectorAll<HTMLElement>('.conloca-generic-block__fallback-label')].find(
+      (element) => element.textContent === 'Callout',
+    );
+    if (!label) throw new Error('no Callout label');
+    await userEvent.click(label);
+    const title = await waitFor(() => {
+      const field = canvasElement.querySelector<HTMLInputElement>('input[aria-label="title"]');
+      if (!field) throw new Error('side panel not showing the Callout');
+      return field;
+    });
+    // Real keys: a key typed after focus left the field lands in the page, which simulated keys never show. The browser
+    // runner that sends them is not in the static catalog build.
+    const { userEvent: real } = await import('vitest/browser');
+    await userEvent.click(title);
+    title.setSelectionRange(title.value.length, title.value.length);
+    for (const key of 'sTip') {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- one key at a time, each checked before the next
+      await real.keyboard(key);
+      if (key === 'T') {
+        soloTeammateEdit((text) => text.insert(text.toJSON().indexOf('Callout body'), 'Hey '));
+        // oxlint-disable-next-line eslint/no-await-in-loop -- the teammate's change shows before the next key
+        await waitFor(() => expect(solo.editor?.getRootElement()?.textContent).toContain('Hey Callout body'));
+      }
+      // oxlint-disable-next-line eslint/no-await-in-loop -- see above
+      await expect(canvasElement.querySelector('input[aria-label="title"]')).toBe(title);
+      // oxlint-disable-next-line eslint/no-await-in-loop -- see above
+      await expect(document.activeElement, `focus after ${key}`).toBe(title);
+    }
+    await expect(title.value).toBe('NotesTip');
+    await expect(solo.editor?.getRootElement()?.textContent).not.toContain('Tip');
+    await real.keyboard('{Tab}');
+    await waitFor(() => expect(solo.text.toJSON()).toContain('<Callout title="NotesTip">'));
+    await expect(solo.text.toJSON()).toContain('Hey Callout body');
+  },
+};
+
+/** A Callout rendered by the site, whose title is shown as text the author edits in place. */
+const withSiteCallout = () => {
+  setMdxComponents([
+    {
+      name: 'Callout',
+      kind: 'flow',
+      hasChildren: true,
+      import: { from: 'site' },
+      props: [{ name: 'title', type: 'string' }],
+    },
+  ]);
+  const realFetch = window.fetch;
+  // Bun's `typeof fetch` carries `preconnect`; the render never calls it.
+  window.fetch = Object.assign(
+    async (input: RequestInfo | URL, init?: RequestInit) => {
+      // The editor asks for its renders by URL string.
+      if (typeof input !== 'string' || !input.endsWith('/api/render') || typeof init?.body !== 'string')
+        return realFetch(input, init);
+      const request: { tree: { props: { title?: string } } } = JSON.parse(init.body);
+      return new Response(`<p class="site-title">${request.tree.props.title ?? ''}</p><conloca-slot></conloca-slot>`);
+    },
+    { preconnect: realFetch.preconnect },
+  );
+  return () => {
+    window.fetch = realFetch;
+    setSelectedBlock(null);
+    setMdxComponents([]);
+  };
+};
+
+/** A prop typed in place keeps its field, focus and text, and is written once the field is left. */
+export const LiveTwoEditorsInlineProp: Story = {
+  beforeEach: withSiteCallout,
+  render: () => <TwoEditors initial={'<Callout title="Note">\n\nHello\n\n</Callout>\n'} />,
+  play: async () => {
+    const field = await waitFor(() => {
+      const found = peers[0]?.editor?.getRootElement()?.querySelector<HTMLElement>('[data-conloca-prop="title"]');
+      if (!found) throw new Error('no inline title in editor 0');
+      return found;
+    });
+    // Real keys: the simulated ones type into `contenteditable="true"` only, and the field is `plaintext-only`. The
+    // browser runner that sends them is not in the static catalog build.
+    const { userEvent: real } = await import('vitest/browser');
+    await userEvent.click(field);
+    document.getSelection()?.collapse(field.firstChild, 'Note'.length);
+    await real.keyboard(' A');
+    await expect(document.activeElement).toBe(field);
+    await expect(field.textContent).toBe('Note A');
+    await expect(peers[1].text.toJSON()).toContain('<Callout title="Note">');
+    await real.keyboard('{Enter}');
+    await waitFor(() => expect(peers[1].text.toJSON()).toContain('<Callout title="Note A">'));
+  },
+};
+
 interface Solo {
   doc: Y.Doc;
   text: Y.Text;

@@ -5,12 +5,18 @@ import {
   addNestedEditorChild$,
   addTableCellEditorChild$,
   BoldItalicUnderlineToggles,
+  diffSourcePlugin,
   jsxPlugin,
   MDXEditor,
+  markdown$,
+  markdownSourceEditorValue$,
+  type Realm,
   type RealmPlugin,
+  readOnly$,
   realmPlugin,
   tablePlugin,
   toolbarPlugin,
+  viewMode$,
 } from '@mdxeditor/editor';
 import { act, cleanup, fireEvent, type RenderResult, render, waitFor } from '@testing-library/react';
 import {
@@ -28,9 +34,9 @@ import { GenericBlock } from '../components/editor/GenericBlock.js';
 import { JsxPropsPanel } from '../components/editor/JsxPropsPanel.js';
 import { jsxLayoutPlugin } from '../components/editor/jsx-layout-plugin.js';
 import { type MdxComponentProp, setMdxComponents } from '../mdx-components.js';
-import { setSelectedBlock } from '../selected-block.js';
+import { isLiveEditing, setSelectedBlock } from '../selected-block.js';
 import { LOCAL_ORIGIN } from './doc-channel.js';
-import { markdownLivePlugin } from './markdown-live-plugin.js';
+import { hasHeldWork, markdownLivePlugin } from './markdown-live-plugin.js';
 
 const REMOTE = Symbol('remote');
 const BODY = '<Callout>\n\nHello\n\n</Callout>\n\nOther\n';
@@ -636,6 +642,349 @@ test('text typed in a table cell is kept when a teammate edits the same table', 
   expect(live.container.textContent).toContain('alpha');
 });
 
+/** Clicks into the table cell showing `a` and types `lpha` at its end, staying in the cell. */
+async function typeInCell(live: Live) {
+  const cell = await waitFor(() => {
+    const found = [...live.container.querySelectorAll<HTMLElement>('td')].find((td) => td.textContent === 'a');
+    if (!found) throw new Error('no cell');
+    return found;
+  });
+  act(() => {
+    fireEvent.click(cell);
+  });
+  const editable = await waitFor(() => {
+    const found = cell.querySelector<HTMLElement>('[contenteditable="true"]');
+    if (!found) throw new Error('cell editor not mounted');
+    return found;
+  });
+  const cellEditor = getNearestEditorFromDOMNode(editable);
+  if (!cellEditor) throw new Error('no cell editor');
+  act(() => {
+    editable.focus();
+    cellEditor.update(() => $getRoot().selectEnd().insertText('lpha'), { discrete: true });
+  });
+  return { cell, editable };
+}
+
+test('text typed in a table cell is in the shared text before the cell is left, and the cell stays active', async () => {
+  const live = openLive(TABLE);
+  const { cell, editable } = await typeInCell(live);
+  expect(live.text.toJSON()).toContain('| alpha');
+  expect(document.activeElement).toBe(editable);
+  expect(cell.dataset.active).toBe('true');
+});
+
+test('leaving the page with a table cell still focused keeps its text, written before anything of the leave runs', async () => {
+  const live = openLive(TABLE);
+  await typeInCell(live);
+  // A page unload can end before what its teardown or pagehide writes leaves the editor's frame: it must be out already.
+  expect(live.text.toJSON()).toContain('| alpha');
+  live.unmount();
+  expect(live.text.toJSON()).toContain('| alpha');
+});
+
+/** Opens `body` with a handle on the editor's realm, to switch views and type in the Source view as CodeMirror does. */
+async function openWithRealm(body: string): Promise<{ live: Live; realm: Realm }> {
+  let realm: Realm | undefined;
+  const live = openLive(
+    body,
+    realmPlugin({
+      init: (r) => {
+        realm = r;
+      },
+    })(),
+  );
+  await waitFor(() => expect(live.container.textContent).toContain(body.trim()));
+  if (!realm) throw new Error('no realm');
+  return { live, realm };
+}
+
+/** Waits out the pause after the last key that the Source view's text is written after. */
+const sourcePause = () => act(() => Bun.sleep(400));
+
+test('text typed in the Source view is in the shared text once typing pauses', async () => {
+  const { live, realm } = await openWithRealm('Hello\n');
+  act(() => {
+    realm.pub(viewMode$, 'source');
+    realm.pub(markdownSourceEditorValue$, 'Hello there');
+  });
+  await sourcePause();
+  expect(live.text.toJSON()).toBe('Hello there\n');
+});
+
+test('typing in the Source view of a large page reads the page once typing pauses, not on every key', async () => {
+  const { live, realm } = await openWithRealm('Hello\n');
+  // About 300 KB: reading it as MDX takes about 200 ms, so thirty keys each read would take seconds.
+  const page = `Hello\n\n${'A paragraph of a large page, with enough words in it to count.\n\n'.repeat(4700)}`;
+  act(() => realm.pub(viewMode$, 'source'));
+  const started = performance.now();
+  act(() => {
+    for (let typed = 1; typed <= 30; typed++) realm.pub(markdownSourceEditorValue$, `${page}${'x'.repeat(typed)}`);
+  });
+  expect(performance.now() - started).toBeLessThan(300);
+  await sourcePause();
+  expect(live.text.toJSON()).toBe(`${page}${'x'.repeat(30)}\n`);
+});
+
+test('a teammate edit made while in the Source view shows once back in rich text, with both edits kept', async () => {
+  const { live, realm } = await openWithRealm('Hello\n');
+  act(() => {
+    realm.pub(viewMode$, 'source');
+    realm.pub(markdownSourceEditorValue$, 'Hello there');
+  });
+  await sourcePause();
+  live.teammate((shared) => shared.insert(0, 'Intro\n\n'));
+  await frames();
+  // Shown now, it would rebuild the Source view under the caret.
+  expect(realm.getValue(markdownSourceEditorValue$)).toBe('Hello there');
+  expect(live.text.toJSON()).toBe('Intro\n\nHello there\n');
+  act(() => realm.pub(viewMode$, 'rich-text'));
+  await frames();
+  await waitFor(() => expect(live.container.textContent).toContain('Intro'));
+  expect(live.container.textContent).toContain('Hello there');
+  expect(live.text.toJSON()).toBe('Intro\n\nHello there\n');
+});
+
+test('text typed in the Source view that does not parse yet is written once it parses, so no teammate gets a page their editor cannot read', async () => {
+  const { live, realm } = await openWithRealm('Hello\n');
+  act(() => {
+    realm.pub(viewMode$, 'source');
+    realm.pub(markdownSourceEditorValue$, 'Hello\n\n<Cal');
+  });
+  await sourcePause();
+  expect(live.text.toJSON()).toBe('Hello\n');
+  act(() => realm.pub(markdownSourceEditorValue$, 'Hello\n\n<Callout>'));
+  await sourcePause();
+  expect(live.text.toJSON()).toBe('Hello\n');
+  act(() => realm.pub(markdownSourceEditorValue$, 'Hello\n\n<Callout />'));
+  await sourcePause();
+  expect(live.text.toJSON()).toBe('Hello\n\n<Callout />\n');
+});
+
+/** The tab is hidden (switched away from, the window minimised), as the browser says it. */
+function hideTab() {
+  Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+  try {
+    document.dispatchEvent(new Event('visibilitychange'));
+  } finally {
+    Reflect.deleteProperty(document, 'visibilityState');
+  }
+}
+
+for (const { leave, how } of [
+  { leave: 'the switch back to rich text', how: (_live: Live, realm: Realm) => realm.pub(viewMode$, 'rich-text') },
+  { leave: 'closing the editor', how: (live: Live) => live.unmount() },
+  { leave: 'leaving the page', how: () => window.dispatchEvent(new Event('pagehide')) },
+  { leave: 'hiding the tab', how: hideTab },
+]) {
+  test(`text typed in the Source view that does not parse is written on ${leave}`, async () => {
+    const { live, realm } = await openWithRealm('Hello\n');
+    act(() => {
+      realm.pub(viewMode$, 'source');
+      realm.pub(markdownSourceEditorValue$, 'Hello\n\n<Cal');
+    });
+    act(() => how(live, realm));
+    expect(live.text.toJSON()).toBe('Hello\n\n<Cal\n');
+  });
+
+  test(`text typed in the Source view that parses is written on ${leave}, without waiting for a pause`, async () => {
+    const { live, realm } = await openWithRealm('Hello\n');
+    act(() => {
+      realm.pub(viewMode$, 'source');
+      realm.pub(markdownSourceEditorValue$, 'Hello there');
+    });
+    act(() => how(live, realm));
+    expect(live.text.toJSON()).toBe('Hello there\n');
+  });
+}
+
+test('switching back to rich text with text that does not parse keeps it, and the Source view stays open to fix it', async () => {
+  const { live, realm } = await openWithRealm('Hello\n');
+  act(() => {
+    realm.pub(viewMode$, 'source');
+    realm.pub(markdownSourceEditorValue$, 'Hello\n\n<Cal');
+  });
+  act(() => realm.pub(viewMode$, 'rich-text'));
+  await frames();
+  expect(live.text.toJSON()).toBe('Hello\n\n<Cal\n');
+  await waitFor(() => expect(live.getByRole('alert').textContent).toContain('needs fixing'));
+  expect(realm.getValue(viewMode$)).toBe('source');
+  expect(realm.getValue(readOnly$)).toBe(false);
+});
+
+test('a teammate text the editor cannot read opens the Source view, editable, so anyone can fix it there', async () => {
+  const { live, realm } = await openWithRealm('Hello\n');
+  live.teammate((shared) => shared.insert(shared.length, '\n<Cal'));
+  await frames();
+  await waitFor(() => expect(live.getByRole('alert').textContent).toContain('needs fixing'));
+  expect(realm.getValue(viewMode$)).toBe('source');
+  expect(realm.getValue(readOnly$)).toBe(false);
+  act(() => realm.pub(markdownSourceEditorValue$, 'Hello\n\n<Callout />'));
+  await sourcePause();
+  expect(live.text.toJSON()).toBe('Hello\n\n<Callout />');
+  act(() => realm.pub(viewMode$, 'rich-text'));
+  await frames();
+  await waitFor(() => expect(live.queryByRole('alert')).toBeNull());
+  const root = live.container.querySelector<HTMLElement>('[contenteditable]');
+  const editor = root && getNearestEditorFromDOMNode(root);
+  if (!editor) throw new Error('no editor');
+  act(() => editor.update(() => $getRoot().getFirstChildOrThrow().selectEnd().insertText('!'), { discrete: true }));
+  await waitFor(() => expect(live.text.toJSON()).toContain('Hello!'));
+});
+
+test('an editor opened on a text it cannot read opens in the Source view, editable', async () => {
+  const live = openLive('Hello\n\n<Cal\n', diffSourcePlugin());
+  await waitFor(() => expect(live.getByRole('alert').textContent).toContain('needs fixing'));
+  const source = await waitFor(() => {
+    const found = live.container.querySelector<HTMLElement>('.cm-content');
+    if (!found) throw new Error('Source view not shown');
+    return found;
+  });
+  expect(source.textContent).toContain('<Cal');
+  expect(source.getAttribute('contenteditable')).toBe('true');
+});
+
+test('an editor held from its open on a text it cannot read opens the Source view read-only', async () => {
+  const doc = new Y.Doc();
+  const text = doc.getText('body');
+  text.insert(0, 'Hello\n\n<Cal\n');
+  const plugin = markdownLivePlugin({
+    text,
+    undoScope: [text],
+    onSelectionBlock: () => {},
+    held: { notice: () => 'Held', content: () => text.toJSON(), subscribe: () => () => {} },
+  });
+  const { container } = render(<LiveEditor text={text} plugin={plugin} extra={diffSourcePlugin()} />);
+  await waitFor(() => {
+    const source = container.querySelector<HTMLElement>('.cm-content');
+    if (!source) throw new Error('Source view not shown');
+    expect(source.textContent).toContain('<Cal');
+    expect(source.getAttribute('aria-readonly')).toBe('true');
+  });
+});
+
+/** Opens `body`, which the editor cannot read, in the Source view with its "needs fixing" alert. */
+async function openToFix(body: string): Promise<{ live: Live; realm: Realm }> {
+  let realm: Realm | undefined;
+  const live = openLive(
+    body,
+    realmPlugin({
+      init: (r) => {
+        realm = r;
+      },
+    })(),
+  );
+  await waitFor(() => expect(live.getByRole('alert').textContent).toContain('needs fixing'));
+  if (!realm) throw new Error('no realm');
+  return { live, realm };
+}
+
+test('fixing in the Source view with nothing typed yet, a teammate fix shows there, and a fix of the same spot replaces it cleanly', async () => {
+  const { live, realm } = await openToFix('Hello\n\n<Cal\n');
+  live.teammate((shared) => shared.insert(shared.toJSON().indexOf('<Cal') + 4, 'lout />'));
+  await frames();
+  await waitFor(() => expect(realm.getValue(markdown$)).toContain('<Callout />'));
+  await waitFor(() => expect(live.queryByRole('alert')).toBeNull());
+  act(() => realm.pub(markdownSourceEditorValue$, 'Hello\n\n<Callout title="a" />'));
+  await sourcePause();
+  expect(live.text.toJSON()).toBe('Hello\n\n<Callout title="a" />\n');
+});
+
+test('fixing in the Source view with text not written yet, a teammate change is said, the stale fix is never merged into it, and it stays held to copy until copied', async () => {
+  const copied: string[] = [];
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: { writeText: async (value: string) => void copied.push(value) },
+  });
+  try {
+    const { live, realm } = await openToFix('Hello\n\n<Cal\n');
+    act(() => realm.pub(markdownSourceEditorValue$, 'Hello\n\n<Callo'));
+    live.teammate((shared) => shared.insert(shared.toJSON().indexOf('<Cal') + 4, 'lout />'));
+    await frames();
+    await waitFor(() => expect(live.getByRole('alert').textContent).toContain('changed this page'));
+    expect(hasHeldWork()).toBe(true);
+    act(() => realm.pub(markdownSourceEditorValue$, 'Hello\n\n<Callout title="a" />'));
+    await sourcePause();
+    act(() => {
+      window.dispatchEvent(new Event('pagehide'));
+    });
+    expect(live.text.toJSON()).toBe('Hello\n\n<Callout />\n');
+    act(() => realm.pub(viewMode$, 'rich-text'));
+    await frames();
+    // The teammate's text shows; what this user typed is still held, to copy, and a leave still asks.
+    await waitFor(() => expect(realm.getValue(markdown$)).toContain('<Callout />'));
+    expect(live.text.toJSON()).toBe('Hello\n\n<Callout />\n');
+    expect(live.getByRole('alert').textContent).toContain('changed this page');
+    expect(hasHeldWork()).toBe(true);
+    await act(async () => {
+      fireEvent.click(live.getByRole('button', { name: 'Copy text' }));
+    });
+    expect(copied).toEqual(['Hello\n\n<Callout title="a" />']);
+    await waitFor(() => expect(live.queryByRole('alert')).toBeNull());
+    expect(hasHeldWork()).toBe(false);
+  } finally {
+    Reflect.deleteProperty(navigator, 'clipboard');
+  }
+});
+
+test('a stale fix held to copy is let go by dismissing it', async () => {
+  const { live, realm } = await openToFix('Hello\n\n<Cal\n');
+  act(() => realm.pub(markdownSourceEditorValue$, 'Hello\n\n<Callo'));
+  live.teammate((shared) => shared.insert(shared.toJSON().indexOf('<Cal') + 4, 'lout />'));
+  await frames();
+  await waitFor(() => expect(live.getByRole('alert').textContent).toContain('changed this page'));
+  expect(hasHeldWork()).toBe(true);
+  act(() => {
+    fireEvent.click(live.getByRole('button', { name: 'Dismiss' }));
+  });
+  expect(hasHeldWork()).toBe(false);
+  expect(live.queryByText(/changed this page/)).toBeNull();
+});
+
+test('the editor counts as co-edited only while it is open', async () => {
+  expect(isLiveEditing()).toBe(false);
+  const live = openLive('Hello\n');
+  await waitFor(() => expect(live.container.textContent).toContain('Hello'));
+  expect(isLiveEditing()).toBe(true);
+  live.unmount();
+  expect(isLiveEditing()).toBe(false);
+});
+
+test('an editor a hold made read-only shows no teammate change, so nothing is typed into a held replica', async () => {
+  const doc = new Y.Doc();
+  const text = doc.getText('body');
+  text.insert(0, 'Hello\n');
+  let notice: string | null = null;
+  const listeners = new Set<() => void>();
+  const plugin = markdownLivePlugin({
+    text,
+    undoScope: [text],
+    onSelectionBlock: () => {},
+    held: {
+      notice: () => notice,
+      content: () => text.toJSON(),
+      subscribe: (onChange) => {
+        listeners.add(onChange);
+        return () => {
+          listeners.delete(onChange);
+        };
+      },
+    },
+  });
+  const { container } = render(<LiveEditor text={text} plugin={plugin} />);
+  await waitFor(() => expect(container.textContent).toContain('Hello'));
+  act(() => {
+    notice = 'Held';
+    for (const onChange of listeners) onChange();
+  });
+  const root = container.querySelector<HTMLElement>('[contenteditable]');
+  await waitFor(() => expect(root?.getAttribute('contenteditable')).toBe('false'));
+  act(() => text.insert(0, 'Intro\n\n'));
+  await frames();
+  expect(container.textContent).not.toContain('Intro');
+  expect(root?.getAttribute('contenteditable')).toBe('false');
+});
+
 /**
  * The Callout as a site renders it: the preview comes from the render endpoint, its title is text the author edits in
  * place, and the markup carries the block's place in the page, so a teammate's insert above re-renders it.
@@ -720,6 +1069,7 @@ test('a prop typed in place is written when a teammate edits the same component'
     act(() => {
       title.focus();
       title.textContent = 'Notes';
+      fireEvent.input(title);
     });
     live.teammate((shared) => shared.insert(shared.toJSON().indexOf('Hello'), 'Hey '));
     await frames();
@@ -832,6 +1182,66 @@ test('a list item that leaves the page without a blur writes nothing afterwards'
     live.unmount();
     expect(live.text.toJSON()).toContain('Teammate Other');
     expect(live.text.toJSON()).not.toContain('uno');
+  } finally {
+    site.mockRestore();
+  }
+});
+
+/** Types `typed` into list item `li` as the browser does: the item's text changes and an input event follows. */
+function typeInItem(li: HTMLElement, typed: string) {
+  act(() => {
+    li.focus();
+    li.textContent = typed;
+    fireEvent.input(li);
+  });
+}
+
+test('a list item typed in place writes as it is typed, keeping its item, focus and text, so leaving the page keeps it', async () => {
+  const site = renderedBySite();
+  try {
+    const live = openLive('<Callout title="Note">\n\n- one\n- two\n\n</Callout>\n\nOther\n');
+    const item = await waitFor(() => {
+      const found = [...live.container.querySelectorAll<HTMLElement>('li[data-conloca-listitem]')].find(
+        (li) => li.textContent === 'one',
+      );
+      if (!found) throw new Error('no editable list item');
+      return found;
+    });
+    for (const typed of ['on', 'o', 'uno']) {
+      typeInItem(item, typed);
+      expect(live.text.toJSON()).toContain(`* ${typed}\n\n* two`);
+      // oxlint-disable-next-line eslint/no-await-in-loop -- each key's render, if any, lands before the next key
+      await frames();
+      expect(item.isConnected).toBe(true);
+      expect(document.activeElement).toBe(item);
+      expect(item.textContent).toBe(typed);
+    }
+    // A reload with focus still in the item: nothing of the leave runs, so the text must be out already.
+    live.unmount();
+    expect(live.text.toJSON()).toContain('* uno\n\n* two');
+  } finally {
+    site.mockRestore();
+  }
+});
+
+test('a list item typed in place keeps a teammate edit to another item, with the keys typed after it', async () => {
+  const site = renderedBySite();
+  try {
+    const live = openLive('<Callout title="Note">\n\n- one\n- two\n\n</Callout>\n\nOther\n');
+    const item = (content: string) =>
+      waitFor(() => {
+        const found = [...live.container.querySelectorAll<HTMLElement>('li[data-conloca-listitem]')].find(
+          (li) => li.textContent === content,
+        );
+        if (!found) throw new Error(`no editable list item ${content}`);
+        return found;
+      });
+    typeInItem(await item('one'), 'uno');
+    live.teammate((shared) => shared.insert(shared.toJSON().indexOf('two') + 'two'.length, '!'));
+    await frames();
+    typeInItem(await item('uno'), 'unos');
+    await frames();
+    expect(live.text.toJSON()).toContain('* unos\n\n* two!');
   } finally {
     site.mockRestore();
   }

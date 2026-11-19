@@ -1,6 +1,6 @@
 /** Binds an MDXEditor to a shared doc's body text: local edits go out through an editor replica, remote ones come in. */
 
-import { splitEsm } from '@conloca/mdx';
+import { parseMdx, splitEsm } from '@conloca/mdx';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import {
   activeEditor$,
@@ -15,6 +15,7 @@ import {
   type MdastJsx,
   markdown$,
   markdownProcessingError$,
+  markdownSourceEditorValue$,
   muteChange$,
   NESTED_EDITOR_UPDATED_COMMAND,
   type RealmPlugin,
@@ -24,6 +25,7 @@ import {
   setMarkdown$,
   useCellValue,
   usePublisher,
+  viewMode$,
 } from '@mdxeditor/editor';
 import {
   $createParagraphNode,
@@ -36,17 +38,19 @@ import {
   $isRangeSelection,
   $setSelection,
   COMMAND_PRIORITY_CRITICAL,
+  FOCUS_COMMAND,
   getNearestEditorFromDOMNode,
   type LexicalEditor,
   type LexicalNode,
   REDO_COMMAND,
+  SKIP_DOM_SELECTION_TAG,
   UNDO_COMMAND,
 } from 'lexical';
 import { useEffect, useLayoutEffect, useReducer, useRef, useSyncExternalStore } from 'react';
 import { flushSync } from 'react-dom';
 import type * as Y from 'yjs';
 import { notifyEditorDirtyChanged } from '../editor-flush.js';
-import { commitDrafts, getSelectedBlock, setSelectedBlock } from '../selected-block.js';
+import { commitDrafts, getSelectedBlock, markLiveEditing, setSelectedBlock } from '../selected-block.js';
 import { LOCAL_ORIGIN } from './doc-channel.js';
 import {
   anchorCaret,
@@ -59,7 +63,14 @@ import {
 } from './markdown-binding.js';
 import { createLocalUndo, type UndoScope } from './undo.js';
 
-export const HTML_COMMENT_NOTICE = 'This page has an HTML comment. Replace it with {/* */} to edit it live.';
+export const HTML_COMMENT_NOTICE =
+  'This page has an HTML comment. Replace it here in the Source view with {/* */} to edit it live again.';
+
+// Source text is read as MDX (O(page)) and written once typing pauses this long, not on every key.
+const SOURCE_WRITE_DELAY_MS = 300;
+
+const STALE_FIX =
+  'A teammate changed this page while you were fixing it in the Source view, so what you typed there is not written. Copy it to redo your fix on their version.';
 
 // Stable, so the store is not resubscribed on each render of an editor that has no hold to watch.
 const noSubscribe = () => () => {};
@@ -79,10 +90,12 @@ function typedText(keys: string[]) {
 
 // The keys each bound editor holds for a body on its way back; they exist nowhere else.
 const heldKeyLists = new Set<string[]>();
+// Per bound editor: whether it holds a stale Source fix to copy, which exists nowhere else.
+const heldFixes = new Set<() => boolean>();
 
-/** Some editor holds typed keys for a body not back yet; a leave guard counts them as unsaved. */
-export function hasHeldKeys(): boolean {
-  return [...heldKeyLists].some((keys) => keys.length > 0);
+/** Some editor holds typed keys for a body not back yet, or a stale Source fix to copy; a leave guard counts them. */
+export function hasHeldWork(): boolean {
+  return [...heldKeyLists].some((keys) => keys.length > 0) || [...heldFixes].some((holds) => holds());
 }
 
 /** A component block, whose MDAST holds its body: only mdxeditor's `jsx` nodes have that type, and both methods. */
@@ -92,15 +105,30 @@ function isComponentNode(
   return node?.getType() === 'jsx';
 }
 
+function writeBody(body: LexicalEditor): void {
+  body.dispatchCommand(NESTED_EDITOR_UPDATED_COMMAND, undefined);
+}
+
+/**
+ * mdxeditor writes a cell with the handler Tab, Enter and blur leave it by, which also makes no cell active: the cell
+ * the user is still in is made active again, as focusing it does.
+ */
+function writeCell(cell: LexicalEditor): void {
+  cell.dispatchCommand(NESTED_EDITOR_UPDATED_COMMAND, undefined);
+  if (cell.getRootElement()?.contains(document.activeElement)) {
+    cell.dispatchCommand(FOCUS_COMMAND, new FocusEvent('focus'));
+  }
+}
+
 /** Where `part` sits in `within` when it sits there once, else null. */
 function once(within: string, part: string): number | null {
   return part !== '' && within.indexOf(part) === within.lastIndexOf(part) ? within.indexOf(part) : null;
 }
 
-/** Why a body the editor cannot import stops co-editing; nothing is written until the editor remounts. */
-function unparseableNotice(body: string, error: string): string {
+/** Why the editor opened the Source view: a body it cannot import is fixed there, by anyone, never locked. */
+function fixNotice(body: string, error: string): string {
   if (body.includes('<!--')) return HTML_COMMENT_NOTICE;
-  return `This page can't be edited live: its markdown could not be read (${error}).`;
+  return `This page has MDX that needs fixing (${error}). Fix it here in the Source view to edit it live again.`;
 }
 
 function $readCaret(): Caret | null {
@@ -221,19 +249,46 @@ export function markdownLivePlugin(input: {
 }): RealmPlugin {
   const { text, held } = input;
   const notice$ = Cell<string | null>(null);
+  // A body the editor cannot import: the Source view is open, editable, to fix it in.
+  const fix$ = Cell<string | null>(null);
   // Keys typed for a body that went before they could be typed into it, now at the end of the page: said, to copy.
   const unplaced$ = Cell<string | null>(null);
+  // Source text a teammate's change made stale before it was written: never written, held here to copy until let go.
+  const stale$ = Cell<string | null>(null);
   // What the host reads to show, in the same render that builds this plugin; the editor starts later.
   const opened = text.toJSON();
 
   function LiveNotice() {
     const notice = useCellValue(notice$);
+    const fix = useCellValue(fix$);
     const unplaced = useCellValue(unplaced$);
     const setUnplaced = usePublisher(unplaced$);
+    const stale = useCellValue(stale$);
+    const setStale = usePublisher(stale$);
     // A hold that comes after another notice locked the editor leaves `notice$` as it is, so it is watched on its own.
     const heldNotice = useSyncExternalStore(held?.subscribe ?? noSubscribe, held?.notice ?? notHeld);
     return (
       <>
+        {fix !== null && (
+          <div role="alert" className="flex items-center gap-3 px-4 py-2 bg-yellow-11 text-yellow-02 text-sm">
+            <span>{fix}</span>
+          </div>
+        )}
+        {stale !== null && (
+          <div role="alert" className="flex items-center gap-3 px-4 py-2 bg-yellow-11 text-yellow-02 text-sm">
+            <span>{STALE_FIX}</span>
+            <button
+              type="button"
+              className="px-3 py-1 border border-line rounded"
+              onClick={() => void navigator.clipboard.writeText(stale).then(() => setStale(null))}
+            >
+              Copy text
+            </button>
+            <button type="button" className="px-3 py-1 border border-line rounded" onClick={() => setStale(null)}>
+              Dismiss
+            </button>
+          </div>
+        )}
         {notice !== null && (
           <div role="alert" className="flex items-center gap-3 px-4 py-2 bg-yellow-11 text-yellow-02 text-sm">
             <span>{notice}</span>
@@ -271,59 +326,57 @@ export function markdownLivePlugin(input: {
 
   return realmPlugin({
     init(realm) {
-      // Typed text nothing has written yet: a table cell's until it is left, a body's until it can be written.
-      const unwritten = new Set<LexicalEditor>();
-      // Bodies whose DOM is live but whose passive effects, where mdxeditor registers the handler that writes them, have
-      // not run yet, each with a render of its own. A dispatch before then finds no handler, or bubbles up to an outer
-      // body's, which writes only its own text.
+      // Typed text nothing has written yet, each with what writes it: a body's or cell's before its handler is there.
+      const unwritten = new Map<LexicalEditor, () => void>();
+      // Bodies and cells whose DOM is live but whose passive effects, where mdxeditor registers the handler that writes
+      // them, have not run yet, each with a render of its own. A dispatch before then finds no handler, or bubbles up to
+      // an outer body's, which writes only its own text.
       const mounting = new Map<LexicalEditor, () => void>();
-      /** A component body writes to the page on every change, as a code block does, so none of its text is ever unwritten. */
-      function WriteThrough() {
-        const [body] = useLexicalComposerContext();
+      /**
+       * A component body or table cell writes to the page on every change, as a code block does, so none of its text
+       * waits for the user to leave it: teammates see it as it is typed, and no way out of the page can drop it.
+       */
+      function useWriteThrough(write: (nested: LexicalEditor) => void) {
+        const [nested] = useLexicalComposerContext();
         const [, rerender] = useReducer((renders: number) => renders + 1, 0);
         // A layout effect can run again without its passive one (a Suspense boundary showing the body again).
         const effectsRan = useRef(false);
-        // Live with the body's DOM, so a key typed before its passive effects run is still seen.
+        // Live with the editor's DOM, so a key typed before its passive effects run is still seen.
         useLayoutEffect(() => {
-          if (!effectsRan.current) mounting.set(body, rerender);
-          return body.registerUpdateListener(({ dirtyElements, dirtyLeaves }) => {
+          if (!effectsRan.current) mounting.set(nested, rerender);
+          return nested.registerUpdateListener(({ dirtyElements, dirtyLeaves }) => {
             if (dirtyElements.size === 0 && dirtyLeaves.size === 0) return;
-            if (mounting.has(body)) unwritten.add(body);
-            else body.dispatchCommand(NESTED_EDITOR_UPDATED_COMMAND, undefined);
+            if (mounting.has(nested)) unwritten.set(nested, () => write(nested));
+            else write(nested);
           });
-        }, [body]);
+        }, [nested, write]);
         useEffect(() => {
           effectsRan.current = true;
           // mdxeditor's handler registers later in this same passive flush: its editor's effects run after this child's.
-          mounting.delete(body);
+          mounting.delete(nested);
           queueMicrotask(() => {
-            if (unwritten.delete(body)) body.dispatchCommand(NESTED_EDITOR_UPDATED_COMMAND, undefined);
+            const pending = unwritten.get(nested);
+            unwritten.delete(nested);
+            pending?.();
           });
-        }, [body]);
+        }, [nested]);
+      }
+      function WriteThroughBody() {
+        useWriteThrough(writeBody);
         return null;
       }
-      // A table cell writes only when it is left; one with typing in it is written before anything can rebuild it. Live
-      // with the cell's DOM, as a body's is. React commits a cell's mount at once and runs its passive effects, where
-      // mdxeditor registers the cell's write handler, right after, before any event can reach it: no write waits here.
-      function TrackUnwrittenCell() {
-        const [cell] = useLexicalComposerContext();
-        useLayoutEffect(
-          () =>
-            cell.registerUpdateListener(({ dirtyElements, dirtyLeaves }) => {
-              if (dirtyElements.size > 0 || dirtyLeaves.size > 0) unwritten.add(cell);
-            }),
-          [cell],
-        );
+      function WriteThroughCell() {
+        useWriteThrough(writeCell);
         return null;
       }
       /** Writes what the user typed but nothing has written yet: side-panel and inline field drafts, table cells, bodies. */
       const writeInput = () => {
         commitDrafts();
-        for (const nested of unwritten) {
+        for (const [nested, write] of unwritten) {
           // flushSync makes React first run the passive effects it still owes, mdxeditor's write handler among them.
           const rerender = mounting.get(nested);
           if (rerender) flushSync(rerender);
-          nested.dispatchCommand(NESTED_EDITOR_UPDATED_COMMAND, undefined);
+          write();
         }
         unwritten.clear();
       };
@@ -341,12 +394,13 @@ export function markdownLivePlugin(input: {
 
       realm.pub(addTopAreaChild$, LiveNotice);
       realm.pub(addComposerChild$, LiveBinding);
-      realm.pub(addNestedEditorChild$, WriteThrough);
-      realm.pub(addTableCellEditorChild$, TrackUnwrittenCell);
+      realm.pub(addNestedEditorChild$, WriteThroughBody);
+      realm.pub(addTableCellEditorChild$, WriteThroughCell);
 
       function bind(editor: LexicalEditor): () => void {
         let shadow = realm.getValue(markdown$);
         const replica = createEditorReplica(text);
+        const releaseLive = markLiveEditing();
         let frame = 0;
         let restoring = 0;
         // Keys typed while a rebuilt body is on its way back: focus is on the page then, where a key does nothing.
@@ -375,6 +429,60 @@ export function markdownLivePlugin(input: {
           writeEditorEdit(replica, text, shadow, next, LOCAL_ORIGIN);
           shadow = next;
         });
+        // Source text not written yet: it is read as MDX once typing pauses, and written if a teammate's editor could
+        // show it; text that does not parse yet (a tag still being typed) waits for the switch back or the user leaving.
+        let source: string | null = null;
+        let sourceTimer = 0;
+        // Fixing in the Source view, a teammate changed the page while this user's fix waited: that fix was typed
+        // against a page that is gone, so it is never written; it is held in `stale$` to copy, and the switch back
+        // shows the teammate's.
+        let staleFix = false;
+        const holdsFix = () => realm.getValue(stale$) !== null;
+        heldFixes.add(holdsFix);
+        const stopStale = realm.sub(stale$, notifyEditorDirtyChanged);
+        const writeSource = (next: string) => {
+          clearTimeout(sourceTimer);
+          // Held, nothing writes; the text stays for a later write.
+          if (realm.getValue(notice$) !== null || staleFix) return;
+          source = null;
+          if (next === shadow) return;
+          writeEditorEdit(replica, text, shadow, next, LOCAL_ORIGIN);
+          shadow = next;
+        };
+        const flushSource = () => {
+          if (source !== null) writeSource(source);
+        };
+        // The Source and Diff views type into CodeMirror, whose text mdxeditor gives the editor only on the switch back to
+        // rich text: it is written as it is typed instead.
+        const stopSource = realm.sub(markdownSourceEditorValue$, (next) => {
+          if (realm.getValue(viewMode$) === 'rich-text' || realm.getValue(notice$) !== null) return;
+          source = next;
+          if (staleFix) realm.pub(stale$, next);
+          clearTimeout(sourceTimer);
+          sourceTimer = window.setTimeout(() => {
+            if (parseMdx(next)) writeSource(next);
+          }, SOURCE_WRITE_DELAY_MS);
+        });
+        // A teammate's change made meanwhile shows on the switch back (see `showRemote`).
+        const stopViewMode = realm.sub(viewMode$, (mode) => {
+          if (mode !== 'rich-text') return;
+          if (staleFix) {
+            staleFix = false;
+            source = null;
+          }
+          flushSource();
+          show();
+        });
+        /** A body the editor cannot import opens the Source view, editable, to fix it in; nothing ever locks on it. */
+        const settleImport = (body: string): boolean => {
+          const error = realm.getValue(markdownProcessingError$);
+          if (!error) {
+            realm.pub(fix$, null);
+            return false;
+          }
+          realm.pubIn({ [fix$]: fixNotice(body, error.error), [viewMode$]: 'source' });
+          return true;
+        };
 
         /** The top-level block holding focus, or for a toolbar or dialog the block its action targets (`ui`). */
         function busyBlock(root: HTMLElement): { key: string; ui: boolean } | null {
@@ -515,6 +623,19 @@ export function markdownLivePlugin(input: {
         function showRemote(afterUi: boolean) {
           frame = 0;
           if (realm.getValue(notice$) !== null) return;
+          // In the Source or Diff view, showing it would rebuild the view under the caret; it shows on the switch back.
+          if (realm.getValue(viewMode$) !== 'rich-text') {
+            // Fixing a text the editor cannot read, a teammate's text shows here while nothing of this user's waits;
+            // with a fix waiting, merging it into a page it was not typed against would garble both: it is said instead.
+            if (realm.getValue(fix$) === null || staleFix) return;
+            if (source === null) apply(afterUi, false);
+            else {
+              staleFix = true;
+              // The page this fix was typed against is gone: its "needs fixing" notice says no more than this one.
+              realm.pubIn({ [fix$]: null, [stale$]: source });
+            }
+            return;
+          }
           // A side-panel field writes its draft first: that changes nothing it shows, and its block may be rebuilt.
           if (!editor.getRootElement()?.contains(document.activeElement)) commitDrafts();
           apply(afterUi, false);
@@ -537,6 +658,7 @@ export function markdownLivePlugin(input: {
           // setMarkdown$ drops a text equal to the editor's after trimming, and no onChange follows.
           if (body.trim() === shadow.trim()) {
             syncEditorReplica(replica, text);
+            settleImport(body);
             return;
           }
           const blocks = editor.getEditorState().read(() =>
@@ -617,10 +739,8 @@ export function markdownLivePlugin(input: {
           }
           // The replica follows what the editor shows; one that went ahead of a put-back editor would misplace its writes.
           syncEditorReplica(replica, text);
-          const error = realm.getValue(markdownProcessingError$);
-          if (error) {
+          if (settleImport(body)) {
             shadow = body;
-            lock(unparseableNotice(body, error.error));
             return;
           }
           const before = shadow;
@@ -668,6 +788,17 @@ export function markdownLivePlugin(input: {
         };
         document.addEventListener('click', uiDone);
         document.addEventListener('focusin', uiDone);
+        // Focus moved to a form field outside the editor and its toolbars and dialogs (the side panel's): the editor's
+        // selection goes, so no later update of the editor (a teammate's change, a body or a draft writing) puts the
+        // page's selection, and with it focus, back in the editor while the user types in that field.
+        const leaveSelection = (event: FocusEvent) => {
+          const root = editor.getRootElement();
+          const target = event.target;
+          if (!root || !(target instanceof HTMLElement) || !target.matches('input, textarea, select')) return;
+          if (root.contains(target) || isPartOftheEditorUI(target, root)) return;
+          editor.update(() => $setSelection(null), { discrete: true, tag: SKIP_DOM_SELECTION_TAG });
+        };
+        document.addEventListener('focusin', leaveSelection);
         const press = (event: PointerEvent) => {
           const root = editor.getRootElement();
           pressedUi =
@@ -681,19 +812,24 @@ export function markdownLivePlugin(input: {
         };
         document.addEventListener('pointerdown', press);
         document.addEventListener('pointerup', release);
-        // Closing the tab or leaving the page without leaving the field: its text is written while it still can be.
-        const hidden = () => {
-          if (document.visibilityState === 'hidden') writeInput();
+        // Closing the tab or leaving the page without leaving the field: its text is written while it still can be. It
+        // reaches the parent after the parent's own pagehide, which then sends it unbatched.
+        const leave = () => {
+          writeInput();
+          flushSource();
         };
-        window.addEventListener('pagehide', writeInput);
+        const hidden = () => {
+          if (document.visibilityState === 'hidden') leave();
+        };
+        window.addEventListener('pagehide', leave);
         document.addEventListener('visibilitychange', hidden);
-        const error = realm.getValue(markdownProcessingError$);
-        if (error) lock(unparseableNotice(shadow, error.error));
+        // Held from the open, the editor is read-only before the Source view a text it cannot read opens mounts.
         const lockIfHeld = () => {
           const notice = held?.notice();
           if (notice != null && realm.getValue(notice$) === null) lock(notice);
         };
         lockIfHeld();
+        settleImport(shadow);
         const stopHeld = held?.subscribe(lockIfHeld);
         const observer = (_event: Y.YTextEvent, transaction: Y.Transaction) => {
           if (transaction.origin !== LOCAL_ORIGIN) show();
@@ -704,7 +840,7 @@ export function markdownLivePlugin(input: {
         const undo = createLocalUndo(input.undoScope);
         // Read-only writes nothing, undo included; the editor's own history never runs either way.
         const unlessLocked = (step: () => void) => () => {
-          if (realm.getValue(notice$) === null) step();
+          if (realm.getValue(notice$) === null && realm.getValue(fix$) === null && !staleFix) step();
           return true;
         };
         const stopUndo = editor.registerCommand(
@@ -727,20 +863,26 @@ export function markdownLivePlugin(input: {
         return () => {
           // The editor is closing: what the user typed but nothing wrote yet is written while the binding still listens.
           writeInput();
+          flushSource();
           cancelAnimationFrame(restoring);
           // Before `stopMarkdown`, which writes held keys placed through the editor.
           writeHeldToText();
           heldKeyLists.delete(heldKeys);
           text.unobserve(observer);
           stopMarkdown();
+          stopSource();
+          stopViewMode();
+          stopStale();
+          heldFixes.delete(holdsFix);
           cancelAnimationFrame(frame);
           frame = 0;
           document.removeEventListener('click', uiDone);
           document.removeEventListener('focusin', uiDone);
+          document.removeEventListener('focusin', leaveSelection);
           document.removeEventListener('keydown', holdKey, true);
           document.removeEventListener('pointerdown', press);
           document.removeEventListener('pointerup', release);
-          window.removeEventListener('pagehide', writeInput);
+          window.removeEventListener('pagehide', leave);
           document.removeEventListener('visibilitychange', hidden);
           stopUndo();
           undo.destroy();
@@ -750,11 +892,12 @@ export function markdownLivePlugin(input: {
           stopRoot();
           input.onRootElement?.(null);
           replica.doc.destroy();
+          releaseLive();
         };
       }
     },
     update(realm) {
-      // The editor's own update republishes its `readOnly` prop; a locked body stays read-only until remount.
+      // The editor's own update republishes its `readOnly` prop; a locked body stays read-only until it unlocks.
       if (realm.getValue(notice$) !== null) realm.pub(readOnly$, true);
     },
   })();

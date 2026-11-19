@@ -50,6 +50,8 @@ interface SharedState {
   subscribers: Set<(next: SelectedBlock | null) => void>;
   /** Optional: state made by an older copy of this module has none. */
   drafts?: Set<() => void>;
+  /** Co-editing bindings open now (see `markLiveEditing`); optional as `drafts` is. */
+  live?: number;
 }
 
 declare global {
@@ -126,8 +128,9 @@ export function useSelectedBlock(): SelectedBlock | null {
 
 /**
  * Registers a field's commit while it may hold typed text that commits only when the field is left (the side panel's
- * fields, a block's inline prop and list-item fields). The co-editing binding commits them all before a teammate's
- * change rebuilds the block they write to, and before the editor closes. `commit` must do nothing when nothing is typed.
+ * fields, a block's inline prop fields, and its list-item fields off co-editing). The co-editing binding commits them
+ * all before a teammate's change rebuilds the block they write to, and before the editor closes. `commit` must do
+ * nothing when nothing is typed.
  * Returns the release.
  */
 export function trackDraft(commit: () => void): () => void {
@@ -150,4 +153,21 @@ export function useTrackedDraft(commit: () => void): void {
   const latest = useRef(commit);
   latest.current = commit;
   useEffect(() => trackDraft(() => latest.current()), []);
+}
+
+/**
+ * Marks the editor as co-edited while its binding is open: list items then write as they are typed, so teammates see
+ * it and no way out of the page drops it. Otherwise they write once the item is left, one undo step per visit.
+ * Returns the release.
+ */
+export function markLiveEditing(): () => void {
+  const state = getState();
+  state.live = (state.live ?? 0) + 1;
+  return () => {
+    state.live = (state.live ?? 1) - 1;
+  };
+}
+
+export function isLiveEditing(): boolean {
+  return (getState().live ?? 0) > 0;
 }
