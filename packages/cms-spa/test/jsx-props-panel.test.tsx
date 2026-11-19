@@ -1,5 +1,5 @@
 /// <reference lib="dom" />
-import { afterEach, expect, mock, spyOn, test } from 'bun:test';
+import { afterEach, expect, mock, setSystemTime, spyOn, test } from 'bun:test';
 import { parseFragmentMdx } from '@conloca/mdx/render';
 import type { MDXEditorMethods } from '@mdxeditor/editor';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -228,6 +228,9 @@ for (const { name, find } of [
         { preconnect: fetch.preconnect },
       ),
     );
+    // The clock stands still, so every change falls inside Lexical's 300 ms undo merge window: the two undo steps below
+    // must come from the writes themselves, not from how fast the test runs.
+    setSystemTime(Date.now());
     try {
       const ref = createRef<MDXEditorMethods>();
       const { container } = render(
@@ -248,14 +251,28 @@ for (const { name, find } of [
       const nested = getNearestEditorFromDOMNode(body);
       if (!nested) throw new Error('no body editor');
       // An edit before the field visit, so undo has a step to go back to.
+      const editBody = () =>
+        nested.update(
+          () => {
+            const text = $getRoot().getAllTextNodes()[0];
+            // Through 'Hello' first: on a retry the text is already 'Hello!', and setting it unchanged edits nothing.
+            text?.setTextContent('Hello').setTextContent('Hello!');
+            text?.selectEnd();
+          },
+          { discrete: true },
+        );
       act(() => {
         fireEvent.mouseDown(body);
         body.focus();
-        nested.update(() => $getRoot().selectEnd().insertText('!'), { discrete: true });
+        editBody();
       });
-      await waitFor(() => expect(markdown()).toContain('Hello!'));
-      // Lexical merges changes to one node made within 300 ms into one undo step; a person's visit comes later.
-      await act(() => Bun.sleep(350));
+      // The body can show before the effect that writes its edits back to the document has run; an edit made then never
+      // reaches the document, so it is made again.
+      await waitFor(() => {
+        if (!markdown().includes('Hello!')) editBody();
+        expect(markdown()).toContain('Hello!');
+      });
+      // Undo merges changes within 300 ms, but the field's write is tagged as a new history step.
       const title = await find();
       title.focus();
       for (const typed of ['NoteX', 'NoteXY', 'NoteXYZ']) typeInto(title, typed);
@@ -273,6 +290,7 @@ for (const { name, find } of [
       await waitFor(() => expect(markdown()).toContain('title="Note"'));
       expect(markdown()).toContain('Hello!');
     } finally {
+      setSystemTime();
       site.mockRestore();
     }
   });
