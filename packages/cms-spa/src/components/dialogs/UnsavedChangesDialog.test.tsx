@@ -145,6 +145,27 @@ it('waits again when an auto-retry answers not ok while work is owed, then leave
   await waitFor(() => expect(onDiscard).toHaveBeenCalledTimes(1));
 });
 
+it('leaves anyway while the retry after a failed Sync is still running, and only once', async () => {
+  const answers: ((result: EditorFlushResult) => void)[] = [];
+  const fake = createFakeDocChannel(
+    { mdx: 'Hello\n' },
+    { flush: () => new Promise<EditorFlushResult>((resolve) => answers.push(resolve)) },
+  );
+  configureUI({ docChannel: fake.channel });
+  await act(() => fake.channel.receive('live.status', status(false, 'connected')));
+  const onDiscard = mock(() => {});
+  render(<UnsavedChangesDialog live onSave={() => {}} onDiscard={onDiscard} onCancel={() => {}} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Sync and continue' }));
+  await waitFor(() => expect(answers).toHaveLength(1));
+  await act(async () => answers[0]({ ok: false, message: 'Held.' }));
+  // The clicked Sync syncs once more on its own; its answer has not come.
+  await waitFor(() => expect(answers).toHaveLength(2));
+  fireEvent.click(screen.getByRole('button', { name: 'Leave anyway' }));
+  expect(onDiscard).toHaveBeenCalledTimes(1);
+  await act(async () => answers[1]({ ok: true }));
+  expect(onDiscard).toHaveBeenCalledTimes(1);
+});
+
 it('shows the error and re-enables the buttons when the flush rejects', async () => {
   // No doc channel: the open editor's flush runs, and nothing below the dialog catches its rejection.
   const unregister = registerEditorFlushHandler(() => Promise.reject(new Error('Socket gone.')));

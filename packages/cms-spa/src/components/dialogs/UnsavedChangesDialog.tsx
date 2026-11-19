@@ -149,6 +149,8 @@ function UnsyncedChangesDialog({ onDiscard, onCancel }: UnsavedChangesDialogProp
   // The user gave up the values the schema rejected and the fragment edits the save check held; kept, they would make
   // every later leave ask again.
   const leaveAnyway = () => {
+    // A flush still running (the retry after a failed one) must not leave a second time when it answers.
+    attempts.current += 1;
     dropHeldDataValues();
     dropHeldFragmentEdits();
     onDiscard();
@@ -175,7 +177,7 @@ function UnsyncedChangesDialog({ onDiscard, onCancel }: UnsavedChangesDialogProp
         <Button variant="outline" size="sm" onClick={stay}>
           Stay
         </Button>
-        <Button variant="destructive" size="sm" disabled={syncing} onClick={leaveAnyway}>
+        <Button variant="destructive" size="sm" onClick={leaveAnyway}>
           Leave anyway
         </Button>
         <Button variant="primary" size="sm" disabled={syncing} onClick={() => void sync(true)}>
