@@ -5,6 +5,7 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { playwright } from '@vitest/browser-playwright';
 import { defineConfig } from 'vitest/config';
+import { browserEnv } from './browser-env.js';
 import { sandboxFramePlugin } from './sandbox-frame-plugin.js';
 import { typiaFixtures, typiaRuntimeHelpers } from './typia-fixtures.js';
 
@@ -15,7 +16,7 @@ import { typiaFixtures, typiaRuntimeHelpers } from './typia-fixtures.js';
 const PREINSTALLED_CHROME = ['/usr/bin/google-chrome', '/usr/bin/chromium-browser', '/usr/bin/chromium'];
 const executablePath =
   process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ?? PREINSTALLED_CHROME.find((p) => existsSync(p));
-const playwrightOptions = executablePath ? ([{ launchOptions: { executablePath } }] as const) : ([] as const);
+const launchOptions = { executablePath, env: browserEnv };
 
 // Runs every story discovered by ../.storybook/main.ts as a Vitest test in a
 // real Chromium instance — browser mode, never a simulated DOM.
@@ -41,7 +42,7 @@ export default defineConfig({
     name: 'storybook',
     browser: {
       enabled: true,
-      provider: playwright(...playwrightOptions),
+      provider: playwright({ launchOptions }),
       headless: true,
       instances: [{ browser: 'chromium' }],
       // Storybook's runner sets 1200x900 before each story without its own viewport. Starting each
