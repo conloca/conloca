@@ -3,39 +3,10 @@ import { relative, resolve } from 'node:path';
 import { isContentPublished } from '@conloca/content-api';
 import { FileSystemContentAPI } from '@conloca/content-api/node';
 import { findUnknownFragmentComponents } from '@conloca/mdx/render';
-import { type Plugin, runnerImport, type UserConfig } from 'vite';
+import type { UserConfig } from 'vite';
 import { islandVocabulary } from '../components/FragmentIsland.js';
-import { type FragmentComponentsModule, fragmentVocabularyOf } from '../handlers/page-render-core.js';
-import { discoverFragmentIslands } from '../lib/hydration-scanner.js';
-
-const CHECK_ENTRY = 'virtual:conloca-fragment-check';
-
-/** The render module, and each island the build discovers in its imports as `[key, component]`, from one module graph. */
-interface CheckEntry {
-  render: FragmentComponentsModule;
-  islands: [string, object | undefined][];
-}
-
-/**
- * Serves an entry that imports the render module and every module the island discovery maps, so their components are
- * the same function objects the render module holds: the published render maps islands by identity.
- */
-function checkEntryPlugin(renderModulePath: string): Plugin {
-  return {
-    name: 'conloca:fragment-check-entry',
-    resolveId: (id) => (id === CHECK_ENTRY ? `\0${CHECK_ENTRY}` : undefined),
-    async load(id) {
-      if (id !== `\0${CHECK_ENTRY}`) return undefined;
-      const islands = await discoverFragmentIslands(renderModulePath, (s, i) => this.resolve(s, i));
-      return [
-        `import * as render from ${JSON.stringify(renderModulePath)};`,
-        ...islands.map(({ filePath }, i) => `import * as island${i} from ${JSON.stringify(filePath)};`),
-        'export { render };',
-        `export const islands = [${islands.map(({ key, exportName }, i) => `[${JSON.stringify(key)}, island${i}[${JSON.stringify(exportName)}]]`).join(', ')}];`,
-      ].join('\n');
-    },
-  };
-}
+import { fragmentVocabularyOf } from '../handlers/page-render-core.js';
+import { loadFragmentRender } from './fragment-render-load.js';
 
 const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
@@ -58,14 +29,7 @@ export async function checkFragmentComponents(input: {
   let names: ReadonlySet<string> | undefined = new Set();
   if (fragmentComponentsPath) {
     try {
-      const renderModulePath = resolve(root, fragmentComponentsPath);
-      const { module } = await runnerImport<CheckEntry>(CHECK_ENTRY, {
-        ...input.vite,
-        plugins: [...(input.vite.plugins ?? []), checkEntryPlugin(renderModulePath)],
-        configFile: false,
-        root,
-        logLevel: 'warn',
-      });
+      const module = await loadFragmentRender({ root, vite: input.vite, fragmentComponentsPath });
       let declared: ReadonlySet<string> | undefined;
       try {
         const vocabulary = fragmentVocabularyOf(module.render, fragmentComponentsPath);

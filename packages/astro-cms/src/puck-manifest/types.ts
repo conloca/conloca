@@ -1,5 +1,11 @@
 import type { JsonValue } from '@conloca/content-api';
+import type { FragmentManifest } from '@conloca/content-api/component-vocabulary';
 
+export type {
+  FragmentManifest,
+  FragmentManifestComponent,
+  FragmentManifestProp,
+} from '@conloca/content-api/component-vocabulary';
 export type { JsonValue };
 
 /**
@@ -57,6 +63,8 @@ export interface PuckManifest {
    * contract.
    */
   unreadableReason?: string;
+  /** The site's fragment vocabulary; absent from a manifest written before it was listed. */
+  fragments?: FragmentManifest;
 }
 
 export interface ManifestComponent {

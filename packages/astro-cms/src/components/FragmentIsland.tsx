@@ -13,7 +13,7 @@ const memo = new WeakMap<FragmentVocabulary, FragmentVocabulary>();
 const staticMemo = new WeakMap<FragmentVocabulary, FragmentVocabulary>();
 
 // The strategy withHydration() attached, read without trusting the shape of the function's own properties.
-function strategyOf(component: AnyComponent | undefined): HydrationMeta['strategy'] | undefined {
+export function strategyOf(component: AnyComponent | undefined): HydrationMeta['strategy'] | undefined {
   const meta: unknown = component === undefined ? undefined : Reflect.get(component, '__hydration');
   if (typeof meta !== 'object' || meta === null || Reflect.get(meta, '__isHydratable') !== true) return undefined;
   const strategy: unknown = Reflect.get(meta, 'strategy');

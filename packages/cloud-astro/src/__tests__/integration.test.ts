@@ -1056,7 +1056,9 @@ describe('conlocaCloud — the editor page', () => {
   }
 
   /** The channel conlocaCMS publishes in every build it is part of. */
-  function publishChannel(extra: { editorCSS?: string; contentPaths?: string[]; schemasPath?: string } = {}): void {
+  function publishChannel(
+    extra: { editorCSS?: string; contentPaths?: string[]; schemasPath?: string; fragmentComponentsPath?: string } = {},
+  ): void {
     process.env.CONLOCA_EDITOR_DESCRIPTORS = JSON.stringify({
       registry: { contentRoot: buildDir.root, componentFolders: [] },
       ...extra,
@@ -1599,6 +1601,29 @@ describe('conlocaCloud — the editor page', () => {
     expect(await readdir(editorDir())).toContain('data-schemas.json');
     const written = JSON.parse(await readFile(join(editorDir(), 'data-schemas.json'), 'utf8'));
     expect(Object.keys(written.collections)).toEqual(['team']);
+  });
+
+  it('lists the fragment components and their host-authored props in the component manifest', async () => {
+    const schemasPath = join(buildDir.root, 'schemas.ts');
+    await writeFile(
+      schemasPath,
+      [
+        "export const dataSchemas = { team: { metadata: { version: '3.1', schema: { type: 'object' }, components: {} } } };",
+        "export const mdxComponents = [{ name: 'Callout', kind: 'flow', props: [{ name: 'tone', type: 'string' }] }];",
+      ].join('\n'),
+    );
+    const fragmentComponentsPath = join(buildDir.root, 'fragment-render.mjs');
+    await writeFile(
+      fragmentComponentsPath,
+      'const Callout = () => null;\nexport const fragmentComponents = { components: { Callout }, elements: {} };\n',
+    );
+    publishChannel({ schemasPath, fragmentComponentsPath });
+    await buildDoneHook(pageOptions())({ dir: buildDir.dist, logger: makeLogger() });
+    const { info } = await readPage();
+    if (!isEditorPageInfo(info) || info.componentManifest === null) throw new Error('expected a component manifest');
+    const manifest = JSON.parse(await readFile(join(editorDir(), info.componentManifest.path), 'utf8'));
+    expect(manifest.fragments.components.Callout.props.tone.type).toBe('string');
+    expect(await readdir(editorDir())).toContain('data-schemas.json');
   });
 
   it('writes the sandbox frame from @conloca/mdx', async () => {

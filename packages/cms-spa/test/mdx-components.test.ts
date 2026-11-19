@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, spyOn, test } from 'bun:test';
+import { defineFragmentComponents, EMPTY_FRAGMENT_VOCABULARY } from '@conloca/mdx/render';
 import type { MdxJsxFlowElement } from 'mdast-util-mdx-jsx';
 import {
   containsMarkdownMarkers,
@@ -13,7 +14,10 @@ import {
   withOutlineId,
   writeAttribute,
 } from '../src/mdx-components.js';
+import { setSiteRender } from '../src/site-render.js';
 import { readAttrs } from '../src/utils/mdast-tree.js';
+
+const TextTable = () => null;
 
 // Smallest JSX descriptor that satisfies the type — `kind: 'flow'` is the
 // default insert path, `name` is required, everything else stays optional.
@@ -201,6 +205,54 @@ describe('mergeDiscoveredMdxComponents', () => {
     const discovered = [minimal({ name: 'Card' }), minimal({ name: 'Tabs' })];
 
     expect(mergeDiscoveredMdxComponents([], discovered).map((d) => d.name)).toEqual(['Card', 'Tabs']);
+  });
+
+  // A fragment vocabulary component's declared list must not be replaced by discovery's usage-inferred string.
+  const hostTable = minimal({
+    name: 'TextTable',
+    props: [{ name: 'items', type: 'list', of: { type: 'object', fields: { title: { type: 'string' } } } }],
+  });
+  const discoveredTable = minimal({ name: 'TextTable', props: [{ name: 'items', type: 'string' }] });
+
+  test('keeps the host descriptor for a name in hostWins', () => {
+    expect(mergeDiscoveredMdxComponents([hostTable], [discoveredTable], new Set(['TextTable']))).toEqual([hostTable]);
+  });
+
+  // Without hostWins discovery wins, keeping the host's editor settings (props among them).
+  test('lets discovery win without hostWins', () => {
+    expect(mergeDiscoveredMdxComponents([hostTable], [discoveredTable])).toEqual([
+      { ...discoveredTable, props: hostTable.props },
+    ]);
+  });
+
+  describe('through the installers and the site render', () => {
+    beforeEach(() => {
+      setSiteRender({});
+      installHostAuthoredMdxComponents([]);
+      installDiscoveredMdxComponents([]);
+    });
+
+    test('re-merges when the vocabulary names the component, host installed first', () => {
+      installHostAuthoredMdxComponents([hostTable]);
+      installDiscoveredMdxComponents([discoveredTable]);
+      setSiteRender({ vocabulary: defineFragmentComponents({ components: { TextTable } }) });
+      expect(getMdxComponents()).toEqual([hostTable]);
+    });
+
+    test('re-merges when the vocabulary names the component, discovered installed first', () => {
+      installDiscoveredMdxComponents([discoveredTable]);
+      installHostAuthoredMdxComponents([hostTable]);
+      setSiteRender({ vocabulary: defineFragmentComponents({ components: { TextTable } }) });
+      expect(getMdxComponents()).toEqual([hostTable]);
+    });
+
+    test('discovery wins again once the vocabulary drops the component', () => {
+      installHostAuthoredMdxComponents([hostTable]);
+      installDiscoveredMdxComponents([discoveredTable]);
+      setSiteRender({ vocabulary: defineFragmentComponents({ components: { TextTable } }) });
+      setSiteRender({ vocabulary: EMPTY_FRAGMENT_VOCABULARY });
+      expect(getMdxComponents()).toEqual([{ ...discoveredTable, props: hostTable.props }]);
+    });
   });
 });
 

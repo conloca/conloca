@@ -13,6 +13,37 @@ export type FragmentPropSpec =
   | { type: 'list'; of: FragmentPropSpec; required?: boolean }
   | { type: 'object'; fields: Readonly<Record<string, FragmentPropSpec>>; required?: boolean };
 
+/** A descriptor field, structurally: the editor's prop descriptors and the component manifest's props both fit. */
+export type FragmentPropField =
+  | { type: 'string'; required?: boolean; options?: ReadonlyArray<{ value: string }> }
+  | { type: 'number' | 'boolean'; required?: boolean }
+  | { type: 'list'; required?: boolean; of: FragmentPropField }
+  | { type: 'object'; required?: boolean; fields: Readonly<Record<string, FragmentPropField>> };
+
+/** The prop spec `checkFragmentMdx` reads for one descriptor field. */
+export function fragmentPropSpec(field: FragmentPropField): FragmentPropSpec {
+  const required = field.required ? { required: true } : {};
+  switch (field.type) {
+    case 'string':
+      return { type: 'string', ...(field.options ? { options: field.options.map((o) => o.value) } : {}), ...required };
+    case 'number':
+    case 'boolean':
+      return { type: field.type, ...required };
+    case 'list':
+      return { type: 'list', of: fragmentPropSpec(field.of), ...required };
+    case 'object':
+      return {
+        type: 'object',
+        fields: Object.fromEntries(Object.entries(field.fields).map(([name, f]) => [name, fragmentPropSpec(f)])),
+        ...required,
+      };
+    default: {
+      const unknownField: never = field;
+      throw new Error(`Unknown prop type ${JSON.stringify(unknownField)}`);
+    }
+  }
+}
+
 export interface FragmentMdxProblem {
   message: string;
   line?: number;
@@ -122,11 +153,12 @@ function checkFields(
 
 /**
  * Why the published renderer would refuse or change `mdx`, or undefined when it renders as written. Pure: it parses,
- * never evaluates. `propSpecs` checks only declared props of components it names.
+ * never evaluates. `propSpecs` checks only declared props of components it names. `componentNames` undefined (the
+ * site's vocabulary is unknown) skips only the unknown-component check.
  */
 export function checkFragmentMdx(
   mdx: string,
-  componentNames: ReadonlySet<string>,
+  componentNames: ReadonlySet<string> | undefined,
   propSpecs: Readonly<Record<string, Readonly<Record<string, FragmentPropSpec>>>>,
 ): FragmentMdxProblem | undefined {
   let all: Node[];
@@ -156,11 +188,11 @@ export function checkFragmentMdx(
     return { message: `Fragments can't contain {…} expressions (line ${line}).`, line };
   }
 
-  const unknown = findUnknownFragmentComponents(mdx, componentNames);
+  const unknown = componentNames ? findUnknownFragmentComponents(mdx, componentNames) : [];
   if (unknown.length > 0) {
     const names = [...new Set(unknown.map((u) => `<${u.name}>`))].join(', ');
     const offered =
-      componentNames.size > 0
+      componentNames && componentNames.size > 0
         ? `Components this site offers in fragments: ${[...componentNames].join(', ')}.`
         : 'This site offers no components in fragments.';
     const line = unknown[0]?.line ?? 1;

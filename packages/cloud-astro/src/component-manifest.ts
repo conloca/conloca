@@ -3,6 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { endpointReaderOptions, type PuckManifest, readPuckConfig } from '@conloca/astro-cms/puck-manifest';
 import { COMPONENT_MANIFEST_LIMITS, measureJson } from '@conloca/content-api/component-vocabulary';
+import type { UserConfig } from 'vite';
 
 /** The emitted manifest: its site-relative URL, its file name and the full sha-256 hex of its bytes. */
 export interface ComponentManifestArtifact {
@@ -33,13 +34,31 @@ export async function emitComponentManifest(input: {
   folder?: string;
   puckConfigPath: string;
   projectRoot: string;
+  vite: UserConfig;
+  /** The fragment components render module (conlocaCMS `fragmentComponentsPath`). */
+  fragmentComponentsPath?: string;
+  /** The loaded schemas module; absent when the site sets no `schemasPath`. */
+  schemas?: { mdxComponents: unknown } | { error: string };
+  discoveredMdxComponents?: readonly unknown[];
   logger: Logger;
 }): Promise<ComponentManifestArtifact | undefined> {
   const folder = input.folder ?? '_conloca';
   try {
-    const manifest = readPuckConfig(
-      endpointReaderOptions({ puckConfigPath: input.puckConfigPath, projectRoot: input.projectRoot }),
-    );
+    // Imported here so loading the config does not pay for the page renderer.
+    const { readFragmentManifest } = await import('@conloca/astro-cms/fragment-manifest');
+    const fragments = await readFragmentManifest({
+      root: input.projectRoot,
+      vite: input.vite,
+      ...(input.fragmentComponentsPath ? { fragmentComponentsPath: input.fragmentComponentsPath } : {}),
+      schemas: input.schemas,
+      discovered: input.discoveredMdxComponents ?? [],
+    });
+    const manifest: PuckManifest = {
+      ...readPuckConfig(
+        endpointReaderOptions({ puckConfigPath: input.puckConfigPath, projectRoot: input.projectRoot }),
+      ),
+      fragments: fragments.manifest,
+    };
     const bytes = new TextEncoder().encode(JSON.stringify(manifest));
     if (bytes.byteLength > MAX_MANIFEST_BYTES) {
       input.logger.warn(
@@ -53,6 +72,7 @@ export async function emitComponentManifest(input: {
     await mkdir(join(input.dir, folder), { recursive: true });
     await writeFile(join(input.dir, folder, filename), bytes);
     reportManifest(manifest, `/${folder}/${filename}`, input.logger);
+    for (const warning of fragments.warnings) input.logger.warn(warning);
     return { url: `/${folder}/${filename}`, filename, hash };
   } catch (error) {
     input.logger.warn(
@@ -65,7 +85,13 @@ export async function emitComponentManifest(input: {
 
 /** One info line for the artifact, and a warning for everything the reader could not read. */
 function reportManifest(manifest: PuckManifest, url: string, logger: Logger): void {
-  logger.info(`component manifest written: ${url} (${Object.keys(manifest.components).length} components)`);
+  const fragments = manifest.fragments;
+  logger.info(
+    `component manifest written: ${url} (${Object.keys(manifest.components).length} components, ${Object.keys(fragments?.components ?? {}).length} fragment components)`,
+  );
+  if (fragments?.unreadable) {
+    logger.warn(`fragment components are missing from the component manifest: ${fragments.unreadableReason}`);
+  }
   if (manifest.unreadable) {
     logger.warn(
       `component manifest is incomplete: ${manifest.unreadableReason ?? 'the config could not be fully read'}`,

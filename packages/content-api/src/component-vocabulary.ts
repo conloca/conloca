@@ -6,6 +6,43 @@ export const VOCABULARY_SAMPLE_NODES = 50_000;
 export const VOCABULARY_OUTPUT_BYTES = 256_000;
 export const VOCABULARY_READ_CONCURRENCY = 4;
 
+/** One prop of a fragment component, from the descriptor the editor uses for it. */
+export type FragmentManifestProp = (
+  | { type: 'string'; options?: Array<{ value: string; label: string }>; default?: string }
+  | { type: 'number'; default?: number }
+  | { type: 'boolean'; default?: boolean }
+  | { type: 'list'; of: FragmentManifestProp }
+  | { type: 'object'; fields: Record<string, FragmentManifestProp> }
+) & { label?: string; help?: string; required?: true };
+
+/** A component of the site's fragment vocabulary. */
+export interface FragmentManifestComponent {
+  /** The descriptor's `kind`. */
+  kind?: 'flow' | 'text';
+  /** The descriptor's `insert.label`. */
+  label?: string;
+  /** The descriptor's `insert.description`. */
+  description?: string;
+  /** The descriptor's `hasChildren`. */
+  children?: true;
+  /** Absent when no descriptor describes the component: then only its name is known. */
+  props?: Record<string, FragmentManifestProp>;
+  /** The `withHydration` strategy; absent for a static component. */
+  hydrate?: 'load' | 'visible' | 'idle';
+  /** The vocabulary's outline entry: the props that make it a contents entry. */
+  outline?: { id: string; text: string };
+}
+
+/** The site's fragment vocabulary, as its build loaded it. */
+export interface FragmentManifest {
+  components: Record<string, FragmentManifestComponent>;
+  /** Overridden element names, in the vocabulary's key order. */
+  elements: string[];
+  /** The render module or the schemas module failed to load; nothing is listed. */
+  unreadable?: true;
+  unreadableReason?: string;
+}
+
 /** Work and wire-size limits for JSON received by the metadata reader. */
 export interface JsonLimits {
   nodes: number;

@@ -159,6 +159,51 @@ export function isSnippetDescriptor(d: MdxComponentDescriptor): d is MdxSnippetD
 }
 
 /**
+ * Merge auto-discovered descriptors over host-authored ones.
+ *
+ * Discovered entries win on a name collision: they are derived from the
+ * source of truth (the MDX files and component folders themselves), while a
+ * hand-written list can lag. Discovery cannot see the host's editor settings,
+ * though: the host's `insert` (labels, descriptions), `props` (labels, help,
+ * `hidden`) and `blockType` stay on the merged entry. The exception is a name
+ * in `hostWins`, the site's fragment vocabulary components: there the host's
+ * declared types are the contract, so the host entry is kept and the
+ * discovered one dropped. ONE rule for every caller: the editors and the
+ * component manifest.
+ *
+ * Host survivors keep their relative order and discovered entries append
+ * after them, so a colliding entry surfaces at its discovered position, not
+ * its host slot. Inputs are assumed unique-by-name — that validation lives
+ * in `defineMdxComponents` and the discovery merge, not here.
+ */
+export function mergeDiscoveredMdxComponents(
+  hostAuthored: MdxComponents,
+  discovered: MdxComponents,
+  hostWins: ReadonlySet<string> = new Set(),
+): MdxComponents {
+  if (discovered.length === 0) return hostAuthored;
+  const host = new Map(hostAuthored.map((descriptor) => [descriptor.name, descriptor]));
+  const kept = discovered.filter((descriptor) => !(hostWins.has(descriptor.name) && host.has(descriptor.name)));
+  const keptNames = new Set(kept.map((descriptor) => descriptor.name));
+  const merged = hostAuthored.filter((descriptor) => !keptNames.has(descriptor.name));
+  for (const descriptor of kept) {
+    const authored = host.get(descriptor.name);
+    if (!authored || !isJsxDescriptor(authored) || !isJsxDescriptor(descriptor)) {
+      merged.push(descriptor);
+      continue;
+    }
+    const { insert, props, blockType } = authored;
+    merged.push({
+      ...descriptor,
+      ...(insert && { insert }),
+      ...(props && { props }),
+      ...(blockType !== undefined && { blockType }),
+    });
+  }
+  return merged;
+}
+
+/**
  * Identity helper that validates registration-time invariants.
  *
  * Throws on:

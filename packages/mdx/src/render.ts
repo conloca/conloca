@@ -9,7 +9,9 @@ export { evaluateMDXToComponent, fragmentHeadingIds, parseFragmentMdx } from './
 export {
   checkFragmentMdx,
   type FragmentMdxProblem,
+  type FragmentPropField,
   type FragmentPropSpec,
+  fragmentPropSpec,
   mdxCarriesNoCode,
 } from './mdx/fragment-check.js';
 export { type FragmentOutlineComponent, outlineIdFor } from './mdx/heading-outline.js';

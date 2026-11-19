@@ -31,7 +31,8 @@ Workers, a strict CSP): it imports no editor code and no Node.js APIs, and it ne
   fragments may use (the vocabulary), and which components are contents entries
 - **findUnknownFragmentComponents(mdx, names)** - The component tags in `mdx` that `names` does not declare, with lines
 - **checkFragmentMdx(mdx, names, propSpecs)** - Why the renderer would refuse or change `mdx`, or `undefined`; also
-  checks declared prop types
+  checks declared prop types; `names` undefined skips the unknown-component check
+- **fragmentPropSpec(field)** - The prop spec `checkFragmentMdx` reads for one component descriptor field
 - **fragmentComponentProps(attributes)** - The props a published component receives for its parsed attributes
 - **parseFragmentMdx(mdx)** - The renderer's syntax tree for `mdx`, before any transform
 - **isFragmentVocabulary**, **isFragmentComponentName**, **EMPTY_FRAGMENT_VOCABULARY**, **FRAGMENT_ELEMENT_NAMES** -

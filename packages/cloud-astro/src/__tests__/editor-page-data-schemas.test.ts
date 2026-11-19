@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Plugin } from 'vite';
-import { emitDataSchemas } from '../editor-page/data-schemas.js';
+import { emitDataSchemas, loadSchemasModule } from '../editor-page/data-schemas.js';
 
 /** What typia's `json.schema<T>()` generates: an `IJsonSchemaUnit` 3.1. */
 const UNIT = {
@@ -28,7 +28,8 @@ function makeLogger() {
 
 async function emit(plugins: Plugin[] = []) {
   const logger = makeLogger();
-  await emitDataSchemas({ folder, root: projectDir, vite: { plugins }, schemasPath, logger });
+  const loaded = await loadSchemasModule({ root: projectDir, vite: { plugins }, schemasPath });
+  await emitDataSchemas({ folder, schemasPath, loaded, logger });
   return logger;
 }
 

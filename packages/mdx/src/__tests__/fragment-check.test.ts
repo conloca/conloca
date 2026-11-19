@@ -8,6 +8,7 @@ import {
   defineFragmentComponents,
   evaluateMDXToComponent,
   type FragmentPropSpec,
+  fragmentPropSpec,
   mdxCarriesNoCode,
   parseFragmentMdx,
 } from '../render.js';
@@ -22,6 +23,42 @@ const specs = {
   },
 } satisfies Record<string, Record<string, FragmentPropSpec>>;
 const check = (mdx: string) => checkFragmentMdx(mdx, names, specs);
+
+describe('checkFragmentMdx without a vocabulary', () => {
+  test('skips only the unknown-component check', () => {
+    expect(checkFragmentMdx('<Nope />\n', undefined, {})).toBeUndefined();
+    expect(checkFragmentMdx("import x from 'y'\n", undefined, {})).toEqual(
+      checkFragmentMdx("import x from 'y'\n", names, {}),
+    );
+    expect(checkFragmentMdx("import x from 'y'\n", undefined, {})?.line).toBe(1);
+    expect(checkFragmentMdx('<Callout tone="loud" />\n', undefined, specs)).toEqual({
+      message: 'Callout prop "tone" must be one of info, warn (line 1).',
+      line: 1,
+    });
+    expect(checkFragmentMdx('<Callout onClick="x" />\n', undefined, {})?.message).toContain(
+      'would not be published: names starting with "on"',
+    );
+  });
+});
+
+describe('fragmentPropSpec', () => {
+  test('maps descriptor fields to prop specs', () => {
+    expect(
+      fragmentPropSpec({
+        type: 'list',
+        required: true,
+        of: {
+          type: 'object',
+          fields: { tone: { type: 'string', options: [{ value: 'a' }] }, n: { type: 'number' } },
+        },
+      }),
+    ).toEqual({
+      type: 'list',
+      required: true,
+      of: { type: 'object', fields: { tone: { type: 'string', options: ['a'] }, n: { type: 'number' } } },
+    });
+  });
+});
 
 describe('checkFragmentMdx', () => {
   test('a parse failure is refused with the parser message', () => {

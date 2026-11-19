@@ -60,6 +60,11 @@
       "import": "./dist/ts/src/puck-manifest/index.js",
       "default": "./dist/ts/src/puck-manifest/index.js"
     },
+    "./fragment-manifest": {
+      "types": "./dist/ts/src/build/fragment-manifest.d.ts",
+      "import": "./dist/ts/src/build/fragment-manifest.js",
+      "default": "./dist/ts/src/build/fragment-manifest.js"
+    },
     "./components": {
       "types": "./dist/ts/src/components.d.ts",
       "import": "./dist/ts/src/components.js",

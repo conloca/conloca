@@ -1,6 +1,12 @@
 import type { JsxComponentDescriptor, JsxEditorProps } from '@mdxeditor/editor';
 import { type ComponentType, useEffect, useState } from 'react';
-import { isJsxDescriptor, type MdxComponentDescriptor, type MdxComponents } from './mdx-components-define.js';
+import {
+  isJsxDescriptor,
+  type MdxComponentDescriptor,
+  type MdxComponents,
+  mergeDiscoveredMdxComponents,
+} from './mdx-components-define.js';
+import { getSiteRender, subscribeSiteRender } from './site-render.js';
 
 // The declaration surface (types, defineMdxComponents, the attribute
 // helpers) lives in mdx-components-define — editor-free so content configs
@@ -99,58 +105,30 @@ export function getMdxComponents(): MdxComponents {
  * settled last overwrote the other's entries — discovered components
  * vanished whenever the fetch won the race. Each producer now writes its
  * own remembered slot and the registry is recomputed as the merge of both,
- * so settle order stops mattering. A host app that installs the full list
- * with a single `setMdxComponents` call keeps doing so; these slots are
- * dev-only plumbing.
+ * so settle order stops mattering. An editor embedding the CMS installs
+ * through the same two slots.
+ *
+ * The merge keeps host-authored entries for the current site render's
+ * fragment vocabulary names, and is redone whenever the site render changes.
  */
 export function installHostAuthoredMdxComponents(components: MdxComponents): void {
-  const state = getSharedState();
-  state.hostAuthored = components;
-  setMdxComponents(mergeDiscoveredMdxComponents(components, state.discovered ?? []));
+  getSharedState().hostAuthored = components;
+  remerge();
 }
 
 /** Install the auto-discovered descriptor list — see `installHostAuthoredMdxComponents`. */
 export function installDiscoveredMdxComponents(components: MdxComponents): void {
-  const state = getSharedState();
-  state.discovered = components;
-  setMdxComponents(mergeDiscoveredMdxComponents(state.hostAuthored ?? [], components));
+  getSharedState().discovered = components;
+  remerge();
 }
 
-/**
- * Merge auto-discovered descriptors over host-authored ones.
- *
- * Discovered entries win on a name collision: they are derived from the
- * source of truth (the MDX files and component folders themselves), while a
- * hand-written list can lag. Discovery cannot see the host's editor settings,
- * though: the host's `insert` (labels, descriptions), `props` (labels, help,
- * `hidden`) and `blockType` stay on the merged entry. ONE rule for every
- * caller — the dev SPA merges the `/api/registry` response over the
- * `schemasPath` exports, and a host app merges the same two lists from what
- * it supplies.
- *
- * Host survivors keep their relative order and discovered entries append
- * after them, so a colliding entry surfaces at its discovered position, not
- * its host slot. Inputs are assumed unique-by-name — that validation lives
- * in `defineMdxComponents` and the discovery merge, not here.
- */
-export function mergeDiscoveredMdxComponents(hostAuthored: MdxComponents, discovered: MdxComponents): MdxComponents {
-  if (discovered.length === 0) return hostAuthored;
-  const discoveredNames = new Set(discovered.map((descriptor) => descriptor.name));
-  const host = new Map(hostAuthored.map((descriptor) => [descriptor.name, descriptor]));
-  return [
-    ...hostAuthored.filter((descriptor) => !discoveredNames.has(descriptor.name)),
-    ...discovered.map((descriptor) => {
-      const authored = host.get(descriptor.name);
-      if (!authored || !isJsxDescriptor(authored) || !isJsxDescriptor(descriptor)) return descriptor;
-      const { insert, props, blockType } = authored;
-      return {
-        ...descriptor,
-        ...(insert && { insert }),
-        ...(props && { props }),
-        ...(blockType !== undefined && { blockType }),
-      };
-    }),
-  ];
+let unsubscribeSiteRender: (() => void) | undefined;
+
+function remerge(): void {
+  unsubscribeSiteRender ??= subscribeSiteRender(remerge);
+  const state = getSharedState();
+  const hostWins = new Set(Object.keys(getSiteRender().vocabulary.components));
+  setMdxComponents(mergeDiscoveredMdxComponents(state.hostAuthored ?? [], state.discovered ?? [], hostWins));
 }
 
 /**

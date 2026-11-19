@@ -364,7 +364,8 @@ It reads the Puck config that `conlocaCMS`'s `puckConfigPath` names from source,
 per component with its fields, then each component it could not read with the reason. `--json` prints the manifest the
 editor and agents use: `components`, `unresolved` and, when the config cannot be fully read, `unreadable: true` with
 `unreadableReason`. An unreadable config is still an answer; the command fails only without an `astro.config` or when
-`puckConfigPath` is not a plain string. Read-only: it never modifies a file.
+`puckConfigPath` is not a plain string. It lists only the Puck part of the manifest; a site build adds `fragments`, the
+fragment components. Read-only: it never modifies a file.
 
 ```plain
 Hero: title (text), image (image)

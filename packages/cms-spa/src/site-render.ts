@@ -117,6 +117,15 @@ export function getSiteRender(): SiteRender {
   return getSharedState().render;
 }
 
+/** Call `listener` on every later `setSiteRender`; returns the unsubscribe. */
+export function subscribeSiteRender(listener: (render: SiteRender) => void): () => void {
+  const state = getSharedState();
+  state.subscribers.add(listener);
+  return () => {
+    state.subscribers.delete(listener);
+  };
+}
+
 /** React hook for the current site render; re-renders the caller when it changes (HMR support). */
 export function useSiteRender(): SiteRender {
   const [render, setRender] = useState(() => getSharedState().render);
