@@ -1,11 +1,25 @@
 # Theming the Conloca editor
 
-The CMS editor visually matches your published site automatically. You don't write a separate theme for it — Conloca
-discovers your site's CSS at runtime and applies it to the editor surface, then mirrors your content wrapper element
-around the contenteditable so your selectors hit naturally.
+The CMS editor shows your content with your site's own CSS and wrappers. You don't write a separate theme for it —
+Conloca discovers your site's CSS and applies it to the editor surface, then mirrors your content wrapper element around
+the contenteditable so your selectors hit naturally. What that guarantees, and what it does not, is listed under
+[What matches the published page](#what-matches-the-published-page).
 
 This page documents the contract: which CSS your site can ship to influence the editor, what each piece controls, and
 how to override anything that auto-discovery picks wrong.
+
+## What matches the published page
+
+- **The page canvas** renders fragments in place among the page's blocks, with your site's CSS and your fragment
+  components (the `fragmentComponentsPath` module), inside the route's `editorFrame` when it declares one. Fragments
+  there render with the same renderer as the published page, so element overrides and components look as published,
+  within the frame you wrote. A route without a frame has no layout wrappers around its content in the canvas.
+- **The fragment editor** renders each fragment component as your real React component. Markdown (headings, paragraphs,
+  lists, tables) is editable text styled by your CSS through the discovery described below, so element overrides do not
+  show while typing.
+- **The live preview** beside the fragment editor renders the fragment with the published renderer, element overrides
+  included, inside the `editorFrame` of the first routing entry that declares one, with `fragmentPreviewRoute` as its
+  `pathname`.
 
 ## How discovery works
 
@@ -71,12 +85,16 @@ fragment inside it, so it stays the first marker and keeps winning.
 
 ### CSS variables the editor reads
 
-MDX content typography uses a three-layer model:
+MDX content typography uses three layers, in the editor document's cascade order
+`cms-admin, conloca-host-defaults, conloca-host-preview`:
 
 1. **L0 — Conloca baseline** (`--conloca-prose-*`) — always on; readable default when host matching is unavailable.
-2. **L1 — Host auto-match** (`--conloca-host-*` from the style probe + fetched host CSS) — overrides L0 when the preview
-   route works.
-3. **L2 — Consumer override** — `editorCSS` / your site CSS on `.conloca-prose--editor` wins on the same properties.
+2. **L1 — Host auto-match** — your discovered CSS sits in `conloca-host-preview`. The style probe measures your page's
+   bare elements: a spacing, colour or typography value your discovered CSS already gives the editor goes in
+   `conloca-host-defaults`, a fallback your own rules beat; values it does not reproduce (including the
+   `--conloca-host-*` heading scale) stay unlayered, so they beat the editor's own prose scale.
+3. **L2 — Consumer override** — `editorCSS` is appended to `conloca-host-preview` after the discovered CSS, so it wins
+   over discovered CSS and over `conloca-host-defaults`, but not over the probe's unlayered values.
 
 Anything you set on `:root` (or a more specific selector) can flow through. Host tokens the probe and Puck bridge
 commonly pick up:
@@ -129,6 +147,8 @@ export default defineConfig({
 
 Fragments aren't tied to a single route, so the fragment editor needs a route to synthesize its preview from. Pick a
 representative content page on your site — typically one that uses the same layout style your fragments will end up in.
+It is also the `pathname` the live preview hands to the editor frame, so a frame that varies by path (for example one
+that adds an article wrapper under `/blog/`) shows the wrappers of that page.
 
 Hosts that ship rich typography (custom prose styles, code blocks, custom list markers) see the biggest benefit. Hosts
 whose body bg matches the editor chrome can leave this on the default.

@@ -236,7 +236,8 @@ Use this when the user names existing `src/pages` routes to make editable. Conve
    endpoints, browser components through props) then reads the same data entries, so there is one copy. Pages the user
    did not name may change only there, and their output must stay identical.
 8. The shared header and footer stay code in the layout. Their texts and links (menu items, footer links, contact
-   details) move into a data entry the layout reads. Fragments are for prose blocks placed inside pages.
+   details) move into a data entry the layout reads. Fragments are for content blocks placed inside pages: markdown plus
+   the site's fragment components (see "Fragment components").
 9. Read a shared entry by a fixed name and fail the build when it is missing or duplicated:
    `conlocaDataEntry(dataSchemas, 'site', await getCollection('site'), 'header', 'en').menu` throws in both cases.
 10. Write all content through the CLI: `conloca page create` / `conloca page update` (with `--content` and the metadata
@@ -253,7 +254,11 @@ Use this when the user names existing `src/pages` routes to make editable. Conve
 
 The workspace also has an MCP server for editing content remotely: pages, fragments and data entries on pushed branches.
 It cannot change code, upload media or publish. Use the address the editor's prompt gives you; never guess or hardcode
-one. Setup and limits: https://conloca.com/workspace-mcp/.
+one. Setup and limits: https://conloca.com/workspace-mcp/. Its `get_component_vocabulary` lists the components a
+fragment may use. Every change it makes to a fragment is checked like a save in the editor. On the default branch the
+components are those of the deployed production build, so one added since is refused until that build is deployed. On
+another branch they are checked only against a deploy of that branch's exact head; otherwise, as when the deployed build
+predates fragment components, the change is stored and the answer gives `vocabularyNotChecked` with the reason.
 
 ## Custom Puck components
 
@@ -268,11 +273,41 @@ Follow the generated examples in `src/components/puck/` — that is the one prov
 
 A component referenced by stored content but not registered renders blank — see "Where errors appear".
 
+## Fragment components
+
+A fragment is MDX: markdown plus the components the site declares for fragments. Declare them in one render module and
+name it in `conlocaCMS({ fragmentComponentsPath: './src/fragment-components.tsx' })`:
+
+```tsx
+// src/fragment-components.tsx — loaded by the page render, so import no editor code here.
+import { defineFragmentComponents } from '@conloca/mdx/render';
+import type { ReactNode } from 'react';
+
+function Callout({ children }: { children?: ReactNode }) {
+  return <aside className="callout">{children}</aside>;
+}
+
+export const fragmentComponents = defineFragmentComponents({ components: { Callout } });
+```
+
+- `elements` restyles the HTML markdown produces (`elements: { h2: SectionHeading }`); `outline` makes a component a
+  contents entry.
+- An `mdxComponents` descriptor of the same name (from `schemasPath`) gives the component its label, insert hint and
+  settings fields. A component without one is still offered, with no settings.
+- Authors write `<Callout>text</Callout>`, or `<Name prop="text" />` without children. Prop values are JSON (`{3}`,
+  `{["a", "b"]}`); there are no `import` lines, `{…}` expressions, `style` or `on*` props.
+- Components render static HTML. For an interactive one, wrap it with `withHydration(Component, 'visible')` from
+  `@conloca/astro-cms/hydration` in its own file and import it into the render module by name.
+- A published or scheduled (not expired) fragment that uses a component the module does not declare fails `astro build`,
+  naming the fragment, its file and line: `<X> is not in ./src/fragment-components.tsx`. The fix is declaring the
+  component, not editing the fragment. If the module cannot load outside Astro, the build only warns.
+
+All rules: https://conloca.com/configuration/ (`fragmentComponentsPath`) and https://conloca.com/packages/mdx/ ("Server:
+Fragment Components").
+
 ## Known limits — by design, do not fight them
 
-- MDX fragments render prose only.
-  `Unknown component <X>: fragments render as plain content and cannot use React components.` is intentional: fragment
-  content is treated as untrusted, so `{...}` expressions and `import`/`export` statements are rejected too. Do not try
-  to sneak components in.
+- Fragment content never runs code: `{...}` expressions, `import`/`export` lines, `<script>`, `style` and `on*`
+  attributes are rejected or dropped. Put behavior in a fragment component, never in the fragment.
 - Unknown Puck component types render as nothing; the dev-server or build console names them. The fix is registering the
   type in `puck.config.tsx`, not editing the stored content.
