@@ -23,8 +23,11 @@ const stockExitFlowTag = mdxJsxFromMarkdown().exit?.mdxJsxFlowTag;
 const stockFlowElement = mdxJsxToMarkdown().handlers?.mdxJsxFlowElement;
 if (!stockExitFlowTag || !stockFlowElement) throw new Error('mdast-util-mdx-jsx no longer handles flow elements');
 
+// The name too: a renamed block's recorded opening tag would no longer match its closing tag.
 const attributesOf = (element: MdxJsxFlowElement) =>
-  JSON.stringify(element.attributes, (key, value) => (key === 'position' || key === 'data' ? undefined : value));
+  JSON.stringify([element.name, element.attributes], (key, value) =>
+    key === 'position' || key === 'data' ? undefined : value,
+  );
 
 /** The stock tag exit, plus the source layout of the block the tag opens or closes. */
 const exitFlowTag: typeof stockExitFlowTag = function (token) {
