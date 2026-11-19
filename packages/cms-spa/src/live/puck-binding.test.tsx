@@ -783,7 +783,7 @@ describe('createPuckBinding', () => {
 
 // A page file as stored (and as the page creator writes it): Puck 0.23 holds root as `{ props }` from its first state.
 const FILE: Data = {
-  content: [{ props: { id: 'Hero-library-two-staging-acceptance', title: 'Library two seed' }, type: 'Hero' }],
+  content: [{ props: { id: 'Hero-sample-page', title: 'Sample page seed' }, type: 'Hero' }],
   root: {},
   zones: {},
 };
@@ -798,11 +798,11 @@ describe('createPuckBinding with a file whose root is {}', () => {
     const fake = createFakeDocChannel({ puckData: FILE });
     const live = await fake.channel.open({ kind: 'puck', id: 'p', locale: 'en' });
     const binding = createPuckBinding(live, FILE);
-    binding.change(puckShaped(FILE, 'zqxLibrary two seed'));
-    binding.change(puckShaped(FILE, 'Library two seed'));
+    binding.change(puckShaped(FILE, 'zqxSample page seed'));
+    binding.change(puckShaped(FILE, 'Sample page seed'));
     expect(live.doc.getMap('puck').toJSON().root).toEqual({});
     const shown = binding.reseed();
-    if (shown) binding.change(puckShaped(shown, 'Library two seed'));
+    if (shown) binding.change(puckShaped(shown, 'Sample page seed'));
     expect(live.doc.getMap('puck').toJSON().root).toEqual({});
   });
 
@@ -810,7 +810,7 @@ describe('createPuckBinding with a file whose root is {}', () => {
     const fake = createFakeDocChannel({ puckData: FILE });
     const live = await fake.channel.open({ kind: 'puck', id: 'p', locale: 'en' });
     const binding = createPuckBinding(live, FILE);
-    binding.change({ ...puckShaped(FILE, 'Library two seed'), root: { props: { title: 'Mine' } } });
+    binding.change({ ...puckShaped(FILE, 'Sample page seed'), root: { props: { title: 'Mine' } } });
     expect(readPuckData(live.doc).root).toMatchObject({ props: { title: 'Mine' } });
   });
 });
@@ -830,8 +830,8 @@ describe('createPuckBinding handed the file as the page editor loads it', () => 
     const fake = createFakeDocChannel({ puckData: FILE });
     const live = await fake.channel.open({ kind: 'puck', id: 'p', locale: 'en' });
     const binding = createPuckBinding(live, LOADED);
-    binding.change(handedWith(HELD, 'zqxLibrary two seed'));
-    binding.change(handedWith(HELD, 'Library two seed'));
+    binding.change(handedWith(HELD, 'zqxSample page seed'));
+    binding.change(handedWith(HELD, 'Sample page seed'));
     expect(readPuckData(live.doc)).toEqual(FILE);
   });
 
@@ -844,8 +844,8 @@ describe('createPuckBinding handed the file as the page editor loads it', () => 
     const fake = createFakeDocChannel({ puckData: FILE });
     const live = await fake.channel.open({ kind: 'puck', id: 'p', locale: 'en' });
     const binding = createPuckBinding(live, prepare(LOADED), prepare);
-    binding.change(handedWith(HELD_WITH_DEFAULTS, 'zqxLibrary two seed'));
-    binding.change(handedWith(HELD_WITH_DEFAULTS, 'Library two seed'));
+    binding.change(handedWith(HELD_WITH_DEFAULTS, 'zqxSample page seed'));
+    binding.change(handedWith(HELD_WITH_DEFAULTS, 'Sample page seed'));
     expect(readPuckData(live.doc)).toEqual(FILE);
     // A re-seed hands Puck the defaults again, so the root Puck then holds and hands back is the re-seed's.
     const shown = binding.reseed();
