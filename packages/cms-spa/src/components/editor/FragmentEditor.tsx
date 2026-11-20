@@ -25,6 +25,7 @@ import type { SaveState } from '../../types.js';
 import { getUIConfig } from '../../ui-config.js';
 import { DraftNoticeStrip } from '../conflicts/EditorNoticeStrip.js';
 import { PageDraftMenu } from '../conflicts/PageDraftMenu.js';
+import { PeerAvatars } from '../conflicts/PeerAvatars.js';
 import { draftToolsPage } from '../conflicts/use-page-conflicts.js';
 import { ConflictDialog } from '../dialogs/ConflictDialog.js';
 import { ErrorModal } from '../dialogs/ErrorModal.js';
@@ -228,6 +229,7 @@ function LiveFragmentEditor() {
           <h1 className="text-base font-medium text-foreground truncate">Edit: {filePath}</h1>
         </div>
         <div className="flex items-center gap-2">
+          {editing && <PeerAvatars live={editing.live} />}
           <LocaleSelector
             currentLocale={currentLocale}
             availableLocales={availableLocales}

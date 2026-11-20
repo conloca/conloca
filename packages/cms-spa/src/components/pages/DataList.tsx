@@ -476,7 +476,9 @@ export function DataList({ dataSchemas }: DataListProps) {
           className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50"
           role="dialog"
           onKeyDown={(e) => {
-            if (e.key === 'Escape') closeEditDataDialog();
+            // A menu or dialog opened from the editor closes itself on Escape; React still bubbles the key here.
+            const layer = e.target instanceof Element ? e.target.closest('[role="dialog"], [role="menu"]') : null;
+            if (e.key === 'Escape' && layer === e.currentTarget) closeEditDataDialog();
           }}
         >
           <div

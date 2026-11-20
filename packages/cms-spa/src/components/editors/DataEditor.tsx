@@ -8,12 +8,15 @@ import { AlertCircle, Code2, Loader2, Save } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { notifyEditorDirtyChanged, registerEditorFlushHandler } from '../../editor-flush.js';
 import { type HostSchema, isHostSchema } from '../../host-schema.js';
-import { dropHeldDataValues, heldDataKeys, useLiveDataValues } from '../../live/data-binding.js';
+import { dropHeldDataValues, heldDataKeys, type LiveDataValues, useLiveDataValues } from '../../live/data-binding.js';
 import { type FrameLiveDoc, useDocChannel } from '../../live/doc-channel.js';
 import { useLiveDoc } from '../../live/use-live.js';
 import { contentFailureMessage } from '../../utils/content-failure.js';
 import { validateEntryData } from '../../utils/data-entry-validation.js';
 import { DraftNoticeStrip } from '../conflicts/EditorNoticeStrip.js';
+import { PageDraftMenu } from '../conflicts/PageDraftMenu.js';
+import { PeerAvatars } from '../conflicts/PeerAvatars.js';
+import { draftToolsPage } from '../conflicts/use-page-conflicts.js';
 import { LiveLeaveGuard, UnsavedChangesDialog } from '../dialogs/UnsavedChangesDialog.js';
 import { LocaleSelector } from '../editor/LocaleSelector.js';
 import { SchemaForm } from '../forms/SchemaForm.js';
@@ -37,18 +40,31 @@ interface DataEditorProps {
  * Supports locale switching similar to FragmentEditor.
  */
 export function DataEditor(props: DataEditorProps) {
+  // The entry's id: a new entry gets one once created, and from then on is bound like any other.
+  const [id, setId] = useState(props.id);
+  // Typed during the create of an entry made here and stored by nothing yet; see `EntryEditor`'s `takeCarried`.
+  const [carrying, setCarrying] = useState(false);
   // Above the loading and error screens too: a locale switch reloads, and the old doc may still owe work.
-  const bound = useDocChannel() !== null && props.id !== '';
+  const bound = useDocChannel() !== null && id !== '';
   return (
     <>
-      {bound && <LiveLeaveGuard />}
-      <EntryEditor {...props} />
+      {bound && <LiveLeaveGuard unsaved={carrying} />}
+      <EntryEditor
+        {...props}
+        id={id}
+        carrying={carrying}
+        onCreated={(created) => {
+          setId(created);
+          setCarrying(true);
+        }}
+        onCarried={() => setCarrying(false)}
+      />
     </>
   );
 }
 
 function EntryEditor({
-  id: entryId,
+  id,
   collection,
   initialLocale,
   existingLocales,
@@ -56,9 +72,10 @@ function EntryEditor({
   create,
   onSave,
   onCancel,
-}: DataEditorProps) {
-  // The entry's id: a new entry gets one once created, so a save after typing during the create updates it.
-  const [id, setId] = useState(entryId);
+  carrying,
+  onCreated,
+  onCarried,
+}: DataEditorProps & { carrying: boolean; onCreated: (id: string) => void; onCarried: () => void }) {
   // Locale state
   const [currentLocale, setCurrentLocale] = useState(initialLocale);
   // null: the version is not known (nothing loaded, or a create that returned no tag); '' is a real, loaded tag.
@@ -70,6 +87,15 @@ function EntryEditor({
   const savedValuesRef = useRef<Record<string, unknown>>({});
   // The values as typed, current even inside a save's await (state is only current after the next render).
   const latestValuesRef = useRef(savedValuesRef.current);
+  // Typed during the create of an entry made here, not stored yet: the form keeps it, with Save, until the entry's
+  // doc opens and takes it, once; a doc that fails to open leaves it to Save.
+  const carryingRef = useRef(false);
+  const takeCarried = () => {
+    if (!carryingRef.current) return null;
+    carryingRef.current = false;
+    onCarried();
+    return latestValuesRef.current === savedValuesRef.current ? null : latestValuesRef.current;
+  };
 
   const { data: entry, isLoading, error } = useLocalizedContent(id, currentLocale);
   const updateLocalized = useUpdateLocalized();
@@ -81,11 +107,11 @@ function EntryEditor({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const isNew = id === '';
-  // Bound to the entry's shared doc, each valid change is written as it is typed; a new entry has no doc until created,
-  // and one created in this editor stays unbound so the typing it holds is not dropped.
+  // Bound to the entry's shared doc, each valid change is written as it is typed; a new entry has no doc until created.
   const channel = useDocChannel();
-  const bound = channel !== null && entryId !== '';
-  const liveDoc = useLiveDoc(bound ? { kind: 'data', id, locale: currentLocale } : null);
+  const docWanted = channel !== null && id !== '';
+  const liveDoc = useLiveDoc(docWanted ? { kind: 'data', id, locale: currentLocale } : null);
+  const bound = docWanted && (!carrying || liveDoc.state === 'ready');
   const [dropSwitch, setDropSwitch] = useState<{ locale: string; keys: string[] } | null>(null);
 
   // Initialize form values and etag when entry loads. A save's cache update or a refetch also emits a
@@ -126,10 +152,11 @@ function EntryEditor({
         const created = (await create?.(values)) ?? null;
         if (!created) return false;
         savedValuesRef.current = values;
-        // Typing during the create is not stored yet: keep it open and unsaved; the next save updates the entry.
+        // Typing during the create is not stored yet: keep it open; bound, the doc takes it, else the next save does.
         if (latestValuesRef.current !== values && created.id) {
           setCurrentEtag(created.etag ?? null);
-          setId(created.id);
+          carryingRef.current = true;
+          onCreated(created.id);
         } else {
           setHasChanges(false);
           onSave?.();
@@ -162,6 +189,11 @@ function EntryEditor({
       // Typing during the write is not stored yet: the edit stays unsaved and the editor stays open.
       if (latestValuesRef.current === values) {
         setHasChanges(false);
+        // The carried typing is stored now: nothing is left for the doc to take or for leaving to lose.
+        if (carryingRef.current) {
+          carryingRef.current = false;
+          onCarried();
+        }
         onSave?.();
       }
       return true;
@@ -317,6 +349,7 @@ function EntryEditor({
       if (keys.length > 0) setDropSwitch({ locale, keys });
       else setCurrentLocale(locale);
     };
+    const draftPage = draftToolsPage(id, currentLocale);
     return (
       <div className="space-y-6">
         <DraftNoticeStrip
@@ -331,6 +364,10 @@ function EntryEditor({
             availableLocales={existingLocales}
             onChange={switchLiveLocale}
           />
+          <div className="ml-auto flex items-center gap-2">
+            {liveDoc.state === 'ready' && <PeerAvatars live={liveDoc.live} />}
+            {draftPage && <PageDraftMenu page={draftPage} label={entry?.localized?.meta?.title || id} />}
+          </div>
         </div>
         {liveDoc.state === 'ready' ? (
           <LiveDataForm
@@ -338,6 +375,7 @@ function EntryEditor({
             live={liveDoc.live}
             schema={schema}
             entry={`${id}:${currentLocale}`}
+            takeCarried={takeCarried}
           />
         ) : liveDoc.state === 'failed' ? (
           <p className="text-red-04 dark:text-red-08">{liveDoc.message}</p>
@@ -464,12 +502,27 @@ function EntryEditor({
 }
 
 /** The form over the entry's replica: what it shows is the doc's data, with the values the schema rejected held. */
-function LiveDataForm({ live, schema, entry }: { live: FrameLiveDoc; schema: HostSchema; entry: string }) {
+function LiveDataForm({
+  live,
+  schema,
+  entry,
+  takeCarried,
+}: {
+  live: FrameLiveDoc;
+  schema: HostSchema;
+  entry: string;
+  takeCarried: () => LiveDataValues['values'] | null;
+}) {
   const { values, change, errors } = useLiveDataValues(
     live,
     (next) => (isHostSchema(schema) ? validateEntryData(schema, next) : null),
     entry,
   );
+  // biome-ignore lint/correctness/useExhaustiveDependencies: written once, into the doc of the entry just created.
+  useEffect(() => {
+    const carried = takeCarried();
+    if (carried) change(carried);
+  }, []);
   const messages = [...new Set(Object.values(errors))];
   return (
     <>

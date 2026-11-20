@@ -23,6 +23,7 @@ import { getUIConfig } from '../../ui-config.js';
 import { buildMetadataUpdate, extractPageMetadata, pageSettingsSaveError } from '../../utils/pageMetadata.js';
 import { DraftNoticeStrip } from '../conflicts/EditorNoticeStrip.js';
 import { PageDraftMenu } from '../conflicts/PageDraftMenu.js';
+import { PeerAvatars } from '../conflicts/PeerAvatars.js';
 import { draftToolsPage } from '../conflicts/use-page-conflicts.js';
 import { ConflictDialog } from '../dialogs/ConflictDialog.js';
 import { ErrorModal } from '../dialogs/ErrorModal.js';
@@ -178,6 +179,7 @@ function LiveMdxPageEditor({ initialLocale }: { initialLocale: string }) {
     );
   }
 
+  const draftPage = draftToolsPage(id, currentLocale);
   return (
     <div className="h-full flex flex-col bg-page">
       <header className="flex items-center justify-between gap-4 px-4 py-2 border-b border-line bg-overlay shrink-0">
@@ -193,6 +195,7 @@ function LiveMdxPageEditor({ initialLocale }: { initialLocale: string }) {
           <h1 className="text-base font-medium text-foreground truncate">Edit: {pagePathname}</h1>
         </div>
         <div className="flex items-center gap-2">
+          <PeerAvatars live={live} />
           <LocaleSelector
             currentLocale={currentLocale}
             availableLocales={availableLocales}
@@ -221,6 +224,7 @@ function LiveMdxPageEditor({ initialLocale }: { initialLocale: string }) {
           >
             <Settings size={16} aria-hidden />
           </button>
+          {draftPage && <PageDraftMenu page={draftPage} label={pageMetadata?.title || pagePathname} />}
         </div>
       </header>
       <DraftNoticeStrip id={id} locale={currentLocale} docKey={live.docKey} />

@@ -505,7 +505,7 @@ export function PageEditor({
     onOpenMetadata,
     onBack,
     previewBlockedReason,
-    live: binding !== null,
+    live: binding?.live,
     previewPending,
     title: entry.localized.meta.title || 'Untitled Page',
   });
@@ -522,7 +522,7 @@ export function PageEditor({
     onOpenMetadata,
     onBack,
     previewBlockedReason,
-    live: binding !== null,
+    live: binding?.live,
     previewPending,
     title: entry.localized.meta.title || 'Untitled Page',
   };
@@ -550,6 +550,7 @@ export function PageEditor({
             onBack={p.onBack}
             draftPage={draftToolsPage(p.id, p.locale)}
             draftLabel={p.title}
+            live={p.live}
             previewDisabledReason={p.previewBlockedReason ?? undefined}
             previewPending={p.previewPending}
           />

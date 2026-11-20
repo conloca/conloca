@@ -1,6 +1,6 @@
 import { AlertTriangle, X } from 'lucide-react';
 import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from 'react';
-import type { EditorFlushResult } from '../../editor-flush.js';
+import { type EditorFlushResult, flushOpenEditor } from '../../editor-flush.js';
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard.js';
 import { dropHeldDataValues } from '../../live/data-binding.js';
 import { useDocChannel } from '../../live/doc-channel.js';
@@ -27,15 +27,19 @@ export function UnsavedChangesDialog(props: UnsavedChangesDialogProps) {
 /**
  * Asks before a route change or unload leaves live work unsynced. The live MDX, fragment and data editors mount it; the
  * live page editor has its own blocker, one saving with Save asks on its own, and only live editors need the data
- * router `useBlocker` requires.
+ * router `useBlocker` requires. `unsaved`: the editor also holds work only its Save stores (a new data entry's typing
+ * before its doc opens), so it asks to save that, as an editor saving with Save does.
  */
-export function LiveLeaveGuard() {
-  const blocker = useUnsavedChangesGuard(false, true);
+export function LiveLeaveGuard({ unsaved = false }: { unsaved?: boolean }) {
+  const blocker = useUnsavedChangesGuard(unsaved, !unsaved);
   if (blocker.state !== 'blocked') return null;
   return (
     <UnsavedChangesDialog
-      live
-      onSave={() => blocker.proceed()}
+      live={!unsaved}
+      onSave={() => {
+        if (!unsaved) return blocker.proceed();
+        void flushOpenEditor().then((result) => (result.ok ? blocker.proceed() : blocker.reset()));
+      }}
       onDiscard={() => blocker.proceed()}
       onCancel={() => blocker.reset()}
     />

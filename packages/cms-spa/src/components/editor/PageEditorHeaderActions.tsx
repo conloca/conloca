@@ -1,10 +1,12 @@
 import { AlertTriangle, Check, Eye, Loader2, Moon, Save, Settings, Sun, X } from 'lucide-react';
 import type { PageRef } from '../../draft-tools.js';
 import { useCanvasTheme } from '../../hooks/useCanvasTheme.js';
+import type { FrameLiveDoc } from '../../live/doc-channel.js';
 import type { SaveState } from '../../types.js';
 import { getUIConfig } from '../../ui-config.js';
 import { cn } from '../../utils/cn.js';
 import { PageDraftMenu } from '../conflicts/PageDraftMenu.js';
+import { PeerAvatars } from '../conflicts/PeerAvatars.js';
 import { IconButton } from '../ui/IconButton.js';
 import { Separator } from '../ui/Separator.js';
 import { LocaleSelector } from './LocaleSelector.js';
@@ -47,6 +49,8 @@ interface PageEditorHeaderActionsProps {
   draftPage?: PageRef | null;
   /** The page's title, naming it in its recent versions. */
   draftLabel?: string;
+  /** The page's live replica: its header shows who else is on it. */
+  live?: Pick<FrameLiveDoc, 'docKey' | 'user'>;
 }
 
 /** PageEditor keeps preview clicks actionable so an unavailable preview can explain how to recover. */
@@ -100,6 +104,7 @@ export function PageEditorHeaderActions({
   onBack,
   draftPage,
   draftLabel,
+  live,
 }: PageEditorHeaderActionsProps) {
   const hideSave = getUIConfig().hideEditorSave === true || onSave === undefined;
   return (
@@ -183,6 +188,7 @@ export function PageEditorHeaderActions({
 
       {/* Settings & Exit Group */}
       <div className="flex items-center gap-1">
+        {live && <PeerAvatars live={live} />}
         <IconButton icon={Settings} onClick={onOpenMetadata} ariaLabel="Page settings" />
         {draftPage && <PageDraftMenu page={draftPage} label={draftLabel ?? draftPage.id} />}
         <IconButton icon={X} onClick={onBack} ariaLabel="Exit editor" />

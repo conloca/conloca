@@ -3,19 +3,25 @@
  * The data editor bound to its entry's shared doc: every valid change is written as it is typed, so there is no Save,
  * and a refetch of the stored entry never puts old values back over what the user typed.
  */
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { serializeDoc } from '@conloca/content-api/ydoc';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { DataEditor } from '../src/components/editors/DataEditor.js';
 import { setDataSchemas } from '../src/data-schemas.js';
-import { type EditorFlushResult, flushOpenEditor, registerEditorFlushHandler } from '../src/editor-flush.js';
+import type { DraftToolsHost } from '../src/draft-tools.js';
+import {
+  type EditorFlushResult,
+  flushOpenEditor,
+  isOpenEditorDirty,
+  registerEditorFlushHandler,
+} from '../src/editor-flush.js';
 import { invalidateEditorQueries } from '../src/editor-queries.js';
 import type { HostSchema } from '../src/host-schema.js';
 import { dropHeldDataValues, hasHeldDataValues } from '../src/live/data-binding.js';
 import { configureUI } from '../src/ui-config.js';
-import { createFakeDocChannel } from './fake-doc-channel.js';
+import { createFakeDocChannel, type FakeDocChannelOptions } from './fake-doc-channel.js';
 import { requiredBio } from './fixtures/typia/host-schemas.js';
 import { renderAppWithDataRouter, renderWithProviders, setupTestAPI, testApi } from './test-utils.js';
 
@@ -29,7 +35,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   dropHeldDataValues();
-  configureUI({ docChannel: undefined });
+  configureUI({ docChannel: undefined, draftTools: undefined, siteId: undefined });
   // oxlint-disable-next-line no-underscore-dangle -- the browser global invalidateEditorQueries reads.
   window.__QUERY_CLIENT__ = undefined;
   testApi?.clear();
@@ -51,9 +57,19 @@ async function createAuthor() {
 }
 
 /** The editor of entry `id` (`''`: a new one), with the doc channel on; `schema` null gives the no-schema screen. */
-function renderEditor(id: string, schema: HostSchema | null = requiredBio) {
-  const fake = createFakeDocChannel({ data: { name: 'Anna' } });
-  configureUI({ docChannel: fake.channel, locales: { list: ['en', 'de'], defaultLocale: 'en' } });
+function renderEditor(
+  id: string,
+  schema: HostSchema | null = requiredBio,
+  create: () => Promise<{ id?: string; etag?: string } | null> = async () => ({}),
+  options: FakeDocChannelOptions = {},
+  tools?: DraftToolsHost,
+) {
+  const fake = createFakeDocChannel({ data: { name: 'Anna' } }, options);
+  configureUI({
+    docChannel: fake.channel,
+    locales: { list: ['en', 'de'], defaultLocale: 'en' },
+    ...(tools && { draftTools: tools, siteId: 'web' }),
+  });
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   // oxlint-disable-next-line no-underscore-dangle -- the browser global invalidateEditorQueries reads.
   window.__QUERY_CLIENT__ = queryClient;
@@ -74,7 +90,7 @@ function renderEditor(id: string, schema: HostSchema | null = requiredBio) {
           initialLocale="en"
           existingLocales={['en', 'de']}
           schema={schema}
-          create={async () => ({})}
+          create={create}
         />
       ),
     },
@@ -86,6 +102,24 @@ function renderEditor(id: string, schema: HostSchema | null = requiredBio) {
     </QueryClientProvider>,
   );
   return { fake, opens, router };
+}
+
+/** Types Bo, saves, and types Bob while the create runs; the create then stores the entry. */
+async function typeDuringCreate(options: FakeDocChannelOptions) {
+  const created = Promise.withResolvers<void>();
+  let id = '';
+  const create = async () => {
+    await created.promise;
+    id = await createAuthor();
+    return { id, etag: (await testApi.getLocalized(id, 'en'))?.localized.etag };
+  };
+  const view = renderEditor('', requiredBio, create, options);
+  fireEvent.change(await screen.findByLabelText(/^Name/), { target: { value: 'Bo' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: 'Bob' } });
+  await act(async () => created.resolve());
+  await waitFor(() => expect(id).not.toBe(''));
+  return { ...view, id };
 }
 
 describe('the data editor on a shared doc', () => {
@@ -115,6 +149,69 @@ describe('the data editor on a shared doc', () => {
     await screen.findByLabelText(/^Name/);
     expect(screen.getByRole('button', { name: 'Save' })).toBeDefined();
     expect(opens).toEqual([]);
+  });
+
+  test('binds an entry created here to its shared doc, keeping what was typed during the create', async () => {
+    const created = Promise.withResolvers<{ id: string; etag: string }>();
+    const { fake, opens } = renderEditor('', requiredBio, () => created.promise);
+    fireEvent.change(await screen.findByLabelText(/^Name/), { target: { value: 'Bo' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: 'Bob' } });
+    await act(async () => created.resolve({ id: 'new-1', etag: 'e1' }));
+    await screen.findByLabelText(/^Name/);
+    expect(screen.queryByRole('button', { name: /Save/ })).toBeNull();
+    expect(opens).toEqual(['new-1:en']);
+    expect(screen.getByLabelText<HTMLInputElement>(/^Name/).value).toBe('Bob');
+    const [{ docKey }] = fake.updates();
+    expect(serializeDoc(fake.parent(docKey)).data).toMatchObject({ name: 'Bob' });
+    // Written once: the next replica the form binds to keeps what it holds, not the values typed during the create.
+    await act(async () => fake.replace(docKey, { data: { name: 'Cy' } }));
+    await waitFor(() => expect(screen.getByLabelText<HTMLInputElement>(/^Name/).value).toBe('Cy'));
+    expect(fake.updates()).toHaveLength(1);
+  });
+
+  test("keeps what was typed during the create, with Save, when the entry's doc fails to open", async () => {
+    const { id, fake, opens } = await typeDuringCreate({ refuseOpen: new Error('no doc') });
+    await waitFor(() => expect(opens).toEqual([`${id}:en`]));
+    expect(screen.getByLabelText<HTMLInputElement>(/^Name/).value).toBe('Bob');
+    expect(isOpenEditorDirty()).toBe(true);
+    fireEvent.click(await screen.findByRole('button', { name: 'Save' }));
+    await waitFor(async () =>
+      expect((await testApi.getLocalized(id, 'en'))?.localized.content?.data).toMatchObject({ name: 'Bob' }),
+    );
+    expect(fake.updates()).toEqual([]);
+  });
+
+  test('warns before leaving what was typed during the create while its doc is still opening', async () => {
+    const { fake, router } = await typeDuringCreate({ holdOpen: true });
+    expect(screen.getByLabelText<HTMLInputElement>(/^Name/).value).toBe('Bob');
+    // The host asks before an unload while the open editor is dirty, and its Save flushes it.
+    expect(isOpenEditorDirty()).toBe(true);
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDefined();
+    await act(() => router.navigate('/elsewhere'));
+    await screen.findByText('Unsaved Changes');
+    expect(router.state.location.pathname).toBe('/');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByText('Unsaved Changes')).toBeNull());
+    await act(async () => fake.releaseOpens());
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Save' })).toBeNull());
+    expect(isOpenEditorDirty()).toBe(false);
+    expect(screen.getByLabelText<HTMLInputElement>(/^Name/).value).toBe('Bob');
+    const [{ docKey }] = fake.updates();
+    expect(serializeDoc(fake.parent(docKey)).data).toMatchObject({ name: 'Bob' });
+  });
+
+  test('discards the locale it shows from its draft menu after a locale switch', async () => {
+    const discardPage = mock(async () => ({ ok: true as const }));
+    const id = await createAuthor();
+    renderEditor(id, requiredBio, undefined, {}, draftTools(discardPage));
+    await screen.findByLabelText(/^Name/);
+    fireEvent.click(screen.getByRole('combobox', { name: 'Locale' }));
+    fireEvent.click(await screen.findByTestId('locale-option-de'));
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Locale' }).textContent).toContain('de'));
+    fireEvent.keyDown(await screen.findByRole('button', { name: 'Page draft' }), { key: 'Enter' });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Discard changes' }));
+    await waitFor(() => expect(discardPage).toHaveBeenCalledWith({ site: 'web', id, locale: 'de' }));
   });
 
   test('asks before a locale switch drops values held invalid', async () => {
@@ -215,6 +312,17 @@ describe('the data editor saving with Save', () => {
   });
 });
 
+function draftTools(discardPage: DraftToolsHost['discardPage']): DraftToolsHost {
+  return {
+    listConflicts: async () => [],
+    resolveConflict: async () => ({ ok: true }),
+    discardPage,
+    listVersions: async () => [],
+    restoreVersion: async () => ({ ok: true, kept: [] }),
+    listPageNotes: async () => [],
+  };
+}
+
 /** The app's own routes at `/data`, with the editor of entry `id` opened from its card; returns the Name field. */
 async function openFromList(id: string) {
   renderAppWithDataRouter(['/data'], undefined, false);
@@ -239,5 +347,20 @@ describe('the data editor under the app routes', () => {
     configureUI({ docChannel: createFakeDocChannel({ data: { name: 'Anna' } }).channel });
     expect((await openFromList(id)).value).toBe('Anna');
     expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
+  });
+
+  test('Escape in the draft menu closes the menu, not the edit dialog', async () => {
+    const id = await createAuthor();
+    configureUI({
+      docChannel: createFakeDocChannel({ data: { name: 'Anna' } }).channel,
+      draftTools: draftTools(async () => ({ ok: true })),
+      siteId: 'web',
+    });
+    await openFromList(id);
+    expect(screen.getByTestId('edit-data-dialog')).toBeDefined();
+    fireEvent.keyDown(await screen.findByRole('button', { name: 'Page draft' }), { key: 'Enter' });
+    fireEvent.keyDown(await screen.findByRole('menuitem', { name: 'Discard changes' }), { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('menuitem')).toBeNull());
+    expect(screen.getByTestId('edit-data-dialog')).toBeDefined();
   });
 });
